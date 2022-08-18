@@ -115,7 +115,7 @@ func TestRouting(t *testing.T) {
 	assert.Len(t, cons.Medias, 3)
 
 	// setup stream with one producer
-	stream := newStream("fake:")
+	stream := NewStream("fake:")
 
 	// main check:
 	err := stream.AddConsumer(cons)

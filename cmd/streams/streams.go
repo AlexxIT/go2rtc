@@ -17,7 +17,7 @@ func Init() {
 	log = app.GetLogger("streams")
 
 	for name, item := range cfg.Mod {
-		Streams[name] = newStream(item)
+		Streams[name] = NewStream(item)
 	}
 }
 

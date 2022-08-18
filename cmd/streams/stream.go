@@ -15,7 +15,7 @@ type Stream struct {
 	consumers []*Consumer
 }
 
-func newStream(source interface{}) *Stream {
+func NewStream(source interface{}) *Stream {
 	s := new(Stream)
 
 	switch source := source.(type) {
@@ -28,7 +28,7 @@ func newStream(source interface{}) *Stream {
 			s.producers = append(s.producers, prod)
 		}
 	case map[string]interface{}:
-		return newStream(source["url"])
+		return NewStream(source["url"])
 	default:
 		panic("wrong source type")
 	}
