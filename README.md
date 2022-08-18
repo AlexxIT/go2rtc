@@ -228,15 +228,61 @@ rtsp:
 
 ### Module: WebRTC
 
-TODO...
+WebRTC usually works without problems in the local network. But external access may require additional settings. It depends on what type of internet do you have.
+
+- by default, WebRTC use two random UDP ports for each connection (for video and audio)
+- you can enable one additional TCP port for all connections and use it for external access
+
+**Static public IP**
+
+- add some TCP port to YAML config (ex. 8555)
+- forward this port on your router (you can use same 8555 port or any other)
+- add your external IP-address and external port to YAML config
 
 ```yaml
 webrtc:
   listen: ":8555"  # address of your local server (TCP)
   candidates:
     - 216.58.210.174:8555  # if you have static public IP-address
-    - 192.168.1.123:8555   # ip you have problems with UDP in LAN
-    - stun   # if you have dynamic public IP-address (auto discovery via STUN)
+```
+
+**Dynamic public IP**
+
+- add some TCP port to YAML config (ex. 8555)
+- forward this port on your router (you can use same 8555 port or any other)
+- add `stun` word and external port to YAML config
+  - go2rtc automatically detects your external address with STUN-server
+
+```yaml
+webrtc:
+  listen: ":8555"  # address of your local server (TCP)
+  candidates:
+    - stun:8555  # if you have dynamic public IP-address
+```
+
+**Private IP**
+
+- add some TCP port to YAML config (ex. 8555)
+- setup integration with [Ngrok service](#module-ngrok)
+
+```yaml
+webrtc:
+  listen: ":8555"  # address of your local server (TCP)
+
+ngrok:
+  command: ...
+```
+
+**Own TCP-tunnel**
+
+If you have personal VPS, you can create TCP-tunnel and setup in the same way as "Static public IP". But use your VPS IP-address in YAML config.
+
+**Using TURN-server**
+
+TODO...
+
+```yaml
+webrtc:
   ice_servers:
     - urls: [stun:stun.l.google.com:19302]
     - urls: [turn:123.123.123.123:3478]
@@ -246,18 +292,55 @@ webrtc:
 
 ### Module: Ngrok
 
-TODO...
+With Ngrok integration you can get external access to your streams in situation when you have Internet with private IP-address.
+
+- you may need external access for two different things:
+  - WebRTC stream, so you need tunnel WebRTC TCP port (ex. 8555)
+  - go2rtc web interface, so you need tunnel API HTTP port (ex. 3000)
+- Ngrok support authorization for your web interface
+- Ngrok automatically adds HTTPS to your web interface
+
+Ngrok free subscription limitations:
+
+- you will always get random external address (not a problem for webrtc stream)
+- you can forward multiple ports but use only one Ngrok app
+
+go2rtc will automatically get your external TCP address (if you enable it in ngrok config) and use it with WebRTC connection (if you enable it in webrtc config).
+
+You need manually download [Ngrok agent app](https://ngrok.com/download) for your OS and register in [Ngrok service](https://ngrok.com/).
+
+**Tunnel for only WebRTC Stream**
+
+You need to add your [Ngrok token](https://dashboard.ngrok.com/get-started/your-authtoken) and WebRTC TCP port to YAML:
 
 ```yaml
 ngrok:
   command: ngrok tcp 8555 --authtoken eW91IHNoYWxsIG5vdCBwYXNzCnlvdSBzaGFsbCBub3QgcGFzcw
 ```
 
-or
+**Tunnel for WebRTC and Web interface**
+
+You need to create `ngrok.yaml` config file and add it to go2rtc config:
 
 ```yaml
 ngrok:
-  command: ngrok start --all --config ngrok.yml
+  command: ngrok start --all --config ngrok.yaml
+```
+
+Ngrok config example:
+
+```yaml
+version: "2"
+authtoken: eW91IHNoYWxsIG5vdCBwYXNzCnlvdSBzaGFsbCBub3QgcGFzcw
+tunnels:
+  api:
+    addr: 3000  # use the same port as in go2rtc config
+    proto: http
+    basic_auth:
+      - admin:password  # you can set login/pass for your web interface
+  webrtc:
+    addr: 8555  # use the same port as in go2rtc config
+    proto: tcp
 ```
 
 ### Module: Log
