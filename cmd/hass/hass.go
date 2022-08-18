@@ -79,7 +79,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stream := streams.NewStream(url)
+	stream := streams.Get(url)
 	str, err = webrtc.ExchangeSDP(stream, string(offer), r.UserAgent())
 	if err != nil {
 		log.Error().Err(err).Msg("[api.hass] exchange SDP")

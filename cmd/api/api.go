@@ -83,7 +83,7 @@ func fileServerHandlder(w http.ResponseWriter, r *http.Request) {
 
 func statsHandler(w http.ResponseWriter, _ *http.Request) {
 	v := map[string]interface{}{
-		"streams": streams.Streams,
+		"streams": streams.All(),
 	}
 	data, err := json.Marshal(v)
 	if err != nil {

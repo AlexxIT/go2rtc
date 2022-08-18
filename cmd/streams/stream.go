@@ -120,6 +120,20 @@ func (s *Stream) RemoveProducer(prod streamer.Producer) {
 	panic("not implemented")
 }
 
+func (s *Stream) Active() bool {
+	if len(s.consumers) > 0{
+		return true
+	}
+
+	for _, prod := range s.producers {
+		if prod.element != nil {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (s *Stream) MarshalJSON() ([]byte, error) {
 	var v []interface{}
 	for _, prod := range s.producers {

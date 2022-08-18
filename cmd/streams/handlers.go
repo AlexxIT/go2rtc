@@ -17,6 +17,11 @@ func HandleFunc(scheme string, handler Handler) {
 	handlers[scheme] = handler
 }
 
+func HasProducer(url string) bool {
+	i := strings.IndexByte(url, ':')
+	return handlers[url[:i]] != nil
+}
+
 func GetProducer(url string) (streamer.Producer, error) {
 	i := strings.IndexByte(url, ':')
 	handler := handlers[url[:i]]

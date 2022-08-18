@@ -5,8 +5,6 @@ import (
 	"github.com/rs/zerolog"
 )
 
-var Streams = map[string]*Stream{}
-
 func Init() {
 	var cfg struct {
 		Mod map[string]interface{} `yaml:"streams"`
@@ -17,12 +15,34 @@ func Init() {
 	log = app.GetLogger("streams")
 
 	for name, item := range cfg.Mod {
-		Streams[name] = NewStream(item)
+		streams[name] = NewStream(item)
 	}
 }
 
 func Get(name string) *Stream {
-	return Streams[name]
+	if stream, ok := streams[name]; ok {
+		return stream
+	}
+
+	if HasProducer(name) {
+		log.Info().Str("url", name).Msg("[streams] create new stream")
+		stream := NewStream(name)
+		streams[name] = stream
+		return stream
+	}
+
+	return nil
+}
+
+func All() map[string]interface{} {
+	active := map[string]interface{}{}
+	for name, stream := range streams {
+		if stream.Active() {
+			active[name] = stream
+		}
+	}
+	return active
 }
 
 var log zerolog.Logger
+var streams = map[string]*Stream{}
