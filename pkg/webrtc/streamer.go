@@ -55,7 +55,7 @@ func (c *Conn) AddTrack(media *streamer.Media, track *streamer.Track) *streamer.
 			wrapper := h264.RTPPay(1200)
 			push = wrapper(push)
 
-			if codec.PayloadType != 255 {
+			if !h264.IsAVC(codec) {
 				wrapper = h264.RTPDepay(track)
 				push = wrapper(push)
 			}
