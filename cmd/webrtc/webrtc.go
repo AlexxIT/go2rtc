@@ -34,14 +34,14 @@ func Init() {
 	address := cfg.Mod.Listen
 	pionAPI, err := webrtc.NewAPI(address)
 	if pionAPI == nil {
-		log.Error().Err(err).Msg("[webrtc] Init API")
+		log.Error().Err(err).Msg("[webrtc] init API")
 		return
 	}
 
 	if err != nil {
-		log.Warn().Err(err).Msg("[webrtc] Listen")
+		log.Warn().Err(err).Msg("[webrtc] listen")
 	} else if address != "" {
-		log.Info().Str("addr", address).Msg("[webrtc] Listen")
+		log.Info().Str("addr", address).Msg("[webrtc] listen")
 		_, Port, _ = net.SplitHostPort(address)
 	}
 
@@ -63,7 +63,6 @@ func Init() {
 }
 
 func AddCandidate(address string) {
-	log.Info().Str("addr", address).Msg("[webrtc] new candidate")
 	candidates = append(candidates, address)
 }
 
@@ -238,6 +237,8 @@ func offerHandler(ctx *api.Context, msg *streamer.Message) {
 				continue
 			}
 			address = ip.String() + address[4:]
+
+			log.Debug().Str("addr", address).Msg("[webrtc] stun public address")
 		}
 
 		cand, err := webrtc.NewCandidate(address)
@@ -259,7 +260,7 @@ func candidateHandler(ctx *api.Context, msg *streamer.Message) {
 		return
 	}
 	if conn := ctx.Consumer.(*webrtc.Conn); conn != nil {
-		log.Trace().Str("candidate", msg.Value.(string)).Msg("[webrtc] Remote")
+		log.Trace().Str("candidate", msg.Value.(string)).Msg("[webrtc] remote")
 		conn.Push(msg)
 	}
 }

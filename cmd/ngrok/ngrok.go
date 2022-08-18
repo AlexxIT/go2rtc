@@ -46,6 +46,9 @@ func Init() {
 					log.Warn().Err(err).Msg("[ngrok] add candidate")
 					return
 				}
+
+				log.Info().Str("addr", address).Msg("[ngrok] add external candidate for WebRTC")
+
 				webrtc.AddCandidate(address)
 			}
 		}
