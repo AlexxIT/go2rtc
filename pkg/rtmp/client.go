@@ -22,6 +22,8 @@ type Client struct {
 
 	conn   *rtmp.Conn
 	closed bool
+
+	receive int
 }
 
 func NewClient(uri string) *Client {
@@ -93,6 +95,8 @@ func (c *Client) Handle() (err error) {
 			}
 			return
 		}
+
+		c.receive += len(pkt.Data)
 
 		track := c.tracks[int(pkt.Idx)]
 

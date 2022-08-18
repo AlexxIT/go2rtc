@@ -1,7 +1,9 @@
 package rtmp
 
 import (
+	"encoding/json"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
+	"strconv"
 )
 
 func (c *Client) GetMedias() []*streamer.Media {
@@ -23,4 +25,22 @@ func (c *Client) Start() error {
 
 func (c *Client) Stop() error {
 	return c.Close()
+}
+
+func (c *Client) MarshalJSON() ([]byte, error) {
+	v := map[string]interface{}{
+		streamer.JSONReceive:    c.receive,
+		streamer.JSONType:       "RTMP client producer",
+		streamer.JSONRemoteAddr: c.conn.NetConn().RemoteAddr().String(),
+		"url":                   c.URI,
+	}
+	for i, media := range c.medias {
+		k := "media:" + strconv.Itoa(i)
+		v[k] = media.String()
+	}
+	for i, track := range c.tracks {
+		k := "track:" + strconv.Itoa(i)
+		v[k] = track.String()
+	}
+	return json.Marshal(v)
 }
