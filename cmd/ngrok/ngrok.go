@@ -12,9 +12,6 @@ import (
 
 func Init() {
 	var cfg struct {
-		Log struct {
-			Level string `yaml:"ngrok"`
-		} `yaml:"log"`
 		Mod struct {
 			Cmd string `yaml:"command"`
 		} `yaml:"ngrok"`
@@ -26,7 +23,7 @@ func Init() {
 		return
 	}
 
-	log = app.GetLogger(cfg.Log.Level)
+	log = app.GetLogger("ngrok")
 
 	ngr, err := ngrok.NewNgrok(cfg.Mod.Cmd)
 	if err != nil {
