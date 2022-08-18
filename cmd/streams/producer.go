@@ -2,7 +2,6 @@ package streams
 
 import (
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
-	"strings"
 )
 
 type state byte
@@ -26,17 +25,10 @@ type Producer struct {
 
 func (p *Producer) GetMedias() []*streamer.Media {
 	if p.state == stateNone {
-		i := strings.IndexByte(p.url, ':')
-		handler := handlers[p.url[:i]]
-		if handler == nil {
-			log.Warn().Str("url", p.url).Msg("[streams] unsupported scheme")
-			return nil
-		}
-
 		log.Debug().Str("url", p.url).Msg("[streams] probe producer")
 
 		var err error
-		p.element, err = handler(p.url)
+		p.element, err = GetProducer(p.url)
 		if err != nil {
 			log.Error().Err(err).Str("url", p.url).Msg("[streams] probe producer")
 			return nil
