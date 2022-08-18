@@ -281,7 +281,7 @@ func UnmarshalCodec(md *sdp.MediaDescription, payloadType string) *Codec {
 			c.Name = "PCMA"
 			c.ClockRate = 8000
 		default:
-			panic("unknown codec")
+			c.Name = payloadType
 		}
 	}
 
