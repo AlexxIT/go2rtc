@@ -1,0 +1,43 @@
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>go2rtc</title>
+</head>
+<body>
+<div id="header"></div>
+<table id="items"></table>
+<script>
+    const baseUrl = location.origin + location.pathname.substr(
+        0, location.pathname.lastIndexOf("/")
+    );
+
+    const header = document.getElementById('header');
+    header.innerHTML = `<a href="api/stats">stats</a>` +
+        `<a href="webcam.html?url=webcam">webcam</a>`;
+
+    const links = [
+        '<a href="webrtc-async.html?url={name}">webrtc-async</a>',
+        '<a href="webrtc-sync.html?url={name}">webrtc-sync</a>',
+        '<a href="mse.html?url={name}">mse</a>',
+    ];
+
+    fetch(`${baseUrl}/api/stats`).then(r => {
+        r.json().then(data => {
+            const content = document.getElementById('items');
+
+            for (let name in data.streams) {
+                let html = `<tr><td>${name || 'default'}</td>`;
+                links.forEach(link => {
+                    html += `<td>${link.replace('{name}', name)}</td>`
+                })
+                html += `</tr>`;
+                content.innerHTML += html
+            }
+        });
+    })
+</script>
+</body>
+</html>

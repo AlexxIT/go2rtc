@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>go2rtc - WebRTC</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        html, body {
+            height: 100%;
+            width: 100%;
+        }
+
+        #video {
+            /* video "container" size */
+            width: 100%;
+            height: 100%;
+            background: black;
+        }
+    </style>
+    <!-- Fix bugs for example with Safari... -->
+<!--    <script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>-->
+</head>
+<body>
+<!-- muted is important for autoplay -->
+<video id="video" autoplay controls playsinline muted></video>
+<script>
+    function init(stream) {
+        // support api_path
+        const baseUrl = location.origin + location.pathname.substr(
+            0, location.pathname.lastIndexOf("/")
+        );
+
+        const ws = new WebSocket(`ws${baseUrl.substr(4)}/api/ws${location.search}`);
+        ws.onopen = () => {
+            console.debug('ws.onopen');
+
+            pc.createOffer({
+                // this is adds two media to SDP with recvonly direction
+                // offerToReceiveAudio: true,
+                // offerToReceiveVideo: true,
+            }).then(offer => {
+                pc.setLocalDescription(offer).then(() => {
+                    console.log(offer.sdp);
+                    const msg = {type: 'webrtc/offer', value: pc.localDescription.sdp};
+                    ws.send(JSON.stringify(msg));
+                });
+            });
+        }
+        ws.onmessage = ev => {
+            const msg = JSON.parse(ev.data);
+            console.debug('ws.onmessage', msg);
+
+            if (msg.type === 'webrtc/candidate') {
+                pc.addIceCandidate({candidate: msg.value, sdpMid: ''});
+            } else if (msg.type === 'webrtc/answer') {
+                pc.setRemoteDescription({type: 'answer', sdp: msg.value});
+                pc.getTransceivers().forEach(t => {
+                    if (t.receiver.track.kind === 'audio') {
+                        t.currentDirection
+                    }
+                })
+            }
+        }
+
+        const pc = new RTCPeerConnection({
+            iceServers: [{urls: 'stun:stun.l.google.com:19302'}]
+        });
+        pc.onicecandidate = ev => {
+            console.debug("pc.onicecandidate", ev.candidate);
+
+            if (ev.candidate !== null) {
+                ws.send(JSON.stringify({
+                    type: 'webrtc/candidate', value: ev.candidate.toJSON().candidate
+                }));
+            }
+        }
+        pc.ontrack = ev => {
+            const video = document.getElementById('video');
+            console.debug('pc.ontrack', video.srcObject !== null);
+
+            // when audio track not exist in Chrome
+            if (ev.streams.length === 0) return;
+
+            // when audio track not exist in Firefox
+            if (ev.streams[0].id[0] === '{') return;
+
+            // when stream already init
+            if (video.srcObject !== null) return;
+
+            video.srcObject = ev.streams[0];
+        }
+
+        // Safari don't support "offerToReceiveVideo"
+        // so need to create transeivers manually
+        pc.addTransceiver('video', {direction: 'recvonly'});
+        pc.addTransceiver('audio', {direction: 'recvonly'});
+
+        if (stream) {
+            stream.getTracks().forEach(track => {
+                const sender = pc.addTrack(track, stream)
+                // track.stop();
+                // setTimeout(() => {
+                //     navigator.mediaDevices.getUserMedia({audio: true}).then(stream => {
+                //         stream.getTracks().forEach(track => {
+                //             sender.replaceTrack(track);
+                //         });
+                //     });
+                // }, 10000);
+            });
+        }
+    }
+
+    if (navigator.mediaDevices) {
+        navigator.mediaDevices.getUserMedia({audio: true}).then(init).catch(() => init());
+    } else {
+        init();
+    }
+</script>
+</body>
+</html>
