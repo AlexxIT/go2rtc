@@ -49,11 +49,19 @@ func LoadConfig(v interface{}) {
 }
 
 func GetLogger(module string) zerolog.Logger {
-	lvl, err := zerolog.ParseLevel(modules[module])
-	if err != nil {
-		return log
+	if s, ok := modules[module]; ok {
+		lvl, err := zerolog.ParseLevel(s)
+		if err != nil {
+			log.Warn().Err(err).Msg("[log]")
+			return log
+		}
+
+		return log.Level(lvl)
 	}
-	return log.Level(lvl)
+
+	log.Warn().Msgf("[log] wrong module: %s", module)
+
+	return log
 }
 
 // internal
