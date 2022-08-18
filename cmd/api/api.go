@@ -39,6 +39,8 @@ func Init() {
 		HandleFunc("/", fileServerHandlder)
 	}
 
+	HandleFunc("/api/frame.mp4", frameHandler)
+	HandleFunc("/api/frame.raw", frameHandler)
 	HandleFunc("/api/stack", stackHandler)
 	HandleFunc("/api/stats", statsHandler)
 	HandleFunc("/api/ws", apiWS)
