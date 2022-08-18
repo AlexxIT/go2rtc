@@ -71,7 +71,7 @@ Available modules:
 - [webrtc](#module-webrtc) - WebRTC Server (important for external access)
 - [ngrok](#module-ngrok) - Ngrok integration (external access for private network)
 - [ffmpeg](#source-ffmpeg) - FFmpeg integration
-- [hass](#source-hass) - Home Assistant integration
+- [hass](#module-hass) - Home Assistant integration
 - [log](#module-log) - logs config
 
 ### Module: Streams
@@ -342,6 +342,17 @@ tunnels:
     addr: 8555  # use the same port as in go2rtc config
     proto: tcp
 ```
+
+### Module: Hass
+
+go2rtc compatible with Home Assistant [RTSPtoWebRTC](https://www.home-assistant.io/integrations/rtsp_to_webrtc/) integration API.
+
+- add integration with link to go2rtc HTTP API:
+  - Hass > Settings > Integrations > Add Integration > RTSPtoWebRTC > `http://192.168.1.123:3000/`
+- add generic camera with RTSP link:
+  - Hass > Settings > Integrations > Add Integration > Generic Camera > `rtsp://...`
+- use Picture Entity or Picture Glance lovelace card
+- open full screen card - this is should be WebRTC stream
 
 ### Module: Log
 
