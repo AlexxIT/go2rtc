@@ -186,6 +186,15 @@ func (c *Conn) GetAnswer() (answer string, err error) {
 	return sdAnswer.SDP, nil
 }
 
+func (c *Conn) GetCompleteAnswer() (answer string, err error) {
+	if _, err = c.GetAnswer(); err != nil {
+		return
+	}
+
+	<-webrtc.GatheringCompletePromise(c.Conn)
+	return c.Conn.LocalDescription().SDP, nil
+}
+
 func (c *Conn) remote() string {
 	for _, trans := range c.Conn.GetTransceivers() {
 		pair, _ := trans.Receiver().Transport().ICETransport().GetSelectedCandidatePair()

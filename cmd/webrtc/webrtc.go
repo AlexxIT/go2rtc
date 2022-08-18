@@ -255,6 +255,55 @@ func offerHandler(ctx *api.Context, msg *streamer.Message) {
 	ctx.Consumer = conn
 }
 
+func ExchangeSDP(
+	stream *streams.Stream, offer string, userAgent string,
+) (answer string, err error) {
+	// create new webrtc instance
+	conn := new(webrtc.Conn)
+	conn.Conn, err = NewPConn()
+	if err != nil {
+		log.Error().Err(err).Msg("[webrtc] new conn")
+		return
+	}
+
+	conn.UserAgent = userAgent
+	conn.Listen(func(msg interface{}) {
+		switch msg := msg.(type) {
+		case streamer.EventType:
+			if msg == streamer.StateNull {
+				stream.RemoveConsumer(conn)
+			}
+		}
+	})
+
+	// 1. SetOffer, so we can get remote client codecs
+	log.Trace().Msgf("[webrtc] offer:\n%s", offer)
+
+	if err = conn.SetOffer(offer); err != nil {
+		log.Warn().Err(err).Msg("[api.webrtc] set offer")
+		return
+	}
+
+	// 2. AddConsumer, so we get new tracks
+	if err = stream.AddConsumer(conn); err != nil {
+		log.Warn().Err(err).Msg("[api.webrtc] add consumer")
+		return
+	}
+
+	conn.Init()
+
+	// exchange sdp without waiting all candidates
+	//answer, err := conn.ExchangeSDP(offer, false)
+	answer, err = conn.GetCompleteAnswer()
+	log.Trace().Msgf("[webrtc] answer\n%s", answer)
+
+	if err != nil {
+		log.Error().Err(err).Msg("[webrtc] get answer")
+	}
+
+	return
+}
+
 func candidateHandler(ctx *api.Context, msg *streamer.Message) {
 	if ctx.Consumer == nil {
 		return
