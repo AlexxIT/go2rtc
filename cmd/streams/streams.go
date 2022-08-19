@@ -35,13 +35,14 @@ func Get(name string) *Stream {
 }
 
 func All() map[string]interface{} {
-	active := map[string]interface{}{}
+	all := map[string]interface{}{}
 	for name, stream := range streams {
-		if stream.Active() {
-			active[name] = stream
-		}
+		all[name] = stream
+		//if stream.Active() {
+		//	all[name] = stream
+		//}
 	}
-	return active
+	return all
 }
 
 var log zerolog.Logger
