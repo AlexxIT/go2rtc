@@ -8,10 +8,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	pion "github.com/pion/webrtc/v3"
 	"github.com/rs/zerolog"
-	"io/ioutil"
 	"net"
-	"net/http"
-	"strings"
 )
 
 func Init() {
@@ -56,111 +53,14 @@ func Init() {
 
 	candidates = cfg.Mod.Candidates
 
-	api.HandleFunc("/api/webrtc", apiHandler)
-	api.HandleFunc("/api/webrtc/camera", cameraHandler)
 	api.HandleWS(webrtc.MsgTypeOffer, offerHandler)
 	api.HandleWS(webrtc.MsgTypeCandidate, candidateHandler)
 }
 
-func AddCandidate(address string) {
-	candidates = append(candidates, address)
-}
-
 var Port string
 var log zerolog.Logger
-var candidates []string
 
 var NewPConn func() (*pion.PeerConnection, error)
-
-func apiHandler(w http.ResponseWriter, r *http.Request) {
-	url := r.URL.Query().Get("url")
-	stream := streams.Get(url)
-	if stream == nil {
-		return
-	}
-
-	// get offer
-	offer, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		log.Error().Err(err).Msg("[webrtc] read offer")
-		return
-	}
-
-	// create new webrtc instance
-	cons := new(webrtc.Conn)
-	cons.Conn, err = NewPConn()
-	if err != nil {
-		log.Error().Err(err).Msg("[webrtc] new conn")
-		return
-	}
-
-	cons.UserAgent = r.UserAgent()
-	cons.Listen(func(msg interface{}) {
-		if msg == streamer.StateNull {
-			stream.RemoveConsumer(cons)
-		}
-	})
-
-	if err = stream.AddConsumer(cons); err != nil {
-		log.Warn().Err(err).Msg("[api.webrtc] add consumer")
-		return
-	}
-
-	cons.Init()
-
-	// exchange sdp with waiting all candidates
-	answer, err := cons.ExchangeSDP(string(offer), true)
-
-	// send SDP to client
-	if _, err = w.Write([]byte(answer)); err != nil {
-		log.Error().Err(err).Msg("[api.webrtc] send answer")
-	}
-}
-
-func cameraHandler(w http.ResponseWriter, r *http.Request) {
-	url := r.URL.Query().Get("url")
-	stream := streams.Get(url)
-	if stream == nil {
-		return
-	}
-
-	// get offer
-	offer, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		log.Error().Err(err).Msg("[webrtc] read offer")
-		return
-	}
-
-	// create new webrtc instance
-	conn := new(webrtc.Conn)
-	conn.Conn, err = NewPConn()
-	if err != nil {
-		log.Error().Err(err).Msg("[webrtc] new conn")
-		return
-	}
-
-	conn.UserAgent = r.UserAgent()
-	conn.Listen(func(msg interface{}) {
-		switch msg.(type) {
-		case pion.PeerConnectionState:
-			if msg == pion.PeerConnectionStateDisconnected {
-				stream.RemoveConsumer(conn)
-			}
-		case streamer.Track:
-			//stream.AddProducer(conn)
-		}
-	})
-
-	conn.Init()
-
-	// exchange sdp with waiting all candidates
-	answer, err := conn.ExchangeSDP(string(offer), true)
-
-	// send SDP to client
-	if _, err = w.Write([]byte(answer)); err != nil {
-		log.Error().Err(err).Msg("[api.webrtc] send answer")
-	}
-}
 
 func offerHandler(ctx *api.Context, msg *streamer.Message) {
 	name := ctx.Request.URL.Query().Get("url")
@@ -216,7 +116,11 @@ func offerHandler(ctx *api.Context, msg *streamer.Message) {
 
 	// exchange sdp without waiting all candidates
 	//answer, err := conn.ExchangeSDP(offer, false)
-	answer, err := conn.GetAnswer()
+	//answer, err := conn.GetAnswer()
+	answer, err := conn.GetCompleteAnswer()
+	if err == nil {
+		answer, err = addCanditates(answer)
+	}
 	log.Trace().Msgf("[webrtc] answer\n%s", answer)
 
 	if err != nil {
@@ -228,29 +132,6 @@ func offerHandler(ctx *api.Context, msg *streamer.Message) {
 	ctx.Write(&streamer.Message{
 		Type: webrtc.MsgTypeAnswer, Value: answer,
 	})
-
-	for _, address := range candidates {
-		if strings.HasPrefix(address, "stun:") {
-			ip, err := webrtc.GetPublicIP()
-			if err != nil {
-				log.Warn().Err(err).Msg("[webrtc] public IP")
-				continue
-			}
-			address = ip.String() + address[4:]
-
-			log.Debug().Str("addr", address).Msg("[webrtc] stun public address")
-		}
-
-		cand, err := webrtc.NewCandidate(address)
-		if err != nil {
-			log.Warn().Err(err).Msg("[webrtc] candidate")
-			continue
-		}
-
-		conn.Fire(&streamer.Message{
-			Type: webrtc.MsgTypeCandidate, Value: cand,
-		})
-	}
 
 	ctx.Consumer = conn
 }
@@ -295,6 +176,9 @@ func ExchangeSDP(
 	// exchange sdp without waiting all candidates
 	//answer, err := conn.ExchangeSDP(offer, false)
 	answer, err = conn.GetCompleteAnswer()
+	if err == nil {
+		answer, err = addCanditates(answer)
+	}
 	log.Trace().Msgf("[webrtc] answer\n%s", answer)
 
 	if err != nil {
@@ -302,14 +186,4 @@ func ExchangeSDP(
 	}
 
 	return
-}
-
-func candidateHandler(ctx *api.Context, msg *streamer.Message) {
-	if ctx.Consumer == nil {
-		return
-	}
-	if conn := ctx.Consumer.(*webrtc.Conn); conn != nil {
-		log.Trace().Str("candidate", msg.Value.(string)).Msg("[webrtc] remote")
-		conn.Push(msg)
-	}
 }
