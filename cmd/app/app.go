@@ -59,8 +59,6 @@ func GetLogger(module string) zerolog.Logger {
 		return log.Level(lvl)
 	}
 
-	log.Warn().Msgf("[log] wrong module: %s", module)
-
 	return log
 }
 
