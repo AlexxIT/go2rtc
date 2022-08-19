@@ -24,6 +24,15 @@ func Init() {
 
 	app.LoadConfig(&conf)
 
+	log = app.GetLogger("api")
+
+	// support https://www.home-assistant.io/integrations/rtsp_to_webrtc/
+	api.HandleFunc("/static", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	api.HandleFunc("/stream", handler)
+
+	// support load cameras from Hass config file
 	filename := path.Join(conf.Mod.Config, ".storage/core.config_entries")
 	data, err := os.ReadFile(filename)
 	if err != nil {
@@ -52,14 +61,6 @@ func Init() {
 		}
 		return nil, fmt.Errorf("can't get url: %s", url)
 	})
-
-	// support https://www.home-assistant.io/integrations/rtsp_to_webrtc/
-	api.HandleFunc("/static", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-	api.HandleFunc("/stream", handler)
-
-	log = app.GetLogger("api")
 }
 
 var log zerolog.Logger
