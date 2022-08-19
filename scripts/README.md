@@ -1,6 +1,7 @@
-# Build
+## Build
 
-- important to use [UPX](https://github.com/upx/upx/releases) 3.95, because 3.96 has a bug for `mipsel`
+- UPX-3.96 pack broken bin for `linux_mipsel`
+- UPX-3.95 pack broken bin for `mac_amd64`
 - `aarch64` = `arm64`
 - `armv7` = `arm`
 
