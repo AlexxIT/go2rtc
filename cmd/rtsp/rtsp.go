@@ -18,7 +18,7 @@ func Init() {
 	}
 
 	// default config
-	conf.Mod.Listen = ":554"
+	conf.Mod.Listen = ":8554"
 
 	app.LoadConfig(&conf)
 

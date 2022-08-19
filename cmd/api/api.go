@@ -21,7 +21,7 @@ func Init() {
 	}
 
 	// default config
-	cfg.Mod.Listen = ":3000"
+	cfg.Mod.Listen = ":1984"
 	cfg.Mod.StaticDir = "www"
 
 	// load config from YAML

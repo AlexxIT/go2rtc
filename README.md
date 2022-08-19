@@ -66,8 +66,8 @@ Don't forget to fix the rights `chmod +x go2rtc_linux_xxx` on Linux and Mac.
 Create file `go2rtc.yaml` next to the app.
 
 - by default, you need to config only your `streams` links
-- `api` server will start on default **3000 port**
-- `rtsp` server will start on default **554 port**
+- `api` server will start on default **1984 port**
+- `rtsp` server will start on default **8554 port**
 - `webrtc` will use random UDP port for each connection
 - `ffmpeg` will use default transcoding options (you need to install it [manually](https://ffmpeg.org/))
 
@@ -103,7 +103,7 @@ Available source types:
 
 ```yaml
 streams:
-  sonoff_camera: rtsp://rtsp:12345678@192.168.1.123:554/av_stream/ch0
+  sonoff_camera: rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0
 ```
 
 If your camera has two RTSP links - you can add both of them as sources. This is useful when streams has different codecs, as example AAC audio with main stream and PCMU/PCMA audio with second stream.
@@ -150,7 +150,7 @@ streams:
   mjpeg: ffmpeg:http://185.97.122.128/cgi-bin/faststream.jpg?stream=half&fps=15#video=h264
 
   # [RTSP] video and audio will be copied
-  rtsp: ffmpeg:rtsp://rtsp:12345678@192.168.1.123:554/av_stream/ch0#video=copy&audio=copy
+  rtsp: ffmpeg:rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0#video=copy&audio=copy
 ```
 
 All trascoding formats has built-in templates. But you can override them via YAML config. You can also add your own formats to config and use them with source params.
@@ -206,13 +206,13 @@ The HTTP API is the main part for interacting with the application.
 
 - you can use WebRTC only when HTTP API enabled
 - you can disable HTTP API with `listen: ""` and use, for example, only RTSP client/server protocol
-- you can enable HTTP API only on localhost with `listen: "localhost:3000"` setting
+- you can enable HTTP API only on localhost with `listen: "127.0.0.1:1984"` setting
 - you can change API `base_path` and host go2rtc on your main app webserver suburl
 - all files from `static_dir` hosted on root path: `/`
 
 ```yaml
 api:
-  listen: ":3000"    # HTTP API port ("" - disabled)
+  listen: ":1984"    # HTTP API port ("" - disabled)
   base_path: ""      # API prefix for serve on suburl
   static_dir: "www"  # folder for static files ("" - disabled)
 ```
@@ -231,7 +231,7 @@ rtsp://192.168.1.123/{stream_name}?video={codec}&audio={codec1}&audio={codec2}
 
 ```yaml
 rtsp:
-  listen: ":554"
+  listen: ":8554"
 ```
 
 ### Module: WebRTC
@@ -304,7 +304,7 @@ With Ngrok integration you can get external access to your streams in situation 
 
 - you may need external access for two different things:
   - WebRTC stream, so you need tunnel WebRTC TCP port (ex. 8555)
-  - go2rtc web interface, so you need tunnel API HTTP port (ex. 3000)
+  - go2rtc web interface, so you need tunnel API HTTP port (ex. 1984)
 - Ngrok support authorization for your web interface
 - Ngrok automatically adds HTTPS to your web interface
 
@@ -342,7 +342,7 @@ version: "2"
 authtoken: eW91IHNoYWxsIG5vdCBwYXNzCnlvdSBzaGFsbCBub3QgcGFzcw
 tunnels:
   api:
-    addr: 3000  # use the same port as in go2rtc config
+    addr: 1984  # use the same port as in go2rtc config
     proto: http
     basic_auth:
       - admin:password  # you can set login/pass for your web interface
@@ -356,7 +356,7 @@ tunnels:
 go2rtc compatible with Home Assistant [RTSPtoWebRTC](https://www.home-assistant.io/integrations/rtsp_to_webrtc/) integration API.
 
 - add integration with link to go2rtc HTTP API:
-  - Hass > Settings > Integrations > Add Integration > RTSPtoWebRTC > `http://192.168.1.123:3000/`
+  - Hass > Settings > Integrations > Add Integration > RTSPtoWebRTC > `http://192.168.1.123:1984/`
 - add generic camera with RTSP link:
   - Hass > Settings > Integrations > Add Integration > Generic Camera > `rtsp://...`
 - use Picture Entity or Picture Glance lovelace card
