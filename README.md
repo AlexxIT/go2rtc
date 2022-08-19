@@ -9,6 +9,14 @@
 - multi-source 2-way [codecs negotiation](#codecs-negotiation)
 - streaming from private networks via [Ngrok or SSH-tunnels](#module-webrtc)
 
+**Inspired by:**
+
+- [webrtc](https://github.com/pion/webrtc) go library and whole [@pion](https://github.com/pion) team
+- series of streaming projects from [@deepch](https://github.com/deepch)
+- [rtsp-simple-server](https://github.com/aler9/rtsp-simple-server) idea from [@aler9](https://github.com/aler9)
+- [GStreamer](https://gstreamer.freedesktop.org/) multimedia framework pipeline idea
+- [MediaSoup](https://mediasoup.org/) framework routing idea
+
 ## Codecs negotiation
 
 For example, you want to watch RTSP-stream from [Dahua IPC-K42](https://www.dahuasecurity.com/fr/products/All-Products/Network-Cameras/Wireless-Series/Wi-Fi-Series/4MP/IPC-K42) camera in your Chrome browser.
