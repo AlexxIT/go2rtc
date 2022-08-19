@@ -22,7 +22,6 @@ func Init() {
 
 	// default config
 	cfg.Mod.Listen = ":1984"
-	cfg.Mod.StaticDir = "www"
 
 	// load config from YAML
 	app.LoadConfig(&cfg)
@@ -34,10 +33,7 @@ func Init() {
 	basePath = cfg.Mod.BasePath
 	log = app.GetLogger("api")
 
-	if cfg.Mod.StaticDir != "" {
-		fileServer = http.FileServer(http.Dir(cfg.Mod.StaticDir))
-		HandleFunc("/", fileServerHandlder)
-	}
+	initStatic(cfg.Mod.StaticDir)
 
 	HandleFunc("/api/frame.mp4", frameHandler)
 	HandleFunc("/api/frame.raw", frameHandler)
@@ -70,16 +66,8 @@ func HandleWS(msgType string, handler WSHandler) {
 }
 
 var basePath string
-var fileServer http.Handler
 var log zerolog.Logger
 var wsHandlers = make(map[string]WSHandler)
-
-func fileServerHandlder(w http.ResponseWriter, r *http.Request) {
-	if basePath != "" {
-		r.URL.Path = r.URL.Path[len(basePath):]
-	}
-	fileServer.ServeHTTP(w, r)
-}
 
 func statsHandler(w http.ResponseWriter, _ *http.Request) {
 	v := map[string]interface{}{
