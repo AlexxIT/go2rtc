@@ -47,6 +47,9 @@ func GetPublicIP() (net.IP, error) {
 	if err = c.Do(message, func(e stun.Event) { res = e }); err != nil {
 		return nil, err
 	}
+	if err = c.Close(); err != nil {
+		return nil, err
+	}
 
 	if res.Error != nil {
 		return nil, res.Error
