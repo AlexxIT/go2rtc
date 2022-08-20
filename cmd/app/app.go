@@ -1,6 +1,7 @@
 package app
 
 import (
+	"flag"
 	"github.com/rs/zerolog"
 	"gopkg.in/yaml.v3"
 	"io"
@@ -9,7 +10,15 @@ import (
 )
 
 func Init() {
-	data, _ = os.ReadFile("go2rtc.yaml")
+	config := flag.String(
+		"config",
+		"go2rtc.yaml",
+		"Path to go2rtc configuration file",
+	)
+
+	flag.Parse()
+
+	data, _ = os.ReadFile(*config)
 
 	var cfg struct {
 		Mod map[string]string `yaml:"log"`
