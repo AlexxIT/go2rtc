@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/AlexxIT/go2rtc/cmd/api"
 	"github.com/AlexxIT/go2rtc/cmd/app"
+	"github.com/AlexxIT/go2rtc/cmd/rtsp"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
 	"github.com/AlexxIT/go2rtc/cmd/webrtc"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
@@ -13,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"strings"
 )
 
 func Init() {
@@ -78,6 +80,15 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Error().Err(err).Msg("[api.hass] sdp64 decode")
 		return
+	}
+
+	// TODO: fixme
+	if strings.HasPrefix(url, "rtsp://") {
+		port := ":" + rtsp.Port + "/"
+		i := strings.Index(url, port)
+		if i > 0 {
+			url = url[i+len(port):]
+		}
 	}
 
 	stream := streams.Get(url)
