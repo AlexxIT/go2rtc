@@ -8,19 +8,22 @@ import (
 )
 
 var stackSkip = [][]byte{
-	// debug.go
-	[]byte("github.com/AlexxIT/go2rtc/cmd/debug.handler"),
-
-	// cmd.go
-	[]byte("github.com/AlexxIT/go2rtc/cmd.Run"),
+	// main.go
+	[]byte("main.main()"),
 	[]byte("created by os/signal.Notify"),
 
-	// api.go
+	// api/stack.go
+	[]byte("github.com/AlexxIT/go2rtc/cmd/api.stackHandler"),
+
+	// api/api.go
 	[]byte("created by github.com/AlexxIT/go2rtc/cmd/api.Init"),
 	[]byte("created by net/http.(*connReader).startBackgroundRead"),
-	[]byte("created by net/http.(*Server).Serve"),
+	[]byte("created by net/http.(*Server).Serve"), // TODO: why two?
 
 	[]byte("created by github.com/AlexxIT/go2rtc/cmd/rtsp.Init"),
+
+	// webrtc/api.go
+	[]byte("created by github.com/pion/ice/v2.NewTCPMuxDefault"),
 }
 
 func stackHandler(w http.ResponseWriter, r *http.Request) {
