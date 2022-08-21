@@ -47,3 +47,7 @@ pc.ontrack = ev => {
     video.srcObject = ev.streams[0];
 }
 ```
+
+## Useful links
+
+- https://divtable.com/table-styler/
