@@ -8,6 +8,7 @@ import (
 func initStatic(staticDir string) {
 	var root http.FileSystem
 	if staticDir != "" {
+		log.Info().Str("dir", staticDir).Msg("[api] serve static")
 		root = http.Dir(staticDir)
 	} else {
 		root = http.FS(www.Static)
