@@ -5,9 +5,9 @@
 - zero-dependency and zero-config small [app for all OS](#installation) (Windows, macOS, Linux, ARM)
 - zero-delay for all supported protocols (lowest possible streaming latency)
 - zero-load on CPU for supported codecs
-- on the fly transcoding for unsupported codecs [via FFmpeg](#source-ffmpeg)
+- on the fly transcoding for unsupported codecs via [FFmpeg](#source-ffmpeg)
 - multi-source 2-way [codecs negotiation](#codecs-negotiation)
-- streaming from private networks via [Ngrok or SSH-tunnels](#module-webrtc)
+- streaming from private networks via [Ngrok](#module-webrtc)
 
 **Inspired by:**
 
@@ -45,7 +45,24 @@ streams:
 
 ![](codecs.svg)
 
-## Installation
+## Fast start
+
+1. Download [binary](#go2rtc-binary) or use [Docker](#go2rtc-docker) or [Home Assistant Add-on](#go2rtc-home-assistant-add-on)
+2. Open web interface [http://localhost:1984/](http://localhost:1984/)
+
+**Optionally:**
+
+- add your [streams](#module-streams) to [config](#configuration) file
+- setup [external access](#module-webrtc) to webrtc
+- setup [external access](#module-ngrok) to web interface
+- install [ffmpeg](#source-ffmpeg) for transcoding
+
+**Developers:**
+
+- write your own [web interface](#module-api)
+- integrate [web api](#module-api) into your smart home platform
+
+### go2rtc: Binary
 
 Download binary for your OS from [latest release](https://github.com/AlexxIT/go2rtc/releases/):
 
@@ -60,6 +77,23 @@ Download binary for your OS from [latest release](https://github.com/AlexxIT/go2
 - `go2rtc_mac_arm64` - Mac with M1
 
 Don't forget to fix the rights `chmod +x go2rtc_linux_xxx` on Linux and Mac.
+
+### go2rtc: Home Assistant Add-on
+
+[![](https://my.home-assistant.io/badges/supervisor_addon.svg)](https://my.home-assistant.io/redirect/supervisor_addon/?addon=a889bffc_go2rtc&repository_url=https%3A%2F%2Fgithub.com%2FAlexxIT%2Fhassio-addons)
+
+1. Install Add-On:
+    - Settings > Add-ons > Plus > Repositories > Add `https://github.com/AlexxIT/hassio-addons`
+    - go2rtc > Install > Start
+2. Setup [Integration](#module-hass)
+
+**Optionally:**
+
+- create `go2rtc.yaml` in your Home Assistant [config](https://www.home-assistant.io/docs/configuration) folder
+
+### go2rtc: Docker
+
+Container [alexxit/go2rtc](https://hub.docker.com/r/alexxit/go2rtc) with support `amd64`, `386`, `arm64`, `arm`. This container same as [Home Assistant Add-on](#go2rtc-home-assistant-add-on), but can be used separately from the Home Assistant. Container has preinstalled [FFmpeg](#source-ffmpeg) and [Ngrok](#module-ngrok) applications.
 
 ## Configuration
 
@@ -76,7 +110,7 @@ Available modules:
 - [streams](#module-streams)
 - [api](#module-api) - HTTP API (important for WebRTC support)
 - [rtsp](#module-rtsp) - RTSP Server (important for FFmpeg support)
-- [webrtc](#module-webrtc) - WebRTC Server (important for external access)
+- [webrtc](#module-webrtc) - WebRTC Server
 - [ngrok](#module-ngrok) - Ngrok integration (external access for private network)
 - [ffmpeg](#source-ffmpeg) - FFmpeg integration
 - [hass](#module-hass) - Home Assistant integration
@@ -202,7 +236,7 @@ streams:
 
 ### Module: API
 
-The HTTP API is the main part for interacting with the application.
+The HTTP API is the main part for interacting with the application. Default address: `http://127.0.0.1:1984/`.
 
 - you can use WebRTC only when HTTP API enabled
 - you can disable HTTP API with `listen: ""` and use, for example, only RTSP client/server protocol
@@ -212,10 +246,14 @@ The HTTP API is the main part for interacting with the application.
 
 ```yaml
 api:
-  listen: ":1984"    # HTTP API port ("" - disabled)
-  base_path: ""      # API prefix for serve on suburl
-  static_dir: "www"  # folder for static files ("" - disabled)
+  listen: ":1984"  # HTTP API port ("" - disabled)
+  base_path: ""    # API prefix for serve on suburl
+  static_dir: ""   # folder for static files (custom web interface)
 ```
+
+**PS. go2rtc** don't provide HTTPS or password protection. Use [Nginx](https://nginx.org/) or [Ngrok](#module-ngrok) or [Home Assistant Add-on](#go2rtc-home-assistant-add-on) for this tasks.
+
+**PS2.** You can access microphone (for 2-way audio) only with HTTPS
 
 ### Module: RTSP
 
@@ -353,14 +391,25 @@ tunnels:
 
 ### Module: Hass
 
-go2rtc compatible with Home Assistant [RTSPtoWebRTC](https://www.home-assistant.io/integrations/rtsp_to_webrtc/) integration API.
+**go2rtc** compatible with Home Assistant [RTSPtoWebRTC](https://www.home-assistant.io/integrations/rtsp_to_webrtc/) integration.
 
-- add integration with link to go2rtc HTTP API:
-  - Hass > Settings > Integrations > Add Integration > RTSPtoWebRTC > `http://192.168.1.123:1984/`
-- add generic camera with RTSP link:
-  - Hass > Settings > Integrations > Add Integration > Generic Camera > `rtsp://...`
-- use Picture Entity or Picture Glance lovelace card
-- open full screen card - this is should be WebRTC stream
+If you install **go2rtc** as [Hass Add-on](#go2rtc-home-assistant-add-on) - you need to use localhost IP-address, example:
+
+- `http://127.0.0.1:1984/` to web interface
+- `rtsp://127.0.0.1:8554/camera1` to RTSP streams
+
+In other cases you need to use IP-address of server with **go2rtc** application.
+
+1. Add integration with link to go2rtc HTTP API:
+   - Hass > Settings > Integrations > Add Integration > [RTSPtoWebRTC](https://my.home-assistant.io/redirect/config_flow_start/?domain=rtsp_to_webrtc) > `http://127.0.0.1:1984/`
+2. Add generic camera with RTSP link:
+   - Hass > Settings > Integrations > Add Integration > [Generic Camera](https://my.home-assistant.io/redirect/config_flow_start/?domain=generic) > `rtsp://...` or `rtmp://...`
+3. Use Picture Entity or Picture Glance lovelace card
+4. Open full screen card - this is should be WebRTC stream
+
+- you can use either direct RTSP links to cameras or take RTSP streams from **go2rtc**
+
+PS. Default Home Assistant lovelace cards don't support 2-way audio. You can use 2-way audio from [Add-on Web UI](https://my.home-assistant.io/redirect/supervisor_addon/?addon=a889bffc_go2rtc&repository_url=https%3A%2F%2Fgithub.com%2FAlexxIT%2Fhassio-addons). But you need use HTTPS to access the microphone. This is a browser restriction and cannot be avoided.
 
 ### Module: Log
 
