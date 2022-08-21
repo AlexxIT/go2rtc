@@ -130,7 +130,9 @@ func (c *Conn) GetCompleteAnswer() (answer string, err error) {
 func (c *Conn) remote() string {
 	for _, trans := range c.Conn.GetTransceivers() {
 		pair, _ := trans.Receiver().Transport().ICETransport().GetSelectedCandidatePair()
-		return pair.Remote.String()
+		if pair.Remote != nil {
+			return pair.Remote.String()
+		}
 	}
 	return ""
 }
