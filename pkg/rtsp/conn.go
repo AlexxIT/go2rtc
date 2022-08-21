@@ -264,6 +264,13 @@ func (c *Conn) Describe() error {
 		return err
 	}
 
+	if val := res.Header.Get("Content-Base"); val != "" {
+		c.URL, err = url.Parse(val)
+		if err != nil {
+			return err
+		}
+	}
+
 	// fix bug in Sonoff camera SDP "o=- 1 1 IN IP4 rom t_rtsplin"
 	// TODO: make some universal fix
 	if i := bytes.Index(res.Body, []byte("rom t_rtsplin")); i > 0 {
