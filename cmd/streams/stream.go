@@ -61,6 +61,10 @@ func (s *Stream) AddConsumer(cons streamer.Consumer) (err error) {
 
 					// Step 4. Get producer track
 					prodTrack := prod.GetTrack(prodMedia, prodCodec)
+					if prodTrack == nil {
+						log.Warn().Msg("[stream] can't get track")
+						continue
+					}
 
 					// Step 5. Add track to consumer and get new track
 					consTrack := consumer.element.AddTrack(consMedia, prodTrack)
@@ -121,7 +125,7 @@ func (s *Stream) RemoveProducer(prod streamer.Producer) {
 }
 
 func (s *Stream) Active() bool {
-	if len(s.consumers) > 0{
+	if len(s.consumers) > 0 {
 		return true
 	}
 
