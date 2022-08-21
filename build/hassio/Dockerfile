@@ -16,4 +16,7 @@ RUN if [ "${BUILD_ARCH}" = "aarch64" ]; then BUILD_ARCH="arm64"; \
     && curl $(curl -s "https://raw.githubusercontent.com/ngrok/docker-ngrok/main/releases.json" | jq -r ".${BUILD_ARCH}.url") -o ngrok.zip \
     && unzip ngrok
 
-CMD [ "/app/go2rtc", "-config", "/config/go2rtc.yaml" ]
+COPY run.sh /
+RUN chmod a+x /run.sh
+
+CMD [ "/run.sh" ]
