@@ -54,7 +54,7 @@ func Init() {
 
 		var query url.Values
 		if i := strings.IndexByte(s, '#'); i > 0 {
-			query, _ = url.ParseQuery(s[i+1:])
+			query = parseQuery(s[i+1:])
 			s = s[:i]
 		}
 
@@ -109,4 +109,17 @@ func Init() {
 
 		return exec.Handle(s)
 	})
+}
+
+func parseQuery(s string) map[string][]string {
+	query := map[string][]string{}
+	for _, key := range strings.Split(s, "#") {
+		var value string
+		i := strings.IndexByte(key, '=')
+		if i > 0 {
+			key, value = key[:i], key[i+1:]
+		}
+		query[key] = append(query[key], value)
+	}
+	return query
 }

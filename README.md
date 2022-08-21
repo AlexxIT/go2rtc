@@ -130,7 +130,7 @@ streams:
 
 You can get any stream or file or device via FFmpeg and push it to go2rtc. The app will automatically start FFmpeg with the proper arguments when someone starts watching the stream.
 
-Format: `ffmpeg:{input}#{params}`. Examples:
+Format: `ffmpeg:{input}#{param1}#{param2}#{param3}`. Examples:
 
 ```yaml
 streams:
@@ -141,7 +141,7 @@ streams:
   file2: ffmpeg:~/media/BigBuckBunny.mp4#video=h264
 
   # [FILE] video will be copied, audio will be transcoded to pcmu
-  file3: ffmpeg:~/media/BigBuckBunny.mp4#video=copy&audio=pcmu
+  file3: ffmpeg:~/media/BigBuckBunny.mp4#video=copy#audio=pcmu
 
   # [HLS] video will be copied, audio will be skipped
   hls: ffmpeg:https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/gear5/prog_index.m3u8#video=copy
@@ -150,7 +150,7 @@ streams:
   mjpeg: ffmpeg:http://185.97.122.128/cgi-bin/faststream.jpg?stream=half&fps=15#video=h264
 
   # [RTSP] video and audio will be copied
-  rtsp: ffmpeg:rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0#video=copy&audio=copy
+  rtsp: ffmpeg:rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0#video=copy#audio=copy
 ```
 
 All trascoding formats has built-in templates. But you can override them via YAML config. You can also add your own formats to config and use them with source params.
