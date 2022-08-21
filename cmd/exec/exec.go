@@ -70,7 +70,7 @@ func Handle(url string) (streamer.Producer, error) {
 	}
 
 	select {
-	case <-time.After(time.Second * 10):
+	case <-time.After(time.Second * 15):
 		_ = cmd.Process.Kill()
 		log.Error().Str("url", url).Msg("[exec] timeout")
 		return nil, errors.New("timeout")
