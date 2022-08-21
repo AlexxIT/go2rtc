@@ -362,10 +362,22 @@ func (c *Conn) SetupMedia(
 	// we send our `interleaved`, but camera can answer with another
 
 	// Transport: RTP/AVP/TCP;unicast;interleaved=10-11;ssrc=10117CB7
+	// Transport: RTP/AVP/TCP;unicast;destination=192.168.1.123;source=192.168.10.12;interleaved=0
 	s := res.Header.Get("Transport")
-	s, ok1, ok2 := between(s, "RTP/AVP/TCP;unicast;interleaved=", "-")
-	if !ok1 || !ok2 {
-		panic("wrong response")
+	// TODO: rewrite
+	if !strings.HasPrefix(s, "RTP/AVP/TCP;unicast") {
+		return nil, fmt.Errorf("wrong transport: %s", s)
+	}
+
+	i := strings.Index(s, "interleaved=")
+	if i < 0 {
+		return nil, fmt.Errorf("wrong transport: %s", s)
+	}
+
+	s = s[i+len("interleaved="):]
+	i = strings.IndexAny(s, "-;")
+	if i > 0 {
+		s = s[:i]
 	}
 
 	ch, err = strconv.Atoi(s)
