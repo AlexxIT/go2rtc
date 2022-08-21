@@ -189,7 +189,7 @@ func (c *Conn) Do(req *tcp.Request) (*tcp.Response, error) {
 	}
 
 	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("wrong response on %s", req.Method)
+		return res, fmt.Errorf("wrong response on %s", req.Method)
 	}
 
 	return res, nil
@@ -261,7 +261,14 @@ func (c *Conn) Describe() error {
 
 	res, err := c.Do(req)
 	if err != nil {
-		return err
+		if res != nil {
+			// if we have answer - give second chanse without onvif header
+			req.Header.Del("Require")
+			res, err = c.Do(req)
+		}
+		if err != nil {
+			return err
+		}
 	}
 
 	if val := res.Header.Get("Content-Base"); val != "" {
