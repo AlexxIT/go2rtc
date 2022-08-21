@@ -34,6 +34,10 @@ func Get(name string) *Stream {
 	return nil
 }
 
+func Delete(name string) {
+	delete(streams, name)
+}
+
 func All() map[string]interface{} {
 	all := map[string]interface{}{}
 	for name, stream := range streams {

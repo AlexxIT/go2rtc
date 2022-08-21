@@ -9,6 +9,8 @@ import (
 	"github.com/rs/zerolog"
 	"net"
 	"net/http"
+	"os"
+	"strconv"
 )
 
 func Init() {
@@ -38,7 +40,8 @@ func Init() {
 	HandleFunc("/api/frame.mp4", frameHandler)
 	HandleFunc("/api/frame.raw", frameHandler)
 	HandleFunc("/api/stack", stackHandler)
-	HandleFunc("/api/stats", statsHandler)
+	HandleFunc("/api/streams", streamsHandler)
+	HandleFunc("/api/exit", exitHandler)
 	HandleFunc("/api/ws", apiWS)
 
 	// ensure we can listen without errors
@@ -69,17 +72,37 @@ var basePath string
 var log zerolog.Logger
 var wsHandlers = make(map[string]WSHandler)
 
-func statsHandler(w http.ResponseWriter, _ *http.Request) {
-	v := map[string]interface{}{
-		"streams": streams.All(),
+func streamsHandler(w http.ResponseWriter, r *http.Request) {
+	src := r.URL.Query().Get("src")
+
+	switch r.Method {
+	case "PUT":
+		streams.Get(src)
+		return
+	case "DELETE":
+		streams.Delete(src)
+		return
+	}
+
+	var v interface{}
+	if src != "" {
+		v = streams.Get(src)
+	} else {
+		v = streams.All()
 	}
 	data, err := json.Marshal(v)
 	if err != nil {
-		log.Error().Err(err).Msg("[api.stats] marshal")
+		log.Error().Err(err).Msg("[api.streams] marshal")
 	}
 	if _, err = w.Write(data); err != nil {
-		log.Error().Err(err).Msg("[api.stats] write")
+		log.Error().Err(err).Msg("[api.streams] write")
 	}
+}
+
+func exitHandler(w http.ResponseWriter, r *http.Request) {
+	s := r.URL.Query().Get("code")
+	code, _ := strconv.Atoi(s)
+	os.Exit(code)
 }
 
 func apiWS(w http.ResponseWriter, r *http.Request) {
