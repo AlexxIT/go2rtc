@@ -50,6 +50,8 @@ type Conn struct {
 
 	// public
 
+	Backchannel bool
+
 	Medias    []*streamer.Media
 	Session   string
 	UserAgent string
@@ -106,6 +108,9 @@ func (c *Conn) Dial() (err error) {
 	//if c.state != StateClientInit {
 	//	panic("wrong state")
 	//}
+	if c.conn != nil && c.auth != nil {
+		c.auth.Reset()
+	}
 
 	c.conn, err = net.DialTimeout(
 		"tcp", c.URL.Host, 10*time.Second,
@@ -258,21 +263,17 @@ func (c *Conn) Describe() error {
 		Method: MethodDescribe,
 		URL:    c.URL,
 		Header: map[string][]string{
-			"Accept":  {"application/sdp"},
-			"Require": {"www.onvif.org/ver20/backchannel"},
+			"Accept": {"application/sdp"},
 		},
+	}
+
+	if c.Backchannel {
+		req.Header.Set("Require", "www.onvif.org/ver20/backchannel")
 	}
 
 	res, err := c.Do(req)
 	if err != nil {
-		if res != nil {
-			// if we have answer - give second chanse without onvif header
-			req.Header.Del("Require")
-			res, err = c.Do(req)
-		}
-		if err != nil {
-			return err
-		}
+		return err
 	}
 
 	if val := res.Header.Get("Content-Base"); val != "" {

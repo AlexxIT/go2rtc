@@ -65,8 +65,17 @@ func rtspHandler(url string) (streamer.Producer, error) {
 	if err = conn.Dial(); err != nil {
 		return nil, err
 	}
+
+	conn.Backchannel = true
 	if err = conn.Describe(); err != nil {
-		return nil, err
+		// second try without backchannel, we need to reconnect
+		if err = conn.Dial(); err != nil {
+			return nil, err
+		}
+		conn.Backchannel = false
+		if err = conn.Describe(); err != nil {
+			return nil, err
+		}
 	}
 
 	return conn, nil
