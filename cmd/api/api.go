@@ -9,8 +9,6 @@ import (
 	"github.com/rs/zerolog"
 	"net"
 	"net/http"
-	"os"
-	"strconv"
 )
 
 func Init() {
@@ -39,9 +37,7 @@ func Init() {
 
 	HandleFunc("/api/frame.mp4", frameHandler)
 	HandleFunc("/api/frame.raw", frameHandler)
-	HandleFunc("/api/stack", stackHandler)
 	HandleFunc("/api/streams", streamsHandler)
-	HandleFunc("/api/exit", exitHandler)
 	HandleFunc("/api/ws", apiWS)
 
 	// ensure we can listen without errors
@@ -97,12 +93,6 @@ func streamsHandler(w http.ResponseWriter, r *http.Request) {
 	if _, err = w.Write(data); err != nil {
 		log.Error().Err(err).Msg("[api.streams] write")
 	}
-}
-
-func exitHandler(w http.ResponseWriter, r *http.Request) {
-	s := r.URL.Query().Get("code")
-	code, _ := strconv.Atoi(s)
-	os.Exit(code)
 }
 
 func apiWS(w http.ResponseWriter, r *http.Request) {

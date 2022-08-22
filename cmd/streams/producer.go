@@ -29,7 +29,7 @@ func (p *Producer) GetMedias() []*streamer.Media {
 
 		var err error
 		p.element, err = GetProducer(p.url)
-		if err != nil {
+		if err != nil || p.element == nil {
 			log.Error().Err(err).Str("url", p.url).Msg("[streams] probe producer")
 			return nil
 		}

@@ -2,6 +2,7 @@ package streams
 
 import (
 	"encoding/json"
+	"errors"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 )
 
@@ -78,7 +79,7 @@ func (s *Stream) AddConsumer(cons streamer.Consumer) (err error) {
 
 	// can't match tracks for consumer
 	if len(consumer.tracks) == 0 {
-		return nil
+		return errors.New("couldn't find the matching tracks")
 	}
 
 	s.consumers = append(s.consumers, consumer)

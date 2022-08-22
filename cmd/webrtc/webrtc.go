@@ -108,6 +108,7 @@ func offerHandler(ctx *api.Context, msg *streamer.Message) {
 	// 2. AddConsumer, so we get new tracks
 	if err = stream.AddConsumer(conn); err != nil {
 		log.Warn().Err(err).Msg("[api.webrtc] add consumer")
+		_ = conn.Conn.Close()
 		ctx.Error(err)
 		return
 	}

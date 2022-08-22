@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/AlexxIT/go2rtc/cmd/api"
 	"github.com/AlexxIT/go2rtc/cmd/app"
+	"github.com/AlexxIT/go2rtc/cmd/debug"
 	"github.com/AlexxIT/go2rtc/cmd/exec"
 	"github.com/AlexxIT/go2rtc/cmd/ffmpeg"
 	"github.com/AlexxIT/go2rtc/cmd/hass"
@@ -33,6 +34,7 @@ func main() {
 	mse.Init()
 
 	ngrok.Init()
+	debug.Init()
 
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
