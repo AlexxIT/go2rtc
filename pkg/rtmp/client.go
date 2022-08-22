@@ -3,9 +3,12 @@ package rtmp
 import (
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/hex"
+	"fmt"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/deepch/vdk/av"
+	"github.com/deepch/vdk/codec/aacparser"
 	"github.com/deepch/vdk/codec/h264parser"
 	"github.com/deepch/vdk/format/rtmp"
 	"github.com/pion/rtp"
@@ -70,9 +73,36 @@ func (c *Client) Dial() (err error) {
 			c.tracks = append(c.tracks, track)
 
 		case av.AAC:
-			panic("not implemented")
+			// TODO: fix support
+			cd := stream.(aacparser.CodecData)
+
+			// a=fmtp:97 streamtype=5;profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;config=1588
+			fmtp := fmt.Sprintf(
+				"config=%s",
+				hex.EncodeToString(cd.ConfigBytes),
+			)
+
+			codec := &streamer.Codec{
+				Name:      streamer.CodecAAC,
+				ClockRate: uint32(cd.Config.SampleRate),
+				Channels:  uint16(cd.Config.ChannelConfig),
+				FmtpLine:  fmtp,
+			}
+
+			media := &streamer.Media{
+				Kind:      streamer.KindAudio,
+				Direction: streamer.DirectionSendonly,
+				Codecs:    []*streamer.Codec{codec},
+			}
+			c.medias = append(c.medias, media)
+
+			track := &streamer.Track{
+				Codec: codec, Direction: media.Direction,
+			}
+			c.tracks = append(c.tracks, track)
+
 		default:
-			panic("unsupported codec")
+			fmt.Printf("[rtmp] unsupported codec %+v\n", stream)
 		}
 	}
 
