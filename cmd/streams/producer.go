@@ -2,6 +2,7 @@ package streams
 
 import (
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
+	"sync"
 )
 
 type state byte
@@ -21,9 +22,13 @@ type Producer struct {
 	tracks  []*streamer.Track
 
 	state state
+	mx    sync.Mutex
 }
 
 func (p *Producer) GetMedias() []*streamer.Media {
+	p.mx.Lock()
+	defer p.mx.Unlock()
+
 	if p.state == stateNone {
 		log.Debug().Str("url", p.url).Msg("[streams] probe producer")
 
@@ -41,6 +46,9 @@ func (p *Producer) GetMedias() []*streamer.Media {
 }
 
 func (p *Producer) GetTrack(media *streamer.Media, codec *streamer.Codec) *streamer.Track {
+	p.mx.Lock()
+	defer p.mx.Unlock()
+
 	if p.state == stateMedias {
 		p.state = stateTracks
 	}
@@ -61,6 +69,9 @@ func (p *Producer) GetTrack(media *streamer.Media, codec *streamer.Codec) *strea
 // internals
 
 func (p *Producer) start() {
+	p.mx.Lock()
+	defer p.mx.Unlock()
+
 	if p.state != stateTracks {
 		return
 	}
@@ -72,6 +83,8 @@ func (p *Producer) start() {
 }
 
 func (p *Producer) stop() {
+	p.mx.Lock()
+
 	log.Debug().Str("url", p.url).Msg("[streams] stop producer")
 
 	if p.element != nil {
@@ -82,4 +95,6 @@ func (p *Producer) stop() {
 	}
 	p.tracks = nil
 	p.state = stateNone
+
+	p.mx.Unlock()
 }
