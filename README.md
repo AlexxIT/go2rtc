@@ -128,6 +128,8 @@ Available source types:
 - [exec](#source-exec) - advanced FFmpeg and GStreamer integration
 - [hass](#source-hass) - Home Assistant integration
 
+**PS.** You can use sources like `MJPEG`, `HLS` and others via FFmpeg integration.
+
 #### Source: RTSP
 
 - Support **RTSP and RTSPS** links with multiple video and audio tracks
@@ -274,9 +276,9 @@ rtsp:
 
 ### Module: WebRTC
 
-WebRTC usually works without problems in the local network. But external access may require additional settings. It depends on what type of internet do you have.
+WebRTC usually works without problems in the local network. But external access may require additional settings. It depends on what type of Internet do you have.
 
-- by default, WebRTC use two random UDP ports for each connection (for video and audio)
+- by default, WebRTC use two random UDP ports for each connection (video and audio)
 - you can enable one additional TCP port for all connections and use it for external access
 
 **Static public IP**
