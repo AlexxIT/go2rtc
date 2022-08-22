@@ -1,4 +1,4 @@
 @SET GOOS=windows
 @SET GOARCH=amd64
 cd ..
-go build -ldflags "-s -w" -trimpath && upx-3.96 go2rtc.exe
+go build -ldflags "-w -s" -trimpath
