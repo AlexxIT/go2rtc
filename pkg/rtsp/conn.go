@@ -629,7 +629,7 @@ func (c *Conn) Handle() (err error) {
 		if channelID&1 == 0 {
 			packet := &rtp.Packet{}
 			if err = packet.Unmarshal(buf); err != nil {
-				return errors.New("wrong RTP data")
+				return
 			}
 
 			track := c.channels[channelID]
@@ -643,12 +643,12 @@ func (c *Conn) Handle() (err error) {
 			msg := &RTCP{Channel: channelID}
 
 			if err = msg.Header.Unmarshal(buf); err != nil {
-				return errors.New("wrong RTCP data")
+				return
 			}
 
 			msg.Packets, err = rtcp.Unmarshal(buf)
 			if err != nil {
-				return errors.New("wrong RTCP data")
+				return
 			}
 
 			c.Fire(msg)
