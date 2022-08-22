@@ -74,8 +74,12 @@ func (p *Producer) start() {
 func (p *Producer) stop() {
 	log.Debug().Str("url", p.url).Msg("[streams] stop producer")
 
-	_ = p.element.Stop()
-	p.element = nil
+	if p.element != nil {
+		_ = p.element.Stop()
+		p.element = nil
+	} else {
+		log.Warn().Str("url", p.url).Msg("[streams] stop empty producer")
+	}
 	p.tracks = nil
 	p.state = stateNone
 }
