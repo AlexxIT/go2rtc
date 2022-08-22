@@ -146,7 +146,9 @@ func (c *Conn) Request(req *tcp.Request) error {
 	}
 
 	c.sequence++
-	req.Header.Set("CSeq", strconv.Itoa(c.sequence))
+	// important to send case sensitive CSeq
+	// https://github.com/AlexxIT/go2rtc/issues/7
+	req.Header["CSeq"] = []string{strconv.Itoa(c.sequence)}
 
 	c.auth.Write(req)
 
