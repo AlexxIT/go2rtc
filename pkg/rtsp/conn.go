@@ -368,9 +368,10 @@ func (c *Conn) SetupMedia(
 
 	// Transport: RTP/AVP/TCP;unicast;interleaved=10-11;ssrc=10117CB7
 	// Transport: RTP/AVP/TCP;unicast;destination=192.168.1.123;source=192.168.10.12;interleaved=0
+	// Transport: RTP/AVP/TCP;ssrc=22345682;interleaved=0-1
 	s := res.Header.Get("Transport")
 	// TODO: rewrite
-	if !strings.HasPrefix(s, "RTP/AVP/TCP;unicast") {
+	if !strings.HasPrefix(s, "RTP/AVP/TCP;") {
 		return nil, fmt.Errorf("wrong transport: %s", s)
 	}
 
