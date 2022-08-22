@@ -43,6 +43,8 @@ const (
 	ModeServerConsumer
 )
 
+const KeepAlive = time.Second * 25
+
 type Conn struct {
 	streamer.Element
 
@@ -575,6 +577,7 @@ func (c *Conn) Handle() (err error) {
 	}()
 
 	//c.Fire(streamer.StatePlaying)
+	ts := time.Now().Add(KeepAlive)
 
 	for {
 		// we can read:
@@ -652,6 +655,17 @@ func (c *Conn) Handle() (err error) {
 			}
 
 			c.Fire(msg)
+		}
+
+		// keep-alive
+		now := time.Now()
+		if now.After(ts) {
+			req := &tcp.Request{Method: MethodOptions, URL: c.URL}
+			// don't need to wait respose on this request
+			if err = c.Request(req); err != nil {
+				return err
+			}
+			ts = now.Add(KeepAlive)
 		}
 	}
 }
