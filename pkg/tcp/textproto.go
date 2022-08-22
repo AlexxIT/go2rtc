@@ -2,6 +2,7 @@ package tcp
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"net/textproto"
@@ -45,6 +46,9 @@ func ReadResponse(r *bufio.Reader) (*Response, error) {
 	line, err := tp.ReadLine()
 	if err != nil {
 		return nil, err
+	}
+	if line == "" {
+		return nil, errors.New("empty response on RTSP request")
 	}
 
 	ss := strings.SplitN(line, " ", 3)
