@@ -2,9 +2,9 @@
 
 **go2rtc** - ultimate camera streaming application with support RTSP, WebRTC, FFmpeg, RTMP, etc.
 
-- zero-dependency and zero-config small [app for all OS](#installation) (Windows, macOS, Linux, ARM)
+- zero-dependency and zero-config small [app for all OS](#go2rtc-binary) (Windows, macOS, Linux, ARM)
 - zero-delay for all supported protocols (lowest possible streaming latency)
-- zero-load on CPU for supported codecs
+- low CPU load for supported codecs
 - on the fly transcoding for unsupported codecs via [FFmpeg](#source-ffmpeg)
 - multi-source 2-way [codecs negotiation](#codecs-negotiation)
 - streaming from private networks via [Ngrok](#module-webrtc)
@@ -14,7 +14,7 @@
 - [webrtc](https://github.com/pion/webrtc) go library and whole [@pion](https://github.com/pion) team
 - series of streaming projects from [@deepch](https://github.com/deepch)
 - [rtsp-simple-server](https://github.com/aler9/rtsp-simple-server) idea from [@aler9](https://github.com/aler9)
-- [GStreamer](https://gstreamer.freedesktop.org/) multimedia framework pipeline idea
+- [GStreamer](https://gstreamer.freedesktop.org/) framework pipeline idea
 - [MediaSoup](https://mediasoup.org/) framework routing idea
 
 ## Codecs negotiation
@@ -76,7 +76,7 @@ Download binary for your OS from [latest release](https://github.com/AlexxIT/go2
 - `go2rtc_mac_amd64` - Mac with Intel
 - `go2rtc_mac_arm64` - Mac with M1
 
-Don't forget to fix the rights `chmod +x go2rtc_linux_xxx` on Linux and Mac.
+Don't forget to fix the rights `chmod +x go2rtc_xxx_xxx` on Linux and Mac.
 
 ### go2rtc: Home Assistant Add-on
 
@@ -103,7 +103,7 @@ Create file `go2rtc.yaml` next to the app.
 - `api` server will start on default **1984 port**
 - `rtsp` server will start on default **8554 port**
 - `webrtc` will use random UDP port for each connection
-- `ffmpeg` will use default transcoding options (you need to install it [manually](https://ffmpeg.org/))
+- `ffmpeg` will use default transcoding options (you may install it [manually](https://ffmpeg.org/))
 
 Available modules:
 
@@ -118,7 +118,7 @@ Available modules:
 
 ### Module: Streams
 
-**go2rtc** support different stream source types. You can config only one link as stream source or multiple.
+**go2rtc** support different stream source types. You can config one or multiple link as stream source.
 
 Available source types:
 
@@ -405,9 +405,8 @@ In other cases you need to use IP-address of server with **go2rtc** application.
 2. Add generic camera with RTSP link:
    - Hass > Settings > Integrations > Add Integration > [Generic Camera](https://my.home-assistant.io/redirect/config_flow_start/?domain=generic) > `rtsp://...` or `rtmp://...`
 3. Use Picture Entity or Picture Glance lovelace card
+   - you can use either direct RTSP links to cameras or take RTSP streams from **go2rtc**
 4. Open full screen card - this is should be WebRTC stream
-
-- you can use either direct RTSP links to cameras or take RTSP streams from **go2rtc**
 
 PS. Default Home Assistant lovelace cards don't support 2-way audio. You can use 2-way audio from [Add-on Web UI](https://my.home-assistant.io/redirect/supervisor_addon/?addon=a889bffc_go2rtc&repository_url=https%3A%2F%2Fgithub.com%2FAlexxIT%2Fhassio-addons). But you need use HTTPS to access the microphone. This is a browser restriction and cannot be avoided.
 
