@@ -19,6 +19,9 @@ func HandleFunc(scheme string, handler Handler) {
 
 func HasProducer(url string) bool {
 	i := strings.IndexByte(url, ':')
+	if i <= 0 { // TODO: i < 4 ?
+		return false
+	}
 	return handlers[url[:i]] != nil
 }
 
