@@ -282,13 +282,7 @@ func (c *Conn) Describe() error {
 		}
 	}
 
-	// fix bug in Sonoff camera SDP "o=- 1 1 IN IP4 rom t_rtsplin"
-	// TODO: make some universal fix
-	if i := bytes.Index(res.Body, []byte("rom t_rtsplin")); i > 0 {
-		res.Body[i+3] = '_'
-	}
-
-	c.Medias, err = streamer.UnmarshalRTSPSDP(res.Body)
+	c.Medias, err = UnmarshalSDP(res.Body)
 	if err != nil {
 		return err
 	}
@@ -479,7 +473,7 @@ func (c *Conn) Accept() error {
 				return errors.New("wrong content type")
 			}
 
-			c.Medias, err = streamer.UnmarshalRTSPSDP(req.Body)
+			c.Medias, err = UnmarshalSDP(req.Body)
 			if err != nil {
 				return err
 			}
@@ -728,17 +722,35 @@ type RTCP struct {
 	Packets []rtcp.Packet
 }
 
-func between(s, sub1, sub2 string) (res string, ok1 bool, ok2 bool) {
-	i := strings.Index(s, sub1)
-	if i >= 0 {
-		ok1 = true
-		s = s[i+len(sub1):]
+const sdpHeader = `v=0
+o=- 0 0 IN IP4 0.0.0.0
+s=-
+t=0 0`
+
+func UnmarshalSDP(rawSDP []byte) ([]*streamer.Media, error) {
+	medias, err := streamer.UnmarshalSDP(rawSDP)
+	if err != nil {
+		// fix SDP header for some cameras
+		i := bytes.Index(rawSDP, []byte("\nm="))
+		if i > 0 {
+			rawSDP = append([]byte(sdpHeader), rawSDP[i:]...)
+			medias, err = streamer.UnmarshalSDP(rawSDP)
+		}
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	i = strings.Index(s, sub2)
-	if i >= 0 {
-		return s[:i], ok1, true
+	// fix bug in ONVIF spec
+	// https://www.onvif.org/specs/stream/ONVIF-Streaming-Spec-v241.pdf
+	for _, media := range medias {
+		switch media.Direction {
+		case streamer.DirectionRecvonly, "":
+			media.Direction = streamer.DirectionSendonly
+		case streamer.DirectionSendonly:
+			media.Direction = streamer.DirectionRecvonly
+		}
 	}
 
-	return s, ok1, false
+	return medias, nil
 }

@@ -2,6 +2,7 @@ package streams
 
 import (
 	"github.com/AlexxIT/go2rtc/pkg/fake"
+	"github.com/AlexxIT/go2rtc/pkg/rtsp"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -103,7 +104,7 @@ a=control:streamid=0
 
 func TestRouting(t *testing.T) {
 	prod := &fake.Producer{}
-	prod.Medias, _ = streamer.UnmarshalRTSPSDP([]byte(dahuaSimple))
+	prod.Medias, _ = rtsp.UnmarshalSDP([]byte(dahuaSimple))
 	assert.Len(t, prod.Medias, 3)
 
 	HandleFunc("fake", func(url string) (streamer.Producer, error) {

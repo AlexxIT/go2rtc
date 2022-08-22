@@ -180,26 +180,6 @@ func UnmarshalSDP(rawSDP []byte) ([]*Media, error) {
 	return medias, nil
 }
 
-func UnmarshalRTSPSDP(rawSDP []byte) ([]*Media, error) {
-	medias, err := UnmarshalSDP(rawSDP)
-	if err != nil {
-		return nil, err
-	}
-
-	// fix bug in ONVIF spec
-	// https://www.onvif.org/specs/stream/ONVIF-Streaming-Spec-v241.pdf
-	for _, media := range medias {
-		switch media.Direction {
-		case DirectionRecvonly, "":
-			media.Direction = DirectionSendonly
-		case DirectionSendonly:
-			media.Direction = DirectionRecvonly
-		}
-	}
-
-	return medias, nil
-}
-
 func MarshalSDP(medias []*Media) ([]byte, error) {
 	sd := &sdp.SessionDescription{}
 
