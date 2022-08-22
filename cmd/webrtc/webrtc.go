@@ -169,6 +169,7 @@ func ExchangeSDP(
 	// 2. AddConsumer, so we get new tracks
 	if err = stream.AddConsumer(conn); err != nil {
 		log.Warn().Err(err).Msg("[api.webrtc] add consumer")
+		_ = conn.Conn.Close()
 		return
 	}
 
