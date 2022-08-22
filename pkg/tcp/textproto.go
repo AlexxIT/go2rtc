@@ -2,7 +2,6 @@ package tcp
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"io"
 	"net/textproto"
@@ -50,7 +49,7 @@ func ReadResponse(r *bufio.Reader) (*Response, error) {
 
 	ss := strings.SplitN(line, " ", 3)
 	if len(ss) != 3 {
-		return nil, errors.New("malformed response")
+		return nil, fmt.Errorf("malformed response: %s", line)
 	}
 
 	res := &Response{
