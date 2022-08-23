@@ -426,3 +426,29 @@ log:
   streams: error
   webrtc: fatal
 ```
+
+## Security
+
+By default `go2rtc` start Web interface on port `1984` and RTSP on port `8554`. Both ports are accessible from your local network. So anyone on your local network can watch video from your cameras without authorization. The same rule applies to the Home Assistant Add-on.
+
+This is not a problem if you trust your local network as much as I do. But you can change this behaviour with a `go2rtc.yaml` config:
+
+```yaml
+api:
+  listen: "127.0.0.1:1984" # localhost
+
+rtsp:
+  listen: "127.0.0.1:8554" # localhost
+
+webrtc:
+  listen: ":8555" # external TCP port
+```
+
+- local access to RTSP is not a problem for [FFmpeg](#source-ffmpeg) integration, because it runs locally on your server
+- local access to API is not a problem for [Home Assistant Add-on](#go2rtc-home-assistant-add-on), because Hass runs locally on same server and Add-on Web UI protected with Hass authorization ([Ingress feature](https://www.home-assistant.io/blog/2019/04/15/hassio-ingress/))
+- external access to WebRTC TCP port is not a problem, because it used only for transmit encrypted media data
+  - anyway you need to open this port to your local network and to the Internet in order for WebRTC to work
+
+If you need Web interface protection without Home Assistant Add-on - you need to use reverse proxy, like [Nginx](https://nginx.org/), [Caddy](https://caddyserver.com/), [Ngrok](https://ngrok.com/), etc.
+
+PS. Additionally WebRTC opens a lot of random UDP ports for transmit encrypted media. They work without problems on the local network. And sometimes work for external access, even if you haven't opened ports on your router. But for stable external WebRTC access, you need to configure the TCP port.
