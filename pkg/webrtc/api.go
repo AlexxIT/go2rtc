@@ -1,6 +1,7 @@
 package webrtc
 
 import (
+	"github.com/pion/ice/v2"
 	"github.com/pion/interceptor"
 	"github.com/pion/webrtc/v3"
 	"net"
@@ -21,31 +22,30 @@ func NewAPI(address string) (*webrtc.API, error) {
 		return nil, err
 	}
 
-	if address == "" {
-		return webrtc.NewAPI(
-			webrtc.WithMediaEngine(m),
-			webrtc.WithInterceptorRegistry(i),
-		), nil
-	}
-
-	ln, err := net.Listen("tcp", address)
-	if err != nil {
-		return webrtc.NewAPI(
-			webrtc.WithMediaEngine(m),
-			webrtc.WithInterceptorRegistry(i),
-		), err
-	}
-
 	s := webrtc.SettingEngine{
 		//LoggerFactory: customLoggerFactory{},
 	}
-	s.SetNetworkTypes([]webrtc.NetworkType{
-		webrtc.NetworkTypeUDP4, webrtc.NetworkTypeUDP6,
-		webrtc.NetworkTypeTCP4, webrtc.NetworkTypeTCP6,
+
+	// disable listen on Hassio docker interfaces
+	s.SetInterfaceFilter(func(name string) bool {
+		return name != "hassio" && name != "docker0"
 	})
 
-	tcpMux := webrtc.NewICETCPMux(nil, ln, 8)
-	s.SetICETCPMux(tcpMux)
+	// disable mDNS listener
+	s.SetICEMulticastDNSMode(ice.MulticastDNSModeDisabled)
+
+	if address != "" {
+		ln, err := net.Listen("tcp", address)
+		if err == nil {
+			s.SetNetworkTypes([]webrtc.NetworkType{
+				webrtc.NetworkTypeUDP4, webrtc.NetworkTypeUDP6,
+				webrtc.NetworkTypeTCP4, webrtc.NetworkTypeTCP6,
+			})
+
+			tcpMux := webrtc.NewICETCPMux(nil, ln, 8)
+			s.SetICETCPMux(tcpMux)
+		}
+	}
 
 	return webrtc.NewAPI(
 		webrtc.WithMediaEngine(m),
