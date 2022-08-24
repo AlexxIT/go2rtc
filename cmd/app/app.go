@@ -52,7 +52,9 @@ func Init() {
 
 	modules = cfg.Mod
 
-	log.Info().Msgf("go2rtc %s/%s", runtime.GOOS, runtime.GOARCH)
+	path, _ := os.Getwd()
+	log.Debug().Str("os", runtime.GOOS).Str("arch", runtime.GOARCH).
+		Str("cwd", path).Int("conf_size", len(data)).Msgf("[app]")
 }
 
 func LoadConfig(v interface{}) {
