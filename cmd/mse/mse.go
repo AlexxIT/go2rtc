@@ -13,8 +13,8 @@ func Init() {
 }
 
 func handler(ctx *api.Context, msg *streamer.Message) {
-	url := ctx.Request.URL.Query().Get("url")
-	stream := streams.Get(url)
+	src := ctx.Request.URL.Query().Get("src")
+	stream := streams.Get(src)
 	if stream == nil {
 		return
 	}

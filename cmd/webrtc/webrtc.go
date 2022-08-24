@@ -63,13 +63,13 @@ var log zerolog.Logger
 var NewPConn func() (*pion.PeerConnection, error)
 
 func offerHandler(ctx *api.Context, msg *streamer.Message) {
-	name := ctx.Request.URL.Query().Get("url")
-	stream := streams.Get(name)
+	src := ctx.Request.URL.Query().Get("src")
+	stream := streams.Get(src)
 	if stream == nil {
 		return
 	}
 
-	log.Debug().Str("stream", name).Msg("[webrtc] new consumer")
+	log.Debug().Str("src", src).Msg("[webrtc] new consumer")
 
 	var err error
 

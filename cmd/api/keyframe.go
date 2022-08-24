@@ -8,8 +8,8 @@ import (
 )
 
 func frameHandler(w http.ResponseWriter, r *http.Request) {
-	url := r.URL.Query().Get("url")
-	stream := streams.Get(url)
+	src := r.URL.Query().Get("src")
+	stream := streams.Get(src)
 	if stream == nil {
 		return
 	}
