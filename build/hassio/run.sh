@@ -2,11 +2,13 @@
 
 set +e
 
+cd /config
+
 while true; do
-    if [ -x /config/go2rtc ]; then
-        /config/go2rtc -config /config/go2rtc.yaml
+    if [ -x go2rtc ]; then
+        ./go2rtc
     else
-        /app/go2rtc -config /config/go2rtc.yaml
+        /app/go2rtc
     fi
 
     sleep 5
