@@ -24,7 +24,11 @@ func Init() {
 		Mod map[string]string `yaml:"log"`
 	}
 
-	LoadConfig(&cfg)
+	if data != nil {
+		if err := yaml.Unmarshal(data, &cfg); err != nil {
+			println("ERROR: " + err.Error())
+		}
+	}
 
 	var writer io.Writer = os.Stdout
 
