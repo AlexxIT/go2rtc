@@ -44,6 +44,7 @@ func Init() {
 	listener, err := net.Listen("tcp", cfg.Mod.Listen)
 	if err != nil {
 		log.Fatal().Err(err).Msg("[api] listen")
+		return
 	}
 
 	log.Info().Str("addr", cfg.Mod.Listen).Msg("[api] listen")
@@ -51,7 +52,7 @@ func Init() {
 	go func() {
 		s := http.Server{}
 		if err = s.Serve(listener); err != nil {
-			log.Fatal().Err(err).Msg("[api] Serve")
+			log.Fatal().Err(err).Msg("[api] serve")
 		}
 	}()
 }
