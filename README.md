@@ -118,7 +118,7 @@ Available modules:
 
 ### Module: Streams
 
-**go2rtc** support different stream source types. You can config one or multiple link as stream source.
+**go2rtc** support different stream source types. You can config one or multiple links of any type as stream source.
 
 Available source types:
 
@@ -135,7 +135,7 @@ Available source types:
 - Support **RTSP and RTSPS** links with multiple video and audio tracks
 - Support **2-way audio** ONLY for [ONVIF Profile T](https://www.onvif.org/specs/stream/ONVIF-Streaming-Spec.pdf) cameras (back channel connection)
 
-**Attention:** proprietary 2-way audio standards are not supported!
+**Attention:** other 2-way audio standards are not supported! ONVIF without Profile T is not supported!
 
 ```yaml
 streams:
