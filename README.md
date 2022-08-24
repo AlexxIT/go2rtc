@@ -1,6 +1,6 @@
 # go2rtc
 
-**go2rtc** - ultimate camera streaming application with support RTSP, WebRTC, FFmpeg, RTMP, etc.
+Ultimate camera streaming application with support RTSP, WebRTC, FFmpeg, RTMP, etc.
 
 - zero-dependency and zero-config small [app for all OS](#go2rtc-binary) (Windows, macOS, Linux, ARM)
 - zero-delay for all supported protocols (lowest possible streaming latency)
@@ -94,6 +94,16 @@ Don't forget to fix the rights `chmod +x go2rtc_xxx_xxx` on Linux and Mac.
 ### go2rtc: Docker
 
 Container [alexxit/go2rtc](https://hub.docker.com/r/alexxit/go2rtc) with support `amd64`, `386`, `arm64`, `arm`. This container same as [Home Assistant Add-on](#go2rtc-home-assistant-add-on), but can be used separately from the Home Assistant. Container has preinstalled [FFmpeg](#source-ffmpeg) and [Ngrok](#module-ngrok) applications.
+
+```yaml
+services:
+  go2rtc:
+    image: alexxit/go2rtc
+    network_mode: host
+    restart: always
+    volumes:
+      - "~/go2rtc.yaml:/config/go2rtc.yaml"
+```
 
 ## Configuration
 
@@ -189,28 +199,15 @@ streams:
   rtsp: ffmpeg:rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0#video=copy#audio=copy
 ```
 
-All trascoding formats has built-in templates. But you can override them via YAML config. You can also add your own formats to config and use them with source params.
+All trascoding formats has [built-in templates](https://github.com/AlexxIT/go2rtc/blob/master/cmd/ffmpeg/ffmpeg.go): `h264`, `h264/ultra`, `h264/high`, `h265`, `opus`, `pcmu`, `pcmu/16000`, `pcmu/48000`, `pcma`, `pcma/16000`, `pcma/48000`, `aac/16000`.
+
+But you can override them via YAML config. You can also add your own formats to config and use them with source params.
 
 ```yaml
 ffmpeg:
   bin: ffmpeg                                        # path to ffmpeg binary
-  link: -hide_banner -i {input}                      # if input is link
-  file: -hide_banner -re -stream_loop -1 -i {input}  # if input not link
-  rtsp: -hide_banner -fflags nobuffer -flags low_delay -rtsp_transport tcp -i {input}  # if input is RTSP link
-  output: -rtsp_transport tcp -f rtsp {output}  # output
-
-  h264:       "-codec:v libx264 -g 30 -preset superfast -tune zerolatency -profile main -level 4.1"
-  h264/ultra: "-codec:v libx264 -g 30 -preset ultrafast -tune zerolatency"
-  h264/high:  "-codec:v libx264 -g 30 -preset superfast -tune zerolatency"
-  h265:       "-codec:v libx265 -g 30 -preset ultrafast -tune zerolatency"
-  opus:       "-codec:a libopus -ar 48000 -ac 2"
-  pcmu:       "-codec:a pcm_mulaw -ar 8000 -ac 1"
-  pcmu/16000: "-codec:a pcm_mulaw -ar 16000 -ac 1"
-  pcmu/48000: "-codec:a pcm_mulaw -ar 48000 -ac 1"
-  pcma:       "-codec:a pcm_alaw -ar 8000 -ac 1"
-  pcma/16000: "-codec:a pcm_alaw -ar 16000 -ac 1"
-  pcma/48000: "-codec:a pcm_alaw -ar 48000 -ac 1"
-  aac/16000:  "-codec:a aac -ar 16000 -ac 1"
+  h264: "-codec:v libx264 -g 30 -preset superfast -tune zerolatency -profile main -level 4.1"
+  mycodec: "-any args that support ffmpeg..."
 ```
 
 #### Source: Exec
