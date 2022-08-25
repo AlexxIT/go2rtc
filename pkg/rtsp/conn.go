@@ -451,15 +451,17 @@ func (c *Conn) Accept() error {
 			return err
 		}
 
+		if c.URL == nil {
+			c.URL = req.URL
+			c.UserAgent = req.Header.Get("User-Agent")
+		}
+
 		c.Fire(req)
 
 		// Receiver: OPTIONS > DESCRIBE > SETUP... > PLAY > TEARDOWN
 		// Sender: OPTIONS > ANNOUNCE > SETUP... > RECORD > TEARDOWN
 		switch req.Method {
 		case MethodOptions:
-			c.URL = req.URL
-			c.UserAgent = req.Header.Get("User-Agent")
-
 			res := &tcp.Response{
 				Header: map[string][]string{
 					"Public": {"OPTIONS, SETUP, TEARDOWN, DESCRIBE, PLAY, PAUSE, ANNOUNCE, RECORD"},
