@@ -2,17 +2,18 @@
 
 Ultimate camera streaming application with support RTSP, WebRTC, FFmpeg, RTMP, etc.
 
-- zero-dependency and zero-config small [app for all OS](#go2rtc-binary) (Windows, macOS, Linux, ARM)
+- zero-dependency and zero-config [small app](#go2rtc-binary) for all OS (Windows, macOS, Linux, ARM)
 - zero-delay for all supported protocols (lowest possible streaming latency)
 - low CPU load for supported codecs
 - on the fly transcoding for unsupported codecs via [FFmpeg](#source-ffmpeg)
 - multi-source 2-way [codecs negotiation](#codecs-negotiation)
-- streaming from private networks via [Ngrok](#module-webrtc)
+- streaming from private networks via [Ngrok](#module-ngrok)
+- can be [integrated to](#module-api) any smart home platform or be used as [standalone app](#go2rtc-binary)
 
 **Inspired by:**
 
-- [webrtc](https://github.com/pion/webrtc) go library and whole [@pion](https://github.com/pion) team
 - series of streaming projects from [@deepch](https://github.com/deepch)
+- [webrtc](https://github.com/pion/webrtc) go library and whole [@pion](https://github.com/pion) team
 - [rtsp-simple-server](https://github.com/aler9/rtsp-simple-server) idea from [@aler9](https://github.com/aler9)
 - [GStreamer](https://gstreamer.freedesktop.org/) framework pipeline idea
 - [MediaSoup](https://mediasoup.org/) framework routing idea
@@ -30,25 +31,26 @@ For example, you want to watch RTSP-stream from [Dahua IPC-K42](https://www.dahu
 - you can't get camera audio directly, because its audio codecs doesn't match with your browser codecs 
    - so you decide to use transcoding via FFmpeg and add this setting to config YAML file
    - you have chosen `OPUS/48000/2` codec, because it is higher quality than the `PCMU/8000` or `PCMA/8000`
-- now you have stream with two sources - **RTSP and FFmpeg**
 
-**go2rtc** automatically match codecs for you browser and all your stream sources. This called **multi-source 2-way codecs negotiation**. And this is one of the main features of this app.
-
-**PS.** You can select `PCMU` or `PCMA` codec in camera setting and don't use transcoding at all. Or you can select `AAC` codec for main stream and `PCMU` codec for second stream and add both RTSP to YAML config, this also will work fine.
+Now you have stream with two sources - **RTSP and FFmpeg**:
 
 ```yaml
 streams:
   dahua:
     - rtsp://admin:password@192.168.1.123/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif
-    - ffmpeg:rtsp://admin:password@192.168.1.123/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif#audio=opus
+    - ffmpeg:rtsp://admin:password@192.168.1.123/cam/realmonitor?channel=1&subtype=0#audio=opus
 ```
 
+**go2rtc** automatically match codecs for you browser and all your stream sources. This called **multi-source 2-way codecs negotiation**. And this is one of the main features of this app.
+
 ![](codecs.svg)
+
+**PS.** You can select `PCMU` or `PCMA` codec in camera setting and don't use transcoding at all. Or you can select `AAC` codec for main stream and `PCMU` codec for second stream and add both RTSP to YAML config, this also will work fine.
 
 ## Fast start
 
 1. Download [binary](#go2rtc-binary) or use [Docker](#go2rtc-docker) or [Home Assistant Add-on](#go2rtc-home-assistant-add-on)
-2. Open web interface [http://localhost:1984/](http://localhost:1984/)
+2. Open web interface: `http://localhost:1984/`
 
 **Optionally:**
 
@@ -176,18 +178,21 @@ streams:
 
 You can get any stream or file or device via FFmpeg and push it to go2rtc. The app will automatically start FFmpeg with the proper arguments when someone starts watching the stream.
 
+- FFmpeg preistalled for **Docker** and **Hass Add-on** users
+- **Hass Add-on** users can target files from [/media](https://www.home-assistant.io/more-info/local-media/setup-media/) folder
+
 Format: `ffmpeg:{input}#{param1}#{param2}#{param3}`. Examples:
 
 ```yaml
 streams:
   # [FILE] all tracks will be copied without transcoding codecs
-  file1: ffmpeg:~/media/BigBuckBunny.mp4
+  file1: ffmpeg:/media/BigBuckBunny.mp4
 
   # [FILE] video will be transcoded to H264, audio will be skipped
-  file2: ffmpeg:~/media/BigBuckBunny.mp4#video=h264
+  file2: ffmpeg:/media/BigBuckBunny.mp4#video=h264
 
   # [FILE] video will be copied, audio will be transcoded to pcmu
-  file3: ffmpeg:~/media/BigBuckBunny.mp4#video=copy#audio=pcmu
+  file3: ffmpeg:/media/BigBuckBunny.mp4#video=copy#audio=pcmu
 
   # [HLS] video will be copied, audio will be skipped
   hls: ffmpeg:https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/gear5/prog_index.m3u8#video=copy
@@ -216,7 +221,7 @@ FFmpeg source just a shortcut to exec source. You can get any stream or file or 
 
 ```yaml
 streams:
-  stream1: exec:ffmpeg -hide_banner -re -stream_loop -1 -i ~/media/BigBuckBunny.mp4 -c copy -rtsp_transport tcp -f rtsp {output}
+  stream1: exec:ffmpeg -hide_banner -re -stream_loop -1 -i /media/BigBuckBunny.mp4 -c copy -rtsp_transport tcp -f rtsp {output}
 ```
 
 #### Source: Hass
@@ -227,7 +232,7 @@ Support import camera links from [Home Assistant](https://www.home-assistant.io/
 
 ```yaml
 hass:
-  config: "~/.homeassistant"
+  config: "/config"  # skip this setting if you Hass Add-on user
 
 streams:
   generic_camera: hass:Camera1  # Settings > Integrations > Integration Name
@@ -339,6 +344,7 @@ webrtc:
 
 With Ngrok integration you can get external access to your streams in situation when you have Internet with private IP-address.
 
+- Ngrok preistalled for **Docker** and **Hass Add-on** users
 - you may need external access for two different things:
   - WebRTC stream, so you need tunnel WebRTC TCP port (ex. 8555)
   - go2rtc web interface, so you need tunnel API HTTP port (ex. 1984)
@@ -403,8 +409,8 @@ In other cases you need to use IP-address of server with **go2rtc** application.
    - Hass > Settings > Integrations > Add Integration > [RTSPtoWebRTC](https://my.home-assistant.io/redirect/config_flow_start/?domain=rtsp_to_webrtc) > `http://127.0.0.1:1984/`
 2. Add generic camera with RTSP link:
    - Hass > Settings > Integrations > Add Integration > [Generic Camera](https://my.home-assistant.io/redirect/config_flow_start/?domain=generic) > `rtsp://...` or `rtmp://...`
-3. Use Picture Entity or Picture Glance lovelace card
    - you can use either direct RTSP links to cameras or take RTSP streams from **go2rtc**
+3. Use Picture Entity or Picture Glance lovelace card
 4. Open full screen card - this is should be WebRTC stream
 
 PS. Default Home Assistant lovelace cards don't support 2-way audio. You can use 2-way audio from [Add-on Web UI](https://my.home-assistant.io/redirect/supervisor_addon/?addon=a889bffc_go2rtc&repository_url=https%3A%2F%2Fgithub.com%2FAlexxIT%2Fhassio-addons). But you need use HTTPS to access the microphone. This is a browser restriction and cannot be avoided.
