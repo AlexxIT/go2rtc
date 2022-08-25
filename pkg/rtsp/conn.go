@@ -638,7 +638,8 @@ func (c *Conn) Handle() (err error) {
 				_ = track.WriteRTP(packet)
 				//return fmt.Errorf("wrong channelID: %d", channelID)
 			} else {
-				panic("wrong channelID")
+				continue // TODO: maybe fix this
+				//panic("wrong channelID")
 			}
 		} else {
 			msg := &RTCP{Channel: channelID}
