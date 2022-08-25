@@ -41,21 +41,12 @@ func Init() {
 		return
 	}
 
-	ent := new(entries)
-	if err = json.Unmarshal(data, ent); err != nil {
+	storage := new(entries)
+	if err = json.Unmarshal(data, storage); err != nil {
 		return
 	}
 
 	urls := map[string]string{}
-
-	for _, entrie := range ent.Data.Entries {
-		switch entrie.Domain {
-		case "generic":
-			if entrie.Options.StreamSource != "" {
-				urls[entrie.Title] = entrie.Options.StreamSource
-			}
-		}
-	}
 
 	streams.HandleFunc("hass", func(url string) (streamer.Producer, error) {
 		if hurl := urls[url[5:]]; hurl != "" {
@@ -63,6 +54,32 @@ func Init() {
 		}
 		return nil, fmt.Errorf("can't get url: %s", url)
 	})
+
+	for _, entrie := range storage.Data.Entries {
+		switch entrie.Domain {
+		case "generic":
+			if entrie.Options.StreamSource == "" {
+				continue
+			}
+			urls[entrie.Title] = entrie.Options.StreamSource
+
+		//case "homekit_controller":
+		//	if entrie.Data.ClientID == "" {
+		//		continue
+		//	}
+		//	urls[entrie.Title] = fmt.Sprintf(
+		//		"homekit://%s:%d?client_id=%s&client_private=%s%s&device_id=%s&device_public=%s",
+		//		entrie.Data.DeviceHost, entrie.Data.DevicePort,
+		//		entrie.Data.ClientID, entrie.Data.ClientPrivate, entrie.Data.ClientPublic,
+		//		entrie.Data.DeviceID, entrie.Data.DevicePublic,
+		//	)
+
+		default:
+			continue
+		}
+
+		streams.Get("hass:" + entrie.Title)
+	}
 }
 
 var log zerolog.Logger
