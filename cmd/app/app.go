@@ -59,7 +59,9 @@ func Init() {
 
 func LoadConfig(v interface{}) {
 	if data != nil {
-		_ = yaml.Unmarshal(data, v)
+		if err := yaml.Unmarshal(data, v); err != nil {
+			log.Warn().Err(err).Msg("[app] read config")
+		}
 	}
 }
 
