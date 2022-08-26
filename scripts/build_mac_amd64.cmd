@@ -1,4 +1,4 @@
-@SET GOOS=linux
+@SET GOOS=darwin
 @SET GOARCH=amd64
 @cd ..
 del go2rtc
