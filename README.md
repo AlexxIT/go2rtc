@@ -206,8 +206,8 @@ streams:
   # [MJPEG] video will be transcoded to H264
   mjpeg: ffmpeg:http://185.97.122.128/cgi-bin/faststream.jpg?stream=half&fps=15#video=h264
 
-  # [RTSP] video and audio will be copied
-  rtsp: ffmpeg:rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0#video=copy#audio=copy
+  # [RTSP] video with rotation, should be transcoded, so select H264
+  rotate: ffmpeg:rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0#raw=-vf transpose=1#video=h264
 ```
 
 All trascoding formats has [built-in templates](https://github.com/AlexxIT/go2rtc/blob/master/cmd/ffmpeg/ffmpeg.go): `h264`, `h264/ultra`, `h264/high`, `h265`, `opus`, `pcmu`, `pcmu/16000`, `pcmu/48000`, `pcma`, `pcma/16000`, `pcma/48000`, `aac/16000`.
@@ -220,6 +220,8 @@ ffmpeg:
   h264: "-codec:v libx264 -g 30 -preset superfast -tune zerolatency -profile main -level 4.1"
   mycodec: "-any args that support ffmpeg..."
 ```
+
+Also you can use `raw` param for any additional FFmpeg arguments. As example for video rotation (`#raw=-vf transpose=1`). Remember that rotation is not possible without transcoding, so add supported codec as second param (`#video=h264`).
 
 #### Source: FFmpeg Device
 
