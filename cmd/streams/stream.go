@@ -30,6 +30,7 @@ func NewStream(source interface{}) *Stream {
 		}
 	case map[string]interface{}:
 		return NewStream(source["url"])
+	case nil:
 	default:
 		panic("wrong source type")
 	}
@@ -118,11 +119,17 @@ func (s *Stream) RemoveConsumer(cons streamer.Consumer) {
 }
 
 func (s *Stream) AddProducer(prod streamer.Producer) {
-	panic("not implemented")
+	producer := &Producer{element: prod, state: stateTracks}
+	s.producers = append(s.producers, producer)
 }
 
 func (s *Stream) RemoveProducer(prod streamer.Producer) {
-	panic("not implemented")
+	for i, producer := range s.producers {
+		if producer.element == prod {
+			s.removeProducer(i)
+			break
+		}
+	}
 }
 
 func (s *Stream) Active() bool {
