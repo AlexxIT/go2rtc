@@ -27,6 +27,7 @@ func Init() {
 	// RTSP client support
 	streams.HandleFunc("rtsp", rtspHandler)
 	streams.HandleFunc("rtsps", rtspHandler)
+	streams.HandleFunc("rtspx", rtspHandler)
 
 	// RTSP server support
 	address := conf.Mod.Listen
