@@ -4,9 +4,14 @@ Ultimate camera streaming application with support RTSP, WebRTC, FFmpeg, RTMP, e
 
 - zero-dependency and zero-config [small app](#go2rtc-binary) for all OS (Windows, macOS, Linux, ARM)
 - zero-delay for all supported protocols (lowest possible streaming latency)
+- streaming from `RTSP`, `RTMP`, `MJPEG`, `HLS`, `USB Cameras`, `files` and [other sources](#module-streams)
+- streaming to `RTSP` or `WebRTC` (any modern browser)
 - low CPU load for supported codecs
 - on the fly transcoding for unsupported codecs via [FFmpeg](#source-ffmpeg)
 - multi-source 2-way [codecs negotiation](#codecs-negotiation)
+   - mixing tracks from different sources to single stream
+   - auto match client supported codecs
+   - 2-way audio for `ONVIF Profile T` Cameras
 - streaming from private networks via [Ngrok](#module-ngrok)
 - can be [integrated to](#module-api) any smart home platform or be used as [standalone app](#go2rtc-binary)
 
@@ -134,9 +139,10 @@ Available modules:
 
 Available source types:
 
-- [rtsp](#source-rtsp) - most cameras on market
-- [rtmp](#source-rtmp)
-- [ffmpeg](#source-ffmpeg) - FFmpeg integration
+- [rtsp](#source-rtsp) - `RTSP` and `RTSPS` cameras
+- [rtmp](#source-rtmp) - `RTMP` streams
+- [ffmpeg](#source-ffmpeg) - FFmpeg integration (`MJPEG`, `HLS`, `files` and source types)
+- [ffmpeg:device](#source-ffmpeg-device) - local USB Camera or Webcam
 - [exec](#source-exec) - advanced FFmpeg and GStreamer integration
 - [hass](#source-hass) - Home Assistant integration
 
@@ -213,6 +219,23 @@ ffmpeg:
   bin: ffmpeg                                        # path to ffmpeg binary
   h264: "-codec:v libx264 -g 30 -preset superfast -tune zerolatency -profile main -level 4.1"
   mycodec: "-any args that support ffmpeg..."
+```
+
+#### Source: FFmpeg Device
+
+You can get video from any USB-camera or Webcam as RTSP or WebRTC stream. This is part of FFmpeg integration.
+
+- check available devices in Web interface
+- `resolution` and `framerate` must be supported by your camera!
+- for Linux supported only video for now
+- for macOS you can stream Facetime camera or whole Desktop!
+- for macOS important to set right framerate
+
+```yaml
+streams:
+  linux_usbcam:   ffmpeg:device?video=0&resolution=1280x720#video=h264
+  windows_webcam: ffmpeg:device?video=0#video=h264
+  macos_facetime: ffmpeg:device?video=0&audio=1&resolution=1280x720&framerate=30#video=h264#audio=pcma
 ```
 
 #### Source: Exec
