@@ -2,6 +2,7 @@ package rtmp
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"strconv"
 )
@@ -16,7 +17,7 @@ func (c *Client) GetTrack(media *streamer.Media, codec *streamer.Codec) *streame
 			return track
 		}
 	}
-	panic("wrong codec")
+	panic(fmt.Sprintf("wrong media/codec: %+v %+v", media, codec))
 }
 
 func (c *Client) Start() error {
