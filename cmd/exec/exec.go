@@ -49,7 +49,7 @@ func Handle(url string) (streamer.Producer, error) {
 	)
 
 	// remove `exec:`
-	args := strings.Split(url[5:], " ")
+	args := QuoteSplit(url[5:])
 	cmd := exec.Command(args[0], args[1:]...)
 
 	if log.Trace().Enabled() {
@@ -83,3 +83,39 @@ func Handle(url string) (streamer.Producer, error) {
 
 var log zerolog.Logger
 var waiters map[string]chan streamer.Producer
+
+func QuoteSplit(s string) []string {
+	var a []string
+
+	for len(s) > 0 {
+		is := strings.IndexByte(s, ' ')
+		if is >= 0 {
+			// skip prefix and double spaces
+			if is == 0 {
+				// goto next symbol
+				s = s[1:]
+				continue
+			}
+
+			// check if quote in word
+			if i := strings.IndexByte(s[:is], '"'); i >= 0 {
+				// search quote end
+				if is = strings.Index(s, `" `); is > 0 {
+					is += 1
+				} else {
+					is = -1
+				}
+			}
+		}
+
+		if is >= 0 {
+			a = append(a, strings.ReplaceAll(s[:is], `"`, ""))
+			s = s[is+1:]
+		} else {
+			//add last word
+			a = append(a, s)
+			break
+		}
+	}
+	return a
+}

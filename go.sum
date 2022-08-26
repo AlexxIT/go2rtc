@@ -1,3 +1,5 @@
+github.com/AlexxIT/srtp/v2 v2.0.10-0.20220608200505-3191d4f19c10 h1:4aKRthhmkYcStKuk1hcyvkeNJ/BDx5BTIvYmDO9ZJvg=
+github.com/AlexxIT/srtp/v2 v2.0.10-0.20220608200505-3191d4f19c10/go.mod h1:5TtM9yw6lsH0ppNCehB/EjEUli7VkUgKSPJqWVqbhQ4=
 github.com/AlexxIT/vdk v0.0.18-0.20220616041030-b0d122807b2e h1:NAgHHZB+JUN3/J4/yq1q1EAc8xwJ8bb/Qp0AcjkfzAA=
 github.com/AlexxIT/vdk v0.0.18-0.20220616041030-b0d122807b2e/go.mod h1:KqQ/KU3hOc4a62l/jPRH5Hiz5fhTq5cGCl8IqeCxWQI=
 github.com/cheekybits/genny v1.0.0/go.mod h1:+tQajlRqAUrPI7DOSpB0XAqZYtQakVtB7wXkRAgjxjQ=
@@ -90,8 +92,6 @@ github.com/pion/sdp/v3 v3.0.5/go.mod h1:iiFWFpQO8Fy3S5ldclBkpXqmWy02ns78NOKoLLL0
 github.com/pion/srtp v1.5.1 h1:9Q3jAfslYZBt+C69SI/ZcONJh9049JUHZWYRRf5KEKw=
 github.com/pion/srtp v1.5.1/go.mod h1:B+QgX5xPeQTNc1CJStJPHzOlHK66ViMDWTT0HZTCkcA=
 github.com/pion/srtp/v2 v2.0.9/go.mod h1:5TtM9yw6lsH0ppNCehB/EjEUli7VkUgKSPJqWVqbhQ4=
-github.com/pion/srtp/v2 v2.0.10 h1:b8ZvEuI+mrL8hbr/f1YiJFB34UMrOac3R3N1yq2UN0w=
-github.com/pion/srtp/v2 v2.0.10/go.mod h1:XEeSWaK9PfuMs7zxXyiN252AHPbH12NX5q/CFDWtUuA=
 github.com/pion/stun v0.3.5 h1:uLUCBCkQby4S1cf6CGuR9QrVOKcvUwFeemaC865QHDg=
 github.com/pion/stun v0.3.5/go.mod h1:gDMim+47EeEtfWogA37n6qXZS88L5V6LqFcf+DZA2UA=
 github.com/pion/transport v0.6.0/go.mod h1:iWZ07doqOosSLMhZ+FXUTq+TamDoXSllxpbGcfkCmbE=

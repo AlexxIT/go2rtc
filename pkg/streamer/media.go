@@ -46,12 +46,13 @@ func GetKind(name string) string {
 // - deepch/vdk/format/rtsp/sdp.Media
 // - pion/sdp.MediaDescription
 type Media struct {
-	Kind      string // video, audio
-	Direction string
-	Codecs    []*Codec
+	Kind      string   `json:"kind,omitempty"` // video or audio
+	Direction string   `json:"direction,omitempty"`
+	Codecs    []*Codec `json:"codecs,omitempty"`
 
-	MID     string // TODO: fixme?
-	Control string // TODO: fixme?
+	MID     string `json:"mid,omitempty"`     // TODO: fixme?
+	Control string `json:"control,omitempty"` // TODO: fixme?
+	Title   string `json:"title,omitempty"`   // TODO: fixme?
 }
 
 func (m *Media) String() string {

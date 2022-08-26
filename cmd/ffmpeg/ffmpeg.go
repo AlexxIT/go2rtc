@@ -1,6 +1,7 @@
 package ffmpeg
 
 import (
+	"github.com/AlexxIT/go2rtc/cmd/api"
 	"github.com/AlexxIT/go2rtc/cmd/app"
 	"github.com/AlexxIT/go2rtc/cmd/exec"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
@@ -20,9 +21,9 @@ func Init() {
 		"bin": "ffmpeg",
 
 		// inputs
-		"link": "-hide_banner -i {input}",
-		"rtsp": "-hide_banner -fflags nobuffer -flags low_delay -rtsp_transport tcp -i {input}",
-		"file": "-hide_banner -re -stream_loop -1 -i {input}",
+		"link": "-i {input}",
+		"rtsp": "-fflags nobuffer -flags low_delay -rtsp_transport tcp -i {input}",
+		"file": "-re -stream_loop -1 -i {input}",
 
 		// output
 		"out": "-rtsp_transport tcp -f rtsp {output}",
@@ -31,7 +32,8 @@ func Init() {
 		// `-preset superfast` - we can't use ultrafast because it doesn't support `-profile main -level 4.1`
 		// `-tune zerolatency` - for minimal latency
 		// `-profile main -level 4.1` - most used streaming profile
-		"h264":       "-codec:v libx264 -g 30 -preset superfast -tune zerolatency -profile main -level 4.1",
+		// `-pix_fmt yuv420p` - if input pix format 4:2:2
+		"h264":       "-codec:v libx264 -g 30 -preset superfast -tune zerolatency -profile main -level 4.1 -pix_fmt yuv420p",
 		"h264/ultra": "-codec:v libx264 -g 30 -preset ultrafast -tune zerolatency",
 		"h264/high":  "-codec:v libx264 -g 30 -preset superfast -tune zerolatency",
 		"h265":       "-codec:v libx265 -g 30 -preset ultrafast -tune zerolatency",
@@ -47,7 +49,7 @@ func Init() {
 
 	app.LoadConfig(&cfg)
 
-	tpl := cfg.Mod
+	tpl = cfg.Mod
 
 	streams.HandleFunc("ffmpeg", func(s string) (streamer.Producer, error) {
 		s = s[7:] // remove `ffmpeg:`
@@ -62,13 +64,15 @@ func Init() {
 		switch {
 		case strings.HasPrefix(s, "rtsp"):
 			template = tpl["rtsp"]
+		case strings.HasPrefix(s, "device"):
+			template, _ = getDevice(s)
 		case strings.Contains(s, "://"):
 			template = tpl["link"]
 		default:
 			template = tpl["file"]
 		}
 
-		s = "exec:" + tpl["bin"] + " " +
+		s = "exec:" + tpl["bin"] + " -hide_banner " +
 			strings.Replace(template, "{input}", s, 1)
 
 		if query != nil {
@@ -109,7 +113,11 @@ func Init() {
 
 		return exec.Handle(s)
 	})
+
+	api.HandleFunc("/api/devices", handleDevices)
 }
+
+var tpl map[string]string
 
 func parseQuery(s string) map[string][]string {
 	query := map[string][]string{}
