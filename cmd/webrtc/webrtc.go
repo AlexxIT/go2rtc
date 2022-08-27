@@ -151,8 +151,8 @@ func ExchangeSDP(
 	conn.UserAgent = userAgent
 	conn.Listen(func(msg interface{}) {
 		switch msg := msg.(type) {
-		case streamer.EventType:
-			if msg == streamer.StateNull {
+		case pion.PeerConnectionState:
+			if msg == pion.PeerConnectionStateClosed{
 				stream.RemoveConsumer(conn)
 			}
 		}

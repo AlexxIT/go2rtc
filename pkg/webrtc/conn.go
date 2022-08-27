@@ -62,17 +62,32 @@ func (c *Conn) Init() {
 		fmt.Printf("TODO: webrtc ontrack %#v\n", remote)
 	})
 
+	// OK connection:
+	// 15:01:46 ICE connection state changed: checking
+	// 15:01:46 peer connection state changed: connected
+	// 15:01:54 peer connection state changed: disconnected
+	// 15:02:20 peer connection state changed: failed
+	//
+	// Fail connection:
+	// 14:53:08 ICE connection state changed: checking
+	// 14:53:39 peer connection state changed: failed
 	c.Conn.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		c.Fire(state)
 
 		// TODO: remove
 		switch state {
 		case webrtc.PeerConnectionStateConnected:
-			c.Fire(streamer.StatePlaying)
+			c.Fire(streamer.StatePlaying) // TODO: remove
 		case webrtc.PeerConnectionStateDisconnected:
-			c.Fire(streamer.StateNull)
-		case webrtc.PeerConnectionStateFailed:
+			c.Fire(streamer.StateNull) // TODO: remove
+			// disconnect event comes earlier, than failed
+			// but it comes only for success connections
 			_ = c.Conn.Close()
+			c.Conn = nil
+		case webrtc.PeerConnectionStateFailed:
+			if c.Conn != nil {
+				_ = c.Conn.Close()
+			}
 		}
 	})
 }
