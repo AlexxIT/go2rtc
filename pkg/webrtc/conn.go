@@ -128,11 +128,37 @@ func (c *Conn) GetCompleteAnswer() (answer string, err error) {
 }
 
 func (c *Conn) remote() string {
-	for _, trans := range c.Conn.GetTransceivers() {
-		pair, _ := trans.Receiver().Transport().ICETransport().GetSelectedCandidatePair()
-		if pair.Remote != nil {
-			return pair.Remote.String()
-		}
+	if c.Conn == nil {
+		return ""
 	}
+
+	for _, trans := range c.Conn.GetTransceivers() {
+		if trans == nil {
+			continue
+		}
+
+		receiver := trans.Receiver()
+		if receiver == nil {
+			continue
+		}
+
+		transport := receiver.Transport()
+		if transport == nil {
+			continue
+		}
+
+		iceTransport := transport.ICETransport()
+		if iceTransport == nil {
+			continue
+		}
+
+		pair, _ := iceTransport.GetSelectedCandidatePair()
+		if pair == nil || pair.Remote == nil {
+			continue
+		}
+
+		return pair.Remote.String()
+	}
+
 	return ""
 }
