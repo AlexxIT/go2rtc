@@ -1,9 +1,10 @@
-package ffmpeg
+package device
 
 import (
+	"bytes"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
-	"github.com/rs/zerolog/log"
 	"io/ioutil"
+	"os/exec"
 	"strings"
 )
 
@@ -24,12 +25,25 @@ func loadMedias() {
 		log.Trace().Msg("[ffmpeg] " + file.Name())
 		if strings.HasPrefix(file.Name(), streamer.KindVideo) {
 			media := loadMedia(streamer.KindVideo, "/dev/"+file.Name())
-			medias = append(medias, media)
+			if media != nil {
+				medias = append(medias, media)
+			}
 		}
 	}
 }
 
 func loadMedia(kind, name string) *streamer.Media {
+	cmd := exec.Command(
+		Bin, "-hide_banner", "-f", "v4l2", "-list_formats", "all", "-i", name,
+	)
+	var buf bytes.Buffer
+	cmd.Stderr = &buf
+	_ = cmd.Run()
+
+	if !bytes.Contains(buf.Bytes(), []byte("Raw")) {
+		return nil
+	}
+
 	return &streamer.Media{
 		Kind: kind, Title: name,
 	}

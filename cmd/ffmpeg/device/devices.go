@@ -1,16 +1,24 @@
-package ffmpeg
+package device
 
 import (
 	"encoding/json"
+	"github.com/AlexxIT/go2rtc/cmd/api"
+	"github.com/AlexxIT/go2rtc/cmd/app"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 )
 
-func getDevice(src string) (string, error) {
+func Init() {
+	log = app.GetLogger("exec")
+
+	api.HandleFunc("/api/devices", handle)
+}
+
+func GetInput(src string) (string, error) {
 	if medias == nil {
 		loadMedias()
 	}
@@ -42,6 +50,8 @@ func getDevice(src string) (string, error) {
 	return input, nil
 }
 
+var Bin string
+var log zerolog.Logger
 var medias []*streamer.Media
 
 func findMedia(kind string, index int) *streamer.Media {
@@ -57,7 +67,7 @@ func findMedia(kind string, index int) *streamer.Media {
 	return nil
 }
 
-func handleDevices(w http.ResponseWriter, r *http.Request) {
+func handle(w http.ResponseWriter, r *http.Request) {
 	if medias == nil {
 		loadMedias()
 	}

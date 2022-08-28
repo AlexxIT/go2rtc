@@ -1,9 +1,9 @@
 package ffmpeg
 
 import (
-	"github.com/AlexxIT/go2rtc/cmd/api"
 	"github.com/AlexxIT/go2rtc/cmd/app"
 	"github.com/AlexxIT/go2rtc/cmd/exec"
+	"github.com/AlexxIT/go2rtc/cmd/ffmpeg/device"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"net/url"
@@ -21,9 +21,9 @@ func Init() {
 		"bin": "ffmpeg",
 
 		// inputs
-		"link": "-i {input}",
-		"rtsp": "-fflags nobuffer -flags low_delay -rtsp_transport tcp -i {input}",
 		"file": "-re -stream_loop -1 -i {input}",
+		"http": "-i {input}",
+		"rtsp": "-fflags nobuffer -flags low_delay -rtsp_transport tcp -i {input}",
 
 		// output
 		"out": "-rtsp_transport tcp -f rtsp {output}",
@@ -49,7 +49,7 @@ func Init() {
 
 	app.LoadConfig(&cfg)
 
-	tpl = cfg.Mod
+	tpl := cfg.Mod
 
 	streams.HandleFunc("ffmpeg", func(s string) (streamer.Producer, error) {
 		s = s[7:] // remove `ffmpeg:`
@@ -60,20 +60,29 @@ func Init() {
 			s = s[:i]
 		}
 
-		var template string
-		switch {
-		case strings.HasPrefix(s, "rtsp"):
-			template = tpl["rtsp"]
-		case strings.HasPrefix(s, "device"):
-			template, _ = getDevice(s)
-		case strings.Contains(s, "://"):
-			template = tpl["link"]
-		default:
-			template = tpl["file"]
+		var input string
+		if i := strings.IndexByte(s, ':'); i > 0 {
+			switch s[:i] {
+			case "http", "https":
+				input = strings.Replace(tpl["http"], "{input}", s, 1)
+			case "rtsp", "rtsps":
+				input = strings.Replace(tpl["rtsp"], "{input}", s, 1)
+			}
 		}
 
-		s = "exec:" + tpl["bin"] + " -hide_banner " +
-			strings.Replace(template, "{input}", s, 1)
+		if input == "" {
+			if strings.HasPrefix(s, "device?") {
+				var err error
+				input, err = device.GetInput(s)
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				input = strings.Replace(tpl["file"], "{input}", s, 1)
+			}
+		}
+
+		s = "exec:" + tpl["bin"] + " -hide_banner " + input
 
 		if query != nil {
 			for _, raw := range query["raw"] {
@@ -114,10 +123,9 @@ func Init() {
 		return exec.Handle(s)
 	})
 
-	api.HandleFunc("/api/devices", handleDevices)
+	device.Bin = cfg.Mod["bin"]
+	device.Init()
 }
-
-var tpl map[string]string
 
 func parseQuery(s string) map[string][]string {
 	query := map[string][]string{}
