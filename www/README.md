@@ -50,4 +50,5 @@ pc.ontrack = ev => {
 
 ## Useful links
 
+- https://www.webrtc-experiment.com/DetectRTC/
 - https://divtable.com/table-styler/
