@@ -84,8 +84,8 @@ func offerHandler(ctx *api.Context, msg *streamer.Message) {
 	conn.UserAgent = ctx.Request.UserAgent()
 	conn.Listen(func(msg interface{}) {
 		switch msg := msg.(type) {
-		case streamer.EventType:
-			if msg == streamer.StateNull {
+		case pion.PeerConnectionState:
+			if msg == pion.PeerConnectionStateClosed {
 				stream.RemoveConsumer(conn)
 			}
 		case *streamer.Message:
@@ -152,7 +152,7 @@ func ExchangeSDP(
 	conn.Listen(func(msg interface{}) {
 		switch msg := msg.(type) {
 		case pion.PeerConnectionState:
-			if msg == pion.PeerConnectionStateClosed{
+			if msg == pion.PeerConnectionStateClosed {
 				stream.RemoveConsumer(conn)
 			}
 		}
