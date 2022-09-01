@@ -63,16 +63,16 @@ func Init() {
 			}
 			urls[entrie.Title] = entrie.Options.StreamSource
 
-		//case "homekit_controller":
-		//	if entrie.Data.ClientID == "" {
-		//		continue
-		//	}
-		//	urls[entrie.Title] = fmt.Sprintf(
-		//		"homekit://%s:%d?client_id=%s&client_private=%s%s&device_id=%s&device_public=%s",
-		//		entrie.Data.DeviceHost, entrie.Data.DevicePort,
-		//		entrie.Data.ClientID, entrie.Data.ClientPrivate, entrie.Data.ClientPublic,
-		//		entrie.Data.DeviceID, entrie.Data.DevicePublic,
-		//	)
+		case "homekit_controller":
+			if entrie.Data.ClientID == "" {
+				continue
+			}
+			urls[entrie.Title] = fmt.Sprintf(
+				"homekit://%s:%d?client_id=%s&client_private=%s%s&device_id=%s&device_public=%s",
+				entrie.Data.DeviceHost, entrie.Data.DevicePort,
+				entrie.Data.ClientID, entrie.Data.ClientPrivate, entrie.Data.ClientPublic,
+				entrie.Data.DeviceID, entrie.Data.DevicePublic,
+			)
 
 		default:
 			continue

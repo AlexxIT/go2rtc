@@ -42,11 +42,8 @@
     </style>
 </head>
 <body>
-<div class="header">
-    <input id="src" type="text" placeholder="url">
-    <a id="add" href="#">add</a>
-</div>
-<table id="devices">
+<script src="main.js"></script>
+<table>
     <thead>
     <tr>
         <th>Kind</th>
@@ -61,22 +58,18 @@
         0, location.pathname.lastIndexOf("/")
     );
 
-    function reload() {
-        fetch(`${baseUrl}/api/devices`).then(r => {
-            r.json().then(data => {
-                let html = '';
-
-                data.forEach(function (item) {
-                    html += `<tr><td>${item.kind}</td><td>${item.title}</td></tr>`;
-                })
-
-                let content = document.getElementById('devices').getElementsByTagName('tbody')[0];
-                content.innerHTML = html
-            });
+    fetch(`${baseUrl}/api/devices`)
+        .then(r => r.json())
+        .then(data => {
+            document.querySelector("body > table > tbody").innerHTML =
+                data.reduce((html, item) => {
+                    return html + `<tr>
+                        <td>${item.kind}</td>
+                        <td>${item.title}</td>
+                    </tr>`;
+                }, '');
         })
-    }
-
-    reload();
+        .catch(console.error);
 </script>
 </body>
 </html>

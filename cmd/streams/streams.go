@@ -2,6 +2,7 @@ package streams
 
 import (
 	"github.com/AlexxIT/go2rtc/cmd/app"
+	"github.com/AlexxIT/go2rtc/cmd/app/store"
 	"github.com/rs/zerolog"
 )
 
@@ -15,6 +16,10 @@ func Init() {
 	log = app.GetLogger("streams")
 
 	for name, item := range cfg.Mod {
+		streams[name] = NewStream(item)
+	}
+
+	for name, item := range store.GetDict("streams") {
 		streams[name] = NewStream(item)
 	}
 }
@@ -32,6 +37,10 @@ func Get(name string) *Stream {
 	}
 
 	return nil
+}
+
+func New(name string, source interface{}) {
+	streams[name] = NewStream(source)
 }
 
 func Delete(name string) {

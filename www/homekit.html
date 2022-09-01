@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=yes, initial-scale=1, maximum-scale=1">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+
+    <title>go2rtc</title>
+
+    <style>
+        table {
+            background-color: white;
+            text-align: left;
+            border-collapse: collapse;
+        }
+
+        table td, table th {
+            border: 1px solid black;
+            padding: 5px 5px;
+        }
+
+        table tbody td {
+            font-size: 13px;
+        }
+
+        table thead {
+            background: #CFCFCF;
+            background: linear-gradient(to bottom, #dbdbdb 0%, #d3d3d3 66%, #CFCFCF 100%);
+            border-bottom: 3px solid black;
+        }
+
+        table thead th {
+            font-size: 15px;
+            font-weight: bold;
+            color: black;
+            text-align: center;
+        }
+
+        .header {
+            padding: 5px 5px;
+        }
+    </style>
+</head>
+<body>
+<script src="main.js"></script>
+<div class="header">
+    <label for="pin">PIN</label>
+    <input id="pin" type="text">
+</div>
+<table>
+    <thead>
+    <tr>
+        <th>Name</th>
+        <th>Address</th>
+        <th>Model</th>
+        <th>Commands</th>
+    </tr>
+    </thead>
+    <tbody>
+
+    </tbody>
+</table>
+<script>
+    const baseUrl = location.origin + location.pathname.substr(
+        0, location.pathname.lastIndexOf("/")
+    );
+
+    fetch(`${baseUrl}/api/homekit`)
+        .then(r => r.json())
+        .then(data => {
+            document.querySelector("body > table > tbody").innerHTML =
+                data.reduce((res, item) => {
+                    let commands = '';
+                    if (item.id === "") {
+                        commands = `<a href="#" onclick="unpair('${item.name}')">unpair</a>`;
+                    } else if (item.paired === false) {
+                        commands = `<a href="#" onclick="pair('${item.id}','${item.name}')">pair</a>`;
+                    }
+                    return res + `<tr>
+                        <td>${item.name}</td>
+                        <td>${item.addr}</td>
+                        <td>${item.model}</td>
+                        <td>${commands}</td>
+                    </tr>`;
+                }, '');
+        })
+        .catch(console.error);
+
+    function pair(id, name) {
+        const pin = document.querySelector("#pin").value;
+        fetch(`${baseUrl}/api/homekit?id=${id}&name=${name}&pin=${pin}`, {method: 'POST'})
+            .then(r => r.text())
+            .then(data => {
+                if (data.length > 0) alert(data);
+                else window.location.reload();
+            })
+            .catch(console.error);
+    }
+
+    function unpair(src) {
+        fetch(`${baseUrl}/api/homekit?src=${src}`, {method: 'DELETE'})
+            .then(r => r.text())
+            .then(data => {
+                if (data.length > 0) alert(data);
+                else window.location.reload();
+            })
+            .catch(console.error);
+    }
+</script>
+</body>
+</html>

@@ -7,10 +7,12 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/exec"
 	"github.com/AlexxIT/go2rtc/cmd/ffmpeg"
 	"github.com/AlexxIT/go2rtc/cmd/hass"
+	"github.com/AlexxIT/go2rtc/cmd/homekit"
 	"github.com/AlexxIT/go2rtc/cmd/mse"
 	"github.com/AlexxIT/go2rtc/cmd/ngrok"
 	"github.com/AlexxIT/go2rtc/cmd/rtmp"
 	"github.com/AlexxIT/go2rtc/cmd/rtsp"
+	"github.com/AlexxIT/go2rtc/cmd/srtp"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
 	"github.com/AlexxIT/go2rtc/cmd/webrtc"
 	"os"
@@ -32,6 +34,9 @@ func main() {
 
 	webrtc.Init()
 	mse.Init()
+
+	srtp.Init()
+	homekit.Init()
 
 	ngrok.Init()
 	debug.Init()
