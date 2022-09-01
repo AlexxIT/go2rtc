@@ -1,11 +1,14 @@
 # go2rtc
 
-Ultimate camera streaming application with support RTSP, WebRTC, FFmpeg, RTMP, etc.
+Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg, RTMP, etc.
+
+![](assets/go2rtc.png)
 
 - zero-dependency and zero-config [small app](#go2rtc-binary) for all OS (Windows, macOS, Linux, ARM)
 - zero-delay for all supported protocols (lowest possible streaming latency)
-- streaming from `RTSP`, `RTMP`, `MJPEG`, `HLS`, `USB Cameras`, `files` and [other sources](#module-streams)
-- streaming to `RTSP` or `WebRTC` (any modern browser)
+- streaming from [RTSP](#source-rtsp), [RTMP](#source-rtmp), [MJPEG](#source-ffmpeg), [HLS](#source-ffmpeg), [USB Cameras](#source-ffmpeg-device), [files](#source-ffmpeg) and [other sources](#module-streams)
+- streaming to [RTSP](#module-rtsp), [WebRTC](#module-webrtc) or [MSE](#module-api)
+- first project in the World with support streaming from [HomeKit Cameras](#source-homekit)
 - low CPU load for supported codecs
 - on the fly transcoding for unsupported codecs via [FFmpeg](#source-ffmpeg)
 - multi-source 2-way [codecs negotiation](#codecs-negotiation)
@@ -22,6 +25,7 @@ Ultimate camera streaming application with support RTSP, WebRTC, FFmpeg, RTMP, e
 - [rtsp-simple-server](https://github.com/aler9/rtsp-simple-server) idea from [@aler9](https://github.com/aler9)
 - [GStreamer](https://gstreamer.freedesktop.org/) framework pipeline idea
 - [MediaSoup](https://mediasoup.org/) framework routing idea
+- HomeKit Accessory Protocol from [@brutella](https://github.com/brutella/hap)
 
 ## Codecs negotiation
 
@@ -48,7 +52,7 @@ streams:
 
 **go2rtc** automatically match codecs for you browser and all your stream sources. This called **multi-source 2-way codecs negotiation**. And this is one of the main features of this app.
 
-![](codecs.svg)
+![](assets/codecs.svg)
 
 **PS.** You can select `PCMU` or `PCMA` codec in camera setting and don't use transcoding at all. Or you can select `AAC` codec for main stream and `PCMU` codec for second stream and add both RTSP to YAML config, this also will work fine.
 
@@ -144,6 +148,7 @@ Available source types:
 - [ffmpeg](#source-ffmpeg) - FFmpeg integration (`MJPEG`, `HLS`, `files` and source types)
 - [ffmpeg:device](#source-ffmpeg-device) - local USB Camera or Webcam
 - [exec](#source-exec) - advanced FFmpeg and GStreamer integration
+- [homekit](#source-homekit) - streaming from HomeKit Camera
 - [hass](#source-hass) - Home Assistant integration
 
 **PS.** You can use sources like `MJPEG`, `HLS` and others via FFmpeg integration.
@@ -249,11 +254,28 @@ streams:
   stream1: exec:ffmpeg -hide_banner -re -stream_loop -1 -i /media/BigBuckBunny.mp4 -c copy -rtsp_transport tcp -f rtsp {output}
 ```
 
+#### Source: HomeKit
+
+**Important:**
+
+- You can use HomeKit Cameras **without Apple devices** (iPhone, iPad, etc.), it's just a yet another protocol
+- HomeKit device can be paired with only one ecosystem. So, if you have paired it to an iPhone (Apple Home) - you can't pair it with Home Assistant or go2rtc. Or if you have paired it to go2rtc - you can't pair it with iPhone
+- HomeKit device should be in same network with working [mDNS](https://en.wikipedia.org/wiki/Multicast_DNS) between device and go2rtc
+
+go2rtc support import paired HomeKit devices from [Home Assistant](#source-hass). So you can use HomeKit camera with Hass and go2rtc simultaneously. If you using Hass, I recommend pairing devices with it, it will give you more options.
+
+You can pair device with go2rtc on the HomeKit page. If you can't see your devices - reload the page. Also try reboot your HomeKit device (power off). If you still can't see it - you have a problems with mDNS.
+
+If you see a device but it does not have a pair button - it is paired to some ecosystem (Apple Home, Home Assistant, HomeBridge etc). You need to delete device from that ecosystem, and it will be available for pairing. If you cannot unpair device, you will have to reset it.
+
+**This source is in active development!** Tested only with [Aqara Camera Hub G3](https://www.aqara.com/eu/product/camera-hub-g3) (both EU and CN versions).
+
 #### Source: Hass
 
 Support import camera links from [Home Assistant](https://www.home-assistant.io/) config files:
 
-- support ONLY [Generic Camera](https://www.home-assistant.io/integrations/generic/), setup via GUI
+- support [Generic Camera](https://www.home-assistant.io/integrations/generic/), setup via GUI
+- support [HomeKit Camera](https://www.home-assistant.io/integrations/homekit_controller/)
 
 ```yaml
 hass:
@@ -261,6 +283,7 @@ hass:
 
 streams:
   generic_camera: hass:Camera1  # Settings > Integrations > Integration Name
+  aqara_g3: hass:Camera-Hub-G3-AB12
 ```
 
 ### Module: API
