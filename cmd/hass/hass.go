@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"github.com/AlexxIT/go2rtc/cmd/api"
 	"github.com/AlexxIT/go2rtc/cmd/app"
-	"github.com/AlexxIT/go2rtc/cmd/rtsp"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
 	"github.com/AlexxIT/go2rtc/cmd/webrtc"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/rs/zerolog"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"strings"
@@ -90,7 +90,13 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	url := r.FormValue("url")
+	src := r.FormValue("url")
+	src, err := url.QueryUnescape(src)
+	if err != nil {
+		log.Error().Err(err).Msg("[api.hass] query unescape")
+		return
+	}
+
 	str := r.FormValue("sdp64")
 
 	offer, err := base64.StdEncoding.DecodeString(str)
@@ -99,16 +105,20 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: fixme
-	if strings.HasPrefix(url, "rtsp://") {
-		port := ":" + rtsp.Port + "/"
-		i := strings.Index(url, port)
-		if i > 0 {
-			url = url[i+len(port):]
+	// check if stream links to our rtsp server
+	if strings.HasPrefix(src, "rtsp://") {
+		i := strings.IndexByte(src[7:], '/')
+		if i > 0 && streams.Has(src[8+i:]) {
+			src = src[8+i:]
 		}
 	}
 
-	stream := streams.Get(url)
+	stream := streams.Get(src)
+	if stream == nil {
+		log.Error().Str("url", src).Msg("[api.hass] unsupported source")
+		return
+	}
+
 	str, err = webrtc.ExchangeSDP(stream, string(offer), r.UserAgent())
 	if err != nil {
 		log.Error().Err(err).Msg("[api.hass] exchange SDP")

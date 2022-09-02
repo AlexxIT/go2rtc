@@ -24,19 +24,24 @@ func Init() {
 	}
 }
 
-func Get(name string) *Stream {
-	if stream, ok := streams[name]; ok {
+func Get(src string) *Stream {
+	if stream, ok := streams[src]; ok {
 		return stream
+
 	}
 
-	if HasProducer(name) {
-		log.Info().Str("url", name).Msg("[streams] create new stream")
-		stream := NewStream(name)
-		streams[name] = stream
-		return stream
+	if !HasProducer(src) {
+		return nil
 	}
 
-	return nil
+	log.Info().Str("url", src).Msg("[streams] create new stream")
+	stream := NewStream(src)
+	streams[src] = stream
+	return stream
+}
+
+func Has(src string) bool {
+	return streams[src] != nil
 }
 
 func New(name string, source interface{}) {
