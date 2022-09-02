@@ -78,7 +78,7 @@ func Init() {
 			continue
 		}
 
-		streams.Get("hass:" + entrie.Title)
+		//streams.Get("hass:" + entrie.Title)
 	}
 }
 
