@@ -30,13 +30,14 @@ const (
 	CodecAAC  = "MPEG4-GENERIC"
 	CodecOpus = "OPUS" // payloadType: 111
 	CodecG722 = "G722"
+	CodecMPA  = "MPA" // payload: 14
 )
 
 func GetKind(name string) string {
 	switch name {
 	case CodecH264, CodecH265, CodecVP8, CodecVP9, CodecAV1:
 		return KindVideo
-	case CodecPCMU, CodecPCMA, CodecAAC, CodecOpus, CodecG722:
+	case CodecPCMU, CodecPCMA, CodecAAC, CodecOpus, CodecG722, CodecMPA:
 		return KindAudio
 	}
 	return ""
@@ -256,11 +257,14 @@ func UnmarshalCodec(md *sdp.MediaDescription, payloadType string) *Codec {
 	if c.Name == "" {
 		switch payloadType {
 		case "0":
-			c.Name = "PCMU"
+			c.Name = CodecPCMU
 			c.ClockRate = 8000
 		case "8":
-			c.Name = "PCMA"
+			c.Name = CodecPCMA
 			c.ClockRate = 8000
+		case "14":
+			c.Name = CodecMPA
+			c.ClockRate = 44100
 		default:
 			c.Name = payloadType
 		}
