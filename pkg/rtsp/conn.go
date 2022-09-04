@@ -331,11 +331,18 @@ func (c *Conn) SetupMedia(
 		return nil, fmt.Errorf("wrong media: %v", media)
 	}
 
-	trackURL, err := url.Parse(media.Control)
+	rawURL := media.Control
+	if !strings.Contains(rawURL, "://") {
+		rawURL = c.URL.String()
+		if !strings.HasSuffix(rawURL, "/") {
+			rawURL += "/"
+		}
+		rawURL += media.Control
+	}
+	trackURL, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, err
 	}
-	trackURL = c.URL.ResolveReference(trackURL)
 
 	req := &tcp.Request{
 		Method: MethodSetup,
