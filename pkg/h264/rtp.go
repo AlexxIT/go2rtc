@@ -1,6 +1,7 @@
 package h264
 
 import (
+	"encoding/binary"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/pion/rtp"
 	"github.com/pion/rtp/codecs"
@@ -19,62 +20,83 @@ func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
 
 	return func(push streamer.WriterFunc) streamer.WriterFunc {
 		return func(packet *rtp.Packet) error {
-			//println(packet.SequenceNumber, packet.Payload[0]&0x1F, packet.Payload[0], packet.Payload[1], packet.Marker, packet.Timestamp)
+			//nalUnitType := packet.Payload[0] & 0x1F
+			//fmt.Printf(
+			//	"[RTP] codec: %s, nalu: %2d, size: %6d, ts: %10d, pt: %2d, ssrc: %d\n",
+			//	track.Codec.Name, nalUnitType, len(packet.Payload), packet.Timestamp,
+			//	packet.PayloadType, packet.SSRC,
+			//)
 
-			data, err := depack.Unmarshal(packet.Payload)
-			if len(data) == 0 || err != nil {
+			// NALu packets can be split in different ways:
+			// - single type 7 and type 8 packets
+			// - join type 7 and type 8 packet (type 24)
+			// - split type 5 on multiple 28 packets
+			// - split type 5 on multiple separate 28 packets
+			units, err := depack.Unmarshal(packet.Payload)
+			if len(units) == 0 || err != nil {
 				return nil
 			}
 
-			naluType := NALUType(data)
-			//println(naluType, len(data))
+			for {
+				i := int(binary.BigEndian.Uint32(units)) + 4
+				unitAVC := units[:i]
 
-			switch naluType {
-			case NALUTypeSPS:
-				//println("new SPS")
-				sps = data
-				return nil
-			case NALUTypePPS:
-				//println("new PPS")
-				pps = data
-				return nil
-			}
+				unitType := NALUType(unitAVC)
+				switch unitType {
+				case NALUTypeSPS:
+					//println("new SPS")
+					sps = unitAVC
+					return nil
+				case NALUTypePPS:
+					//println("new PPS")
+					pps = unitAVC
+					return nil
+				}
 
-			// ffmpeg with `-tune zerolatency` enable option `-x264opts sliced-threads=1`
-			// and every NALU will be sliced to multiple NALUs
-			if !packet.Marker {
-				buffer = append(buffer, data...)
-				return nil
-			}
+				// ffmpeg with `-tune zerolatency` enable option `-x264opts sliced-threads=1`
+				// and every NALU will be sliced to multiple NALUs
+				if !packet.Marker {
+					buffer = append(buffer, unitAVC...)
+					return nil
+				}
 
-			if buffer != nil {
-				buffer = append(buffer, data...)
-				data = buffer
-				buffer = nil
-			}
+				if buffer != nil {
+					buffer = append(buffer, unitAVC...)
+					unitAVC = buffer
+					buffer = nil
+				}
 
-			var clone rtp.Packet
+				var clone rtp.Packet
 
-			if naluType == NALUTypeIFrame {
-				clone = *packet
-				clone.Version = RTPPacketVersionAVC
-				clone.Payload = sps
-				if err = push(&clone); err != nil {
-					return err
+				if unitType == NALUTypeIFrame {
+					clone = *packet
+					clone.Version = RTPPacketVersionAVC
+					clone.Payload = sps
+					if err = push(&clone); err != nil {
+						return err
+					}
+
+					clone = *packet
+					clone.Version = RTPPacketVersionAVC
+					clone.Payload = pps
+					if err = push(&clone); err != nil {
+						return err
+					}
 				}
 
 				clone = *packet
 				clone.Version = RTPPacketVersionAVC
-				clone.Payload = pps
+				clone.Payload = unitAVC
 				if err = push(&clone); err != nil {
 					return err
 				}
-			}
 
-			clone = *packet
-			clone.Version = RTPPacketVersionAVC
-			clone.Payload = data
-			return push(&clone)
+				if len(units) == i {
+					return nil
+				}
+
+				units = units[i:]
+			}
 		}
 	}
 }
