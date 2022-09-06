@@ -34,6 +34,7 @@ func Init() {
 	log = app.GetLogger("api")
 
 	initStatic(cfg.Mod.StaticDir)
+	initWS()
 
 	HandleFunc("/api/frame.mp4", frameHandler)
 	HandleFunc("/api/frame.raw", frameHandler)
