@@ -69,7 +69,7 @@ func offerHandler(ctx *api.Context, msg *streamer.Message) {
 		return
 	}
 
-	log.Debug().Str("src", src).Msg("[webrtc] new consumer")
+	log.Debug().Str("url", src).Msg("[webrtc] new consumer")
 
 	var err error
 

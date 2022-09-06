@@ -26,7 +26,7 @@ func Init() {
 
 	app.LoadConfig(&conf)
 
-	log = app.GetLogger("api")
+	log = app.GetLogger("hass")
 
 	// support https://www.home-assistant.io/integrations/rtsp_to_webrtc/
 	api.HandleFunc("/static", func(w http.ResponseWriter, r *http.Request) {
@@ -78,7 +78,7 @@ func Init() {
 			continue
 		}
 
-		log.Info().Str("src", "hass:" + entrie.Title).Msg("[hass] new stream")
+		log.Info().Str("url", "hass:" + entrie.Title).Msg("[hass] load stream")
 		//streams.Get("hass:" + entrie.Title)
 	}
 }
