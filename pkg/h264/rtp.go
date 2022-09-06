@@ -37,32 +37,34 @@ func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
 				return nil
 			}
 
-			for {
+			for len(units) > 0 {
 				i := int(binary.BigEndian.Uint32(units)) + 4
-				unitAVC := units[:i]
+				unit := units[:i] // NAL Unit with AVC header
+				units = units[i:]
 
-				unitType := NALUType(unitAVC)
+				unitType := NALUType(unit)
+				//fmt.Printf("[H264] type: %2d, size: %6d\n", unitType, i)
 				switch unitType {
 				case NALUTypeSPS:
 					//println("new SPS")
-					sps = unitAVC
-					return nil
+					sps = unit
+					continue
 				case NALUTypePPS:
 					//println("new PPS")
-					pps = unitAVC
-					return nil
+					pps = unit
+					continue
 				}
 
 				// ffmpeg with `-tune zerolatency` enable option `-x264opts sliced-threads=1`
 				// and every NALU will be sliced to multiple NALUs
 				if !packet.Marker {
-					buffer = append(buffer, unitAVC...)
-					return nil
+					buffer = append(buffer, unit...)
+					continue
 				}
 
 				if buffer != nil {
-					buffer = append(buffer, unitAVC...)
-					unitAVC = buffer
+					buffer = append(buffer, unit...)
+					unit = buffer
 					buffer = nil
 				}
 
@@ -86,17 +88,13 @@ func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
 
 				clone = *packet
 				clone.Version = RTPPacketVersionAVC
-				clone.Payload = unitAVC
+				clone.Payload = unit
 				if err = push(&clone); err != nil {
 					return err
 				}
-
-				if len(units) == i {
-					return nil
-				}
-
-				units = units[i:]
 			}
+
+			return nil
 		}
 	}
 }
