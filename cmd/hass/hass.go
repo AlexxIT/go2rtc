@@ -78,6 +78,7 @@ func Init() {
 			continue
 		}
 
+		log.Info().Str("src", "hass:" + entrie.Title).Msg("[hass] new stream")
 		//streams.Get("hass:" + entrie.Title)
 	}
 }
