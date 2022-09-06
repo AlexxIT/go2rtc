@@ -5,6 +5,7 @@ import (
 	"github.com/pion/sdp/v3"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 const (
@@ -242,7 +243,8 @@ func UnmarshalCodec(md *sdp.MediaDescription, payloadType string) *Codec {
 			ss := strings.Split(attr.Value[i+1:], "/")
 
 			c.Name = strings.ToUpper(ss[0])
-			c.ClockRate = uint32(atoi(ss[1]))
+			// fix tailing space: `a=rtpmap:96 H264/90000 `
+			c.ClockRate = uint32(atoi(strings.TrimRightFunc(ss[1], unicode.IsSpace)))
 
 			if len(ss) == 3 && ss[2] == "2" {
 				c.Channels = 2
