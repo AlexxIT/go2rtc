@@ -64,6 +64,8 @@ func Handle(url string) (streamer.Producer, error) {
 
 	log.Debug().Str("url", url).Msg("[exec] run")
 
+	ts := time.Now()
+
 	if err := cmd.Start(); err != nil {
 		log.Error().Err(err).Str("url", url).Msg("[exec]")
 		return nil, err
@@ -75,6 +77,7 @@ func Handle(url string) (streamer.Producer, error) {
 		log.Error().Str("url", url).Msg("[exec] timeout")
 		return nil, errors.New("timeout")
 	case prod := <-ch:
+		log.Debug().Stringer("launch", time.Since(ts)).Msg("[exec] run")
 		return prod, nil
 	}
 }
