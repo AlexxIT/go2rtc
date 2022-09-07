@@ -55,9 +55,16 @@ func Init() {
 		s = s[7:] // remove `ffmpeg:`
 
 		var query url.Values
+		var queryVideo, queryAudio bool
 		if i := strings.IndexByte(s, '#'); i > 0 {
 			query = parseQuery(s[i+1:])
+			queryVideo = query["video"] != nil
+			queryAudio = query["audio"] != nil
 			s = s[:i]
+		} else {
+			// by default query both video and audio
+			queryVideo = true
+			queryAudio = true
 		}
 
 		var input string
@@ -66,7 +73,18 @@ func Init() {
 			case "http", "https":
 				input = strings.Replace(tpl["http"], "{input}", s, 1)
 			case "rtsp", "rtsps":
-				input = strings.Replace(tpl["rtsp"], "{input}", s, 1)
+				// https://ffmpeg.org/ffmpeg-protocols.html#rtsp
+				// skip unnecessary input tracks
+				switch {
+				case queryVideo && queryAudio:
+					input = "-allowed_media_types video+audio "
+				case queryVideo:
+					input = "-allowed_media_types video "
+				case queryAudio:
+					input = "-allowed_media_types audio "
+				}
+
+				input += strings.Replace(tpl["rtsp"], "{input}", s, 1)
 			}
 		}
 
@@ -108,11 +126,11 @@ func Init() {
 				}
 			}
 
-			if query["video"] == nil {
-				s += " -vn"
-			}
-			if query["audio"] == nil {
+			switch {
+			case queryVideo && !queryAudio:
 				s += " -an"
+			case queryAudio && !queryVideo:
+				s += " -vn"
 			}
 		} else {
 			s += " -c copy"
