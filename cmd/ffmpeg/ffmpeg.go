@@ -26,7 +26,7 @@ func Init() {
 		"rtsp": "-fflags nobuffer -flags low_delay -rtsp_transport tcp -i {input}",
 
 		// output
-		"out": "-rtsp_transport tcp -f rtsp {output}",
+		"output": "-rtsp_transport tcp -f rtsp {output}",
 
 		// `-g 30` - group of picture, GOP, keyframe interval
 		// `-preset superfast` - we can't use ultrafast because it doesn't support `-profile main -level 4.1`
@@ -118,7 +118,7 @@ func Init() {
 			s += " -c copy"
 		}
 
-		s += " " + tpl["out"]
+		s += " " + tpl["output"]
 
 		return exec.Handle(s)
 	})
