@@ -36,8 +36,6 @@ func Init() {
 	initStatic(cfg.Mod.StaticDir)
 	initWS()
 
-	HandleFunc("/api/frame.mp4", frameHandler)
-	HandleFunc("/api/frame.raw", frameHandler)
 	HandleFunc("/api/streams", streamsHandler)
 	HandleFunc("/api/ws", apiWS)
 

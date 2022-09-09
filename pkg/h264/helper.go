@@ -17,6 +17,17 @@ func NALUType(b []byte) byte {
 	return b[4] & 0x1F
 }
 
+func IsKeyframe(b []byte) bool {
+	return NALUType(b) == NALUTypeIFrame
+}
+
+func GetProfileLevelID(fmtp string) string {
+	if fmtp == "" {
+		return ""
+	}
+	return streamer.Between(fmtp, "profile-level-id=", ";")
+}
+
 func GetParameterSet(fmtp string) (sps, pps []byte) {
 	if fmtp == "" {
 		return

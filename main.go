@@ -8,7 +8,7 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/ffmpeg"
 	"github.com/AlexxIT/go2rtc/cmd/hass"
 	"github.com/AlexxIT/go2rtc/cmd/homekit"
-	"github.com/AlexxIT/go2rtc/cmd/mse"
+	"github.com/AlexxIT/go2rtc/cmd/mp4"
 	"github.com/AlexxIT/go2rtc/cmd/ngrok"
 	"github.com/AlexxIT/go2rtc/cmd/rtmp"
 	"github.com/AlexxIT/go2rtc/cmd/rtsp"
@@ -33,7 +33,7 @@ func main() {
 	api.Init() // init HTTP API server
 
 	webrtc.Init()
-	mse.Init()
+	mp4.Init()
 
 	srtp.Init()
 	homekit.Init()

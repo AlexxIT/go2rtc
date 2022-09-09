@@ -1,35 +1,34 @@
-package mse
+package mp4
 
 import (
 	"github.com/AlexxIT/go2rtc/cmd/api"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
-	"github.com/AlexxIT/go2rtc/pkg/mse"
+	"github.com/AlexxIT/go2rtc/pkg/mp4"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
-	"github.com/rs/zerolog/log"
 )
 
-func Init() {
-	api.HandleWS("mse", handler)
-}
+const MsgTypeMSE = "mse" // fMP4
 
-func handler(ctx *api.Context, msg *streamer.Message) {
+func handlerWS(ctx *api.Context, msg *streamer.Message) {
 	src := ctx.Request.URL.Query().Get("src")
 	stream := streams.Get(src)
 	if stream == nil {
 		return
 	}
 
-	cons := new(mse.Consumer)
+	cons := &mp4.Consumer{}
 	cons.UserAgent = ctx.Request.UserAgent()
 	cons.RemoteAddr = ctx.Request.RemoteAddr
+
 	cons.Listen(func(msg interface{}) {
 		switch msg.(type) {
 		case *streamer.Message, []byte:
 			ctx.Write(msg)
 		}
 	})
+
 	if err := stream.AddConsumer(cons); err != nil {
-		log.Warn().Err(err).Msg("[api.mse] Add consumer")
+		log.Warn().Err(err).Msg("[api.mse] add consumer")
 		ctx.Error(err)
 		return
 	}
@@ -38,5 +37,9 @@ func handler(ctx *api.Context, msg *streamer.Message) {
 		stream.RemoveConsumer(cons)
 	})
 
-	cons.Init()
+	ctx.Write(&streamer.Message{
+		Type: MsgTypeMSE, Value: cons.MimeType(),
+	})
+
+	ctx.Write(cons.Init())
 }

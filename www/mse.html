@@ -60,9 +60,7 @@
             console.debug("ws.onmessage", data);
 
             if (data.type === "mse") {
-                sourceBuffer = mediaSource.addSourceBuffer(
-                    `video/mp4; codecs="${data.value}"`
-                );
+                sourceBuffer = mediaSource.addSourceBuffer(data.value);
                 // important: segments supports TrackFragDecodeTime
                 // sequence supports only TrackFragRunEntry Duration
                 sourceBuffer.mode = "segments";
