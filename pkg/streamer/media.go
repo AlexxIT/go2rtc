@@ -155,8 +155,8 @@ func (c *Codec) Clone() *Codec {
 
 func (c *Codec) Match(codec *Codec) bool {
 	return c.Name == codec.Name &&
-		c.ClockRate == codec.ClockRate &&
-		c.Channels == codec.Channels
+		(c.ClockRate == codec.ClockRate || codec.ClockRate == 0) &&
+		(c.Channels == codec.Channels || codec.Channels == 0)
 }
 
 func UnmarshalSDP(rawSDP []byte) ([]*Media, error) {
