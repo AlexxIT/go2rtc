@@ -53,6 +53,9 @@ func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
 					//println("new PPS")
 					pps = unit
 					continue
+				case NALUTypeSEI:
+					// some unnecessary text information
+					continue
 				}
 
 				// ffmpeg with `-tune zerolatency` enable option `-x264opts sliced-threads=1`

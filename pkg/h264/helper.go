@@ -9,6 +9,7 @@ import (
 const (
 	NALUTypePFrame = 1
 	NALUTypeIFrame = 5
+	NALUTypeSEI    = 6
 	NALUTypeSPS    = 7
 	NALUTypePPS    = 8
 )
