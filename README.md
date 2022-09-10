@@ -5,11 +5,10 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
 ![](assets/go2rtc.png)
 
 - zero-dependency and zero-config [small app](#go2rtc-binary) for all OS (Windows, macOS, Linux, ARM)
-- zero-delay for all supported protocols (lowest possible streaming latency)
+- zero-delay for many supported protocols (lowest possible streaming latency)
 - streaming from [RTSP](#source-rtsp), [RTMP](#source-rtmp), [MJPEG](#source-ffmpeg), [HLS](#source-ffmpeg), [USB Cameras](#source-ffmpeg-device), [files](#source-ffmpeg) and [other sources](#module-streams)
-- streaming to [RTSP](#module-rtsp), [WebRTC](#module-webrtc) or [MSE](#module-api)
+- streaming to [RTSP](#module-rtsp), [WebRTC](#module-webrtc) or [MSE](#module-mp4)
 - first project in the World with support streaming from [HomeKit Cameras](#source-homekit)
-- low CPU load for supported codecs
 - on the fly transcoding for unsupported codecs via [FFmpeg](#source-ffmpeg)
 - multi-source 2-way [codecs negotiation](#codecs-negotiation)
    - mixing tracks from different sources to single stream
@@ -462,6 +461,14 @@ In other cases you need to use IP-address of server with **go2rtc** application.
 4. Open full screen card - this is should be WebRTC stream
 
 PS. Default Home Assistant lovelace cards don't support 2-way audio. You can use 2-way audio from [Add-on Web UI](https://my.home-assistant.io/redirect/supervisor_addon/?addon=a889bffc_go2rtc&repository_url=https%3A%2F%2Fgithub.com%2FAlexxIT%2Fhassio-addons). But you need use HTTPS to access the microphone. This is a browser restriction and cannot be avoided.
+
+### Module: MP4
+
+Provides several features:
+
+1. MSE stream (fMP4 over WebSocket)
+2. Camera snapshots in MP4 format (single frame), can be sent to [Telegram](https://www.telegram.org/)
+3. Progressive MP4 stream - bad format for streaming because of high latency, doesn't work in Safari 
 
 ### Module: Log
 
