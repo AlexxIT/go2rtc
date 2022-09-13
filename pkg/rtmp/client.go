@@ -2,7 +2,6 @@ package rtmp
 
 import (
 	"encoding/base64"
-	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
@@ -134,7 +133,7 @@ func (c *Client) Handle() (err error) {
 
 		var payloads [][]byte
 		if track.Codec.Name == streamer.CodecH264 {
-			payloads = splitAVC(pkt.Data)
+			payloads = h264.SplitAVC(pkt.Data)
 		} else {
 			payloads = [][]byte{pkt.Data}
 		}
@@ -155,22 +154,4 @@ func (c *Client) Close() error {
 	}
 	c.closed = true
 	return c.conn.Close()
-}
-
-func splitAVC(data []byte) [][]byte {
-	var nals [][]byte
-	for {
-		// get AVC length
-		size := int(binary.BigEndian.Uint32(data))
-
-		// check if multiple items in one packet
-		if size+4 < len(data) {
-			nals = append(nals, data[:size+4])
-			data = data[size+4:]
-		} else {
-			nals = append(nals, data)
-			break
-		}
-	}
-	return nals
 }

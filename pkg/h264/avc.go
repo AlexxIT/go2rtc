@@ -58,3 +58,21 @@ func RepairAVC(track *streamer.Track) streamer.WrapperFunc {
 		}
 	}
 }
+
+func SplitAVC(data []byte) [][]byte {
+	var nals [][]byte
+	for {
+		// get AVC length
+		size := int(binary.BigEndian.Uint32(data))
+
+		// check if multiple items in one packet
+		if size+4 < len(data) {
+			nals = append(nals, data[:size+4])
+			data = data[size+4:]
+		} else {
+			nals = append(nals, data)
+			break
+		}
+	}
+	return nals
+}
