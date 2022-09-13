@@ -2,6 +2,7 @@ package mp4
 
 import (
 	"encoding/binary"
+	"fmt"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/deepch/vdk/codec/h264parser"
@@ -32,18 +33,21 @@ func (m *Muxer) MimeType(codecs []*streamer.Codec) string {
 	return s + `"`
 }
 
-func (m *Muxer) GetInit(codecs []*streamer.Codec) []byte {
+func (m *Muxer) GetInit(codecs []*streamer.Codec) ([]byte, error) {
 	moov := MOOV()
 
 	for _, codec := range codecs {
 		switch codec.Name {
 		case streamer.CodecH264:
 			sps, pps := h264.GetParameterSet(codec.FmtpLine)
+			if sps == nil {
+				return nil, fmt.Errorf("empty SPS: %#v", codec)
+			}
 
 			// TODO: remove
 			codecData, err := h264parser.NewCodecDataFromSPSAndPPS(sps, pps)
 			if err != nil {
-				return nil
+				return nil, err
 			}
 
 			width := codecData.Width()
@@ -83,7 +87,7 @@ func (m *Muxer) GetInit(codecs []*streamer.Codec) []byte {
 	data := make([]byte, moov.Len())
 	moov.Marshal(data)
 
-	return append(FTYP(), data...)
+	return append(FTYP(), data...), nil
 }
 
 func (m *Muxer) Rewind() {

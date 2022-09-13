@@ -41,5 +41,12 @@ func handlerWS(ctx *api.Context, msg *streamer.Message) {
 		Type: MsgTypeMSE, Value: cons.MimeType(),
 	})
 
-	ctx.Write(cons.Init())
+	data, err := cons.Init()
+	if err != nil {
+		log.Warn().Err(err).Msg("[api.mse] init")
+		ctx.Error(err)
+		return
+	}
+
+	ctx.Write(data)
 }

@@ -48,12 +48,16 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	defer stream.RemoveConsumer(cons)
+
 	w.Header().Set("Content-Type", cons.MimeType())
 
-	data := cons.Init()
+	data, err := cons.Init()
+	if err != nil {
+		log.Error().Err(err).Msg("[api.keyframe] init")
+		return
+	}
 	data = append(data, <-exit...)
-
-	stream.RemoveConsumer(cons)
 
 	// Apple Safari won't show frame without length
 	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
@@ -97,8 +101,13 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", cons.MimeType())
 
-	data := cons.Init()
-	if _, err := w.Write(data); err != nil {
+	data, err := cons.Init()
+	if err != nil {
+		log.Error().Err(err).Msg("[api.mp4] init")
+		return
+	}
+
+	if _, err = w.Write(data); err != nil {
 		log.Error().Err(err).Msg("[api.mp4] write")
 		return
 	}

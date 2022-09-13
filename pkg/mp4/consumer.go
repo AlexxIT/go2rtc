@@ -86,7 +86,7 @@ func (c *Consumer) MimeType() string {
 	return c.muxer.MimeType(c.codecs)
 }
 
-func (c *Consumer) Init() []byte {
+func (c *Consumer) Init() ([]byte, error) {
 	if c.muxer == nil {
 		c.muxer = &Muxer{}
 	}
