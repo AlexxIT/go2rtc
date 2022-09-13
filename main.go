@@ -8,6 +8,7 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/ffmpeg"
 	"github.com/AlexxIT/go2rtc/cmd/hass"
 	"github.com/AlexxIT/go2rtc/cmd/homekit"
+	"github.com/AlexxIT/go2rtc/cmd/ivideon"
 	"github.com/AlexxIT/go2rtc/cmd/mp4"
 	"github.com/AlexxIT/go2rtc/cmd/ngrok"
 	"github.com/AlexxIT/go2rtc/cmd/rtmp"
@@ -37,6 +38,8 @@ func main() {
 
 	srtp.Init()
 	homekit.Init()
+
+	ivideon.Init()
 
 	ngrok.Init()
 	debug.Init()
