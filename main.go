@@ -4,6 +4,7 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/api"
 	"github.com/AlexxIT/go2rtc/cmd/app"
 	"github.com/AlexxIT/go2rtc/cmd/debug"
+	"github.com/AlexxIT/go2rtc/cmd/echo"
 	"github.com/AlexxIT/go2rtc/cmd/exec"
 	"github.com/AlexxIT/go2rtc/cmd/ffmpeg"
 	"github.com/AlexxIT/go2rtc/cmd/hass"
@@ -24,6 +25,8 @@ import (
 func main() {
 	app.Init()     // init config and logs
 	streams.Init() // load streams list
+
+	echo.Init()
 
 	rtsp.Init()   // add support RTSP client and RTSP server
 	rtmp.Init()   // add support RTMP client
