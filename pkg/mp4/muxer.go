@@ -125,13 +125,15 @@ func (m *Muxer) Marshal(packet *rtp.Packet) []byte {
 	}
 
 	entry := mp4io.TrackFragRunEntry{
-		Duration: 90000,
+		//Duration: 90000,
 		Size:     uint32(len(packet.Payload)),
 	}
 
 	newTime := packet.Timestamp
 	if m.pts > 0 {
-		m.dts += uint64(newTime - m.pts)
+		//m.dts += uint64(newTime - m.pts)
+		entry.Duration = newTime - m.pts
+		m.dts += uint64(entry.Duration)
 	}
 	m.pts = newTime
 
