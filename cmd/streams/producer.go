@@ -79,7 +79,11 @@ func (p *Producer) start() {
 	log.Debug().Str("url", p.url).Msg("[streams] start producer")
 
 	p.state = stateStart
-	go p.element.Start()
+	go func() {
+		if err := p.element.Start(); err != nil {
+			log.Warn().Err(err).Str("url", p.url).Msg("[streams] start")
+		}
+	}()
 }
 
 func (p *Producer) stop() {
