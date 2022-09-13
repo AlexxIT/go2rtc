@@ -80,12 +80,6 @@ func (a *Auth) Write(req *Request) {
 	}
 }
 
-func (a *Auth) Reset() {
-	if a.Method == AuthDigest {
-		a.Method = AuthUnknown
-	}
-}
-
 func Between(s, sub1, sub2 string) string {
 	i := strings.Index(s, sub1)
 	if i < 0 {

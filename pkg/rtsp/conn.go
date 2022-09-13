@@ -61,10 +61,10 @@ type Conn struct {
 
 	auth     *tcp.Auth
 	conn     net.Conn
+	mode     Mode
 	reader   *bufio.Reader
 	sequence int
-
-	mode Mode
+	uri      string
 
 	tracks   []*streamer.Track
 	channels map[byte]*streamer.Track
@@ -76,24 +76,10 @@ type Conn struct {
 }
 
 func NewClient(uri string) (*Conn, error) {
-	var err error
-
 	c := new(Conn)
-	c.URL, err = url.Parse(uri)
-	if err != nil {
-		return nil, err
-	}
-
-	if strings.IndexByte(c.URL.Host, ':') < 0 {
-		c.URL.Host += ":554"
-	}
-
-	// remove UserInfo from URL
-	c.auth = tcp.NewAuth(c.URL.User)
 	c.mode = ModeClientProducer
-	c.URL.User = nil
-
-	return c, nil
+	c.uri = uri
+	return c, c.parseURI()
 }
 
 func NewServer(conn net.Conn) *Conn {
@@ -104,12 +90,29 @@ func NewServer(conn net.Conn) *Conn {
 	return c
 }
 
+func (c *Conn) parseURI() (err error) {
+	c.URL, err = url.Parse(c.uri)
+	if err != nil {
+		return err
+	}
+
+	if strings.IndexByte(c.URL.Host, ':') < 0 {
+		c.URL.Host += ":554"
+	}
+
+	// remove UserInfo from URL
+	c.auth = tcp.NewAuth(c.URL.User)
+	c.URL.User = nil
+
+	return nil
+}
+
 func (c *Conn) Dial() (err error) {
 	//if c.state != StateClientInit {
 	//	panic("wrong state")
 	//}
-	if c.conn != nil && c.auth != nil {
-		c.auth.Reset()
+	if c.conn != nil {
+		_ = c.parseURI()
 	}
 
 	c.conn, err = net.DialTimeout(
@@ -359,7 +362,21 @@ func (c *Conn) SetupMedia(
 	var res *tcp.Response
 	res, err = c.Do(req)
 	if err != nil {
-		return nil, err
+		// Dahua VTO2111D fail on this step because of backchannel
+		if c.Backchannel {
+			if err = c.Dial(); err != nil {
+				return nil, err
+			}
+			c.Backchannel = false
+			if err = c.Describe(); err != nil {
+				return nil, err
+			}
+			res, err = c.Do(req)
+		}
+
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if c.Session == "" {
