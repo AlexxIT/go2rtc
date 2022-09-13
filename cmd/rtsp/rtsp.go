@@ -8,6 +8,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/rs/zerolog"
 	"net"
+	"strings"
 )
 
 func Init() {
@@ -47,6 +48,15 @@ var OnProducer func(conn streamer.Producer) bool // TODO: maybe rewrite...
 var log zerolog.Logger
 
 func rtspHandler(url string) (streamer.Producer, error) {
+	backchannel := true
+
+	if i := strings.IndexByte(url, '#'); i > 0 {
+		if url[i+1:] == "backchannel=0" {
+			backchannel = false
+		}
+		url = url[:i]
+	}
+
 	conn, err := rtsp.NewClient(url)
 	if err != nil {
 		return nil, err
@@ -67,8 +77,12 @@ func rtspHandler(url string) (streamer.Producer, error) {
 		return nil, err
 	}
 
-	conn.Backchannel = true
+	conn.Backchannel = backchannel
 	if err = conn.Describe(); err != nil {
+		if !backchannel {
+			return nil, err
+		}
+
 		// second try without backchannel, we need to reconnect
 		if err = conn.Dial(); err != nil {
 			return nil, err
