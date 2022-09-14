@@ -103,7 +103,7 @@ Don't forget to fix the rights `chmod +x go2rtc_xxx_xxx` on Linux and Mac.
 
 ### go2rtc: Docker
 
-Container [alexxit/go2rtc](https://hub.docker.com/r/alexxit/go2rtc) with support `amd64`, `386`, `arm64`, `arm`. This container same as [Home Assistant Add-on](#go2rtc-home-assistant-add-on), but can be used separately from the Home Assistant. Container has preinstalled [FFmpeg](#source-ffmpeg) and [Ngrok](#module-ngrok) applications.
+Container [alexxit/go2rtc](https://hub.docker.com/r/alexxit/go2rtc) with support `amd64`, `386`, `arm64`, `arm`. This container same as [Home Assistant Add-on](#go2rtc-home-assistant-add-on), but can be used separately from the Home Assistant. Container has preinstalled [FFmpeg](#source-ffmpeg), [Ngrok](#module-ngrok) and [Python](#source-echo).
 
 ```yaml
 services:
@@ -147,6 +147,7 @@ Available source types:
 - [ffmpeg](#source-ffmpeg) - FFmpeg integration (`MJPEG`, `HLS`, `files` and source types)
 - [ffmpeg:device](#source-ffmpeg-device) - local USB Camera or Webcam
 - [exec](#source-exec) - advanced FFmpeg and GStreamer integration
+- [echo](#source-echo) - get stream link via bash or python
 - [homekit](#source-homekit) - streaming from HomeKit Camera
 - [hass](#source-hass) - Home Assistant integration
 
@@ -251,6 +252,19 @@ FFmpeg source just a shortcut to exec source. You can get any stream or file or 
 ```yaml
 streams:
   stream1: exec:ffmpeg -hide_banner -re -stream_loop -1 -i /media/BigBuckBunny.mp4 -c copy -rtsp_transport tcp -f rtsp {output}
+```
+
+#### Source: Echo
+
+Some sources may have a dynamic link. And you will need to get it using a bash or python script. Your script should echo a link to the source. RTSP, FFmpeg or any of the [supported sources](#module-streams).
+
+**Docker** and **Hass Add-on** users has preinstalled `python3`, `curl`, `jq`.
+
+Check examples in [wiki](https://github.com/AlexxIT/go2rtc/wiki/Source-Echo-examples).
+
+```yaml
+streams:
+  apple_hls: echo:python3 hls.py https://developer.apple.com/streaming/examples/basic-stream-osx-ios5.html
 ```
 
 #### Source: HomeKit
