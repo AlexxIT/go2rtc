@@ -1,3 +1,14 @@
+## RTP H264
+
+Camera | NALu
+-------|-----
+EZVIZ C3S          | 7f, 8f, 28:28:28 -> 5t, 28:28:28 -> 1t, 1t, 1t, 1t
+Sonoff GK-200MP2-B | 28:28:28 -> 5t, 1t, 1t, 1t
+Dahua IPC-K42      | 7f, 8f, 28:28:28 -> 5t, 28:28:28 -> 1t, 28:28:28 -> 1t
+FFmpeg copy        | 5t, 1t, 1t, 28:28:28 -> 1t, 28:28:28 -> 1t
+FFmpeg h264        | 24 -> 6:5:5:5:5t, 24 -> 1:1:1:1t, 28:28:28 -> 5f, 28:28:28 -> 5f, 28:28:28 -> 5t
+FFmpeg resize      | 6f, 28:28:28 -> 5f, 28... -> 5t, 24 -> 1:1f, 24 -> 1:1t
+
 ## WebRTC
 
 Video codec	    | Media string | Device
