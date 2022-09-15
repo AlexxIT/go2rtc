@@ -5,7 +5,6 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	"github.com/pion/sdp/v3"
-	"strings"
 )
 
 var candidates []string
@@ -32,15 +31,11 @@ func addCanditates(answer string) (string, error) {
 	}
 
 	for _, address := range candidates {
-		if strings.HasPrefix(address, "stun:") {
-			ip, err := webrtc.GetPublicIP()
-			if err != nil {
-				log.Warn().Err(err).Msg("[webrtc] public IP")
-				continue
-			}
-			address = ip.String() + address[4:]
-
-			log.Debug().Str("addr", address).Msg("[webrtc] stun public address")
+		var err error
+		address, err = webrtc.LookupIP(address)
+		if err != nil {
+			log.Warn().Err(err).Msg("[webrtc] candidate")
+			continue
 		}
 
 		cand, err := webrtc.NewCandidate(address)

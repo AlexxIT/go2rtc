@@ -1,12 +1,14 @@
 package webrtc
 
 import (
+	"fmt"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/pion/ice/v2"
 	"github.com/pion/stun"
 	"github.com/pion/webrtc/v3"
 	"net"
 	"strconv"
+	"strings"
 )
 
 func NewCandidate(address string) (string, error) {
@@ -32,6 +34,31 @@ func NewCandidate(address string) (string, error) {
 	}
 
 	return "candidate:" + cand.Marshal(), nil
+}
+
+func LookupIP(address string) (string, error) {
+	if strings.HasPrefix(address, "stun:") {
+		ip, err := GetPublicIP()
+		if err != nil {
+			return "", err
+		}
+		return ip.String() + address[4:], nil
+	}
+
+	if IsIP(address) {
+		return address, nil
+	}
+
+	i := strings.IndexByte(address, ':')
+	ips, err := net.LookupIP(address[:i])
+	if err != nil {
+		return "", err
+	}
+	if len(ips) == 0 {
+		return "", fmt.Errorf("can't resolve: %s", address)
+	}
+
+	return ips[0].String() + address[i:], nil
 }
 
 // GetPublicIP example from https://github.com/pion/stun
@@ -61,6 +88,15 @@ func GetPublicIP() (net.IP, error) {
 	}
 
 	return xorAddr.IP, nil
+}
+
+func IsIP(host string) bool {
+	for _, i := range host {
+		if i >= 'A' {
+			return false
+		}
+	}
+	return true
 }
 
 func MimeType(codec *streamer.Codec) string {
