@@ -70,7 +70,7 @@ func Init() {
 		var input string
 		if i := strings.IndexByte(s, ':'); i > 0 {
 			switch s[:i] {
-			case "http", "https":
+			case "http", "https", "rtmp":
 				input = strings.Replace(tpl["http"], "{input}", s, 1)
 			case "rtsp", "rtsps":
 				// https://ffmpeg.org/ffmpeg-protocols.html#rtsp
