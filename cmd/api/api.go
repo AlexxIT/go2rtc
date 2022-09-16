@@ -88,7 +88,7 @@ func streamsHandler(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case "PUT":
-		streams.Get(src)
+		streams.New(src, src)
 		return
 	case "DELETE":
 		streams.Delete(src)
@@ -101,13 +101,14 @@ func streamsHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		v = streams.All()
 	}
+
 	data, err := json.Marshal(v)
 	if err != nil {
 		log.Error().Err(err).Msg("[api.streams] marshal")
+		return
 	}
-	if _, err = w.Write(data); err != nil {
-		log.Error().Err(err).Msg("[api.streams] write")
-	}
+
+	_, _ = w.Write(data)
 }
 
 func apiWS(w http.ResponseWriter, r *http.Request) {

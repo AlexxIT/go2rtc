@@ -28,7 +28,7 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	src := r.URL.Query().Get("src")
-	stream := streams.Get(src)
+	stream := streams.GetOrNew(src)
 	if stream == nil {
 		return
 	}
@@ -75,7 +75,7 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 	log.Trace().Msgf("[api.mp4] %+v", r)
 
 	src := r.URL.Query().Get("src")
-	stream := streams.Get(src)
+	stream := streams.GetOrNew(src)
 	if stream == nil {
 		return
 	}

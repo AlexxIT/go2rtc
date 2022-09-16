@@ -11,7 +11,7 @@ const MsgTypeMSE = "mse" // fMP4
 
 func handlerWS(ctx *api.Context, msg *streamer.Message) {
 	src := ctx.Request.URL.Query().Get("src")
-	stream := streams.Get(src)
+	stream := streams.GetOrNew(src)
 	if stream == nil {
 		return
 	}
