@@ -36,8 +36,8 @@ func Init() {
 	initStatic(cfg.Mod.StaticDir)
 	initWS()
 
-	HandleFunc("/api/streams", streamsHandler)
-	HandleFunc("/api/ws", apiWS)
+	HandleFunc("api/streams", streamsHandler)
+	HandleFunc("api/ws", apiWS)
 
 	// ensure we can listen without errors
 	listener, err := net.Listen("tcp", cfg.Mod.Listen)
@@ -64,8 +64,15 @@ func Init() {
 	}()
 }
 
+// HandleFunc handle pattern with relative path:
+// - "api/streams" => "{basepath}/api/streams"
+// - "/streams"    => "/streams"
 func HandleFunc(pattern string, handler http.HandlerFunc) {
-	http.HandleFunc(basePath+pattern, handler)
+	if len(pattern) == 0 || pattern[0] != '/' {
+		pattern = basePath + "/" + pattern
+	}
+	log.Trace().Str("path", pattern).Msg("[api] register path")
+	http.HandleFunc(pattern, handler)
 }
 
 func HandleWS(msgType string, handler WSHandler) {

@@ -26,6 +26,8 @@ func main() {
 	app.Init()     // init config and logs
 	streams.Init() // load streams list
 
+	api.Init() // init HTTP API server
+
 	echo.Init()
 
 	rtsp.Init()   // add support RTSP client and RTSP server
@@ -33,8 +35,6 @@ func main() {
 	exec.Init()   // add support exec scheme (depends on RTSP server)
 	ffmpeg.Init() // add support ffmpeg scheme (depends on exec scheme)
 	hass.Init()   // add support hass scheme
-
-	api.Init() // init HTTP API server
 
 	webrtc.Init()
 	mp4.Init()

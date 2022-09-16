@@ -14,7 +14,7 @@ func Init() {
 
 	streams.HandleFunc("homekit", streamHandler)
 
-	api.HandleFunc("/api/homekit", apiHandler)
+	api.HandleFunc("api/homekit", apiHandler)
 }
 
 var log zerolog.Logger

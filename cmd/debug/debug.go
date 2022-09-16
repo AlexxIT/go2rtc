@@ -10,8 +10,8 @@ import (
 )
 
 func Init() {
-	api.HandleFunc("/api/stack", stackHandler)
-	api.HandleFunc("/api/exit", exitHandler)
+	api.HandleFunc("api/stack", stackHandler)
+	api.HandleFunc("api/exit", exitHandler)
 
 	streams.HandleFunc("null", nullHandler)
 }

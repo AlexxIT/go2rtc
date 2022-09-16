@@ -14,13 +14,13 @@ func initStatic(staticDir string) {
 		root = http.FS(www.Static)
 	}
 
+	base := len(basePath)
 	fileServer := http.FileServer(root)
 
-	HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if basePath != "" {
-			r.URL.Path = r.URL.Path[len(basePath):]
+	HandleFunc("", func(w http.ResponseWriter, r *http.Request) {
+		if base > 0 {
+			r.URL.Path = r.URL.Path[base:]
 		}
-
 		fileServer.ServeHTTP(w, r)
 	})
 }

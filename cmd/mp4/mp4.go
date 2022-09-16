@@ -16,8 +16,8 @@ func Init() {
 
 	api.HandleWS(MsgTypeMSE, handlerWS)
 
-	api.HandleFunc("/api/frame.mp4", handlerKeyframe)
-	api.HandleFunc("/api/stream.mp4", handlerMP4)
+	api.HandleFunc("api/frame.mp4", handlerKeyframe)
+	api.HandleFunc("api/stream.mp4", handlerMP4)
 }
 
 var log zerolog.Logger

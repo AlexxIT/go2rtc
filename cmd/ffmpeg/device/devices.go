@@ -15,7 +15,7 @@ import (
 func Init() {
 	log = app.GetLogger("exec")
 
-	api.HandleFunc("/api/devices", handle)
+	api.HandleFunc("api/devices", handle)
 }
 
 func GetInput(src string) (string, error) {
