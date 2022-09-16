@@ -97,10 +97,6 @@ Don't forget to fix the rights `chmod +x go2rtc_xxx_xxx` on Linux and Mac.
     - go2rtc > Install > Start
 2. Setup [Integration](#module-hass)
 
-**Optionally:**
-
-- create `go2rtc.yaml` in your Home Assistant [config](https://www.home-assistant.io/docs/configuration) folder
-
 ### go2rtc: Docker
 
 Container [alexxit/go2rtc](https://hub.docker.com/r/alexxit/go2rtc) with support `amd64`, `386`, `arm64`, `arm`. This container same as [Home Assistant Add-on](#go2rtc-home-assistant-add-on), but can be used separately from the Home Assistant. Container has preinstalled [FFmpeg](#source-ffmpeg), [Ngrok](#module-ngrok) and [Python](#source-echo).
@@ -152,8 +148,6 @@ Available source types:
 - [homekit](#source-homekit) - streaming from HomeKit Camera
 - [ivideon](#source-ivideon) - public cameras from [Ivideon](https://tv.ivideon.com/) service
 - [hass](#source-hass) - Home Assistant integration
-
-**PS.** You can use sources like `MJPEG`, `HLS` and others via FFmpeg integration.
 
 #### Source: RTSP
 
@@ -468,22 +462,30 @@ tunnels:
 
 ### Module: Hass
 
-**go2rtc** compatible with Home Assistant [RTSPtoWebRTC](https://www.home-assistant.io/integrations/rtsp_to_webrtc/) integration.
+If you install **go2rtc** as [Hass Add-on](#go2rtc-home-assistant-add-on) - you need to use localhost IP-address. In other cases you need to use IP-address of server with **go2rtc** application.
 
-If you install **go2rtc** as [Hass Add-on](#go2rtc-home-assistant-add-on) - you need to use localhost IP-address, example:
+#### From go2rtc to Hass
 
-- `http://127.0.0.1:1984/` to web interface
-- `rtsp://127.0.0.1:8554/camera1` to RTSP streams
+Add any supported [stream source](#module-streams) as [Generic Camera](https://www.home-assistant.io/integrations/generic/) and view stream with built-in [Stream](https://www.home-assistant.io/integrations/stream/) integration. Technology `HLS`, supported codecs: `H264`, poor latency.
 
-In other cases you need to use IP-address of server with **go2rtc** application.
+1. Add your stream to [go2rtc config](#configuration)
+2. Hass > Settings > Integrations > Add Integration > [Generic Camera](https://my.home-assistant.io/redirect/config_flow_start/?domain=generic) > `rtsp://127.0.0.1:8554/camera1`
 
-1. Add integration with link to go2rtc HTTP API:
-   - Hass > Settings > Integrations > Add Integration > [RTSPtoWebRTC](https://my.home-assistant.io/redirect/config_flow_start/?domain=rtsp_to_webrtc) > `http://127.0.0.1:1984/`
-2. Add generic camera with RTSP link:
-   - Hass > Settings > Integrations > Add Integration > [Generic Camera](https://my.home-assistant.io/redirect/config_flow_start/?domain=generic) > `rtsp://...` or `rtmp://...`
-   - you can use either direct RTSP links to cameras or take RTSP streams from **go2rtc**
-3. Use Picture Entity or Picture Glance lovelace card
-4. Open full screen card - this is should be WebRTC stream
+#### From Hass to go2rtc
+
+View almost any Hass camera using `WebRTC` technology, supported codecs `H264`/`PCMU`/`PCMA`/`OPUS`, best latency.
+
+When the stream starts - the camera `entity_id` will be added to go2rtc "on the fly". You don't need to add cameras manually to [go2rtc config](#configuration). Some cameras (like [Nest](https://www.home-assistant.io/integrations/nest/)) have a dynamic link to the stream, it will be updated each time a stream is started from the Hass interface. 
+
+1. Hass > Settings > Integrations > Add Integration > [RTSPtoWebRTC](https://my.home-assistant.io/redirect/config_flow_start/?domain=rtsp_to_webrtc) > `http://127.0.0.1:1984/`
+2. Use Picture Entity or Picture Glance lovelace card
+
+You can add camera `entity_id` to [go2rtc config](#configuration) if you need transcoding:
+
+```yaml
+sources:
+  "camera.hall": ffmpeg:{input}#video=copy#audio=opus
+```
 
 PS. Default Home Assistant lovelace cards don't support 2-way audio. You can use 2-way audio from [Add-on Web UI](https://my.home-assistant.io/redirect/supervisor_addon/?addon=a889bffc_go2rtc&repository_url=https%3A%2F%2Fgithub.com%2FAlexxIT%2Fhassio-addons). But you need use HTTPS to access the microphone. This is a browser restriction and cannot be avoided.
 
