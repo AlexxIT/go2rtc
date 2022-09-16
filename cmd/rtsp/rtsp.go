@@ -157,15 +157,15 @@ func worker(address string) {
 
 					log.Debug().Str("stream", name).Msg("[rtsp] new producer")
 
-					str := streams.Get(conn.URL.Path[1:])
-					if str == nil {
+					stream := streams.Get(name)
+					if stream == nil {
 						return
 					}
 
-					str.AddProducer(conn)
+					stream.AddProducer(conn)
 
 					onDisconnect = func() {
-						str.RemoveProducer(conn)
+						stream.RemoveProducer(conn)
 					}
 
 				case streamer.StatePlaying:
