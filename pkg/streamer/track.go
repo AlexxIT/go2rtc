@@ -32,6 +32,8 @@ func (t *Track) WriteRTP(p *rtp.Packet) error {
 }
 
 func (t *Track) Bind(w WriterFunc) *Track {
+	t.mx.Lock()
+
 	if t.Sink == nil {
 		t.Sink = map[*Track]WriterFunc{}
 	}
@@ -39,9 +41,10 @@ func (t *Track) Bind(w WriterFunc) *Track {
 	clone := &Track{
 		Codec: t.Codec, Direction: t.Direction, Sink: t.Sink,
 	}
-	t.mx.Lock()
 	t.Sink[clone] = w
+
 	t.mx.Unlock()
+
 	return clone
 }
 
