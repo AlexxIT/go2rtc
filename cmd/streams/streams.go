@@ -4,6 +4,7 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/app"
 	"github.com/AlexxIT/go2rtc/cmd/app/store"
 	"github.com/rs/zerolog"
+	"strings"
 )
 
 func Init() {
@@ -27,7 +28,6 @@ func Init() {
 func Get(src string) *Stream {
 	if stream, ok := streams[src]; ok {
 		return stream
-
 	}
 
 	if !HasProducer(src) {
@@ -45,6 +45,19 @@ func Has(src string) bool {
 }
 
 func New(name string, source interface{}) {
+	switch source := source.(type) {
+	case string:
+		// check if new stream already link on our other stream
+		if strings.HasPrefix(source, "rtsp://") {
+			if i := strings.IndexByte(source[7:], '/'); i > 0 {
+				if stream, ok := streams[source[8+i:]]; ok {
+					streams[name] = stream
+					return
+				}
+			}
+		}
+	}
+
 	streams[name] = NewStream(source)
 }
 

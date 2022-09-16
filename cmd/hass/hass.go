@@ -1,20 +1,14 @@
 package hass
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/AlexxIT/go2rtc/cmd/api"
 	"github.com/AlexxIT/go2rtc/cmd/app"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
-	"github.com/AlexxIT/go2rtc/cmd/webrtc"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/rs/zerolog"
-	"net/http"
-	"net/url"
 	"os"
 	"path"
-	"strings"
 )
 
 func Init() {
@@ -28,11 +22,7 @@ func Init() {
 
 	log = app.GetLogger("hass")
 
-	// support https://www.home-assistant.io/integrations/rtsp_to_webrtc/
-	api.HandleFunc("/static", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-	api.HandleFunc("/stream", handler)
+	initAPI()
 
 	// support load cameras from Hass config file
 	filename := path.Join(conf.Mod.Config, ".storage/core.config_entries")
@@ -78,72 +68,12 @@ func Init() {
 			continue
 		}
 
-		log.Info().Str("url", "hass:" + entrie.Title).Msg("[hass] load stream")
+		log.Info().Str("url", "hass:"+entrie.Title).Msg("[hass] load stream")
 		//streams.Get("hass:" + entrie.Title)
 	}
 }
 
 var log zerolog.Logger
-
-func handler(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		log.Error().Err(err).Msg("[api.hass] parse form")
-		return
-	}
-
-	src := r.FormValue("url")
-	src, err := url.QueryUnescape(src)
-	if err != nil {
-		log.Error().Err(err).Msg("[api.hass] query unescape")
-		return
-	}
-
-	str := r.FormValue("sdp64")
-
-	offer, err := base64.StdEncoding.DecodeString(str)
-	if err != nil {
-		log.Error().Err(err).Msg("[api.hass] sdp64 decode")
-		return
-	}
-
-	// check if stream links to our rtsp server
-	if strings.HasPrefix(src, "rtsp://") {
-		i := strings.IndexByte(src[7:], '/')
-		if i > 0 && streams.Has(src[8+i:]) {
-			src = src[8+i:]
-		}
-	}
-
-	stream := streams.Get(src)
-	if stream == nil {
-		log.Error().Str("url", src).Msg("[api.hass] unsupported source")
-		return
-	}
-
-	str, err = webrtc.ExchangeSDP(stream, string(offer), r.UserAgent())
-	if err != nil {
-		log.Error().Err(err).Msg("[api.hass] exchange SDP")
-		return
-	}
-
-	resp := struct {
-		Answer string `json:"sdp64"`
-	}{
-		Answer: base64.StdEncoding.EncodeToString([]byte(str)),
-	}
-
-	data, err := json.Marshal(resp)
-	if err != nil {
-		log.Error().Err(err).Msg("[api.hass] marshal JSON")
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	if _, err = w.Write(data); err != nil {
-		log.Error().Err(err).Msg("[api.hass] write")
-		return
-	}
-}
 
 type entries struct {
 	Data struct {

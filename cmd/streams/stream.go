@@ -38,6 +38,12 @@ func NewStream(source interface{}) *Stream {
 	return s
 }
 
+func (s *Stream) SetSource(source string) {
+	if len(s.producers) > 0 {
+		s.producers[0].url = source
+	}
+}
+
 func (s *Stream) AddConsumer(cons streamer.Consumer) (err error) {
 	ic := len(s.consumers)
 
