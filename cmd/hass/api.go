@@ -32,20 +32,32 @@ func initAPI() {
 				return
 			}
 
-			if streams.Has(v.Name) {
-				stream := streams.Get(v.Name)
-				stream.SetSource(v.Channels.First.Url)
-			} else {
-				streams.New(v.Name, v.Channels.First.Url)
+			// we can get three types of links:
+			// 1. link to go2rtc stream: rtsp://...:8554/{stream_name}
+			// 2. static link to Hass camera
+			// 3. dynamic link to Hass camera
+			stream := streams.Get(v.Name)
+			if stream == nil {
+				// check if it is rtsp link to go2rtc
+				stream = rtspStream(v.Channels.First.Url)
+				if stream != nil {
+					streams.New(v.Name, stream)
+				} else {
+					stream = streams.New(v.Name, "{input}")
+				}
 			}
+
+			stream.SetSource(v.Channels.First.Url)
 
 			ok(w, r)
 
 		// /stream/{id}/channel/0/webrtc
 		default:
 			i := strings.IndexByte(r.RequestURI[8:], '/')
-			src := r.RequestURI[8 : 8+i]
-			if !streams.Has(src) {
+			name := r.RequestURI[8 : 8+i]
+
+			stream := streams.Get(name)
+			if stream == nil {
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
@@ -62,15 +74,6 @@ func initAPI() {
 				return
 			}
 
-			// check if stream links to our rtsp server
-			//if strings.HasPrefix(src, "rtsp://") {
-			//	i := strings.IndexByte(src[7:], '/')
-			//	if i > 0 && streams.Has(src[8+i:]) {
-			//		src = src[8+i:]
-			//	}
-			//}
-
-			stream := streams.Get(src)
 			s, err = webrtc.ExchangeSDP(stream, string(offer), r.UserAgent())
 			if err != nil {
 				log.Error().Err(err).Msg("[api.hass] exchange SDP")
@@ -81,6 +84,15 @@ func initAPI() {
 			_, _ = w.Write([]byte(s))
 		}
 	})
+}
+
+func rtspStream(url string) *streams.Stream {
+	if strings.HasPrefix(url, "rtsp://") {
+		if i := strings.IndexByte(url[7:], '/'); i > 0 {
+			return streams.Get(url[8+i:])
+		}
+	}
+	return nil
 }
 
 type addJSON struct {

@@ -4,7 +4,6 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/app"
 	"github.com/AlexxIT/go2rtc/cmd/app/store"
 	"github.com/rs/zerolog"
-	"strings"
 )
 
 func Init() {
@@ -25,7 +24,17 @@ func Init() {
 	}
 }
 
-func Get(src string) *Stream {
+func Get(name string) *Stream {
+	return streams[name]
+}
+
+func New(name string, source interface{}) *Stream {
+	stream := NewStream(source)
+	streams[name] = stream
+	return stream
+}
+
+func GetOrNew(src string) *Stream {
 	if stream, ok := streams[src]; ok {
 		return stream
 	}
@@ -35,30 +44,8 @@ func Get(src string) *Stream {
 	}
 
 	log.Info().Str("url", src).Msg("[streams] create new stream")
-	stream := NewStream(src)
-	streams[src] = stream
-	return stream
-}
 
-func Has(src string) bool {
-	return streams[src] != nil
-}
-
-func New(name string, source interface{}) {
-	switch source := source.(type) {
-	case string:
-		// check if new stream already link on our other stream
-		if strings.HasPrefix(source, "rtsp://") {
-			if i := strings.IndexByte(source[7:], '/'); i > 0 {
-				if stream, ok := streams[source[8+i:]]; ok {
-					streams[name] = stream
-					return
-				}
-			}
-		}
-	}
-
-	streams[name] = NewStream(source)
+	return New(src, src)
 }
 
 func Delete(name string) {

@@ -17,30 +17,33 @@ type Stream struct {
 }
 
 func NewStream(source interface{}) *Stream {
-	s := new(Stream)
-
 	switch source := source.(type) {
 	case string:
+		s := new(Stream)
 		prod := &Producer{url: source}
 		s.producers = append(s.producers, prod)
+		return s
 	case []interface{}:
+		s := new(Stream)
 		for _, source := range source {
 			prod := &Producer{url: source.(string)}
 			s.producers = append(s.producers, prod)
 		}
+		return s
+	case *Stream:
+		return source
 	case map[string]interface{}:
 		return NewStream(source["url"])
 	case nil:
+		return new(Stream)
 	default:
 		panic("wrong source type")
 	}
-
-	return s
 }
 
 func (s *Stream) SetSource(source string) {
-	if len(s.producers) > 0 {
-		s.producers[0].url = source
+	for _, prod := range s.producers {
+		prod.SetSource(source)
 	}
 }
 

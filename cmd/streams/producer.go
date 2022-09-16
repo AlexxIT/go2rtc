@@ -2,6 +2,7 @@ package streams
 
 import (
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
+	"strings"
 	"sync"
 )
 
@@ -17,12 +18,21 @@ const (
 type Producer struct {
 	streamer.Element
 
-	url     string
+	url      string
+	template string
+
 	element streamer.Producer
 	tracks  []*streamer.Track
 
 	state state
 	mx    sync.Mutex
+}
+
+func (p *Producer) SetSource(s string) {
+	if p.template == "" {
+		p.template = p.url
+	}
+	p.url = strings.Replace(p.template, "{input}", s, 1)
 }
 
 func (p *Producer) GetMedias() []*streamer.Media {
