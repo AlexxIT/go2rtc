@@ -54,15 +54,7 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 			items = append(items, device)
 		}
 
-		data, err := json.Marshal(items)
-		if err != nil {
-			log.Error().Err(err).Msg("[api.homekit]")
-			return
-		}
-
-		if _, err = w.Write(data); err != nil {
-			log.Error().Err(err).Msg("[api.homekit]")
-		}
+		_= json.NewEncoder(w).Encode(items)
 
 	case "POST":
 		// TODO: post params...

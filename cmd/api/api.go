@@ -102,13 +102,9 @@ func streamsHandler(w http.ResponseWriter, r *http.Request) {
 		v = streams.All()
 	}
 
-	data, err := json.Marshal(v)
-	if err != nil {
-		log.Error().Err(err).Msg("[api.streams] marshal")
-		return
-	}
-
-	_, _ = w.Write(data)
+	e := json.NewEncoder(w)
+	e.SetIndent("", "  ")
+	_ = e.Encode(v)
 }
 
 func apiWS(w http.ResponseWriter, r *http.Request) {
