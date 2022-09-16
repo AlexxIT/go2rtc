@@ -50,6 +50,14 @@ func Init() {
 
 	go func() {
 		s := http.Server{}
+
+		if log.Trace().Enabled() {
+			s.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				log.Trace().Stringer("url", r.URL).Msgf("[api] %s", r.Method)
+				http.DefaultServeMux.ServeHTTP(w, r)
+			})
+		}
+
 		if err = s.Serve(listener); err != nil {
 			log.Fatal().Err(err).Msg("[api] serve")
 		}
