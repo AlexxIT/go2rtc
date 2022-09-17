@@ -284,7 +284,7 @@ If you see a device but it does not have a pair button - it is paired to some ec
 Support public cameras from service [Ivideon](https://tv.ivideon.com/).
 
 ```yaml
-sources:
+streams:
   quailcam: ivideon:100-tu5dkUPct39cTp9oNEN2B6/0
 ```
 
@@ -479,7 +479,7 @@ When the stream starts - the camera `entity_id` will be added to go2rtc "on the 
 You can add camera `entity_id` to [go2rtc config](#configuration) if you need transcoding:
 
 ```yaml
-sources:
+streams:
   "camera.hall": ffmpeg:{input}#video=copy#audio=opus
 ```
 
