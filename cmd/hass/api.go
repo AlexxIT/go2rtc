@@ -7,6 +7,7 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/streams"
 	"github.com/AlexxIT/go2rtc/cmd/webrtc"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -83,6 +84,48 @@ func initAPI() {
 			s = base64.StdEncoding.EncodeToString([]byte(s))
 			_, _ = w.Write([]byte(s))
 		}
+	})
+
+	// api from RTSPtoWebRTC
+	api.HandleFunc("/stream", func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			return
+		}
+
+		str := r.FormValue("sdp64")
+		offer, err := base64.StdEncoding.DecodeString(str)
+		if err != nil {
+			return
+		}
+
+		src := r.FormValue("url")
+		src, err = url.QueryUnescape(src)
+		if err != nil {
+			return
+		}
+
+		stream := streams.Get(src)
+		if stream == nil {
+			if stream = rtspStream(src); stream != nil {
+				streams.New(src, stream)
+			} else {
+				stream = streams.New(src, src)
+			}
+		}
+
+		str, err = webrtc.ExchangeSDP(stream, string(offer), r.UserAgent())
+		if err != nil {
+			return
+		}
+
+		v := struct {
+			Answer string `json:"sdp64"`
+		}{
+			Answer: base64.StdEncoding.EncodeToString([]byte(str)),
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(v)
 	})
 }
 
