@@ -39,3 +39,5 @@
 - https://html5test.com/
 - https://trac.ffmpeg.org/wiki/Capture/Webcam
 - https://trac.ffmpeg.org/wiki/DirectShow
+- https://stackoverflow.com/questions/53207692/libav-mjpeg-encoding-and-huffman-table
+- https://github.com/tuupola/esp_video/blob/master/README.md

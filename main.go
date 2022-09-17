@@ -10,6 +10,7 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/hass"
 	"github.com/AlexxIT/go2rtc/cmd/homekit"
 	"github.com/AlexxIT/go2rtc/cmd/ivideon"
+	"github.com/AlexxIT/go2rtc/cmd/mjpeg"
 	"github.com/AlexxIT/go2rtc/cmd/mp4"
 	"github.com/AlexxIT/go2rtc/cmd/ngrok"
 	"github.com/AlexxIT/go2rtc/cmd/rtmp"
@@ -38,6 +39,7 @@ func main() {
 
 	webrtc.Init()
 	mp4.Init()
+	mjpeg.Init()
 
 	srtp.Init()
 	homekit.Init()

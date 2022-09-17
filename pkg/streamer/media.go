@@ -25,6 +25,7 @@ const (
 	CodecVP8  = "VP8"
 	CodecVP9  = "VP9"
 	CodecAV1  = "AV1"
+	CodecJPEG = "JPEG" // payloadType: 26
 
 	CodecPCMU = "PCMU" // payloadType: 0
 	CodecPCMA = "PCMA" // payloadType: 8
@@ -36,7 +37,7 @@ const (
 
 func GetKind(name string) string {
 	switch name {
-	case CodecH264, CodecH265, CodecVP8, CodecVP9, CodecAV1:
+	case CodecH264, CodecH265, CodecVP8, CodecVP9, CodecAV1, CodecJPEG:
 		return KindVideo
 	case CodecPCMU, CodecPCMA, CodecAAC, CodecOpus, CodecG722, CodecMPA:
 		return KindAudio
@@ -129,12 +130,14 @@ type Codec struct {
 func NewCodec(name string) *Codec {
 	name = strings.ToUpper(name)
 	switch name {
-	case CodecH264, CodecH265, CodecVP8, CodecVP9, CodecAV1:
+	case CodecH264, CodecH265, CodecVP8, CodecVP9, CodecAV1, CodecJPEG:
 		return &Codec{Name: name, ClockRate: 90000}
 	case CodecPCMU, CodecPCMA:
 		return &Codec{Name: name, ClockRate: 8000}
 	case CodecOpus:
 		return &Codec{Name: name, ClockRate: 48000, Channels: 2}
+	case "MJPEG":
+		return &Codec{Name: CodecJPEG, ClockRate: 90000}
 	}
 
 	panic(fmt.Sprintf("unsupported codec: %s", name))
@@ -257,6 +260,7 @@ func UnmarshalCodec(md *sdp.MediaDescription, payloadType string) *Codec {
 	}
 
 	if c.Name == "" {
+		// https://en.wikipedia.org/wiki/RTP_payload_formats
 		switch payloadType {
 		case "0":
 			c.Name = CodecPCMU
@@ -267,6 +271,9 @@ func UnmarshalCodec(md *sdp.MediaDescription, payloadType string) *Codec {
 		case "14":
 			c.Name = CodecMPA
 			c.ClockRate = 44100
+		case "26":
+			c.Name = CodecJPEG
+			c.ClockRate = 90000
 		default:
 			c.Name = payloadType
 		}

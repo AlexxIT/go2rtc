@@ -6,8 +6,8 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
 
 - zero-dependency and zero-config [small app](#go2rtc-binary) for all OS (Windows, macOS, Linux, ARM)
 - zero-delay for many supported protocols (lowest possible streaming latency)
-- streaming from [RTSP](#source-rtsp), [RTMP](#source-rtmp), [MJPEG](#source-ffmpeg), [HLS](#source-ffmpeg), [USB Cameras](#source-ffmpeg-device), [files](#source-ffmpeg) and [other sources](#module-streams)
-- streaming to [RTSP](#module-rtsp), [WebRTC](#module-webrtc) or [MSE](#module-mp4)
+- streaming from [RTSP](#source-rtsp), [RTMP](#source-rtmp), [MJPEG](#source-ffmpeg), [HLS/HTTP](#source-ffmpeg), [USB Cameras](#source-ffmpeg-device) and [other sources](#module-streams)
+- streaming to [RTSP](#module-rtsp), [WebRTC](#module-webrtc), [MSE/MP4](#module-mp4) or [MJPEG](#module-mjpeg)
 - first project in the World with support streaming from [HomeKit Cameras](#source-homekit)
 - on the fly transcoding for unsupported codecs via [FFmpeg](#source-ffmpeg)
 - multi-source 2-way [codecs negotiation](#codecs-negotiation)
@@ -327,13 +327,9 @@ api:
 
 ### Module: RTSP
 
-You can get any stream as RTSP-stream with codecs filter:
+You can get any stream as RTSP-stream: `rtsp://192.168.1.123:8554/{stream_name}`
 
-```
-rtsp://192.168.1.123/{stream_name}?video={codec}&audio={codec1}&audio={codec2}
-```
-
-- you can omit the codecs, so one first video and one first audio will be selected
+- you can omit the codec filters, so one first video and one first audio will be selected
 - you can set `?video=copy` or just `?video`, so only one first video without audio will be selected
 - you can set multiple video or audio, so all of them will be selected
 
@@ -496,6 +492,19 @@ Provides several features:
 1. MSE stream (fMP4 over WebSocket)
 2. Camera snapshots in MP4 format (single frame), can be sent to [Telegram](https://www.telegram.org/)
 3. Progressive MP4 stream - bad format for streaming because of high latency, doesn't work in Safari 
+
+### Module: MJPEG
+
+**Important.** For stream as MJPEG format, your source MUST contain the MJPEG codec. If your camera outputs H264/H265 - you SHOULD use transcoding. With this example, your stream will have both H264 and MJPEG codecs:
+
+```yaml
+streams:
+  camera1:
+    - rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0
+    - ffmpeg:rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0#video=mjpeg
+```
+
+Example link to MJPEG: `http://192.168.1.123:1984/api/stream.mjpeg?src=camera1`
 
 ### Module: Log
 
