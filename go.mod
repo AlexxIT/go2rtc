@@ -54,8 +54,4 @@ replace (
 	github.com/brutella/dnssd v1.2.2 => github.com/rblenkinsopp/dnssd v1.2.3-0.20220516082132-0923f3c787a1
 	// RTP tlv8 fix
 	github.com/brutella/hap v0.0.17 => github.com/AlexxIT/hap v0.0.15-0.20220823033740-ce7d1564e657
-	// MSE update
-	github.com/deepch/vdk v0.0.19 => github.com/AlexxIT/vdk v0.0.18-0.20220616041030-b0d122807b2e
-	// AES_256_CM_HMAC_SHA1_80 support
-	github.com/pion/srtp/v2 v2.0.10 => github.com/AlexxIT/srtp/v2 v2.0.10-0.20220608200505-3191d4f19c10
 )

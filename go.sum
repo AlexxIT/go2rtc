@@ -1,9 +1,5 @@
 github.com/AlexxIT/hap v0.0.15-0.20220823033740-ce7d1564e657 h1:FUzXAJfm6sRLJ8T6vfzvy/Hm3aioX8+fbxgx2VZoI78=
 github.com/AlexxIT/hap v0.0.15-0.20220823033740-ce7d1564e657/go.mod h1:c2vEL5pzjRWEx07sa32kTVjzI9bBVlstrwBwKe3DlJ0=
-github.com/AlexxIT/srtp/v2 v2.0.10-0.20220608200505-3191d4f19c10 h1:4aKRthhmkYcStKuk1hcyvkeNJ/BDx5BTIvYmDO9ZJvg=
-github.com/AlexxIT/srtp/v2 v2.0.10-0.20220608200505-3191d4f19c10/go.mod h1:5TtM9yw6lsH0ppNCehB/EjEUli7VkUgKSPJqWVqbhQ4=
-github.com/AlexxIT/vdk v0.0.18-0.20220616041030-b0d122807b2e h1:NAgHHZB+JUN3/J4/yq1q1EAc8xwJ8bb/Qp0AcjkfzAA=
-github.com/AlexxIT/vdk v0.0.18-0.20220616041030-b0d122807b2e/go.mod h1:KqQ/KU3hOc4a62l/jPRH5Hiz5fhTq5cGCl8IqeCxWQI=
 github.com/brutella/dnssd v1.2.3 h1:4fBLjZjPH7SbcHhEcIJhZcC9nOhIDZ0m3rn9bjl1/i0=
 github.com/brutella/dnssd v1.2.3/go.mod h1:JoW2sJUrmVIef25G6lrLj7HS6Xdwh6q8WUIvMkkBYXs=
 github.com/cheekybits/genny v1.0.0/go.mod h1:+tQajlRqAUrPI7DOSpB0XAqZYtQakVtB7wXkRAgjxjQ=
@@ -11,6 +7,8 @@ github.com/coreos/go-systemd/v22 v22.3.3-0.20220203105225-a9a7ef127534/go.mod h1
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
+github.com/deepch/vdk v0.0.19 h1:r6xYyBTtXEIEh+csO0XHT00sI7xLF+hQFkJE9/go5II=
+github.com/deepch/vdk v0.0.19/go.mod h1:7ydHfSkflMZxBXfWR79dMjrT54xzvLxnPaByOa9Jpzg=
 github.com/fsnotify/fsnotify v1.4.7/go.mod h1:jwhsz4b93w/PPRr/qN1Yymfu8t87LnFCMoQvtojpjFo=
 github.com/fsnotify/fsnotify v1.4.9/go.mod h1:znqG4EE+3YCdAaPaxE2ZRY/06pZUdp0tY4IgpuI1SZQ=
 github.com/go-chi/chi v1.5.4 h1:QHdzF2szwjqVV4wmByUnTcsbIg7UGaQ0tPF2t5GcAIs=
@@ -103,6 +101,8 @@ github.com/pion/sdp/v3 v3.0.5/go.mod h1:iiFWFpQO8Fy3S5ldclBkpXqmWy02ns78NOKoLLL0
 github.com/pion/srtp v1.5.1 h1:9Q3jAfslYZBt+C69SI/ZcONJh9049JUHZWYRRf5KEKw=
 github.com/pion/srtp v1.5.1/go.mod h1:B+QgX5xPeQTNc1CJStJPHzOlHK66ViMDWTT0HZTCkcA=
 github.com/pion/srtp/v2 v2.0.9/go.mod h1:5TtM9yw6lsH0ppNCehB/EjEUli7VkUgKSPJqWVqbhQ4=
+github.com/pion/srtp/v2 v2.0.10 h1:b8ZvEuI+mrL8hbr/f1YiJFB34UMrOac3R3N1yq2UN0w=
+github.com/pion/srtp/v2 v2.0.10/go.mod h1:XEeSWaK9PfuMs7zxXyiN252AHPbH12NX5q/CFDWtUuA=
 github.com/pion/stun v0.3.5 h1:uLUCBCkQby4S1cf6CGuR9QrVOKcvUwFeemaC865QHDg=
 github.com/pion/stun v0.3.5/go.mod h1:gDMim+47EeEtfWogA37n6qXZS88L5V6LqFcf+DZA2UA=
 github.com/pion/transport v0.6.0/go.mod h1:iWZ07doqOosSLMhZ+FXUTq+TamDoXSllxpbGcfkCmbE=
@@ -121,7 +121,7 @@ github.com/pion/udp v0.1.0/go.mod h1:BPELIjbwE9PRbd/zxI/KYBnbo7B6+oA6YuEaNE8lths
 github.com/pion/udp v0.1.1 h1:8UAPvyqmsxK8oOjloDk4wUt63TzFe9WEJkg5lChlj7o=
 github.com/pion/udp v0.1.1/go.mod h1:6AFo+CMdKQm7UiA0eUPA8/eVCTx8jBIITLZHc9DWX5M=
 github.com/pion/webrtc/v2 v2.2.26/go.mod h1:XMZbZRNHyPDe1gzTIHFcQu02283YO45CbiwFgKvXnmc=
-github.com/pion/webrtc/v3 v3.1.41/go.mod h1:sUcW9SFPEWerDqGOBmdYEMfRvbdd7rgwo4bNzfsXww4=
+github.com/pion/webrtc/v3 v3.1.42/go.mod h1:ffD9DulDrPxyWvDPUIPAOSAWx9GUlOExiJPf7cCcMLA=
 github.com/pion/webrtc/v3 v3.1.43 h1:YT3ZTO94UT4kSBvZnRAH82+0jJPUruiKr9CEstdlQzk=
 github.com/pion/webrtc/v3 v3.1.43/go.mod h1:G/J8k0+grVsjC/rjCZ24AKoCCxcFFODgh7zThNZGs0M=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
