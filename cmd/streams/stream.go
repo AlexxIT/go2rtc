@@ -103,6 +103,11 @@ func (s *Stream) AddConsumer(cons streamer.Consumer) (err error) {
 
 func (s *Stream) RemoveConsumer(cons streamer.Consumer) {
 	for i, consumer := range s.consumers {
+		if consumer == nil {
+			log.Warn().Msgf("empty consumer: %+v\n", s)
+			continue
+		}
+
 		if consumer.element == cons {
 			// remove consumer pads from all producers
 			for _, track := range consumer.tracks {
@@ -115,6 +120,11 @@ func (s *Stream) RemoveConsumer(cons streamer.Consumer) {
 	}
 
 	for _, producer := range s.producers {
+		if producer == nil {
+			log.Warn().Msgf("empty producer: %+v\n", s)
+			continue
+		}
+
 		var sink bool
 		for _, track := range producer.tracks {
 			if len(track.Sink) > 0 {
