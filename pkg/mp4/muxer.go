@@ -4,8 +4,10 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
+	"github.com/AlexxIT/go2rtc/pkg/h265"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/deepch/vdk/codec/h264parser"
+	"github.com/deepch/vdk/codec/h265parser"
 	"github.com/deepch/vdk/format/fmp4/fmp4io"
 	"github.com/deepch/vdk/format/mp4/mp4io"
 	"github.com/deepch/vdk/format/mp4f/mp4fio"
@@ -27,6 +29,9 @@ func (m *Muxer) MimeType(codecs []*streamer.Codec) string {
 		switch codec.Name {
 		case streamer.CodecH264:
 			s += "avc1." + h264.GetProfileLevelID(codec.FmtpLine)
+		case streamer.CodecH265:
+			// +Safari +Chrome +Edge -iOS15 -Android13
+			s += "hvc1.1.6.L93.B0" // hev1.1.6.L93.B0
 		}
 	}
 
@@ -71,6 +76,49 @@ func (m *Muxer) GetInit(codecs []*streamer.Codec) ([]byte, error) {
 				Depth:                24,
 				ColorTableId:         -1,
 				Conf: &mp4io.AVC1Conf{
+					Data: codecData.AVCDecoderConfRecordBytes(),
+				},
+			}
+
+			trak.Media.Handler = &mp4io.HandlerRefer{
+				SubType: [4]byte{'v', 'i', 'd', 'e'},
+				Name:    []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 'm', 'a', 'i', 'n', 0},
+			}
+
+			moov.Tracks = append(moov.Tracks, trak)
+
+		case streamer.CodecH265:
+			vps, sps, pps := h265.GetParameterSet(codec.FmtpLine)
+			if sps == nil {
+				return nil, fmt.Errorf("empty SPS: %#v", codec)
+			}
+
+			codecData, err := h265parser.NewCodecDataFromVPSAndSPSAndPPS(vps, sps, pps)
+			if err != nil {
+				return nil, err
+			}
+
+			width := codecData.Width()
+			height := codecData.Height()
+
+			trak := TRAK()
+			trak.Media.Header.TimeScale = int32(codec.ClockRate)
+			trak.Header.TrackWidth = float64(width)
+			trak.Header.TrackHeight = float64(height)
+
+			trak.Media.Info.Video = &mp4io.VideoMediaInfo{
+				Flags: 0x000001,
+			}
+			trak.Media.Info.Sample.SampleDesc.HV1Desc = &mp4io.HV1Desc{
+				DataRefIdx:           1,
+				HorizontalResolution: 72,
+				VorizontalResolution: 72,
+				Width:                int16(width),
+				Height:               int16(height),
+				FrameCount:           1,
+				Depth:                24,
+				ColorTableId:         -1,
+				Conf: &mp4io.HV1Conf{
 					Data: codecData.AVCDecoderConfRecordBytes(),
 				},
 			}
@@ -126,7 +174,7 @@ func (m *Muxer) Marshal(packet *rtp.Packet) []byte {
 
 	entry := mp4io.TrackFragRunEntry{
 		//Duration: 90000,
-		Size:     uint32(len(packet.Payload)),
+		Size: uint32(len(packet.Payload)),
 	}
 
 	newTime := packet.Timestamp

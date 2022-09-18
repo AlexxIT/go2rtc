@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
+	"github.com/AlexxIT/go2rtc/pkg/h265"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/pion/rtp"
 )
@@ -28,6 +29,7 @@ func (c *Consumer) GetMedias() []*streamer.Media {
 			Direction: streamer.DirectionRecvonly,
 			Codecs: []*streamer.Codec{
 				{Name: streamer.CodecH264, ClockRate: 90000},
+				{Name: streamer.CodecH265, ClockRate: 90000},
 			},
 		},
 		//{
@@ -71,6 +73,36 @@ func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 
 		if !h264.IsAVC(codec) {
 			wrapper := h264.RTPDepay(track)
+			push = wrapper(push)
+		}
+
+		return track.Bind(push)
+
+	case streamer.CodecH265:
+		c.codecs = append(c.codecs, track.Codec)
+
+		push := func(packet *rtp.Packet) error {
+			if packet.Version != h264.RTPPacketVersionAVC {
+				return nil
+			}
+
+			if !c.start {
+				if h265.IsKeyframe(packet.Payload) {
+					c.start = true
+				} else {
+					return nil
+				}
+			}
+
+			buf := c.muxer.Marshal(packet)
+			c.send += len(buf)
+			c.Fire(buf)
+
+			return nil
+		}
+
+		if !h264.IsAVC(codec) {
+			wrapper := h265.RTPDepay(track)
 			push = wrapper(push)
 		}
 
