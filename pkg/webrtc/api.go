@@ -87,10 +87,6 @@ func RegisterDefaultCodecs(m *webrtc.MediaEngine) error {
 		},
 		// macOS Safari 15.1
 		{
-			RTPCodecCapability: webrtc.RTPCodecCapability{webrtc.MimeTypeH264, 90000, 0, "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640c1f", videoRTCPFeedback},
-			PayloadType:        99,
-		},
-		{
 			RTPCodecCapability: webrtc.RTPCodecCapability{webrtc.MimeTypeH265, 90000, 0, "", videoRTCPFeedback},
 			PayloadType:        100,
 		},
