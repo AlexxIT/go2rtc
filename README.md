@@ -547,6 +547,30 @@ If you need Web interface protection without Home Assistant Add-on - you need to
 
 PS. Additionally WebRTC opens a lot of random UDP ports for transmit encrypted media. They work without problems on the local network. And sometimes work for external access, even if you haven't opened ports on your router. But for stable external WebRTC access, you need to configure the TCP port.
 
+## Codecs madness
+
+`AVC/H.264` codec can be played almost anywhere. But `HEVC/H.265` has a lot of limitations in supporting with different devices and browsers. It's all about patents and money, you can't do anything about it.
+
+Device | WebRTC | MSE | MP4
+-------|--------|-----|----
+*latency*       | best        | medium      | bad
+Desktop Chrome  | H264        | H264, H265* | H264, H265*
+Desktop Safari  | H264, H265* | H264        | no
+Desktop Edge    | H264        | H264, H265* | H264, H265*
+Desktop Firefox | H264        | H264        | H264
+Desktop Opera   | no          | H264        | H264
+iPhone Safari   | H264, H265* | no          | no
+iPad Safari     | H264, H265* | H264        | no
+Android Chrome  | H264        | H264        | H264
+masOS Hass App  | no          | no          | no
+
+- WebRTC audio codecs: `PCMU/8000`, `PCMA/8000`, `OPUS/48000/2`
+- MSE/MP4 audio codecs: not supported yet (should be: `AAC`)
+- Chrome H265: [read this](https://github.com/StaZhu/enable-chromium-hevc-hardware-decoding)
+- Edge H265: [read this](https://www.reddit.com/r/MicrosoftEdge/comments/v9iw8k/enable_hevc_support_in_edge/)
+- Desktop Safari H265: Menu > Develop > Experimental > WebRTC H265
+- iOS Safari H265: Settings > Safari > Advanced > Experimental > WebRTC H265
+
 ## FAQ
 
 **Q. What's the difference between go2rtc, WebRTC Camera and RTSPtoWebRTC?**
