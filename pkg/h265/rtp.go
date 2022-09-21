@@ -1,7 +1,6 @@
 package h265
 
 import (
-	"encoding/binary"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/deepch/vdk/codec/h265parser"
@@ -9,18 +8,20 @@ import (
 )
 
 func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
+	vps, sps, pps := GetParameterSet(track.Codec.FmtpLine)
+
 	var buffer []byte
 
 	return func(push streamer.WriterFunc) streamer.WriterFunc {
 		return func(packet *rtp.Packet) error {
-			naluType := (packet.Payload[0] >> 1) & 0x3f
+			nut := (packet.Payload[0] >> 1) & 0x3f
 			//fmt.Printf(
 			//	"[RTP] codec: %s, nalu: %2d, size: %6d, ts: %10d, pt: %2d, ssrc: %d, seq: %d\n",
-			//	track.Codec.Name, naluType, len(packet.Payload), packet.Timestamp,
+			//	track.Codec.Name, nut, len(packet.Payload), packet.Timestamp,
 			//	packet.PayloadType, packet.SSRC, packet.SequenceNumber,
 			//)
 
-			switch naluType {
+			switch nut {
 			case h265parser.NAL_UNIT_UNSPECIFIED_49:
 				data := packet.Payload
 				switch data[2] >> 6 {
@@ -36,16 +37,48 @@ func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
 				case 1: // end
 					packet.Payload = append(buffer, data[3:]...)
 				}
+			case h265parser.NAL_UNIT_VPS:
+				vps = packet.Payload
+				return nil
+			case h265parser.NAL_UNIT_SPS:
+				sps = packet.Payload
+				return nil
+			case h265parser.NAL_UNIT_PPS:
+				pps = packet.Payload
+				return nil
 			default:
 				//panic("not implemented")
 			}
 
-			size := make([]byte, 4)
-			binary.BigEndian.PutUint32(size, uint32(len(packet.Payload)))
+			var clone rtp.Packet
 
-			clone := *packet
+			nut = (packet.Payload[0] >> 1) & 0x3f
+			if nut >= h265parser.NAL_UNIT_CODED_SLICE_BLA_W_LP && nut <= h265parser.NAL_UNIT_CODED_SLICE_CRA {
+				clone = *packet
+				clone.Version = h264.RTPPacketVersionAVC
+				clone.Payload = h264.EncodeAVC(vps)
+				if err := push(&clone); err != nil {
+					return err
+				}
+
+				clone = *packet
+				clone.Version = h264.RTPPacketVersionAVC
+				clone.Payload = h264.EncodeAVC(sps)
+				if err := push(&clone); err != nil {
+					return err
+				}
+
+				clone = *packet
+				clone.Version = h264.RTPPacketVersionAVC
+				clone.Payload = h264.EncodeAVC(pps)
+				if err := push(&clone); err != nil {
+					return err
+				}
+			}
+
+			clone = *packet
 			clone.Version = h264.RTPPacketVersionAVC
-			clone.Payload = append(size, packet.Payload...)
+			clone.Payload = h264.EncodeAVC(packet.Payload)
 
 			return push(&clone)
 		}
@@ -74,11 +107,12 @@ func SafariPay(mtu uint16) streamer.WrapperFunc {
 			var start byte
 
 			nut := (data[4] >> 1) & 0b111111
-			switch nut {
-			case h265parser.NAL_UNIT_VPS, h265parser.NAL_UNIT_SPS, h265parser.NAL_UNIT_PPS:
+			//fmt.Printf("[H265] nut: %2d, size: %6d, data: %16x\n", nut, len(data), data[4:20])
+			switch {
+			case nut >= h265parser.NAL_UNIT_VPS && nut <= h265parser.NAL_UNIT_PPS:
 				buffer = append(buffer, data...)
 				return nil
-			case h265parser.NAL_UNIT_CODED_SLICE_IDR_W_RADL:
+			case nut >= h265parser.NAL_UNIT_CODED_SLICE_BLA_W_LP && nut <= h265parser.NAL_UNIT_CODED_SLICE_CRA:
 				buffer = append([]byte{3}, buffer...)
 				data = append(buffer, data...)
 				start = 1
