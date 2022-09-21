@@ -59,7 +59,6 @@ func (c *Conn) Init() {
 		}
 
 		fmt.Printf("TODO: webrtc ontrack %+v\n", remote)
-		fmt.Printf("TODO: webrtc ontrack %#v\n", remote)
 	})
 
 	// OK connection:

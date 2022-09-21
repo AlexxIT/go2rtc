@@ -21,10 +21,6 @@ func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
 			//)
 
 			switch naluType {
-			case h265parser.NAL_UNIT_CODED_SLICE_TRAIL_R:
-			case h265parser.NAL_UNIT_VPS:
-			case h265parser.NAL_UNIT_SPS:
-			case h265parser.NAL_UNIT_PPS:
 			case h265parser.NAL_UNIT_UNSPECIFIED_49:
 				data := packet.Payload
 				switch data[2] >> 6 {
@@ -51,6 +47,72 @@ func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
 			clone.Version = h264.RTPPacketVersionAVC
 			clone.Payload = append(size, packet.Payload...)
 
+			return push(&clone)
+		}
+	}
+}
+
+// SafariPay - generate Safari friendly payload for H265
+func SafariPay(mtu uint16) streamer.WrapperFunc {
+	sequencer := rtp.NewRandomSequencer()
+	size := int(mtu - 12) // rtp.Header size
+
+	var buffer []byte
+
+	return func(push streamer.WriterFunc) streamer.WriterFunc {
+		return func(packet *rtp.Packet) error {
+			if packet.Version != h264.RTPPacketVersionAVC {
+				return push(packet)
+			}
+
+			data := packet.Payload
+			data[0] = 0
+			data[1] = 0
+			data[2] = 0
+			data[3] = 1
+
+			var start byte
+
+			nut := (data[4] >> 1) & 0b111111
+			switch nut {
+			case h265parser.NAL_UNIT_VPS, h265parser.NAL_UNIT_SPS, h265parser.NAL_UNIT_PPS:
+				buffer = append(buffer, data...)
+				return nil
+			case h265parser.NAL_UNIT_CODED_SLICE_IDR_W_RADL:
+				buffer = append([]byte{3}, buffer...)
+				data = append(buffer, data...)
+				start = 1
+			default:
+				data = append([]byte{2}, data...)
+				start = 0
+			}
+
+			for len(data) > size {
+				clone := rtp.Packet{
+					Header: rtp.Header{
+						Version:        2,
+						Marker:         false,
+						SequenceNumber: sequencer.NextSequenceNumber(),
+						Timestamp:      packet.Timestamp,
+					},
+					Payload: data[:size],
+				}
+				if err := push(&clone); err != nil {
+					return err
+				}
+
+				data = append([]byte{start}, data[size:]...)
+			}
+
+			clone := rtp.Packet{
+				Header: rtp.Header{
+					Version:        2,
+					Marker:         true,
+					SequenceNumber: sequencer.NextSequenceNumber(),
+					Timestamp:      packet.Timestamp,
+				},
+				Payload: data,
+			}
 			return push(&clone)
 		}
 	}

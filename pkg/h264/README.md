@@ -36,3 +36,4 @@ H.264/high      | avc1.6400xx  | FFmpeg superfast
 - [AVC levels](https://en.wikipedia.org/wiki/Advanced_Video_Coding#Levels)
 - [AVC profiles table](https://developer.mozilla.org/ru/docs/Web/Media/Formats/codecs_parameter)
 - [Supported Media for Google Cast](https://developers.google.com/cast/docs/media)
+- [Two stream formats, Annex-B, AVCC (H.264) and HVCC (H.265)](https://www.programmersought.com/article/3901815022/)

@@ -3,6 +3,7 @@ package webrtc
 import (
 	"encoding/json"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
+	"github.com/AlexxIT/go2rtc/pkg/h265"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
@@ -51,7 +52,8 @@ func (c *Conn) AddTrack(media *streamer.Media, track *streamer.Track) *streamer.
 			return trackLocal.WriteRTP(packet)
 		}
 
-		if codec.Name == streamer.CodecH264 {
+		switch codec.Name {
+		case streamer.CodecH264:
 			wrapper := h264.RTPPay(1200)
 			push = wrapper(push)
 
@@ -60,6 +62,15 @@ func (c *Conn) AddTrack(media *streamer.Media, track *streamer.Track) *streamer.
 			} else {
 				wrapper = h264.RTPDepay(track)
 			}
+			push = wrapper(push)
+
+		case streamer.CodecH265:
+			// SafariPay because it is the only browser in the world
+			// that supports WebRTC + H265
+			wrapper := h265.SafariPay(1200)
+			push = wrapper(push)
+
+			wrapper = h265.RTPDepay(track)
 			push = wrapper(push)
 		}
 
