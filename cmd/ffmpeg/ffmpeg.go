@@ -121,7 +121,7 @@ func Init() {
 
 			for _, audio := range query["audio"] {
 				if audio == "copy" {
-					s += " -codec:v copy"
+					s += " -codec:a copy"
 				} else {
 					s += " " + tpl[audio]
 				}
