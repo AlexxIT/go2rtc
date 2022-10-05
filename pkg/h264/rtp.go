@@ -1,6 +1,7 @@
 package h264
 
 import (
+	"encoding/binary"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/pion/rtp"
 	"github.com/pion/rtp/codecs"
@@ -47,6 +48,13 @@ func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
 			switch NALUType(payload) {
 			case NALUTypeIFrame:
 				payload = Join(ps, payload)
+			case NALUTypeSEI:
+				// ffmpeg with transcoding
+				i := 4 + binary.BigEndian.Uint32(payload)
+				payload = payload[i:]
+				if NALUType(payload) == NALUTypeIFrame {
+					payload = Join(ps, payload)
+				}
 			}
 
 			clone := *packet
