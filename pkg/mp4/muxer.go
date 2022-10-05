@@ -46,10 +46,11 @@ func (m *Muxer) GetInit(codecs []*streamer.Codec) ([]byte, error) {
 		case streamer.CodecH264:
 			sps, pps := h264.GetParameterSet(codec.FmtpLine)
 			if sps == nil {
-				return nil, fmt.Errorf("empty SPS: %#v", codec)
+				// some dummy SPS and PPS not a problem
+				sps = []byte{0x67, 0x42, 0x00, 0x0a, 0xf8, 0x41, 0xa2}
+				pps = []byte{0x68, 0xce, 0x38, 0x80}
 			}
 
-			// TODO: remove
 			codecData, err := h264parser.NewCodecDataFromSPSAndPPS(sps, pps)
 			if err != nil {
 				return nil, err
