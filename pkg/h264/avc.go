@@ -63,12 +63,12 @@ func SplitAVC(data []byte) [][]byte {
 	var nals [][]byte
 	for {
 		// get AVC length
-		size := int(binary.BigEndian.Uint32(data))
+		size := int(binary.BigEndian.Uint32(data)) + 4
 
 		// check if multiple items in one packet
-		if size+4 < len(data) {
-			nals = append(nals, data[:size+4])
-			data = data[size+4:]
+		if size < len(data) {
+			nals = append(nals, data[:size])
+			data = data[size:]
 		} else {
 			nals = append(nals, data)
 			break
