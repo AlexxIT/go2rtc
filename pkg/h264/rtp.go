@@ -15,7 +15,7 @@ func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
 	sps, pps := GetParameterSet(track.Codec.FmtpLine)
 	ps := EncodeAVC(sps, pps)
 
-	var buffer []byte
+	buf := make([]byte, 0, 512*1024) // 512K
 
 	return func(push streamer.WriterFunc) streamer.WriterFunc {
 		return func(packet *rtp.Packet) error {
@@ -34,35 +34,41 @@ func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
 			if packet.Marker {
 				switch NALUType(payload) {
 				case NALUTypeSPS, NALUTypePPS:
-					packet.Marker = false
+					buf = append(buf, payload...)
+					return nil
 				}
 			}
 
-			// ffmpeg with `-tune zerolatency` enable option `-x264opts sliced-threads=1`
-			// and every NALU will be sliced to multiple NALUs
+			if len(buf) == 0 {
+				switch NALUType(payload) {
+				case NALUTypeIFrame:
+					// fix IFrame without SPS,PPS
+					buf = append(buf, ps...)
+				case NALUTypeSEI:
+					// fix ffmpeg with transcoding first frame
+					i := 4 + binary.BigEndian.Uint32(payload)
+					payload = payload[i:]
+					if NALUType(payload) == NALUTypeIFrame {
+						buf = append(buf, ps...)
+					}
+				}
+			}
+
+			// collect all NALs for Access Unit
 			if !packet.Marker {
-				buffer = append(buffer, payload...)
+				buf = append(buf, payload...)
 				return nil
 			}
 
-			if buffer != nil {
-				payload = append(buffer, payload...)
-				buffer = nil
+			if len(buf) > 0 {
+				payload = append(buf, payload...)
+				buf = buf[:0]
 			}
 
-			//fmt.Printf("[AVC] %v, len: %d\n", Types(payload), len(payload))
-
-			switch NALUType(payload) {
-			case NALUTypeIFrame:
-				payload = Join(ps, payload)
-			case NALUTypeSEI:
-				// ffmpeg with transcoding
-				i := 4 + binary.BigEndian.Uint32(payload)
-				payload = payload[i:]
-				if NALUType(payload) == NALUTypeIFrame {
-					payload = Join(ps, payload)
-				}
-			}
+			//fmt.Printf(
+			//	"[AVC] %v, len: %d, %v\n", Types(payload), len(payload),
+			//	reflect.ValueOf(buf).Pointer() == reflect.ValueOf(payload).Pointer(),
+			//)
 
 			clone := *packet
 			clone.Version = RTPPacketVersionAVC
