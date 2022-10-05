@@ -1,3 +1,11 @@
+# H264
+
+Access Unit (AU) can contain one or multiple NAL Unit:
+
+1. [SEI,] SPS, PPS, IFrame, [IFrame...]
+2. BFrame, [BFrame...]
+3. IFrame, [IFrame...]
+
 ## RTP H264
 
 Camera | NALu

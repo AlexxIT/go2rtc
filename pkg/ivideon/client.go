@@ -245,14 +245,12 @@ func (c *Client) worker() {
 			time.Sleep(d)
 
 			// can be SPS, PPS and IFrame in one packet
-			for _, payload := range h264.SplitAVC(data[:entry.Size]) {
-				packet := &rtp.Packet{
-					// ivideon clockrate=1000, RTP clockrate=90000
-					Header:  rtp.Header{Timestamp: ts * 90},
-					Payload: payload,
-				}
-				_ = track.WriteRTP(packet)
+			packet := &rtp.Packet{
+				// ivideon clockrate=1000, RTP clockrate=90000
+				Header:  rtp.Header{Timestamp: ts * 90},
+				Payload: data[:entry.Size],
 			}
+			_ = track.WriteRTP(packet)
 
 			data = data[entry.Size:]
 			ts += entry.Duration

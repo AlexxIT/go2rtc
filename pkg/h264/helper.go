@@ -2,6 +2,7 @@ package h264
 
 import (
 	"encoding/base64"
+	"encoding/binary"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"strings"
 )
@@ -18,8 +19,31 @@ func NALUType(b []byte) byte {
 	return b[4] & 0x1F
 }
 
+// IsKeyframe - check if any NALU in one AU is Keyframe
 func IsKeyframe(b []byte) bool {
-	return NALUType(b) == NALUTypeIFrame
+	for {
+		switch NALUType(b) {
+		case NALUTypePFrame:
+			return false
+		case NALUTypeIFrame:
+			return true
+		}
+
+		size := int(binary.BigEndian.Uint32(b)) + 4
+		if size < len(b) {
+			b = b[size:]
+			continue
+		} else {
+			return false
+		}
+	}
+}
+
+func Join(ps, iframe []byte) []byte {
+	b := make([]byte, len(ps)+len(iframe))
+	i := copy(b, ps)
+	copy(b[i:], iframe)
+	return b
 }
 
 func GetProfileLevelID(fmtp string) string {

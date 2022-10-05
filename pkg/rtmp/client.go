@@ -136,20 +136,11 @@ func (c *Client) Handle() (err error) {
 		// convert seconds to RTP timestamp
 		timestamp := uint32(pkt.Time * time.Duration(track.Codec.ClockRate) / time.Second)
 
-		var payloads [][]byte
-		if track.Codec.Name == streamer.CodecH264 {
-			payloads = h264.SplitAVC(pkt.Data)
-		} else {
-			payloads = [][]byte{pkt.Data}
+		packet := &rtp.Packet{
+			Header:  rtp.Header{Timestamp: timestamp},
+			Payload: pkt.Data,
 		}
-
-		for _, payload := range payloads {
-			packet := &rtp.Packet{
-				Header:  rtp.Header{Timestamp: timestamp},
-				Payload: payload,
-			}
-			_ = track.WriteRTP(packet)
-		}
+		_ = track.WriteRTP(packet)
 	}
 }
 

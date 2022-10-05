@@ -53,15 +53,16 @@ func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 				return nil
 			}
 
-			switch h264.NALUType(packet.Payload) {
-			case h264.NALUTypeIFrame:
-				c.start = true
-			case h264.NALUTypePFrame:
-				if !c.start {
+			if c.muxer == nil {
+				return nil
+			}
+
+			if !c.start {
+				if h264.IsKeyframe(packet.Payload) {
+					c.start = true
+				} else {
 					return nil
 				}
-			default:
-				return nil
 			}
 
 			buf := c.muxer.Marshal(packet)
@@ -71,10 +72,13 @@ func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 			return nil
 		}
 
-		if !h264.IsAVC(codec) {
-			wrapper := h264.RTPDepay(track)
-			push = wrapper(push)
+		var wrapper streamer.WrapperFunc
+		if h264.IsAVC(codec) {
+			wrapper = h264.RepairAVC(track)
+		} else {
+			wrapper = h264.RTPDepay(track)
 		}
+		push = wrapper(push)
 
 		return track.Bind(push)
 
