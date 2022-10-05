@@ -47,10 +47,14 @@ func (c *Client) Dial() (err error) {
 	for _, stream := range streams {
 		switch stream.Type() {
 		case av.H264:
-			cd := stream.(h264parser.CodecData)
-			fmtp := "sprop-parameter-sets=" +
-				base64.StdEncoding.EncodeToString(cd.RecordInfo.SPS[0]) + "," +
-				base64.StdEncoding.EncodeToString(cd.RecordInfo.PPS[0])
+			info := stream.(h264parser.CodecData).RecordInfo
+
+			fmtp := fmt.Sprintf(
+				"profile-level-id=%02X%02X%02X;sprop-parameter-sets=%s,%s",
+				info.AVCProfileIndication, info.ProfileCompatibility, info.AVCLevelIndication,
+				base64.StdEncoding.EncodeToString(info.SPS[0]),
+				base64.StdEncoding.EncodeToString(info.PPS[0]),
+			)
 
 			codec := &streamer.Codec{
 				Name:        streamer.CodecH264,
