@@ -129,7 +129,8 @@ func (c *Client) Handle() (err error) {
 
 		track := c.tracks[int(pkt.Idx)]
 
-		timestamp := uint32(pkt.Time / time.Duration(track.Codec.ClockRate))
+		// convert seconds to RTP timestamp
+		timestamp := uint32(pkt.Time * time.Duration(track.Codec.ClockRate) / time.Second)
 
 		var payloads [][]byte
 		if track.Codec.Name == streamer.CodecH264 {
