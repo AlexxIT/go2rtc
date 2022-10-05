@@ -19,16 +19,23 @@ func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
 
 	return func(push streamer.WriterFunc) streamer.WriterFunc {
 		return func(packet *rtp.Packet) error {
-			//nalUnitType := packet.Payload[0] & 0x1F
 			//fmt.Printf(
-			//	"[RTP] codec: %s, nalu: %2d, size: %6d, ts: %10d, pt: %2d, ssrc: %d, seq: %d\n",
-			//	track.Codec.Name, nalUnitType, len(packet.Payload), packet.Timestamp,
-			//	packet.PayloadType, packet.SSRC, packet.SequenceNumber,
+			//	"[RTP] codec: %s, nalu: %2d, size: %6d, ts: %10d, pt: %2d, ssrc: %d, seq: %d, %v\n",
+			//	track.Codec.Name, packet.Payload[0]&0x1F, len(packet.Payload), packet.Timestamp,
+			//	packet.PayloadType, packet.SSRC, packet.SequenceNumber, packet.Marker,
 			//)
 
 			payload, err := depack.Unmarshal(packet.Payload)
 			if len(payload) == 0 || err != nil {
 				return nil
+			}
+
+			// Fix TP-Link Tapo TC70: sends SPS and PPS with packet.Marker = true
+			if packet.Marker {
+				switch NALUType(payload) {
+				case NALUTypeSPS, NALUTypePPS:
+					packet.Marker = false
+				}
 			}
 
 			// ffmpeg with `-tune zerolatency` enable option `-x264opts sliced-threads=1`
