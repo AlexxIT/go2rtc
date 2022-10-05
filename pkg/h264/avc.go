@@ -60,3 +60,18 @@ func SplitAVC(data []byte) [][]byte {
 	}
 	return nals
 }
+
+func Types(data []byte) []byte {
+	var types []byte
+	for {
+		types = append(types, NALUType(data))
+
+		size := 4 + int(binary.BigEndian.Uint32(data))
+		if size < len(data) {
+			data = data[size:]
+		} else {
+			break
+		}
+	}
+	return types
+}

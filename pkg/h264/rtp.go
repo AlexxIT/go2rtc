@@ -42,6 +42,8 @@ func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
 				buffer = nil
 			}
 
+			//fmt.Printf("[AVC] %v, len: %d\n", Types(payload), len(payload))
+
 			switch NALUType(payload) {
 			case NALUTypeIFrame:
 				payload = Join(ps, payload)
