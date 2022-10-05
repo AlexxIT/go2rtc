@@ -13,17 +13,22 @@ func IsAVC(codec *streamer.Codec) bool {
 }
 
 func EncodeAVC(nals ...[]byte) (avc []byte) {
-	n := 4 * len(nals)
+	var i, n int
+
 	for _, nal := range nals {
-		n += len(nal)
+		if i = len(nal); i > 0 {
+			n += 4 + i
+		}
 	}
 
 	avc = make([]byte, n)
 
-	var i int
+	n = 0
 	for _, nal := range nals {
-		binary.BigEndian.PutUint32(avc[i:], uint32(len(nal)))
-		i += 4 + copy(avc[i+4:], nal)
+		if i = len(nal); i > 0 {
+			binary.BigEndian.PutUint32(avc[n:], uint32(i))
+			n += 4 + copy(avc[n+4:], nal)
+		}
 	}
 
 	return
