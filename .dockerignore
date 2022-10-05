@@ -1,0 +1,8 @@
+.git/
+assets/
+examples/
+
+.dockerignore
+config.yaml
+Dockerfile
+README.md
