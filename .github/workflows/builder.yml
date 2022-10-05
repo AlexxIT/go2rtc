@@ -30,22 +30,22 @@ jobs:
       - name: Build amd64
         uses: home-assistant/builder@master
         with:
-          args: --amd64 --target build/hassio --version $TAG-amd64 --no-latest --docker-hub-check
+          args: --amd64 --target . --version $TAG-amd64 --no-latest --docker-hub-check
 
       - name: Build i386
         uses: home-assistant/builder@master
         with:
-          args: --i386 --target build/hassio --version $TAG-i386 --no-latest --docker-hub-check
+          args: --i386 --target . --version $TAG-i386 --no-latest --docker-hub-check
 
       - name: Build aarch64
         uses: home-assistant/builder@master
         with:
-          args: --aarch64 --target build/hassio --version $TAG-aarch64 --no-latest --docker-hub-check
+          args: --aarch64 --target . --version $TAG-aarch64 --no-latest --docker-hub-check
 
       - name: Build armv7
         uses: home-assistant/builder@master
         with:
-          args: --armv7 --target build/hassio --version $TAG-armv7 --no-latest --docker-hub-check
+          args: --armv7 --target . --version $TAG-armv7 --no-latest --docker-hub-check
 
       - name: Docker manifest
         run: |
