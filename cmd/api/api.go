@@ -85,10 +85,15 @@ var wsHandlers = make(map[string]WSHandler)
 
 func streamsHandler(w http.ResponseWriter, r *http.Request) {
 	src := r.URL.Query().Get("src")
+	name := r.URL.Query().Get("name")
+	
+	if name == "" {
+		name = src
+	}
 
 	switch r.Method {
 	case "PUT":
-		streams.New(src, src)
+		streams.New(name, src)
 		return
 	case "DELETE":
 		streams.Delete(src)
