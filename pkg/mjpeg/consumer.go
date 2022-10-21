@@ -61,8 +61,16 @@ func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 				lqt, cqt = MakeTables(q)
 			}
 
+			// https://www.rfc-editor.org/rfc/rfc2435#section-3.1.5
+			// The maximum width is 2040 pixels.
 			w := uint16(packet.Payload[6]) << 3
 			h := uint16(packet.Payload[7]) << 3
+
+			// fix 2560x1920 and 2560x1440
+			if w == 512 && (h == 1920 || h == 1440) {
+				w = 2560
+			}
+
 			//fmt.Printf("t: %d, q: %d, w: %d, h: %d\n", t, q, w, h)
 			header = MakeHeaders(t, w, h, lqt, cqt)
 		}
