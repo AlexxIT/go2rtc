@@ -46,8 +46,15 @@ func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
 					buf = append(buf, ps...)
 				case NALUTypeSEI:
 					// fix ffmpeg with transcoding first frame
-					i := 4 + binary.BigEndian.Uint32(payload)
+					i := int(4 + binary.BigEndian.Uint32(payload))
+
+					// check if only one NAL (fix ffmpeg transcoding for Reolink RLC-510A)
+					if i == len(payload) {
+						return nil
+					}
+
 					payload = payload[i:]
+
 					if NALUType(payload) == NALUTypeIFrame {
 						buf = append(buf, ps...)
 					}
