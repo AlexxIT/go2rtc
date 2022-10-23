@@ -1,0 +1,22 @@
+#!/command/with-contenv bashio
+# shellcheck shell=bash
+
+bashio::log.info 'Starting go2rtc-watchdog...'
+
+# Waits for the known errors to occur
+known_errors=(
+  'read: connection reset by peer'
+)
+
+# Transform the known errors into grep args
+grep_args=()
+for error in "${known_errors[@]}"; do
+  grep_args+=(-e "${error}")
+done
+
+if grep -q "${grep_args[@]}" <(tail -F /var/log/go2rtc/current 2>/dev/null); then
+  bashio::log.warning "go2rtc-watchdog detected a known error, restarting add-on"
+
+  echo 1 > /run/s6-linux-init-container-results/exitcode
+  /run/s6/basedir/bin/halt
+fi

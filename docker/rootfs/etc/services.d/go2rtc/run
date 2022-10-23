@@ -20,4 +20,5 @@ fi
 # set cwd for go2rtc (for config file, Hass integration, etc)
 cd "${config_path}" || bashio::exit.nok "Could not change working directory"
 
+exec 2>&1 # ensure stderr is logged
 exec "${binary_path}"

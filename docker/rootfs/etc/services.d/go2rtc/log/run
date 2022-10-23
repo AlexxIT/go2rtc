@@ -1,0 +1,6 @@
+#!/command/with-contenv bashio
+# shellcheck shell=bash
+
+# Redirect stdout from go2rtc to both stdout and /var/log/go2rtc/current
+# https://github.com/just-containers/s6-overlay/issues/252
+exec s6-envuidgid nobody s6-applyuidgid -U s6-log -bp T 1 n20 s1000000 T /var/log/go2rtc
