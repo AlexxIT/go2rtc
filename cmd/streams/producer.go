@@ -64,6 +64,9 @@ func (p *Producer) GetTrack(media *streamer.Media, codec *streamer.Codec) *strea
 	}
 
 	track := p.element.GetTrack(media, codec)
+	if track == nil {
+		return nil
+	}
 
 	for _, t := range p.tracks {
 		if track == t {

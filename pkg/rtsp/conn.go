@@ -362,21 +362,25 @@ func (c *Conn) SetupMedia(
 	var res *tcp.Response
 	res, err = c.Do(req)
 	if err != nil {
-		// Dahua VTO2111D fail on this step because of backchannel
+		// some Dahua/Amcrest cameras fail here because two simultaneous
+		// backchannel connections
 		if c.Backchannel {
-			if err = c.Dial(); err != nil {
-				return nil, err
-			}
 			c.Backchannel = false
-			if err = c.Describe(); err != nil {
+			if err := c.Dial(); err != nil {
 				return nil, err
 			}
-			res, err = c.Do(req)
+			if err := c.Describe(); err != nil {
+				return nil, err
+			}
+
+			for _, newMedia := range c.Medias {
+				if newMedia.Control == media.Control {
+					return c.SetupMedia(newMedia, newMedia.Codecs[0])
+				}
+			}
 		}
 
-		if err != nil {
-			return nil, err
-		}
+		return nil, err
 	}
 
 	if c.Session == "" {
