@@ -8,11 +8,12 @@ import (
 )
 
 const (
-	NALUTypePFrame = 1
-	NALUTypeIFrame = 5
-	NALUTypeSEI    = 6
-	NALUTypeSPS    = 7
-	NALUTypePPS    = 8
+	NALUTypePFrame = 1 // Coded slice of a non-IDR picture
+	NALUTypeIFrame = 5 // Coded slice of an IDR picture
+	NALUTypeSEI    = 6 // Supplemental enhancement information (SEI)
+	NALUTypeSPS    = 7 // Sequence parameter set
+	NALUTypePPS    = 8 // Picture parameter set
+	NALUTypeAUD    = 9 // Access unit delimiter
 )
 
 func NALUType(b []byte) byte {
