@@ -32,7 +32,7 @@ func (c *Client) MarshalJSON() ([]byte, error) {
 	v := map[string]interface{}{
 		streamer.JSONReceive:    c.receive,
 		streamer.JSONType:       "RTMP client producer",
-		streamer.JSONRemoteAddr: c.conn.NetConn().RemoteAddr().String(),
+		//streamer.JSONRemoteAddr: c.conn.NetConn().RemoteAddr().String(),
 		"url":                   c.URI,
 	}
 	for i, media := range c.medias {

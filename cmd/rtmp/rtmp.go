@@ -8,6 +8,9 @@ import (
 
 func Init() {
 	streams.HandleFunc("rtmp", handle)
+	// RTMPT (flv over HTTP)
+	streams.HandleFunc("http", handle)
+	streams.HandleFunc("https", handle)
 }
 
 func handle(url string) (streamer.Producer, error) {

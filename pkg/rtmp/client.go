@@ -5,14 +5,23 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
+	"github.com/AlexxIT/go2rtc/pkg/rtmpt"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/deepch/vdk/av"
 	"github.com/deepch/vdk/codec/aacparser"
 	"github.com/deepch/vdk/codec/h264parser"
 	"github.com/deepch/vdk/format/rtmp"
 	"github.com/pion/rtp"
+	"strings"
 	"time"
 )
+
+// Conn for RTMP and RTMPT (flv over HTTP)
+type Conn interface {
+	Streams() (streams []av.CodecData, err error)
+	ReadPacket() (pkt av.Packet, err error)
+	Close() (err error)
+}
 
 type Client struct {
 	streamer.Element
@@ -22,7 +31,7 @@ type Client struct {
 	medias []*streamer.Media
 	tracks []*streamer.Track
 
-	conn   *rtmp.Conn
+	conn   Conn
 	closed bool
 
 	receive int
@@ -33,7 +42,12 @@ func NewClient(uri string) *Client {
 }
 
 func (c *Client) Dial() (err error) {
-	c.conn, err = rtmp.Dial(c.URI)
+	if strings.HasPrefix(c.URI, "http") {
+		c.conn, err = rtmpt.Dial(c.URI)
+	} else {
+		c.conn, err = rtmp.Dial(c.URI)
+	}
+
 	if err != nil {
 		return
 	}
