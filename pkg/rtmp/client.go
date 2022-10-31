@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
-	"github.com/AlexxIT/go2rtc/pkg/rtmpt"
+	"github.com/AlexxIT/go2rtc/pkg/httpflv"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/deepch/vdk/av"
 	"github.com/deepch/vdk/codec/aacparser"
@@ -43,7 +43,7 @@ func NewClient(uri string) *Client {
 
 func (c *Client) Dial() (err error) {
 	if strings.HasPrefix(c.URI, "http") {
-		c.conn, err = rtmpt.Dial(c.URI)
+		c.conn, err = httpflv.Dial(c.URI)
 	} else {
 		c.conn, err = rtmp.Dial(c.URI)
 	}

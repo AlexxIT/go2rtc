@@ -1,4 +1,4 @@
-package rtmpt
+package httpflv
 
 import (
 	"bufio"
