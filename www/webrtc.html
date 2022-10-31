@@ -51,11 +51,6 @@
                 pc.addIceCandidate({candidate: msg.value, sdpMid: ''});
             } else if (msg.type === 'webrtc/answer') {
                 pc.setRemoteDescription({type: 'answer', sdp: msg.value});
-                pc.getTransceivers().forEach(t => {
-                    if (t.receiver.track.kind === 'audio') {
-                        t.currentDirection
-                    }
-                })
             }
         }
 
