@@ -9,6 +9,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func NewCandidate(address string) (string, error) {
@@ -38,7 +39,7 @@ func NewCandidate(address string) (string, error) {
 
 func LookupIP(address string) (string, error) {
 	if strings.HasPrefix(address, "stun:") {
-		ip, err := GetPublicIP()
+		ip, err := GetCachedPublicIP()
 		if err != nil {
 			return "", err
 		}
@@ -97,6 +98,24 @@ func GetPublicIP() (net.IP, error) {
 	}
 
 	return xorAddr.IP, nil
+}
+
+var cachedIP net.IP
+var cachedTS time.Time
+
+func GetCachedPublicIP() (net.IP, error) {
+	now := time.Now()
+	if now.After(cachedTS) {
+		newIP, err := GetPublicIP()
+		if err == nil {
+			cachedIP = newIP
+			cachedTS = now.Add(time.Minute * 5)
+		} else if cachedIP == nil {
+			return nil, err
+		}
+	}
+
+	return cachedIP, nil
 }
 
 func IsIP(host string) bool {
