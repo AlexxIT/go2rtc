@@ -63,8 +63,17 @@ func LookupIP(address string) (string, error) {
 
 // GetPublicIP example from https://github.com/pion/stun
 func GetPublicIP() (net.IP, error) {
-	c, err := stun.Dial("udp", "stun.l.google.com:19302")
+	conn, err := net.Dial("udp", "stun.l.google.com:19302")
 	if err != nil {
+		return nil, err
+	}
+
+	c, err := stun.NewClient(conn)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = conn.SetDeadline(time.Now().Add(time.Second * 3)); err != nil {
 		return nil, err
 	}
 
