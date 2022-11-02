@@ -59,10 +59,6 @@ func (p *Producer) GetTrack(media *streamer.Media, codec *streamer.Codec) *strea
 	p.mx.Lock()
 	defer p.mx.Unlock()
 
-	if p.state == stateMedias {
-		p.state = stateTracks
-	}
-
 	track := p.element.GetTrack(media, codec)
 	if track == nil {
 		return nil
@@ -74,6 +70,10 @@ func (p *Producer) GetTrack(media *streamer.Media, codec *streamer.Codec) *strea
 		}
 	}
 
+	if p.state == stateMedias {
+		p.state = stateTracks
+	}
+
 	p.tracks = append(p.tracks, track)
 
 	return track
@@ -82,12 +82,12 @@ func (p *Producer) GetTrack(media *streamer.Media, codec *streamer.Codec) *strea
 // internals
 
 func (p *Producer) start() {
-	p.mx.Lock()
-	defer p.mx.Unlock()
-
 	if p.state != stateTracks {
 		return
 	}
+
+	p.mx.Lock()
+	defer p.mx.Unlock()
 
 	log.Debug().Str("url", p.url).Msg("[streams] start producer")
 
