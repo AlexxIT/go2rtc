@@ -8,7 +8,9 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	pion "github.com/pion/webrtc/v3"
 	"github.com/rs/zerolog"
+	"io/ioutil"
 	"net"
+	"net/http"
 )
 
 func Init() {
@@ -55,6 +57,8 @@ func Init() {
 
 	api.HandleWS(webrtc.MsgTypeOffer, offerHandler)
 	api.HandleWS(webrtc.MsgTypeCandidate, candidateHandler)
+
+	api.HandleFunc("api/webrtc", syncHandler)
 }
 
 var Port string
@@ -135,6 +139,32 @@ func offerHandler(ctx *api.Context, msg *streamer.Message) {
 	})
 
 	ctx.Consumer = conn
+}
+
+func syncHandler(w http.ResponseWriter, r *http.Request) {
+	url := r.URL.Query().Get("src")
+	stream := streams.Get(url)
+	if stream == nil {
+		return
+	}
+
+	// get offer
+	offer, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		log.Error().Err(err).Caller().Send()
+		return
+	}
+
+	answer, err := ExchangeSDP(stream, string(offer), r.UserAgent())
+	if err != nil {
+		log.Error().Err(err).Caller().Send()
+		return
+	}
+
+	// send SDP to client
+	if _, err = w.Write([]byte(answer)); err != nil {
+		log.Error().Err(err).Caller().Send()
+	}
 }
 
 func ExchangeSDP(
