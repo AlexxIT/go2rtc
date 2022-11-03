@@ -3,6 +3,7 @@ package app
 import (
 	"flag"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
 	"io"
 	"os"
@@ -48,7 +49,7 @@ func Init() {
 		lvl = zerolog.InfoLevel
 	}
 
-	log = zerolog.New(writer).With().Timestamp().Logger().Level(lvl)
+	log.Logger = zerolog.New(writer).With().Timestamp().Logger().Level(lvl)
 
 	modules = cfg.Mod
 
@@ -68,24 +69,19 @@ func LoadConfig(v interface{}) {
 func GetLogger(module string) zerolog.Logger {
 	if s, ok := modules[module]; ok {
 		lvl, err := zerolog.ParseLevel(s)
-		if err != nil {
-			log.Warn().Err(err).Msg("[log]")
-			return log
+		if err == nil {
+			return log.Level(lvl)
 		}
-
-		return log.Level(lvl)
+		log.Warn().Err(err).Caller().Send()
 	}
 
-	return log
+	return log.Logger
 }
 
 // internal
 
 // data - config content
 var data []byte
-
-// log - main logger
-var log zerolog.Logger
 
 // modules log levels
 var modules map[string]string
