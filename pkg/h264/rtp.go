@@ -19,11 +19,7 @@ func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
 
 	return func(push streamer.WriterFunc) streamer.WriterFunc {
 		return func(packet *rtp.Packet) error {
-			//fmt.Printf(
-			//	"[RTP] codec: %s, nalu: %2d, size: %6d, ts: %10d, pt: %2d, ssrc: %d, seq: %d, %v\n",
-			//	track.Codec.Name, packet.Payload[0]&0x1F, len(packet.Payload), packet.Timestamp,
-			//	packet.PayloadType, packet.SSRC, packet.SequenceNumber, packet.Marker,
-			//)
+			//log.Printf("[RTP] codec: %s, nalu: %2d, size: %6d, ts: %10d, pt: %2d, ssrc: %d, seq: %d, %v", track.Codec.Name, packet.Payload[0]&0x1F, len(packet.Payload), packet.Timestamp, packet.PayloadType, packet.SSRC, packet.SequenceNumber, packet.Marker)
 
 			payload, err := depack.Unmarshal(packet.Payload)
 			if len(payload) == 0 || err != nil {
@@ -74,10 +70,7 @@ func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
 				buf = buf[:0]
 			}
 
-			//fmt.Printf(
-			//	"[AVC] %v, len: %d, %v\n", Types(payload), len(payload),
-			//	reflect.ValueOf(buf).Pointer() == reflect.ValueOf(payload).Pointer(),
-			//)
+			//log.Printf("[AVC] %v, len: %d", Types(payload), len(payload))
 
 			clone := *packet
 			clone.Version = RTPPacketVersionAVC
