@@ -577,7 +577,7 @@ func (c *Conn) Accept() error {
 				Request: req,
 			}
 
-			if tr[:len(transport)] == transport {
+			if strings.HasPrefix(tr, transport) {
 				c.Session = "1" // TODO: fixme
 				res.Header.Set("Transport", tr[:len(transport)+3])
 			} else {
