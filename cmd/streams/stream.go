@@ -129,7 +129,7 @@ func (s *Stream) RemoveConsumer(cons streamer.Consumer) {
 
 		var sink bool
 		for _, track := range producer.tracks {
-			if len(track.Sink) > 0 {
+			if track.HasSink() {
 				sink = true
 			}
 		}

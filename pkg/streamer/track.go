@@ -12,44 +12,54 @@ type WrapperFunc func(push WriterFunc) WriterFunc
 type Track struct {
 	Codec     *Codec
 	Direction string
-	Sink      map[*Track]WriterFunc
-	mx        sync.Mutex
+	sink      map[*Track]WriterFunc
+	sinkMu    sync.Mutex
 }
 
 func (t *Track) String() string {
 	s := t.Codec.String()
-	s += fmt.Sprintf(", sinks=%d", len(t.Sink))
+	s += fmt.Sprintf(", sinks=%d", len(t.sink))
 	return s
 }
 
 func (t *Track) WriteRTP(p *rtp.Packet) error {
-	t.mx.Lock()
-	for _, f := range t.Sink {
+	t.sinkMu.Lock()
+	for _, f := range t.sink {
 		_ = f(p)
 	}
-	t.mx.Unlock()
+	t.sinkMu.Unlock()
 	return nil
 }
 
 func (t *Track) Bind(w WriterFunc) *Track {
-	t.mx.Lock()
+	t.sinkMu.Lock()
 
-	if t.Sink == nil {
-		t.Sink = map[*Track]WriterFunc{}
+	if t.sink == nil {
+		t.sink = map[*Track]WriterFunc{}
 	}
 
 	clone := &Track{
-		Codec: t.Codec, Direction: t.Direction, Sink: t.Sink,
+		Codec: t.Codec, Direction: t.Direction, sink: t.sink,
 	}
-	t.Sink[clone] = w
+	t.sink[clone] = w
 
-	t.mx.Unlock()
+	t.sinkMu.Unlock()
 
 	return clone
 }
 
 func (t *Track) Unbind() {
-	t.mx.Lock()
-	delete(t.Sink, t)
-	t.mx.Unlock()
+	t.sinkMu.Lock()
+	delete(t.sink, t)
+	t.sinkMu.Unlock()
+}
+
+func (t *Track) GetSink(from *Track) {
+	t.sink = from.sink
+}
+
+func (t *Track) HasSink() bool {
+	t.sinkMu.Lock()
+	defer t.sinkMu.Unlock()
+	return len(t.sink) > 0
 }

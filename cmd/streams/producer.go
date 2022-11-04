@@ -140,7 +140,7 @@ func (p *Producer) reconnect() {
 
 			// move sink from old track to new track
 			newTrack := p.element.GetTrack(media, codec)
-			newTrack.Sink = oldTrack.Sink
+			newTrack.GetSink(oldTrack)
 			p.tracks[i] = newTrack
 
 			break
