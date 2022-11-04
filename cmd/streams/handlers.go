@@ -17,17 +17,20 @@ func HandleFunc(scheme string, handler Handler) {
 	handlers[scheme] = handler
 }
 
-func HasProducer(url string) bool {
+func getHandler(url string) Handler {
 	i := strings.IndexByte(url, ':')
 	if i <= 0 { // TODO: i < 4 ?
-		return false
+		return nil
 	}
-	return handlers[url[:i]] != nil
+	return handlers[url[:i]]
+}
+
+func HasProducer(url string) bool {
+	return getHandler(url) != nil
 }
 
 func GetProducer(url string) (streamer.Producer, error) {
-	i := strings.IndexByte(url, ':')
-	handler := handlers[url[:i]]
+	handler := getHandler(url)
 	if handler == nil {
 		return nil, fmt.Errorf("unsupported scheme: %s", url)
 	}
