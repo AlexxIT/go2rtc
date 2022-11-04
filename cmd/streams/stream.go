@@ -51,18 +51,19 @@ func (s *Stream) AddConsumer(cons streamer.Consumer) (err error) {
 	ic := len(s.consumers)
 
 	consumer := &Consumer{element: cons}
+	var producers []*Producer // matched producers for consumer
 
 	// Step 1. Get consumer medias
 	for icc, consMedia := range cons.GetMedias() {
 		log.Trace().Stringer("media", consMedia).
-			Msgf("[streams] consumer:%d:%d candidate", ic, icc)
+			Msgf("[streams] consumer=%d candidate=%d", ic, icc)
 
 	producers:
 		for ip, prod := range s.producers {
 			// Step 2. Get producer medias (not tracks yet)
 			for ipc, prodMedia := range prod.GetMedias() {
 				log.Trace().Stringer("media", prodMedia).
-					Msgf("[streams] producer:%d:%d candidate", ip, ipc)
+					Msgf("[streams] producer=%d candidate=%d", ip, ipc)
 
 				// Step 3. Match consumer/producer codecs list
 				prodCodec := prodMedia.MatchMedia(consMedia)
@@ -81,20 +82,21 @@ func (s *Stream) AddConsumer(cons streamer.Consumer) (err error) {
 					consTrack := consumer.element.AddTrack(consMedia, prodTrack)
 
 					consumer.tracks = append(consumer.tracks, consTrack)
+					producers = append(producers, prod)
 					break producers
 				}
 			}
 		}
 	}
 
-	// can't match tracks for consumer
-	if len(consumer.tracks) == 0 {
+	if len(producers) == 0 {
 		return errors.New("couldn't find the matching tracks")
 	}
 
 	s.consumers = append(s.consumers, consumer)
 
-	for _, prod := range s.producers {
+	// there may be duplicates, but that's not a problem
+	for _, prod := range producers {
 		prod.start()
 	}
 
