@@ -10,12 +10,47 @@ import (
 )
 
 func Init() {
-	api.HandleFunc("api/stream.mjpeg", handler)
+	api.HandleFunc("api/frame.jpeg", handlerKeyframe)
+	api.HandleFunc("api/stream.mjpeg", handlerStream)
+}
+
+func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
+	src := r.URL.Query().Get("src")
+	stream := streams.GetOrNew(src)
+	if stream == nil {
+		return
+	}
+
+	exit := make(chan []byte)
+
+	cons := &mjpeg.Consumer{}
+	cons.Listen(func(msg interface{}) {
+		switch msg := msg.(type) {
+		case []byte:
+			exit <- msg
+		}
+	})
+
+	if err := stream.AddConsumer(cons); err != nil {
+		log.Error().Err(err).Caller().Send()
+		return
+	}
+
+	data := <-exit
+
+	stream.RemoveConsumer(cons)
+
+	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+
+	if _, err := w.Write(data); err != nil {
+		log.Error().Err(err).Caller().Send()
+	}
 }
 
 const header = "--frame\r\nContent-Type: image/jpeg\r\nContent-Length: "
 
-func handler(w http.ResponseWriter, r *http.Request) {
+func handlerStream(w http.ResponseWriter, r *http.Request) {
 	src := r.URL.Query().Get("src")
 	stream := streams.GetOrNew(src)
 	if stream == nil {
