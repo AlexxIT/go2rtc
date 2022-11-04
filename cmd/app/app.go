@@ -31,10 +31,18 @@ func Init() {
 		}
 	}
 
+	log.Logger = NewLogger(cfg.Mod["format"], cfg.Mod["level"])
+
+	modules = cfg.Mod
+
+	path, _ := os.Getwd()
+	log.Debug().Str("os", runtime.GOOS).Str("arch", runtime.GOARCH).
+		Str("cwd", path).Int("conf_size", len(data)).Msgf("[app]")
+}
+
+func NewLogger(format string, level string) zerolog.Logger {
 	var writer io.Writer = os.Stdout
 
-	// styles
-	format := cfg.Mod["format"]
 	if format != "json" {
 		writer = zerolog.ConsoleWriter{
 			Out: writer, TimeFormat: "15:04:05.000",
@@ -44,18 +52,12 @@ func Init() {
 
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnixMs
 
-	lvl, err := zerolog.ParseLevel(cfg.Mod["level"])
+	lvl, err := zerolog.ParseLevel(level)
 	if err != nil || lvl == zerolog.NoLevel {
 		lvl = zerolog.InfoLevel
 	}
 
-	log.Logger = zerolog.New(writer).With().Timestamp().Logger().Level(lvl)
-
-	modules = cfg.Mod
-
-	path, _ := os.Getwd()
-	log.Debug().Str("os", runtime.GOOS).Str("arch", runtime.GOARCH).
-		Str("cwd", path).Int("conf_size", len(data)).Msgf("[app]")
+	return zerolog.New(writer).With().Timestamp().Logger().Level(lvl)
 }
 
 func LoadConfig(v interface{}) {
