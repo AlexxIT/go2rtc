@@ -172,6 +172,8 @@ streams:
     - rtsp://admin:password@192.168.1.123/cam/realmonitor?channel=1&subtype=1
 ```
 
+**PS.** For disable bachannel just add `#backchannel=0` to end of RTSP link.
+
 #### Source: RTMP
 
 You can get stream from RTMP server, for example [Frigate](https://docs.frigate.video/configuration/rtmp). Support ONLY `H264` video codec without audio.
