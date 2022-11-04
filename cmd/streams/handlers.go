@@ -4,17 +4,18 @@ import (
 	"fmt"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"strings"
+	"sync"
 )
 
 type Handler func(url string) (streamer.Producer, error)
 
-var handlers map[string]Handler
+var handlers = map[string]Handler{}
+var handlersMu sync.Mutex
 
 func HandleFunc(scheme string, handler Handler) {
-	if handlers == nil {
-		handlers = make(map[string]Handler)
-	}
+	handlersMu.Lock()
 	handlers[scheme] = handler
+	handlersMu.Unlock()
 }
 
 func getHandler(url string) Handler {
@@ -22,6 +23,8 @@ func getHandler(url string) Handler {
 	if i <= 0 { // TODO: i < 4 ?
 		return nil
 	}
+	handlersMu.Lock()
+	defer handlersMu.Unlock()
 	return handlers[url[:i]]
 }
 
