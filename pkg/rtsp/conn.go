@@ -745,16 +745,12 @@ func (c *Conn) bindTrack(
 			return nil
 		}
 		packet.Header.PayloadType = payloadType
-		//packet.Header.PayloadType = 100
-		//packet.Header.PayloadType = 8
-		//packet.Header.PayloadType = 106
 
 		size := packet.MarshalSize()
 
 		data := make([]byte, 4+size)
 		data[0] = '$'
 		data[1] = channel
-		//data[1] = 10
 		binary.BigEndian.PutUint16(data[2:], uint16(size))
 
 		if _, err := packet.MarshalTo(data[4:]); err != nil {
