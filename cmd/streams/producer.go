@@ -112,7 +112,7 @@ func (p *Producer) reconnect() {
 	defer p.mu.Unlock()
 
 	if p.state != stateStart {
-		log.Debug().Msgf("[streams] closed ...")
+		log.Trace().Msgf("[streams] stop reconnect url=%s", p.url)
 		return
 	}
 
