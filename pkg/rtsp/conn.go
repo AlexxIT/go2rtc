@@ -114,9 +114,7 @@ func (c *Conn) Dial() (err error) {
 		_ = c.parseURI()
 	}
 
-	c.conn, err = net.DialTimeout(
-		"tcp", c.URL.Host, 10*time.Second,
-	)
+	c.conn, err = net.DialTimeout("tcp", c.URL.Host, time.Second*5)
 	if err != nil {
 		return
 	}
