@@ -23,7 +23,7 @@ func Init() {
 		// inputs
 		"file": "-re -stream_loop -1 -i {input}",
 		"http": "-fflags nobuffer -flags low_delay -i {input}",
-		"rtsp": "-fflags nobuffer -flags low_delay -rtsp_transport tcp -i {input}",
+		"rtsp": "-fflags nobuffer -flags low_delay -rtsp_transport tcp -timeout 5000000 -i {input}",
 
 		// output
 		"output": "-rtsp_transport tcp -f rtsp {output}",
