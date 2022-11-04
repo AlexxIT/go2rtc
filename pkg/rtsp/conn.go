@@ -469,10 +469,6 @@ func (c *Conn) Close() error {
 const transport = "RTP/AVP/TCP;unicast;interleaved="
 
 func (c *Conn) Accept() error {
-	//if c.state != StateServerInit {
-	//	panic("wrong state")
-	//}
-
 	for {
 		req, err := tcp.ReadRequest(c.reader)
 		if err != nil {
@@ -600,6 +596,10 @@ func (c *Conn) Handle() (err error) {
 	defer func() {
 		if c.closed {
 			err = nil
+		} else {
+			// may have gotten here because of the deadline
+			// so close the connection to stop keepalive
+			_ = c.conn.Close()
 		}
 	}()
 
@@ -712,13 +712,11 @@ func (c *Conn) Handle() (err error) {
 	}
 }
 
-const KeepAlive = time.Second * 25
-
 func (c *Conn) keepalive() {
 	// TODO: rewrite to RTCP
 	req := &tcp.Request{Method: MethodOptions, URL: c.URL}
 	for {
-		time.Sleep(KeepAlive)
+		time.Sleep(time.Second * 25)
 		if c.closed {
 			return
 		}

@@ -4,6 +4,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"strings"
 	"sync"
+	"time"
 )
 
 type state byte
@@ -24,8 +25,9 @@ type Producer struct {
 	element streamer.Producer
 	tracks  []*streamer.Track
 
-	state state
-	mx    sync.Mutex
+	state   state
+	mu      sync.Mutex
+	restart *time.Timer
 }
 
 func (p *Producer) SetSource(s string) {
@@ -36,16 +38,16 @@ func (p *Producer) SetSource(s string) {
 }
 
 func (p *Producer) GetMedias() []*streamer.Media {
-	p.mx.Lock()
-	defer p.mx.Unlock()
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
 	if p.state == stateNone {
-		log.Debug().Str("url", p.url).Msg("[streams] probe producer")
+		log.Debug().Msgf("[streams] probe producer url=%s", p.url)
 
 		var err error
 		p.element, err = GetProducer(p.url)
 		if err != nil || p.element == nil {
-			log.Error().Err(err).Str("url", p.url).Msg("[streams] probe producer")
+			log.Error().Err(err).Caller().Send()
 			return nil
 		}
 
@@ -56,8 +58,12 @@ func (p *Producer) GetMedias() []*streamer.Media {
 }
 
 func (p *Producer) GetTrack(media *streamer.Media, codec *streamer.Codec) *streamer.Track {
-	p.mx.Lock()
-	defer p.mx.Unlock()
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.state == stateNone {
+		return nil
+	}
 
 	track := p.element.GetTrack(media, codec)
 	if track == nil {
@@ -82,36 +88,89 @@ func (p *Producer) GetTrack(media *streamer.Media, codec *streamer.Codec) *strea
 // internals
 
 func (p *Producer) start() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	if p.state != stateTracks {
 		return
 	}
 
-	p.mx.Lock()
-	defer p.mx.Unlock()
-
-	log.Debug().Str("url", p.url).Msg("[streams] start producer")
+	log.Debug().Msgf("[streams] start producer url=%s", p.url)
 
 	p.state = stateStart
 	go func() {
+		// safe read element while mu locked
 		if err := p.element.Start(); err != nil {
-			log.Warn().Err(err).Str("url", p.url).Msg("[streams] start")
+			log.Warn().Err(err).Caller().Send()
 		}
+		p.reconnect()
+	}()
+}
+
+func (p *Producer) reconnect() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.state != stateStart {
+		log.Debug().Msgf("[streams] closed ...")
+		return
+	}
+
+	log.Debug().Msgf("[streams] reconnect to url=%s", p.url)
+
+	var err error
+	p.element, err = GetProducer(p.url)
+	if err != nil || p.element == nil {
+		log.Debug().Err(err).Caller().Send()
+		// TODO: dynamic timeout
+		p.restart = time.AfterFunc(30*time.Second, p.reconnect)
+		return
+	}
+
+	medias := p.element.GetMedias()
+
+	// convert all old producer tracks to new tracks
+	for i, oldTrack := range p.tracks {
+		// match new element medias with old track codec
+		for _, media := range medias {
+			codec := media.MatchCodec(oldTrack.Codec)
+			if codec == nil {
+				continue
+			}
+
+			// move sink from old track to new track
+			newTrack := p.element.GetTrack(media, codec)
+			newTrack.Sink = oldTrack.Sink
+			p.tracks[i] = newTrack
+
+			break
+		}
+	}
+
+	go func() {
+		if err = p.element.Start(); err != nil {
+			log.Debug().Err(err).Caller().Send()
+		}
+		p.reconnect()
 	}()
 }
 
 func (p *Producer) stop() {
-	p.mx.Lock()
+	p.mu.Lock()
 
-	log.Debug().Str("url", p.url).Msg("[streams] stop producer")
+	log.Debug().Msgf("[streams] stop producer url=%s", p.url)
 
 	if p.element != nil {
 		_ = p.element.Stop()
 		p.element = nil
-	} else {
-		log.Warn().Str("url", p.url).Msg("[streams] stop empty producer")
 	}
-	p.tracks = nil
-	p.state = stateNone
+	if p.restart != nil {
+		p.restart.Stop()
+		p.restart = nil
+	}
 
-	p.mx.Unlock()
+	p.state = stateNone
+	p.tracks = nil
+
+	p.mu.Unlock()
 }

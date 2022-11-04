@@ -2,6 +2,7 @@ package rtsp
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"strconv"
 )
@@ -27,13 +28,16 @@ func (c *Conn) GetTrack(media *streamer.Media, codec *streamer.Codec) *streamer.
 }
 
 func (c *Conn) Start() error {
-	if c.mode == ModeServerProducer {
-		return nil
+	switch c.mode {
+	case ModeClientProducer:
+		if err := c.Play(); err != nil {
+			return err
+		}
+	case ModeServerProducer:
+	default:
+		return fmt.Errorf("start wrong mode: %d", c.mode)
 	}
 
-	if err := c.Play(); err != nil {
-		return err
-	}
 	return c.Handle()
 }
 

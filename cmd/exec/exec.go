@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -23,22 +24,22 @@ func Init() {
 		return
 	}
 
-	rtsp.OnProducer = func(prod streamer.Producer) bool {
-		if conn := prod.(*pkg.Conn); conn != nil {
-			if waiter := waiters[conn.URL.Path]; waiter != nil {
-				waiter <- prod
-				return true
-			}
+	rtsp.HandleFunc(func(conn *pkg.Conn) bool {
+		waitersMu.Lock()
+		waiter := waiters[conn.URL.Path]
+		waitersMu.Unlock()
+
+		if waiter == nil {
+			return false
 		}
-		return false
-	}
+
+		waiter <- conn
+		return true
+	})
 
 	streams.HandleFunc("exec", Handle)
 
 	log = app.GetLogger("exec")
-
-	// TODO: add sync.Mutex
-	waiters = map[string]chan streamer.Producer{}
 }
 
 func Handle(url string) (streamer.Producer, error) {
@@ -60,8 +61,15 @@ func Handle(url string) (streamer.Producer, error) {
 
 	ch := make(chan streamer.Producer)
 
+	waitersMu.Lock()
 	waiters[path] = ch
-	defer delete(waiters, path)
+	waitersMu.Unlock()
+
+	defer func() {
+		waitersMu.Lock()
+		delete(waiters, path)
+		waitersMu.Unlock()
+	}()
 
 	log.Debug().Str("url", url).Msg("[exec] run")
 
@@ -86,4 +94,5 @@ func Handle(url string) (streamer.Producer, error) {
 // internal
 
 var log zerolog.Logger
-var waiters map[string]chan streamer.Producer
+var waiters = map[string]chan streamer.Producer{}
+var waitersMu sync.Mutex

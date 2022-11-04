@@ -75,13 +75,13 @@ func (m *Media) AV() bool {
 	return m.Kind == KindVideo || m.Kind == KindAudio
 }
 
-func (m *Media) MatchCodec(codec *Codec) bool {
+func (m *Media) MatchCodec(codec *Codec) *Codec {
 	for _, c := range m.Codecs {
 		if c.Match(codec) {
-			return true
+			return c
 		}
 	}
-	return false
+	return nil
 }
 
 func (m *Media) MatchMedia(media *Media) *Codec {

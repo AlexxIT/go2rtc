@@ -32,20 +32,43 @@ func Init() {
 
 	// RTSP server support
 	address := conf.Mod.Listen
-	if address != "" {
-		_, Port, _ = net.SplitHostPort(address)
-
-		go worker(address)
+	if address == "" {
+		return
 	}
+
+	ln, err := net.Listen("tcp", address)
+	if err != nil {
+		log.Error().Err(err).Msg("[rtsp] listen")
+		return
+	}
+
+	_, Port, _ = net.SplitHostPort(address)
+
+	log.Info().Str("addr", address).Msg("[rtsp] listen")
+
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go tcpHandler(conn)
+		}
+	}()
+}
+
+type Handler func(conn *rtsp.Conn) bool
+
+func HandleFunc(handler Handler) {
+	handlers = append(handlers, handler)
 }
 
 var Port string
 
-var OnProducer func(conn streamer.Producer) bool // TODO: maybe rewrite...
-
 // internal
 
 var log zerolog.Logger
+var handlers []Handler
 
 func rtspHandler(url string) (streamer.Producer, error) {
 	backchannel := true
@@ -96,101 +119,89 @@ func rtspHandler(url string) (streamer.Producer, error) {
 	return conn, nil
 }
 
-func worker(address string) {
-	srv, err := tcp.NewServer(address)
-	if err != nil {
-		log.Error().Err(err).Msg("[rtsp] listen")
-		return
-	}
+func tcpHandler(c net.Conn) {
+	var name string
+	var closer func()
 
-	log.Info().Str("addr", address).Msg("[rtsp] listen")
+	trace := log.Trace().Enabled()
 
-	srv.Listen(func(msg interface{}) {
-		switch msg.(type) {
-		case net.Conn:
-			var name string
-			var onDisconnect func()
+	conn := rtsp.NewServer(c)
+	conn.Listen(func(msg interface{}) {
+		if trace {
+			switch msg := msg.(type) {
+			case *tcp.Request:
+				log.Trace().Msgf("[rtsp] server request:\n%s", msg)
+			case *tcp.Response:
+				log.Trace().Msgf("[rtsp] server response:\n%s", msg)
+			}
+		}
 
-			trace := log.Trace().Enabled()
+		switch msg {
+		case rtsp.MethodDescribe:
+			name = conn.URL.Path[1:]
 
-			conn := rtsp.NewServer(msg.(net.Conn))
-			conn.Listen(func(msg interface{}) {
-				if trace {
-					switch msg := msg.(type) {
-					case *tcp.Request:
-						log.Trace().Msgf("[rtsp] server request:\n%s", msg)
-					case *tcp.Response:
-						log.Trace().Msgf("[rtsp] server response:\n%s", msg)
-					}
-				}
-
-				switch msg {
-				case rtsp.MethodDescribe:
-					name = conn.URL.Path[1:]
-
-					log.Debug().Str("stream", name).Msg("[rtsp] new consumer")
-
-					stream := streams.Get(name) // TODO: rewrite
-					if stream == nil {
-						return
-					}
-
-					initMedias(conn)
-
-					if err = stream.AddConsumer(conn); err != nil {
-						log.Warn().Err(err).Str("stream", name).Msg("[rtsp]")
-						return
-					}
-
-					onDisconnect = func() {
-						stream.RemoveConsumer(conn)
-					}
-
-				case rtsp.MethodAnnounce:
-					if OnProducer != nil {
-						if OnProducer(conn) {
-							return
-						}
-					}
-
-					name = conn.URL.Path[1:]
-
-					log.Debug().Str("stream", name).Msg("[rtsp] new producer")
-
-					stream := streams.Get(name)
-					if stream == nil {
-						return
-					}
-
-					stream.AddProducer(conn)
-
-					onDisconnect = func() {
-						stream.RemoveProducer(conn)
-					}
-
-				case streamer.StatePlaying:
-					log.Debug().Str("stream", name).Msg("[rtsp] start")
-				}
-			})
-
-			if err = conn.Accept(); err != nil {
-				log.Warn().Err(err).Msg("[rtsp] accept")
+			stream := streams.Get(name)
+			if stream == nil {
 				return
 			}
 
-			if err = conn.Handle(); err != nil {
-				//log.Warn().Err(err).Msg("[rtsp] handle server")
+			log.Debug().Str("stream", name).Msg("[rtsp] new consumer")
+
+			initMedias(conn)
+
+			if err := stream.AddConsumer(conn); err != nil {
+				log.Warn().Err(err).Str("stream", name).Msg("[rtsp]")
+				return
 			}
 
-			if onDisconnect != nil {
-				onDisconnect()
+			closer = func() {
+				stream.RemoveConsumer(conn)
 			}
 
-			log.Debug().Str("stream", name).Msg("[rtsp] disconnect")
+		case rtsp.MethodAnnounce:
+			name = conn.URL.Path[1:]
+
+			stream := streams.Get(name)
+			if stream == nil {
+				return
+			}
+
+			log.Debug().Str("stream", name).Msg("[rtsp] new producer")
+
+			stream.AddProducer(conn)
+
+			closer = func() {
+				stream.RemoveProducer(conn)
+			}
+
+		case streamer.StatePlaying:
+			log.Debug().Str("stream", name).Msg("[rtsp] start")
 		}
 	})
 
-	srv.Serve()
+	if err := conn.Accept(); err != nil {
+		log.Warn().Err(err).Caller().Send()
+		_ = conn.Close()
+		return
+	}
+
+	for _, handler := range handlers {
+		if handler(conn) {
+			return
+		}
+	}
+
+	if closer != nil {
+		if err := conn.Handle(); err != nil {
+			log.Debug().Err(err).Caller().Send()
+		}
+
+		closer()
+
+		log.Debug().Str("stream", name).Msg("[rtsp] disconnect")
+	}
+
+	_ = conn.Close()
 }
 
 func initMedias(conn *rtsp.Conn) {
