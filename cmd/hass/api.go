@@ -55,6 +55,10 @@ func initAPI() {
 		// /stream/{id}/channel/0/webrtc
 		default:
 			i := strings.IndexByte(r.RequestURI[8:], '/')
+			if i <= 0 {
+				log.Warn().Msgf("wrong request: %s", r.RequestURI)
+				return
+			}
 			name := r.RequestURI[8 : 8+i]
 
 			stream := streams.Get(name)
