@@ -21,6 +21,7 @@ var stackSkip = [][]byte{
 	[]byte("created by net/http.(*Server).Serve"), // TODO: why two?
 
 	[]byte("created by github.com/AlexxIT/go2rtc/cmd/rtsp.Init"),
+	[]byte("created by github.com/AlexxIT/go2rtc/cmd/srtp.Init"),
 
 	// webrtc/api.go
 	[]byte("created by github.com/pion/ice/v2.NewTCPMuxDefault"),
