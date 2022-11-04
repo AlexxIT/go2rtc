@@ -385,13 +385,13 @@ ngrok:
   command: ...
 ```
 
-**Own TCP-tunnel**
+**Hard tech way 1. Own TCP-tunnel**
 
-If you have personal VPS, you can create TCP-tunnel and setup in the same way as "Static public IP". But use your VPS IP-address in YAML config.
+If you have personal [VPS](https://en.wikipedia.org/wiki/Virtual_private_server), you can create TCP-tunnel and setup in the same way as "Static public IP". But use your VPS IP-address in YAML config.
 
-**Using TURN-server**
+**Hard tech way 2. Using TURN-server**
 
-TODO...
+If you have personal [VPS](https://en.wikipedia.org/wiki/Virtual_private_server), you can install TURN server (e.g. [coturn](https://github.com/coturn/coturn), config [example](https://github.com/AlexxIT/WebRTC/wiki/Coturn-Example)).
 
 ```yaml
 webrtc:
