@@ -2,7 +2,6 @@ package mp4
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
@@ -28,44 +27,37 @@ func (c *Consumer) GetMedias() []*streamer.Media {
 			Kind:      streamer.KindVideo,
 			Direction: streamer.DirectionRecvonly,
 			Codecs: []*streamer.Codec{
-				{Name: streamer.CodecH264, ClockRate: 90000},
-				{Name: streamer.CodecH265, ClockRate: 90000},
+				{Name: streamer.CodecH264},
+				{Name: streamer.CodecH265},
 			},
 		},
-		//{
-		//	Kind:      streamer.KindAudio,
-		//	Direction: streamer.DirectionRecvonly,
-		//	Codecs: []*streamer.Codec{
-		//		{Name: streamer.CodecAAC, ClockRate: 16000},
-		//	},
-		//},
+		{
+			Kind:      streamer.KindAudio,
+			Direction: streamer.DirectionRecvonly,
+			Codecs: []*streamer.Codec{
+				{Name: streamer.CodecAAC},
+			},
+		},
 	}
 }
 
 func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *streamer.Track {
+	trackID := byte(len(c.codecs))
+	c.codecs = append(c.codecs, track.Codec)
+
 	codec := track.Codec
 	switch codec.Name {
 	case streamer.CodecH264:
-		c.codecs = append(c.codecs, track.Codec)
-
 		push := func(packet *rtp.Packet) error {
 			if packet.Version != h264.RTPPacketVersionAVC {
 				return nil
 			}
 
-			if c.muxer == nil {
+			if !c.start {
 				return nil
 			}
 
-			if !c.start {
-				if h264.IsKeyframe(packet.Payload) {
-					c.start = true
-				} else {
-					return nil
-				}
-			}
-
-			buf := c.muxer.Marshal(packet)
+			buf := c.muxer.Marshal(trackID, packet)
 			c.send += len(buf)
 			c.Fire(buf)
 
@@ -83,22 +75,16 @@ func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 		return track.Bind(push)
 
 	case streamer.CodecH265:
-		c.codecs = append(c.codecs, track.Codec)
-
 		push := func(packet *rtp.Packet) error {
 			if packet.Version != h264.RTPPacketVersionAVC {
 				return nil
 			}
 
 			if !c.start {
-				if h265.IsKeyframe(packet.Payload) {
-					c.start = true
-				} else {
-					return nil
-				}
+				return nil
 			}
 
-			buf := c.muxer.Marshal(packet)
+			buf := c.muxer.Marshal(trackID, packet)
 			c.send += len(buf)
 			c.Fire(buf)
 
@@ -111,11 +97,24 @@ func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 		}
 
 		return track.Bind(push)
+
+	case streamer.CodecAAC:
+		push := func(packet *rtp.Packet) error {
+			if !c.start {
+				return nil
+			}
+
+			buf := c.muxer.Marshal(trackID, packet)
+			c.send += len(buf)
+			c.Fire(buf)
+
+			return nil
+		}
+
+		return track.Bind(push)
 	}
 
-	fmt.Printf("[rtmp] unsupported codec: %+v\n", track.Codec)
-
-	return nil
+	panic("unsupported codec")
 }
 
 func (c *Consumer) MimeType() string {
@@ -123,10 +122,12 @@ func (c *Consumer) MimeType() string {
 }
 
 func (c *Consumer) Init() ([]byte, error) {
-	if c.muxer == nil {
-		c.muxer = &Muxer{}
-	}
+	c.muxer = &Muxer{}
 	return c.muxer.GetInit(c.codecs)
+}
+
+func (c *Consumer) Start() {
+	c.start = true
 }
 
 //

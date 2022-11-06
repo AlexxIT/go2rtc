@@ -3,6 +3,8 @@ package mp4
 import (
 	"encoding/binary"
 	"github.com/deepch/vdk/format/mp4/mp4io"
+	"github.com/deepch/vdk/format/mp4f"
+	"github.com/deepch/vdk/format/mp4f/mp4fio"
 	"time"
 )
 
@@ -37,25 +39,17 @@ func MOOV() *mp4io.Movie {
 			SelectionDuration: time0,
 			CurrentTime:       time0,
 		},
-		MovieExtend: &mp4io.MovieExtend{
-			Tracks: []*mp4io.TrackExtend{
-				{
-					TrackId:               1,
-					DefaultSampleDescIdx:  1,
-					DefaultSampleDuration: 40,
-				},
-			},
-		},
+		MovieExtend: &mp4io.MovieExtend{},
 	}
 }
 
-func TRAK() *mp4io.Track {
+func TRAK(id int) *mp4io.Track {
 	return &mp4io.Track{
 		// trak > tkhd
 		Header: &mp4io.TrackHeader{
-			TrackId:    int32(1), // change me
-			Flags:      0x0007,   // 7 ENABLED IN-MOVIE IN-PREVIEW
-			Duration:   0,        // OK
+			TrackId:    int32(id),
+			Flags:      0x0007, // 7 ENABLED IN-MOVIE IN-PREVIEW
+			Duration:   0,      // OK
 			Matrix:     matrix,
 			CreateTime: time0,
 			ModifyTime: time0,
@@ -90,5 +84,17 @@ func TRAK() *mp4io.Track {
 				},
 			},
 		},
+	}
+}
+
+func ESDS(conf []byte) *mp4f.FDummy {
+	esds := &mp4fio.ElemStreamDesc{DecConfig: conf}
+
+	b := make([]byte, esds.Len())
+	esds.Marshal(b)
+
+	return &mp4f.FDummy{
+		Data: b,
+		Tag_: mp4io.Tag(uint32(mp4io.ESDS)),
 	}
 }

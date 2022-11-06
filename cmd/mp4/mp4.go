@@ -84,9 +84,8 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 
 	cons := &mp4.Consumer{}
 	cons.Listen(func(msg interface{}) {
-		switch msg := msg.(type) {
-		case []byte:
-			if _, err := w.Write(msg); err != nil {
+		if data, ok := msg.([]byte); ok {
+			if _, err := w.Write(data); err != nil {
 				exit <- struct{}{}
 			}
 		}
@@ -111,6 +110,8 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 		log.Error().Err(err).Msg("[api.mp4] write")
 		return
 	}
+
+	cons.Start()
 
 	<-exit
 

@@ -74,7 +74,11 @@
             if (sourceBuffer.updating) {
                 queueBuffer.push(ev.data)
             } else {
-                sourceBuffer.appendBuffer(ev.data);
+                try {
+                    sourceBuffer.appendBuffer(ev.data);
+                } catch (e) {
+                    console.warn(e);
+                }
             }
         }
     }

@@ -21,14 +21,13 @@ func handlerWS(ctx *api.Context, msg *streamer.Message) {
 	cons.RemoteAddr = ctx.Request.RemoteAddr
 
 	cons.Listen(func(msg interface{}) {
-		switch msg.(type) {
-		case *streamer.Message, []byte:
-			ctx.Write(msg)
+		if data, ok := msg.([]byte); ok {
+			ctx.Write(data)
 		}
 	})
 
 	if err := stream.AddConsumer(cons); err != nil {
-		log.Warn().Err(err).Msg("[api.mse] add consumer")
+		log.Warn().Err(err).Caller().Send()
 		ctx.Error(err)
 		return
 	}
@@ -37,16 +36,16 @@ func handlerWS(ctx *api.Context, msg *streamer.Message) {
 		stream.RemoveConsumer(cons)
 	})
 
-	ctx.Write(&streamer.Message{
-		Type: MsgTypeMSE, Value: cons.MimeType(),
-	})
+	ctx.Write(&streamer.Message{Type: MsgTypeMSE, Value: cons.MimeType()})
 
 	data, err := cons.Init()
 	if err != nil {
-		log.Warn().Err(err).Msg("[api.mse] init")
+		log.Warn().Err(err).Caller().Send()
 		ctx.Error(err)
 		return
 	}
 
 	ctx.Write(data)
+
+	cons.Start()
 }
