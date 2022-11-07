@@ -13,7 +13,7 @@ type Track struct {
 	Codec     *Codec
 	Direction string
 	sink      map[*Track]WriterFunc
-	sinkMu    sync.Mutex
+	sinkMu    sync.RWMutex
 }
 
 func (t *Track) String() string {
@@ -23,11 +23,11 @@ func (t *Track) String() string {
 }
 
 func (t *Track) WriteRTP(p *rtp.Packet) error {
-	t.sinkMu.Lock()
+	t.sinkMu.RLock()
 	for _, f := range t.sink {
 		_ = f(p)
 	}
-	t.sinkMu.Unlock()
+	t.sinkMu.RUnlock()
 	return nil
 }
 
@@ -59,7 +59,7 @@ func (t *Track) GetSink(from *Track) {
 }
 
 func (t *Track) HasSink() bool {
-	t.sinkMu.Lock()
-	defer t.sinkMu.Unlock()
+	t.sinkMu.RLock()
+	defer t.sinkMu.RUnlock()
 	return len(t.sink) > 0
 }

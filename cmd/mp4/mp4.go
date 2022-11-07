@@ -37,14 +37,14 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 
 	cons := &mp4.Consumer{}
 	cons.Listen(func(msg interface{}) {
-		switch msg := msg.(type) {
-		case []byte:
-			exit <- msg
+		if data, ok := msg.([]byte); ok && exit != nil {
+			exit <- data
+			exit = nil
 		}
 	})
 
 	if err := stream.AddConsumer(cons); err != nil {
-		log.Error().Err(err).Msg("[api.keyframe] add consumer")
+		log.Error().Err(err).Caller().Send()
 		return
 	}
 
@@ -54,7 +54,7 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 
 	data, err := cons.Init()
 	if err != nil {
-		log.Error().Err(err).Msg("[api.keyframe] init")
+		log.Error().Err(err).Caller().Send()
 		return
 	}
 	data = append(data, <-exit...)
@@ -63,7 +63,7 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
 
 	if _, err := w.Write(data); err != nil {
-		log.Error().Err(err).Msg("[api.keyframe] add consumer")
+		log.Error().Err(err).Caller().Send()
 	}
 }
 
@@ -80,19 +80,20 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	exit := make(chan struct{})
+	exit := make(chan error)
 
 	cons := &mp4.Consumer{}
 	cons.Listen(func(msg interface{}) {
 		if data, ok := msg.([]byte); ok {
-			if _, err := w.Write(data); err != nil {
-				exit <- struct{}{}
+			if _, err := w.Write(data); err != nil && exit != nil {
+				exit <- err
+				exit = nil
 			}
 		}
 	})
 
 	if err := stream.AddConsumer(cons); err != nil {
-		log.Error().Err(err).Msg("[api.mp4] add consumer")
+		log.Error().Err(err).Caller().Send()
 		return
 	}
 
@@ -102,20 +103,20 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 
 	data, err := cons.Init()
 	if err != nil {
-		log.Error().Err(err).Msg("[api.mp4] init")
+		log.Error().Err(err).Caller().Send()
 		return
 	}
 
 	if _, err = w.Write(data); err != nil {
-		log.Error().Err(err).Msg("[api.mp4] write")
+		log.Error().Err(err).Caller().Send()
 		return
 	}
 
 	cons.Start()
 
-	<-exit
+	err = <-exit
 
-	log.Trace().Msg("[api.mp4] close")
+	log.Trace().Err(err).Caller().Send()
 }
 
 func isChromeFirst(w http.ResponseWriter, r *http.Request) bool {
