@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func Init() {
@@ -108,9 +109,25 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 
 	cons.Start()
 
+	var duration *time.Timer
+	if s := r.URL.Query().Get("duration"); s != "" {
+		if i, _ := strconv.Atoi(s); i > 0 {
+			duration = time.AfterFunc(time.Second*time.Duration(i), func() {
+				if exit != nil {
+					exit <- nil
+					exit = nil
+				}
+			})
+		}
+	}
+
 	err = <-exit
 
 	log.Trace().Err(err).Caller().Send()
+
+	if duration != nil {
+		duration.Stop()
+	}
 }
 
 func isChromeFirst(w http.ResponseWriter, r *http.Request) bool {
