@@ -129,22 +129,6 @@ type Codec struct {
 	PayloadType uint8
 }
 
-func NewCodec(name string) *Codec {
-	name = strings.ToUpper(name)
-	switch name {
-	case CodecH264, CodecH265, CodecVP8, CodecVP9, CodecAV1, CodecJPEG:
-		return &Codec{Name: name, ClockRate: 90000}
-	case CodecPCMU, CodecPCMA:
-		return &Codec{Name: name, ClockRate: 8000}
-	case CodecOpus:
-		return &Codec{Name: name, ClockRate: 48000, Channels: 2}
-	case "MJPEG":
-		return &Codec{Name: CodecJPEG, ClockRate: 90000}
-	}
-
-	panic(fmt.Sprintf("unsupported codec: %s", name))
-}
-
 func (c *Codec) String() string {
 	s := fmt.Sprintf("%d %s/%d", c.PayloadType, c.Name, c.ClockRate)
 	if c.Channels > 0 {

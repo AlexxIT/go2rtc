@@ -209,16 +209,27 @@ func initMedias(conn *rtsp.Conn) {
 	for key, value := range conn.URL.Query() {
 		switch key {
 		case streamer.KindVideo, streamer.KindAudio:
-			for _, value := range value {
+			for _, name := range value {
+				name = strings.ToUpper(name)
+
+				// check aliases
+				switch name {
+				case "COPY":
+					name = "" // pass empty codecs list
+				case "MJPEG":
+					name = streamer.CodecJPEG
+				case "AAC":
+					name = streamer.CodecAAC
+				}
+
 				media := &streamer.Media{
 					Kind: key, Direction: streamer.DirectionRecvonly,
 				}
 
-				switch value {
-				case "", "copy": // pass empty codecs list
-				default:
-					codec := streamer.NewCodec(value)
-					media.Codecs = append(media.Codecs, codec)
+				// empty codecs match all codecs
+				if name != "" {
+					// empty clock rate and channels match any values
+					media.Codecs = []*streamer.Codec{{Name: name}}
 				}
 
 				conn.Medias = append(conn.Medias, media)
