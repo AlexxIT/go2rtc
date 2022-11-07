@@ -64,22 +64,14 @@ func (ctx *Context) Close() {
 
 func (ctx *Context) Write(msg interface{}) {
 	ctx.mu.Lock()
-	defer ctx.mu.Unlock()
 
-	var err error
-
-	switch msg := msg.(type) {
-	case *streamer.Message:
-		err = ctx.Conn.WriteJSON(msg)
-	case []byte:
-		err = ctx.Conn.WriteMessage(websocket.BinaryMessage, msg)
-	default:
-		return
+	if data, ok := msg.([]byte); ok {
+		_ = ctx.Conn.WriteMessage(websocket.BinaryMessage, data)
+	} else {
+		_ = ctx.Conn.WriteJSON(msg)
 	}
 
-	if err != nil {
-		//panic(err) // TODO: fix panic
-	}
+	ctx.mu.Unlock()
 }
 
 func (ctx *Context) Error(err error) {
