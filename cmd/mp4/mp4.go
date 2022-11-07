@@ -35,7 +35,7 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 
 	exit := make(chan []byte)
 
-	cons := &mp4.Consumer{}
+	cons := &mp4.Keyframe{}
 	cons.Listen(func(msg interface{}) {
 		if data, ok := msg.([]byte); ok && exit != nil {
 			exit <- data
@@ -48,19 +48,13 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	defer stream.RemoveConsumer(cons)
+	data := <-exit
 
-	w.Header().Set("Content-Type", cons.MimeType())
-
-	data, err := cons.Init()
-	if err != nil {
-		log.Error().Err(err).Caller().Send()
-		return
-	}
-	data = append(data, <-exit...)
+	stream.RemoveConsumer(cons)
 
 	// Apple Safari won't show frame without length
 	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+	w.Header().Set("Content-Type", cons.MimeType)
 
 	if _, err := w.Write(data); err != nil {
 		log.Error().Err(err).Caller().Send()
