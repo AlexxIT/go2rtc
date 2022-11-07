@@ -25,12 +25,12 @@
 <body>
 <video id="video" autoplay controls playsinline muted></video>
 <script>
+    const baseUrl = location.origin + location.pathname.substr(
+        0, location.pathname.lastIndexOf("/")
+    );
+
     function init(stream) {
         // support api_path
-        const baseUrl = location.origin + location.pathname.substr(
-            0, location.pathname.lastIndexOf("/")
-        );
-
         const ws = new WebSocket(`ws${baseUrl.substr(4)}/api/ws${location.search}`);
         ws.onopen = () => {
             console.debug('ws.onopen');

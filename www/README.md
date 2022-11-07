@@ -53,3 +53,5 @@ pc.ontrack = ev => {
 - https://www.webrtc-experiment.com/DetectRTC/
 - https://divtable.com/table-styler/
 - https://www.chromium.org/audio-video/
+- https://web.dev/i18n/en/fast-playback-with-preload/#manual_buffering
+- https://developer.mozilla.org/en-US/docs/Web/API/Media_Source_Extensions_API
