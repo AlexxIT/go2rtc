@@ -140,8 +140,8 @@ Available modules:
 Available source types:
 
 - [rtsp](#source-rtsp) - `RTSP` and `RTSPS` cameras
-- [rtmp](#source-rtmp) - `RTMP` streams
-- [ffmpeg](#source-ffmpeg) - FFmpeg integration (`MJPEG`, `HLS`, `files` and source types)
+- [rtmp](#source-rtmp) - `RTMP` and `HTTP-FLV` streams
+- [ffmpeg](#source-ffmpeg) - FFmpeg integration (`MJPEG`, `HLS`, `files` and others)
 - [ffmpeg:device](#source-ffmpeg-device) - local USB Camera or Webcam
 - [exec](#source-exec) - advanced FFmpeg and GStreamer integration
 - [echo](#source-echo) - get stream link from bash or python
@@ -323,9 +323,9 @@ api:
   static_dir: ""   # folder for static files (custom web interface)
 ```
 
-**PS. go2rtc** don't provide HTTPS or password protection. Use [Nginx](https://nginx.org/) or [Ngrok](#module-ngrok) or [Home Assistant Add-on](#go2rtc-home-assistant-add-on) for this tasks.
+**PS. go2rtc** doesn't provide HTTPS or password protection. Use [Nginx](https://nginx.org/) or [Ngrok](#module-ngrok) or [Home Assistant Add-on](#go2rtc-home-assistant-add-on) for this tasks.
 
-**PS2.** You can access microphone (for 2-way audio) only with HTTPS
+**PS2.** You can access microphone (for 2-way audio) only with HTTPS ([read more](https://stackoverflow.com/questions/52759992/how-to-access-camera-and-microphone-in-chrome-without-https)).
 
 ### Module: RTSP
 
@@ -566,12 +566,15 @@ iPad Safari     | H264, H265* | H264        | no
 Android Chrome  | H264        | H264        | H264
 masOS Hass App  | no          | no          | no
 
-- WebRTC audio codecs: `PCMU/8000`, `PCMA/8000`, `OPUS/48000/2`
-- MSE/MP4 audio codecs: not supported yet (should be: `AAC`)
 - Chrome H265: [read this](https://github.com/StaZhu/enable-chromium-hevc-hardware-decoding)
 - Edge H265: [read this](https://www.reddit.com/r/MicrosoftEdge/comments/v9iw8k/enable_hevc_support_in_edge/)
 - Desktop Safari H265: Menu > Develop > Experimental > WebRTC H265
 - iOS Safari H265: Settings > Safari > Advanced > Experimental > WebRTC H265
+
+**Audio**
+
+- WebRTC audio codecs: `PCMU/8000`, `PCMA/8000`, `OPUS/48000/2`
+- MSE/MP4 audio codecs: `AAC`
 
 ## FAQ
 
