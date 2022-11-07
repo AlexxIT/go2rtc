@@ -23,6 +23,7 @@ jobs:
       - name: Branch name
         run: |
           VERSION="${GITHUB_REF#refs/tags/v}"
+          VERSION="${VERSION#refs/heads/}"
           echo "REPO=alexxit/go2rtc" >> $GITHUB_ENV
           echo "TAG=${VERSION}" >> $GITHUB_ENV
           echo "IMAGE=alexxit/go2rtc:${VERSION}" >> $GITHUB_ENV
