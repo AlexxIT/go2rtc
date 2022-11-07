@@ -9,6 +9,8 @@ import (
 
 const MsgTypeMSE = "mse" // fMP4
 
+const packetSize = 8192
+
 func handlerWS(ctx *api.Context, msg *streamer.Message) {
 	src := ctx.Request.URL.Query().Get("src")
 	stream := streams.GetOrNew(src)
@@ -22,6 +24,10 @@ func handlerWS(ctx *api.Context, msg *streamer.Message) {
 
 	cons.Listen(func(msg interface{}) {
 		if data, ok := msg.([]byte); ok {
+			for len(data) > packetSize {
+				ctx.Write(data[:packetSize])
+				data = data[packetSize:]
+			}
 			ctx.Write(data)
 		}
 	})
