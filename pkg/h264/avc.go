@@ -6,12 +6,6 @@ import (
 	"github.com/pion/rtp"
 )
 
-const PayloadTypeAVC = 255
-
-func IsAVC(codec *streamer.Codec) bool {
-	return codec.PayloadType == PayloadTypeAVC
-}
-
 func EncodeAVC(nals ...[]byte) (avc []byte) {
 	var i, n int
 

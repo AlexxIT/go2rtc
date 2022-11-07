@@ -2,6 +2,7 @@ package mp4
 
 import (
 	"encoding/json"
+	"github.com/AlexxIT/go2rtc/pkg/aac"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
@@ -65,7 +66,7 @@ func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 		}
 
 		var wrapper streamer.WrapperFunc
-		if h264.IsAVC(codec) {
+		if codec.IsMP4() {
 			wrapper = h264.RepairAVC(track)
 		} else {
 			wrapper = h264.RTPDepay(track)
@@ -91,7 +92,7 @@ func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 			return nil
 		}
 
-		if !h264.IsAVC(codec) {
+		if !codec.IsMP4() {
 			wrapper := h265.RTPDepay(track)
 			push = wrapper(push)
 		}
@@ -109,6 +110,11 @@ func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 			c.Fire(buf)
 
 			return nil
+		}
+
+		if !codec.IsMP4() {
+			wrapper := aac.RTPDepay(track)
+			push = wrapper(push)
 		}
 
 		return track.Bind(push)

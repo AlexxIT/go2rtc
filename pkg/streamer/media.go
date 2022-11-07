@@ -35,6 +35,8 @@ const (
 	CodecMPA  = "MPA" // payload: 14
 )
 
+const PayloadTypeMP4 byte = 255
+
 func GetKind(name string) string {
 	switch name {
 	case CodecH264, CodecH265, CodecVP8, CodecVP9, CodecAV1, CodecJPEG:
@@ -149,6 +151,10 @@ func (c *Codec) String() string {
 		s = fmt.Sprintf("%s/%d", s, c.Channels)
 	}
 	return s
+}
+
+func (c *Codec) IsMP4() bool {
+	return c.PayloadType == PayloadTypeMP4
 }
 
 func (c *Codec) Clone() *Codec {

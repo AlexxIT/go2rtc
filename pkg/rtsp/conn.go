@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/AlexxIT/go2rtc/pkg/aac"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
@@ -764,9 +765,15 @@ func (c *Conn) bindTrack(
 		return nil
 	}
 
-	if h264.IsAVC(track.Codec) {
-		wrapper := h264.RTPPay(1500)
-		push = wrapper(push)
+	if track.Codec.IsMP4() {
+		switch track.Codec.Name {
+		case streamer.CodecH264:
+			wrapper := h264.RTPPay(1500)
+			push = wrapper(push)
+		case streamer.CodecAAC:
+			wrapper := aac.RTPPay(1500)
+			push = wrapper(push)
+		}
 	}
 
 	return track.Bind(push)

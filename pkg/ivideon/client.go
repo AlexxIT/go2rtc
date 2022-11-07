@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/deepch/vdk/codec/h264parser"
 	"github.com/deepch/vdk/format/fmp4/fmp4io"
@@ -162,9 +161,12 @@ func (c *Client) getTracks() error {
 					continue
 				}
 
-				codec := streamer.NewCodec(streamer.CodecH264)
-				codec.FmtpLine = "profile-level-id=" + msg.CodecString[i+1:]
-				codec.PayloadType = h264.PayloadTypeAVC
+				codec := &streamer.Codec{
+					Name:        streamer.CodecH264,
+					ClockRate:   90000,
+					FmtpLine:    "profile-level-id=" + msg.CodecString[i+1:],
+					PayloadType: streamer.PayloadTypeMP4,
+				}
 
 				i = bytes.Index(msg.Data, []byte("avcC")) - 4
 				if i < 0 {

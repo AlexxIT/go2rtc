@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/httpflv"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/deepch/vdk/av"
@@ -74,7 +73,7 @@ func (c *Client) Dial() (err error) {
 				Name:        streamer.CodecH264,
 				ClockRate:   90000,
 				FmtpLine:    fmtp,
-				PayloadType: h264.PayloadTypeAVC,
+				PayloadType: streamer.PayloadTypeMP4,
 			}
 
 			media := &streamer.Media{
@@ -93,17 +92,13 @@ func (c *Client) Dial() (err error) {
 			// TODO: fix support
 			cd := stream.(aacparser.CodecData)
 
-			// a=fmtp:97 streamtype=5;profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;config=1588
-			fmtp := fmt.Sprintf(
-				"config=%s",
-				hex.EncodeToString(cd.ConfigBytes),
-			)
-
 			codec := &streamer.Codec{
 				Name:      streamer.CodecAAC,
 				ClockRate: uint32(cd.Config.SampleRate),
 				Channels:  uint16(cd.Config.ChannelConfig),
-				FmtpLine:  fmtp,
+				//  a=fmtp:97 streamtype=5;profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;config=1588
+				FmtpLine:    "streamtype=5;profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;config=" + hex.EncodeToString(cd.ConfigBytes),
+				PayloadType: streamer.PayloadTypeMP4,
 			}
 
 			media := &streamer.Media{
