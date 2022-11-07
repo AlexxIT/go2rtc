@@ -65,22 +65,27 @@ func (p *Producer) GetTrack(media *streamer.Media, codec *streamer.Codec) *strea
 		return nil
 	}
 
+	for _, track := range p.tracks {
+		if track.Codec == codec {
+			return track
+		}
+	}
+
+	// can't get new tracks after start
+	if p.state == stateStart {
+		return nil
+	}
+
 	track := p.element.GetTrack(media, codec)
 	if track == nil {
 		return nil
 	}
 
-	for _, t := range p.tracks {
-		if track == t {
-			return track
-		}
-	}
+	p.tracks = append(p.tracks, track)
 
 	if p.state == stateMedias {
 		p.state = stateTracks
 	}
-
-	p.tracks = append(p.tracks, track)
 
 	return track
 }
