@@ -87,29 +87,28 @@ func RTPPay(mtu uint16) streamer.WrapperFunc {
 
 	return func(push streamer.WriterFunc) streamer.WriterFunc {
 		return func(packet *rtp.Packet) error {
-			if packet.Version == RTPPacketVersionAVC {
-				payloads := payloader.Payload(mtu, packet.Payload)
-				last := len(payloads) - 1
-				for i, payload := range payloads {
-					clone := rtp.Packet{
-						Header: rtp.Header{
-							Version: 2,
-							Marker:  i == last,
-							//PayloadType:    packet.PayloadType,
-							SequenceNumber: sequencer.NextSequenceNumber(),
-							Timestamp:      packet.Timestamp,
-							//SSRC:           packet.SSRC,
-						},
-						Payload: payload,
-					}
-					if err := push(&clone); err != nil {
-						return err
-					}
-				}
-				return nil
+			if packet.Version != RTPPacketVersionAVC {
+				return push(packet)
 			}
 
-			return push(packet)
+			payloads := payloader.Payload(mtu, packet.Payload)
+			last := len(payloads) - 1
+			for i, payload := range payloads {
+				clone := rtp.Packet{
+					Header: rtp.Header{
+						Version:        2,
+						Marker:         i == last,
+						SequenceNumber: sequencer.NextSequenceNumber(),
+						Timestamp:      packet.Timestamp,
+					},
+					Payload: payload,
+				}
+				if err := push(&clone); err != nil {
+					return err
+				}
+			}
+
+			return nil
 		}
 	}
 }
