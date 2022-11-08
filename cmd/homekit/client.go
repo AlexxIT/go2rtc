@@ -14,17 +14,18 @@ import (
 	"strconv"
 )
 
-type Producer struct {
+type Client struct {
 	streamer.Element
 
-	client *homekit.Client
+	conn   *homekit.Conn
+	exit   chan error
 	medias []*streamer.Media
 	tracks []*streamer.Track
 
 	sessions []*pkg.Session
 }
 
-func (c *Producer) GetMedias() []*streamer.Media {
+func (c *Client) GetMedias() []*streamer.Media {
 	if c.medias == nil {
 		c.medias = c.getMedias()
 	}
@@ -32,7 +33,7 @@ func (c *Producer) GetMedias() []*streamer.Media {
 	return c.medias
 }
 
-func (c *Producer) GetTrack(media *streamer.Media, codec *streamer.Codec) *streamer.Track {
+func (c *Client) GetTrack(media *streamer.Media, codec *streamer.Codec) *streamer.Track {
 	for _, track := range c.tracks {
 		if track.Codec == codec {
 			return track
@@ -44,13 +45,13 @@ func (c *Producer) GetTrack(media *streamer.Media, codec *streamer.Codec) *strea
 	return track
 }
 
-func (c *Producer) Start() error {
+func (c *Client) Start() error {
 	if c.tracks == nil {
 		return errors.New("producer without tracks")
 	}
 
 	// get our server local IP-address
-	host, _, err := net.SplitHostPort(c.client.LocalAddr())
+	host, _, err := net.SplitHostPort(c.conn.LocalAddr())
 	if err != nil {
 		return err
 	}
@@ -66,7 +67,7 @@ func (c *Producer) Start() error {
 	hkSession.SetLocalEndpoint(host, uint16(port))
 
 	// create client for processing camera accessory
-	cam := camera.NewClient(c.client)
+	cam := camera.NewClient(c.conn)
 	// try to start HomeKit stream
 	if err = cam.StartStream2(hkSession); err != nil {
 		panic(err) // TODO: fixme
@@ -103,11 +104,11 @@ func (c *Producer) Start() error {
 
 	c.sessions = []*pkg.Session{vs, as}
 
-	return nil
+	return <-c.exit
 }
 
-func (c *Producer) Stop() error {
-	err := c.client.Close()
+func (c *Client) Stop() error {
+	err := c.conn.Close()
 
 	for _, session := range c.sessions {
 		srtp.RemoveSession(session)
@@ -116,10 +117,10 @@ func (c *Producer) Stop() error {
 	return err
 }
 
-func (c *Producer) getMedias() []*streamer.Media {
+func (c *Client) getMedias() []*streamer.Media {
 	var medias []*streamer.Media
 
-	accs, err := c.client.GetAccessories()
+	accs, err := c.conn.GetAccessories()
 	acc := accs[0]
 	if err != nil {
 		panic(err)

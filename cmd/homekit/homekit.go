@@ -20,20 +20,14 @@ func Init() {
 var log zerolog.Logger
 
 func streamHandler(url string) (streamer.Producer, error) {
-	client, err := homekit.NewClient(url)
+	conn, err := homekit.Dial(url)
 	if err != nil {
 		return nil, err
 	}
-	if err = client.Dial(); err != nil {
-		return nil, err
-	}
-
-	// start gorutine for reading responses from camera
+	exit := make(chan error)
 	go func() {
-		if err = client.Handle(); err != nil {
-			log.Warn().Err(err).Msg("[homekit] client")
-		}
+		//start goroutine for reading responses from camera
+		exit <- conn.Handle()
 	}()
-
-	return &Producer{client: client}, nil
+	return &Client{conn: conn, exit: exit}, nil
 }

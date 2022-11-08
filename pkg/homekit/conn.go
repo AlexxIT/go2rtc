@@ -21,10 +21,11 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 )
 
-// Client for HomeKit. DevicePublic can be null.
-type Client struct {
+// Conn for HomeKit. DevicePublic can be null.
+type Conn struct {
 	streamer.Element
 
 	DeviceAddress string // including port
@@ -41,14 +42,14 @@ type Client struct {
 	httpResponse chan *bufio.Reader
 }
 
-func NewClient(rawURL string) (*Client, error) {
+func Dial(rawURL string) (*Conn, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, err
 	}
 
 	query := u.Query()
-	c := &Client{
+	c := &Conn{
 		DeviceAddress: u.Host,
 		DeviceID:      query.Get("device_id"),
 		DevicePublic:  DecodeKey(query.Get("device_public")),
@@ -56,16 +57,38 @@ func NewClient(rawURL string) (*Client, error) {
 		ClientPrivate: DecodeKey(query.Get("client_private")),
 	}
 
+	if err = c.Dial(); err != nil {
+		return nil, err
+	}
+
 	return c, nil
 }
 
-func Pair(deviceID, pin string) (*Client, error) {
+//func NewConn(rawURL string) (*Conn, error) {
+//	u, err := url.Parse(rawURL)
+//	if err != nil {
+//		return nil, err
+//	}
+//
+//	query := u.Query()
+//	c := &Conn{
+//		DeviceAddress: u.Host,
+//		DeviceID:      query.Get("device_id"),
+//		DevicePublic:  DecodeKey(query.Get("device_public")),
+//		ClientID:      query.Get("client_id"),
+//		ClientPrivate: DecodeKey(query.Get("client_private")),
+//	}
+//
+//	return c, nil
+//}
+
+func Pair(deviceID, pin string) (*Conn, error) {
 	entry := mdns.GetEntry(deviceID)
 	if entry == nil {
 		return nil, errors.New("can't find device via mDNS")
 	}
 
-	c := &Client{
+	c := &Conn{
 		DeviceAddress: fmt.Sprintf("%s:%d", entry.AddrV4.String(), entry.Port),
 		DeviceID:      deviceID,
 		ClientID:      GenerateUUID(),
@@ -85,32 +108,32 @@ func Pair(deviceID, pin string) (*Client, error) {
 	return c, c.Pair(mfi, pin)
 }
 
-func (c *Client) ClientPublic() []byte {
+func (c *Conn) ClientPublic() []byte {
 	return c.ClientPrivate[32:]
 }
 
-func (c *Client) URL() string {
+func (c *Conn) URL() string {
 	return fmt.Sprintf(
 		"homekit://%s?device_id=%s&device_public=%16x&client_id=%s&client_private=%32x",
 		c.DeviceAddress, c.DeviceID, c.DevicePublic, c.ClientID, c.ClientPrivate,
 	)
 }
 
-func (c *Client) DialAndServe() error {
+func (c *Conn) DialAndServe() error {
 	if err := c.Dial(); err != nil {
 		return err
 	}
 	return c.Handle()
 }
 
-func (c *Client) Dial() error {
+func (c *Conn) Dial() error {
 	// update device host before dial
 	if host := mdns.GetAddress(c.DeviceID); host != "" {
 		c.DeviceAddress = host
 	}
 
 	var err error
-	c.conn, err = net.Dial("tcp", c.DeviceAddress)
+	c.conn, err = net.DialTimeout("tcp", c.DeviceAddress, time.Second*5)
 	if err != nil {
 		return err
 	}
@@ -254,7 +277,7 @@ func (c *Client) Dial() error {
 }
 
 // https://github.com/apple/HomeKitADK/blob/master/HAP/HAPPairingPairSetup.c
-func (c *Client) Pair(mfi bool, pin string) (err error) {
+func (c *Conn) Pair(mfi bool, pin string) (err error) {
 	pin = strings.ReplaceAll(pin, "-", "")
 	if len(pin) != 8 {
 		return fmt.Errorf("wrong PIN format: %s", pin)
@@ -489,7 +512,7 @@ func (c *Client) Pair(mfi bool, pin string) (err error) {
 	return nil
 }
 
-func (c *Client) Close() error {
+func (c *Conn) Close() error {
 	if c.conn == nil {
 		return nil
 	}
@@ -498,7 +521,7 @@ func (c *Client) Close() error {
 	return conn.Close()
 }
 
-func (c *Client) GetAccessories() ([]*Accessory, error) {
+func (c *Conn) GetAccessories() ([]*Accessory, error) {
 	res, err := c.Get("/accessories")
 	if err != nil {
 		return nil, err
@@ -525,7 +548,7 @@ func (c *Client) GetAccessories() ([]*Accessory, error) {
 	return p.Accessories, nil
 }
 
-func (c *Client) GetCharacters(query string) ([]*Character, error) {
+func (c *Conn) GetCharacters(query string) ([]*Character, error) {
 	res, err := c.Get("/characteristics?id=" + query)
 	if err != nil {
 		return nil, err
@@ -543,7 +566,7 @@ func (c *Client) GetCharacters(query string) ([]*Character, error) {
 	return ch.Characters, nil
 }
 
-func (c *Client) GetCharacter(char *Character) error {
+func (c *Conn) GetCharacter(char *Character) error {
 	query := fmt.Sprintf("%d.%d", char.AID, char.IID)
 	chars, err := c.GetCharacters(query)
 	if err != nil {
@@ -553,7 +576,7 @@ func (c *Client) GetCharacter(char *Character) error {
 	return nil
 }
 
-func (c *Client) PutCharacters(characters ...*Character) (err error) {
+func (c *Conn) PutCharacters(characters ...*Character) (err error) {
 	for i, char := range characters {
 		if char.Event != nil {
 			char = &Character{AID: char.AID, IID: char.IID, Event: char.Event}
@@ -579,7 +602,7 @@ func (c *Client) PutCharacters(characters ...*Character) (err error) {
 	return
 }
 
-func (c *Client) GetImage(width, height int) ([]byte, error) {
+func (c *Conn) GetImage(width, height int) ([]byte, error) {
 	res, err := c.Post(
 		"/resource", []byte(fmt.Sprintf(
 			`{"image-width":%d,"image-height":%d,"resource-type":"image","reason":0}`,
@@ -609,7 +632,7 @@ func (c *Client) GetImage(width, height int) ([]byte, error) {
 //	return nil
 //}
 
-func (c *Client) ListPairings() error {
+func (c *Conn) ListPairings() error {
 	pReq := struct {
 		Method byte `tlv8:"0"`
 		State  byte `tlv8:"6"`
@@ -642,7 +665,7 @@ func (c *Client) ListPairings() error {
 	return nil
 }
 
-func (c *Client) PairingsAdd(clientID string, clientPublic []byte, admin bool) error {
+func (c *Conn) PairingsAdd(clientID string, clientPublic []byte, admin bool) error {
 	pReq := struct {
 		Method     byte   `tlv8:"0"`
 		Identifier string `tlv8:"1"`
@@ -682,7 +705,7 @@ func (c *Client) PairingsAdd(clientID string, clientPublic []byte, admin bool) e
 	return nil
 }
 
-func (c *Client) DeletePairing(id string) error {
+func (c *Conn) DeletePairing(id string) error {
 	reqM1 := struct {
 		State      byte   `tlv8:"6"`
 		Method     byte   `tlv8:"0"`
@@ -716,7 +739,7 @@ func (c *Client) DeletePairing(id string) error {
 	return nil
 }
 
-func (c *Client) LocalAddr() string {
+func (c *Conn) LocalAddr() string {
 	return c.conn.LocalAddr().String()
 }
 

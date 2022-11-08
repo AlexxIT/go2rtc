@@ -23,7 +23,7 @@ const (
 	UriResource        = "/resource"
 )
 
-func (c *Client) Write(p []byte) (r io.Reader, err error) {
+func (c *Conn) Write(p []byte) (r io.Reader, err error) {
 	if c.secure == nil {
 		if _, err = c.conn.Write(p); err == nil {
 			r = bufio.NewReader(c.conn)
@@ -36,7 +36,7 @@ func (c *Client) Write(p []byte) (r io.Reader, err error) {
 	return
 }
 
-func (c *Client) Do(req *http.Request) (*http.Response, error) {
+func (c *Conn) Do(req *http.Request) (*http.Response, error) {
 	if c.secure == nil {
 		// insecure requests
 		if err := req.Write(c.conn); err != nil {
@@ -56,7 +56,7 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 	return http.ReadResponse(buf, req)
 }
 
-func (c *Client) Get(uri string) (*http.Response, error) {
+func (c *Conn) Get(uri string) (*http.Response, error) {
 	req, err := http.NewRequest(
 		"GET", "http://"+c.DeviceAddress+uri, nil,
 	)
@@ -66,7 +66,7 @@ func (c *Client) Get(uri string) (*http.Response, error) {
 	return c.Do(req)
 }
 
-func (c *Client) Post(uri string, data []byte) (*http.Response, error) {
+func (c *Conn) Post(uri string, data []byte) (*http.Response, error) {
 	req, err := http.NewRequest(
 		"POST", "http://"+c.DeviceAddress+uri,
 		bytes.NewReader(data),
@@ -85,7 +85,7 @@ func (c *Client) Post(uri string, data []byte) (*http.Response, error) {
 	return c.Do(req)
 }
 
-func (c *Client) Put(uri string, data []byte) (*http.Response, error) {
+func (c *Conn) Put(uri string, data []byte) (*http.Response, error) {
 	req, err := http.NewRequest(
 		"PUT", "http://"+c.DeviceAddress+uri,
 		bytes.NewReader(data),
@@ -102,7 +102,7 @@ func (c *Client) Put(uri string, data []byte) (*http.Response, error) {
 	return c.Do(req)
 }
 
-func (c *Client) Handle() (err error) {
+func (c *Conn) Handle() (err error) {
 	defer func() {
 		if c.conn == nil {
 			err = nil

@@ -54,7 +54,7 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 			items = append(items, device)
 		}
 
-		_= json.NewEncoder(w).Encode(items)
+		_ = json.NewEncoder(w).Encode(items)
 
 	case "POST":
 		// TODO: post params...
@@ -62,10 +62,10 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 		id := r.URL.Query().Get("id")
 		pin := r.URL.Query().Get("pin")
 
-		client, err := homekit.Pair(id, pin)
+		conn, err := homekit.Pair(id, pin)
 		if err != nil {
 			// log error
-			log.Error().Err(err).Msg("[api.homekit] pair")
+			log.Error().Err(err).Caller().Send()
 			// response error
 			_, err = w.Write([]byte(err.Error()))
 			return
@@ -73,15 +73,15 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 
 		name := r.URL.Query().Get("name")
 		dict := store.GetDict("streams")
-		dict[name] = client.URL()
+		dict[name] = conn.URL()
 		if err = store.Set("streams", dict); err != nil {
 			// log error
-			log.Error().Err(err).Msg("[api.homekit] save to store")
+			log.Error().Err(err).Caller().Send()
 			// response error
 			_, err = w.Write([]byte(err.Error()))
 		}
 
-		streams.New(name, client.URL())
+		streams.New(name, conn.URL())
 
 	case "DELETE":
 		src := r.URL.Query().Get("src")
@@ -91,36 +91,32 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			client, err := homekit.NewClient(rawURL.(string))
+			conn, err := homekit.Dial(rawURL.(string))
 			if err != nil {
 				// log error
-				log.Error().Err(err).Msg("[api.homekit] new client")
+				log.Error().Err(err).Caller().Send()
 				// response error
 				_, err = w.Write([]byte(err.Error()))
 				return
 			}
 
-			if err = client.Dial(); err != nil {
+			go func() {
+				if err = conn.Handle(); err != nil {
+					log.Warn().Err(err).Caller().Send()
+				}
+			}()
+
+			if err = conn.ListPairings(); err != nil {
 				// log error
-				log.Error().Err(err).Msg("[api.homekit] client dial")
+				log.Error().Err(err).Caller().Send()
 				// response error
 				_, err = w.Write([]byte(err.Error()))
 				return
 			}
 
-			go client.Handle()
-
-			if err = client.ListPairings(); err != nil {
+			if err = conn.DeletePairing(conn.ClientID); err != nil {
 				// log error
-				log.Error().Err(err).Msg("[api.homekit] unpair")
-				// response error
-				_, err = w.Write([]byte(err.Error()))
-				return
-			}
-
-			if err = client.DeletePairing(client.ClientID); err != nil {
-				// log error
-				log.Error().Err(err).Msg("[api.homekit] unpair")
+				log.Error().Err(err).Caller().Send()
 				// response error
 				_, err = w.Write([]byte(err.Error()))
 			}

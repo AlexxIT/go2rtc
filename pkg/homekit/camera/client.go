@@ -8,10 +8,10 @@ import (
 )
 
 type Client struct {
-	client *homekit.Client
+	client *homekit.Conn
 }
 
-func NewClient(client *homekit.Client) *Client {
+func NewClient(client *homekit.Conn) *Client {
 	return &Client{client: client}
 }
 
