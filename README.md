@@ -306,6 +306,8 @@ streams:
   aqara_g3: hass:Camera-Hub-G3-AB12
 ```
 
+More cameras, like [Tuya](https://www.home-assistant.io/integrations/tuya/), [ONVIF](https://www.home-assistant.io/integrations/onvif/), and possibly others can also be imported by using [this method](https://github.com/felipecrs/hass-expose-camera-stream-source#importing-home-assistant-cameras-to-go2rtc-andor-frigate).
+
 ### Module: API
 
 The HTTP API is the main part for interacting with the application. Default address: `http://127.0.0.1:1984/`.
