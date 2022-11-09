@@ -357,6 +357,7 @@ WebRTC usually works without problems in the local network. But external access 
 webrtc:
   listen: ":8555"  # address of your local server (TCP)
   candidates:
+    - 192.168.1.10:8555 # local server IP-address for local connections
     - 216.58.210.174:8555  # if you have static public IP-address
 ```
 
@@ -371,6 +372,7 @@ webrtc:
 webrtc:
   listen: ":8555"  # address of your local server (TCP)
   candidates:
+    - 192.168.1.10:8555 # local server IP-address for local connections
     - stun:8555  # if you have dynamic public IP-address
 ```
 
