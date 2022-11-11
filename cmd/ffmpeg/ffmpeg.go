@@ -23,10 +23,10 @@ func Init() {
 		// inputs
 		"file": "-re -stream_loop -1 -i {input}",
 		"http": "-fflags nobuffer -flags low_delay -i {input}",
-		"rtsp": "-fflags nobuffer -flags low_delay -rtsp_transport tcp -timeout 5000000 -i {input}",
+		"rtsp": "-fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_transport tcp -i {input}",
 
 		// output
-		"output": "-rtsp_transport tcp -f rtsp {output}",
+		"output": "-user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}",
 
 		// `-g 30` - group of picture, GOP, keyframe interval
 		// `-preset superfast` - we can't use ultrafast because it doesn't support `-profile main -level 4.1`
