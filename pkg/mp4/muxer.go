@@ -8,7 +8,6 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/h265"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/deepch/vdk/av"
-	"github.com/deepch/vdk/codec/aacparser"
 	"github.com/deepch/vdk/codec/h264parser"
 	"github.com/deepch/vdk/codec/h265parser"
 	"github.com/deepch/vdk/format/fmp4/fmp4io"
@@ -143,11 +142,6 @@ func (m *Muxer) GetInit(codecs []*streamer.Codec) ([]byte, error) {
 				return nil, err
 			}
 
-			codecData, err := aacparser.ParseMPEG4AudioConfigBytes(b)
-			if err != nil {
-				return nil, err
-			}
-
 			trak := TRAK(i + 1)
 			trak.Header.AlternateGroup = 1
 			trak.Header.Duration = 0
@@ -162,9 +156,9 @@ func (m *Muxer) GetInit(codecs []*streamer.Codec) ([]byte, error) {
 
 			trak.Media.Info.Sample.SampleDesc.MP4ADesc = &mp4io.MP4ADesc{
 				DataRefIdx:       1,
-				NumberOfChannels: int16(codecData.ChannelLayout.Count()),
+				NumberOfChannels: int16(codec.Channels),
 				SampleSize:       int16(av.FLTP.BytesPerSample() * 4),
-				SampleRate:       float64(codecData.SampleRate),
+				SampleRate:       float64(codec.ClockRate),
 				Unknowns:         []mp4io.Atom{ESDS(b)},
 			}
 
