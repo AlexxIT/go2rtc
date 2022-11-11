@@ -1,4 +1,4 @@
-package homekit
+package hap
 
 import (
 	"crypto/rand"
@@ -29,13 +29,13 @@ func GenerateUUID() string {
 }
 
 type PairVerifyPayload struct {
-	Method        byte   `tlv8:"0"`
-	Identifier    string `tlv8:"1"`
-	PublicKey     []byte `tlv8:"3"`
-	EncryptedData []byte `tlv8:"5"`
-	State         byte   `tlv8:"6"`
-	Status        byte   `tlv8:"7"`
-	Signature     []byte `tlv8:"10"`
+	Method        byte   `tlv8:"0,optional"`
+	Identifier    string `tlv8:"1,optional"`
+	PublicKey     []byte `tlv8:"3,optional"`
+	EncryptedData []byte `tlv8:"5,optional"`
+	State         byte   `tlv8:"6,optional"`
+	Status        byte   `tlv8:"7,optional"`
+	Signature     []byte `tlv8:"10,optional"`
 }
 
 //func (c *Character) Unmarshal(value interface{}) error {

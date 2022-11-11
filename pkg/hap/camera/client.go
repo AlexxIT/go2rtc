@@ -2,22 +2,22 @@ package camera
 
 import (
 	"errors"
-	"github.com/AlexxIT/go2rtc/pkg/homekit"
+	"github.com/AlexxIT/go2rtc/pkg/hap"
 	"github.com/brutella/hap/characteristic"
 	"github.com/brutella/hap/rtp"
 )
 
 type Client struct {
-	client *homekit.Conn
+	client *hap.Conn
 }
 
-func NewClient(client *homekit.Conn) *Client {
+func NewClient(client *hap.Conn) *Client {
 	return &Client{client: client}
 }
 
-func (c *Client) StartStream2(ses *Session) (err error) {
+func (c *Client) StartStream(ses *Session) (err error) {
 	// Step 1. Check if camera ready (free) to stream
-	var srv *homekit.Service
+	var srv *hap.Service
 	if srv, err = c.GetFreeStream(); err != nil {
 		return err
 	}
@@ -35,8 +35,8 @@ func (c *Client) StartStream2(ses *Session) (err error) {
 // GetFreeStream search free streaming service.
 // Usual every HomeKit camera can stream only to two clients simultaniosly.
 // So it has two similar services for streaming.
-func (c *Client) GetFreeStream() (srv *homekit.Service, err error) {
-	var accs []*homekit.Accessory
+func (c *Client) GetFreeStream() (srv *hap.Service, err error) {
+	var accs []*hap.Accessory
 	if accs, err = c.client.GetAccessories(); err != nil {
 		return
 	}
@@ -60,7 +60,7 @@ func (c *Client) GetFreeStream() (srv *homekit.Service, err error) {
 }
 
 func (c *Client) SetupEndpoins(
-	srv *homekit.Service, req *rtp.SetupEndpoints,
+	srv *hap.Service, req *rtp.SetupEndpoints,
 ) (res *rtp.SetupEndpointsResponse, err error) {
 	// get setup endpoint character ID
 	char := srv.GetCharacter(characteristic.TypeSetupEndpoints)
@@ -87,7 +87,7 @@ func (c *Client) SetupEndpoins(
 	return
 }
 
-func (c *Client) SetConfig(srv *homekit.Service, config *rtp.StreamConfiguration) (err error) {
+func (c *Client) SetConfig(srv *hap.Service, config *rtp.StreamConfiguration) (err error) {
 	// get setup endpoint character ID
 	char := srv.GetCharacter(characteristic.TypeSelectedStreamConfiguration)
 	char.Event = nil

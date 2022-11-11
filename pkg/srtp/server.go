@@ -8,7 +8,17 @@ import (
 // Server using same UDP port for SRTP and for SRTCP as the iPhone does
 // this is not really necessary but anyway
 type Server struct {
+	conn     net.PacketConn
 	sessions map[uint32]*Session
+}
+
+func (s *Server) Port() uint16 {
+	addr := s.conn.LocalAddr().(*net.UDPAddr)
+	return uint16(addr.Port)
+}
+
+func (s *Server) Close() error {
+	return s.conn.Close()
 }
 
 func (s *Server) AddSession(session *Session) {
@@ -23,6 +33,8 @@ func (s *Server) RemoveSession(session *Session) {
 }
 
 func (s *Server) Serve(conn net.PacketConn) error {
+	s.conn = conn
+
 	buf := make([]byte, 2048)
 	for {
 		n, addr, err := conn.ReadFrom(buf)

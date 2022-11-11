@@ -34,26 +34,15 @@ func Init() {
 
 	log.Info().Str("addr", cfg.Mod.Listen).Msg("[srtp] listen")
 
-	_, Port, _ = net.SplitHostPort(cfg.Mod.Listen)
-
 	// run server
 	go func() {
-		server = &srtp.Server{}
-		if err = server.Serve(conn); err != nil {
+		Server = &srtp.Server{}
+		if err = Server.Serve(conn); err != nil {
 			log.Warn().Err(err).Msg("[srtp] serve")
 		}
 	}()
 }
 
+var Server *srtp.Server
+
 var log zerolog.Logger
-var server *srtp.Server
-
-var Port string
-
-func AddSession(session *srtp.Session)  {
-	server.AddSession(session)
-}
-
-func RemoveSession(session *srtp.Session) {
-	server.RemoveSession(session)
-}

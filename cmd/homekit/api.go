@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"github.com/AlexxIT/go2rtc/cmd/app/store"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
-	"github.com/AlexxIT/go2rtc/pkg/homekit"
-	"github.com/AlexxIT/go2rtc/pkg/homekit/mdns"
+	"github.com/AlexxIT/go2rtc/pkg/hap"
+	"github.com/AlexxIT/go2rtc/pkg/hap/mdns"
 	"net/http"
 	"net/url"
 	"strings"
@@ -61,78 +61,73 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 
 		id := r.URL.Query().Get("id")
 		pin := r.URL.Query().Get("pin")
-
-		conn, err := homekit.Pair(id, pin)
-		if err != nil {
-			// log error
-			log.Error().Err(err).Caller().Send()
-			// response error
-			_, err = w.Write([]byte(err.Error()))
-			return
-		}
-
 		name := r.URL.Query().Get("name")
-		dict := store.GetDict("streams")
-		dict[name] = conn.URL()
-		if err = store.Set("streams", dict); err != nil {
-			// log error
+		if err := hkPair(id, pin, name); err != nil {
 			log.Error().Err(err).Caller().Send()
-			// response error
 			_, err = w.Write([]byte(err.Error()))
 		}
-
-		streams.New(name, conn.URL())
 
 	case "DELETE":
 		src := r.URL.Query().Get("src")
-		dict := store.GetDict("streams")
-		for name, rawURL := range dict {
-			if name != src {
-				continue
-			}
-
-			conn, err := homekit.Dial(rawURL.(string))
-			if err != nil {
-				// log error
-				log.Error().Err(err).Caller().Send()
-				// response error
-				_, err = w.Write([]byte(err.Error()))
-				return
-			}
-
-			go func() {
-				if err = conn.Handle(); err != nil {
-					log.Warn().Err(err).Caller().Send()
-				}
-			}()
-
-			if err = conn.ListPairings(); err != nil {
-				// log error
-				log.Error().Err(err).Caller().Send()
-				// response error
-				_, err = w.Write([]byte(err.Error()))
-				return
-			}
-
-			if err = conn.DeletePairing(conn.ClientID); err != nil {
-				// log error
-				log.Error().Err(err).Caller().Send()
-				// response error
-				_, err = w.Write([]byte(err.Error()))
-			}
-
-			delete(dict, name)
-
-			if err = store.Set("streams", dict); err != nil {
-				// log error
-				log.Error().Err(err).Msg("[api.homekit] store set")
-				// response error
-				_, err = w.Write([]byte(err.Error()))
-			}
-
-			return
+		if err := hkDelete(src); err != nil {
+			log.Error().Err(err).Caller().Send()
+			_, err = w.Write([]byte(err.Error()))
 		}
 	}
+}
+
+func hkPair(deviceID, pin, name string) (err error) {
+	var conn *hap.Conn
+
+	if conn, err = hap.Pair(deviceID, pin); err != nil {
+		return
+	}
+
+	streams.New(name, conn.URL())
+
+	dict := store.GetDict("streams")
+	dict[name] = conn.URL()
+
+	return store.Set("streams", dict)
+}
+
+func hkDelete(name string) (err error) {
+	dict := store.GetDict("streams")
+	for key, rawURL := range dict {
+		if key != name {
+			continue
+		}
+
+		var conn *hap.Conn
+
+		if conn, err = hap.NewConn(rawURL.(string)); err != nil {
+			return
+		}
+
+		if err = conn.Dial(); err != nil {
+			return
+		}
+
+		go func() {
+			if err = conn.Handle(); err != nil {
+				log.Warn().Err(err).Caller().Send()
+			}
+		}()
+
+		if err = conn.ListPairings(); err != nil {
+			return
+		}
+
+		if err = conn.DeletePairing(conn.ClientID); err != nil {
+			log.Error().Err(err).Caller().Send()
+		}
+
+		delete(dict, name)
+
+		return store.Set("streams", dict)
+	}
+
+	return nil
 }
 
 type Device struct {

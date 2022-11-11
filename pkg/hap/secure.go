@@ -1,4 +1,4 @@
-package homekit
+package hap
 
 import (
 	"encoding/binary"

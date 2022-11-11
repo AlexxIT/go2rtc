@@ -3,26 +3,61 @@ package homekit
 import (
 	"errors"
 	"fmt"
-	"github.com/AlexxIT/go2rtc/cmd/srtp"
-	"github.com/AlexxIT/go2rtc/pkg/homekit"
-	"github.com/AlexxIT/go2rtc/pkg/homekit/camera"
-	pkg "github.com/AlexxIT/go2rtc/pkg/srtp"
+	"github.com/AlexxIT/go2rtc/pkg/hap"
+	"github.com/AlexxIT/go2rtc/pkg/hap/camera"
+	"github.com/AlexxIT/go2rtc/pkg/srtp"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/brutella/hap/characteristic"
 	"github.com/brutella/hap/rtp"
 	"net"
-	"strconv"
+	"net/url"
 )
 
 type Client struct {
 	streamer.Element
 
-	conn   *homekit.Conn
+	conn   *hap.Conn
 	exit   chan error
+	server *srtp.Server
+	url    string
+
 	medias []*streamer.Media
 	tracks []*streamer.Track
 
-	sessions []*pkg.Session
+	sessions []*srtp.Session
+}
+
+func NewClient(rawURL string, server *srtp.Server) (*Client, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, err
+	}
+
+	query := u.Query()
+	c := &hap.Conn{
+		DeviceAddress: u.Host,
+		DeviceID:      query.Get("device_id"),
+		DevicePublic:  hap.DecodeKey(query.Get("device_public")),
+		ClientID:      query.Get("client_id"),
+		ClientPrivate: hap.DecodeKey(query.Get("client_private")),
+	}
+
+	return &Client{conn: c, server: server}, nil
+}
+
+func (c *Client) Dial() error {
+	if err := c.conn.Dial(); err != nil {
+		return err
+	}
+
+	c.exit = make(chan error)
+
+	go func() {
+		//start goroutine for reading responses from camera
+		c.exit <- c.conn.Handle()
+	}()
+
+	return nil
 }
 
 func (c *Client) GetMedias() []*streamer.Media {
@@ -56,28 +91,54 @@ func (c *Client) Start() error {
 		return err
 	}
 
-	// get our server SRTP port
-	port, err := strconv.Atoi(srtp.Port)
-	if err != nil {
-		return err
+	// TODO: set right config
+	vp := &rtp.VideoParameters{
+		CodecType: rtp.VideoCodecType_H264,
+		CodecParams: rtp.VideoCodecParameters{
+			Profiles: []rtp.VideoCodecProfile{
+				{Id: rtp.VideoCodecProfileMain},
+			},
+			Levels: []rtp.VideoCodecLevel{
+				{Level: rtp.VideoCodecLevel4},
+			},
+			Packetizations: []rtp.VideoCodecPacketization{
+				{Mode: rtp.VideoCodecPacketizationModeNonInterleaved},
+			},
+		},
+		Attributes: rtp.VideoCodecAttributes{
+			Width: 1920, Height: 1080, Framerate: 30,
+		},
+	}
+
+	ap := &rtp.AudioParameters{
+		CodecType: rtp.AudioCodecType_AAC_ELD,
+		CodecParams: rtp.AudioCodecParameters{
+			Channels:   1,
+			Bitrate:    rtp.AudioCodecBitrateVariable,
+			Samplerate: rtp.AudioCodecSampleRate16Khz,
+			// packet time=20 => AAC-ELD packet size=480
+			// packet time=30 => AAC-ELD packet size=480
+			// packet time=40 => AAC-ELD packet size=480
+			// packet time=60 => AAC-LD  packet size=960
+			PacketTime: 40,
+		},
 	}
 
 	// setup HomeKit stream session
-	hkSession := camera.NewSession()
-	hkSession.SetLocalEndpoint(host, uint16(port))
+	hkSession := camera.NewSession(vp, ap)
+	hkSession.SetLocalEndpoint(host, c.server.Port())
 
 	// create client for processing camera accessory
 	cam := camera.NewClient(c.conn)
 	// try to start HomeKit stream
-	if err = cam.StartStream2(hkSession); err != nil {
-		panic(err) // TODO: fixme
+	if err = cam.StartStream(hkSession); err != nil {
+		return err
 	}
 
 	// SRTP Video Session
-	vs := &pkg.Session{
+	vs := &srtp.Session{
 		LocalSSRC:  hkSession.Config.Video.RTP.Ssrc,
 		RemoteSSRC: hkSession.Answer.SsrcVideo,
-		Track:      c.tracks[0],
 	}
 	if err = vs.SetKeys(
 		hkSession.Offer.Video.MasterKey, hkSession.Offer.Video.MasterSalt,
@@ -87,10 +148,9 @@ func (c *Client) Start() error {
 	}
 
 	// SRTP Audio Session
-	as := &pkg.Session{
+	as := &srtp.Session{
 		LocalSSRC:  hkSession.Config.Audio.RTP.Ssrc,
 		RemoteSSRC: hkSession.Answer.SsrcAudio,
-		Track:      &streamer.Track{},
 	}
 	if err = as.SetKeys(
 		hkSession.Offer.Audio.MasterKey, hkSession.Offer.Audio.MasterSalt,
@@ -99,10 +159,19 @@ func (c *Client) Start() error {
 		return err
 	}
 
-	srtp.AddSession(vs)
-	srtp.AddSession(as)
+	for _, track := range c.tracks {
+		switch track.Codec.Name {
+		case streamer.CodecH264:
+			vs.Track = track
+		case streamer.CodecAAC:
+			as.Track = track
+		}
+	}
 
-	c.sessions = []*pkg.Session{vs, as}
+	c.server.AddSession(vs)
+	c.server.AddSession(as)
+
+	c.sessions = []*srtp.Session{vs, as}
 
 	return <-c.exit
 }
@@ -111,7 +180,7 @@ func (c *Client) Stop() error {
 	err := c.conn.Close()
 
 	for _, session := range c.sessions {
-		srtp.RemoveSession(session)
+		c.server.RemoveSession(session)
 	}
 
 	return err
@@ -121,16 +190,17 @@ func (c *Client) getMedias() []*streamer.Media {
 	var medias []*streamer.Media
 
 	accs, err := c.conn.GetAccessories()
-	acc := accs[0]
 	if err != nil {
-		panic(err)
+		return nil
 	}
+
+	acc := accs[0]
 
 	// get supported video config (not really necessary)
 	char := acc.GetCharacter(characteristic.TypeSupportedVideoStreamConfiguration)
 	v1 := &rtp.VideoStreamConfiguration{}
 	if err = char.ReadTLV8(v1); err != nil {
-		panic(err)
+		return nil
 	}
 
 	for _, hkCodec := range v1.Codecs {
@@ -139,8 +209,10 @@ func (c *Client) getMedias() []*streamer.Media {
 		switch hkCodec.Type {
 		case rtp.VideoCodecType_H264:
 			codec.Name = streamer.CodecH264
+			codec.FmtpLine = "profile-level-id=420029"
 		default:
-			panic(fmt.Sprintf("unknown codec: %d", hkCodec.Type))
+			fmt.Printf("unknown codec: %d", hkCodec.Type)
+			continue
 		}
 
 		media := &streamer.Media{
@@ -153,7 +225,7 @@ func (c *Client) getMedias() []*streamer.Media {
 	char = acc.GetCharacter(characteristic.TypeSupportedAudioStreamConfiguration)
 	v2 := &rtp.AudioStreamConfiguration{}
 	if err = char.ReadTLV8(v2); err != nil {
-		panic(err)
+		return nil
 	}
 
 	for _, hkCodec := range v2.Codecs {
@@ -165,7 +237,8 @@ func (c *Client) getMedias() []*streamer.Media {
 		case rtp.AudioCodecType_AAC_ELD:
 			codec.Name = streamer.CodecAAC
 		default:
-			panic(fmt.Sprintf("unknown codec: %d", hkCodec.Type))
+			fmt.Printf("unknown codec: %d", hkCodec.Type)
+			continue
 		}
 
 		switch hkCodec.Parameters.Samplerate {

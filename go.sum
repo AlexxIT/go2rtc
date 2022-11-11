@@ -1,5 +1,7 @@
-github.com/AlexxIT/hap v0.0.15-0.20220823033740-ce7d1564e657 h1:FUzXAJfm6sRLJ8T6vfzvy/Hm3aioX8+fbxgx2VZoI78=
-github.com/AlexxIT/hap v0.0.15-0.20220823033740-ce7d1564e657/go.mod h1:c2vEL5pzjRWEx07sa32kTVjzI9bBVlstrwBwKe3DlJ0=
+github.com/AlexxIT/hap v0.0.15-0.20221108133010-d8a45b7a7045 h1:xJf3FxQJReJSDyYXJfI1NUWv8tUEAGNV9xigLqNtmrI=
+github.com/AlexxIT/hap v0.0.15-0.20221108133010-d8a45b7a7045/go.mod h1:QNA3sm16zE5uUyC8+E/gNkMvQWjqQLuxQKkU5PMi8N4=
+github.com/AlexxIT/vdk v0.0.18-0.20221108193131-6168555b4f92 h1:cIeYMGaAirSZnrKRDTb5VgZDDYqPLhYiczElMg4sQW0=
+github.com/AlexxIT/vdk v0.0.18-0.20221108193131-6168555b4f92/go.mod h1:7ydHfSkflMZxBXfWR79dMjrT54xzvLxnPaByOa9Jpzg=
 github.com/brutella/dnssd v1.2.3 h1:4fBLjZjPH7SbcHhEcIJhZcC9nOhIDZ0m3rn9bjl1/i0=
 github.com/brutella/dnssd v1.2.3/go.mod h1:JoW2sJUrmVIef25G6lrLj7HS6Xdwh6q8WUIvMkkBYXs=
 github.com/cheekybits/genny v1.0.0/go.mod h1:+tQajlRqAUrPI7DOSpB0XAqZYtQakVtB7wXkRAgjxjQ=
@@ -7,8 +9,6 @@ github.com/coreos/go-systemd/v22 v22.3.3-0.20220203105225-a9a7ef127534/go.mod h1
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/deepch/vdk v0.0.19 h1:r6xYyBTtXEIEh+csO0XHT00sI7xLF+hQFkJE9/go5II=
-github.com/deepch/vdk v0.0.19/go.mod h1:7ydHfSkflMZxBXfWR79dMjrT54xzvLxnPaByOa9Jpzg=
 github.com/fsnotify/fsnotify v1.4.7/go.mod h1:jwhsz4b93w/PPRr/qN1Yymfu8t87LnFCMoQvtojpjFo=
 github.com/fsnotify/fsnotify v1.4.9/go.mod h1:znqG4EE+3YCdAaPaxE2ZRY/06pZUdp0tY4IgpuI1SZQ=
 github.com/go-chi/chi v1.5.4 h1:QHdzF2szwjqVV4wmByUnTcsbIg7UGaQ0tPF2t5GcAIs=
@@ -245,6 +245,7 @@ gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7/go.mod h1:dt/ZhP58zS4L8KSrWD
 gopkg.in/yaml.v2 v2.2.1/go.mod h1:hI93XBmqTisBFMUTm0b8Fm+jr3Dg1NNxqwp+5A1VGuI=
 gopkg.in/yaml.v2 v2.2.2/go.mod h1:hI93XBmqTisBFMUTm0b8Fm+jr3Dg1NNxqwp+5A1VGuI=
 gopkg.in/yaml.v2 v2.2.4/go.mod h1:hI93XBmqTisBFMUTm0b8Fm+jr3Dg1NNxqwp+5A1VGuI=
+gopkg.in/yaml.v2 v2.2.8/go.mod h1:hI93XBmqTisBFMUTm0b8Fm+jr3Dg1NNxqwp+5A1VGuI=
 gopkg.in/yaml.v2 v2.3.0/go.mod h1:hI93XBmqTisBFMUTm0b8Fm+jr3Dg1NNxqwp+5A1VGuI=
 gopkg.in/yaml.v2 v2.4.0/go.mod h1:RDklbk79AGWmwhnvt/jBztapEOGDOx6ZbXqjP6csGnQ=
 gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=

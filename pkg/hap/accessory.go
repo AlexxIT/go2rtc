@@ -1,4 +1,4 @@
-package homekit
+package hap
 
 type Accessory struct {
 	AID      int        `json:"aid"`

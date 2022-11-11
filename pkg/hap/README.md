@@ -1,4 +1,4 @@
-# Homekit
+# Home Accessory Protocol
 
 > PS. Character = Characteristic
 

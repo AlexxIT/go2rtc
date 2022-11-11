@@ -37,6 +37,10 @@ func (s *Session) HandleRTP(data []byte) (err error) {
 		return
 	}
 
+	if s.Track == nil {
+		return
+	}
+
 	packet := &rtp.Packet{}
 	if err = packet.Unmarshal(data); err != nil {
 		return
@@ -90,8 +94,8 @@ func GuessProfile(masterKey []byte) srtp.ProtectionProfile {
 	switch len(masterKey) {
 	case 16:
 		return srtp.ProtectionProfileAes128CmHmacSha1_80
-	//case 32:
-	//	return srtp.ProtectionProfileAes256CmHmacSha1_80
+		//case 32:
+		//	return srtp.ProtectionProfileAes256CmHmacSha1_80
 	}
 	return 0
 }

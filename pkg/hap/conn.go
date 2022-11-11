@@ -1,4 +1,4 @@
-package homekit
+package hap
 
 import (
 	"bufio"
@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/AlexxIT/go2rtc/pkg/homekit/mdns"
+	"github.com/AlexxIT/go2rtc/pkg/hap/mdns"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/brutella/hap"
 	"github.com/brutella/hap/chacha20poly1305"
@@ -42,7 +42,7 @@ type Conn struct {
 	httpResponse chan *bufio.Reader
 }
 
-func Dial(rawURL string) (*Conn, error) {
+func NewConn(rawURL string) (*Conn, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, err
@@ -57,30 +57,8 @@ func Dial(rawURL string) (*Conn, error) {
 		ClientPrivate: DecodeKey(query.Get("client_private")),
 	}
 
-	if err = c.Dial(); err != nil {
-		return nil, err
-	}
-
 	return c, nil
 }
-
-//func NewConn(rawURL string) (*Conn, error) {
-//	u, err := url.Parse(rawURL)
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	query := u.Query()
-//	c := &Conn{
-//		DeviceAddress: u.Host,
-//		DeviceID:      query.Get("device_id"),
-//		DevicePublic:  DecodeKey(query.Get("device_public")),
-//		ClientID:      query.Get("client_id"),
-//		ClientPrivate: DecodeKey(query.Get("client_private")),
-//	}
-//
-//	return c, nil
-//}
 
 func Pair(deviceID, pin string) (*Conn, error) {
 	entry := mdns.GetEntry(deviceID)
