@@ -85,6 +85,8 @@ func rtspHandler(url string) (streamer.Producer, error) {
 		return nil, err
 	}
 
+	conn.UserAgent = app.UserAgent
+
 	if log.Trace().Enabled() {
 		conn.Listen(func(msg interface{}) {
 			switch msg := msg.(type) {
