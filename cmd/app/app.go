@@ -10,6 +10,9 @@ import (
 	"runtime"
 )
 
+var Version = "0.1-rc.2"
+var UserAgent = "go2rtc/" + Version
+
 func Init() {
 	config := flag.String(
 		"config",
@@ -35,9 +38,10 @@ func Init() {
 
 	modules = cfg.Mod
 
+	log.Info().Msgf("go2rtc version %s %s/%s", Version, runtime.GOOS, runtime.GOARCH)
+
 	path, _ := os.Getwd()
-	log.Debug().Str("os", runtime.GOOS).Str("arch", runtime.GOARCH).
-		Str("cwd", path).Int("conf_size", len(data)).Msgf("[app]")
+	log.Debug().Str("cwd", path).Send()
 }
 
 func NewLogger(format string, level string) zerolog.Logger {
