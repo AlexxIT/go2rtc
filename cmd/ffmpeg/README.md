@@ -41,3 +41,6 @@
 - https://trac.ffmpeg.org/wiki/DirectShow
 - https://stackoverflow.com/questions/53207692/libav-mjpeg-encoding-and-huffman-table
 - https://github.com/tuupola/esp_video/blob/master/README.md
+- https://github.com/leandromoreira/ffmpeg-libav-tutorial
+- https://www.reddit.com/user/VeritablePornocopium/comments/okw130/ffmpeg_with_libfdk_aac_for_windows_x64/
+- https://slhck.info/video/2017/02/24/vbr-settings.html
