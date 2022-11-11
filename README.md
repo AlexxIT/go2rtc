@@ -578,6 +578,13 @@ masOS Hass App  | no          | no          | no
 - WebRTC audio codecs: `PCMU/8000`, `PCMA/8000`, `OPUS/48000/2`
 - MSE/MP4 audio codecs: `AAC`
 
+## TIPS
+
+**Using apps for low RTSP delay**
+
+- `ffplay -fflags nobuffer -flags low_delay "rtsp://192.168.1.123:8554/camera1"`
+- VLC > Preferences > Input / Codecs > Default Caching Level: Lowest Latency
+
 ## FAQ
 
 **Q. What's the difference between go2rtc, WebRTC Camera and RTSPtoWebRTC?**
