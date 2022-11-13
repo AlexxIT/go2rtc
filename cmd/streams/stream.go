@@ -92,6 +92,7 @@ func (s *Stream) AddConsumer(cons streamer.Consumer) (err error) {
 	}
 
 	if len(producers) == 0 {
+		s.stopProducers()
 		return errors.New("couldn't find the matching tracks")
 	}
 
@@ -110,11 +111,6 @@ func (s *Stream) AddConsumer(cons streamer.Consumer) (err error) {
 func (s *Stream) RemoveConsumer(cons streamer.Consumer) {
 	s.mu.Lock()
 	for i, consumer := range s.consumers {
-		if consumer == nil {
-			log.Warn().Msgf("empty consumer: %+v\n", s)
-			continue
-		}
-
 		if consumer.element == cons {
 			// remove consumer pads from all producers
 			for _, track := range consumer.tracks {
@@ -125,24 +121,9 @@ func (s *Stream) RemoveConsumer(cons streamer.Consumer) {
 			break
 		}
 	}
-
-	for _, producer := range s.producers {
-		if producer == nil {
-			log.Warn().Msgf("empty producer: %+v\n", s)
-			continue
-		}
-
-		var sink bool
-		for _, track := range producer.tracks {
-			if track.HasSink() {
-				sink = true
-			}
-		}
-		if !sink {
-			producer.stop()
-		}
-	}
 	s.mu.Unlock()
+
+	s.stopProducers()
 }
 
 func (s *Stream) AddProducer(prod streamer.Producer) {
@@ -159,6 +140,20 @@ func (s *Stream) RemoveProducer(prod streamer.Producer) {
 			s.removeProducer(i)
 			break
 		}
+	}
+	s.mu.Unlock()
+}
+
+func (s *Stream) stopProducers() {
+	s.mu.Lock()
+producers:
+	for _, producer := range s.producers {
+		for _, track := range producer.tracks {
+			if track.HasSink() {
+				continue producers
+			}
+		}
+		producer.stop()
 	}
 	s.mu.Unlock()
 }

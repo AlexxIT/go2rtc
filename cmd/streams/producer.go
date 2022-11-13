@@ -160,8 +160,12 @@ func (p *Producer) stop() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if p.state == stateExternal {
+	switch p.state {
+	case stateExternal:
 		log.Debug().Msgf("[streams] can't stop external producer")
+		return
+	case stateNone:
+		log.Debug().Msgf("[streams] can't stop none producer")
 		return
 	}
 

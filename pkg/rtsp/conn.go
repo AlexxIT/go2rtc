@@ -460,10 +460,7 @@ func (c *Conn) Play() (err error) {
 }
 
 func (c *Conn) Teardown() (err error) {
-	if c.state != StatePlay {
-		return fmt.Errorf("RTSP TEARDOWN from wrong state: %s", c.state)
-	}
-
+	// allow TEARDOWN from any state (ex. ANNOUNCE > SETUP)
 	req := &tcp.Request{Method: MethodTeardown, URL: c.URL}
 	return c.Request(req)
 }
