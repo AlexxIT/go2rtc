@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"github.com/AlexxIT/go2rtc/cmd/app"
 	"github.com/AlexxIT/go2rtc/cmd/rtsp"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
@@ -82,11 +83,19 @@ func Handle(url string) (streamer.Producer, error) {
 		return nil, err
 	}
 
+	chErr := make(chan error)
+
+	go func() {
+		chErr <- cmd.Wait()
+	}()
+
 	select {
-	case <-time.After(time.Second * 15):
+	case <-time.After(time.Second * 60):
 		_ = cmd.Process.Kill()
 		log.Error().Str("url", url).Msg("[exec] timeout")
 		return nil, errors.New("timeout")
+	case err := <-chErr:
+		return nil, fmt.Errorf("exec: %s", err)
 	case prod := <-ch:
 		log.Debug().Stringer("launch", time.Since(ts)).Msg("[exec] run")
 		return prod, nil
