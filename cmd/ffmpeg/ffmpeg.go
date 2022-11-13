@@ -8,6 +8,7 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/streams"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -34,19 +35,20 @@ func Init() {
 		// `-tune zerolatency` - for minimal latency
 		// `-profile main -level 4.1` - most used streaming profile
 		// `-pix_fmt yuv420p` - if input pix format 4:2:2
-		"h264":       "-codec:v libx264 -g 30 -preset superfast -tune zerolatency -profile:v main -level 4.1 -pix_fmt yuv420p",
-		"h264/ultra": "-codec:v libx264 -g 30 -preset ultrafast -tune zerolatency",
-		"h264/high":  "-codec:v libx264 -g 30 -preset superfast -tune zerolatency",
-		"h265":       "-codec:v libx265 -g 30 -preset ultrafast -tune zerolatency",
-		"mjpeg":      "-codec:v mjpeg -force_duplicated_matrix 1 -huffman 0 -pix_fmt yuvj420p",
-		"opus":       "-codec:a libopus -ar 48000 -ac 2",
-		"pcmu":       "-codec:a pcm_mulaw -ar 8000 -ac 1",
-		"pcmu/16000": "-codec:a pcm_mulaw -ar 16000 -ac 1",
-		"pcmu/48000": "-codec:a pcm_mulaw -ar 48000 -ac 1",
-		"pcma":       "-codec:a pcm_alaw -ar 8000 -ac 1",
-		"pcma/16000": "-codec:a pcm_alaw -ar 16000 -ac 1",
-		"pcma/48000": "-codec:a pcm_alaw -ar 48000 -ac 1",
-		"aac/16000":  "-codec:a aac -ar 16000 -ac 1",
+		"h264":       "-c:v libx264 -g:v 30 -preset:v superfast -tune:v zerolatency -profile:v main -level:v 4.1 -pix_fmt:v yuv420p",
+		"h264/ultra": "-c:v libx264 -g:v 30 -preset:v ultrafast -tune:v zerolatency",
+		"h264/high":  "-c:v libx264 -g:v 30 -preset:v superfast -tune:v zerolatency",
+		"h265":       "-c:v libx265 -g:v 30 -preset:v ultrafast -tune:v zerolatency",
+		"mjpeg":      "-c:v mjpeg -force_duplicated_matrix:v 1 -huffman:v 0 -pix_fmt:v yuvj420p",
+		"opus":       "-c:a libopus -ar:a 48000 -ac:a 2",
+		"pcmu":       "-c:a pcm_mulaw -ar:a 8000 -ac:a 1",
+		"pcmu/16000": "-c:a pcm_mulaw -ar:a 16000 -ac:a 1",
+		"pcmu/48000": "-c:a pcm_mulaw -ar:a 48000 -ac:a 1",
+		"pcma":       "-c:a pcm_alaw -ar:a 8000 -ac:a 1",
+		"pcma/16000": "-c:a pcm_alaw -ar:a 16000 -ac:a 1",
+		"pcma/48000": "-c:a pcm_alaw -ar:a 48000 -ac:a 1",
+		"aac":        "-c:a aac", // keep sample rate and channels
+		"aac/16000":  "-c:a aac -ar:a 16000 -ac:a 1",
 	}
 
 	app.LoadConfig(&cfg)
@@ -64,6 +66,7 @@ func Init() {
 
 		var query url.Values
 		var queryVideo, queryAudio bool
+
 		if i := strings.IndexByte(s, '#'); i > 0 {
 			query = parseQuery(s[i+1:])
 			queryVideo = query["video"] != nil
@@ -138,30 +141,52 @@ func Init() {
 				break
 			}
 
-			// TODO: multiple codecs via -map
-			// s += fmt.Sprintf(" -map 0:v:0 -c:v:%d copy", i)
-
-			for _, video := range query["video"] {
-				if video == "copy" {
-					s += " -codec:v copy"
-				} else {
-					s += " " + tpl[video]
-				}
-			}
-
-			for _, audio := range query["audio"] {
-				if audio == "copy" {
-					s += " -codec:a copy"
-				} else {
-					s += " " + tpl[audio]
-				}
-			}
-
-			switch {
-			case queryVideo && !queryAudio:
-				s += " -an"
-			case queryAudio && !queryVideo:
+			switch len(query["video"]) {
+			case 0:
 				s += " -vn"
+			case 1:
+				if len(query["audio"]) > 1 {
+					s += " -map 0:v:0"
+				}
+				for _, video := range query["video"] {
+					if video == "copy" {
+						s += " -c:v copy"
+					} else {
+						s += " " + tpl[video]
+					}
+				}
+			default:
+				for i, video := range query["video"] {
+					if video == "copy" {
+						s += " -map 0:v:0 -c:v:" + strconv.Itoa(i) + " copy"
+					} else {
+						s += " -map 0:v:0 " + strings.ReplaceAll(tpl[video], ":v ", ":v:"+strconv.Itoa(i)+" ")
+					}
+				}
+			}
+
+			switch len(query["audio"]) {
+			case 0:
+				s += " -an"
+			case 1:
+				if len(query["video"]) > 1 {
+					s += " -map 0:a:0"
+				}
+				for _, audio := range query["audio"] {
+					if audio == "copy" {
+						s += " -c:a copy"
+					} else {
+						s += " " + tpl[audio]
+					}
+				}
+			default:
+				for i, audio := range query["audio"] {
+					if audio == "copy" {
+						s += " -map 0:a:0 -c:a:" + strconv.Itoa(i) + " copy"
+					} else {
+						s += " -map 0:a:0 " + strings.ReplaceAll(tpl[audio], ":a ", ":a:"+strconv.Itoa(i)+" ")
+					}
+				}
 			}
 		} else {
 			s += " -c copy"
