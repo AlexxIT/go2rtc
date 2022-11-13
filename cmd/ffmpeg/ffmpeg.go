@@ -33,7 +33,7 @@ func Init() {
 		// `-tune zerolatency` - for minimal latency
 		// `-profile main -level 4.1` - most used streaming profile
 		// `-pix_fmt yuv420p` - if input pix format 4:2:2
-		"h264":       "-codec:v libx264 -g 30 -preset superfast -tune zerolatency -profile main -level 4.1 -pix_fmt yuv420p",
+		"h264":       "-codec:v libx264 -g 30 -preset superfast -tune zerolatency -profile:v main -level 4.1 -pix_fmt yuv420p",
 		"h264/ultra": "-codec:v libx264 -g 30 -preset ultrafast -tune zerolatency",
 		"h264/high":  "-codec:v libx264 -g 30 -preset superfast -tune zerolatency",
 		"h265":       "-codec:v libx265 -g 30 -preset ultrafast -tune zerolatency",
