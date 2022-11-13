@@ -4,6 +4,7 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/app"
 	"github.com/AlexxIT/go2rtc/cmd/exec"
 	"github.com/AlexxIT/go2rtc/cmd/ffmpeg/device"
+	"github.com/AlexxIT/go2rtc/cmd/rtsp"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"net/url"
@@ -75,7 +76,7 @@ func Init() {
 		}
 
 		var input string
-		if i := strings.IndexByte(s, ':'); i > 0 {
+		if i := strings.Index(s, "://"); i > 0 {
 			switch s[:i] {
 			case "http", "https", "rtmp":
 				input = strings.Replace(tpl["http"], "{input}", s, 1)
@@ -92,19 +93,26 @@ func Init() {
 				}
 
 				input += strings.Replace(tpl["rtsp"], "{input}", s, 1)
+			default:
+				input = "-i " + s
 			}
-		}
-
-		if input == "" {
-			if strings.HasPrefix(s, "device?") {
-				var err error
-				input, err = device.GetInput(s)
-				if err != nil {
-					return nil, err
-				}
-			} else {
-				input = strings.Replace(tpl["file"], "{input}", s, 1)
+		} else if streams.Get(s) != nil {
+			s = "rtsp://localhost:" + rtsp.Port + "/" + s
+			switch {
+			case queryVideo && !queryAudio:
+				s += "?video"
+			case queryAudio && !queryVideo:
+				s += "?audio"
 			}
+			input = strings.Replace(tpl["rtsp"], "{input}", s, 1)
+		} else if strings.HasPrefix(s, "device?") {
+			var err error
+			input, err = device.GetInput(s)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			input = strings.Replace(tpl["file"], "{input}", s, 1)
 		}
 
 		s = cmd + input
