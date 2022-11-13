@@ -14,6 +14,7 @@ const (
 	stateMedias
 	stateTracks
 	stateStart
+	stateExternal
 )
 
 type Producer struct {
@@ -69,11 +70,6 @@ func (p *Producer) GetTrack(media *streamer.Media, codec *streamer.Codec) *strea
 		if track.Codec == codec {
 			return track
 		}
-	}
-
-	// can't get new tracks after start
-	if p.state == stateStart {
-		return nil
 	}
 
 	track := p.element.GetTrack(media, codec)
@@ -162,6 +158,12 @@ func (p *Producer) reconnect() {
 
 func (p *Producer) stop() {
 	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.state == stateExternal {
+		log.Debug().Msgf("[streams] can't stop external producer")
+		return
+	}
 
 	log.Debug().Msgf("[streams] stop producer url=%s", p.url)
 
@@ -176,6 +178,4 @@ func (p *Producer) stop() {
 
 	p.state = stateNone
 	p.tracks = nil
-
-	p.mu.Unlock()
 }

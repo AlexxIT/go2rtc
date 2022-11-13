@@ -146,7 +146,7 @@ func (s *Stream) RemoveConsumer(cons streamer.Consumer) {
 }
 
 func (s *Stream) AddProducer(prod streamer.Producer) {
-	producer := &Producer{element: prod, state: stateTracks}
+	producer := &Producer{element: prod, state: stateExternal}
 	s.mu.Lock()
 	s.producers = append(s.producers, producer)
 	s.mu.Unlock()

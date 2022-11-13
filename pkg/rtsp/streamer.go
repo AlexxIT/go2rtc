@@ -20,6 +20,11 @@ func (c *Conn) GetTrack(media *streamer.Media, codec *streamer.Codec) *streamer.
 		}
 	}
 
+	// can't setup new tracks from play state
+	if c.state == StatePlay {
+		return nil
+	}
+
 	track, err := c.SetupMedia(media, codec)
 	if err != nil {
 		return nil

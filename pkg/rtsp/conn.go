@@ -44,6 +44,15 @@ const (
 	ModeServerConsumer
 )
 
+type State byte
+
+const (
+	StateNone State = iota
+	StateConn
+	StateSetup
+	StatePlay
+)
+
 type Conn struct {
 	streamer.Element
 
@@ -59,9 +68,9 @@ type Conn struct {
 	// internal
 
 	auth     *tcp.Auth
-	closed   bool
 	conn     net.Conn
 	mode     Mode
+	state    State
 	reader   *bufio.Reader
 	sequence int
 	uri      string
@@ -108,9 +117,6 @@ func (c *Conn) parseURI() (err error) {
 }
 
 func (c *Conn) Dial() (err error) {
-	//if c.state != StateClientInit {
-	//	panic("wrong state")
-	//}
 	if c.conn != nil {
 		_ = c.parseURI()
 	}
@@ -137,6 +143,7 @@ func (c *Conn) Dial() (err error) {
 	}
 
 	c.reader = bufio.NewReader(c.conn)
+	c.state = StateConn
 
 	return nil
 }
@@ -437,33 +444,38 @@ func (c *Conn) SetupMedia(
 		track = c.bindTrack(track, byte(ch), codec.PayloadType)
 	}
 
+	c.state = StateSetup
 	c.tracks = append(c.tracks, track)
 
 	return track, nil
 }
 
 func (c *Conn) Play() (err error) {
+	if c.state != StateSetup {
+		return fmt.Errorf("RTSP PLAY from wrong state: %s", c.state)
+	}
+
 	req := &tcp.Request{Method: MethodPlay, URL: c.URL}
 	return c.Request(req)
 }
 
 func (c *Conn) Teardown() (err error) {
-	//if c.state != StateClientPlay {
-	//	panic("wrong state")
-	//}
+	if c.state != StatePlay {
+		return fmt.Errorf("RTSP TEARDOWN from wrong state: %s", c.state)
+	}
 
 	req := &tcp.Request{Method: MethodTeardown, URL: c.URL}
 	return c.Request(req)
 }
 
 func (c *Conn) Close() error {
-	if c.closed {
+	if c.state == StateNone {
 		return nil
 	}
 	if err := c.Teardown(); err != nil {
 		return err
 	}
-	c.closed = true
+	c.state = StateNone
 	return c.conn.Close()
 }
 
@@ -574,6 +586,7 @@ func (c *Conn) Accept() error {
 
 			if strings.HasPrefix(tr, transport) {
 				c.Session = "1" // TODO: fixme
+				c.state = StateSetup
 				res.Header.Set("Transport", tr[:len(transport)+3])
 			} else {
 				res.Status = "461 Unsupported transport"
@@ -594,14 +607,22 @@ func (c *Conn) Accept() error {
 }
 
 func (c *Conn) Handle() (err error) {
+	if c.state != StateSetup {
+		return fmt.Errorf("RTSP Handle from wrong state: %d", c.state)
+	}
+
+	c.state = StatePlay
+
 	defer func() {
-		if c.closed {
+		if c.state == StateNone {
 			err = nil
-		} else {
-			// may have gotten here because of the deadline
-			// so close the connection to stop keepalive
-			_ = c.conn.Close()
+			return
 		}
+
+		// may have gotten here because of the deadline
+		// so close the connection to stop keepalive
+		c.state = StateNone
+		_ = c.conn.Close()
 	}()
 
 	var timeout time.Duration
@@ -625,7 +646,7 @@ func (c *Conn) Handle() (err error) {
 	}
 
 	for {
-		if c.closed {
+		if c.state == StateNone {
 			return
 		}
 
@@ -717,7 +738,7 @@ func (c *Conn) keepalive() {
 	req := &tcp.Request{Method: MethodOptions, URL: c.URL}
 	for {
 		time.Sleep(time.Second * 25)
-		if c.closed {
+		if c.state == StateNone {
 			return
 		}
 		if err := c.Request(req); err != nil {
@@ -739,7 +760,7 @@ func (c *Conn) bindTrack(
 	track *streamer.Track, channel uint8, payloadType uint8,
 ) *streamer.Track {
 	push := func(packet *rtp.Packet) error {
-		if c.closed {
+		if c.state == StateNone {
 			return nil
 		}
 		packet.Header.PayloadType = payloadType
