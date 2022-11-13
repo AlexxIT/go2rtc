@@ -114,6 +114,18 @@ func Init() {
 				s += " " + raw
 			}
 
+			for _, rotate := range query["rotate"] {
+				switch rotate {
+				case "90":
+					s += " -vf transpose=1" // 90 degrees clockwise
+				case "180":
+					s += " -vf transpose=1,transpose=1"
+				case "-90", "270":
+					s += " -vf transpose=2" // 90 degrees counterclockwise
+				}
+				break
+			}
+
 			// TODO: multiple codecs via -map
 			// s += fmt.Sprintf(" -map 0:v:0 -c:v:%d copy", i)
 
