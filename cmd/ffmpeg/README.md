@@ -58,3 +58,4 @@
 - https://github.com/leandromoreira/ffmpeg-libav-tutorial
 - https://www.reddit.com/user/VeritablePornocopium/comments/okw130/ffmpeg_with_libfdk_aac_for_windows_x64/
 - https://slhck.info/video/2017/02/24/vbr-settings.html
+- [HomeKit audio samples problem](https://superuser.com/questions/1290996/non-monotonous-dts-with-igndts-flag)

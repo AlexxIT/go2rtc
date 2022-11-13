@@ -115,6 +115,10 @@ func Init() {
 			input = strings.Replace(tpl["file"], "{input}", s, 1)
 		}
 
+		if _, ok := query["async"]; ok {
+			input = "-use_wallclock_as_timestamps 1 -async 1 " + input
+		}
+
 		s = cmd + input
 
 		if query != nil {
