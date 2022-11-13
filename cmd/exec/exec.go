@@ -56,6 +56,8 @@ func Handle(url string) (streamer.Producer, error) {
 
 	if log.Trace().Enabled() {
 		cmd.Stdout = os.Stdout
+	}
+	if log.Debug().Enabled() {
 		cmd.Stderr = os.Stderr
 	}
 
