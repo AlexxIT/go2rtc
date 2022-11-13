@@ -644,22 +644,21 @@ func (c *Conn) Handle() (err error) {
 		}
 
 		if buf4[0] != '$' {
-			if string(buf4) == "RTSP" {
+			switch string(buf4) {
+			case "RTSP":
 				var res *tcp.Response
-				res, err = tcp.ReadResponse(c.reader)
-				if err != nil {
+				if res, err = tcp.ReadResponse(c.reader); err != nil {
 					return
 				}
-
 				c.Fire(res)
-			} else {
+			case "OPTI", "TEAR", "DESC", "SETU", "PLAY", "PAUS", "RECO", "ANNO", "GET_", "SET_":
 				var req *tcp.Request
-				req, err = tcp.ReadRequest(c.reader)
-				if err != nil {
+				if req, err = tcp.ReadRequest(c.reader); err != nil {
 					return
 				}
-
 				c.Fire(req)
+			default:
+				return fmt.Errorf("RTSP wrong input")
 			}
 			continue
 		}
