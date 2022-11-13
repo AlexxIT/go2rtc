@@ -52,6 +52,12 @@ func Init() {
 
 	tpl := cfg.Mod
 
+	cmd := "exec:" + tpl["bin"] + " -hide_banner "
+
+	if app.GetLogger("exec").GetLevel() >= 0 {
+		cmd += "-v error "
+	}
+
 	streams.HandleFunc("ffmpeg", func(s string) (streamer.Producer, error) {
 		s = s[7:] // remove `ffmpeg:`
 
@@ -101,7 +107,7 @@ func Init() {
 			}
 		}
 
-		s = "exec:" + tpl["bin"] + " -hide_banner " + input
+		s = cmd + input
 
 		if query != nil {
 			for _, raw := range query["raw"] {
