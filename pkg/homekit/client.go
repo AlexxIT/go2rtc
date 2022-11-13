@@ -163,7 +163,7 @@ func (c *Client) Start() error {
 		switch track.Codec.Name {
 		case streamer.CodecH264:
 			vs.Track = track
-		case streamer.CodecAAC:
+		case streamer.CodecELD:
 			as.Track = track
 		}
 	}
@@ -233,14 +233,6 @@ func (c *Client) getMedias() []*streamer.Media {
 			Channels: uint16(hkCodec.Parameters.Channels),
 		}
 
-		switch hkCodec.Type {
-		case rtp.AudioCodecType_AAC_ELD:
-			codec.Name = streamer.CodecAAC
-		default:
-			fmt.Printf("unknown codec: %d", hkCodec.Type)
-			continue
-		}
-
 		switch hkCodec.Parameters.Samplerate {
 		case rtp.AudioCodecSampleRate8Khz:
 			codec.ClockRate = 8000
@@ -250,6 +242,16 @@ func (c *Client) getMedias() []*streamer.Media {
 			codec.ClockRate = 24000
 		default:
 			panic(fmt.Sprintf("unknown clockrate: %d", hkCodec.Parameters.Samplerate))
+		}
+
+		switch hkCodec.Type {
+		case rtp.AudioCodecType_AAC_ELD:
+			codec.Name = streamer.CodecELD
+			// only this value supported by FFmpeg
+			codec.FmtpLine = "profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;config=F8EC3000"
+		default:
+			fmt.Printf("unknown codec: %d", hkCodec.Type)
+			continue
 		}
 
 		media := &streamer.Media{

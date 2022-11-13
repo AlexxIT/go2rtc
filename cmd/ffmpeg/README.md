@@ -1,3 +1,17 @@
+## FFplay output
+
+[FFplay](https://stackoverflow.com/questions/27778678/what-are-mv-fd-aq-vq-sq-and-f-in-a-video-stream) `7.11 A-V:  0.003 fd=   1 aq=   21KB vq=  321KB sq=    0B f=0/0`:
+
+- `7.11` - master clock, is the time from start of the stream/video
+- `A-V` - av_diff, difference between audio and video timestamps
+- `fd` - frames dropped
+- `aq` - audio queue (0 - no delay)
+- `vq` - video queue (0 - no delay)
+- `sq` - subtitle queue
+- `f` - timestamp error correction rate (Not 100% sure)
+
+`M-V`, `M-A` means video stream only, audio stream only respectively.
+
 ## Devices Windows
 
 ```

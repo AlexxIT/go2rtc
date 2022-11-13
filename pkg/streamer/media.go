@@ -33,6 +33,8 @@ const (
 	CodecOpus = "OPUS" // payloadType: 111
 	CodecG722 = "G722"
 	CodecMPA  = "MPA" // payload: 14
+
+	CodecELD = "ELD" // AAC-ELD
 )
 
 const PayloadTypeMP4 byte = 255
@@ -41,7 +43,7 @@ func GetKind(name string) string {
 	switch name {
 	case CodecH264, CodecH265, CodecVP8, CodecVP9, CodecAV1, CodecJPEG:
 		return KindVideo
-	case CodecPCMU, CodecPCMA, CodecAAC, CodecOpus, CodecG722, CodecMPA:
+	case CodecPCMU, CodecPCMA, CodecAAC, CodecOpus, CodecG722, CodecMPA, CodecELD:
 		return KindAudio
 	}
 	return ""
@@ -187,13 +189,19 @@ func MarshalSDP(medias []*Media) ([]byte, error) {
 		}
 
 		codec := media.Codecs[0]
+
+		name := codec.Name
+		if name == CodecELD {
+			name = CodecAAC
+		}
+
 		md := &sdp.MediaDescription{
 			MediaName: sdp.MediaName{
 				Media:  media.Kind,
 				Protos: []string{"RTP", "AVP"},
 			},
 		}
-		md.WithCodec(payloadType, codec.Name, codec.ClockRate, codec.Channels, codec.FmtpLine)
+		md.WithCodec(payloadType, name, codec.ClockRate, codec.Channels, codec.FmtpLine)
 
 		sd.MediaDescriptions = append(sd.MediaDescriptions, md)
 
