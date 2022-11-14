@@ -9,6 +9,7 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
 - streaming from [RTSP](#source-rtsp), [RTMP](#source-rtmp), [MJPEG](#source-ffmpeg), [HLS/HTTP](#source-ffmpeg), [USB Cameras](#source-ffmpeg-device) and [other sources](#module-streams)
 - streaming to [RTSP](#module-rtsp), [WebRTC](#module-webrtc), [MSE/MP4](#module-mp4) or [MJPEG](#module-mjpeg)
 - first project in the World with support streaming from [HomeKit Cameras](#source-homekit)
+- first project in the World with support H265 for WebRTC in browser (only Safari)
 - on the fly transcoding for unsupported codecs via [FFmpeg](#source-ffmpeg)
 - multi-source 2-way [codecs negotiation](#codecs-negotiation)
    - mixing tracks from different sources to single stream
@@ -25,35 +26,6 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
 - [GStreamer](https://gstreamer.freedesktop.org/) framework pipeline idea
 - [MediaSoup](https://mediasoup.org/) framework routing idea
 - HomeKit Accessory Protocol from [@brutella](https://github.com/brutella/hap)
-
-## Codecs negotiation
-
-For example, you want to watch RTSP-stream from [Dahua IPC-K42](https://www.dahuasecurity.com/fr/products/All-Products/Network-Cameras/Wireless-Series/Wi-Fi-Series/4MP/IPC-K42) camera in your Chrome browser.
-
-- this camera support 2-way audio standard **ONVIF Profile T**
-- this camera support codecs **H264, H265** for send video, and you select `H264` in camera settings
-- this camera support codecs **AAC, PCMU, PCMA** for send audio (from mic), and you select `AAC/16000` in camera settings
-- this camera support codecs **AAC, PCMU, PCMA** for receive audio (to speaker), you don't need to select them
-- your browser support codecs **H264, VP8, VP9, AV1** for receive video, you don't need to select them
-- your browser support codecs **OPUS, PCMU, PCMA** for send and receive audio, you don't need to select them
-- you can't get camera audio directly, because its audio codecs doesn't match with your browser codecs 
-   - so you decide to use transcoding via FFmpeg and add this setting to config YAML file
-   - you have chosen `OPUS/48000/2` codec, because it is higher quality than the `PCMU/8000` or `PCMA/8000`
-
-Now you have stream with two sources - **RTSP and FFmpeg**:
-
-```yaml
-streams:
-  dahua:
-    - rtsp://admin:password@192.168.1.123/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif
-    - ffmpeg:rtsp://admin:password@192.168.1.123/cam/realmonitor?channel=1&subtype=0#audio=opus
-```
-
-**go2rtc** automatically match codecs for you browser and all your stream sources. This called **multi-source 2-way codecs negotiation**. And this is one of the main features of this app.
-
-![](assets/codecs.svg)
-
-**PS.** You can select `PCMU` or `PCMA` codec in camera setting and don't use transcoding at all. Or you can select `AAC` codec for main stream and `PCMU` codec for second stream and add both RTSP to YAML config, this also will work fine.
 
 ## Fast start
 
@@ -207,24 +179,27 @@ streams:
   hls: ffmpeg:https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/gear5/prog_index.m3u8#video=copy
 
   # [MJPEG] video will be transcoded to H264
-  mjpeg: ffmpeg:http://185.97.122.128/cgi-bin/faststream.jpg?stream=half&fps=15#video=h264
+  mjpeg: ffmpeg:http://185.97.122.128/cgi-bin/faststream.jpg#video=h264
 
   # [RTSP] video with rotation, should be transcoded, so select H264
-  rotate: ffmpeg:rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0#raw=-vf transpose=1#video=h264
+  rotate: ffmpeg:rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0#video=h264#rotate=90
 ```
 
-All trascoding formats has [built-in templates](https://github.com/AlexxIT/go2rtc/blob/master/cmd/ffmpeg/ffmpeg.go): `h264`, `h264/ultra`, `h264/high`, `h265`, `opus`, `pcmu`, `pcmu/16000`, `pcmu/48000`, `pcma`, `pcma/16000`, `pcma/48000`, `aac/16000`.
+All trascoding formats has [built-in templates](https://github.com/AlexxIT/go2rtc/blob/master/cmd/ffmpeg/ffmpeg.go): `h264`, `h264/ultra`, `h264/high`, `h265`, `opus`, `pcmu`, `pcmu/16000`, `pcmu/48000`, `pcma`, `pcma/16000`, `pcma/48000`, `aac`, `aac/16000`.
 
 But you can override them via YAML config. You can also add your own formats to config and use them with source params.
 
 ```yaml
 ffmpeg:
   bin: ffmpeg                                        # path to ffmpeg binary
-  h264: "-codec:v libx264 -g 30 -preset superfast -tune zerolatency -profile main -level 4.1"
+  h264: "-codec:v libx264 -g:v 30 -preset:v superfast -tune:v zerolatency -profile:v main -level:v 4.1"
   mycodec: "-any args that support ffmpeg..."
 ```
 
-Also you can use `raw` param for any additional FFmpeg arguments. As example for video rotation (`#raw=-vf transpose=1`). Remember that rotation is not possible without transcoding, so add supported codec as second param (`#video=h264`).
+- You can use `video` and `audio` params multiple times (ex. `#video=copy#audio=copy#audio=pcmu`)
+- You can use go2rtc stream name as ffmpeg input (ex. `ffmpeg:camera1#video=h264`)
+- You can use `rotate` params with `90`, `180`, `270` or `-90` values, important with transcoding (ex. `#video=h264#rotate=90`)
+- You can use `raw` param for any additional FFmpeg arguments (ex. `#raw=-vf transpose=1`).
 
 #### Source: FFmpeg Device
 
@@ -278,6 +253,24 @@ go2rtc support import paired HomeKit devices from [Home Assistant](#source-hass)
 You can pair device with go2rtc on the HomeKit page. If you can't see your devices - reload the page. Also try reboot your HomeKit device (power off). If you still can't see it - you have a problems with mDNS.
 
 If you see a device but it does not have a pair button - it is paired to some ecosystem (Apple Home, Home Assistant, HomeBridge etc). You need to delete device from that ecosystem, and it will be available for pairing. If you cannot unpair device, you will have to reset it.
+
+**Important:**
+
+- HomeKit audio uses very non-standard **AAC-ELD** codec with very non-standard params and specification violation
+- Audio can be transcoded by [ffmpeg](#source-ffmpeg) source with `#async` option
+- Audio can be played by `ffplay` with `-use_wallclock_as_timestamps 1 -async 1` options
+- Audio can't be played in `VLC` and probably any other player
+
+Recommended settings for using HomeKit Camera with WebRTC, MSE, MP4, RTSP:
+
+```
+streams:
+  aqara_g3:
+    - hass:Camera-Hub-G3-AB12
+    - ffmpeg:aqara_g3#audio=aac#audio=opus#async
+```
+
+RTSP link with "normal" audio for any player: `rtsp://192.168.1.123:8554/aqara_g3?video&audio=aac`
 
 **This source is in active development!** Tested only with [Aqara Camera Hub G3](https://www.aqara.com/eu/product/camera-hub-g3) (both EU and CN versions).
 
@@ -577,6 +570,35 @@ masOS Hass App  | no          | no          | no
 
 - WebRTC audio codecs: `PCMU/8000`, `PCMA/8000`, `OPUS/48000/2`
 - MSE/MP4 audio codecs: `AAC`
+
+## Codecs negotiation
+
+For example, you want to watch RTSP-stream from [Dahua IPC-K42](https://www.dahuasecurity.com/fr/products/All-Products/Network-Cameras/Wireless-Series/Wi-Fi-Series/4MP/IPC-K42) camera in your Chrome browser.
+
+- this camera support 2-way audio standard **ONVIF Profile T**
+- this camera support codecs **H264, H265** for send video, and you select `H264` in camera settings
+- this camera support codecs **AAC, PCMU, PCMA** for send audio (from mic), and you select `AAC/16000` in camera settings
+- this camera support codecs **AAC, PCMU, PCMA** for receive audio (to speaker), you don't need to select them
+- your browser support codecs **H264, VP8, VP9, AV1** for receive video, you don't need to select them
+- your browser support codecs **OPUS, PCMU, PCMA** for send and receive audio, you don't need to select them
+- you can't get camera audio directly, because its audio codecs doesn't match with your browser codecs
+  - so you decide to use transcoding via FFmpeg and add this setting to config YAML file
+  - you have chosen `OPUS/48000/2` codec, because it is higher quality than the `PCMU/8000` or `PCMA/8000`
+
+Now you have stream with two sources - **RTSP and FFmpeg**:
+
+```yaml
+streams:
+  dahua:
+    - rtsp://admin:password@192.168.1.123/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif
+    - ffmpeg:rtsp://admin:password@192.168.1.123/cam/realmonitor?channel=1&subtype=0#audio=opus
+```
+
+**go2rtc** automatically match codecs for you browser and all your stream sources. This called **multi-source 2-way codecs negotiation**. And this is one of the main features of this app.
+
+![](assets/codecs.svg)
+
+**PS.** You can select `PCMU` or `PCMA` codec in camera setting and don't use transcoding at all. Or you can select `AAC` codec for main stream and `PCMU` codec for second stream and add both RTSP to YAML config, this also will work fine.
 
 ## TIPS
 
