@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/pion/webrtc/v3"
-	"sort"
 )
 
 const (
@@ -100,12 +99,23 @@ func (c *Conn) SetOffer(offer string) (err error) {
 		return
 	}
 	rawSDP := []byte(c.Conn.RemoteDescription().SDP)
-	c.medias, err = streamer.UnmarshalSDP(rawSDP)
+	medias, err := streamer.UnmarshalSDP(rawSDP)
+	if err != nil {
+		return
+	}
 
 	// sort medias, so video will always be before audio
-	sort.Slice(c.medias, func(i, j int) bool {
-		return c.medias[i].Kind == streamer.KindVideo
-	})
+	// and ignore application media from Hass default lovelace card
+	for _, media := range medias {
+		if media.Kind == streamer.KindVideo {
+			c.medias = append(c.medias, media)
+		}
+	}
+	for _, media := range medias {
+		if media.Kind == streamer.KindAudio {
+			c.medias = append(c.medias, media)
+		}
+	}
 
 	return
 }
