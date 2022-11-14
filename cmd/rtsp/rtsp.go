@@ -140,6 +140,11 @@ func tcpHandler(c net.Conn) {
 
 		switch msg {
 		case rtsp.MethodDescribe:
+			if len(conn.URL.Path) == 0 {
+				log.Warn().Msg("[rtsp] server empty URL on DESCRIBE")
+				return
+			}
+
 			name = conn.URL.Path[1:]
 
 			stream := streams.Get(name)
@@ -161,6 +166,11 @@ func tcpHandler(c net.Conn) {
 			}
 
 		case rtsp.MethodAnnounce:
+			if len(conn.URL.Path) == 0 {
+				log.Warn().Msg("[rtsp] server empty URL on ANNOUNCE")
+				return
+			}
+
 			name = conn.URL.Path[1:]
 
 			stream := streams.Get(name)
