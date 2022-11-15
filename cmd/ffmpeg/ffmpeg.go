@@ -146,7 +146,7 @@ func Init() {
 				s += " -vn"
 			case 1:
 				if len(query["audio"]) > 1 {
-					s += " -map 0:v:0"
+					s += " -map 0:v:0?"
 				}
 				for _, video := range query["video"] {
 					if video == "copy" {
@@ -158,9 +158,9 @@ func Init() {
 			default:
 				for i, video := range query["video"] {
 					if video == "copy" {
-						s += " -map 0:v:0 -c:v:" + strconv.Itoa(i) + " copy"
+						s += " -map 0:v:0? -c:v:" + strconv.Itoa(i) + " copy"
 					} else {
-						s += " -map 0:v:0 " + strings.ReplaceAll(tpl[video], ":v ", ":v:"+strconv.Itoa(i)+" ")
+						s += " -map 0:v:0? " + strings.ReplaceAll(tpl[video], ":v ", ":v:"+strconv.Itoa(i)+" ")
 					}
 				}
 			}
@@ -170,7 +170,7 @@ func Init() {
 				s += " -an"
 			case 1:
 				if len(query["video"]) > 1 {
-					s += " -map 0:a:0"
+					s += " -map 0:a:0?"
 				}
 				for _, audio := range query["audio"] {
 					if audio == "copy" {
@@ -182,9 +182,9 @@ func Init() {
 			default:
 				for i, audio := range query["audio"] {
 					if audio == "copy" {
-						s += " -map 0:a:0 -c:a:" + strconv.Itoa(i) + " copy"
+						s += " -map 0:a:0? -c:a:" + strconv.Itoa(i) + " copy"
 					} else {
-						s += " -map 0:a:0 " + strings.ReplaceAll(tpl[audio], ":a ", ":a:"+strconv.Itoa(i)+" ")
+						s += " -map 0:a:0? " + strings.ReplaceAll(tpl[audio], ":a ", ":a:"+strconv.Itoa(i)+" ")
 					}
 				}
 			}
