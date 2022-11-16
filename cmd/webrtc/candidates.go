@@ -13,7 +13,27 @@ func AddCandidate(address string) {
 	candidates = append(candidates, address)
 }
 
-func addCanditates(answer string) (string, error) {
+func asyncCandidates(ctx *api.Context) {
+	for _, address := range candidates {
+		address, err := webrtc.LookupIP(address)
+		if err != nil {
+			log.Warn().Err(err).Caller().Send()
+			continue
+		}
+
+		cand, err := webrtc.NewCandidate(address)
+		if err != nil {
+			log.Warn().Err(err).Caller().Send()
+			continue
+		}
+
+		log.Trace().Str("candidate", cand).Msg("[webrtc] config")
+
+		ctx.Write(&streamer.Message{Type: webrtc.MsgTypeCandidate, Value: cand})
+	}
+}
+
+func syncCanditates(answer string) (string, error) {
 	if len(candidates) == 0 {
 		return answer, nil
 	}
