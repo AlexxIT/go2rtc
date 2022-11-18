@@ -3,6 +3,8 @@
 # Runs go2rtc
 # ==============================================================================
 
+set -euo pipefail
+
 echo 'Starting go2rtc...' >&2
 
 readonly config_path="/config"

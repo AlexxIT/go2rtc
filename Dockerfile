@@ -46,7 +46,7 @@ COPY ./docker/run.sh /run.sh
 # Final image
 FROM base
 
-RUN apk add --no-cache bash tini ffmpeg
+RUN apk add --no-cache bash tini curl ffmpeg
 
 COPY --from=rootfs / /
 
