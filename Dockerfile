@@ -46,7 +46,9 @@ COPY ./docker/run.sh /run.sh
 # Final image
 FROM base
 
-RUN apk add --no-cache bash tini curl ffmpeg
+# Install ffmpeg, bash (for run.sh), tini (for signal handling),
+# and other common tools for the echo source.
+RUN apk add --no-cache ffmpeg bash tini curl jq
 
 COPY --from=rootfs / /
 
