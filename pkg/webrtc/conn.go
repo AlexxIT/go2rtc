@@ -1,7 +1,6 @@
 package webrtc
 
 import (
-	"fmt"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/pion/webrtc/v3"
 )
@@ -58,7 +57,7 @@ func (c *Conn) Init() {
 			}
 		}
 
-		fmt.Printf("TODO: webrtc ontrack %+v\n", remote)
+		//fmt.Printf("TODO: webrtc ontrack %+v\n", remote)
 	})
 
 	// OK connection:
