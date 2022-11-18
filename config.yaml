@@ -1,6 +1,0 @@
-# https://github.com/home-assistant/builder/blob/master/builder.sh
-name: go2rtc
-description: Ultimate camera streaming application
-url: https://github.com/AlexxIT/go2rtc
-image: alexxit/go2rtc
-arch: [ amd64, aarch64, i386, armv7 ]
