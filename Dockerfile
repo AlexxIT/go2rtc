@@ -31,11 +31,14 @@ COPY www www
 COPY main.go .
 RUN CGO_ENABLED=0 go build -ldflags "-s -w" -trimpath
 
+RUN mkdir -p /config
 
 # Collect all files
 FROM scratch AS rootfs
 
 COPY --from=build /workspace/go2rtc /usr/local/bin/
+# Ensure an empty /config folder exists so that the container can be run without a volume
+COPY --from=build /config /config
 COPY --from=ngrok /bin/ngrok /usr/local/bin/
 COPY ./docker/run.sh /run.sh
 
