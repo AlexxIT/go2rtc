@@ -18,7 +18,9 @@ type Track struct {
 
 func (t *Track) String() string {
 	s := t.Codec.String()
+	t.sinkMu.RLock()
 	s += fmt.Sprintf(", sinks=%d", len(t.sink))
+	t.sinkMu.RUnlock()
 	return s
 }
 
@@ -55,7 +57,9 @@ func (t *Track) Unbind() {
 }
 
 func (t *Track) GetSink(from *Track) {
+	t.sinkMu.Lock()
 	t.sink = from.sink
+	t.sinkMu.Unlock()
 }
 
 func (t *Track) HasSink() bool {
