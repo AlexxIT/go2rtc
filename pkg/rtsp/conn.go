@@ -429,9 +429,7 @@ func (c *Conn) SetupMedia(
 		return nil, err
 	}
 
-	track := &streamer.Track{
-		Codec: codec, Direction: media.Direction,
-	}
+	track := streamer.NewTrack(codec, media.Direction)
 
 	switch track.Direction {
 	case streamer.DirectionSendonly:
@@ -519,9 +517,7 @@ func (c *Conn) Accept() error {
 			// TODO: fix someday...
 			c.channels = map[byte]*streamer.Track{}
 			for i, media := range c.Medias {
-				track := &streamer.Track{
-					Codec: media.Codecs[0], Direction: media.Direction,
-				}
+				track := streamer.NewTrack(media.Codecs[0], media.Direction)
 				c.tracks = append(c.tracks, track)
 				c.channels[byte(i<<1)] = track
 			}

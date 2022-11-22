@@ -24,7 +24,7 @@ func (p *Producer) GetTrack(media *streamer.Media, codec *streamer.Codec) *strea
 		panic("you shall not pass!")
 	}
 
-	track := &streamer.Track{Codec: codec, Direction: media.Direction}
+	track := streamer.NewTrack(codec, media.Direction)
 
 	switch media.Direction {
 	case streamer.DirectionSendonly:

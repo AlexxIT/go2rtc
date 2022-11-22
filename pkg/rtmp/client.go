@@ -83,9 +83,7 @@ func (c *Client) Dial() (err error) {
 			}
 			c.medias = append(c.medias, media)
 
-			track := &streamer.Track{
-				Codec: codec, Direction: media.Direction,
-			}
+			track := streamer.NewTrack(codec, media.Direction)
 			c.tracks = append(c.tracks, track)
 
 		case av.AAC:
@@ -108,9 +106,7 @@ func (c *Client) Dial() (err error) {
 			}
 			c.medias = append(c.medias, media)
 
-			track := &streamer.Track{
-				Codec: codec, Direction: media.Direction,
-			}
+			track := streamer.NewTrack(codec, media.Direction)
 			c.tracks = append(c.tracks, track)
 
 		default:

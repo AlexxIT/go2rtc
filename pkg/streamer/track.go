@@ -13,7 +13,11 @@ type Track struct {
 	Codec     *Codec
 	Direction string
 	sink      map[*Track]WriterFunc
-	sinkMu    sync.RWMutex
+	sinkMu    *sync.RWMutex
+}
+
+func NewTrack(codec *Codec, direction string) *Track {
+	return &Track{Codec: codec, Direction: direction, sinkMu: new(sync.RWMutex)}
 }
 
 func (t *Track) String() string {
@@ -40,14 +44,12 @@ func (t *Track) Bind(w WriterFunc) *Track {
 		t.sink = map[*Track]WriterFunc{}
 	}
 
-	clone := &Track{
-		Codec: t.Codec, Direction: t.Direction, sink: t.sink,
-	}
-	t.sink[clone] = w
+	clone := *t
+	t.sink[&clone] = w
 
 	t.sinkMu.Unlock()
 
-	return clone
+	return &clone
 }
 
 func (t *Track) Unbind() {
