@@ -38,7 +38,7 @@ func Init() {
 		"h264":       "-c:v libx264 -g:v 30 -preset:v superfast -tune:v zerolatency -profile:v main -level:v 4.1 -pix_fmt:v yuv420p",
 		"h264/ultra": "-c:v libx264 -g:v 30 -preset:v ultrafast -tune:v zerolatency",
 		"h264/high":  "-c:v libx264 -g:v 30 -preset:v superfast -tune:v zerolatency",
-		"h265":       "-c:v libx265 -g:v 30 -preset:v ultrafast -tune:v zerolatency",
+		"h265":       "-c:v libx265 -g:v 30 -preset:v superfast -tune:v zerolatency -profile:v main -level:v 5.1 -pix_fmt:v yuv420p",
 		"mjpeg":      "-c:v mjpeg -force_duplicated_matrix:v 1 -huffman:v 0 -pix_fmt:v yuvj420p",
 		"opus":       "-c:a libopus -ar:a 48000 -ac:a 2",
 		"pcmu":       "-c:a pcm_mulaw -ar:a 8000 -ac:a 1",
