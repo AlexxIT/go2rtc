@@ -35,8 +35,9 @@ func (m *Muxer) MimeType(codecs []*streamer.Codec) string {
 		case streamer.CodecH264:
 			s += "avc1." + h264.GetProfileLevelID(codec.FmtpLine)
 		case streamer.CodecH265:
-			// +Safari +Chrome +Edge -iOS15 -Android13
-			s += "hvc1.1.6.L93.B0" // hev1.1.6.L93.B0
+			// H.265 profile=main level=5.1
+			// hvc1 - supported in Safari, hev1 - doesn't, both supported in Chrome
+			s += "hvc1.1.6.L153.B0"
 		case streamer.CodecAAC:
 			s += "mp4a.40.2"
 		}

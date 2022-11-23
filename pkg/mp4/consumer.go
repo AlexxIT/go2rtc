@@ -12,6 +12,7 @@ import (
 type Consumer struct {
 	streamer.Element
 
+	Medias     []*streamer.Media
 	UserAgent  string
 	RemoteAddr string
 
@@ -23,6 +24,11 @@ type Consumer struct {
 }
 
 func (c *Consumer) GetMedias() []*streamer.Media {
+	if c.Medias != nil {
+		return c.Medias
+	}
+
+	// default medias
 	return []*streamer.Media{
 		{
 			Kind:      streamer.KindVideo,
