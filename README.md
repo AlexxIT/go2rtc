@@ -313,9 +313,10 @@ The HTTP API is the main part for interacting with the application. Default addr
 
 ```yaml
 api:
-  listen: ":1984"  # HTTP API port ("" - disabled)
-  base_path: ""    # API prefix for serve on suburl
-  static_dir: ""   # folder for static files (custom web interface)
+  listen: ":1984"    # HTTP API port ("" - disabled)
+  base_path: "/rtc"  # API prefix for serve on suburl (/api => /rtc/api)
+  static_dir: "www"  # folder for static files (custom web interface)
+  origin: "*"        # allow CORS requests (only * supported)
 ```
 
 **PS. go2rtc** doesn't provide HTTPS or password protection. Use [Nginx](https://nginx.org/) or [Ngrok](#module-ngrok) or [Home Assistant Add-on](#go2rtc-home-assistant-add-on) for this tasks.

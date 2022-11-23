@@ -17,6 +17,7 @@ func Init() {
 			Listen    string `yaml:"listen"`
 			BasePath  string `yaml:"base_path"`
 			StaticDir string `yaml:"static_dir"`
+			Origin    string `yaml:"origin"`
 		} `yaml:"api"`
 	}
 
@@ -34,7 +35,7 @@ func Init() {
 	log = app.GetLogger("api")
 
 	initStatic(cfg.Mod.StaticDir)
-	initWS()
+	initWS(cfg.Mod.Origin)
 
 	HandleFunc("api/streams", streamsHandler)
 	HandleFunc("api/ws", apiWS)
@@ -48,16 +49,18 @@ func Init() {
 
 	log.Info().Str("addr", cfg.Mod.Listen).Msg("[api] listen")
 
+	s := http.Server{}
+	s.Handler = http.DefaultServeMux
+
+	if log.Trace().Enabled() {
+		s.Handler = middlewareLog(s.Handler)
+	}
+
+	if cfg.Mod.Origin == "*" {
+		s.Handler = middlewareCORS(s.Handler)
+	}
+
 	go func() {
-		s := http.Server{}
-
-		if log.Trace().Enabled() {
-			s.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				log.Trace().Stringer("url", r.URL).Msgf("[api] %s", r.Method)
-				http.DefaultServeMux.ServeHTTP(w, r)
-			})
-		}
-
 		if err = s.Serve(listener); err != nil {
 			log.Fatal().Err(err).Msg("[api] serve")
 		}
@@ -83,10 +86,25 @@ var basePath string
 var log zerolog.Logger
 var wsHandlers = make(map[string]WSHandler)
 
+func middlewareLog(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Trace().Msgf("[api] %s %s", r.Method, r.URL)
+		next.ServeHTTP(w, r)
+	})
+}
+
+func middlewareCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		next.ServeHTTP(w, r)
+	})
+}
+
 func streamsHandler(w http.ResponseWriter, r *http.Request) {
 	src := r.URL.Query().Get("src")
 	name := r.URL.Query().Get("name")
-	
+
 	if name == "" {
 		name = src
 	}
