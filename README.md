@@ -551,18 +551,17 @@ PS. Additionally WebRTC opens a lot of random UDP ports for transmit encrypted m
 
 Device | WebRTC | MSE | MP4
 -------|--------|-----|----
-*latency*       | best        | medium      | bad
-Desktop Chrome  | H264        | H264, H265* | H264, H265*
-Desktop Safari  | H264, H265* | H264        | no
-Desktop Edge    | H264        | H264, H265* | H264, H265*
-Desktop Firefox | H264        | H264        | H264
-Desktop Opera   | no          | H264        | H264
-iPhone Safari   | H264, H265* | no          | no
-iPad Safari     | H264, H265* | H264        | no
-Android Chrome  | H264        | H264        | H264
-masOS Hass App  | no          | no          | no
+*latency*           | best        | medium      | bad
+Desktop Chrome 107+ | H264        | H264, H265* | H264, H265*
+Desktop Safari      | H264, H265* | H264, H265  | **no!**
+Desktop Edge        | H264        | H264, H265* | H264, H265*
+Desktop Firefox     | H264        | H264        | H264
+iPad Safari 13+     | H264, H265* | H264, H265  | **no!**
+iPhone Safari 13+   | H264, H265* | **no!**     | **no!**
+Android Chrome 107+ | H264        | H264, H265* | H264
+masOS Hass App      | no          | no          | no
 
-- Chrome H265: [read this](https://github.com/StaZhu/enable-chromium-hevc-hardware-decoding)
+- Chrome H265: [read this](https://chromestatus.com/feature/5186511939567616) and [read this](https://github.com/StaZhu/enable-chromium-hevc-hardware-decoding)
 - Edge H265: [read this](https://www.reddit.com/r/MicrosoftEdge/comments/v9iw8k/enable_hevc_support_in_edge/)
 - Desktop Safari H265: Menu > Develop > Experimental > WebRTC H265
 - iOS Safari H265: Settings > Safari > Advanced > Experimental > WebRTC H265
@@ -571,6 +570,12 @@ masOS Hass App  | no          | no          | no
 
 - WebRTC audio codecs: `PCMU/8000`, `PCMA/8000`, `OPUS/48000/2`
 - MSE/MP4 audio codecs: `AAC`
+
+**Apple devices**
+
+- all Apple devices don't support MP4 stream (they only support progressive loading of static files)
+- iPhones don't support MSE technology because it competes with the HLS technology, invented by Apple
+- HLS is the worst technology for **live** streaming, it still exists only because of iPhones
 
 ## Codecs negotiation
 
