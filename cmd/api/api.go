@@ -141,11 +141,7 @@ func apiWS(w http.ResponseWriter, r *http.Request) {
 	for {
 		msg := new(streamer.Message)
 		if err := ctx.Conn.ReadJSON(msg); err != nil {
-			if websocket.IsUnexpectedCloseError(
-				err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure,
-			) {
-				log.Error().Err(err).Msg("[api.ws] readJSON")
-			}
+			log.Trace().Err(err).Caller().Send()
 			return
 		}
 
