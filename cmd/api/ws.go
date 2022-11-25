@@ -4,6 +4,8 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/gorilla/websocket"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 )
 
@@ -13,7 +15,30 @@ func initWS(origin string) {
 		WriteBufferSize: 512000,
 	}
 
-	if origin == "*" {
+	switch origin {
+	case "":
+		// same origin + ignore port
+		wsUp.CheckOrigin = func(r *http.Request) bool {
+			origin := r.Header["Origin"]
+			if len(origin) == 0 {
+				return true
+			}
+			o, err := url.Parse(origin[0])
+			if err != nil {
+				return false
+			}
+			if o.Host == r.Host {
+				return true
+			}
+			log.Trace().Msgf("[api.ws] origin=%s, host=%s", o.Host, r.Host)
+			// https://github.com/AlexxIT/go2rtc/issues/118
+			if i := strings.IndexByte(o.Host, ':'); i > 0 {
+				return o.Host[:i] == r.Host
+			}
+			return false
+		}
+	case "*":
+		// any origin
 		wsUp.CheckOrigin = func(r *http.Request) bool {
 			return true
 		}

@@ -5,7 +5,6 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/app"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
-	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog"
 	"net"
 	"net/http"
@@ -133,7 +132,8 @@ func streamsHandler(w http.ResponseWriter, r *http.Request) {
 func apiWS(w http.ResponseWriter, r *http.Request) {
 	ctx := new(Context)
 	if err := ctx.Upgrade(w, r); err != nil {
-		log.Error().Err(err).Msg("[api.ws] upgrade")
+		origin := r.Header.Get("Origin")
+		log.Error().Err(err).Caller().Msgf("host=%s origin=%s", r.Host, origin)
 		return
 	}
 	defer ctx.Close()
