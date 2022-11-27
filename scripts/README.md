@@ -2,6 +2,7 @@
 
 - UPX-3.96 pack broken bin for `linux_mipsel`
 - UPX-3.95 pack broken bin for `mac_amd64`
+- UPX pack broken bin for `mac_arm64`
 - UPX windows pack is recognised by anti-viruses as malicious
 - `aarch64` = `arm64`
 - `armv7` = `arm`
