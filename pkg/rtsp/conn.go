@@ -99,6 +99,11 @@ func NewServer(conn net.Conn) *Conn {
 	return c
 }
 
+func (c *Conn) Auth(username, password string) {
+	info := url.UserPassword(username, password)
+	c.auth = tcp.NewAuth(info)
+}
+
 func (c *Conn) parseURI() (err error) {
 	c.URL, err = url.Parse(c.uri)
 	if err != nil {
@@ -489,6 +494,17 @@ func (c *Conn) Accept() error {
 		}
 
 		c.Fire(req)
+
+		if !c.auth.Validate(req) {
+			res := &tcp.Response{
+				Status: "401 Unauthorized",
+				Header: map[string][]string{"Www-Authenticate": {`Basic realm="go2rtc"`}},
+			}
+			if err = c.Response(res); err != nil {
+				return err
+			}
+			continue
+		}
 
 		// Receiver: OPTIONS > DESCRIBE > SETUP... > PLAY > TEARDOWN
 		// Sender: OPTIONS > ANNOUNCE > SETUP... > RECORD > TEARDOWN

@@ -14,7 +14,9 @@ import (
 func Init() {
 	var conf struct {
 		Mod struct {
-			Listen string `yaml:"listen"`
+			Listen   string `yaml:"listen"`
+			Username string `yaml:"username"`
+			Password string `yaml:"password"`
 		} `yaml:"rtsp"`
 	}
 
@@ -52,7 +54,12 @@ func Init() {
 			if err != nil {
 				return
 			}
-			go tcpHandler(conn)
+
+			c := rtsp.NewServer(conn)
+			if conf.Mod.Username != "" {
+				c.Auth(conf.Mod.Username, conf.Mod.Password)
+			}
+			go tcpHandler(c)
 		}
 	}()
 }
@@ -121,13 +128,12 @@ func rtspHandler(url string) (streamer.Producer, error) {
 	return conn, nil
 }
 
-func tcpHandler(c net.Conn) {
+func tcpHandler(conn *rtsp.Conn) {
 	var name string
 	var closer func()
 
 	trace := log.Trace().Enabled()
 
-	conn := rtsp.NewServer(c)
 	conn.Listen(func(msg interface{}) {
 		if trace {
 			switch msg := msg.(type) {
