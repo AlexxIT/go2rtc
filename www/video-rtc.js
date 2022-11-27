@@ -315,8 +315,8 @@ class VideoRTC extends HTMLElement {
             }, delay);
         });
 
-        if ("MediaSource" in window && this.MSE2) {
-            if (MediaSource.canConstructInDedicatedWorker) {
+        if ("MediaSource" in window) {
+            if (MediaSource.canConstructInDedicatedWorker && this.MSE2) {
                 this.internalMSE2();
             } else {
                 this.internalMSE();
