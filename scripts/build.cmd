@@ -10,6 +10,11 @@ go build -ldflags "-s -w" -trimpath && 7z a -sdel %FILENAME% go2rtc.exe
 @SET FILENAME=go2rtc_win32.zip
 go build -ldflags "-s -w" -trimpath && 7z a -sdel %FILENAME% go2rtc.exe
 
+@SET GOOS=windows
+@SET GOARCH=arm64
+@SET FILENAME=go2rtc_win_arm64.zip
+go build -ldflags "-s -w" -trimpath && 7z a -sdel %FILENAME% go2rtc.exe
+
 @SET GOOS=linux
 @SET GOARCH=amd64
 @SET FILENAME=go2rtc_linux_amd64
