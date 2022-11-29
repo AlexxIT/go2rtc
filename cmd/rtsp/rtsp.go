@@ -56,7 +56,8 @@ func Init() {
 			}
 
 			c := rtsp.NewServer(conn)
-			if conf.Mod.Username != "" {
+			// skip check auth for localhost
+			if conf.Mod.Username != "" && !conn.RemoteAddr().(*net.TCPAddr).IP.IsLoopback() {
 				c.Auth(conf.Mod.Username, conf.Mod.Password)
 			}
 			go tcpHandler(c)
