@@ -794,7 +794,7 @@ func (c *Conn) bindTrack(
 		return nil
 	}
 
-	if track.Codec.IsMP4() {
+	if !track.Codec.IsRTP() {
 		switch track.Codec.Name {
 		case streamer.CodecH264:
 			wrapper := h264.RTPPay(1500)

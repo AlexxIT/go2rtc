@@ -72,10 +72,10 @@ func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 		}
 
 		var wrapper streamer.WrapperFunc
-		if codec.IsMP4() {
-			wrapper = h264.RepairAVC(track)
-		} else {
+		if codec.IsRTP() {
 			wrapper = h264.RTPDepay(track)
+		} else {
+			wrapper = h264.RepairAVC(track)
 		}
 		push = wrapper(push)
 
@@ -98,7 +98,7 @@ func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 			return nil
 		}
 
-		if !codec.IsMP4() {
+		if codec.IsRTP() {
 			wrapper := h265.RTPDepay(track)
 			push = wrapper(push)
 		}
@@ -118,7 +118,7 @@ func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 			return nil
 		}
 
-		if !codec.IsMP4() {
+		if codec.IsRTP() {
 			wrapper := aac.RTPDepay(track)
 			push = wrapper(push)
 		}

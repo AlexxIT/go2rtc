@@ -40,8 +40,12 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 
 	stream.RemoveConsumer(cons)
 
-	w.Header().Set("Content-Type", "image/jpeg")
-	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+	h := w.Header()
+	h.Set("Content-Type", "image/jpeg")
+	h.Set("Content-Length", strconv.Itoa(len(data)))
+	h.Set("Cache-Control", "no-cache")
+	h.Set("Connection", "close")
+	h.Set("Pragma", "no-cache")
 
 	if _, err := w.Write(data); err != nil {
 		log.Error().Err(err).Caller().Send()
@@ -57,20 +61,21 @@ func handlerStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	exit := make(chan struct{})
+	flusher := w.(http.Flusher)
 
 	cons := &mjpeg.Consumer{}
 	cons.Listen(func(msg interface{}) {
 		switch msg := msg.(type) {
 		case []byte:
 			data := []byte(header + strconv.Itoa(len(msg)))
-			data = append(data, 0x0D, 0x0A, 0x0D, 0x0A)
+			data = append(data, '\r', '\n', '\r', '\n')
 			data = append(data, msg...)
-			data = append(data, 0x0D, 0x0A)
+			data = append(data, '\r', '\n')
 
-			if _, err := w.Write(data); err != nil {
-				exit <- struct{}{}
-			}
+			// Chrome bug: mjpeg image always shows the second to last image
+			// https://bugs.chromium.org/p/chromium/issues/detail?id=527446
+			_, _ = w.Write(data)
+			flusher.Flush()
 		}
 	})
 
@@ -79,9 +84,13 @@ func handlerStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", `multipart/x-mixed-replace; boundary=frame`)
+	h := w.Header()
+	h.Set("Content-Type", "multipart/x-mixed-replace; boundary=frame")
+	h.Set("Cache-Control", "no-cache")
+	h.Set("Connection", "close")
+	h.Set("Pragma", "no-cache")
 
-	<-exit
+	<-r.Context().Done()
 
 	stream.RemoveConsumer(cons)
 

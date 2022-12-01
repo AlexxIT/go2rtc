@@ -22,13 +22,17 @@ func Dial(uri string) (*Conn, error) {
 		return nil, err
 	}
 
+	return Accept(res)
+}
+
+func Accept(res *http.Response) (*Conn, error) {
 	c := Conn{
 		conn:   res.Body,
 		reader: bufio.NewReaderSize(res.Body, pio.RecommendBufioSize),
 		buf:    make([]byte, 256),
 	}
 
-	if _, err = io.ReadFull(c.reader, c.buf[:flvio.FileHeaderLength]); err != nil {
+	if _, err := io.ReadFull(c.reader, c.buf[:flvio.FileHeaderLength]); err != nil {
 		return nil, err
 	}
 
@@ -49,9 +53,9 @@ func Dial(uri string) (*Conn, error) {
 }
 
 type Conn struct {
-	conn      io.ReadCloser
-	reader    *bufio.Reader
-	buf       []byte
+	conn   io.ReadCloser
+	reader *bufio.Reader
+	buf    []byte
 }
 
 func (c *Conn) Streams() ([]av.CodecData, error) {

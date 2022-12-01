@@ -52,10 +52,10 @@ func (c *Keyframe) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 		}
 
 		var wrapper streamer.WrapperFunc
-		if track.Codec.IsMP4() {
-			wrapper = h264.RepairAVC(track)
-		} else {
+		if track.Codec.IsRTP() {
 			wrapper = h264.RTPDepay(track)
+		} else {
+			wrapper = h264.RepairAVC(track)
 		}
 		push = wrapper(push)
 
@@ -73,7 +73,7 @@ func (c *Keyframe) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 			return nil
 		}
 
-		if !track.Codec.IsMP4() {
+		if track.Codec.IsRTP() {
 			wrapper := h265.RTPDepay(track)
 			push = wrapper(push)
 		}

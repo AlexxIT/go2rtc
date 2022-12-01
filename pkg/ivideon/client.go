@@ -165,7 +165,7 @@ func (c *Client) getTracks() error {
 					Name:        streamer.CodecH264,
 					ClockRate:   90000,
 					FmtpLine:    "profile-level-id=" + msg.CodecString[i+1:],
-					PayloadType: streamer.PayloadTypeMP4,
+					PayloadType: streamer.PayloadTypeRAW,
 				}
 
 				i = bytes.Index(msg.Data, []byte("avcC")) - 4

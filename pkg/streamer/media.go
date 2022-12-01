@@ -37,7 +37,7 @@ const (
 	CodecELD = "ELD" // AAC-ELD
 )
 
-const PayloadTypeMP4 byte = 255
+const PayloadTypeRAW byte = 255
 
 func GetKind(name string) string {
 	switch name {
@@ -139,8 +139,8 @@ func (c *Codec) String() string {
 	return s
 }
 
-func (c *Codec) IsMP4() bool {
-	return c.PayloadType == PayloadTypeMP4
+func (c *Codec) IsRTP() bool {
+	return c.PayloadType != PayloadTypeRAW
 }
 
 func (c *Codec) Clone() *Codec {

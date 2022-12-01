@@ -11,7 +11,7 @@ import (
 	"github.com/deepch/vdk/codec/h264parser"
 	"github.com/deepch/vdk/format/rtmp"
 	"github.com/pion/rtp"
-	"strings"
+	"net/http"
 	"time"
 )
 
@@ -41,16 +41,20 @@ func NewClient(uri string) *Client {
 }
 
 func (c *Client) Dial() (err error) {
-	if strings.HasPrefix(c.URI, "http") {
-		c.conn, err = httpflv.Dial(c.URI)
-	} else {
-		c.conn, err = rtmp.Dial(c.URI)
-	}
+	c.conn, err = rtmp.Dial(c.URI)
+	return
+}
 
+// Accept - convert http.Response to Client
+func Accept(res *http.Response) (*Client, error) {
+	conn, err := httpflv.Accept(res)
 	if err != nil {
-		return
+		return nil, err
 	}
+	return &Client{URI: res.Request.URL.String(), conn: conn}, nil
+}
 
+func (c *Client) Describe() (err error) {
 	// important to get SPS/PPS
 	streams, err := c.conn.Streams()
 	if err != nil {
@@ -73,7 +77,7 @@ func (c *Client) Dial() (err error) {
 				Name:        streamer.CodecH264,
 				ClockRate:   90000,
 				FmtpLine:    fmtp,
-				PayloadType: streamer.PayloadTypeMP4,
+				PayloadType: streamer.PayloadTypeRAW,
 			}
 
 			media := &streamer.Media{
@@ -96,7 +100,7 @@ func (c *Client) Dial() (err error) {
 				Channels:  uint16(cd.Config.ChannelConfig),
 				//  a=fmtp:97 streamtype=5;profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;config=1588
 				FmtpLine:    "streamtype=5;profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;config=" + hex.EncodeToString(cd.ConfigBytes),
-				PayloadType: streamer.PayloadTypeMP4,
+				PayloadType: streamer.PayloadTypeRAW,
 			}
 
 			media := &streamer.Media{
