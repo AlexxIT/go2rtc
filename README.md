@@ -352,10 +352,15 @@ You can get any stream as RTSP-stream: `rtsp://192.168.1.123:8554/{stream_name}`
 - you can omit the codec filters, so one first video and one first audio will be selected
 - you can set `?video=copy` or just `?video`, so only one first video without audio will be selected
 - you can set multiple video or audio, so all of them will be selected
+- you can enable external password protection for your RTSP streams
+
+Password protection always disabled for localhost calls (ex. FFmpeg or Hass on same server)
 
 ```yaml
 rtsp:
-  listen: ":8554"
+  listen: ":8554"  # RTSP Server TCP port, default - 8554
+  username: admin  # optional, default - disabled
+  password: pass   # optional, default - disabled
 ```
 
 ### Module: WebRTC
