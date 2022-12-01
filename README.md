@@ -99,7 +99,8 @@ Available modules:
 - [api](#module-api) - HTTP API (important for WebRTC support)
 - [rtsp](#module-rtsp) - RTSP Server (important for FFmpeg support)
 - [webrtc](#module-webrtc) - WebRTC Server
-- [mp4](#module-mp4) - MSE, MP4 stream and MP4 shapshot
+- [mp4](#module-mp4) - MSE, MP4 stream and MP4 shapshot Server
+- [mjpeg](#module-mjpeg) - MJPEG Server
 - [ffmpeg](#source-ffmpeg) - FFmpeg integration
 - [ngrok](#module-ngrok) - Ngrok integration (external access for private network)
 - [hass](#module-hass) - Home Assistant integration
@@ -112,8 +113,9 @@ Available modules:
 Available source types:
 
 - [rtsp](#source-rtsp) - `RTSP` and `RTSPS` cameras
-- [rtmp](#source-rtmp) - `RTMP` and `HTTP-FLV` streams
-- [ffmpeg](#source-ffmpeg) - FFmpeg integration (`MJPEG`, `HLS`, `files` and others)
+- [rtmp](#source-rtmp) - `RTMP` streams
+- [http](#source-http) - `HTTP-FLV`, `JPEG` (snapshots), `MJPEG` streams 
+- [ffmpeg](#source-ffmpeg) - FFmpeg integration (`HLS`, `files` and many others)
 - [ffmpeg:device](#source-ffmpeg-device) - local USB Camera or Webcam
 - [exec](#source-exec) - advanced FFmpeg and GStreamer integration
 - [echo](#source-echo) - get stream link from bash or python
@@ -148,11 +150,31 @@ streams:
 
 #### Source: RTMP
 
-You can get stream from RTMP server, for example [Frigate](https://docs.frigate.video/configuration/rtmp). Support ONLY `H264` video codec without audio.
+You can get stream from RTMP server, for example [Frigate](https://docs.frigate.video/configuration/rtmp).
 
 ```yaml
 streams:
   rtmp_stream: rtmp://192.168.1.123/live/camera1
+```
+
+#### Source: HTTP
+
+Support Content-Type:
+
+- **HTTP-FLV** (`video/x-flv`) - same as RTMP, but over HTTP
+- **HTTP-JPEG** (`image/jpeg`) - camera snapshot link, can be converted by go2rtc to MJPEG stream
+- **HTTP-MJPEG** (`multipart/x`) - simple MJPEG stream over HTTP
+
+```yaml
+streams:
+  # [HTTP-FLV] stream in video/x-flv format
+  http_flv: http://192.168.1.123:20880/api/camera/stream/780900131155/657617
+  
+  # [JPEG] snapshots from Dahua camera, will be converted to MJPEG stream
+  dahua_snap: http://admin:password@192.168.1.123/cgi-bin/snapshot.cgi?channel=1
+
+  # [MJPEG] stream will be proxied without modification
+  http_mjpeg: https://mjpeg.sanford.io/count.mjpeg
 ```
 
 #### Source: FFmpeg
@@ -493,16 +515,28 @@ Provides several features:
 
 ### Module: MJPEG
 
-**Important.** For stream as MJPEG format, your source MUST contain the MJPEG codec. If your camera outputs H264/H265 - you SHOULD use transcoding. With this example, your stream will have both H264 and MJPEG codecs:
+**Important.** For stream as MJPEG format, your source MUST contain the MJPEG codec. If your stream has a MJPEG codec - you can receive **MJPEG stream** or **JPEG snapshots** via API.
+
+You can receive an MJPEG stream in several ways:
+
+- some cameras support MJPEG codec inside [RTSP stream](#source-rtsp) (ex. second stream for Dahua cameras)
+- some cameras has HTTP link with [MJPEG stream](#source-http)
+- some cameras has HTTP link with snapshots - go2rtc can convert them to [MJPEG stream](#source-http)
+- you can convert H264/H265 stream from your camera via [FFmpeg integraion](#source-ffmpeg)
+
+With this example, your stream will have both H264 and MJPEG codecs:
 
 ```yaml
 streams:
   camera1:
     - rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0
-    - ffmpeg:rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0#video=mjpeg
+    - ffmpeg:camera1#video=mjpeg
 ```
 
-Example link to MJPEG: `http://192.168.1.123:1984/api/stream.mjpeg?src=camera1`
+API examples:
+
+- MJPEG stream: `http://192.168.1.123:1984/api/stream.mjpeg?src=camera1`
+- JPEG snapshots: `http://192.168.1.123:1984/api/frame.jpeg?src=camera1`
 
 ### Module: Log
 
