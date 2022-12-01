@@ -516,7 +516,7 @@ Provides several features:
 
 1. MSE stream (fMP4 over WebSocket)
 2. Camera snapshots in MP4 format (single frame), can be sent to [Telegram](https://www.telegram.org/)
-3. Progressive MP4 stream - bad format for streaming because of high latency, doesn't work in Safari 
+3. MP4 "file stream" - bad format for streaming because of high latency, doesn't work in Safari 
 
 ### Module: MJPEG
 
@@ -588,17 +588,17 @@ PS. Additionally WebRTC opens a lot of random UDP ports for transmit encrypted m
 
 `AVC/H.264` codec can be played almost anywhere. But `HEVC/H.265` has a lot of limitations in supporting with different devices and browsers. It's all about patents and money, you can't do anything about it.
 
-Device | WebRTC | MSE | MP4
--------|--------|-----|----
-*latency*           | best        | medium      | bad
-Desktop Chrome 107+ | H264        | H264, H265* | H264, H265*
-Desktop Safari      | H264, H265* | H264, H265  | **no!**
-Desktop Edge        | H264        | H264, H265* | H264, H265*
-Desktop Firefox     | H264        | H264        | H264
-iPad Safari 13+     | H264, H265* | H264, H265  | **no!**
-iPhone Safari 13+   | H264, H265* | **no!**     | **no!**
-Android Chrome 107+ | H264        | H264, H265* | H264
-masOS Hass App      | no          | no          | no
+| Device              | WebRTC      | MSE         | MP4         |
+|---------------------|-------------|-------------|-------------|
+| *latency*           | best        | medium      | bad         |
+| Desktop Chrome 107+ | H264        | H264, H265* | H264, H265* |
+| Desktop Edge        | H264        | H264, H265* | H264, H265* |
+| Desktop Safari      | H264, H265* | H264, H265  | **no!**     |
+| Desktop Firefox     | H264        | H264        | H264        |
+| Android Chrome 107+ | H264        | H264, H265* | H264        |
+| iPad Safari 13+     | H264, H265* | H264, H265  | **no!**     |
+| iPhone Safari 13+   | H264, H265* | **no!**     | **no!**     |
+| masOS Hass App      | no          | no          | no          |
 
 - Chrome H265: [read this](https://chromestatus.com/feature/5186511939567616) and [read this](https://github.com/StaZhu/enable-chromium-hevc-hardware-decoding)
 - Edge H265: [read this](https://www.reddit.com/r/MicrosoftEdge/comments/v9iw8k/enable_hevc_support_in_edge/)
