@@ -177,6 +177,8 @@ streams:
   http_mjpeg: https://mjpeg.sanford.io/count.mjpeg
 ```
 
+**PS.** Dahua camera has bug: if you select MJPEG codec for RTSP second stream - snapshot won't work.
+
 #### Source: FFmpeg
 
 You can get any stream or file or device via FFmpeg and push it to go2rtc. The app will automatically start FFmpeg with the proper arguments when someone starts watching the stream.
