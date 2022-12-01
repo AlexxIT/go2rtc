@@ -11,6 +11,7 @@ import (
 	"net/textproto"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Client struct {
@@ -73,7 +74,7 @@ func (c *Client) startJPEG() error {
 		return err
 	}
 
-	packet := &rtp.Packet{Payload: buf}
+	packet := &rtp.Packet{Header: rtp.Header{Timestamp: now()}, Payload: buf}
 	_ = c.track.WriteRTP(packet)
 
 	req := c.res.Request
@@ -93,7 +94,7 @@ func (c *Client) startJPEG() error {
 			return err
 		}
 
-		packet = &rtp.Packet{Payload: buf}
+		packet = &rtp.Packet{Header: rtp.Header{Timestamp: now()}, Payload: buf}
 		_ = c.track.WriteRTP(packet)
 	}
 
@@ -135,7 +136,7 @@ func (c *Client) startMJPEG(boundary string) error {
 			return err
 		}
 
-		packet := &rtp.Packet{Payload: buf}
+		packet := &rtp.Packet{Header: rtp.Header{Timestamp: now()}, Payload: buf}
 		_ = c.track.WriteRTP(packet)
 
 		if _, err = r.Discard(2); err != nil {
@@ -144,4 +145,8 @@ func (c *Client) startMJPEG(boundary string) error {
 	}
 
 	return nil
+}
+
+func now() uint32 {
+	return uint32(time.Now().UnixMilli() * 90)
 }

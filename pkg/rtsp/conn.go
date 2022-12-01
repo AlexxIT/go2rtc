@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"github.com/AlexxIT/go2rtc/pkg/aac"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
+	"github.com/AlexxIT/go2rtc/pkg/mjpeg"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/pion/rtcp"
@@ -776,6 +777,8 @@ func (c *Conn) bindTrack(
 
 		size := packet.MarshalSize()
 
+		//log.Printf("[RTP] codec: %s, size: %6d, ts: %10d, pt: %2d, ssrc: %d, seq: %d, mark: %v", track.Codec.Name, len(packet.Payload), packet.Timestamp, packet.PayloadType, packet.SSRC, packet.SequenceNumber, packet.Marker)
+
 		data := make([]byte, 4+size)
 		data[0] = '$'
 		data[1] = channel
@@ -801,6 +804,9 @@ func (c *Conn) bindTrack(
 			push = wrapper(push)
 		case streamer.CodecAAC:
 			wrapper := aac.RTPPay(1500)
+			push = wrapper(push)
+		case streamer.CodecJPEG:
+			wrapper := mjpeg.RTPPay()
 			push = wrapper(push)
 		}
 	}
