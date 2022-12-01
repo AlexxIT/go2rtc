@@ -20,9 +20,10 @@ func (c *Conn) GetTrack(media *streamer.Media, codec *streamer.Codec) *streamer.
 		}
 	}
 
-	// can't setup new tracks from play state
+	// can't setup new tracks from play state - forcing a reconnection feature
 	if c.state == StatePlay {
-		return nil
+		go c.Close()
+		return streamer.NewTrack(codec, media.Direction)
 	}
 
 	track, err := c.SetupMedia(media, codec)

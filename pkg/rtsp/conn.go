@@ -404,6 +404,12 @@ func (c *Conn) SetupMedia(
 		}
 	}
 
+	// in case the track has already been setup before
+	if codec == nil {
+		c.state = StateSetup
+		return nil, nil
+	}
+
 	// we send our `interleaved`, but camera can answer with another
 
 	// Transport: RTP/AVP/TCP;unicast;interleaved=10-11;ssrc=10117CB7
