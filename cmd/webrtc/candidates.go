@@ -29,7 +29,7 @@ func asyncCandidates(ctx *api.Context) {
 
 		log.Trace().Str("candidate", cand).Msg("[webrtc] config")
 
-		ctx.Write(&streamer.Message{Type: webrtc.MsgTypeCandidate, Value: cand})
+		ctx.Write(&streamer.Message{Type: "webrtc/candidate", Value: cand})
 	}
 }
 
@@ -84,7 +84,8 @@ func candidateHandler(ctx *api.Context, msg *streamer.Message) {
 		return
 	}
 	if conn := ctx.Consumer.(*webrtc.Conn); conn != nil {
-		log.Trace().Str("candidate", msg.Value.(string)).Msg("[webrtc] remote")
-		conn.Push(msg)
+		s := msg.Value.(string)
+		log.Trace().Str("candidate", s).Msg("[webrtc] remote")
+		conn.AddCandidate(s)
 	}
 }

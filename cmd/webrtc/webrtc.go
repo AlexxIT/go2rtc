@@ -55,8 +55,8 @@ func Init() {
 
 	candidates = cfg.Mod.Candidates
 
-	api.HandleWS(webrtc.MsgTypeOffer, asyncHandler)
-	api.HandleWS(webrtc.MsgTypeCandidate, candidateHandler)
+	api.HandleWS("webrtc/offer", asyncHandler)
+	api.HandleWS("webrtc/candidate", candidateHandler)
 
 	api.HandleFunc("api/webrtc", syncHandler)
 }
@@ -92,10 +92,12 @@ func asyncHandler(ctx *api.Context, msg *streamer.Message) {
 			if msg == pion.PeerConnectionStateClosed {
 				stream.RemoveConsumer(conn)
 			}
-		case *streamer.Message:
-			// subscribe on webrtc server candidates
-			log.Trace().Str("candidate", msg.Value.(string)).Msg("[webrtc] local")
-			ctx.Write(msg)
+		case *pion.ICECandidate:
+			if msg != nil {
+				s := msg.ToJSON().Candidate
+				log.Trace().Str("candidate", s).Msg("[webrtc] local")
+				ctx.Write(&streamer.Message{Type: "webrtc/candidate", Value: s})
+			}
 		}
 	})
 
@@ -119,7 +121,7 @@ func asyncHandler(ctx *api.Context, msg *streamer.Message) {
 
 	conn.Init()
 
-	// exchange sdp without waiting all candidates
+	// 3. Exchange SDP without waiting all candidates
 	answer, err := conn.GetAnswer()
 	log.Trace().Msgf("[webrtc] answer\n%s", answer)
 
@@ -131,7 +133,7 @@ func asyncHandler(ctx *api.Context, msg *streamer.Message) {
 
 	ctx.Consumer = conn
 
-	ctx.Write(&streamer.Message{Type: webrtc.MsgTypeAnswer, Value: answer})
+	ctx.Write(&streamer.Message{Type: "webrtc/answer", Value: answer})
 
 	asyncCandidates(ctx)
 }

@@ -108,14 +108,8 @@ func (c *Conn) AddTrack(media *streamer.Media, track *streamer.Track) *streamer.
 
 //
 
-func (c *Conn) Push(msg interface{}) {
-	if msg := msg.(*streamer.Message); msg != nil {
-		if msg.Type == MsgTypeCandidate {
-			_ = c.Conn.AddICECandidate(webrtc.ICECandidateInit{
-				Candidate: msg.Value.(string),
-			})
-		}
-	}
+func (c *Conn) AddCandidate(candidate string) {
+	_ = c.Conn.AddICECandidate(webrtc.ICECandidateInit{Candidate: candidate})
 }
 
 func (c *Conn) MarshalJSON() ([]byte, error) {

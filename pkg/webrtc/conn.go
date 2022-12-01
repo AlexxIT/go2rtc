@@ -5,13 +5,6 @@ import (
 	"github.com/pion/webrtc/v3"
 )
 
-const (
-	MsgTypeOffer         = "webrtc/offer"
-	MsgTypeOfferComplete = "webrtc/offer-complete"
-	MsgTypeAnswer        = "webrtc/answer"
-	MsgTypeCandidate     = "webrtc/candidate"
-)
-
 type Conn struct {
 	streamer.Element
 
@@ -28,11 +21,7 @@ type Conn struct {
 
 func (c *Conn) Init() {
 	c.Conn.OnICECandidate(func(candidate *webrtc.ICECandidate) {
-		if candidate != nil {
-			c.Fire(&streamer.Message{
-				Type: MsgTypeCandidate, Value: candidate.ToJSON().Candidate,
-			})
-		}
+		c.Fire(candidate)
 	})
 
 	c.Conn.OnTrack(func(remote *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
