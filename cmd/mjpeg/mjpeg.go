@@ -4,6 +4,7 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/api"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
 	"github.com/AlexxIT/go2rtc/pkg/mjpeg"
+	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/rs/zerolog/log"
 	"net/http"
 	"strconv"
@@ -12,6 +13,8 @@ import (
 func Init() {
 	api.HandleFunc("api/frame.jpeg", handlerKeyframe)
 	api.HandleFunc("api/stream.mjpeg", handlerStream)
+
+	api.HandleWS("mjpeg", handlerWS)
 }
 
 func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
@@ -95,4 +98,28 @@ func handlerStream(w http.ResponseWriter, r *http.Request) {
 	stream.RemoveConsumer(cons)
 
 	//log.Trace().Msg("[api.mjpeg] close")
+}
+
+func handlerWS(ctx *api.Context, msg *streamer.Message) {
+	src := ctx.Request.URL.Query().Get("src")
+	stream := streams.GetOrNew(src)
+	if stream == nil {
+		return
+	}
+
+	cons := &mjpeg.Consumer{}
+	cons.Listen(func(msg interface{}) {
+		if data, ok := msg.([]byte); ok {
+			ctx.Write(data)
+		}
+	})
+
+	if err := stream.AddConsumer(cons); err != nil {
+		log.Error().Err(err).Caller().Send()
+		return
+	}
+
+	ctx.OnClose(func() {
+		stream.RemoveConsumer(cons)
+	})
 }
