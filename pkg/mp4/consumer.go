@@ -18,10 +18,16 @@ type Consumer struct {
 
 	muxer  *Muxer
 	codecs []*streamer.Codec
-	start  bool
+	wait   byte
 
 	send int
 }
+
+const (
+	waitNone byte = iota
+	waitKeyframe
+	waitInit
+)
 
 func (c *Consumer) GetMedias() []*streamer.Media {
 	if c.Medias != nil {
@@ -55,13 +61,18 @@ func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 	codec := track.Codec
 	switch codec.Name {
 	case streamer.CodecH264:
+		c.wait = waitInit
+
 		push := func(packet *rtp.Packet) error {
 			if packet.Version != h264.RTPPacketVersionAVC {
 				return nil
 			}
 
-			if !c.start {
-				return nil
+			if c.wait != waitNone {
+				if c.wait == waitInit || !h264.IsKeyframe(packet.Payload) {
+					return nil
+				}
+				c.wait = waitNone
 			}
 
 			buf := c.muxer.Marshal(trackID, packet)
@@ -82,13 +93,18 @@ func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 		return track.Bind(push)
 
 	case streamer.CodecH265:
+		c.wait = waitInit
+
 		push := func(packet *rtp.Packet) error {
 			if packet.Version != h264.RTPPacketVersionAVC {
 				return nil
 			}
 
-			if !c.start {
-				return nil
+			if c.wait != waitNone {
+				if c.wait == waitInit || !h265.IsKeyframe(packet.Payload) {
+					return nil
+				}
+				c.wait = waitNone
 			}
 
 			buf := c.muxer.Marshal(trackID, packet)
@@ -107,7 +123,7 @@ func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 
 	case streamer.CodecAAC:
 		push := func(packet *rtp.Packet) error {
-			if !c.start {
+			if c.wait != waitNone {
 				return nil
 			}
 
@@ -139,7 +155,9 @@ func (c *Consumer) Init() ([]byte, error) {
 }
 
 func (c *Consumer) Start() {
-	c.start = true
+	if c.wait == waitInit {
+		c.wait = waitKeyframe
+	}
 }
 
 //

@@ -15,7 +15,8 @@ import (
 func Init() {
 	log = app.GetLogger("mp4")
 
-	api.HandleWS(MsgTypeMSE, handlerWS)
+	api.HandleWS("mse", handlerWS)
+	api.HandleWS("mp4", handlerWS4)
 
 	api.HandleFunc("api/frame.mp4", handlerKeyframe)
 	api.HandleFunc("api/stream.mp4", handlerMP4)
@@ -36,7 +37,7 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 
 	exit := make(chan []byte)
 
-	cons := &mp4.Keyframe{}
+	cons := &mp4.Segment{OnlyKeyframe: true}
 	cons.Listen(func(msg interface{}) {
 		if data, ok := msg.([]byte); ok && exit != nil {
 			exit <- data

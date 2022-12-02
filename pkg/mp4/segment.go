@@ -7,13 +7,20 @@ import (
 	"github.com/pion/rtp"
 )
 
-type Keyframe struct {
+type Segment struct {
 	streamer.Element
 
-	MimeType string
+	Medias       []*streamer.Media
+	MimeType     string
+	OnlyKeyframe bool
 }
 
-func (c *Keyframe) GetMedias() []*streamer.Media {
+func (c *Segment) GetMedias() []*streamer.Media {
+	if c.Medias != nil {
+		return c.Medias
+	}
+
+	// default medias
 	return []*streamer.Media{
 		{
 			Kind:      streamer.KindVideo,
@@ -26,7 +33,7 @@ func (c *Keyframe) GetMedias() []*streamer.Media {
 	}
 }
 
-func (c *Keyframe) AddTrack(media *streamer.Media, track *streamer.Track) *streamer.Track {
+func (c *Segment) AddTrack(media *streamer.Media, track *streamer.Track) *streamer.Track {
 	muxer := &Muxer{}
 
 	codecs := []*streamer.Codec{track.Codec}
@@ -40,15 +47,46 @@ func (c *Keyframe) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 
 	switch track.Codec.Name {
 	case streamer.CodecH264:
-		push := func(packet *rtp.Packet) error {
-			if !h264.IsKeyframe(packet.Payload) {
+		var push streamer.WriterFunc
+
+		if c.OnlyKeyframe {
+			push = func(packet *rtp.Packet) error {
+				if !h264.IsKeyframe(packet.Payload) {
+					return nil
+				}
+
+				buf := muxer.Marshal(0, packet)
+				c.Fire(append(init, buf...))
+
 				return nil
 			}
+		} else {
+			var buf []byte
 
-			buf := muxer.Marshal(0, packet)
-			c.Fire(append(init, buf...))
+			push = func(packet *rtp.Packet) error {
+				if h264.IsKeyframe(packet.Payload) {
+					// fist frame - send only IFrame
+					// other frames - send IFrame and all PFrames
+					if buf == nil {
+						buf = append(buf, init...)
+						b := muxer.Marshal(0, packet)
+						buf = append(buf, b...)
+					}
 
-			return nil
+					c.Fire(buf)
+
+					buf = buf[:0]
+					buf = append(buf, init...)
+					muxer.Reset()
+				}
+
+				if buf != nil {
+					b := muxer.Marshal(0, packet)
+					buf = append(buf, b...)
+				}
+
+				return nil
+			}
 		}
 
 		var wrapper streamer.WrapperFunc

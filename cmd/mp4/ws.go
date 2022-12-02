@@ -8,8 +8,6 @@ import (
 	"strings"
 )
 
-const MsgTypeMSE = "mse" // fMP4
-
 const packetSize = 8192
 
 func handlerWS(ctx *api.Context, msg *streamer.Message) {
@@ -24,7 +22,7 @@ func handlerWS(ctx *api.Context, msg *streamer.Message) {
 	cons.RemoteAddr = ctx.Request.RemoteAddr
 
 	if codecs, ok := msg.Value.(string); ok {
-		cons.Medias = parseMedias(codecs)
+		cons.Medias = parseMedias(codecs, true)
 	}
 
 	cons.Listen(func(msg interface{}) {
@@ -47,7 +45,7 @@ func handlerWS(ctx *api.Context, msg *streamer.Message) {
 		stream.RemoveConsumer(cons)
 	})
 
-	ctx.Write(&streamer.Message{Type: MsgTypeMSE, Value: cons.MimeType()})
+	ctx.Write(&streamer.Message{Type: "mse", Value: cons.MimeType()})
 
 	data, err := cons.Init()
 	if err != nil {
@@ -61,7 +59,36 @@ func handlerWS(ctx *api.Context, msg *streamer.Message) {
 	cons.Start()
 }
 
-func parseMedias(codecs string) (medias []*streamer.Media) {
+func handlerWS4(ctx *api.Context, msg *streamer.Message) {
+	src := ctx.Request.URL.Query().Get("src")
+	stream := streams.GetOrNew(src)
+	if stream == nil {
+		return
+	}
+
+	cons := &mp4.Segment{}
+
+	if codecs, ok := msg.Value.(string); ok {
+		cons.Medias = parseMedias(codecs, false)
+	}
+
+	cons.Listen(func(msg interface{}) {
+		if data, ok := msg.([]byte); ok {
+			ctx.Write(data)
+		}
+	})
+
+	if err := stream.AddConsumer(cons); err != nil {
+		log.Error().Err(err).Caller().Send()
+		return
+	}
+
+	ctx.OnClose(func() {
+		stream.RemoveConsumer(cons)
+	})
+}
+
+func parseMedias(codecs string, parseAudio bool) (medias []*streamer.Media) {
 	var videos []*streamer.Codec
 	var audios []*streamer.Codec
 
@@ -88,7 +115,7 @@ func parseMedias(codecs string) (medias []*streamer.Media) {
 		medias = append(medias, media)
 	}
 
-	if audios != nil {
+	if audios != nil && parseAudio {
 		media := &streamer.Media{
 			Kind:      streamer.KindAudio,
 			Direction: streamer.DirectionRecvonly,

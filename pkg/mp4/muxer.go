@@ -19,8 +19,6 @@ type Muxer struct {
 	fragIndex uint32
 	dts       []uint64
 	pts       []uint32
-	//data      []byte
-	//total     int
 }
 
 func (m *Muxer) MimeType(codecs []*streamer.Codec) string {
@@ -185,10 +183,13 @@ func (m *Muxer) GetInit(codecs []*streamer.Codec) ([]byte, error) {
 	return append(FTYP(), data...), nil
 }
 
-//func (m *Muxer) Rewind() {
-//	m.dts = 0
-//	m.pts = 0
-//}
+func (m *Muxer) Reset() {
+	m.fragIndex = 0
+	for i := range m.dts {
+		m.dts[i] = 0
+		m.pts[i] = 0
+	}
+}
 
 func (m *Muxer) Marshal(trackID byte, packet *rtp.Packet) []byte {
 	run := &mp4fio.TrackFragRun{
@@ -218,15 +219,16 @@ func (m *Muxer) Marshal(trackID byte, packet *rtp.Packet) []byte {
 	}
 
 	entry := mp4io.TrackFragRunEntry{
-		//Duration: 90000,
 		Size: uint32(len(packet.Payload)),
 	}
 
 	newTime := packet.Timestamp
 	if m.pts[trackID] > 0 {
-		//m.dts += uint64(newTime - m.pts)
 		entry.Duration = newTime - m.pts[trackID]
 		m.dts[trackID] += uint64(entry.Duration)
+	} else {
+		// important, or Safari will fail with first frame
+		entry.Duration = 1
 	}
 	m.pts[trackID] = newTime
 
