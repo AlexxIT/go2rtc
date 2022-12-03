@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
-	"github.com/deepch/vdk/codec/h265parser"
 	"github.com/pion/rtp"
 )
 
@@ -69,11 +68,10 @@ func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
 }
 
 // SafariPay - generate Safari friendly payload for H265
+// https://github.com/AlexxIT/Blog/issues/5
 func SafariPay(mtu uint16) streamer.WrapperFunc {
 	sequencer := rtp.NewRandomSequencer()
 	size := int(mtu - 12) // rtp.Header size
-
-	var buffer []byte
 
 	return func(push streamer.WriterFunc) streamer.WriterFunc {
 		return func(packet *rtp.Packet) error {
@@ -81,56 +79,69 @@ func SafariPay(mtu uint16) streamer.WrapperFunc {
 				return push(packet)
 			}
 
-			data := packet.Payload
-			data[0] = 0
-			data[1] = 0
-			data[2] = 0
-			data[3] = 1
+			// protect original packets from modification
+			au := make([]byte, len(packet.Payload))
+			copy(au, packet.Payload)
 
 			var start byte
 
-			nuType := (data[4] >> 1) & 0b111111
-			//fmt.Printf("[H265] nut: %2d, size: %6d, data: %16x\n", nut, len(data), data[4:20])
-			switch {
-			case nuType >= h265parser.NAL_UNIT_VPS && nuType <= h265parser.NAL_UNIT_PPS:
-				buffer = append(buffer, data...)
-				return nil
-			case nuType >= h265parser.NAL_UNIT_CODED_SLICE_BLA_W_LP && nuType <= h265parser.NAL_UNIT_CODED_SLICE_CRA:
-				buffer = append([]byte{3}, buffer...)
-				data = append(buffer, data...)
-				start = 1
-			default:
-				data = append([]byte{2}, data...)
-				start = 0
+			for i := 0; i < len(au); {
+				size := int(binary.BigEndian.Uint32(au[i:])) + 4
+
+				// convert AVC to Annex-B
+				au[i] = 0
+				au[i+1] = 0
+				au[i+2] = 0
+				au[i+3] = 1
+
+				switch NALUType(au[i:]) {
+				case NALUTypeIFrame, NALUTypeIFrame2, NALUTypeIFrame3:
+					start = 3
+				default:
+					if start == 0 {
+						start = 2
+					}
+				}
+
+				i += size
 			}
 
-			for len(data) > size {
+			// rtp.Packet payload
+			b := make([]byte, 1, size)
+			size-- // minus header byte
+
+			for au != nil {
+				b[0] = start
+
+				if start > 1 {
+					start -= 2
+				}
+
+				if len(au) > size {
+					b = append(b, au[:size]...)
+					au = au[size:]
+				} else {
+					b = append(b, au...)
+					au = nil
+				}
+
 				clone := rtp.Packet{
 					Header: rtp.Header{
 						Version:        2,
-						Marker:         false,
+						Marker:         au == nil,
 						SequenceNumber: sequencer.NextSequenceNumber(),
 						Timestamp:      packet.Timestamp,
 					},
-					Payload: data[:size],
+					Payload: b,
 				}
 				if err := push(&clone); err != nil {
 					return err
 				}
 
-				data = append([]byte{start}, data[size:]...)
+				b = b[:1] // clear buffer
 			}
 
-			clone := rtp.Packet{
-				Header: rtp.Header{
-					Version:        2,
-					Marker:         true,
-					SequenceNumber: sequencer.NextSequenceNumber(),
-					Timestamp:      packet.Timestamp,
-				},
-				Payload: data,
-			}
-			return push(&clone)
+			return nil
 		}
 	}
 }
