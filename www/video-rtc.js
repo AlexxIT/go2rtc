@@ -215,8 +215,8 @@ class VideoRTC extends HTMLElement {
 
     codecs(type) {
         const test = type === "mse"
-            ? type => MediaSource.isTypeSupported(type)
-            : type => this.video.canPlayType(type);
+            ? codec => MediaSource.isTypeSupported(`video/mp4; codecs="${codec}"`)
+            : codec => this.video.canPlayType(`video/mp4; codecs="${codec}"`);
         return this.CODECS.filter(test).join();
     }
 
