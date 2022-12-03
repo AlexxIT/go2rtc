@@ -132,16 +132,16 @@ class VideoRTC extends HTMLElement {
         this.ws = null;
 
         /**
-         * Internal WebSocket connection state. Values: STOP, CONNECTING, OPEN, CLOSED
+         * Internal WebSocket connection state. Values: CONNECTING, OPEN, CLOSED
          * @type {number}
          */
         this.wsState = WebSocket.CLOSED;
 
         /**
          * Internal WebSocket URL.
-         * @type {string}
+         * @type {string|URL}
          */
-        this.wsURL = "";
+        this.url = "";
 
         /**
          * @type {RTCPeerConnection}
@@ -172,16 +172,18 @@ class VideoRTC extends HTMLElement {
 
     /**
      * Set video source (WebSocket URL). Support relative path.
-     * @param {string} value
+     * @param {string|URL} value
      */
     set src(value) {
-        if (value.startsWith("/")) {
-            value = "ws" + location.origin.substring(4) + value;
-        } else if (value.startsWith("http")) {
-            value = "ws" + value.substring(4);
+        if (typeof value === "string") {
+            if (value.startsWith("/")) {
+                value = "ws" + location.origin.substring(4) + value;
+            } else if (value.startsWith("http")) {
+                value = "ws" + value.substring(4);
+            }
         }
 
-        this.wsURL = value;
+        this.url = value;
 
         if (this.isConnected) this.connectedCallback();
     }
@@ -204,7 +206,7 @@ class VideoRTC extends HTMLElement {
      * @param {Object} value
      */
     send(value) {
-        this.ws && this.ws.send(JSON.stringify(value));
+        if (this.ws) this.ws.send(JSON.stringify(value));
     }
 
     get closed() {
@@ -239,7 +241,7 @@ class VideoRTC extends HTMLElement {
             }
         }
 
-        if (!this.wsURL || !this.closed) return;
+        if (!this.url || !this.closed) return;
 
         // CLOSED => CONNECTING
         this.wsState = WebSocket.CONNECTING;
@@ -332,7 +334,7 @@ class VideoRTC extends HTMLElement {
 
         const ts = Date.now();
 
-        this.ws = new WebSocket(this.wsURL);
+        this.ws = new WebSocket(this.url);
 
         this.ws.addEventListener("open", () => {
             console.debug("VideoRTC.ws.open", this.wsState);
@@ -545,7 +547,7 @@ class VideoRTC extends HTMLElement {
         const reader = new FileReader();
         reader.addEventListener("load", () => {
             this.video.poster = reader.result;
-        })
+        });
 
         this.ws.binaryType = "blob";
         this.ws.addEventListener("message", ev => {
