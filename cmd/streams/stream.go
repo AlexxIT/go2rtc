@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
+	"strings"
 	"sync"
 )
 
@@ -55,6 +56,8 @@ func (s *Stream) AddConsumer(cons streamer.Consumer) (err error) {
 	consumer := &Consumer{element: cons}
 	var producers []*Producer // matched producers for consumer
 
+	var codecs string
+
 	// Step 1. Get consumer medias
 	for icc, consMedia := range cons.GetMedias() {
 		log.Trace().Stringer("media", consMedia).
@@ -66,6 +69,8 @@ func (s *Stream) AddConsumer(cons streamer.Consumer) (err error) {
 			for ipc, prodMedia := range prod.GetMedias() {
 				log.Trace().Stringer("media", prodMedia).
 					Msgf("[streams] producer=%d candidate=%d", ip, ipc)
+
+				collectCodecs(prodMedia, &codecs)
 
 				// Step 3. Match consumer/producer codecs list
 				prodCodec := prodMedia.MatchMedia(consMedia)
@@ -93,7 +98,7 @@ func (s *Stream) AddConsumer(cons streamer.Consumer) (err error) {
 
 	if len(producers) == 0 {
 		s.stopProducers()
-		return errors.New("couldn't find the matching tracks")
+		return errors.New("no matching codecs: " + codecs)
 	}
 
 	s.mu.Lock()
@@ -214,5 +219,21 @@ func (s *Stream) removeProducer(i int) {
 		s.producers = s.producers[:i]
 	default: // middle element
 		s.producers = append(s.producers[:i], s.producers[i+1:]...)
+	}
+}
+
+func collectCodecs(media *streamer.Media, codecs *string) {
+	for _, codec := range media.Codecs {
+		name := codec.Name
+		if name == streamer.CodecAAC {
+			name = "AAC"
+		}
+		if strings.Contains(*codecs, name) {
+			continue
+		}
+		if len(*codecs) > 0 {
+			*codecs += ","
+		}
+		*codecs += name
 	}
 }
