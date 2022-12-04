@@ -108,10 +108,10 @@ class VideoRTC extends HTMLElement {
         ];
 
         /**
-         * Supported modes.
+         * Supported modes (webrtc, mse, mse2, mp4, mjpeg).
          * @type {string}
          */
-        this.modes = "webrtc,mse2,mp4";
+        this.modes = "webrtc,mse,mp4";
 
         /**
          * Run stream when not displayed on the screen. Default `false`.
@@ -303,14 +303,11 @@ class VideoRTC extends HTMLElement {
 
         this.appendChild(this.video);
 
-        // don't know if styles like this is good idea
+        // important for second video for mode MP4
         this.style.display = "block";
         this.style.position = "relative";
-        this.style.width = "100%";
-        this.style.height = "100%";
 
-        // video position absolute important for second video child
-        this.video.style.position = "absolute";
+        this.video.style.display = "block"; // fix bottom margin 4px
         this.video.style.width = "100%";
         this.video.style.height = "100%"
 
@@ -347,6 +344,7 @@ class VideoRTC extends HTMLElement {
         const ts = Date.now();
 
         this.ws = new WebSocket(this.url);
+        this.ws.binaryType = "arraybuffer";
 
         this.ws.addEventListener("open", () => {
             console.debug("VideoRTC.ws.open", this.wsState);
@@ -406,7 +404,6 @@ class VideoRTC extends HTMLElement {
         this.video.srcObject = null;
         this.play();
 
-        this.ws.binaryType = "arraybuffer";
         this.ws.addEventListener("message", MediaSourceHandler(ms));
     }
 
@@ -423,7 +420,6 @@ class VideoRTC extends HTMLElement {
             }
         });
 
-        this.ws.binaryType = "arraybuffer";
         this.ws.addEventListener("message", ev => {
             if (typeof ev.data === "string") {
                 worker.postMessage(ev.data);
@@ -556,20 +552,9 @@ class VideoRTC extends HTMLElement {
     internalMJPEG() {
         console.debug("VideoRTC.internalMJPEG");
 
-        const reader = new FileReader();
-        reader.addEventListener("load", () => {
-            this.video.poster = reader.result;
-        });
-
-        this.ws.binaryType = "blob";
         this.ws.addEventListener("message", ev => {
-            if (typeof ev.data !== "string") {
-                try {
-                    reader.readAsDataURL(ev.data);
-                } catch (e) {
-                    console.debug(e);
-                }
-            }
+            if (typeof ev.data === "string") return;
+            this.video.poster = "data:image/jpeg;base64," + VideoRTC.btoa(ev.data);
         });
 
         this.send({type: "mjpeg"});
@@ -582,48 +567,47 @@ class VideoRTC extends HTMLElement {
         /** @type {HTMLVideoElement} */
         let video2;
 
-        /** @type {number} */
-        let i;
+        this.ws.addEventListener("message", ev => {
+            if (typeof ev.data === "string") return;
 
-        const reader = new FileReader();
-        reader.addEventListener("load", () => {
+            // first video with default position (set container size)
+            // second video with position=absolute and top=0px
             if (video2) {
                 this.removeChild(this.video);
                 this.video.src = "";
                 this.video = video2;
-            } else {
-                // get position only once on first packet
-                i = reader.result.indexOf(";");
-                console.debug("VideoRTC.file", reader.result.substring(0, i));
+                video2.style.position = "";
+                video2.style.top = "";
             }
 
             video2 = this.video.cloneNode();
+            video2.style.position = "absolute";
+            video2.style.top = "0px";
             this.appendChild(video2);
 
-            video2.src = "data:video/mp4" + reader.result.substring(i);
+            video2.src = "data:video/mp4;base64," + VideoRTC.btoa(ev.data);
             video2.play().catch(() => console.log);
         });
 
-        this.ws.binaryType = "blob";
-        this.ws.addEventListener("message", ev => {
-            if (typeof ev.data !== "string") {
-                try {
-                    reader.readAsDataURL(ev.data);
-                } catch (e) {
-                    console.debug(e);
-                }
-            }
-        });
-
         this.ws.addEventListener("close", () => {
-            if (video2) {
-                this.removeChild(video2);
-                video2.src = "";
-            }
+            if (!video2) return;
+
+            this.removeChild(video2);
+            video2.src = "";
         });
 
         this.send({type: "mp4", value: this.codecs("mp4")});
         this.video.controls = false;
+    }
+
+    static btoa(buffer) {
+        const bytes = new Uint8Array(buffer);
+        const len = bytes.byteLength;
+        let binary = "";
+        for (let i = 0; i < len; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        return window.btoa(binary);
     }
 }
 
