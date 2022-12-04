@@ -45,50 +45,85 @@ func initWS(origin string) {
 	}
 }
 
+func apiWS(w http.ResponseWriter, r *http.Request) {
+	ws, err := wsUp.Upgrade(w, r, nil)
+	if err != nil {
+		origin := r.Header.Get("Origin")
+		log.Error().Err(err).Caller().Msgf("host=%s origin=%s", r.Host, origin)
+		return
+	}
+
+	tr := &Transport{Request: r}
+	tr.OnWrite(func(msg interface{}) {
+		if data, ok := msg.([]byte); ok {
+			_ = ws.WriteMessage(websocket.BinaryMessage, data)
+		} else {
+			_ = ws.WriteJSON(msg)
+		}
+	})
+
+	for {
+		msg := new(streamer.Message)
+		if err = ws.ReadJSON(msg); err != nil {
+			log.Trace().Err(err).Caller().Send()
+			_ = ws.Close()
+			break
+		}
+
+		if handler := wsHandlers[msg.Type]; handler != nil {
+			handler(tr, msg)
+		}
+	}
+
+	tr.Close()
+}
+
 var wsUp *websocket.Upgrader
 
-type WSHandler func(ctx *Context, msg *streamer.Message)
+type WSHandler func(tr *Transport, msg *streamer.Message)
 
-type Context struct {
-	Conn     *websocket.Conn
+type Transport struct {
 	Request  *http.Request
 	Consumer interface{} // TODO: rewrite
 
-	onClose []func()
-	mu      sync.Mutex
+	mx sync.Mutex
+
+	onChange func()
+	onWrite  func(msg interface{})
+	onClose  []func()
 }
 
-func (ctx *Context) Upgrade(w http.ResponseWriter, r *http.Request) (err error) {
-	ctx.Conn, err = wsUp.Upgrade(w, r, nil)
-	ctx.Request = r
-	return
+func (t *Transport) OnWrite(f func(msg interface{})) {
+	t.mx.Lock()
+	if t.onChange != nil {
+		t.onChange()
+	}
+	t.onWrite = f
+	t.mx.Unlock()
 }
 
-func (ctx *Context) Close() {
-	for _, f := range ctx.onClose {
+func (t *Transport) Write(msg interface{}) {
+	t.mx.Lock()
+	t.onWrite(msg)
+	t.mx.Unlock()
+}
+
+func (t *Transport) Close() {
+	for _, f := range t.onClose {
 		f()
 	}
-	_ = ctx.Conn.Close()
 }
 
-func (ctx *Context) Write(msg interface{}) {
-	ctx.mu.Lock()
-
-	if data, ok := msg.([]byte); ok {
-		_ = ctx.Conn.WriteMessage(websocket.BinaryMessage, data)
-	} else {
-		_ = ctx.Conn.WriteJSON(msg)
-	}
-
-	ctx.mu.Unlock()
-}
-
-func (ctx *Context) Error(err error) {
-	ctx.Write(&streamer.Message{
+func (t *Transport) Error(err error) {
+	t.Write(&streamer.Message{
 		Type: "error", Value: err.Error(),
 	})
 }
 
-func (ctx *Context) OnClose(f func()) {
-	ctx.onClose = append(ctx.onClose, f)
+func (t *Transport) OnChange(f func()) {
+	t.onChange = f
+}
+
+func (t *Transport) OnClose(f func()) {
+	t.onClose = append(t.onClose, f)
 }

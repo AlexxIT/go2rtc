@@ -10,7 +10,7 @@ import (
 
 const packetSize = 8192
 
-func handlerWS(ctx *api.Context, msg *streamer.Message) {
+func handlerWS(ctx *api.Transport, msg *streamer.Message) {
 	src := ctx.Request.URL.Query().Get("src")
 	stream := streams.GetOrNew(src)
 	if stream == nil {
@@ -59,7 +59,7 @@ func handlerWS(ctx *api.Context, msg *streamer.Message) {
 	cons.Start()
 }
 
-func handlerWS4(ctx *api.Context, msg *streamer.Message) {
+func handlerWS4(ctx *api.Transport, msg *streamer.Message) {
 	src := ctx.Request.URL.Query().Get("src")
 	stream := streams.GetOrNew(src)
 	if stream == nil {

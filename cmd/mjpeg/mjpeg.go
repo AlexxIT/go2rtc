@@ -100,7 +100,7 @@ func handlerStream(w http.ResponseWriter, r *http.Request) {
 	//log.Trace().Msg("[api.mjpeg] close")
 }
 
-func handlerWS(ctx *api.Context, msg *streamer.Message) {
+func handlerWS(ctx *api.Transport, msg *streamer.Message) {
 	src := ctx.Request.URL.Query().Get("src")
 	stream := streams.GetOrNew(src)
 	if stream == nil {

@@ -49,6 +49,10 @@ func (c *Conn) Init() {
 		//fmt.Printf("TODO: webrtc ontrack %+v\n", remote)
 	})
 
+	c.Conn.OnDataChannel(func(channel *webrtc.DataChannel) {
+		c.Fire(channel)
+	})
+
 	// OK connection:
 	// 15:01:46 ICE connection state changed: checking
 	// 15:01:46 peer connection state changed: connected

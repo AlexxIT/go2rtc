@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"github.com/AlexxIT/go2rtc/cmd/app"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/rs/zerolog"
 	"net"
 	"net/http"
@@ -127,27 +126,4 @@ func streamsHandler(w http.ResponseWriter, r *http.Request) {
 	e := json.NewEncoder(w)
 	e.SetIndent("", "  ")
 	_ = e.Encode(v)
-}
-
-func apiWS(w http.ResponseWriter, r *http.Request) {
-	ctx := new(Context)
-	if err := ctx.Upgrade(w, r); err != nil {
-		origin := r.Header.Get("Origin")
-		log.Error().Err(err).Caller().Msgf("host=%s origin=%s", r.Host, origin)
-		return
-	}
-	defer ctx.Close()
-
-	for {
-		msg := new(streamer.Message)
-		if err := ctx.Conn.ReadJSON(msg); err != nil {
-			log.Trace().Err(err).Caller().Send()
-			return
-		}
-
-		handler := wsHandlers[msg.Type]
-		if handler != nil {
-			handler(ctx, msg)
-		}
-	}
 }

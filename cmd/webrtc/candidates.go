@@ -13,7 +13,7 @@ func AddCandidate(address string) {
 	candidates = append(candidates, address)
 }
 
-func asyncCandidates(ctx *api.Context) {
+func asyncCandidates(ctx *api.Transport) {
 	for _, address := range candidates {
 		address, err := webrtc.LookupIP(address)
 		if err != nil {
@@ -79,7 +79,7 @@ func syncCanditates(answer string) (string, error) {
 	return string(data), nil
 }
 
-func candidateHandler(ctx *api.Context, msg *streamer.Message) {
+func candidateHandler(ctx *api.Transport, msg *streamer.Message) {
 	if ctx.Consumer == nil {
 		return
 	}

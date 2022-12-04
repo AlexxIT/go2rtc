@@ -8,7 +8,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	pion "github.com/pion/webrtc/v3"
 	"github.com/rs/zerolog"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 )
@@ -66,8 +66,8 @@ var log zerolog.Logger
 
 var NewPConn func() (*pion.PeerConnection, error)
 
-func asyncHandler(ctx *api.Context, msg *streamer.Message) {
-	src := ctx.Request.URL.Query().Get("src")
+func asyncHandler(tr *api.Transport, msg *streamer.Message) {
+	src := tr.Request.URL.Query().Get("src")
 	stream := streams.Get(src)
 	if stream == nil {
 		return
@@ -85,7 +85,7 @@ func asyncHandler(ctx *api.Context, msg *streamer.Message) {
 		return
 	}
 
-	conn.UserAgent = ctx.Request.UserAgent()
+	conn.UserAgent = tr.Request.UserAgent()
 	conn.Listen(func(msg interface{}) {
 		switch msg := msg.(type) {
 		case pion.PeerConnectionState:
@@ -96,7 +96,7 @@ func asyncHandler(ctx *api.Context, msg *streamer.Message) {
 			if msg != nil {
 				s := msg.ToJSON().Candidate
 				log.Trace().Str("candidate", s).Msg("[webrtc] local")
-				ctx.Write(&streamer.Message{Type: "webrtc/candidate", Value: s})
+				tr.Write(&streamer.Message{Type: "webrtc/candidate", Value: s})
 			}
 		}
 	})
@@ -107,7 +107,7 @@ func asyncHandler(ctx *api.Context, msg *streamer.Message) {
 
 	if err = conn.SetOffer(offer); err != nil {
 		log.Warn().Err(err).Caller().Msg("conn.SetOffer")
-		ctx.Error(err)
+		tr.Error(err)
 		return
 	}
 
@@ -115,7 +115,7 @@ func asyncHandler(ctx *api.Context, msg *streamer.Message) {
 	if err = stream.AddConsumer(conn); err != nil {
 		log.Warn().Err(err).Caller().Msg("stream.AddConsumer")
 		_ = conn.Conn.Close()
-		ctx.Error(err)
+		tr.Error(err)
 		return
 	}
 
@@ -127,15 +127,15 @@ func asyncHandler(ctx *api.Context, msg *streamer.Message) {
 
 	if err != nil {
 		log.Error().Err(err).Caller().Msg("conn.GetAnswer")
-		ctx.Error(err)
+		tr.Error(err)
 		return
 	}
 
-	ctx.Consumer = conn
+	tr.Consumer = conn
 
-	ctx.Write(&streamer.Message{Type: "webrtc/answer", Value: answer})
+	tr.Write(&streamer.Message{Type: "webrtc/answer", Value: answer})
 
-	asyncCandidates(ctx)
+	asyncCandidates(tr)
 }
 
 func syncHandler(w http.ResponseWriter, r *http.Request) {
@@ -146,7 +146,7 @@ func syncHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// get offer
-	offer, err := ioutil.ReadAll(r.Body)
+	offer, err := io.ReadAll(r.Body)
 	if err != nil {
 		log.Error().Err(err).Caller().Msg("ioutil.ReadAll")
 		return
