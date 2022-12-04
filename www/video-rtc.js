@@ -111,7 +111,7 @@ class VideoRTC extends HTMLElement {
          * Supported modes (webrtc, mse, mse2, mp4, mjpeg).
          * @type {string}
          */
-        this.modes = "webrtc,mse,mp4";
+        this.mode = "webrtc,mse,mp4";
 
         /**
          * Run stream when not displayed on the screen. Default `false`.
@@ -352,21 +352,21 @@ class VideoRTC extends HTMLElement {
             // CONNECTING => OPEN
             this.wsState = WebSocket.OPEN;
 
-            if (this.modes.indexOf("mse") >= 0 && "MediaSource" in window) { // iPhone
-                if (this.modes.indexOf("mse2") >= 0 && MediaSource.canConstructInDedicatedWorker) {
+            if (this.mode.indexOf("mse") >= 0 && "MediaSource" in window) { // iPhone
+                if (this.mode.indexOf("mse2") >= 0 && MediaSource.canConstructInDedicatedWorker) {
                     this.internalMSE2();
                 } else {
                     this.internalMSE();
                 }
-            } else if (this.modes.indexOf("mp4") >= 0) {
+            } else if (this.mode.indexOf("mp4") >= 0) {
                 this.internalMP4();
             }
 
-            if (this.modes.indexOf("webrtc") >= 0 && "RTCPeerConnection" in window) { // macOS Desktop app
+            if (this.mode.indexOf("webrtc") >= 0 && "RTCPeerConnection" in window) { // macOS Desktop app
                 this.internalRTC();
             }
 
-            if (this.modes.indexOf("mjpeg") >= 0) {
+            if (this.mode.indexOf("mjpeg") >= 0) {
                 this.internalMJPEG();
             }
         });
