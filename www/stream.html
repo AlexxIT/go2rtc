@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>go2rtc - Stream</title>
+    <script src="video-rtc.js"></script>
+    <style>
+        body {
+            background: black;
+            margin: 0;
+            padding: 0;
+            display: flex;
+        }
+
+        html, body {
+            height: 100%;
+            width: 100%;
+        }
+
+        .flex {
+            flex-wrap: wrap;
+            align-content: flex-start;
+            align-items: flex-start;
+        }
+    </style>
+</head>
+<body>
+<script>
+    const params = new URLSearchParams(location.search);
+
+    // support multiple streams and multiple modes
+    const streams = params.getAll("src");
+    const modes = params.getAll("mode");
+    if (modes.length === 0) modes.push("");
+
+    while (modes.length > streams.length) {
+        streams.push(streams[0]);
+    }
+    while (streams.length > modes.length) {
+        modes.push(modes[0]);
+    }
+
+    if (streams.length > 1) {
+        document.body.className = "flex";
+    }
+
+    const background = params.get("background") === "true";
+    const width = "1 0 " + (params.get("width") || "320px");
+
+    for (let i = 0; i < streams.length; i++) {
+        /** @type {VideoRTC} */
+        const video = document.createElement("video-rtc");
+        video.background = background;
+        video.mode = modes[i] || video.mode;
+        video.style.flex = width;
+        video.src = new URL("api/ws?src=" + streams[i], location.href);
+        document.body.appendChild(video);
+    }
+</script>
+</body>
+</html>
