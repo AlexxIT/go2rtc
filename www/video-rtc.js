@@ -7,8 +7,9 @@ function MediaSourceHandler(ms) {
     /** @type {SourceBuffer} */
     let sb;
 
-    /** @type {array<ArrayBuffer>} */
-    let qb = [];
+    const bufCap = 2 * 1024 * 1024;
+    const buf = new Uint8Array(bufCap);
+    let bufLen = 0;
 
     return ev => {
         if (typeof ev.data === "string") {
@@ -22,23 +23,35 @@ function MediaSourceHandler(ms) {
                 sb = ms.addSourceBuffer(msg.value);
                 sb.mode = "segments"; // segments or sequence
                 sb.addEventListener("updateend", () => {
-                    if (!sb.updating && qb.length > 0) {
+                    if (sb.updating) return;
+                    if (bufLen > 0) {
                         try {
-                            sb.appendBuffer(qb.shift());
+                            sb.appendBuffer(buf.slice(0, bufLen));
                         } catch (e) {
                             console.debug(e);
                         }
+                        bufLen = 0;
+                    } else if (sb.buffered.length) {
+                        const end = sb.buffered.end(sb.buffered.length - 1) - 5;
+                        const start = sb.buffered.start(0);
+                        if (end > start) {
+                            sb.remove(start, end);
+                            ms.setLiveSeekableRange(end, end + 5);
+                        }
+                        // console.debug("VideoRTC.buffered", start, end);
                     }
                 });
             }
-        } else if (sb.updating || qb.length > 0) {
-            qb.push(ev.data);
-            // console.debug("buffer:", qb.length);
+        } else if (sb.updating || bufLen > 0) {
+            const b = new Uint8Array(ev.data);
+            buf.set(b, bufLen);
+            bufLen += b.byteLength;
+            // console.debug("VideoRTC.buffer", b.byteLength, bufLen);
         } else {
             try {
                 sb.appendBuffer(ev.data);
             } catch (e) {
-                console.debug(e);
+                // console.debug(e);
             }
         }
     }
