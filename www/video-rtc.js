@@ -188,12 +188,11 @@ class VideoRTC extends HTMLElement {
      * @param {string|URL} value
      */
     set src(value) {
-        if (typeof value === "string") {
-            if (value.startsWith("/")) {
-                value = "ws" + location.origin.substring(4) + value;
-            } else if (value.startsWith("http")) {
-                value = "ws" + value.substring(4);
-            }
+        if (typeof value !== "string") value = value.toString();
+        if (value.startsWith("http")) {
+            value = "ws" + value.substring(4);
+        } else if (value.startsWith("/")) {
+            value = "ws" + location.origin.substring(4) + value;
         }
 
         this.url = value;
