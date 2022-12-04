@@ -4,7 +4,6 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/api"
 	"github.com/AlexxIT/go2rtc/cmd/app"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	pion "github.com/pion/webrtc/v3"
 	"github.com/rs/zerolog"
@@ -66,7 +65,7 @@ var log zerolog.Logger
 
 var NewPConn func() (*pion.PeerConnection, error)
 
-func asyncHandler(tr *api.Transport, msg *streamer.Message) {
+func asyncHandler(tr *api.Transport, msg *api.Message) {
 	src := tr.Request.URL.Query().Get("src")
 	stream := streams.Get(src)
 	if stream == nil {
@@ -96,7 +95,7 @@ func asyncHandler(tr *api.Transport, msg *streamer.Message) {
 			if msg != nil {
 				s := msg.ToJSON().Candidate
 				log.Trace().Str("candidate", s).Msg("[webrtc] local")
-				tr.Write(&streamer.Message{Type: "webrtc/candidate", Value: s})
+				tr.Write(&api.Message{Type: "webrtc/candidate", Value: s})
 			}
 		}
 	})
@@ -133,7 +132,7 @@ func asyncHandler(tr *api.Transport, msg *streamer.Message) {
 
 	tr.Consumer = conn
 
-	tr.Write(&streamer.Message{Type: "webrtc/answer", Value: answer})
+	tr.Write(&api.Message{Type: "webrtc/answer", Value: answer})
 
 	asyncCandidates(tr)
 }

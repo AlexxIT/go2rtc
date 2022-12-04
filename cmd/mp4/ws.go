@@ -10,16 +10,16 @@ import (
 
 const packetSize = 8192
 
-func handlerWS(ctx *api.Transport, msg *streamer.Message) {
-	src := ctx.Request.URL.Query().Get("src")
+func handlerWS(tr *api.Transport, msg *api.Message) {
+	src := tr.Request.URL.Query().Get("src")
 	stream := streams.GetOrNew(src)
 	if stream == nil {
 		return
 	}
 
 	cons := &mp4.Consumer{}
-	cons.UserAgent = ctx.Request.UserAgent()
-	cons.RemoteAddr = ctx.Request.RemoteAddr
+	cons.UserAgent = tr.Request.UserAgent()
+	cons.RemoteAddr = tr.Request.RemoteAddr
 
 	if codecs, ok := msg.Value.(string); ok {
 		cons.Medias = parseMedias(codecs, true)
@@ -28,39 +28,39 @@ func handlerWS(ctx *api.Transport, msg *streamer.Message) {
 	cons.Listen(func(msg interface{}) {
 		if data, ok := msg.([]byte); ok {
 			for len(data) > packetSize {
-				ctx.Write(data[:packetSize])
+				tr.Write(data[:packetSize])
 				data = data[packetSize:]
 			}
-			ctx.Write(data)
+			tr.Write(data)
 		}
 	})
 
 	if err := stream.AddConsumer(cons); err != nil {
 		log.Warn().Err(err).Caller().Send()
-		ctx.Error(err)
+		tr.Error(err)
 		return
 	}
 
-	ctx.OnClose(func() {
+	tr.OnClose(func() {
 		stream.RemoveConsumer(cons)
 	})
 
-	ctx.Write(&streamer.Message{Type: "mse", Value: cons.MimeType()})
+	tr.Write(&api.Message{Type: "mse", Value: cons.MimeType()})
 
 	data, err := cons.Init()
 	if err != nil {
 		log.Warn().Err(err).Caller().Send()
-		ctx.Error(err)
+		tr.Error(err)
 		return
 	}
 
-	ctx.Write(data)
+	tr.Write(data)
 
 	cons.Start()
 }
 
-func handlerWS4(ctx *api.Transport, msg *streamer.Message) {
-	src := ctx.Request.URL.Query().Get("src")
+func handlerWS4(tr *api.Transport, msg *api.Message) {
+	src := tr.Request.URL.Query().Get("src")
 	stream := streams.GetOrNew(src)
 	if stream == nil {
 		return
@@ -74,7 +74,7 @@ func handlerWS4(ctx *api.Transport, msg *streamer.Message) {
 
 	cons.Listen(func(msg interface{}) {
 		if data, ok := msg.([]byte); ok {
-			ctx.Write(data)
+			tr.Write(data)
 		}
 	})
 
@@ -83,7 +83,7 @@ func handlerWS4(ctx *api.Transport, msg *streamer.Message) {
 		return
 	}
 
-	ctx.OnClose(func() {
+	tr.OnClose(func() {
 		stream.RemoveConsumer(cons)
 	})
 }

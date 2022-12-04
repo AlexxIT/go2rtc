@@ -1,13 +1,26 @@
 package api
 
 import (
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/gorilla/websocket"
 	"net/http"
 	"net/url"
 	"strings"
 	"sync"
 )
+
+// Message - struct for data exchange in Web API
+type Message struct {
+	Type  string      `json:"type"`
+	Value interface{} `json:"value,omitempty"`
+}
+
+type WSHandler func(tr *Transport, msg *Message)
+
+func HandleWS(msgType string, handler WSHandler) {
+	wsHandlers[msgType] = handler
+}
+
+var wsHandlers = make(map[string]WSHandler)
 
 func initWS(origin string) {
 	wsUp = &websocket.Upgrader{
@@ -63,7 +76,7 @@ func apiWS(w http.ResponseWriter, r *http.Request) {
 	})
 
 	for {
-		msg := new(streamer.Message)
+		msg := new(Message)
 		if err = ws.ReadJSON(msg); err != nil {
 			log.Trace().Err(err).Caller().Send()
 			_ = ws.Close()
@@ -79,8 +92,6 @@ func apiWS(w http.ResponseWriter, r *http.Request) {
 }
 
 var wsUp *websocket.Upgrader
-
-type WSHandler func(tr *Transport, msg *streamer.Message)
 
 type Transport struct {
 	Request  *http.Request
@@ -115,9 +126,7 @@ func (t *Transport) Close() {
 }
 
 func (t *Transport) Error(err error) {
-	t.Write(&streamer.Message{
-		Type: "error", Value: err.Error(),
-	})
+	t.Write(&Message{Type: "error", Value: err.Error()})
 }
 
 func (t *Transport) OnChange(f func()) {

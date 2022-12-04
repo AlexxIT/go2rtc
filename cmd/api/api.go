@@ -76,13 +76,8 @@ func HandleFunc(pattern string, handler http.HandlerFunc) {
 	http.HandleFunc(pattern, handler)
 }
 
-func HandleWS(msgType string, handler WSHandler) {
-	wsHandlers[msgType] = handler
-}
-
 var basePath string
 var log zerolog.Logger
-var wsHandlers = make(map[string]WSHandler)
 
 func middlewareLog(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

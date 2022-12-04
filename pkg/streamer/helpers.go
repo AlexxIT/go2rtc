@@ -12,14 +12,6 @@ const (
 	JSONSend       = "send"
 )
 
-// Message - struct for data exchange in Web API
-type Message struct {
-	Type  string      `json:"type"`
-	Value interface{} `json:"value,omitempty"`
-}
-
-// other
-
 func Between(s, sub1, sub2 string) string {
 	i := strings.Index(s, sub1)
 	if i < 0 {

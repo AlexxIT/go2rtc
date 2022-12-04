@@ -2,7 +2,6 @@ package webrtc
 
 import (
 	"github.com/AlexxIT/go2rtc/cmd/api"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	"github.com/pion/sdp/v3"
 )
@@ -13,7 +12,7 @@ func AddCandidate(address string) {
 	candidates = append(candidates, address)
 }
 
-func asyncCandidates(ctx *api.Transport) {
+func asyncCandidates(tr *api.Transport) {
 	for _, address := range candidates {
 		address, err := webrtc.LookupIP(address)
 		if err != nil {
@@ -29,7 +28,7 @@ func asyncCandidates(ctx *api.Transport) {
 
 		log.Trace().Str("candidate", cand).Msg("[webrtc] config")
 
-		ctx.Write(&streamer.Message{Type: "webrtc/candidate", Value: cand})
+		tr.Write(&api.Message{Type: "webrtc/candidate", Value: cand})
 	}
 }
 
@@ -79,11 +78,11 @@ func syncCanditates(answer string) (string, error) {
 	return string(data), nil
 }
 
-func candidateHandler(ctx *api.Transport, msg *streamer.Message) {
-	if ctx.Consumer == nil {
+func candidateHandler(tr *api.Transport, msg *api.Message) {
+	if tr.Consumer == nil {
 		return
 	}
-	if conn := ctx.Consumer.(*webrtc.Conn); conn != nil {
+	if conn := tr.Consumer.(*webrtc.Conn); conn != nil {
 		s := msg.Value.(string)
 		log.Trace().Str("candidate", s).Msg("[webrtc] remote")
 		conn.AddCandidate(s)
