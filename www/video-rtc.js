@@ -1,81 +1,4 @@
 /**
- * Common function for processing MSE and MSE2 data.
- * @param {MediaSource} ms
- * @returns {Function}
- */
-function MediaSourceHandler(ms) {
-    /** @type {SourceBuffer} */
-    let sb;
-
-    const bufCap = 2 * 1024 * 1024;
-    const buf = new Uint8Array(bufCap);
-    let bufLen = 0;
-
-    return ev => {
-        if (typeof ev.data === "string") {
-            const msg = JSON.parse(ev.data);
-            if (msg.type === "mse") {
-                if (!MediaSource.isTypeSupported(msg.value)) {
-                    console.warn("Not supported: " + msg.value)
-                    return;
-                }
-
-                sb = ms.addSourceBuffer(msg.value);
-                sb.mode = "segments"; // segments or sequence
-                sb.addEventListener("updateend", () => {
-                    if (sb.updating) return;
-                    if (bufLen > 0) {
-                        try {
-                            sb.appendBuffer(buf.slice(0, bufLen));
-                        } catch (e) {
-                            console.debug(e);
-                        }
-                        bufLen = 0;
-                    } else if (sb.buffered.length) {
-                        const end = sb.buffered.end(sb.buffered.length - 1) - 5;
-                        const start = sb.buffered.start(0);
-                        if (end > start) {
-                            sb.remove(start, end);
-                            ms.setLiveSeekableRange(end, end + 5);
-                        }
-                        // console.debug("VideoRTC.buffered", start, end);
-                    }
-                });
-            }
-        } else if (sb.updating || bufLen > 0) {
-            const b = new Uint8Array(ev.data);
-            buf.set(b, bufLen);
-            bufLen += b.byteLength;
-            // console.debug("VideoRTC.buffer", b.byteLength, bufLen);
-        } else {
-            try {
-                sb.appendBuffer(ev.data);
-            } catch (e) {
-                // console.debug(e);
-            }
-        }
-    }
-}
-
-/**
- * Dedicated Worker Handler for MSE2 https://chromestatus.com/feature/5177263249162240
- */
-if (typeof importScripts == "function") {
-    // protect below code (class VideoRTC) from fail inside Worker
-    HTMLElement = Object;
-    customElements = {define: Function()};
-
-    const ms = new MediaSource();
-    ms.addEventListener("sourceopen", ev => {
-        postMessage({type: ev.type});
-    }, {once: true});
-
-    onmessage = MediaSourceHandler(ms);
-
-    postMessage({type: "handle", value: ms.handle}, [ms.handle]);
-}
-
-/**
  * Video player for MSE and WebRTC connections.
  *
  * All modern web technologies are supported in almost any browser except Apple Safari.
@@ -83,7 +6,6 @@ if (typeof importScripts == "function") {
  * Support:
  * - RTCPeerConnection for Safari iOS 11.0+
  * - IntersectionObserver for Safari iOS 12.2+
- * - MediaSource in Workers for Chrome 108+
  *
  * Doesn't support:
  * - MediaSource for Safari iOS all
@@ -108,10 +30,10 @@ class VideoRTC extends HTMLElement {
         ];
 
         /**
-         * Supported modes (webrtc, mse, mse2, mp4, mjpeg).
+         * Supported modes (webrtc, mse, mp4, mjpeg).
          * @type {string}
          */
-        this.mode = "webrtc,mse,mp4";
+        this.mode = "webrtc,mse,mp4,mjpeg";
 
         /**
          * Run stream when not displayed on the screen. Default `false`.
@@ -179,6 +101,18 @@ class VideoRTC extends HTMLElement {
          * @type {number}
          */
         this.reconnectTimeout = 0;
+
+        /**
+         * Handler for receiving Binary from WebSocket
+         * @type {Function}
+         */
+        this.ondata = null;
+
+        /**
+         * Handlers list for receiving JSON from WebSocket
+         * @type {Object.<string,Function>}}
+         */
+        this.onmessage = null;
     }
 
     /** public properties **/
@@ -352,22 +286,44 @@ class VideoRTC extends HTMLElement {
             // CONNECTING => OPEN
             this.wsState = WebSocket.OPEN;
 
-            if (this.mode.indexOf("mse") >= 0 && "MediaSource" in window) { // iPhone
-                if (this.mode.indexOf("mse2") >= 0 && MediaSource.canConstructInDedicatedWorker) {
-                    this.internalMSE2();
+            this.ws.addEventListener("message", ev => {
+                if (typeof ev.data === "string") {
+                    const msg = JSON.parse(ev.data);
+                    for (const mode in this.onmessage) {
+                        this.onmessage[mode](msg);
+                    }
                 } else {
-                    this.internalMSE();
+                    this.ondata(ev.data);
                 }
+            });
+
+            this.ondata = null;
+            this.onmessage = {};
+
+            let firstMode = "";
+
+            if (this.mode.indexOf("mse") >= 0 && "MediaSource" in window) { // iPhone
+                firstMode ||= "mse";
+                this.internalMSE();
             } else if (this.mode.indexOf("mp4") >= 0) {
+                firstMode ||= "mp4";
                 this.internalMP4();
             }
 
             if (this.mode.indexOf("webrtc") >= 0 && "RTCPeerConnection" in window) { // macOS Desktop app
+                firstMode ||= "webrtc";
                 this.internalRTC();
             }
 
             if (this.mode.indexOf("mjpeg") >= 0) {
-                this.internalMJPEG();
+                if (firstMode) {
+                    this.onmessage["mjpeg"] = msg => {
+                        if (msg.type !== "error" || msg.value.indexOf(firstMode) !== 0) return;
+                        this.internalMJPEG();
+                    }
+                } else {
+                    this.internalMJPEG();
+                }
             }
         });
 
@@ -404,33 +360,49 @@ class VideoRTC extends HTMLElement {
         this.video.srcObject = null;
         this.play();
 
-        this.ws.addEventListener("message", MediaSourceHandler(ms));
-    }
+        this.onmessage["mse"] = msg => {
+            if (msg.type !== "mse") return;
 
-    internalMSE2() {
-        console.debug("VideoRTC.internalMSE2");
+            const sb = ms.addSourceBuffer(msg.value);
+            sb.mode = "segments"; // segments or sequence
+            sb.addEventListener("updateend", () => {
+                if (sb.updating) return;
+                if (bufLen > 0) {
+                    try {
+                        sb.appendBuffer(buf.slice(0, bufLen));
+                    } catch (e) {
+                        console.debug(e);
+                    }
+                    bufLen = 0;
+                } else if (sb.buffered.length) {
+                    const end = sb.buffered.end(sb.buffered.length - 1) - 5;
+                    const start = sb.buffered.start(0);
+                    if (end > start) {
+                        sb.remove(start, end);
+                        ms.setLiveSeekableRange(end, end + 5);
+                    }
+                    // console.debug("VideoRTC.buffered", start, end);
+                }
+            });
 
-        const worker = new Worker("video-rtc.js");
-        worker.addEventListener("message", ev => {
-            if (ev.data.type === "handle") {
-                this.video.srcObject = ev.data.value;
-                this.play();
-            } else if (ev.data.type === "sourceopen") {
-                this.send({type: "mse", value: this.codecs("mse")});
+            const buf = new Uint8Array(2 * 1024 * 1024);
+            let bufLen = 0;
+
+            this.ondata = data => {
+                if (sb.updating || bufLen > 0) {
+                    const b = new Uint8Array(data);
+                    buf.set(b, bufLen);
+                    bufLen += b.byteLength;
+                    // console.debug("VideoRTC.buffer", b.byteLength, bufLen);
+                } else {
+                    try {
+                        sb.appendBuffer(data);
+                    } catch (e) {
+                        // console.debug(e);
+                    }
+                }
             }
-        });
-
-        this.ws.addEventListener("message", ev => {
-            if (typeof ev.data === "string") {
-                worker.postMessage(ev.data);
-            } else {
-                worker.postMessage(ev.data, [ev.data]);
-            }
-        });
-
-        this.ws.addEventListener("close", () => {
-            worker.terminate();
-        });
+        }
     }
 
     internalRTC() {
@@ -518,10 +490,7 @@ class VideoRTC extends HTMLElement {
             }
         });
 
-        this.ws.addEventListener("message", ev => {
-            if (typeof ev.data !== "string") return;
-
-            const msg = JSON.parse(ev.data);
+        this.onmessage["webrtc"] = msg => {
             switch (msg.type) {
                 case "webrtc/candidate":
                     pc.addIceCandidate({candidate: msg.value, sdpMid: ""}).catch(() => console.debug);
@@ -532,8 +501,11 @@ class VideoRTC extends HTMLElement {
                 case "mse":
                     mseCodecs = msg.value;
                     break;
+                case "error":
+                    if (msg.value.indexOf("webrtc/offer") < 0) return;
+                    pc.close();
             }
-        });
+        };
 
         // Safari doesn't support "offerToReceiveVideo"
         pc.addTransceiver("video", {direction: "recvonly"});
@@ -552,10 +524,9 @@ class VideoRTC extends HTMLElement {
     internalMJPEG() {
         console.debug("VideoRTC.internalMJPEG");
 
-        this.ws.addEventListener("message", ev => {
-            if (typeof ev.data === "string") return;
-            this.video.poster = "data:image/jpeg;base64," + VideoRTC.btoa(ev.data);
-        });
+        this.ondata = data => {
+            this.video.poster = "data:image/jpeg;base64," + VideoRTC.btoa(data);
+        };
 
         this.send({type: "mjpeg"});
         this.video.controls = false;
@@ -567,9 +538,7 @@ class VideoRTC extends HTMLElement {
         /** @type {HTMLVideoElement} */
         let video2;
 
-        this.ws.addEventListener("message", ev => {
-            if (typeof ev.data === "string") return;
-
+        this.ondata = data => {
             // first video with default position (set container size)
             // second video with position=absolute and top=0px
             if (video2) {
@@ -585,9 +554,9 @@ class VideoRTC extends HTMLElement {
             video2.style.top = "0px";
             this.appendChild(video2);
 
-            video2.src = "data:video/mp4;base64," + VideoRTC.btoa(ev.data);
+            video2.src = "data:video/mp4;base64," + VideoRTC.btoa(data);
             video2.play().catch(() => console.log);
-        });
+        };
 
         this.ws.addEventListener("close", () => {
             if (!video2) return;
