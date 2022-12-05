@@ -1,6 +1,7 @@
 package mp4
 
 import (
+	"errors"
 	"github.com/AlexxIT/go2rtc/cmd/api"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
 	"github.com/AlexxIT/go2rtc/pkg/mp4"
@@ -10,11 +11,11 @@ import (
 
 const packetSize = 8192
 
-func handlerWS(tr *api.Transport, msg *api.Message) {
+func handlerWS(tr *api.Transport, msg *api.Message) error {
 	src := tr.Request.URL.Query().Get("src")
 	stream := streams.GetOrNew(src)
 	if stream == nil {
-		return
+		return errors.New(api.StreamNotFound)
 	}
 
 	cons := &mp4.Consumer{}
@@ -37,8 +38,7 @@ func handlerWS(tr *api.Transport, msg *api.Message) {
 
 	if err := stream.AddConsumer(cons); err != nil {
 		log.Warn().Err(err).Caller().Send()
-		tr.Error(err)
-		return
+		return err
 	}
 
 	tr.OnClose(func() {
@@ -50,20 +50,21 @@ func handlerWS(tr *api.Transport, msg *api.Message) {
 	data, err := cons.Init()
 	if err != nil {
 		log.Warn().Err(err).Caller().Send()
-		tr.Error(err)
-		return
+		return err
 	}
 
 	tr.Write(data)
 
 	cons.Start()
+
+	return nil
 }
 
-func handlerWS4(tr *api.Transport, msg *api.Message) {
+func handlerWS4(tr *api.Transport, msg *api.Message) error {
 	src := tr.Request.URL.Query().Get("src")
 	stream := streams.GetOrNew(src)
 	if stream == nil {
-		return
+		return errors.New(api.StreamNotFound)
 	}
 
 	cons := &mp4.Segment{}
@@ -80,12 +81,14 @@ func handlerWS4(tr *api.Transport, msg *api.Message) {
 
 	if err := stream.AddConsumer(cons); err != nil {
 		log.Error().Err(err).Caller().Send()
-		return
+		return err
 	}
 
 	tr.OnClose(func() {
 		stream.RemoveConsumer(cons)
 	})
+
+	return nil
 }
 
 func parseMedias(codecs string, parseAudio bool) (medias []*streamer.Media) {

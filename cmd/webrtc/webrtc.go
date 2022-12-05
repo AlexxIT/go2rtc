@@ -1,6 +1,7 @@
 package webrtc
 
 import (
+	"errors"
 	"github.com/AlexxIT/go2rtc/cmd/api"
 	"github.com/AlexxIT/go2rtc/cmd/app"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
@@ -65,11 +66,11 @@ var log zerolog.Logger
 
 var NewPConn func() (*pion.PeerConnection, error)
 
-func asyncHandler(tr *api.Transport, msg *api.Message) {
+func asyncHandler(tr *api.Transport, msg *api.Message) error {
 	src := tr.Request.URL.Query().Get("src")
 	stream := streams.Get(src)
 	if stream == nil {
-		return
+		return errors.New(api.StreamNotFound)
 	}
 
 	log.Debug().Str("url", src).Msg("[webrtc] new consumer")
@@ -80,8 +81,8 @@ func asyncHandler(tr *api.Transport, msg *api.Message) {
 	conn := new(webrtc.Conn)
 	conn.Conn, err = NewPConn()
 	if err != nil {
-		log.Error().Err(err).Caller().Msg("NewPConn")
-		return
+		log.Error().Err(err).Caller().Send()
+		return err
 	}
 
 	conn.UserAgent = tr.Request.UserAgent()
@@ -105,17 +106,15 @@ func asyncHandler(tr *api.Transport, msg *api.Message) {
 	log.Trace().Msgf("[webrtc] offer:\n%s", offer)
 
 	if err = conn.SetOffer(offer); err != nil {
-		log.Warn().Err(err).Caller().Msg("conn.SetOffer")
-		tr.Error(err)
-		return
+		log.Warn().Err(err).Caller().Send()
+		return err
 	}
 
 	// 2. AddConsumer, so we get new tracks
 	if err = stream.AddConsumer(conn); err != nil {
-		log.Warn().Err(err).Caller().Msg("stream.AddConsumer")
+		log.Warn().Err(err).Caller().Send()
 		_ = conn.Conn.Close()
-		tr.Error(err)
-		return
+		return err
 	}
 
 	conn.Init()
@@ -125,9 +124,8 @@ func asyncHandler(tr *api.Transport, msg *api.Message) {
 	log.Trace().Msgf("[webrtc] answer\n%s", answer)
 
 	if err != nil {
-		log.Error().Err(err).Caller().Msg("conn.GetAnswer")
-		tr.Error(err)
-		return
+		log.Error().Err(err).Caller().Send()
+		return err
 	}
 
 	tr.Consumer = conn
@@ -135,6 +133,8 @@ func asyncHandler(tr *api.Transport, msg *api.Message) {
 	tr.Write(&api.Message{Type: "webrtc/answer", Value: answer})
 
 	asyncCandidates(tr)
+
+	return nil
 }
 
 func syncHandler(w http.ResponseWriter, r *http.Request) {

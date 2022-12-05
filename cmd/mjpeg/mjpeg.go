@@ -1,6 +1,7 @@
 package mjpeg
 
 import (
+	"errors"
 	"github.com/AlexxIT/go2rtc/cmd/api"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
 	"github.com/AlexxIT/go2rtc/pkg/mjpeg"
@@ -20,6 +21,7 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 	src := r.URL.Query().Get("src")
 	stream := streams.GetOrNew(src)
 	if stream == nil {
+		http.Error(w, api.StreamNotFound, http.StatusNotFound)
 		return
 	}
 
@@ -60,6 +62,7 @@ func handlerStream(w http.ResponseWriter, r *http.Request) {
 	src := r.URL.Query().Get("src")
 	stream := streams.GetOrNew(src)
 	if stream == nil {
+		http.Error(w, api.StreamNotFound, http.StatusNotFound)
 		return
 	}
 
@@ -99,11 +102,11 @@ func handlerStream(w http.ResponseWriter, r *http.Request) {
 	//log.Trace().Msg("[api.mjpeg] close")
 }
 
-func handlerWS(tr *api.Transport, msg *api.Message) {
+func handlerWS(tr *api.Transport, _ *api.Message) error {
 	src := tr.Request.URL.Query().Get("src")
 	stream := streams.GetOrNew(src)
 	if stream == nil {
-		return
+		return errors.New(api.StreamNotFound)
 	}
 
 	cons := &mjpeg.Consumer{}
@@ -115,10 +118,12 @@ func handlerWS(tr *api.Transport, msg *api.Message) {
 
 	if err := stream.AddConsumer(cons); err != nil {
 		log.Error().Err(err).Caller().Send()
-		return
+		return err
 	}
 
 	tr.OnClose(func() {
 		stream.RemoveConsumer(cons)
 	})
+
+	return nil
 }

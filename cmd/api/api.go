@@ -76,6 +76,8 @@ func HandleFunc(pattern string, handler http.HandlerFunc) {
 	http.HandleFunc(pattern, handler)
 }
 
+const StreamNotFound = "stream not found"
+
 var basePath string
 var log zerolog.Logger
 

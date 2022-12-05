@@ -14,7 +14,7 @@ type Message struct {
 	Value interface{} `json:"value,omitempty"`
 }
 
-type WSHandler func(tr *Transport, msg *Message)
+type WSHandler func(tr *Transport, msg *Message) error
 
 func HandleWS(msgType string, handler WSHandler) {
 	wsHandlers[msgType] = handler
@@ -84,7 +84,11 @@ func apiWS(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if handler := wsHandlers[msg.Type]; handler != nil {
-			handler(tr, msg)
+			go func() {
+				if err = handler(tr, msg); err != nil {
+					tr.Write(&Message{Type: "error", Value: msg.Type + ": " + err.Error()})
+				}
+			}()
 		}
 	}
 
@@ -123,10 +127,6 @@ func (t *Transport) Close() {
 	for _, f := range t.onClose {
 		f()
 	}
-}
-
-func (t *Transport) Error(err error) {
-	t.Write(&Message{Type: "error", Value: err.Error()})
 }
 
 func (t *Transport) OnChange(f func()) {
