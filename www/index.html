@@ -8,6 +8,10 @@
     <title>go2rtc</title>
 
     <style>
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
         table {
             background-color: white;
             text-align: left;
@@ -36,8 +40,22 @@
             text-align: center;
         }
 
+        label {
+            display: flex;
+            align-items: center;
+        }
+
         .header {
             padding: 5px 5px;
+        }
+
+        .controls {
+            display: flex;
+            padding: 5px;
+        }
+
+        .controls > label {
+            margin-left: 10px;
         }
     </style>
 </head>
@@ -46,6 +64,13 @@
 <div class="header">
     <input id="src" type="text" placeholder="url">
     <a id="add" href="#">add</a>
+</div>
+<div class="controls">
+    <button>stream</button>
+    <label><input type="checkbox" name="webrtc" checked>webrtc</label>
+    <label><input type="checkbox" name="mse" checked>mse</label>
+    <label><input type="checkbox" name="mp4" checked>mp4</label>
+    <label><input type="checkbox" name="mjpeg" checked>mjpeg</label>
 </div>
 <table id="streams">
     <thead>
@@ -59,50 +84,70 @@
     </tbody>
 </table>
 <script>
-    const baseUrl = location.origin + location.pathname.substr(
-        0, location.pathname.lastIndexOf("/")
-    );
-
-    const links = [
-        '<a href="webrtc.html?src={name}">webrtc</a>',
-        '<a href="mse.html?src={name}">mse</a>',
-        // '<a href="video.html?src={name}">video</a>',
+    const templates = [
+        '<a href="stream.html?src={name}">stream</a>',
         '<a href="api/stream.mp4?src={name}">mp4</a>',
-        '<a href="api/frame.mp4?src={name}">frame</a>',
-        `<a href="rtsp://${location.hostname}:8554/{name}">rtsp</a>`,
         '<a href="api/stream.mjpeg?src={name}">mjpeg</a>',
+        `<a href="rtsp://${location.hostname}:8554/{name}">rtsp</a>`,
         '<a href="api/streams?src={name}">info</a>',
+        '<a href="#" data-name="{name}">delete</a>',
     ];
 
-    function reload() {
-        fetch(`${baseUrl}/api/streams`).then(r => {
-            r.json().then(data => {
-                let html = '';
+    document.querySelector("#add")
+        .addEventListener("click", () => {
+            const src = document.querySelector("#src");
+            const url = new URL("api/streams", location.href);
+            url.searchParams.set("src", src.value);
+            fetch(url, {method: "PUT"}).then(reload);
+        });
 
-                for (const [name, value] of Object.entries(data)) {
-                    const online = value !== null ? value.length : 0
-                    html += `<tr><td>${name || 'default'}</td><td>${online}</td><td>`;
-                    links.forEach(link => {
-                        html += link.replace('{name}', encodeURIComponent(name)) + ' ';
-                    })
-                    html += `<a href="#" onclick="deleteStream('${name}')">delete</a>`;
-                    html += `</td></tr>`;
-                }
+    document.querySelector(".controls > button")
+        .addEventListener("click", () => {
+            const url = new URL("stream.html", location.href);
 
-                let content = document.getElementById('streams').getElementsByTagName('tbody')[0];
-                content.innerHTML = html
+            const streams = document.querySelectorAll("#streams input");
+            streams.forEach(i => {
+                if (i.checked) url.searchParams.append("src", i.name);
             });
-        })
-    }
 
-    function deleteStream(src) {
-        fetch(`${baseUrl}/api/streams?src=${encodeURIComponent(src)}`, {method: 'DELETE'}).then(reload);
-    }
+            if (!url.searchParams.has("src")) return;
 
-    const addButton = document.querySelector('a#add');
-    addButton.onclick = () => {
-        let src = document.querySelector('input#src');
-        fetch(`${baseUrl}/api/streams?src=${encodeURIComponent(src.value)}`, {method: 'PUT'}).then(reload);
+            let mode = document.querySelectorAll(".controls input");
+            mode = Array.from(mode).filter(i => i.checked).map(i => i.name).join(",");
+
+            window.location.href = `${url}&mode=${mode}`;
+        });
+
+    const tbody = document.querySelector("#streams > tbody");
+    tbody.addEventListener("click", ev => {
+        if (ev.target.innerText !== "delete") return;
+
+        ev.preventDefault();
+
+        const url = new URL("api/streams", location.href);
+        url.searchParams.set("src", ev.target.dataset.name);
+        fetch(url, {method: "DELETE"}).then(reload);
+    });
+
+    function reload() {
+        const url = new URL("api/streams", location.href);
+        fetch(url).then(r => r.json()).then(data => {
+            tbody.innerHTML = "";
+
+            for (const [name, value] of Object.entries(data)) {
+                const online = value ? value.length : 0;
+                const links = templates.map(link => {
+                    return link.replace("{name}", encodeURIComponent(name));
+                }).join(" ");
+
+                const tr = document.createElement("tr");
+                tr.dataset["id"] = name;
+                tr.innerHTML =
+                    `<td><label><input type="checkbox" name="${name}">${name}</label></td>` +
+                    `<td>${online}</td><td>${links}</td>`;
+                tbody.appendChild(tr);
+            }
+        });
     }
 
     reload();
