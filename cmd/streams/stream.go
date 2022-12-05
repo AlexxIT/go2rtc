@@ -3,6 +3,7 @@ package streams
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"strings"
 	"sync"
@@ -98,7 +99,11 @@ func (s *Stream) AddConsumer(cons streamer.Consumer) (err error) {
 
 	if len(producers) == 0 {
 		s.stopProducers()
-		return errors.New("no matching codecs: " + codecs)
+		if len(codecs) > 0 {
+			return errors.New("codecs not match: " + codecs)
+		} else {
+			return fmt.Errorf("sources unavailable: %d", len(s.producers))
+		}
 	}
 
 	s.mu.Lock()
