@@ -15,8 +15,8 @@ import (
 func Init() {
 	log = app.GetLogger("mp4")
 
-	api.HandleWS("mse", handlerWS)
-	api.HandleWS("mp4", handlerWS4)
+	api.HandleWS("mse", handlerWSMSE)
+	api.HandleWS("mp4", handlerWSMP4)
 
 	api.HandleFunc("api/frame.mp4", handlerKeyframe)
 	api.HandleFunc("api/stream.mp4", handlerMP4)
@@ -65,7 +65,7 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 }
 
 func handlerMP4(w http.ResponseWriter, r *http.Request) {
-	log.Trace().Msgf("[api.mp4] %s %+v", r.Method, r.Header)
+	log.Trace().Msgf("[mp4] %s %+v", r.Method, r.Header)
 
 	if isChromeFirst(w, r) || isSafari(w, r) {
 		return

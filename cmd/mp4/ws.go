@@ -11,7 +11,7 @@ import (
 
 const packetSize = 8192
 
-func handlerWS(tr *api.Transport, msg *api.Message) error {
+func handlerWSMSE(tr *api.Transport, msg *api.Message) error {
 	src := tr.Request.URL.Query().Get("src")
 	stream := streams.GetOrNew(src)
 	if stream == nil {
@@ -23,6 +23,7 @@ func handlerWS(tr *api.Transport, msg *api.Message) error {
 	cons.RemoteAddr = tr.Request.RemoteAddr
 
 	if codecs, ok := msg.Value.(string); ok {
+		log.Trace().Str("codecs", codecs).Msgf("[mp4] new WS/MSE consumer")
 		cons.Medias = parseMedias(codecs, true)
 	}
 
@@ -60,7 +61,7 @@ func handlerWS(tr *api.Transport, msg *api.Message) error {
 	return nil
 }
 
-func handlerWS4(tr *api.Transport, msg *api.Message) error {
+func handlerWSMP4(tr *api.Transport, msg *api.Message) error {
 	src := tr.Request.URL.Query().Get("src")
 	stream := streams.GetOrNew(src)
 	if stream == nil {
@@ -70,6 +71,7 @@ func handlerWS4(tr *api.Transport, msg *api.Message) error {
 	cons := &mp4.Segment{}
 
 	if codecs, ok := msg.Value.(string); ok {
+		log.Trace().Str("codecs", codecs).Msgf("[mp4] new WS/MP4 consumer")
 		cons.Medias = parseMedias(codecs, false)
 	}
 
