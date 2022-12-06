@@ -6,7 +6,7 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
 
 - zero-dependency and zero-config [small app](#go2rtc-binary) for all OS (Windows, macOS, Linux, ARM)
 - zero-delay for many supported protocols (lowest possible streaming latency)
-- streaming from [RTSP](#source-rtsp), [RTMP](#source-rtmp), [MJPEG](#source-ffmpeg), [HLS/HTTP](#source-ffmpeg), [USB Cameras](#source-ffmpeg-device) and [other sources](#module-streams)
+- streaming from [RTSP](#source-rtsp), [RTMP](#source-rtmp), [HTTP](#source-http) (FLV/MJPEG/JPEG), [FFmpeg](#source-ffmpeg), [USB Cameras](#source-ffmpeg-device) and [other sources](#module-streams)
 - streaming to [RTSP](#module-rtsp), [WebRTC](#module-webrtc), [MSE/MP4](#module-mp4) or [MJPEG](#module-mjpeg)
 - first project in the World with support streaming from [HomeKit Cameras](#source-homekit)
 - first project in the World with support H265 for WebRTC in browser ([read more](https://github.com/AlexxIT/Blog/issues/5))
@@ -50,13 +50,14 @@ Download binary for your OS from [latest release](https://github.com/AlexxIT/go2
 
 - `go2rtc_win64.zip` - Windows 64-bit
 - `go2rtc_win32.zip` - Windows 32-bit
+- `go2rtc_win_arm64.zip` - Windows ARM 64-bit
 - `go2rtc_linux_amd64` - Linux 64-bit
 - `go2rtc_linux_i386` - Linux 32-bit
 - `go2rtc_linux_arm64` - Linux ARM 64-bit (ex. Raspberry 64-bit OS)
 - `go2rtc_linux_arm` - Linux ARM 32-bit (ex. Raspberry 32-bit OS)
-- `go2rtc_linux_mipsel` - Linux on MIPS (ex. [Xiaomi Gateway 3](https://github.com/AlexxIT/XiaomiGateway3))
-- `go2rtc_mac_amd64` - Mac with Intel
-- `go2rtc_mac_arm64` - Mac with M1
+- `go2rtc_linux_mipsel` - Linux MIPS (ex. [Xiaomi Gateway 3](https://github.com/AlexxIT/XiaomiGateway3))
+- `go2rtc_mac_amd64.zip` - Mac Intel 64-bit
+- `go2rtc_mac_arm64.zip` - Mac ARM 64-bit
 
 Don't forget to fix the rights `chmod +x go2rtc_xxx_xxx` on Linux and Mac.
 
@@ -329,7 +330,34 @@ More cameras, like [Tuya](https://www.home-assistant.io/integrations/tuya/), [ON
 
 The HTTP API is the main part for interacting with the application. Default address: `http://127.0.0.1:1984/`.
 
-- you can use WebRTC only when HTTP API enabled
+go2rtc has its own JS video player (`video-rtc.js`) with:
+
+- support technologies:
+   - WebRTC over UDP or TCP
+   - MSE or MP4 or MJPEG over WebSocket 
+- automatic selection best technology according on:
+   - codecs inside your stream
+   - current browser capabilities
+   - current network configuration
+- automatic stop stream while browser or page not active
+- automatic stop stream while player not inside page viewport
+- automatic reconnection
+
+Technology selection based on priorities:
+
+1. Video and Audio better than just Video
+2. H265 better than H264
+3. WebRTC better than MSE, than MP4, than MJPEG
+
+go2rtc has simple HTML page (`stream.html`) with support params in URL:
+
+- multiple streams on page `src=camera1&src=camera2...`
+- stream technology autoselection `mode=webrtc,mse,mp4,mjpeg`
+- stream technology comparison `src=camera1&mode=webrtc&mode=mse&mode=mp4`
+- player width setting in pixels `width=320px` or percents `width=50%`
+
+**Module config**
+
 - you can disable HTTP API with `listen: ""` and use, for example, only RTSP client/server protocol
 - you can enable HTTP API only on localhost with `listen: "127.0.0.1:1984"` setting
 - you can change API `base_path` and host go2rtc on your main app webserver suburl
@@ -337,15 +365,19 @@ The HTTP API is the main part for interacting with the application. Default addr
 
 ```yaml
 api:
-  listen: ":1984"    # HTTP API port ("" - disabled)
-  base_path: "/rtc"  # API prefix for serve on suburl (/api => /rtc/api)
-  static_dir: "www"  # folder for static files (custom web interface)
-  origin: "*"        # allow CORS requests (only * supported)
+  listen: ":1984"    # default ":1984", HTTP API port ("" - disabled)
+  base_path: "/rtc"  # default "", API prefix for serve on suburl (/api => /rtc/api)
+  static_dir: "www"  # default "", folder for static files (custom web interface)
+  origin: "*"        # default "", allow CORS requests (only * supported)
 ```
 
 **PS. go2rtc** doesn't provide HTTPS or password protection. Use [Nginx](https://nginx.org/) or [Ngrok](#module-ngrok) or [Home Assistant Add-on](#go2rtc-home-assistant-add-on) for this tasks.
 
 **PS2.** You can access microphone (for 2-way audio) only with HTTPS ([read more](https://stackoverflow.com/questions/52759992/how-to-access-camera-and-microphone-in-chrome-without-https)).
+
+**PS3.** MJPEG over WebSocket plays better than native MJPEG because Chrome [bug](https://bugs.chromium.org/p/chromium/issues/detail?id=527446).
+
+**PS4.** MP4 over WebSocket was created only for Apple iOS because it doesn't support MSE and native MP4.
 
 ### Module: RTSP
 
