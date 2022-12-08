@@ -138,9 +138,9 @@ var chm_ac_symbols = []byte{
 	0xf9, 0xfa,
 }
 
-func MakeHeaders(t byte, w, h uint16, lqt, cqt []byte) []byte {
+func MakeHeaders(p []byte, t byte, w, h uint16, lqt, cqt []byte) []byte {
 	// Appendix A from https://www.rfc-editor.org/rfc/rfc2435
-	p := []byte{0xFF, 0xD8}
+	p = append(p, 0xFF, 0xD8)
 
 	p = MakeQuantHeader(p, lqt, 0)
 	p = MakeQuantHeader(p, cqt, 1)

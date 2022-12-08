@@ -6,7 +6,7 @@ import (
 )
 
 func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
-	var header, payload []byte
+	buf := make([]byte, 0, 512*1024) // 512K
 
 	return func(push streamer.WriterFunc) streamer.WriterFunc {
 		return func(packet *rtp.Packet) error {
@@ -25,7 +25,7 @@ func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
 				b = b[8:]
 			}
 
-			if header == nil {
+			if len(buf) == 0 {
 				var lqt, cqt []byte
 
 				// 3.1.8.  Quantization Table header
@@ -49,26 +49,26 @@ func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
 				}
 
 				//fmt.Printf("t: %d, q: %d, w: %d, h: %d\n", t, q, w, h)
-				header = MakeHeaders(t, w, h, lqt, cqt)
+				buf = MakeHeaders(buf, t, w, h, lqt, cqt)
 			}
 
 			// 3.1.9.  JPEG Payload
-			payload = append(payload, b...)
+			buf = append(buf, b...)
 
 			if !packet.Marker {
 				return nil
 			}
 
-			b = append(header, payload...)
-			if end := b[len(b)-2:]; end[0] != 0xFF && end[1] != 0xD9 {
-				b = append(b, 0xFF, 0xD9)
+			if end := buf[len(buf)-2:]; end[0] != 0xFF && end[1] != 0xD9 {
+				buf = append(buf, 0xFF, 0xD9)
 			}
 
-			header = nil
-			payload = nil
+			clone := *packet
+			clone.Payload = buf
 
-			packet.Payload = b
-			return push(packet)
+			buf = buf[:0] // clear buffer
+
+			return push(&clone)
 		}
 	}
 }
