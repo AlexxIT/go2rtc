@@ -194,7 +194,7 @@ class VideoRTC extends HTMLElement {
         this.wsState = WebSocket.CONNECTING;
 
         this.internalInit();
-        this.internalWS();
+        this.internalConnect();
     }
 
     /**
@@ -272,7 +272,7 @@ class VideoRTC extends HTMLElement {
         }
     }
 
-    internalWS() {
+    internalConnect() {
         if (this.wsState !== WebSocket.CONNECTING) return;
         if (this.ws) throw "connect with non null WebSocket";
 
@@ -287,45 +287,7 @@ class VideoRTC extends HTMLElement {
             // CONNECTING => OPEN
             this.wsState = WebSocket.OPEN;
 
-            this.ws.addEventListener("message", ev => {
-                if (typeof ev.data === "string") {
-                    const msg = JSON.parse(ev.data);
-                    for (const mode in this.onmessage) {
-                        this.onmessage[mode](msg);
-                    }
-                } else {
-                    this.ondata(ev.data);
-                }
-            });
-
-            this.ondata = null;
-            this.onmessage = {};
-
-            let firstMode = "";
-
-            if (this.mode.indexOf("mse") >= 0 && "MediaSource" in window) { // iPhone
-                firstMode ||= "mse";
-                this.internalMSE();
-            } else if (this.mode.indexOf("mp4") >= 0) {
-                firstMode ||= "mp4";
-                this.internalMP4();
-            }
-
-            if (this.mode.indexOf("webrtc") >= 0 && "RTCPeerConnection" in window) { // macOS Desktop app
-                firstMode ||= "webrtc";
-                this.internalRTC();
-            }
-
-            if (this.mode.indexOf("mjpeg") >= 0) {
-                if (firstMode) {
-                    this.onmessage["mjpeg"] = msg => {
-                        if (msg.type !== "error" || msg.value.indexOf(firstMode) !== 0) return;
-                        this.internalMJPEG();
-                    }
-                } else {
-                    this.internalMJPEG();
-                }
-            }
+            this.internalOpen();
         });
 
         this.ws.addEventListener("close", () => {
@@ -342,9 +304,51 @@ class VideoRTC extends HTMLElement {
 
             this.reconnectTimeout = setTimeout(() => {
                 this.reconnectTimeout = 0;
-                this.internalWS();
+                this.internalConnect();
             }, delay);
         });
+    }
+
+    internalOpen() {
+        this.ws.addEventListener("message", ev => {
+            if (typeof ev.data === "string") {
+                const msg = JSON.parse(ev.data);
+                for (const mode in this.onmessage) {
+                    this.onmessage[mode](msg);
+                }
+            } else {
+                this.ondata(ev.data);
+            }
+        });
+
+        this.ondata = null;
+        this.onmessage = {};
+
+        let firstMode = "";
+
+        if (this.mode.indexOf("mse") >= 0 && "MediaSource" in window) { // iPhone
+            firstMode ||= "mse";
+            this.internalMSE();
+        } else if (this.mode.indexOf("mp4") >= 0) {
+            firstMode ||= "mp4";
+            this.internalMP4();
+        }
+
+        if (this.mode.indexOf("webrtc") >= 0 && "RTCPeerConnection" in window) { // macOS Desktop app
+            firstMode ||= "webrtc";
+            this.internalRTC();
+        }
+
+        if (this.mode.indexOf("mjpeg") >= 0) {
+            if (firstMode) {
+                this.onmessage["mjpeg"] = msg => {
+                    if (msg.type !== "error" || msg.value.indexOf(firstMode) !== 0) return;
+                    this.internalMJPEG();
+                }
+            } else {
+                this.internalMJPEG();
+            }
+        }
     }
 
     internalMSE() {
