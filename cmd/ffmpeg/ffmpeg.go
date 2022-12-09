@@ -125,22 +125,46 @@ func Init() {
 		s = cmd + input
 
 		if query != nil {
+			// 1. Process raw params for FFmpeg
 			for _, raw := range query["raw"] {
 				s += " " + raw
 			}
 
-			for _, rotate := range query["rotate"] {
-				switch rotate {
-				case "90":
-					s += " -vf transpose=1" // 90 degrees clockwise
-				case "180":
-					s += " -vf transpose=1,transpose=1"
-				case "-90", "270":
-					s += " -vf transpose=2" // 90 degrees counterclockwise
+			// 2. Process video filters (resize and rotation)
+			var filters []string
+
+			if query["width"] != nil || query["height"] != nil {
+				filter := "scale="
+				if query["width"] != nil {
+					filter += query["width"][0]
+				} else {
+					filter += "-1"
 				}
-				break
+				filter += ":"
+				if query["height"] != nil {
+					filter += query["height"][0]
+				} else {
+					filter += "-1"
+				}
+				filters = append(filters, filter)
 			}
 
+			if query["rotate"] != nil {
+				switch query["rotate"][0] {
+				case "90":
+					filters = append(filters, "transpose=1") // 90 degrees clockwise
+				case "180":
+					filters = append(filters, "transpose=1,transpose=1")
+				case "-90", "270":
+					filters = append(filters, "transpose=2") // 90 degrees counterclockwise
+				}
+			}
+
+			if filters != nil {
+				s += " -vf " + strings.Join(filters, ",")
+			}
+
+			// 3. Process video codecs
 			switch len(query["video"]) {
 			case 0:
 				s += " -vn"
@@ -165,6 +189,7 @@ func Init() {
 				}
 			}
 
+			// 4. Process audio codecs
 			switch len(query["audio"]) {
 			case 0:
 				s += " -an"
