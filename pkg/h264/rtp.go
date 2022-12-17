@@ -36,26 +36,26 @@ func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
 			}
 
 			if len(buf) == 0 {
-				// Amcrest IP4M-1051: 9, 7, 8, 6, 28...
-				// Amcrest IP4M-1051: 9, 6, 1
-				switch NALUType(payload) {
-				case NALUTypeIFrame:
-					// fix IFrame without SPS,PPS
-					buf = append(buf, ps...)
-				case NALUTypeSEI, NALUTypeAUD:
-					// fix ffmpeg with transcoding first frame
-					i := int(4 + binary.BigEndian.Uint32(payload))
-
-					// check if only one NAL (fix ffmpeg transcoding for Reolink RLC-510A)
-					if i == len(payload) {
-						return nil
-					}
-
-					payload = payload[i:]
-
-					if NALUType(payload) == NALUTypeIFrame {
+				for {
+					// Amcrest IP4M-1051: 9, 7, 8, 6, 28...
+					// Amcrest IP4M-1051: 9, 6, 1
+					switch NALUType(payload) {
+					case NALUTypeIFrame:
+						// fix IFrame without SPS,PPS
 						buf = append(buf, ps...)
+					case NALUTypeSEI, NALUTypeAUD:
+						// fix ffmpeg with transcoding first frame
+						i := int(4 + binary.BigEndian.Uint32(payload))
+
+						// check if only one NAL (fix ffmpeg transcoding for Reolink RLC-510A)
+						if i == len(payload) {
+							return nil
+						}
+
+						payload = payload[i:]
+						continue
 					}
+					break
 				}
 			}
 
