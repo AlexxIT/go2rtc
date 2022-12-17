@@ -22,8 +22,17 @@ jobs:
           images: alexxit/go2rtc
           tags: |
             type=ref,event=branch
-            type=ref,event=pr
             type=semver,pattern={{version}}
+
+      - name: Docker meta Hardware
+        id: meta-hw
+        uses: docker/metadata-action@v4
+        with:
+          images: alexxit/go2rtc
+          tags: |
+            type=ref,event=branch,suffix=-hardware
+            type=semver,pattern={{version}}-hardware,latest=false
+            type=semver,pattern=hardware,latest=false
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
@@ -50,3 +59,13 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Build and push Hardware
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          file: Dockerfile.hardware
+          platforms: linux/amd64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta-hw.outputs.tags }}
+          labels: ${{ steps.meta-hw.outputs.labels }}
