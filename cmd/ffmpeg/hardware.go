@@ -9,7 +9,7 @@ import (
 const (
 	EngineSoftware     = "software"
 	EngineVAAPI        = "vaapi"        // Intel iGPU and AMD GPU
-	EngineV4L2         = "v4l2"         // Raspberry Pi 3 and 4
+	EngineV4L2M2M      = "v4l2m2m"      // Raspberry Pi 3 and 4
 	EngineCUDA         = "cuda"         // NVidia on Windows and Linux
 	EngineDXVA2        = "dxva2"        // Intel on Windows
 	EngineVideoToolbox = "videotoolbox" // macOS
@@ -85,7 +85,7 @@ func MakeHardware(args *Args, engine string) {
 			args.input = "-hwaccel videotoolbox -hwaccel_output_format videotoolbox_vld " + args.input
 			args.codecs[i] = defaults[name+"/"+engine]
 
-		case EngineV4L2:
+		case EngineV4L2M2M:
 			args.codecs[i] = defaults[name+"/"+engine]
 		}
 	}

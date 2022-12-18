@@ -11,14 +11,14 @@ func ProbeHardware(name string) string {
 			if run(
 				"-f", "lavfi", "-i", "testsrc2", "-t", "1",
 				"-c", "h264_v4l2m2m", "-f", "null", "-") {
-				return EngineV4L2
+				return EngineV4L2M2M
 			}
 
 		case "h265":
 			if run(
 				"-f", "lavfi", "-i", "testsrc2", "-t", "1",
 				"-c", "hevc_v4l2m2m", "-f", "null", "-") {
-				return EngineV4L2
+				return EngineV4L2M2M
 			}
 		}
 
