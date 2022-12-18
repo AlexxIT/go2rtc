@@ -69,8 +69,9 @@ var defaults = map[string]string{
 	"aac/16000":  "-c:a aac -ar:a 16000 -ac:a 1",
 
 	// hardware Intel and AMD on Linux
-	"h264/vaapi":  "-c:v h264_vaapi -profile:v high -level:v 4.1 -async_depth:v 1 -sei:v 0",
-	"h265/vaapi":  "-c:v hevc_vaapi -profile:v high -level:v 5.1 -async_depth:v 1 -sei:v 0",
+	// better not to set `-async_depth:v 1` like for QSV, because framedrops
+	"h264/vaapi":  "-c:v h264_vaapi -profile:v high -level:v 4.1 -sei:v 0",
+	"h265/vaapi":  "-c:v hevc_vaapi -profile:v high -level:v 5.1 -sei:v 0",
 	"mjpeg/vaapi": "-c:v mjpeg_vaapi",
 
 	// hardware Raspberry
