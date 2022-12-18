@@ -70,13 +70,14 @@ var defaults = map[string]string{
 
 	// hardware Intel and AMD on Linux
 	// better not to set `-async_depth:v 1` like for QSV, because framedrops
-	"h264/vaapi":  "-c:v h264_vaapi -profile:v high -level:v 4.1 -sei:v 0",
-	"h265/vaapi":  "-c:v hevc_vaapi -profile:v high -level:v 5.1 -sei:v 0",
+	// `-bf 0` - disable B-frames is very important
+	"h264/vaapi":  "-c:v h264_vaapi -g 50 -bf 0 -profile:v high -level:v 4.1 -sei:v 0",
+	"h265/vaapi":  "-c:v hevc_vaapi -g 50 -bf 0 -profile:v high -level:v 5.1 -sei:v 0",
 	"mjpeg/vaapi": "-c:v mjpeg_vaapi",
 
 	// hardware Raspberry
-	"h264/v4l2m2m": "-c:v h264_v4l2m2m",
-	"h265/v4l2m2m": "-c:v hevc_v4l2m2m",
+	"h264/v4l2m2m": "-c:v h264_v4l2m2m -g 50 -bf 0",
+	"h265/v4l2m2m": "-c:v hevc_v4l2m2m -g 50 -bf 0",
 
 	// hardware NVidia on Linux and Windows
 	// preset=p2 - faster, tune=ll - low latency
@@ -84,13 +85,13 @@ var defaults = map[string]string{
 	"h265/cuda": "-c:v hevc_nvenc -g 50 -profile:v high -level:v auto",
 
 	// hardware Intel on Windows
-	"h264/dxva2":  "-c:v h264_qsv -profile:v high -level:v 4.1 -async_depth:v 1",
-	"h265/dxva2":  "-c:v hevc_qsv -profile:v high -level:v 5.1 -async_depth:v 1",
+	"h264/dxva2":  "-c:v h264_qsv -g 50 -bf 0 -profile:v high -level:v 4.1 -async_depth:v 1",
+	"h265/dxva2":  "-c:v hevc_qsv -g 50 -bf 0 -profile:v high -level:v 5.1 -async_depth:v 1",
 	"mjpeg/dxva2": "-c:v mjpeg_qsv -profile:v high -level:v 5.1",
 
 	// hardware macOS
-	"h264/videotoolbox": "-c:v h264_videotoolbox -profile:v high -level:v 4.1",
-	"h265/videotoolbox": "-c:v hevc_videotoolbox -profile:v high -level:v 5.1",
+	"h264/videotoolbox": "-c:v h264_videotoolbox -g 50 -bf 0 -profile:v high -level:v 4.1",
+	"h265/videotoolbox": "-c:v hevc_videotoolbox -g 50 -bf 0 -profile:v high -level:v 5.1",
 }
 
 func parseArgs(s string) *Args {
