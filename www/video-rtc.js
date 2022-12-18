@@ -422,7 +422,8 @@ class VideoRTC extends HTMLElement {
         video2.addEventListener("loadeddata", () => {
             console.debug("VideoRTC.video.loadeddata", video2.readyState, pc.connectionState);
 
-            if (pc.connectionState === "connected" || pc.connectionState === "connecting") {
+            // Firefox doesn't support pc.connectionState
+            if (pc.connectionState === "connected" || pc.connectionState === "connecting" || !pc.connectionState) {
                 // Video+Audio > Video, H265 > H264, Video > Audio, WebRTC > MSE
                 let rtcPriority = 0, msePriority = 0;
 
@@ -498,7 +499,7 @@ class VideoRTC extends HTMLElement {
         this.onmessage["webrtc"] = msg => {
             switch (msg.type) {
                 case "webrtc/candidate":
-                    pc.addIceCandidate({candidate: msg.value, sdpMid: ""}).catch(() => console.debug);
+                    pc.addIceCandidate({candidate: msg.value, sdpMid: "0"}).catch(() => console.debug);
                     break;
                 case "webrtc/answer":
                     pc.setRemoteDescription({type: "answer", sdp: msg.value}).catch(() => console.debug);
