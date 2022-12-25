@@ -68,7 +68,7 @@ var NewPConn func() (*pion.PeerConnection, error)
 
 func asyncHandler(tr *api.Transport, msg *api.Message) error {
 	src := tr.Request.URL.Query().Get("src")
-	stream := streams.Get(src)
+	stream := streams.GetOrNew(src)
 	if stream == nil {
 		return errors.New(api.StreamNotFound)
 	}
