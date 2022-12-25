@@ -53,7 +53,7 @@
         video.background = background;
         video.mode = modes[i] || video.mode;
         video.style.flex = width;
-        video.src = new URL("api/ws?src=" + streams[i], location.href);
+        video.src = new URL("api/ws?src=" + encodeURIComponent(streams[i]), location.href);
         document.body.appendChild(video);
     }
 </script>
