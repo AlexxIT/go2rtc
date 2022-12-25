@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-const packetSize = 8192
+const packetSize = 1400
 
 func handlerWSMSE(tr *api.Transport, msg *api.Message) error {
 	src := tr.Request.URL.Query().Get("src")
