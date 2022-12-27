@@ -533,7 +533,8 @@ View almost any Hass camera using `WebRTC` technology, supported codecs `H264`/`
 When the stream starts - the camera `entity_id` will be added to go2rtc "on the fly". You don't need to add cameras manually to [go2rtc config](#configuration). Some cameras (like [Nest](https://www.home-assistant.io/integrations/nest/)) have a dynamic link to the stream, it will be updated each time a stream is started from the Hass interface. 
 
 1. Hass > Settings > Integrations > Add Integration > [RTSPtoWebRTC](https://my.home-assistant.io/redirect/config_flow_start/?domain=rtsp_to_webrtc) > `http://127.0.0.1:1984/`
-2. Use Picture Entity or Picture Glance lovelace card
+2. RTSPtoWebRTC > Configure > STUN server: `stun.l.google.com:19302`
+3. Use Picture Entity or Picture Glance lovelace card
 
 You can add camera `entity_id` to [go2rtc config](#configuration) if you need transcoding:
 
