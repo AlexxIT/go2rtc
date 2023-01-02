@@ -99,11 +99,18 @@ func (s *Stream) AddConsumer(cons streamer.Consumer) (err error) {
 
 	if len(producers) == 0 {
 		s.stopProducers()
+
 		if len(codecs) > 0 {
 			return errors.New("codecs not match: " + codecs)
-		} else {
-			return fmt.Errorf("sources unavailable: %d", len(s.producers))
 		}
+
+		for i, producer := range s.producers {
+			if producer.lastErr != nil {
+				return fmt.Errorf("source %d error: %w", i, producer.lastErr)
+			}
+		}
+
+		return fmt.Errorf("sources unavailable: %d", len(s.producers))
 	}
 
 	s.mu.Lock()

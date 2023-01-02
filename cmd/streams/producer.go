@@ -24,6 +24,7 @@ type Producer struct {
 	template string
 
 	element streamer.Producer
+	lastErr error
 	tracks  []*streamer.Track
 
 	state   state
@@ -45,10 +46,9 @@ func (p *Producer) GetMedias() []*streamer.Media {
 	if p.state == stateNone {
 		log.Debug().Msgf("[streams] probe producer url=%s", p.url)
 
-		var err error
-		p.element, err = GetProducer(p.url)
-		if err != nil || p.element == nil {
-			log.Error().Err(err).Caller().Send()
+		p.element, p.lastErr = GetProducer(p.url)
+		if p.lastErr != nil || p.element == nil {
+			log.Error().Err(p.lastErr).Caller().Send()
 			return nil
 		}
 
