@@ -22,17 +22,21 @@ jobs:
           images: alexxit/go2rtc
           tags: |
             type=ref,event=branch
-            type=semver,pattern={{version}}
+            type=semver,pattern={{version}},enable=false
+            type=match,pattern=v(.*),group=1
 
       - name: Docker meta Hardware
         id: meta-hw
         uses: docker/metadata-action@v4
         with:
           images: alexxit/go2rtc
+          flavor: |
+            suffix=-hardware
+            latest=false
           tags: |
-            type=ref,event=branch,suffix=-hardware
-            type=semver,pattern={{version}}-hardware,latest=false
-            type=semver,pattern=hardware,latest=false
+            type=ref,event=branch
+            type=semver,pattern={{version}},enable=false
+            type=match,pattern=v(.*),group=1
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
