@@ -1,5 +1,5 @@
 /**
- * Video player for MSE and WebRTC connections.
+ * Video player for go2rtc streaming application.
  *
  * All modern web technologies are supported in almost any browser except Apple Safari.
  *
@@ -12,7 +12,7 @@
  * - Customized built-in elements (extends HTMLVideoElement) because all Safari
  * - Public class fields because old Safari (before 14.0)
  */
-class VideoRTC extends HTMLElement {
+export class VideoRTC extends HTMLElement {
     constructor() {
         super();
 
@@ -31,31 +31,49 @@ class VideoRTC extends HTMLElement {
         ];
 
         /**
-         * Supported modes (webrtc, mse, mp4, mjpeg).
+         * [config] Supported modes (webrtc, mse, mp4, mjpeg).
          * @type {string}
          */
         this.mode = "webrtc,mse,mp4,mjpeg";
 
         /**
-         * Run stream when not displayed on the screen. Default `false`.
+         * [config] Run stream when not displayed on the screen. Default `false`.
          * @type {boolean}
          */
         this.background = false;
 
         /**
-         * Run stream only when player in the viewport. Stop when user scroll out player.
+         * [config] Run stream only when player in the viewport. Stop when user scroll out player.
          * Value is percentage of visibility from `0` (not visible) to `1` (full visible).
          * Default `0` - disable;
          * @type {number}
          */
-        this.intersectionThreshold = 0;
+        this.visibilityThreshold = 0;
 
         /**
-         * Run stream only when browser page on the screen. Stop when user change browser
+         * [config] Run stream only when browser page on the screen. Stop when user change browser
          * tab or minimise browser windows.
          * @type {boolean}
          */
         this.visibilityCheck = true;
+
+        /**
+         * [config] WebRTC configuration
+         * @type {RTCConfiguration}
+         */
+        this.pcConfig = {iceServers: [{urls: "stun:stun.l.google.com:19302"}]};
+
+        /**
+         * [info] WebSocket connection state. Values: CONNECTING, OPEN, CLOSED
+         * @type {number}
+         */
+        this.wsState = WebSocket.CLOSED;
+
+        /**
+         * [info] WebRTC connection state.
+         * @type {number}
+         */
+        this.pcState = WebSocket.CLOSED;
 
         /**
          * @type {HTMLVideoElement}
@@ -68,16 +86,9 @@ class VideoRTC extends HTMLElement {
         this.ws = null;
 
         /**
-         * Internal WebSocket connection state. Values: CONNECTING, OPEN, CLOSED
-         * @type {number}
-         */
-        this.wsState = WebSocket.CLOSED;
-
-        /**
-         * Internal WebSocket URL.
          * @type {string|URL}
          */
-        this.url = "";
+        this.wsURL = "";
 
         /**
          * @type {RTCPeerConnection}
@@ -87,36 +98,37 @@ class VideoRTC extends HTMLElement {
         /**
          * @type {number}
          */
-        this.pcState = WebSocket.CLOSED;
-
-        this.pcConfig = {iceServers: [{urls: "stun:stun.l.google.com:19302"}]};
+        this.connectTS = 0;
 
         /**
-         * Internal disconnect TimeoutID.
+         * @type {string}
+         */
+        this.mseCodecs = "";
+
+        /**
+         * [internal] Disconnect TimeoutID.
          * @type {number}
          */
-        this.disconnectTimeout = 0;
+        this.disconnectTID = 0;
 
         /**
-         * Internal reconnect TimeoutID.
+         * [internal] Reconnect TimeoutID.
          * @type {number}
          */
-        this.reconnectTimeout = 0;
+        this.reconnectTID = 0;
 
         /**
-         * Handler for receiving Binary from WebSocket
+         * [internal] Handler for receiving Binary from WebSocket.
          * @type {Function}
          */
         this.ondata = null;
 
         /**
-         * Handlers list for receiving JSON from WebSocket
+         * [internal] Handlers list for receiving JSON from WebSocket
          * @type {Object.<string,Function>}}
          */
         this.onmessage = null;
     }
-
-    /** public properties **/
 
     /**
      * Set video source (WebSocket URL). Support relative path.
@@ -130,9 +142,9 @@ class VideoRTC extends HTMLElement {
             value = "ws" + location.origin.substring(4) + value;
         }
 
-        this.url = value;
+        this.wsURL = value;
 
-        if (this.isConnected) this.connectedCallback();
+        this.onconnect();
     }
 
     /**
@@ -156,10 +168,6 @@ class VideoRTC extends HTMLElement {
         if (this.ws) this.ws.send(JSON.stringify(value));
     }
 
-    get closed() {
-        return this.wsState === WebSocket.CLOSED && this.pcState === WebSocket.CLOSED;
-    }
-
     codecs(type) {
         const test = type === "mse"
             ? codec => MediaSource.isTypeSupported(`video/mp4; codecs="${codec}"`)
@@ -172,11 +180,9 @@ class VideoRTC extends HTMLElement {
      * document-connected element.
      */
     connectedCallback() {
-        console.debug("VideoRTC.connectedCallback", this.wsState, this.pcState);
-
-        if (this.disconnectTimeout) {
-            clearTimeout(this.disconnectTimeout);
-            this.disconnectTimeout = 0;
+        if (this.disconnectTID) {
+            clearTimeout(this.disconnectTID);
+            this.disconnectTID = 0;
         }
 
         // because video autopause on disconnected from DOM
@@ -186,15 +192,11 @@ class VideoRTC extends HTMLElement {
                 this.video.currentTime = seek.end(seek.length - 1);
                 this.play();
             }
+        } else {
+            this.oninit();
         }
 
-        if (!this.url || !this.closed) return;
-
-        // CLOSED => CONNECTING
-        this.wsState = WebSocket.CONNECTING;
-
-        this.internalInit();
-        this.internalConnect();
+        this.onconnect();
     }
 
     /**
@@ -202,35 +204,25 @@ class VideoRTC extends HTMLElement {
      * document's DOM.
      */
     disconnectedCallback() {
-        console.debug("VideoRTC.disconnectedCallback", this.wsState, this.pcState);
+        if (this.background || this.disconnectTID) return;
+        if (this.wsState === WebSocket.CLOSED && this.pcState === WebSocket.CLOSED) return;
 
-        if (this.background || this.disconnectTimeout || this.closed) return;
-
-        this.disconnectTimeout = setTimeout(() => {
-            if (this.reconnectTimeout) {
-                clearTimeout(this.reconnectTimeout);
-                this.reconnectTimeout = 0;
+        this.disconnectTID = setTimeout(() => {
+            if (this.reconnectTID) {
+                clearTimeout(this.reconnectTID);
+                this.reconnectTID = 0;
             }
 
-            this.disconnectTimeout = 0;
+            this.disconnectTID = 0;
 
-            this.wsState = WebSocket.CLOSED;
-            if (this.ws) {
-                this.ws.close();
-                this.ws = null;
-            }
-
-            this.pcState = WebSocket.CLOSED;
-            if (this.pc) {
-                this.pc.close();
-                this.pc = null;
-            }
+            this.ondisconnect();
         }, this.DISCONNECT_TIMEOUT);
     }
 
-    internalInit() {
-        if (this.childElementCount) return;
-
+    /**
+     * Creates child DOM elements. Called automatically once on `connectedCallback`.
+     */
+    oninit() {
         this.video = document.createElement("video");
         this.video.controls = true;
         this.video.playsInline = true;
@@ -258,7 +250,7 @@ class VideoRTC extends HTMLElement {
             })
         }
 
-        if ("IntersectionObserver" in window && this.intersectionThreshold) {
+        if ("IntersectionObserver" in window && this.visibilityThreshold) {
             const observer = new IntersectionObserver(entries => {
                 entries.forEach(entry => {
                     if (!entry.isIntersecting) {
@@ -267,49 +259,52 @@ class VideoRTC extends HTMLElement {
                         this.connectedCallback();
                     }
                 });
-            }, {threshold: this.intersectionThreshold});
+            }, {threshold: this.visibilityThreshold});
             observer.observe(this);
         }
     }
 
-    internalConnect() {
-        if (this.wsState !== WebSocket.CONNECTING) return;
-        if (this.ws) throw "connect with non null WebSocket";
+    /**
+     * Connect to WebSocket. Called automatically on `connectedCallback`.
+     * @return {boolean} true if the connection has started.
+     */
+    onconnect() {
+        if (!this.isConnected || !this.wsURL || this.ws || this.pc) return false;
 
-        const ts = Date.now();
+        // CLOSED or CONNECTING => CONNECTING
+        this.wsState = WebSocket.CONNECTING;
 
-        this.ws = new WebSocket(this.url);
+        this.connectTS = Date.now();
+
+        this.ws = new WebSocket(this.wsURL);
         this.ws.binaryType = "arraybuffer";
+        this.ws.addEventListener("open", ev => this.onopen(ev));
+        this.ws.addEventListener("close", ev => this.onclose(ev));
 
-        this.ws.addEventListener("open", () => {
-            console.debug("VideoRTC.ws.open", this.wsState);
-
-            // CONNECTING => OPEN
-            this.wsState = WebSocket.OPEN;
-
-            this.internalOpen();
-        });
-
-        this.ws.addEventListener("close", () => {
-            console.debug("VideoRTC.ws.close", this.wsState);
-
-            if (this.wsState === WebSocket.CLOSED) return;
-
-            // CONNECTING, OPEN => CONNECTING
-            this.wsState = WebSocket.CONNECTING;
-            this.ws = null;
-
-            // reconnect no more than once every X seconds
-            const delay = Math.max(this.RECONNECT_TIMEOUT - (Date.now() - ts), 0);
-
-            this.reconnectTimeout = setTimeout(() => {
-                this.reconnectTimeout = 0;
-                this.internalConnect();
-            }, delay);
-        });
+        return true;
     }
 
-    internalOpen() {
+    ondisconnect() {
+        this.wsState = WebSocket.CLOSED;
+        if (this.ws) {
+            this.ws.close();
+            this.ws = null;
+        }
+
+        this.pcState = WebSocket.CLOSED;
+        if (this.pc) {
+            this.pc.close();
+            this.pc = null;
+        }
+    }
+
+    /**
+     * @returns {Array.<string>} of modes (mse, webrtc, etc.)
+     */
+    onopen() {
+        // CONNECTING => OPEN
+        this.wsState = WebSocket.OPEN;
+
         this.ws.addEventListener("message", ev => {
             if (typeof ev.data === "string") {
                 const msg = JSON.parse(ev.data);
@@ -324,39 +319,60 @@ class VideoRTC extends HTMLElement {
         this.ondata = null;
         this.onmessage = {};
 
-        let firstMode = "";
+        const modes = [];
 
         if (this.mode.indexOf("mse") >= 0 && "MediaSource" in window) { // iPhone
-            firstMode ||= "mse";
-            this.internalMSE();
+            modes.push("mse");
+            this.onmse();
         } else if (this.mode.indexOf("mp4") >= 0) {
-            firstMode ||= "mp4";
-            this.internalMP4();
+            modes.push("mp4");
+            this.onmp4();
         }
 
         if (this.mode.indexOf("webrtc") >= 0 && "RTCPeerConnection" in window) { // macOS Desktop app
-            firstMode ||= "webrtc";
-            this.internalRTC();
+            modes.push("webrtc");
+            this.onwebrtc();
         }
 
         if (this.mode.indexOf("mjpeg") >= 0) {
-            if (firstMode) {
+            if (modes.length) {
                 this.onmessage["mjpeg"] = msg => {
-                    if (msg.type !== "error" || msg.value.indexOf(firstMode) !== 0) return;
-                    this.internalMJPEG();
+                    if (msg.type !== "error" || msg.value.indexOf(modes[0]) !== 0) return;
+                    this.onmjpeg();
                 }
             } else {
-                this.internalMJPEG();
+                modes.push("mjpeg");
+                this.onmjpeg();
             }
         }
+
+        return modes;
     }
 
-    internalMSE() {
-        console.debug("VideoRTC.internalMSE");
+    /**
+     * @return {boolean} true if reconnection has started.
+     */
+    onclose() {
+        if (this.wsState === WebSocket.CLOSED) return false;
 
+        // CONNECTING, OPEN => CONNECTING
+        this.wsState = WebSocket.CONNECTING;
+        this.ws = null;
+
+        // reconnect no more than once every X seconds
+        const delay = Math.max(this.RECONNECT_TIMEOUT - (Date.now() - this.connectTS), 0);
+
+        this.reconnectTID = setTimeout(() => {
+            this.reconnectTID = 0;
+            this.onconnect();
+        }, delay);
+
+        return true;
+    }
+
+    onmse() {
         const ms = new MediaSource();
         ms.addEventListener("sourceopen", () => {
-            console.debug("VideoRTC.ms.sourceopen");
             URL.revokeObjectURL(this.video.src);
             this.send({type: "mse", value: this.codecs("mse")});
         }, {once: true});
@@ -365,8 +381,12 @@ class VideoRTC extends HTMLElement {
         this.video.srcObject = null;
         this.play();
 
+        this.mseCodecs = "";
+
         this.onmessage["mse"] = msg => {
             if (msg.type !== "mse") return;
+
+            this.mseCodecs = msg.value;
 
             const sb = ms.addSourceBuffer(msg.value);
             sb.mode = "segments"; // segments or sequence
@@ -376,10 +396,10 @@ class VideoRTC extends HTMLElement {
                     try {
                         sb.appendBuffer(buf.slice(0, bufLen));
                     } catch (e) {
-                        console.debug(e);
+                        // console.debug(e);
                     }
                     bufLen = 0;
-                } else if (sb.buffered.length) {
+                } else if (sb.buffered && sb.buffered.length) {
                     const end = sb.buffered.end(sb.buffered.length - 1) - 5;
                     const start = sb.buffered.start(0);
                     if (end > start) {
@@ -410,56 +430,12 @@ class VideoRTC extends HTMLElement {
         }
     }
 
-    internalRTC() {
-        console.debug("VideoRTC.internalRTC");
-
+    onwebrtc() {
         const pc = new RTCPeerConnection(this.pcConfig);
-
-        let mseCodecs = "";
 
         /** @type {HTMLVideoElement} */
         const video2 = document.createElement("video");
-        video2.addEventListener("loadeddata", () => {
-            console.debug("VideoRTC.video.loadeddata", video2.readyState, pc.connectionState);
-
-            // Firefox doesn't support pc.connectionState
-            if (pc.connectionState === "connected" || pc.connectionState === "connecting" || !pc.connectionState) {
-                // Video+Audio > Video, H265 > H264, Video > Audio, WebRTC > MSE
-                let rtcPriority = 0, msePriority = 0;
-
-                /** @type {MediaStream} */
-                const rtc = video2.srcObject;
-                if (rtc.getVideoTracks().length > 0) rtcPriority += 0x220;
-                if (rtc.getAudioTracks().length > 0) rtcPriority += 0x102;
-
-                if (mseCodecs.indexOf("hvc1.") >= 0) msePriority += 0x230;
-                if (mseCodecs.indexOf("avc1.") >= 0) msePriority += 0x210;
-                if (mseCodecs.indexOf("mp4a.") >= 0) msePriority += 0x101;
-
-                if (rtcPriority >= msePriority) {
-                    console.debug("VideoRTC.select RTC mode", rtcPriority, msePriority);
-
-                    this.video.controls = true;
-                    this.video.srcObject = rtc;
-                    this.play();
-
-                    this.pcState = WebSocket.OPEN;
-
-                    this.wsState = WebSocket.CLOSED;
-                    this.ws.close();
-                    this.ws = null;
-                } else {
-                    console.debug("VideoRTC.select MSE mode", rtcPriority, msePriority);
-
-                    pc.close();
-
-                    this.pcState = WebSocket.CLOSED;
-                    this.pc = null;
-                }
-            }
-
-            video2.srcObject = null;
-        }, {once: true});
+        video2.addEventListener("loadeddata", ev => this.onpcvideo(ev), {once: true});
 
         pc.addEventListener("icecandidate", ev => {
             const candidate = ev.candidate ? ev.candidate.toJSON().candidate : "";
@@ -467,8 +443,6 @@ class VideoRTC extends HTMLElement {
         });
 
         pc.addEventListener("track", ev => {
-            console.debug("VideoRTC.pc.track", ev.streams.length);
-
             // when stream already init
             if (video2.srcObject !== null) return;
 
@@ -482,30 +456,29 @@ class VideoRTC extends HTMLElement {
         });
 
         pc.addEventListener("connectionstatechange", () => {
-            console.debug("VideoRTC.pc.connectionstatechange", this.pc.connectionState);
-
             if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
                 pc.close(); // stop next events
 
                 this.pcState = WebSocket.CLOSED;
                 this.pc = null;
 
-                if (this.wsState === WebSocket.CLOSED && this.isConnected) {
-                    this.connectedCallback();
-                }
+                this.onconnect();
             }
         });
 
         this.onmessage["webrtc"] = msg => {
             switch (msg.type) {
                 case "webrtc/candidate":
-                    pc.addIceCandidate({candidate: msg.value, sdpMid: "0"}).catch(() => console.debug);
+                    pc.addIceCandidate({
+                        candidate: msg.value,
+                        sdpMid: "0"
+                    }).catch(() => console.debug);
                     break;
                 case "webrtc/answer":
-                    pc.setRemoteDescription({type: "answer", sdp: msg.value}).catch(() => console.debug);
-                    break;
-                case "mse":
-                    mseCodecs = msg.value;
+                    pc.setRemoteDescription({
+                        type: "answer",
+                        sdp: msg.value
+                    }).catch(() => console.debug);
                     break;
                 case "error":
                     if (msg.value.indexOf("webrtc/offer") < 0) return;
@@ -527,9 +500,48 @@ class VideoRTC extends HTMLElement {
         this.pc = pc;
     }
 
-    internalMJPEG() {
-        console.debug("VideoRTC.internalMJPEG");
+    /**
+     * @param ev {Event}
+     */
+    onpcvideo(ev) {
+        /** @type {HTMLVideoElement} */
+        const video2 = ev.target;
+        const state = this.pc.connectionState;
 
+        // Firefox doesn't support pc.connectionState
+        if (state === "connected" || state === "connecting" || !state) {
+            // Video+Audio > Video, H265 > H264, Video > Audio, WebRTC > MSE
+            let rtcPriority = 0, msePriority = 0;
+
+            /** @type {MediaStream} */
+            const ms = video2.srcObject;
+            if (ms.getVideoTracks().length > 0) rtcPriority += 0x220;
+            if (ms.getAudioTracks().length > 0) rtcPriority += 0x102;
+
+            if (this.mseCodecs.indexOf("hvc1.") >= 0) msePriority += 0x230;
+            if (this.mseCodecs.indexOf("avc1.") >= 0) msePriority += 0x210;
+            if (this.mseCodecs.indexOf("mp4a.") >= 0) msePriority += 0x101;
+
+            if (rtcPriority >= msePriority) {
+                this.video.srcObject = ms;
+                this.play();
+
+                this.pcState = WebSocket.OPEN;
+
+                this.wsState = WebSocket.CLOSED;
+                this.ws.close();
+                this.ws = null;
+            } else {
+                this.pcState = WebSocket.CLOSED;
+                this.pc.close();
+                this.pc = null;
+            }
+        }
+
+        video2.srcObject = null;
+    }
+
+    onmjpeg() {
         this.ondata = data => {
             this.video.poster = "data:image/jpeg;base64," + VideoRTC.btoa(data);
         };
@@ -538,9 +550,7 @@ class VideoRTC extends HTMLElement {
         this.video.controls = false;
     }
 
-    internalMP4() {
-        console.debug("VideoRTC.internalMP4");
-
+    onmp4() {
         /** @type {HTMLVideoElement} */
         let video2;
 
@@ -585,5 +595,3 @@ class VideoRTC extends HTMLElement {
         return window.btoa(binary);
     }
 }
-
-customElements.define("video-rtc", VideoRTC);

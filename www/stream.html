@@ -3,13 +3,13 @@
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>go2rtc - Stream</title>
-    <script src="video-rtc.js"></script>
     <style>
         body {
             background: black;
             margin: 0;
             padding: 0;
             display: flex;
+            font-family: Arial, Helvetica, sans-serif;
         }
 
         html, body {
@@ -25,7 +25,8 @@
     </style>
 </head>
 <body>
-<script>
+<script type="module" src="./video-stream.js"></script>
+<script type="module">
     const params = new URLSearchParams(location.search);
 
     // support multiple streams and multiple modes
@@ -48,8 +49,8 @@
     const width = "1 0 " + (params.get("width") || "320px");
 
     for (let i = 0; i < streams.length; i++) {
-        /** @type {VideoRTC} */
-        const video = document.createElement("video-rtc");
+        /** @type {VideoStream} */
+        const video = document.createElement("video-stream");
         video.background = background;
         video.mode = modes[i] || video.mode;
         video.style.flex = width;
