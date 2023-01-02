@@ -25,7 +25,7 @@ var wsHandlers = make(map[string]WSHandler)
 func initWS(origin string) {
 	wsUp = &websocket.Upgrader{
 		ReadBufferSize:  1024,
-		WriteBufferSize: 512000,
+		WriteBufferSize: 2028,
 	}
 
 	switch origin {
