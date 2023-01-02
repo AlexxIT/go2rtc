@@ -121,6 +121,8 @@ func handlerWS(tr *api.Transport, _ *api.Message) error {
 		return err
 	}
 
+	tr.Write(&api.Message{Type: "mjpeg"})
+
 	tr.OnClose(func() {
 		stream.RemoveConsumer(cons)
 	})

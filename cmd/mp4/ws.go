@@ -86,6 +86,8 @@ func handlerWSMP4(tr *api.Transport, msg *api.Message) error {
 		return err
 	}
 
+	tr.Write(&api.Message{Type: "mp4", Value: cons.MimeType})
+
 	tr.OnClose(func() {
 		stream.RemoveConsumer(cons)
 	})
