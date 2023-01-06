@@ -1,24 +1,31 @@
+# syntax=docker/dockerfile:labs
+
 # 0. Prepare images
 ARG PYTHON_VERSION="3.11"
 ARG GO_VERSION="1.19"
 ARG NGROK_VERSION="3"
 
 FROM python:${PYTHON_VERSION}-alpine AS base
-FROM golang:${GO_VERSION}-alpine AS go
 FROM ngrok/ngrok:${NGROK_VERSION}-alpine AS ngrok
 
 
 # 1. Build go2rtc binary
-FROM go AS build
+FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine AS build
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+ENV GOOS=${TARGETOS}
+ENV GOARCH=${TARGETARCH}
 
 WORKDIR /build
 
 # Cache dependencies
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/root/.cache/go-build go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 go build -ldflags "-s -w" -trimpath
+RUN --mount=type=cache,target=/root/.cache/go-build CGO_ENABLED=0 go build -ldflags "-s -w" -trimpath
 
 
 # 2. Collect all files
