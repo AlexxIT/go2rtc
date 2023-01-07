@@ -9,7 +9,7 @@ FROM python:${PYTHON_VERSION}-alpine AS base
 FROM ngrok/ngrok:${NGROK_VERSION}-alpine AS ngrok
 
 # 0. collect ace editor
-FROM alpine:latest as ace
+FROM --platform=$BUILDPLATFORM alpine:latest as ace
 RUN apk add curl
 RUN <<EOT
     for i in \
