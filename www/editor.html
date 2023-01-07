@@ -71,10 +71,11 @@
 	</body>
     <script>
         var editor = ace.edit("config", {
-                useWorker: false
+                useWorker: false,
+                printMargin: false
             });
             editor.session.setMode("ace/mode/yaml"); 
-            editor.setTheme("ace/theme/terminal");
+            editor.setTheme("ace/theme/github");
         window.onload = function() {
             var xhr = new XMLHttpRequest();
             xhr.open("GET", "api/getConfig", true);

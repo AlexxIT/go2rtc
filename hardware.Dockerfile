@@ -17,7 +17,7 @@ RUN <<EOT
         https://cdn.jsdelivr.net/npm/ace-builds@1.14.0/src-min-noconflict/mode-yaml.min.js \
         https://cdn.jsdelivr.net/npm/ace-builds@1.14.0/src-min-noconflict/worker-yaml.min.js \
         https://cdn.jsdelivr.net/npm/ace-builds@1.14.0/src-min-noconflict/theme-terminal.min.js \
-        https://cdn.jsdelivr.net/npm/ace-builds@1.14.0/src-min-noconflict/theme-monokai.min.js
+        https://cdn.jsdelivr.net/npm/ace-builds@1.14.0/src-min-noconflict/theme-github.min.js
     do
         curl -sLk "$i" >> /ace.js; echo "" >> /ace.js;
     done
@@ -63,5 +63,5 @@ ENTRYPOINT ["/usr/bin/tini", "--"]
 # https://github.com/NVIDIA/nvidia-docker/wiki/Installation-(Native-GPU-Support)
 ENV NVIDIA_VISIBLE_DEVICES all
 ENV NVIDIA_DRIVER_CAPABILITIES compute,video,utility
-
+RUN chmod +x /run.sh
 CMD ["/run.sh"]
