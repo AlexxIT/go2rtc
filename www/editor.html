@@ -4,7 +4,7 @@
 		<title>File Editor</title>
         <meta name="viewport" content="width=device-width, user-scalable=yes, initial-scale=1, maximum-scale=1">
         <meta http-equiv="X-UA-Compatible" content="ie=edge">
-        <script src="ace.js" type="text/javascript" charset="utf-8"></script>
+        <script src="ace.js"></script>
         <style>
             body {
             font-family: Arial, Helvetica, sans-serif;
@@ -74,7 +74,7 @@
                 useWorker: false
             });
             editor.session.setMode("ace/mode/yaml"); 
-            editor.setTheme("ace/theme/monokai");
+            editor.setTheme("ace/theme/terminal");
         window.onload = function() {
             var xhr = new XMLHttpRequest();
             xhr.open("GET", "api/getConfig", true);
@@ -90,7 +90,15 @@
             fetch('api/saveConfig', {
                 method: 'POST',
                 body: text
-                });
-        });
+                }).then(async (response) => {
+                    if (!response.ok) {
+                        const text = await response.text();
+                        throw new Error(text);
+                    }
+                    const text = await response.text();
+                    alert('Save successful');
+                })
+                .catch((error) => alert(error))
+        })
     </script>
 </html>

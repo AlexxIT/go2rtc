@@ -8,6 +8,20 @@ FROM debian:${DEBIAN_VERSION} AS base
 FROM golang:${GO_VERSION} AS go
 FROM ngrok/ngrok:${NGROK_VERSION} AS ngrok
 
+# 0. collect ace editor
+FROM alpine:latest as ace
+RUN apk add curl
+RUN <<EOT
+    for i in \
+        https://cdn.jsdelivr.net/npm/ace-builds@1.14.0/src-min-noconflict/ace.min.js \
+        https://cdn.jsdelivr.net/npm/ace-builds@1.14.0/src-min-noconflict/mode-yaml.min.js \
+        https://cdn.jsdelivr.net/npm/ace-builds@1.14.0/src-min-noconflict/worker-yaml.min.js \
+        https://cdn.jsdelivr.net/npm/ace-builds@1.14.0/src-min-noconflict/theme-terminal.min.js \
+        https://cdn.jsdelivr.net/npm/ace-builds@1.14.0/src-min-noconflict/theme-monokai.min.js
+    do
+        curl -sLk "$i" >> /ace.js; echo "" >> /ace.js;
+    done
+EOT
 
 # 1. Build go2rtc binary
 FROM go AS build
@@ -19,6 +33,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
+COPY --from=ace /ace.js www/ace.js
 RUN CGO_ENABLED=0 go build -ldflags "-s -w" -trimpath
 
 

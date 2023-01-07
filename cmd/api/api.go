@@ -10,6 +10,7 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/app"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
 	"github.com/rs/zerolog"
+	"gopkg.in/yaml.v3"
 )
 
 type apiCfg struct {
@@ -113,8 +114,9 @@ func handleGetConfig(w http.ResponseWriter, r *http.Request) {
 
 	// Read the file contents.
 	body, err := ioutil.ReadFile(absPath)
+
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		w.Write([]byte(""))
 		return
 	}
 	w.Write(body)
@@ -125,6 +127,18 @@ func handleSaveConfig(w http.ResponseWriter, r *http.Request) {
 
 	// Save the file contents.
 	body, _ := io.ReadAll(r.Body)
+
+	var cfg struct {
+		Mod map[string]string `yaml:"log"`
+	}
+
+	if body != nil {
+		if err := yaml.Unmarshal(body, &cfg); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
 	err := ioutil.WriteFile(absPath, []byte(body), 0644)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
