@@ -52,23 +52,28 @@ func initStatic(cfg apiCfg) {
 			return
 		}
 
-		// Parse the template
-		t, err := template.New("template").Parse(string(b))
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+		if r.URL.Path[len(r.URL.Path)-5:] == ".html" {
+			// Parse the template
+			t, err := template.New("template").Parse(string(b))
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
 
-		data := TemplateData{
-			Host:     host,
-			RTSPPort: cfg.RTSP.Listen[1:],
-		}
+			data := TemplateData{
+				Host:     host,
+				RTSPPort: cfg.RTSP.Listen[1:],
+			}
 
-		// Execute the template with the Host header value
-		err = t.Execute(w, data)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			// Execute the template with the Host header value
+			err = t.Execute(w, data)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		} else {
+			// Send the file
+			w.Write(b)
 		}
 	})
 }

@@ -2,6 +2,8 @@ package api
 
 import (
 	"encoding/json"
+	"io"
+	"io/ioutil"
 	"net"
 	"net/http"
 
@@ -45,6 +47,8 @@ func Init() {
 
 	HandleFunc("api/streams", streamsHandler)
 	HandleFunc("api/ws", apiWS)
+	HandleFunc("api/saveConfig", handleSaveConfig)
+	HandleFunc("api/getConfig", handleGetConfig)
 
 	// ensure we can listen without errors
 	listener, err := net.Listen("tcp", cfg.Mod.Listen)
@@ -102,6 +106,31 @@ func middlewareCORS(next http.Handler) http.Handler {
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		next.ServeHTTP(w, r)
 	})
+}
+func handleGetConfig(w http.ResponseWriter, r *http.Request) {
+
+	absPath := app.GetConfigPath()
+
+	// Read the file contents.
+	body, err := ioutil.ReadFile(absPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Write(body)
+}
+
+func handleSaveConfig(w http.ResponseWriter, r *http.Request) {
+	absPath := app.GetConfigPath()
+
+	// Save the file contents.
+	body, _ := io.ReadAll(r.Body)
+	err := ioutil.WriteFile(absPath, []byte(body), 0644)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 }
 
 func streamsHandler(w http.ResponseWriter, r *http.Request) {

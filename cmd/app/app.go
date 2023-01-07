@@ -2,23 +2,24 @@ package app
 
 import (
 	"flag"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
-	"gopkg.in/yaml.v3"
 	"io"
 	"os"
 	"runtime"
+
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+	"gopkg.in/yaml.v3"
 )
 
 var Version = "0.1-rc.6"
 var UserAgent = "go2rtc/" + Version
+var config = flag.String(
+	"config",
+	"go2rtc.yaml",
+	"Path to go2rtc configuration file",
+)
 
 func Init() {
-	config := flag.String(
-		"config",
-		"go2rtc.yaml",
-		"Path to go2rtc configuration file",
-	)
 
 	flag.Parse()
 
@@ -70,6 +71,10 @@ func LoadConfig(v interface{}) {
 			log.Warn().Err(err).Msg("[app] read config")
 		}
 	}
+}
+
+func GetConfigPath() string {
+	return *config
 }
 
 func GetLogger(module string) zerolog.Logger {
