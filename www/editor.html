@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>File Editor</title>
+        <meta name="viewport" content="width=device-width, user-scalable=yes, initial-scale=1, maximum-scale=1">
+        <meta http-equiv="X-UA-Compatible" content="ie=edge">
+        <script src="ace.js" type="text/javascript" charset="utf-8"></script>
+        <style>
+            body {
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        table {
+            background-color: white;
+            text-align: left;
+            border-collapse: collapse;
+        }
+
+        table td, table th {
+            border: 1px solid black;
+            padding: 5px 5px;
+        }
+
+        table tbody td {
+            font-size: 13px;
+        }
+
+        table thead {
+            background: #CFCFCF;
+            background: linear-gradient(to bottom, #dbdbdb 0%, #d3d3d3 66%, #CFCFCF 100%);
+            border-bottom: 3px solid black;
+        }
+
+        table thead th {
+            font-size: 15px;
+            font-weight: bold;
+            color: black;
+            text-align: center;
+        }
+
+        label {
+            display: flex;
+            align-items: center;
+        }
+
+        .header {
+            padding: 5px 5px;
+        }
+
+        .controls {
+            display: flex;
+            padding: 5px;
+        }
+
+        .controls > label {
+            margin-left: 10px;
+        }
+
+        #config { 
+            width: 80%;
+            height: 400px;
+        }   
+        </style>
+	</head>
+	<body>
+        <script src="main.js"></script>
+		<div id="config"></div>
+		<br>
+        <button id="save-button">Save</button>
+
+	</body>
+    <script>
+        var editor = ace.edit("config", {
+                useWorker: false
+            });
+            editor.session.setMode("ace/mode/yaml"); 
+            editor.setTheme("ace/theme/monokai");
+        window.onload = function() {
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", "api/getConfig", true);
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    editor.setValue(xhr.responseText);
+                }
+            };
+            xhr.send();
+        };
+        document.getElementById('save-button').addEventListener('click', function() {
+            var text = editor.getValue();
+            fetch('api/saveConfig', {
+                method: 'POST',
+                body: text
+                });
+        });
+    </script>
+</html>
