@@ -2,25 +2,33 @@ package api
 
 import (
 	"encoding/json"
+	"net"
+	"net/http"
+
 	"github.com/AlexxIT/go2rtc/cmd/app"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
 	"github.com/rs/zerolog"
-	"net"
-	"net/http"
 )
 
+type apiCfg struct {
+	Mod struct {
+		Listen    string `yaml:"listen"`
+		BasePath  string `yaml:"base_path"`
+		StaticDir string `yaml:"static_dir"`
+		Origin    string `yaml:"origin"`
+	} `yaml:"api"`
+	RTSP struct {
+		Listen string `yaml:"listen"`
+	} `yaml:"rtsp"`
+}
+
 func Init() {
-	var cfg struct {
-		Mod struct {
-			Listen    string `yaml:"listen"`
-			BasePath  string `yaml:"base_path"`
-			StaticDir string `yaml:"static_dir"`
-			Origin    string `yaml:"origin"`
-		} `yaml:"api"`
-	}
+
+	var cfg apiCfg
 
 	// default config
 	cfg.Mod.Listen = ":1984"
+	cfg.RTSP.Listen = ":8554"
 
 	// load config from YAML
 	app.LoadConfig(&cfg)
@@ -32,7 +40,7 @@ func Init() {
 	basePath = cfg.Mod.BasePath
 	log = app.GetLogger("api")
 
-	initStatic(cfg.Mod.StaticDir)
+	initStatic(cfg)
 	initWS(cfg.Mod.Origin)
 
 	HandleFunc("api/streams", streamsHandler)
