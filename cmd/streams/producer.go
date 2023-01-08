@@ -119,10 +119,9 @@ func (p *Producer) reconnect() {
 
 	log.Debug().Msgf("[streams] reconnect to url=%s", p.url)
 
-	var err error
-	p.element, err = GetProducer(p.url)
-	if err != nil || p.element == nil {
-		log.Debug().Err(err).Caller().Send()
+	p.element, p.lastErr = GetProducer(p.url)
+	if p.lastErr != nil || p.element == nil {
+		log.Debug().Err(p.lastErr).Caller().Send()
 		// TODO: dynamic timeout
 		p.restart = time.AfterFunc(30*time.Second, p.reconnect)
 		return
@@ -149,8 +148,8 @@ func (p *Producer) reconnect() {
 	}
 
 	go func() {
-		if err = p.element.Start(); err != nil {
-			log.Debug().Err(err).Str("url", p.url).Caller().Send()
+		if err := p.element.Start(); err != nil {
+			log.Debug().Err(err).Caller().Send()
 		}
 		p.reconnect()
 	}()
