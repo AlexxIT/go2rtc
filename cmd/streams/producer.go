@@ -55,6 +55,11 @@ func (p *Producer) GetMedias() []*streamer.Media {
 		p.state = stateMedias
 	}
 
+	// if element in reconnect state
+	if p.element == nil {
+		return nil
+	}
+
 	return p.element.GetMedias()
 }
 
