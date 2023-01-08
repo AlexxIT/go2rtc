@@ -82,7 +82,7 @@ func (s *Stream) AddConsumer(cons streamer.Consumer) (err error) {
 					// Step 4. Get producer track
 					prodTrack := prod.GetTrack(prodMedia, prodCodec)
 					if prodTrack == nil {
-						log.Warn().Msg("[stream] can't get track")
+						log.Warn().Str("url", prod.url).Msg("[stream] can't get track")
 						continue
 					}
 

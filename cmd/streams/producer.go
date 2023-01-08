@@ -48,7 +48,7 @@ func (p *Producer) GetMedias() []*streamer.Media {
 
 		p.element, p.lastErr = GetProducer(p.url)
 		if p.lastErr != nil || p.element == nil {
-			log.Error().Err(p.lastErr).Caller().Send()
+			log.Error().Err(p.lastErr).Str("url", p.url).Caller().Send()
 			return nil
 		}
 
@@ -102,7 +102,7 @@ func (p *Producer) start() {
 	go func() {
 		// safe read element while mu locked
 		if err := p.element.Start(); err != nil {
-			log.Warn().Err(err).Caller().Send()
+			log.Warn().Err(err).Str("url", p.url).Caller().Send()
 		}
 		p.reconnect()
 	}()
@@ -150,7 +150,7 @@ func (p *Producer) reconnect() {
 
 	go func() {
 		if err = p.element.Start(); err != nil {
-			log.Debug().Err(err).Caller().Send()
+			log.Debug().Err(err).Str("url", p.url).Caller().Send()
 		}
 		p.reconnect()
 	}()
