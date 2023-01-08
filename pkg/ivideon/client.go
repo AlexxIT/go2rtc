@@ -127,7 +127,9 @@ func (c *Client) Close() error {
 	if c.conn == nil {
 		return nil
 	}
-	close(c.buffer)
+	if c.buffer != nil {
+		close(c.buffer)
+	}
 	c.closed = true
 	return c.conn.Close()
 }
