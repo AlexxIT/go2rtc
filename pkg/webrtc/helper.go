@@ -1,6 +1,7 @@
 package webrtc
 
 import (
+	"errors"
 	"fmt"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/pion/ice/v2"
@@ -13,10 +14,11 @@ import (
 )
 
 func NewCandidate(address string) (string, error) {
-	host, port, err := net.SplitHostPort(address)
-	if err != nil {
-		return "", err
+	i := strings.LastIndexByte(address, ':')
+	if i < 0 {
+		return "", errors.New("wrong candidate: " + address)
 	}
+	host, port := address[:i], address[i+1:]
 
 	i, err := strconv.Atoi(port)
 	if err != nil {
