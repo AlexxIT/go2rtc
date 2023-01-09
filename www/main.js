@@ -47,6 +47,7 @@ nav li {
         <li><a href="index.html">Streams</a></li>
         <li><a href="devices.html">Devices</a></li>
         <li><a href="homekit.html">HomeKit</a></li>
+        <li><a href="editor.html">Configuration</a></li>
     </ul>
 </nav>
 ` + document.body.innerHTML;

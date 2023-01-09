@@ -8,6 +8,20 @@ ARG NGROK_VERSION="3"
 FROM python:${PYTHON_VERSION}-alpine AS base
 FROM ngrok/ngrok:${NGROK_VERSION}-alpine AS ngrok
 
+# 0. collect ace editor
+FROM --platform=$BUILDPLATFORM alpine:latest as ace
+RUN apk add curl
+RUN <<EOT
+    for i in \
+        https://cdn.jsdelivr.net/npm/ace-builds@1.14.0/src-min-noconflict/ace.min.js \
+        https://cdn.jsdelivr.net/npm/ace-builds@1.14.0/src-min-noconflict/mode-yaml.min.js \
+        https://cdn.jsdelivr.net/npm/ace-builds@1.14.0/src-min-noconflict/worker-yaml.min.js \
+        https://cdn.jsdelivr.net/npm/ace-builds@1.14.0/src-min-noconflict/theme-terminal.min.js \
+        https://cdn.jsdelivr.net/npm/ace-builds@1.14.0/src-min-noconflict/theme-github.min.js
+    do
+        curl -sLk "$i" >> /ace.js; echo "" >> /ace.js;
+    done
+EOT
 
 # 1. Build go2rtc binary
 FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine AS build
@@ -25,8 +39,8 @@ COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/root/.cache/go-build go mod download
 
 COPY . .
+COPY --link --from=ace /ace.js www/ace.js
 RUN --mount=type=cache,target=/root/.cache/go-build CGO_ENABLED=0 go build -ldflags "-s -w" -trimpath
-
 
 # 2. Collect all files
 FROM scratch AS rootfs
