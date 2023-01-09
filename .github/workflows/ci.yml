@@ -19,59 +19,59 @@ jobs:
         #!/bin/bash
           mkdir artifacts
 
-          GOOS=windows
-          GOARCH=amd64
-          FILENAME=artifacts/go2rtc_win64.zip
+          export GOOS=windows
+          export GOARCH=amd64
+          export FILENAME=artifacts/go2rtc_win64.zip
           go build -ldflags "-s -w" -trimpath && 7z a -mx9 -sdel "$FILENAME" go2rtc.exe
 
-          GOOS=windows
-          GOARCH=386
-          FILENAME=artifacts/go2rtc_win32.zip
+          export GOOS=windows
+          export GOARCH=386
+          export FILENAME=artifacts/go2rtc_win32.zip
           go build -ldflags "-s -w" -trimpath && 7z a -mx9 -sdel "$FILENAME" go2rtc.exe
 
-          GOOS=windows
-          GOARCH=arm64
-          FILENAME=artifacts/go2rtc_win_arm64.zip
+          export GOOS=windows
+          export GOARCH=arm64
+          export FILENAME=artifacts/go2rtc_win_arm64.zip
           go build -ldflags "-s -w" -trimpath && 7z a -mx9 -sdel "$FILENAME" go2rtc.exe
 
-          GOOS=linux
-          GOARCH=amd64
-          FILENAME=artifacts/go2rtc_linux_amd64
+          export GOOS=linux 
+          export GOARCH=amd64
+          export FILENAME=artifacts/go2rtc_linux_amd64
           go build -ldflags "-s -w" -trimpath -o "$FILENAME" && upx "$FILENAME"
 
-          GOOS=linux
-          GOARCH=386
-          FILENAME=artifacts/go2rtc_linux_i386
+          export GOOS=linux
+          export GOARCH=386
+          export FILENAME=artifacts/go2rtc_linux_i386
           go build -ldflags "-s -w" -trimpath -o "$FILENAME" && upx "$FILENAME"
 
-          GOOS=linux
-          GOARCH=arm64
-          FILENAME=artifacts/go2rtc_linux_arm64
+          export GOOS=linux
+          export GOARCH=arm64
+          export FILENAME=artifacts/go2rtc_linux_arm64
           go build -ldflags "-s -w" -trimpath -o "$FILENAME" && upx "$FILENAME"
 
-          GOOS=linux
-          GOARCH=arm
-          GOARM=7
-          FILENAME=artifacts/go2rtc_linux_arm
+          export GOOS=linux
+          export GOARCH=arm
+          export GOARM=7
+          export FILENAME=artifacts/go2rtc_linux_arm
           go build -ldflags "-s -w" -trimpath -o "$FILENAME" && upx "$FILENAME"
 
-          GOOS=linux
-          GOARCH=mipsle
-          FILENAME=artifacts/go2rtc_linux_mipsel
+          export GOOS=linux
+          export GOARCH=mipsle
+          export FILENAME=artifacts/go2rtc_linux_mipsel
           go build -ldflags "-s -w" -trimpath -o "$FILENAME" && upx "$FILENAME"
 
-          GOOS=darwin
-          GOARCH=amd64
-          FILENAME=artifacts/go2rtc_mac_amd64.zip
+          export GOOS=darwin
+          export GOARCH=amd64
+          export FILENAME=artifacts/go2rtc_mac_amd64.zip
           go build -ldflags "-s -w" -trimpath && 7z a -mx9 -sdel "$FILENAME" go2rtc
 
-          GOOS=darwin
-          GOARCH=arm64
-          FILENAME=artifacts/go2rtc_mac_arm64.zip
+          export GOOS=darwin
+          export GOARCH=arm64
+          export FILENAME=artifacts/go2rtc_mac_arm64.zip
           go build -ldflags "-s -w" -trimpath && 7z a -mx9 -sdel "$FILENAME" go2rtc
     - name: Setup tmate session
       if: ${{ failure() }}
-      uses: mxschmitt/action-tmate@v3
+      uses: mxschmitt/action-tmate@v3s
     - name: Create GitHub release
       id: create_release
       uses: softprops/action-gh-release@v1
@@ -98,7 +98,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v4
         with:
-          images: alexxit/go2rtc
+          images: ${{ github.ref_name }}
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}},enable=false
@@ -108,7 +108,7 @@ jobs:
         id: meta-hw
         uses: docker/metadata-action@v4
         with:
-          images: alexxit/go2rtc
+          images: ${{ github.ref_name }}
           flavor: |
             suffix=-hardware
             latest=false
