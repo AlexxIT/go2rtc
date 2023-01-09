@@ -22,6 +22,17 @@ jobs:
         #!/bin/bash
           mkdir artifacts
 
+          cp /dev/null www/ace.js
+          for i in \
+            https://cdn.jsdelivr.net/npm/ace-builds@1.14.0/src-min-noconflict/ace.min.js \
+            https://cdn.jsdelivr.net/npm/ace-builds@1.14.0/src-min-noconflict/mode-yaml.min.js \
+            https://cdn.jsdelivr.net/npm/ace-builds@1.14.0/src-min-noconflict/worker-yaml.min.js \
+            https://cdn.jsdelivr.net/npm/ace-builds@1.14.0/src-min-noconflict/theme-terminal.min.js \
+            https://cdn.jsdelivr.net/npm/ace-builds@1.14.0/src-min-noconflict/theme-github.min.js
+          do
+            curl -sLk "$i" >> www/ace.js; echo "" >> www/ace.js;
+          done
+
           export GOOS=windows
           export GOARCH=amd64
           export FILENAME=artifacts/go2rtc_win64.zip
