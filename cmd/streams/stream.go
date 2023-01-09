@@ -18,6 +18,7 @@ type Stream struct {
 	producers []*Producer
 	consumers []*Consumer
 	mu        sync.Mutex
+	wg        sync.WaitGroup
 }
 
 func NewStream(source interface{}) *Stream {
@@ -59,6 +60,9 @@ func (s *Stream) AddConsumer(cons streamer.Consumer) (err error) {
 
 	var codecs string
 
+	// support for multiple simultaneous requests from different consumers
+	s.wg.Add(1)
+
 	// Step 1. Get consumer medias
 	for icc, consMedia := range cons.GetMedias() {
 		log.Trace().Stringer("media", consMedia).
@@ -82,7 +86,7 @@ func (s *Stream) AddConsumer(cons streamer.Consumer) (err error) {
 					// Step 4. Get producer track
 					prodTrack := prod.GetTrack(prodMedia, prodCodec)
 					if prodTrack == nil {
-						log.Warn().Msg("[stream] can't get track")
+						log.Warn().Str("url", prod.url).Msg("[stream] can't get track")
 						continue
 					}
 
@@ -96,6 +100,9 @@ func (s *Stream) AddConsumer(cons streamer.Consumer) (err error) {
 			}
 		}
 	}
+
+	s.wg.Done()
+	s.wg.Wait()
 
 	if len(producers) == 0 {
 		s.stopProducers()

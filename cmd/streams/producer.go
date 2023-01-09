@@ -48,11 +48,16 @@ func (p *Producer) GetMedias() []*streamer.Media {
 
 		p.element, p.lastErr = GetProducer(p.url)
 		if p.lastErr != nil || p.element == nil {
-			log.Error().Err(p.lastErr).Caller().Send()
+			log.Error().Err(p.lastErr).Str("url", p.url).Caller().Send()
 			return nil
 		}
 
 		p.state = stateMedias
+	}
+
+	// if element in reconnect state
+	if p.element == nil {
+		return nil
 	}
 
 	return p.element.GetMedias()
@@ -102,7 +107,7 @@ func (p *Producer) start() {
 	go func() {
 		// safe read element while mu locked
 		if err := p.element.Start(); err != nil {
-			log.Warn().Err(err).Caller().Send()
+			log.Warn().Err(err).Str("url", p.url).Caller().Send()
 		}
 		p.reconnect()
 	}()
@@ -119,10 +124,9 @@ func (p *Producer) reconnect() {
 
 	log.Debug().Msgf("[streams] reconnect to url=%s", p.url)
 
-	var err error
-	p.element, err = GetProducer(p.url)
-	if err != nil || p.element == nil {
-		log.Debug().Err(err).Caller().Send()
+	p.element, p.lastErr = GetProducer(p.url)
+	if p.lastErr != nil || p.element == nil {
+		log.Debug().Err(p.lastErr).Caller().Send()
 		// TODO: dynamic timeout
 		p.restart = time.AfterFunc(30*time.Second, p.reconnect)
 		return
@@ -149,7 +153,7 @@ func (p *Producer) reconnect() {
 	}
 
 	go func() {
-		if err = p.element.Start(); err != nil {
+		if err := p.element.Start(); err != nil {
 			log.Debug().Err(err).Caller().Send()
 		}
 		p.reconnect()

@@ -1,19 +1,23 @@
 import {VideoRTC} from "./video-rtc.js";
 
 class VideoStream extends VideoRTC {
-    constructor() {
-        super();
+    set divMode(value) {
+        this.querySelector(".mode").innerText = value;
+        this.querySelector(".status").innerText = "";
+    }
 
-        /** @type {HTMLDivElement} */
-        this.divMode = null;
-        /** @type {HTMLDivElement} */
-        this.divStatus = null;
+    set divError(value) {
+        const state = this.querySelector(".mode").innerText;
+        if (state !== "loading") return;
+        this.querySelector(".mode").innerText = "error";
+        this.querySelector(".status").innerText = value;
     }
 
     /**
      * Custom GUI
      */
     oninit() {
+        console.debug("stream.oninit");
         super.oninit();
 
         this.innerHTML = `
@@ -36,35 +40,36 @@ class VideoStream extends VideoRTC {
         </div>
         `;
 
-        this.divStatus = this.querySelector(".status");
-        this.divMode = this.querySelector(".mode");
-
         const info = this.querySelector(".info")
         this.insertBefore(this.video, info);
     }
 
     onconnect() {
+        console.debug("stream.onconnect");
         const result = super.onconnect();
-        if (result) {
-            this.divMode.innerText = "loading";
-        }
+        if (result) this.divMode = "loading";
         return result;
     }
 
+    ondisconnect() {
+        console.debug("stream.ondisconnect");
+        super.ondisconnect();
+    }
+
     onopen() {
+        console.debug("stream.onopen");
         const result = super.onopen();
 
         this.onmessage["stream"] = msg => {
+            console.debug("stream.onmessge", msg);
             switch (msg.type) {
                 case "error":
-                    this.divMode.innerText = "error";
-                    this.divStatus.innerText = msg.value;
+                    this.divError = msg.value;
                     break;
                 case "mse":
                 case "mp4":
                 case "mjpeg":
-                    this.divMode.innerText = msg.type.toUpperCase();
-                    this.divStatus.innerText = "";
+                    this.divMode = msg.type.toUpperCase();
                     break;
             }
         }
@@ -72,12 +77,17 @@ class VideoStream extends VideoRTC {
         return result;
     }
 
+    onclose() {
+        console.debug("stream.onclose");
+        return super.onclose();
+    }
+
     onpcvideo(ev) {
+        console.debug("stream.onpcvideo");
         super.onpcvideo(ev);
 
         if (this.pcState !== WebSocket.CLOSED) {
-            this.divMode.innerText = "RTC";
-            this.divStatus.innerText = "";
+            this.divMode = "RTC";
         }
     }
 }

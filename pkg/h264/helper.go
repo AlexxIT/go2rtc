@@ -3,6 +3,7 @@ package h264
 import (
 	"encoding/base64"
 	"encoding/binary"
+	"fmt"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"strings"
 )
@@ -51,6 +52,16 @@ func GetProfileLevelID(fmtp string) string {
 	if fmtp == "" {
 		return ""
 	}
+
+	// some cameras has wrong profile-level-id
+	// https://github.com/AlexxIT/go2rtc/issues/155
+	if s := streamer.Between(fmtp, "sprop-parameter-sets=", ","); s != "" {
+		sps, _ := base64.StdEncoding.DecodeString(s)
+		if len(sps) >= 4 {
+			return fmt.Sprintf("%06X", sps[1:4])
+		}
+	}
+
 	return streamer.Between(fmtp, "profile-level-id=", ";")
 }
 
