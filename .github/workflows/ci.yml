@@ -65,16 +65,15 @@ jobs:
 
           export GOOS=darwin
           export GOARCH=amd64
-          export FILENAME=artifacts/go2rtc_mac_amd64.zip
-          go build -ldflags "-s -w" -trimpath -o go2rtc_amd64 && 7z a -mx9 -sdel "$FILENAME" go2rtc_amd64
+          go build -ldflags "-s -w" -trimpath -o go2rtc_amd64
 
           export GOOS=darwin
           export GOARCH=arm64
-          export FILENAME=artifacts/go2rtc_mac_arm64.zip
-          go build -ldflags "-s -w" -trimpath -o go2rtc_arm64 && 7z a -mx9 -sdel "$FILENAME" go2rtc_arm64
+          go build -ldflags "-s -w" -trimpath -o go2rtc_arm64
           
           go install github.com/konoui/lipo@latest
-          lipo -create arm64 amd64 -output artifacts/go2rtc_mac_universal
+          ~/go/bin/lipo -create go2rtc_arm64 go2rtc_amd64 -output artifacts/go2rtc_mac_universal
+          7z a -mx9 -sdel artifacts/go2rtc_mac_universal.zip artifacts/go2rtc_mac_universal
 
           parallel --jobs $(nproc) "upx {}" ::: artifacts/go2rtc_linux_*
     - name: Setup tmate session
