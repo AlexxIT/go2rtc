@@ -85,7 +85,6 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: ${{ github.ref }}
         files: artifacts/*
         generate_release_notes: true
         name: Release ${{ env.RELEASE_VERSION }}
@@ -104,7 +103,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v4
         with:
-          images: ${{ github.ref_name }}
+          images: ${{ github.repository }}
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}},enable=false
@@ -114,7 +113,7 @@ jobs:
         id: meta-hw
         uses: docker/metadata-action@v4
         with:
-          images: ${{ github.ref_name }}
+          images: ${{ github.repository }}
           flavor: |
             suffix=-hardware
             latest=false
