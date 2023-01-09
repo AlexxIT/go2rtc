@@ -16,7 +16,7 @@ jobs:
       uses: actions/checkout@v3
     - name: Generate changelog
       run: |
-        docker run -v "$PWD":/workdir quay.io/git-chglog/git-chglog $(git describe --tags $(git rev-list --tags --max-count=1))
+        docker run -v "$PWD":/workdir quay.io/git-chglog/git-chglog $(git describe --tags $(git rev-list --tags --max-count=1 --output CHANGELOG.md))
     - name: Build Go binaries
       run: |
         #!/bin/bash
