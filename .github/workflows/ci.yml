@@ -4,22 +4,105 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - 'master'
+      - 'ci-release'
     tags:
       - 'v*'
 
 jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+    - name: Generate changelog
+      run: |
+        echo -e "$(git log $(git describe --tags --abbrev=0)..HEAD --oneline | awk '{print "- "$0}')" > CHANGELOG.md
+    - name: Build Go binaries
+      run: |
+        #!/bin/bash
+          mkdir artifacts
+
+          export GOOS=windows
+          export GOARCH=amd64
+          export FILENAME=artifacts/go2rtc_win64.zip
+          go build -ldflags "-s -w" -trimpath && 7z a -mx9 -sdel "$FILENAME" go2rtc.exe
+
+          export GOOS=windows
+          export GOARCH=386
+          export FILENAME=artifacts/go2rtc_win32.zip
+          go build -ldflags "-s -w" -trimpath && 7z a -mx9 -sdel "$FILENAME" go2rtc.exe
+
+          export GOOS=windows
+          export GOARCH=arm64
+          export FILENAME=artifacts/go2rtc_win_arm64.zip
+          go build -ldflags "-s -w" -trimpath && 7z a -mx9 -sdel "$FILENAME" go2rtc.exe
+
+          export GOOS=linux 
+          export GOARCH=amd64
+          export FILENAME=artifacts/go2rtc_linux_amd64
+          go build -ldflags "-s -w" -trimpath -o "$FILENAME"
+
+          export GOOS=linux
+          export GOARCH=386
+          export FILENAME=artifacts/go2rtc_linux_i386
+          go build -ldflags "-s -w" -trimpath -o "$FILENAME"
+
+          export GOOS=linux
+          export GOARCH=arm64
+          export FILENAME=artifacts/go2rtc_linux_arm64
+          go build -ldflags "-s -w" -trimpath -o "$FILENAME"
+
+          export GOOS=linux
+          export GOARCH=arm
+          export GOARM=7
+          export FILENAME=artifacts/go2rtc_linux_arm
+          go build -ldflags "-s -w" -trimpath -o "$FILENAME"
+
+          export GOOS=linux
+          export GOARCH=mipsle
+          export FILENAME=artifacts/go2rtc_linux_mipsel
+          go build -ldflags "-s -w" -trimpath -o "$FILENAME"
+
+          export GOOS=darwin
+          export GOARCH=amd64
+          go build -ldflags "-s -w" -trimpath -o go2rtc_amd64
+
+          export GOOS=darwin
+          export GOARCH=arm64
+          go build -ldflags "-s -w" -trimpath -o go2rtc_arm64
+
+          7z a -mx9 -sdel artifacts/go2rtc_darwin_amd64.zip go2rtc_amd64
+          7z a -mx9 -sdel artifacts/go2rtc_darwin_arm64.zip go2rtc_arm64
+
+          parallel --jobs $(nproc) "upx {}" ::: artifacts/go2rtc_linux_*
+    - name: Setup tmate session
+      if: ${{ failure() }}
+      uses: mxschmitt/action-tmate@v3
+    - name: Set env
+      run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+    - name: Create GitHub release
+      id: create_release
+      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/')
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        files: artifacts/*
+        generate_release_notes: true
+        name: Release ${{ env.RELEASE_VERSION }}
+        body_path: CHANGELOG.md
+        draft: false
+        prerelease: false
   build-and-push:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v4
         with:
-          images: alexxit/go2rtc
+          images: ${{ github.repository }}
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}},enable=false
@@ -29,7 +112,7 @@ jobs:
         id: meta-hw
         uses: docker/metadata-action@v4
         with:
-          images: alexxit/go2rtc
+          images: ${{ github.repository }}
           flavor: |
             suffix=-hardware
             latest=false
