@@ -75,7 +75,6 @@ jobs:
           
           go install github.com/konoui/lipo@latest
           lipo -create arm64 amd64 -output artifacts/go2rtc_mac_universal
-          upx artifacts/go2rtc_mac_universal
 
           7z a -mx9 -sdel "artifacts/go2rtc_linux_{arm64,amd64}" go2rtc_{arm64,amd64}
 
