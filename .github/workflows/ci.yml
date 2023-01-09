@@ -77,7 +77,7 @@ jobs:
     - name: Generate Changelog
       id: changelog
       run: |
-        echo "CHANGELOG=$(git log $(git describe --tags --abbrev=0)..HEAD --oneline | awk '{print "- "$0}')" >> $GITHUB_OUTPUT
+        echo "CHANGELOG=CHANGELOG:\n\n$(git log $(git describe --tags --abbrev=0)..HEAD --oneline | awk '{print "- "$0}')" >> $GITHUB_OUTPUT
     - name: Create GitHub release
       id: create_release
       uses: softprops/action-gh-release@v1
