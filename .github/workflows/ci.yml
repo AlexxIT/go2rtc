@@ -14,6 +14,14 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v3
+    - uses: rhysd/changelog-from-release/action@v3
+      with:
+        file: CHANGELOG.md
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        commit: false
+        header: |
+          Changelog
+          =========
     - name: Build Go binaries
       run: |
         #!/bin/bash
@@ -37,28 +45,28 @@ jobs:
           export GOOS=linux 
           export GOARCH=amd64
           export FILENAME=artifacts/go2rtc_linux_amd64
-          go build -ldflags "-s -w" -trimpath -o "$FILENAME" && upx "$FILENAME"
+          go build -ldflags "-s -w" -trimpath -o "$FILENAME"
 
           export GOOS=linux
           export GOARCH=386
           export FILENAME=artifacts/go2rtc_linux_i386
-          go build -ldflags "-s -w" -trimpath -o "$FILENAME" && upx "$FILENAME"
+          go build -ldflags "-s -w" -trimpath -o "$FILENAME"
 
           export GOOS=linux
           export GOARCH=arm64
           export FILENAME=artifacts/go2rtc_linux_arm64
-          go build -ldflags "-s -w" -trimpath -o "$FILENAME" && upx "$FILENAME"
+          go build -ldflags "-s -w" -trimpath -o "$FILENAME"
 
           export GOOS=linux
           export GOARCH=arm
           export GOARM=7
           export FILENAME=artifacts/go2rtc_linux_arm
-          go build -ldflags "-s -w" -trimpath -o "$FILENAME" && upx "$FILENAME"
+          go build -ldflags "-s -w" -trimpath -o "$FILENAME"
 
           export GOOS=linux
           export GOARCH=mipsle
           export FILENAME=artifacts/go2rtc_linux_mipsel
-          go build -ldflags "-s -w" -trimpath -o "$FILENAME" && upx "$FILENAME"
+          go build -ldflags "-s -w" -trimpath -o "$FILENAME"
 
           export GOOS=darwin
           export GOARCH=amd64
@@ -69,15 +77,13 @@ jobs:
           export GOARCH=arm64
           export FILENAME=artifacts/go2rtc_mac_arm64.zip
           go build -ldflags "-s -w" -trimpath && 7z a -mx9 -sdel "$FILENAME" go2rtc
+
+          parallel --jobs $(nproc) "upx {}" ::: artifacts/go2rtc_linux_*
     - name: Setup tmate session
       if: ${{ failure() }}
       uses: mxschmitt/action-tmate@v3
     - name: Set env
       run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
-    - name: Generate Changelog
-      id: changelog
-      run: |
-        echo "CHANGELOG=CHANGELOG:\n\n$(git log $(git describe --tags --abbrev=0)..HEAD --oneline | awk '{print "- "$0}')" >> $GITHUB_OUTPUT
     - name: Create GitHub release
       id: create_release
       uses: softprops/action-gh-release@v1
@@ -88,10 +94,7 @@ jobs:
         files: artifacts/*
         generate_release_notes: true
         name: Release ${{ env.RELEASE_VERSION }}
-        body: |
-          ## Changelog
-          
-          ${{ steps.changelog.outputs.CHANGELOG }}
+        body_path: CHANGELOG.md
         draft: false
         prerelease: false
   build-and-push:
