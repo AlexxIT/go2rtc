@@ -14,14 +14,9 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v3
-    - uses: rhysd/changelog-from-release/action@v3
-      with:
-        file: CHANGELOG.md
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        commit: false
-        header: |
-          Changelog
-          =========
+    - name: Generate changelog
+      run: |
+        docker run -v "$PWD":/workdir quay.io/git-chglog/git-chglog $(git describe --tags $(git rev-list --tags --max-count=1))
     - name: Build Go binaries
       run: |
         #!/bin/bash
@@ -71,12 +66,18 @@ jobs:
           export GOOS=darwin
           export GOARCH=amd64
           export FILENAME=artifacts/go2rtc_mac_amd64.zip
-          go build -ldflags "-s -w" -trimpath && 7z a -mx9 -sdel "$FILENAME" go2rtc
+          go build -ldflags "-s -w" -trimpath -o go2rtc_amd64
 
           export GOOS=darwin
           export GOARCH=arm64
           export FILENAME=artifacts/go2rtc_mac_arm64.zip
-          go build -ldflags "-s -w" -trimpath && 7z a -mx9 -sdel "$FILENAME" go2rtc
+          go build -ldflags "-s -w" -trimpath -o go2rtc_arm64
+          
+          go install github.com/konoui/lipo@latest
+          lipo -create arm64 amd64 -output artifacts/go2rtc_mac_universal
+          upx artifacts/go2rtc_mac_universal
+
+          7z a -mx9 -sdel "artifacts/go2rtc_linux_{arm64,amd64}" go2rtc_{arm64,amd64}
 
           parallel --jobs $(nproc) "upx {}" ::: artifacts/go2rtc_linux_*
     - name: Setup tmate session
