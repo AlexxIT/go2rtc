@@ -69,6 +69,9 @@ jobs:
           GOARCH=arm64
           FILENAME=artifacts/go2rtc_mac_arm64.zip
           go build -ldflags "-s -w" -trimpath && 7z a -mx9 -sdel "$FILENAME" go2rtc
+    - name: Setup tmate session
+      if: ${{ failure() }}
+      uses: mxschmitt/action-tmate@v3
     - name: Create GitHub release
       id: create_release
       uses: softprops/action-gh-release@v1
