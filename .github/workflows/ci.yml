@@ -14,7 +14,7 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v3
-    - name: Build Go binary
+    - name: Build Go binaries
       run: |
         #!/bin/bash
           mkdir artifacts
@@ -72,6 +72,12 @@ jobs:
     - name: Setup tmate session
       if: ${{ failure() }}
       uses: mxschmitt/action-tmate@v3
+    - name: Set env
+      run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+    - name: Generate Changelog
+      id: changelog
+      run: |
+        echo "CHANGELOG=$(git log $(git describe --tags --abbrev=0)..HEAD --oneline | awk '{print "- "$0}')" >> $GITHUB_OUTPUT
     - name: Create GitHub release
       id: create_release
       uses: softprops/action-gh-release@v1
@@ -82,11 +88,11 @@ jobs:
         tag_name: ${{ github.ref }}
         files: artifacts/*
         generate_release_notes: true
-        name: Release ${{ github.ref }}
+        name: Release ${{ env.RELEASE_VERSION }}
         body: |
           ## Changelog
           
-          $(git log $(git describe --tags --abbrev=0)..HEAD --oneline | awk '{print "- "$0}')
+          ${{ steps.changelog.outputs.CHANGELOG }}
         draft: false
         prerelease: false
   build-and-push:
