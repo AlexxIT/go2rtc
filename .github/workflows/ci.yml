@@ -4,17 +4,94 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - 'master'
+      - 'ci-test'
     tags:
       - 'v*'
 
 jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+    - name: Build Go binary
+      run: |
+        #!/bin/bash
+          mkdir artifacts
+          cd artifacts
+
+          GOOS=windows
+          GOARCH=amd64
+          FILENAME=go2rtc_win64.zip
+          go build -ldflags "-s -w" -trimpath && 7z a -mx9 -sdel "$FILENAME" go2rtc.exe
+
+          GOOS=windows
+          GOARCH=386
+          FILENAME=go2rtc_win32.zip
+          go build -ldflags "-s -w" -trimpath && 7z a -mx9 -sdel "$FILENAME" go2rtc.exe
+
+          GOOS=windows
+          GOARCH=arm64
+          FILENAME=go2rtc_win_arm64.zip
+          go build -ldflags "-s -w" -trimpath && 7z a -mx9 -sdel "$FILENAME" go2rtc.exe
+
+          GOOS=linux
+          GOARCH=amd64
+          FILENAME=go2rtc_linux_amd64
+          go build -ldflags "-s -w" -trimpath -o "$FILENAME" && upx "$FILENAME"
+
+          GOOS=linux
+          GOARCH=386
+          FILENAME=go2rtc_linux_i386
+          go build -ldflags "-s -w" -trimpath -o "$FILENAME" && upx "$FILENAME"
+
+          GOOS=linux
+          GOARCH=arm64
+          FILENAME=go2rtc_linux_arm64
+          go build -ldflags "-s -w" -trimpath -o "$FILENAME" && upx "$FILENAME"
+
+          GOOS=linux
+          GOARCH=arm
+          GOARM=7
+          FILENAME=go2rtc_linux_arm
+          go build -ldflags "-s -w" -trimpath -o "$FILENAME" && upx "$FILENAME"
+
+          GOOS=linux
+          GOARCH=mipsle
+          FILENAME=go2rtc_linux_mipsel
+          go build -ldflags "-s -w" -trimpath -o "$FILENAME" && upx "$FILENAME"
+
+          GOOS=darwin
+          GOARCH=amd64
+          FILENAME=go2rtc_mac_amd64.zip
+          go build -ldflags "-s -w" -trimpath && 7z a -mx9 -sdel "$FILENAME" go2rtc
+
+          GOOS=darwin
+          GOARCH=arm64
+          FILENAME=go2rtc_mac_arm64.zip
+          go build -ldflags "-s -w" -trimpath && 7z a -mx9 -sdel "$FILENAME" go2rtc
+    - name: Create GitHub release
+      id: create_release
+      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/')
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        files: artifacts/*
+        generate_release_notes: true
+        name: Release ${{ github.ref }}
+        body: |
+          ## Changelog
+          
+          $(git log $(git describe --tags --abbrev=0)..HEAD --oneline | awk '{print "- "$0}')
+        draft: false
+        prerelease: false
   build-and-push:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v4
