@@ -200,6 +200,9 @@ func tcpHandler(conn *rtsp.Conn) {
 
 	if err := conn.Accept(); err != nil {
 		log.Warn().Err(err).Caller().Send()
+		if closer != nil {
+			closer()
+		}
 		_ = conn.Close()
 		return
 	}
