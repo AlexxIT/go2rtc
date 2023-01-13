@@ -102,9 +102,10 @@ func (s *Stream) AddConsumer(cons streamer.Consumer) (err error) {
 	}
 
 	s.wg.Done()
-	s.wg.Wait()
 
 	if len(producers) == 0 {
+		s.wg.Wait()
+
 		s.stopProducers()
 
 		if len(codecs) > 0 {
