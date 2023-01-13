@@ -35,13 +35,17 @@ func NewAPI(address string) (*webrtc.API, error) {
 	s.SetICEMulticastDNSMode(ice.MulticastDNSModeDisabled)
 
 	if address != "" {
-		ln, err := net.Listen("tcp", address)
-		if err == nil {
-			s.SetNetworkTypes([]webrtc.NetworkType{
-				webrtc.NetworkTypeUDP4, webrtc.NetworkTypeUDP6,
-				webrtc.NetworkTypeTCP4, webrtc.NetworkTypeTCP6,
-			})
+		s.SetNetworkTypes([]webrtc.NetworkType{
+			webrtc.NetworkTypeUDP4, webrtc.NetworkTypeUDP6,
+			webrtc.NetworkTypeTCP4, webrtc.NetworkTypeTCP6,
+		})
 
+		if ln, err := net.ListenPacket("udp", address); err == nil {
+			udpMux := webrtc.NewICEUDPMux(nil, ln)
+			s.SetICEUDPMux(udpMux)
+		}
+
+		if ln, err := net.Listen("tcp", address); err == nil {
 			tcpMux := webrtc.NewICETCPMux(nil, ln, 8)
 			s.SetICETCPMux(tcpMux)
 		}

@@ -25,6 +25,7 @@ var stackSkip = [][]byte{
 
 	// webrtc/api.go
 	[]byte("created by github.com/pion/ice/v2.NewTCPMuxDefault"),
+	[]byte("created by github.com/pion/ice/v2.NewUDPMuxDefault"),
 }
 
 func stackHandler(w http.ResponseWriter, r *http.Request) {

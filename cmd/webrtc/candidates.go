@@ -7,6 +7,7 @@ import (
 )
 
 var candidates []string
+var networks = []string{"udp", "tcp"}
 
 func AddCandidate(address string) {
 	candidates = append(candidates, address)
@@ -20,15 +21,17 @@ func asyncCandidates(tr *api.Transport) {
 			continue
 		}
 
-		cand, err := webrtc.NewCandidate(address)
-		if err != nil {
-			log.Warn().Err(err).Caller().Send()
-			continue
+		for _, network := range networks {
+			cand, err := webrtc.NewCandidate(network, address)
+			if err != nil {
+				log.Warn().Err(err).Caller().Send()
+				continue
+			}
+
+			log.Trace().Str("candidate", cand).Msg("[webrtc] config")
+
+			tr.Write(&api.Message{Type: "webrtc/candidate", Value: cand})
 		}
-
-		log.Trace().Str("candidate", cand).Msg("[webrtc] config")
-
-		tr.Write(&api.Message{Type: "webrtc/candidate", Value: cand})
 	}
 }
 
@@ -57,13 +60,15 @@ func syncCanditates(answer string) (string, error) {
 			continue
 		}
 
-		cand, err := webrtc.NewCandidate(address)
-		if err != nil {
-			log.Warn().Err(err).Msg("[webrtc] candidate")
-			continue
-		}
+		for _, network := range networks {
+			cand, err := webrtc.NewCandidate(network, address)
+			if err != nil {
+				log.Warn().Err(err).Msg("[webrtc] candidate")
+				continue
+			}
 
-		md.WithPropertyAttribute(cand)
+			md.WithPropertyAttribute(cand)
+		}
 	}
 
 	if end {
