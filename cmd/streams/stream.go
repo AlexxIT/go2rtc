@@ -198,8 +198,12 @@ producers:
 //}
 
 func (s *Stream) MarshalJSON() ([]byte, error) {
+	if !s.mu.TryLock() {
+		log.Warn().Msgf("[streams] json locked")
+		return []byte(`null`), nil
+	}
+
 	var v []interface{}
-	s.mu.Lock()
 	for _, prod := range s.producers {
 		if prod.element != nil {
 			v = append(v, prod.element)
