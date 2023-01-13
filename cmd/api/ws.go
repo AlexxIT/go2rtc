@@ -106,6 +106,7 @@ type Transport struct {
 
 	closed bool
 	mx     sync.Mutex
+	wrmx   sync.Mutex
 
 	onChange func()
 	onWrite  func(msg interface{})
@@ -122,9 +123,9 @@ func (t *Transport) OnWrite(f func(msg interface{})) {
 }
 
 func (t *Transport) Write(msg interface{}) {
-	t.mx.Lock()
+	t.wrmx.Lock()
 	t.onWrite(msg)
-	t.mx.Unlock()
+	t.wrmx.Unlock()
 }
 
 func (t *Transport) Close() {
