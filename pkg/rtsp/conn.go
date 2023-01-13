@@ -48,6 +48,22 @@ const (
 
 type State byte
 
+func (s State) String() string {
+	switch s {
+	case StateNone:
+		return "NONE"
+	case StateConn:
+		return "CONN"
+	case StateSetup:
+		return "SETUP"
+	case StatePlay:
+		return "PLAY"
+	case StateHandle:
+		return "HANDLE"
+	}
+	return strconv.Itoa(int(s))
+}
+
 const (
 	StateNone State = iota
 	StateConn
@@ -345,6 +361,10 @@ func (c *Conn) SetupMedia(
 ) (*streamer.Track, error) {
 	c.stateMu.Lock()
 	defer c.stateMu.Unlock()
+
+	if c.state != StateConn && c.state != StateSetup {
+		return nil, fmt.Errorf("RTSP SETUP from wrong state: %s", c.state)
+	}
 
 	ch := c.GetChannel(media)
 	if ch < 0 {
@@ -648,15 +668,17 @@ func (c *Conn) Handle() (err error) {
 	case StatePlay:
 		c.state = StateHandle
 	default:
-		err = fmt.Errorf("RTSP Handle from wrong state: %d", c.state)
+		err = fmt.Errorf("RTSP HANDLE from wrong state: %s", c.state)
 
 		c.state = StateNone
 		_ = c.conn.Close()
 	}
 
+	ok := c.state == StateHandle
+
 	c.stateMu.Unlock()
 
-	if c.state != StateHandle {
+	if !ok {
 		return
 	}
 
