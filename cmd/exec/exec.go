@@ -34,8 +34,13 @@ func Init() {
 			return false
 		}
 
-		waiter <- conn
-		return true
+		// unblocking write to channel
+		select {
+		case waiter <- conn:
+			return true
+		default:
+			return false
+		}
 	})
 
 	streams.HandleFunc("exec", Handle)
