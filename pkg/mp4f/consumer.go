@@ -89,7 +89,7 @@ func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 			return nil
 		}
 
-		if !codec.IsRAW() {
+		if codec.IsRTP() {
 			wrapper := h264.RTPDepay(track)
 			push = wrapper(push)
 		}
