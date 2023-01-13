@@ -119,7 +119,7 @@ func (c *Conn) MarshalJSON() ([]byte, error) {
 		v[k] = media.String()
 	}
 	for i, track := range c.tracks {
-		k := "track:" + strconv.Itoa(int(i>>1))
+		k := "track:" + strconv.Itoa(i)
 		v[k] = track.String()
 	}
 	//for i, track := range c.tracks {
