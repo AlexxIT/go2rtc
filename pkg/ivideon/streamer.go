@@ -20,7 +20,7 @@ func (c *Client) GetTrack(media *streamer.Media, codec *streamer.Codec) *streame
 
 func (c *Client) Start() error {
 	err := c.Handle()
-	if c.closed {
+	if c.buffer == nil {
 		return nil
 	}
 	return err

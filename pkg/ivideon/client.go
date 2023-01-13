@@ -14,6 +14,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -26,12 +27,11 @@ type Client struct {
 	medias []*streamer.Media
 	tracks map[byte]*streamer.Track
 
-	closed bool
-
 	msg *message
 	t0  time.Time
 
 	buffer chan []byte
+	mu     sync.Mutex
 }
 
 func NewClient(id string) *Client {
@@ -87,7 +87,11 @@ func (c *Client) Handle() error {
 
 	track := c.tracks[c.msg.Track]
 	if track != nil {
-		c.buffer <- data
+		c.mu.Lock()
+		if c.buffer != nil {
+			c.buffer <- data
+		}
+		c.mu.Unlock()
 	}
 
 	// we have one unprocessed msg after getTracks
@@ -114,7 +118,11 @@ func (c *Client) Handle() error {
 
 			track = c.tracks[msg.Track]
 			if track != nil {
-				c.buffer <- data
+				c.mu.Lock()
+				if c.buffer != nil {
+					c.buffer <- data
+				}
+				c.mu.Unlock()
 			}
 
 		default:
@@ -127,10 +135,12 @@ func (c *Client) Close() error {
 	if c.conn == nil {
 		return nil
 	}
+	c.mu.Lock()
 	if c.buffer != nil {
 		close(c.buffer)
+		c.buffer = nil
 	}
-	c.closed = true
+	c.mu.Unlock()
 	return c.conn.Close()
 }
 
