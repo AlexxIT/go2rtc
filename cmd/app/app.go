@@ -10,7 +10,7 @@ import (
 	"runtime"
 )
 
-var Version = "0.1-rc.7"
+var Version = "0.1-rc.8"
 var UserAgent = "go2rtc/" + Version
 
 func Init() {
