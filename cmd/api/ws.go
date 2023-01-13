@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Message - struct for data exchange in Web API
@@ -68,6 +69,8 @@ func apiWS(w http.ResponseWriter, r *http.Request) {
 
 	tr := &Transport{Request: r}
 	tr.OnWrite(func(msg interface{}) {
+		_ = ws.SetWriteDeadline(time.Now().Add(time.Second * 5))
+
 		if data, ok := msg.([]byte); ok {
 			_ = ws.WriteMessage(websocket.BinaryMessage, data)
 		} else {
@@ -101,7 +104,8 @@ type Transport struct {
 	Request  *http.Request
 	Consumer interface{} // TODO: rewrite
 
-	mx sync.Mutex
+	closed bool
+	mx     sync.Mutex
 
 	onChange func()
 	onWrite  func(msg interface{})
@@ -124,15 +128,26 @@ func (t *Transport) Write(msg interface{}) {
 }
 
 func (t *Transport) Close() {
+	t.mx.Lock()
 	for _, f := range t.onClose {
 		f()
 	}
+	t.closed = true
+	t.mx.Unlock()
 }
 
 func (t *Transport) OnChange(f func()) {
+	t.mx.Lock()
 	t.onChange = f
+	t.mx.Unlock()
 }
 
 func (t *Transport) OnClose(f func()) {
-	t.onClose = append(t.onClose, f)
+	t.mx.Lock()
+	if t.closed {
+		f()
+	} else {
+		t.onClose = append(t.onClose, f)
+	}
+	t.mx.Unlock()
 }
