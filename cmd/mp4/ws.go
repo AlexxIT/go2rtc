@@ -38,7 +38,7 @@ func handlerWSMSE(tr *api.Transport, msg *api.Message) error {
 	})
 
 	if err := stream.AddConsumer(cons); err != nil {
-		log.Warn().Err(err).Caller().Send()
+		log.Debug().Err(err).Msg("[mp4] add consumer")
 		return err
 	}
 

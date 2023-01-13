@@ -112,7 +112,7 @@ func asyncHandler(tr *api.Transport, msg *api.Message) error {
 
 	// 2. AddConsumer, so we get new tracks
 	if err = stream.AddConsumer(conn); err != nil {
-		log.Warn().Err(err).Caller().Send()
+		log.Debug().Err(err).Msg("[webrtc] add consumer")
 		_ = conn.Conn.Close()
 		return err
 	}
