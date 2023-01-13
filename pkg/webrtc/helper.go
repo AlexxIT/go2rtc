@@ -25,12 +25,17 @@ func NewCandidate(network, address string) (string, error) {
 		return "", err
 	}
 
+	tcpType := ice.TCPTypeUnspecified
+	if network == "tcp" {
+		tcpType = ice.TCPTypePassive
+	}
+
 	cand, err := ice.NewCandidateHost(&ice.CandidateHostConfig{
 		Network:   network,
 		Address:   host,
 		Port:      i,
 		Component: ice.ComponentRTP,
-		TCPType:   ice.TCPTypePassive,
+		TCPType:   tcpType,
 	})
 	if err != nil {
 		return "", err
