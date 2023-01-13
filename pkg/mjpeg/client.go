@@ -64,6 +64,8 @@ func (c *Client) Start() error {
 }
 
 func (c *Client) Stop() error {
+	// important for close reader/writer gorutines
+	_ = c.res.Body.Close()
 	c.closed = true
 	return nil
 }
