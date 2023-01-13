@@ -242,6 +242,10 @@ func (s *Stream) removeProducer(i int) {
 }
 
 func collectCodecs(media *streamer.Media, codecs *string) {
+	if media.Direction == streamer.DirectionRecvonly {
+		return
+	}
+
 	for _, codec := range media.Codecs {
 		name := codec.Name
 		if name == streamer.CodecAAC {
