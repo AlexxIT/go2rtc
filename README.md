@@ -72,7 +72,7 @@ Don't forget to fix the rights `chmod +x go2rtc_xxx_xxx` on Linux and Mac.
 
 ### go2rtc: Docker
 
-Container [alexxit/go2rtc](https://hub.docker.com/r/alexxit/go2rtc) with support `amd64`, `386`, `arm64`, `arm`. This container same as [Home Assistant Add-on](#go2rtc-home-assistant-add-on), but can be used separately from the Home Assistant. Container has preinstalled [FFmpeg](#source-ffmpeg), [Ngrok](#module-ngrok) and [Python](#source-echo).
+Container [alexxit/go2rtc](https://hub.docker.com/r/alexxit/go2rtc) with support `amd64`, `386`, `arm64`, `arm`. This container is the same as [Home Assistant Add-on](#go2rtc-home-assistant-add-on), but can be used separately from Home Assistant. Container has preinstalled [FFmpeg](#source-ffmpeg), [Ngrok](#module-ngrok) and [Python](#source-echo).
 
 ```yaml
 services:
@@ -89,9 +89,9 @@ services:
 Create file `go2rtc.yaml` next to the app.
 
 - by default, you need to config only your `streams` links
-- `api` server will start on default **1984 port**
-- `rtsp` server will start on default **8554 port**
-- `webrtc` will use random UDP port for each connection
+- `api` server will start on default **1984 port** (TCP)
+- `rtsp` server will start on default **8554 port** (TCP)
+- `webrtc` will use port **8555** (TCP/UDP) for connections
 - `ffmpeg` will use default transcoding options (you may install it [manually](https://ffmpeg.org/))
 
 Available modules:
@@ -401,45 +401,43 @@ rtsp:
 
 WebRTC usually works without problems in the local network. But external access may require additional settings. It depends on what type of Internet do you have.
 
-- by default, WebRTC use two random UDP ports for each connection (video and audio)
-- you can enable one additional TCP port for all connections and use it for external access
+- by default, WebRTC uses both TCP and UDP on port 8555 for connections
+- you can use this port for external access
+- you can change the port in YAML config:
+
+```yaml
+webrtc:
+  listen: ":8555" # address of your local server and port (TCP/UDP)
+```
 
 **Static public IP**
 
-- add some TCP port to YAML config (ex. 8555)
-- forward this port on your router (you can use same 8555 port or any other)
+- forward the port 8555 on your router (you can use same 8555 port or any other as external port)
 - add your external IP-address and external port to YAML config
 
 ```yaml
 webrtc:
-  listen: ":8555"  # address of your local server (TCP)
   candidates:
     - 216.58.210.174:8555  # if you have static public IP-address
 ```
 
 **Dynamic public IP**
 
-- add some TCP port to YAML config (ex. 8555)
-- forward this port on your router (you can use same 8555 port or any other)
+- forward the port 8555 on your router (you can use same 8555 port or any other as the external port)
 - add `stun` word and external port to YAML config
   - go2rtc automatically detects your external address with STUN-server
 
 ```yaml
 webrtc:
-  listen: ":8555"  # address of your local server (TCP)
   candidates:
     - stun:8555  # if you have dynamic public IP-address
 ```
 
 **Private IP**
 
-- add some TCP port to YAML config (ex. 8555)
 - setup integration with [Ngrok service](#module-ngrok)
 
 ```yaml
-webrtc:
-  listen: ":8555"  # address of your local server (TCP)
-
 ngrok:
   command: ...
 ```
@@ -595,7 +593,7 @@ log:
 
 ## Security
 
-By default `go2rtc` start Web interface on port `1984` and RTSP on port `8554`. Both ports are accessible from your local network. So anyone on your local network can watch video from your cameras without authorization. The same rule applies to the Home Assistant Add-on.
+By default `go2rtc` starts the Web interface on port `1984` and RTSP on port `8554`, as well as use port `8555` for WebRTC connections. The three ports are accessible from your local network. So anyone on your local network can watch video from your cameras without authorization. The same rule applies to the Home Assistant Add-on.
 
 This is not a problem if you trust your local network as much as I do. But you can change this behaviour with a `go2rtc.yaml` config:
 
@@ -607,7 +605,7 @@ rtsp:
   listen: "127.0.0.1:8554" # localhost
 
 webrtc:
-  listen: ":8555" # external TCP port
+  listen: ":8555" # external TCP/UDP port
 ```
 
 - local access to RTSP is not a problem for [FFmpeg](#source-ffmpeg) integration, because it runs locally on your server
@@ -617,7 +615,7 @@ webrtc:
 
 If you need Web interface protection without Home Assistant Add-on - you need to use reverse proxy, like [Nginx](https://nginx.org/), [Caddy](https://caddyserver.com/), [Ngrok](https://ngrok.com/), etc.
 
-PS. Additionally WebRTC opens a lot of random UDP ports for transmit encrypted media. They work without problems on the local network. And sometimes work for external access, even if you haven't opened ports on your router. But for stable external WebRTC access, you need to configure the TCP port.
+PS. Additionally WebRTC will try to use the 8555 UDP port for transmit encrypted media. It works without problems on the local network. And sometimes also works for external access, even if you haven't opened this port on your router (thanks to [UPnP](https://pt.wikipedia.org/wiki/Universal_Plug_and_Play)). But for stable external WebRTC access, you need to open the 8555 port on your router for both TCP and UDP.
 
 ## Codecs madness
 
