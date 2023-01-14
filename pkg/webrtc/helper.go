@@ -32,7 +32,7 @@ func NewCandidate(network, address string) (string, error) {
 		Component: ice.ComponentRTP,
 	}
 
-	if network == "udp" {
+	if network == "tcp" {
 		config.TCPType = ice.TCPTypePassive
 	}
 
