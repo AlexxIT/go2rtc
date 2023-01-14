@@ -22,6 +22,9 @@ class VideoStream extends VideoRTC {
 
         this.innerHTML = `
         <style>
+        video-stream {
+            position: relative;
+        }
         .info {
             position: absolute;
             top: 0;

@@ -68,7 +68,7 @@ func handlerWSMP4(tr *api.Transport, msg *api.Message) error {
 		return errors.New(api.StreamNotFound)
 	}
 
-	cons := &mp4.Segment{}
+	cons := &mp4.Segment{OnlyKeyframe: true}
 
 	if codecs, ok := msg.Value.(string); ok {
 		log.Trace().Str("codecs", codecs).Msgf("[mp4] new WS/MP4 consumer")
