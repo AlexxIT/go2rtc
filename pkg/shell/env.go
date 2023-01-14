@@ -12,17 +12,19 @@ func ReplaceEnvVars(text string) string {
 		key := match[2 : len(match)-1]
 
 		var def string
+		var dok bool
+
 		i := strings.IndexByte(key, ':')
 		if i > 0 {
 			key, def = key[:i], key[i+1:]
+			dok = true
 		}
 
-		value, exists := os.LookupEnv(key)
-		if exists {
+		if value, vok := os.LookupEnv(key); vok {
 			return value
 		}
 
-		if def != "" {
+		if dok {
 			return def
 		}
 
