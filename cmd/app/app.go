@@ -13,16 +13,17 @@ import (
 var Version = "0.1-rc.8"
 var UserAgent = "go2rtc/" + Version
 
+var ConfigPath string
+
 func Init() {
-	config := flag.String(
-		"config",
-		"go2rtc.yaml",
+	flag.StringVar(
+		&ConfigPath, "config", "go2rtc.yaml",
 		"Path to go2rtc configuration file",
 	)
 
 	flag.Parse()
 
-	data, _ = os.ReadFile(*config)
+	data, _ = os.ReadFile(ConfigPath)
 
 	var cfg struct {
 		Mod map[string]string `yaml:"log"`

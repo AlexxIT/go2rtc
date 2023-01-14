@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>File Editor</title>
+    <meta name="viewport" content="width=device-width, user-scalable=yes, initial-scale=1, maximum-scale=1">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.14.0/ace.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        html, body, #config {
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+<script src="main.js"></script>
+<div>
+    <button id="save">Save & Restart</button>
+</div>
+<br>
+<div id="config"></div>
+<script>
+    ace.config.set('basePath', 'https://cdnjs.cloudflare.com/ajax/libs/ace/1.14.0/');
+    const editor = ace.edit("config", {
+        mode: "ace/mode/yaml",
+    });
+
+    document.getElementById('save').addEventListener('click', () => {
+        fetch('api/config', {
+            method: 'POST', body: editor.getValue()
+        }).then(r => {
+            if (r.ok) {
+                alert("OK");
+                fetch('api/exit', {method: 'POST'});
+            } else {
+                r.text().then(alert);
+            }
+        });
+    });
+
+    window.addEventListener('load', () => {
+        fetch('api/config').then(r => r.text()).then(data => {
+            editor.setValue(data);
+        });
+    })
+</script>
+</body>
+</html>

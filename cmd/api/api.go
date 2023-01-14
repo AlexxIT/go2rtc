@@ -7,6 +7,8 @@ import (
 	"github.com/rs/zerolog"
 	"net"
 	"net/http"
+	"os"
+	"strconv"
 )
 
 func Init() {
@@ -35,6 +37,8 @@ func Init() {
 	initStatic(cfg.Mod.StaticDir)
 	initWS(cfg.Mod.Origin)
 
+	HandleFunc("api/config", configHandler)
+	HandleFunc("api/exit", exitHandler)
 	HandleFunc("api/streams", streamsHandler)
 	HandleFunc("api/ws", apiWS)
 
@@ -94,6 +98,17 @@ func middlewareCORS(next http.Handler) http.Handler {
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		next.ServeHTTP(w, r)
 	})
+}
+
+func exitHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "", http.StatusBadRequest)
+		return
+	}
+
+	s := r.URL.Query().Get("code")
+	code, _ := strconv.Atoi(s)
+	os.Exit(code)
 }
 
 func streamsHandler(w http.ResponseWriter, r *http.Request) {
