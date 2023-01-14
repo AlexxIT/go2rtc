@@ -2,15 +2,18 @@ package webrtc
 
 import (
 	"errors"
+	"io"
+	"net"
+	"net/http"
+	"os"
+	"strings"
+
 	"github.com/AlexxIT/go2rtc/cmd/api"
 	"github.com/AlexxIT/go2rtc/cmd/app"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	pion "github.com/pion/webrtc/v3"
 	"github.com/rs/zerolog"
-	"io"
-	"net"
-	"net/http"
 )
 
 func Init() {
@@ -55,6 +58,12 @@ func Init() {
 	}
 
 	candidates = cfg.Mod.Candidates
+
+	// Add candidates from GO2RTC_WEBRTC_CANDIDATES to list
+	if candidates == nil {
+		value := os.Getenv("GO2RTC_WEBRTC_CANDIDATES")
+		candidates = strings.Split(value, ",")
+	}
 
 	api.HandleWS("webrtc/offer", asyncHandler)
 	api.HandleWS("webrtc/candidate", candidateHandler)
