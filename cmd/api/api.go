@@ -2,14 +2,16 @@ package api
 
 import (
 	"encoding/json"
-	"github.com/AlexxIT/go2rtc/cmd/app"
-	"github.com/AlexxIT/go2rtc/cmd/streams"
-	"github.com/rs/zerolog"
 	"net"
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
+
+	"github.com/AlexxIT/go2rtc/cmd/app"
+	"github.com/AlexxIT/go2rtc/cmd/streams"
+	"github.com/rs/zerolog"
 )
 
 func Init() {
@@ -106,7 +108,7 @@ var mu sync.Mutex
 
 func apiHandler(w http.ResponseWriter, r *http.Request) {
 	mu.Lock()
-	app.Info["host"] = r.Host
+	app.Info["host"] = strings.Split(r.Host, ":")[0]
 	mu.Unlock()
 
 	if err := json.NewEncoder(w).Encode(app.Info); err != nil {
