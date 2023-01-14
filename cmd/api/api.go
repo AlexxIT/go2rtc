@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"sync"
 )
 
 func Init() {
@@ -37,6 +38,7 @@ func Init() {
 	initStatic(cfg.Mod.StaticDir)
 	initWS(cfg.Mod.Origin)
 
+	HandleFunc("api", apiHandler)
 	HandleFunc("api/config", configHandler)
 	HandleFunc("api/exit", exitHandler)
 	HandleFunc("api/streams", streamsHandler)
@@ -98,6 +100,18 @@ func middlewareCORS(next http.Handler) http.Handler {
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		next.ServeHTTP(w, r)
 	})
+}
+
+var mu sync.Mutex
+
+func apiHandler(w http.ResponseWriter, r *http.Request) {
+	mu.Lock()
+	app.Info["host"] = r.Host
+	mu.Unlock()
+
+	if err := json.NewEncoder(w).Encode(app.Info); err != nil {
+		log.Warn().Err(err).Caller().Send()
+	}
 }
 
 func exitHandler(w http.ResponseWriter, r *http.Request) {

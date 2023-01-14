@@ -15,6 +15,9 @@ var Version = "0.1-rc.8"
 var UserAgent = "go2rtc/" + Version
 
 var ConfigPath string
+var Info = map[string]interface{}{
+	"version": Version,
+}
 
 func Init() {
 	flag.StringVar(
@@ -23,6 +26,8 @@ func Init() {
 	)
 
 	flag.Parse()
+
+	Info["config_path"] = ConfigPath
 
 	data, _ = os.ReadFile(ConfigPath)
 

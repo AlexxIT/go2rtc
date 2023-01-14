@@ -14,9 +14,9 @@ import (
 func Init() {
 	var conf struct {
 		Mod struct {
-			Listen   string `yaml:"listen"`
-			Username string `yaml:"username"`
-			Password string `yaml:"password"`
+			Listen   string `yaml:"listen" json:"listen"`
+			Username string `yaml:"username" json:"-"`
+			Password string `yaml:"password" json:"-"`
 		} `yaml:"rtsp"`
 	}
 
@@ -24,6 +24,7 @@ func Init() {
 	conf.Mod.Listen = ":8554"
 
 	app.LoadConfig(&conf)
+	app.Info["rtsp"] = conf.Mod
 
 	log = app.GetLogger("rtsp")
 
