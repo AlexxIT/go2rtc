@@ -37,7 +37,6 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
 - add your [streams](#module-streams) to [config](#configuration) file
 - setup [external access](#module-webrtc) to webrtc
 - setup [external access](#module-ngrok) to web interface
-- install [ffmpeg](#source-ffmpeg) for transcoding
 
 **Developers:**
 
@@ -50,7 +49,6 @@ Download binary for your OS from [latest release](https://github.com/AlexxIT/go2
 
 - `go2rtc_win64.zip` - Windows 64-bit
 - `go2rtc_win32.zip` - Windows 32-bit
-- `go2rtc_win_arm64.zip` - Windows ARM 64-bit
 - `go2rtc_linux_amd64` - Linux 64-bit
 - `go2rtc_linux_i386` - Linux 32-bit
 - `go2rtc_linux_arm64` - Linux ARM 64-bit (ex. Raspberry 64-bit OS)
@@ -74,25 +72,15 @@ Don't forget to fix the rights `chmod +x go2rtc_xxx_xxx` on Linux and Mac.
 
 Container [alexxit/go2rtc](https://hub.docker.com/r/alexxit/go2rtc) with support `amd64`, `386`, `arm64`, `arm`. This container is the same as [Home Assistant Add-on](#go2rtc-home-assistant-add-on), but can be used separately from Home Assistant. Container has preinstalled [FFmpeg](#source-ffmpeg), [Ngrok](#module-ngrok) and [Python](#source-echo).
 
-```yaml
-services:
-  go2rtc:
-    image: alexxit/go2rtc
-    network_mode: host
-    restart: always
-    volumes:
-      - "~/go2rtc.yaml:/config/go2rtc.yaml"
-```
-
 ## Configuration
 
-Create file `go2rtc.yaml` next to the app.
+Create file `go2rtc.yaml`. go2rtc will search this file in current work dirrectory by default.
 
 - by default, you need to config only your `streams` links
 - `api` server will start on default **1984 port** (TCP)
 - `rtsp` server will start on default **8554 port** (TCP)
 - `webrtc` will use port **8555** (TCP/UDP) for connections
-- `ffmpeg` will use default transcoding options (you may install it [manually](https://ffmpeg.org/))
+- `ffmpeg` will use default transcoding options
 
 Available modules:
 
@@ -216,7 +204,7 @@ But you can override them via YAML config. You can also add your own formats to 
 
 ```yaml
 ffmpeg:
-  bin: ffmpeg                                        # path to ffmpeg binary
+  bin: ffmpeg  # path to ffmpeg binary
   h264: "-codec:v libx264 -g:v 30 -preset:v superfast -tune:v zerolatency -profile:v main -level:v 4.1"
   mycodec: "-any args that support ffmpeg..."
 ```
@@ -224,7 +212,10 @@ ffmpeg:
 - You can use `video` and `audio` params multiple times (ex. `#video=copy#audio=copy#audio=pcmu`)
 - You can use go2rtc stream name as ffmpeg input (ex. `ffmpeg:camera1#video=h264`)
 - You can use `rotate` params with `90`, `180`, `270` or `-90` values, important with transcoding (ex. `#video=h264#rotate=90`)
+- You can use `width` and/or `height` params, important with transcoding (ex. `#video=h264#width=1280`)
 - You can use `raw` param for any additional FFmpeg arguments (ex. `#raw=-vf transpose=1`).
+
+Read more about encoding [hardware acceleration](https://github.com/AlexxIT/go2rtc/wiki/Hardware-acceleration).
 
 #### Source: FFmpeg Device
 
@@ -371,13 +362,12 @@ api:
   origin: "*"        # default "", allow CORS requests (only * supported)
 ```
 
-**PS. go2rtc** doesn't provide HTTPS or password protection. Use [Nginx](https://nginx.org/) or [Ngrok](#module-ngrok) or [Home Assistant Add-on](#go2rtc-home-assistant-add-on) for this tasks.
+**PS:**
 
-**PS2.** You can access microphone (for 2-way audio) only with HTTPS ([read more](https://stackoverflow.com/questions/52759992/how-to-access-camera-and-microphone-in-chrome-without-https)).
-
-**PS3.** MJPEG over WebSocket plays better than native MJPEG because Chrome [bug](https://bugs.chromium.org/p/chromium/issues/detail?id=527446).
-
-**PS4.** MP4 over WebSocket was created only for Apple iOS because it doesn't support MSE and native MP4.
+- go2rtc doesn't provide HTTPS or password protection. Use [Nginx](https://nginx.org/) or [Ngrok](#module-ngrok) or [Home Assistant Add-on](#go2rtc-home-assistant-add-on) for this tasks
+- you can access microphone (for 2-way audio) only with HTTPS ([read more](https://stackoverflow.com/questions/52759992/how-to-access-camera-and-microphone-in-chrome-without-https))
+- MJPEG over WebSocket plays better than native MJPEG because Chrome [bug](https://bugs.chromium.org/p/chromium/issues/detail?id=527446)
+- MP4 over WebSocket was created only for Apple iOS because it doesn't support MSE and native MP4
 
 ### Module: RTSP
 
@@ -615,7 +605,7 @@ webrtc:
 
 If you need Web interface protection without Home Assistant Add-on - you need to use reverse proxy, like [Nginx](https://nginx.org/), [Caddy](https://caddyserver.com/), [Ngrok](https://ngrok.com/), etc.
 
-PS. Additionally WebRTC will try to use the 8555 UDP port for transmit encrypted media. It works without problems on the local network. And sometimes also works for external access, even if you haven't opened this port on your router (thanks to [UPnP](https://pt.wikipedia.org/wiki/Universal_Plug_and_Play)). But for stable external WebRTC access, you need to open the 8555 port on your router for both TCP and UDP.
+PS. Additionally WebRTC will try to use the 8555 UDP port for transmit encrypted media. It works without problems on the local network. And sometimes also works for external access, even if you haven't opened this port on your router ([read more](https://en.wikipedia.org/wiki/UDP_hole_punching)). But for stable external WebRTC access, you need to open the 8555 port on your router for both TCP and UDP.
 
 ## Codecs madness
 
