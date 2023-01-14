@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"runtime"
+	"strings"
 )
 
 var Version = "0.1-rc.8"
@@ -20,28 +21,44 @@ var Info = map[string]interface{}{
 }
 
 func Init() {
-	flag.StringVar(
-		&ConfigPath, "config", "go2rtc.yaml",
-		"Path to go2rtc configuration file",
-	)
+	var confs Config
 
+	flag.Var(&confs, "config", "go2rtc config (path to file or raw text), support multiple")
 	flag.Parse()
 
-	Info["config_path"] = ConfigPath
+	if confs == nil {
+		confs = []string{"go2rtc.yaml"}
+	}
 
-	data, _ = os.ReadFile(ConfigPath)
+	for _, conf := range confs {
+		if conf[0] != '{' {
+			// config as file
+			if ConfigPath == "" {
+				ConfigPath = conf
+			}
+
+			data, _ := os.ReadFile(conf)
+			if data == nil {
+				continue
+			}
+
+			data = []byte(shell.ReplaceEnvVars(string(data)))
+			configs = append(configs, data)
+		} else {
+			// config as raw YAML
+			configs = append(configs, []byte(conf))
+		}
+	}
+
+	if ConfigPath != "" {
+		Info["config_path"] = ConfigPath
+	}
 
 	var cfg struct {
 		Mod map[string]string `yaml:"log"`
 	}
 
-	if data != nil {
-		data = []byte(shell.ReplaceEnvVars(string(data)))
-
-		if err := yaml.Unmarshal(data, &cfg); err != nil {
-			println("ERROR: " + err.Error())
-		}
-	}
+	LoadConfig(&cfg)
 
 	log.Logger = NewLogger(cfg.Mod["format"], cfg.Mod["level"])
 
@@ -74,7 +91,7 @@ func NewLogger(format string, level string) zerolog.Logger {
 }
 
 func LoadConfig(v interface{}) {
-	if data != nil {
+	for _, data := range configs {
 		if err := yaml.Unmarshal(data, v); err != nil {
 			log.Warn().Err(err).Msg("[app] read config")
 		}
@@ -95,8 +112,18 @@ func GetLogger(module string) zerolog.Logger {
 
 // internal
 
-// data - config content
-var data []byte
+type Config []string
+
+func (c *Config) String() string {
+	return strings.Join(*c, " ")
+}
+
+func (c *Config) Set(value string) error {
+	*c = append(*c, value)
+	return nil
+}
+
+var configs [][]byte
 
 // modules log levels
 var modules map[string]string
