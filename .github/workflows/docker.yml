@@ -1,4 +1,4 @@
-name: ci
+name: docker
 
 on:
   workflow_dispatch:
@@ -19,7 +19,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v4
         with:
-          images: alexxit/go2rtc
+          images: ${{ github.repository }}
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}},enable=false
@@ -29,7 +29,7 @@ jobs:
         id: meta-hw
         uses: docker/metadata-action@v4
         with:
-          images: alexxit/go2rtc
+          images: ${{ github.repository }}
           flavor: |
             suffix=-hardware
             latest=false
