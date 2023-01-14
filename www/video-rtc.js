@@ -392,21 +392,23 @@ export class VideoRTC extends HTMLElement {
             sb.mode = "segments"; // segments or sequence
             sb.addEventListener("updateend", () => {
                 if (sb.updating) return;
-                if (bufLen > 0) {
-                    try {
-                        sb.appendBuffer(buf.slice(0, bufLen));
-                    } catch (e) {
-                        // console.debug(e);
+
+                try {
+                    if (bufLen > 0) {
+                        const data = buf.slice(0, bufLen);
+                        bufLen = 0;
+                        sb.appendBuffer(data);
+                    } else if (sb.buffered && sb.buffered.length) {
+                        const end = sb.buffered.end(sb.buffered.length - 1) - 5;
+                        const start = sb.buffered.start(0);
+                        if (end > start) {
+                            sb.remove(start, end);
+                            ms.setLiveSeekableRange(end, end + 5);
+                        }
+                        // console.debug("VideoRTC.buffered", start, end);
                     }
-                    bufLen = 0;
-                } else if (sb.buffered && sb.buffered.length) {
-                    const end = sb.buffered.end(sb.buffered.length - 1) - 5;
-                    const start = sb.buffered.start(0);
-                    if (end > start) {
-                        sb.remove(start, end);
-                        ms.setLiveSeekableRange(end, end + 5);
-                    }
-                    // console.debug("VideoRTC.buffered", start, end);
+                } catch (e) {
+                    // console.debug(e);
                 }
             });
 
@@ -504,6 +506,8 @@ export class VideoRTC extends HTMLElement {
      * @param ev {Event}
      */
     onpcvideo(ev) {
+        if (!this.pc) return;
+
         /** @type {HTMLVideoElement} */
         const video2 = ev.target;
         const state = this.pc.connectionState;
