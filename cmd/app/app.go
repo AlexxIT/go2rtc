@@ -2,6 +2,7 @@ package app
 
 import (
 	"flag"
+	"github.com/AlexxIT/go2rtc/pkg/shell"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
@@ -30,6 +31,8 @@ func Init() {
 	}
 
 	if data != nil {
+		data = []byte(shell.ReplaceEnvVars(string(data)))
+
 		if err := yaml.Unmarshal(data, &cfg); err != nil {
 			println("ERROR: " + err.Error())
 		}
