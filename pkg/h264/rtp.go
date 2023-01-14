@@ -70,7 +70,7 @@ func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
 				buf = buf[:0]
 			}
 
-			//log.Printf("[AVC] %v, len: %d", Types(payload), len(payload))
+			//log.Printf("[AVC] %v, len: %d, ts: %10d, seq: %d", Types(payload), len(payload), packet.Timestamp, packet.SequenceNumber)
 
 			clone := *packet
 			clone.Version = RTPPacketVersionAVC

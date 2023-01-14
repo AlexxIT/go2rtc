@@ -14,8 +14,7 @@ func ReplaceEnvVars(text string) string {
 		var def string
 		var dok bool
 
-		i := strings.IndexByte(key, ':')
-		if i > 0 {
+		if i := strings.IndexByte(key, ':'); i > 0 {
 			key, def = key[:i], key[i+1:]
 			dok = true
 		}
