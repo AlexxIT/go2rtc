@@ -57,13 +57,12 @@ func Init() {
 		return pionAPI.NewPeerConnection(pionConf)
 	}
 
-	candidates = cfg.Mod.Candidates
+	// Read candidates from GO2RTC_WEBRTC_CANDIDATES
+	candidatesFromEnv := os.Getenv("GO2RTC_WEBRTC_CANDIDATES")
+	candidates = strings.Split(candidatesFromEnv, ",")
 
-	// Add candidates from GO2RTC_WEBRTC_CANDIDATES to list
-	if candidates == nil {
-		value := os.Getenv("GO2RTC_WEBRTC_CANDIDATES")
-		candidates = strings.Split(value, ",")
-	}
+	// Read candidates from config
+	candidates = append(candidates, cfg.Mod.Candidates...)
 
 	api.HandleWS("webrtc/offer", asyncHandler)
 	api.HandleWS("webrtc/candidate", candidateHandler)
