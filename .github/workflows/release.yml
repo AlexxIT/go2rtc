@@ -63,12 +63,12 @@ jobs:
           
           export GOOS=darwin
           export GOARCH=amd64
-          export FILENAME=go2rtc_mac_amd64.zip
+          export FILENAME=artifacts/go2rtc_mac_amd64.zip
           go build -ldflags "-s -w" -trimpath && 7z a -mx9 -sdel "$FILENAME" go2rtc
           
           export GOOS=darwin
           export GOARCH=arm64
-          export FILENAME=go2rtc_mac_arm64.zip
+          export FILENAME=artifacts/go2rtc_mac_arm64.zip
           go build -ldflags "-s -w" -trimpath && 7z a -mx9 -sdel "$FILENAME" go2rtc
           
           parallel --jobs $(nproc) "upx {}" ::: artifacts/go2rtc_linux_*
