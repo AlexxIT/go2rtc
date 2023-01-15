@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-var Version = "0.1-rc.8"
+var Version = "0.1-rc.9"
 var UserAgent = "go2rtc/" + Version
 
 var ConfigPath string
