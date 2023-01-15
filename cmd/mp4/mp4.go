@@ -80,7 +80,10 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 
 	exit := make(chan error)
 
-	cons := &mp4.Consumer{}
+	cons := &mp4.Consumer{
+		RemoteAddr: r.RemoteAddr,
+		UserAgent:  r.UserAgent(),
+	}
 	cons.Listen(func(msg interface{}) {
 		if data, ok := msg.([]byte); ok {
 			if _, err := w.Write(data); err != nil && exit != nil {

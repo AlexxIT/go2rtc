@@ -1,6 +1,7 @@
 package homekit
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/AlexxIT/go2rtc/pkg/hap"
@@ -11,6 +12,7 @@ import (
 	"github.com/brutella/hap/rtp"
 	"net"
 	"net/url"
+	"sync/atomic"
 )
 
 type Client struct {
@@ -262,4 +264,20 @@ func (c *Client) getMedias() []*streamer.Media {
 	}
 
 	return medias
+}
+
+func (c *Client) MarshalJSON() ([]byte, error) {
+	var recv uint32
+	for _, session := range c.sessions {
+		recv += atomic.LoadUint32(&session.Recv)
+	}
+
+	info := &streamer.Info{
+		Type:   "HomeKit source",
+		URL:    c.conn.URL(),
+		Medias: c.medias,
+		Tracks: c.tracks,
+		Recv:   recv,
+	}
+	return json.Marshal(info)
 }

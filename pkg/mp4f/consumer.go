@@ -1,7 +1,6 @@
 package mp4f
 
 import (
-	"encoding/json"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/deepch/vdk/av"
@@ -148,17 +147,4 @@ func (c *Consumer) Init() ([]byte, error) {
 
 func (c *Consumer) Start() {
 	c.start = true
-}
-
-//
-
-func (c *Consumer) MarshalJSON() ([]byte, error) {
-	v := map[string]interface{}{
-		"type":        "MSE server consumer",
-		"send":        c.send,
-		"remote_addr": c.RemoteAddr,
-		"user_agent":  c.UserAgent,
-	}
-
-	return json.Marshal(v)
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/deepch/vdk/format/rtmp"
 	"github.com/pion/rtp"
 	"net/http"
+	"sync/atomic"
 	"time"
 )
 
@@ -33,7 +34,7 @@ type Client struct {
 	conn   Conn
 	closed bool
 
-	receive int
+	recv uint32
 }
 
 func NewClient(uri string) *Client {
@@ -138,7 +139,7 @@ func (c *Client) Handle() (err error) {
 			return
 		}
 
-		c.receive += len(pkt.Data)
+		atomic.AddUint32(&c.recv, uint32(len(pkt.Data)))
 
 		track := c.tracks[int(pkt.Idx)]
 

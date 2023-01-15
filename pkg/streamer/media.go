@@ -1,6 +1,7 @@
 package streamer
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/pion/sdp/v3"
 	"strconv"
@@ -68,6 +69,10 @@ func (m *Media) String() string {
 		s += ", " + codec.String()
 	}
 	return s
+}
+
+func (m *Media) MarshalJSON() ([]byte, error) {
+	return json.Marshal(m.String())
 }
 
 func (m *Media) Clone() *Media {

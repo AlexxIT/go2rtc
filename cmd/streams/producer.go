@@ -1,6 +1,7 @@
 package streams
 
 import (
+	"encoding/json"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"strings"
 	"sync"
@@ -89,6 +90,15 @@ func (p *Producer) GetTrack(media *streamer.Media, codec *streamer.Codec) *strea
 	}
 
 	return track
+}
+
+func (p *Producer) MarshalJSON() ([]byte, error) {
+	if p.element != nil {
+		return json.Marshal(p.element)
+	}
+
+	info := streamer.Info{URL: p.url}
+	return json.Marshal(info)
 }
 
 // internals

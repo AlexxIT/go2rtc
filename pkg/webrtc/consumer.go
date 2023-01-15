@@ -113,20 +113,12 @@ func (c *Conn) AddCandidate(candidate string) {
 }
 
 func (c *Conn) MarshalJSON() ([]byte, error) {
-	v := map[string]interface{}{
-		streamer.JSONType:       "WebRTC server consumer",
-		streamer.JSONRemoteAddr: c.remote(),
+	info := &streamer.Info{
+		Type:       "WebRTC client",
+		RemoteAddr: c.remote(),
+		UserAgent:  c.UserAgent,
+		Recv:       uint32(c.receive),
+		Send:       uint32(c.send),
 	}
-
-	if c.receive > 0 {
-		v[streamer.JSONReceive] = c.receive
-	}
-	if c.send > 0 {
-		v[streamer.JSONSend] = c.send
-	}
-	if c.UserAgent != "" {
-		v[streamer.JSONUserAgent] = c.UserAgent
-	}
-
-	return json.Marshal(v)
+	return json.Marshal(info)
 }

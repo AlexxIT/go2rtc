@@ -1,9 +1,12 @@
 package streams
 
 import (
+	"encoding/json"
+	"github.com/AlexxIT/go2rtc/cmd/api"
 	"github.com/AlexxIT/go2rtc/cmd/app"
 	"github.com/AlexxIT/go2rtc/cmd/app/store"
 	"github.com/rs/zerolog"
+	"net/http"
 )
 
 func Init() {
@@ -22,6 +25,8 @@ func Init() {
 	for name, item := range store.GetDict("streams") {
 		streams[name] = NewStream(item)
 	}
+
+	api.HandleFunc("api/streams", streamsHandler)
 }
 
 func Get(name string) *Stream {
@@ -48,19 +53,29 @@ func GetOrNew(src string) *Stream {
 	return New(src, src)
 }
 
-func Delete(name string) {
-	delete(streams, name)
-}
+func streamsHandler(w http.ResponseWriter, r *http.Request) {
+	src := r.URL.Query().Get("src")
 
-func All() map[string]interface{} {
-	all := map[string]interface{}{}
-	for name, stream := range streams {
-		all[name] = stream
-		//if stream.Active() {
-		//	all[name] = stream
-		//}
+	switch r.Method {
+	case "PUT":
+		name := r.URL.Query().Get("name")
+		if name == "" {
+			name = src
+		}
+		New(name, src)
+		return
+	case "DELETE":
+		delete(streams, src)
+		return
 	}
-	return all
+
+	if src != "" {
+		e := json.NewEncoder(w)
+		e.SetIndent("", "  ")
+		_ = e.Encode(streams[src])
+	} else {
+		_ = json.NewEncoder(w).Encode(streams)
+	}
 }
 
 var log zerolog.Logger

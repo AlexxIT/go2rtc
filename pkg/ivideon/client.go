@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -41,6 +42,8 @@ type Client struct {
 	buffer chan []byte
 	state  State
 	mu     sync.Mutex
+
+	recv uint32
 }
 
 func NewClient(id string) *Client {
@@ -109,6 +112,7 @@ func (c *Client) Handle() error {
 		c.mu.Lock()
 		if c.state == StateHandle {
 			c.buffer <- data
+			atomic.AddUint32(&c.recv, uint32(len(data)))
 		}
 		c.mu.Unlock()
 	}
@@ -140,6 +144,7 @@ func (c *Client) Handle() error {
 				c.mu.Lock()
 				if c.state == StateHandle {
 					c.buffer <- data
+					atomic.AddUint32(&c.recv, uint32(len(data)))
 				}
 				c.mu.Unlock()
 			}

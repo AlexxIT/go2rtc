@@ -3,6 +3,7 @@ package srtp
 import (
 	"encoding/binary"
 	"net"
+	"sync/atomic"
 )
 
 // Server using same UDP port for SRTP and for SRTCP as the iPhone does
@@ -54,6 +55,8 @@ func (s *Server) Serve(conn net.PacketConn) error {
 					return conn.WriteTo(b, addr)
 				}
 			}
+
+			atomic.AddUint32(&session.Recv, uint32(n))
 
 			if err = session.HandleRTP(buf[:n]); err != nil {
 				return err

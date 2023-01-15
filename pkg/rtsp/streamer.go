@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
-	"strconv"
 )
 
 // Element Producer
@@ -88,40 +87,30 @@ func (c *Conn) AddTrack(media *streamer.Media, track *streamer.Track) *streamer.
 //
 
 func (c *Conn) MarshalJSON() ([]byte, error) {
-	v := map[string]interface{}{
-		streamer.JSONReceive: c.receive,
-		streamer.JSONSend:    c.send,
+	info := &streamer.Info{
+		UserAgent: c.UserAgent,
+		Medias:    c.Medias,
+		Tracks:    c.tracks,
+		Recv:      uint32(c.receive),
+		Send:      uint32(c.send),
 	}
+
 	switch c.mode {
 	case ModeUnknown:
-		v[streamer.JSONType] = "RTSP unknown"
-	case ModeClientProducer:
-		v[streamer.JSONType] = "RTSP client producer"
-	case ModeServerProducer:
-		v[streamer.JSONType] = "RTSP server producer"
+		info.Type = "RTSP unknown"
+	case ModeClientProducer, ModeServerProducer:
+		info.Type = "RTSP source"
 	case ModeServerConsumer:
-		v[streamer.JSONType] = "RTSP server consumer"
+		info.Type = "RTSP client"
 	}
-	//if c.URI != "" {
-	//	v["uri"] = c.URI
-	//}
+
 	if c.URL != nil {
-		v["url"] = c.URL.String()
+		info.URL = c.URL.String()
 	}
 	if c.conn != nil {
-		v[streamer.JSONRemoteAddr] = c.conn.RemoteAddr().String()
+		info.RemoteAddr = c.conn.RemoteAddr().String()
 	}
-	if c.UserAgent != "" {
-		v[streamer.JSONUserAgent] = c.UserAgent
-	}
-	for i, media := range c.Medias {
-		k := "media:" + strconv.Itoa(i)
-		v[k] = media.String()
-	}
-	for i, track := range c.tracks {
-		k := "track:" + strconv.Itoa(i)
-		v[k] = track.String()
-	}
+
 	//for i, track := range c.tracks {
 	//	k := "track:" + strconv.Itoa(i+1)
 	//	if track.MimeType() == streamer.MimeTypeH264 {
@@ -130,5 +119,6 @@ func (c *Conn) MarshalJSON() ([]byte, error) {
 	//		v[k] = track.MimeType()
 	//	}
 	//}
-	return json.Marshal(v)
+
+	return json.Marshal(info)
 }

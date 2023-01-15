@@ -17,6 +17,7 @@ type Session struct {
 
 	Write func(b []byte) (int, error)
 	Track *streamer.Track
+	Recv  uint32
 
 	lastSequence  uint32
 	lastTimestamp uint32

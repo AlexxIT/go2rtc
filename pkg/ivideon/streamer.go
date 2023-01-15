@@ -1,8 +1,10 @@
 package ivideon
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
+	"sync/atomic"
 )
 
 func (c *Client) GetMedias() []*streamer.Media {
@@ -28,4 +30,20 @@ func (c *Client) Start() error {
 
 func (c *Client) Stop() error {
 	return c.Close()
+}
+
+func (c *Client) MarshalJSON() ([]byte, error) {
+	var tracks []*streamer.Track
+	for _, track := range c.tracks {
+		tracks = append(tracks, track)
+	}
+
+	info := &streamer.Info{
+		Type:   "Ivideon source",
+		URL:    c.ID,
+		Medias: c.medias,
+		Tracks: tracks,
+		Recv:   atomic.LoadUint32(&c.recv),
+	}
+	return json.Marshal(info)
 }

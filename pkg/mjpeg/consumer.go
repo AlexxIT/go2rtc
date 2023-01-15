@@ -1,8 +1,10 @@
 package mjpeg
 
 import (
+	"encoding/json"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/pion/rtp"
+	"sync/atomic"
 )
 
 type Consumer struct {
@@ -14,7 +16,7 @@ type Consumer struct {
 	codecs []*streamer.Codec
 	start  bool
 
-	send int
+	send uint32
 }
 
 func (c *Consumer) GetMedias() []*streamer.Media {
@@ -28,6 +30,7 @@ func (c *Consumer) GetMedias() []*streamer.Media {
 func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *streamer.Track {
 	push := func(packet *rtp.Packet) error {
 		c.Fire(packet.Payload)
+		atomic.AddUint32(&c.send, uint32(len(packet.Payload)))
 		return nil
 	}
 
@@ -37,4 +40,14 @@ func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 	}
 
 	return track.Bind(push)
+}
+
+func (c *Consumer) MarshalJSON() ([]byte, error) {
+	info := &streamer.Info{
+		Type:       "MJPEG client",
+		RemoteAddr: c.RemoteAddr,
+		UserAgent:  c.UserAgent,
+		Send:       atomic.LoadUint32(&c.send),
+	}
+	return json.Marshal(info)
 }

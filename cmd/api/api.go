@@ -3,7 +3,6 @@ package api
 import (
 	"encoding/json"
 	"github.com/AlexxIT/go2rtc/cmd/app"
-	"github.com/AlexxIT/go2rtc/cmd/streams"
 	"github.com/rs/zerolog"
 	"net"
 	"net/http"
@@ -41,7 +40,6 @@ func Init() {
 	HandleFunc("api", apiHandler)
 	HandleFunc("api/config", configHandler)
 	HandleFunc("api/exit", exitHandler)
-	HandleFunc("api/streams", streamsHandler)
 	HandleFunc("api/ws", apiWS)
 
 	// ensure we can listen without errors
@@ -123,33 +121,4 @@ func exitHandler(w http.ResponseWriter, r *http.Request) {
 	s := r.URL.Query().Get("code")
 	code, _ := strconv.Atoi(s)
 	os.Exit(code)
-}
-
-func streamsHandler(w http.ResponseWriter, r *http.Request) {
-	src := r.URL.Query().Get("src")
-	name := r.URL.Query().Get("name")
-
-	if name == "" {
-		name = src
-	}
-
-	switch r.Method {
-	case "PUT":
-		streams.New(name, src)
-		return
-	case "DELETE":
-		streams.Delete(src)
-		return
-	}
-
-	var v interface{}
-	if src != "" {
-		v = streams.Get(src)
-	} else {
-		v = streams.All()
-	}
-
-	e := json.NewEncoder(w)
-	e.SetIndent("", "  ")
-	_ = e.Encode(v)
 }

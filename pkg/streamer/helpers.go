@@ -4,13 +4,16 @@ import (
 	"strings"
 )
 
-const (
-	JSONType       = "type"
-	JSONRemoteAddr = "remote_addr"
-	JSONUserAgent  = "user_agent"
-	JSONReceive    = "receive"
-	JSONSend       = "send"
-)
+type Info struct {
+	Type       string   `json:"type,omitempty"`
+	URL        string   `json:"url,omitempty"`
+	RemoteAddr string   `json:"remote_addr,omitempty"`
+	UserAgent  string   `json:"user_agent,omitempty"`
+	Medias     []*Media `json:"medias,omitempty"`
+	Tracks     []*Track `json:"tracks,omitempty"`
+	Recv       uint32   `json:"recv,omitempty"`
+	Send       uint32   `json:"send,omitempty"`
+}
 
 func Between(s, sub1, sub2 string) string {
 	i := strings.Index(s, sub1)

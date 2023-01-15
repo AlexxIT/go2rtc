@@ -7,6 +7,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/h265"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/pion/rtp"
+	"sync/atomic"
 )
 
 type Consumer struct {
@@ -20,7 +21,7 @@ type Consumer struct {
 	codecs []*streamer.Codec
 	wait   byte
 
-	send int
+	send uint32
 }
 
 const (
@@ -76,7 +77,7 @@ func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 			}
 
 			buf := c.muxer.Marshal(trackID, packet)
-			c.send += len(buf)
+			atomic.AddUint32(&c.send, uint32(len(buf)))
 			c.Fire(buf)
 
 			return nil
@@ -108,7 +109,7 @@ func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 			}
 
 			buf := c.muxer.Marshal(trackID, packet)
-			c.send += len(buf)
+			atomic.AddUint32(&c.send, uint32(len(buf)))
 			c.Fire(buf)
 
 			return nil
@@ -128,7 +129,7 @@ func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 			}
 
 			buf := c.muxer.Marshal(trackID, packet)
-			c.send += len(buf)
+			atomic.AddUint32(&c.send, uint32(len(buf)))
 			c.Fire(buf)
 
 			return nil
@@ -163,12 +164,11 @@ func (c *Consumer) Start() {
 //
 
 func (c *Consumer) MarshalJSON() ([]byte, error) {
-	v := map[string]interface{}{
-		"type":        "MP4 server consumer",
-		"send":        c.send,
-		"remote_addr": c.RemoteAddr,
-		"user_agent":  c.UserAgent,
+	info := &streamer.Info{
+		Type:       "MP4 client",
+		RemoteAddr: c.RemoteAddr,
+		UserAgent:  c.UserAgent,
+		Send:       atomic.LoadUint32(&c.send),
 	}
-
-	return json.Marshal(v)
+	return json.Marshal(info)
 }

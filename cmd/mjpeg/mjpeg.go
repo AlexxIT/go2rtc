@@ -27,7 +27,10 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 
 	exit := make(chan []byte)
 
-	cons := &mjpeg.Consumer{}
+	cons := &mjpeg.Consumer{
+		RemoteAddr: r.RemoteAddr,
+		UserAgent:  r.UserAgent(),
+	}
 	cons.Listen(func(msg interface{}) {
 		switch msg := msg.(type) {
 		case []byte:
@@ -68,7 +71,10 @@ func handlerStream(w http.ResponseWriter, r *http.Request) {
 
 	flusher := w.(http.Flusher)
 
-	cons := &mjpeg.Consumer{}
+	cons := &mjpeg.Consumer{
+		RemoteAddr: r.RemoteAddr,
+		UserAgent:  r.UserAgent(),
+	}
 	cons.Listen(func(msg interface{}) {
 		switch msg := msg.(type) {
 		case []byte:
@@ -109,7 +115,10 @@ func handlerWS(tr *api.Transport, _ *api.Message) error {
 		return errors.New(api.StreamNotFound)
 	}
 
-	cons := &mjpeg.Consumer{}
+	cons := &mjpeg.Consumer{
+		RemoteAddr: tr.Request.RemoteAddr,
+		UserAgent:  tr.Request.UserAgent(),
+	}
 	cons.Listen(func(msg interface{}) {
 		if data, ok := msg.([]byte); ok {
 			tr.Write(data)

@@ -1,6 +1,7 @@
 package streamer
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/pion/rtp"
 	"sync"
@@ -22,10 +23,17 @@ func NewTrack(codec *Codec, direction string) *Track {
 
 func (t *Track) String() string {
 	s := t.Codec.String()
-	t.sinkMu.RLock()
-	s += fmt.Sprintf(", sinks=%d", len(t.sink))
-	t.sinkMu.RUnlock()
+	if t.sinkMu.TryRLock() {
+		s += fmt.Sprintf(", sinks=%d", len(t.sink))
+		t.sinkMu.RUnlock()
+	} else {
+		s += fmt.Sprintf(", sinks=?")
+	}
 	return s
+}
+
+func (t *Track) MarshalJSON() ([]byte, error) {
+	return json.Marshal(t.String())
 }
 
 func (t *Track) WriteRTP(p *rtp.Packet) error {

@@ -10,11 +10,6 @@ import (
 	"sync/atomic"
 )
 
-type Consumer struct {
-	element streamer.Consumer
-	tracks  []*streamer.Track
-}
-
 type Stream struct {
 	producers []*Producer
 	consumers []*Consumer
@@ -199,24 +194,19 @@ producers:
 func (s *Stream) MarshalJSON() ([]byte, error) {
 	if !s.mu.TryLock() {
 		log.Warn().Msgf("[streams] json locked")
-		return []byte(`null`), nil
+		return json.Marshal(nil)
 	}
 
-	var v []interface{}
-	for _, prod := range s.producers {
-		if prod.element != nil {
-			v = append(v, prod.element)
-		}
+	var info struct {
+		Producers []*Producer `json:"producers"`
+		Consumers []*Consumer `json:"consumers"`
 	}
-	for _, cons := range s.consumers {
-		// cons.element always not nil
-		v = append(v, cons.element)
-	}
+	info.Producers = s.producers
+	info.Consumers = s.consumers
+
 	s.mu.Unlock()
-	if len(v) == 0 {
-		v = nil
-	}
-	return json.Marshal(v)
+
+	return json.Marshal(info)
 }
 
 func (s *Stream) removeConsumer(i int) {

@@ -137,7 +137,7 @@
             tbody.innerHTML = "";
 
             for (const [name, value] of Object.entries(data)) {
-                const online = value ? value.length : 0;
+                const online = value && value.consumers ? value.consumers.length : 0;
                 const links = templates.map(link => {
                     return link.replace("{name}", encodeURIComponent(name));
                 }).join(" ");

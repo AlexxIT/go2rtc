@@ -18,7 +18,10 @@ func handlerWSMSE(tr *api.Transport, msg *api.Message) error {
 		return errors.New(api.StreamNotFound)
 	}
 
-	cons := &mp4.Consumer{}
+	cons := &mp4.Consumer{
+		RemoteAddr: tr.Request.RemoteAddr,
+		UserAgent:  tr.Request.UserAgent(),
+	}
 	cons.UserAgent = tr.Request.UserAgent()
 	cons.RemoteAddr = tr.Request.RemoteAddr
 
