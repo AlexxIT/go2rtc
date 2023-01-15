@@ -95,6 +95,8 @@ Available modules:
 - [hass](#module-hass) - Home Assistant integration
 - [log](#module-log) - logs config
 
+Full default config [example](https://github.com/AlexxIT/go2rtc/wiki/Configuration).
+
 ### Module: Streams
 
 **go2rtc** support different stream source types. You can config one or multiple links of any type as stream source.
@@ -538,8 +540,13 @@ PS. Default Home Assistant lovelace cards don't support 2-way audio. You can use
 Provides several features:
 
 1. MSE stream (fMP4 over WebSocket)
-2. Camera snapshots in MP4 format (single frame), can be sent to [Telegram](https://www.telegram.org/)
-3. MP4 "file stream" - bad format for streaming because of high latency, doesn't work in Safari 
+2. Camera snapshots in MP4 format (single frame), can be sent to [Telegram](https://github.com/AlexxIT/go2rtc/wiki/Snapshot-to-Telegram)
+3. MP4 "file stream" - bad format for streaming because of high start delay, doesn't work in Safari 
+
+API examples:
+
+- MP4 stream: `http://192.168.1.123:1984/api/stream.mp4?src=camera1`
+- MP4 snapshot: `http://192.168.1.123:1984/api/frame.mp4?src=camera1`
 
 ### Module: MJPEG
 
@@ -674,6 +681,10 @@ streams:
 
 - `ffplay -fflags nobuffer -flags low_delay "rtsp://192.168.1.123:8554/camera1"`
 - VLC > Preferences > Input / Codecs > Default Caching Level: Lowest Latency
+
+**Snapshots to Telegram**
+
+[read more](https://github.com/AlexxIT/go2rtc/wiki/Snapshot-to-Telegram)
 
 ## FAQ
 
