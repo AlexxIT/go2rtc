@@ -10,6 +10,7 @@
     <style>
         body {
             font-family: Arial, Helvetica, sans-serif;
+            background-color: white;
         }
 
         table {
@@ -61,6 +62,7 @@
 </head>
 <body>
 <script src="main.js"></script>
+<div class="info"></div>
 <div class="header">
     <input id="src" type="text" placeholder="url">
     <a id="add" href="#">add</a>
@@ -89,7 +91,6 @@
         '<a href="webrtc.html?src={name}">2-way-aud</a>',
         '<a href="api/stream.mp4?src={name}">mp4</a>',
         '<a href="api/stream.mjpeg?src={name}">mjpeg</a>',
-        `<a href="rtsp://${location.hostname}:8554/{name}">rtsp</a>`,
         '<a href="api/streams?src={name}">info</a>',
         '<a href="#" data-name="{name}">delete</a>',
     ];
@@ -151,7 +152,21 @@
         });
     }
 
-    reload();
+    const url = new URL("api", location.href);
+    fetch(url).then(r => r.json()).then(data => {
+        const info = document.querySelector(".info");
+        info.innerText = `Version: ${data.version}, Config: ${data.config_path}`;
+
+        try {
+            const host = data.host.match(/^[^:]+/)[0];
+            const port = data.rtsp.listen.match(/[0-9]+$/)[0];
+            templates.splice(4, 0, `<a href="rtsp://${host}:${port}/{name}">rtsp</a>`);
+        } catch (e) {
+            templates.splice(4, 0, `<a href="rtsp://${location.host}:8554/{name}">rtsp</a>`);
+        }
+
+        reload();
+    });
 </script>
 </body>
 </html>
