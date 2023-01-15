@@ -8,6 +8,7 @@ import (
 	"gopkg.in/yaml.v3"
 	"io"
 	"os"
+	"path"
 	"runtime"
 	"strings"
 )
@@ -51,6 +52,9 @@ func Init() {
 	}
 
 	if ConfigPath != "" {
+		if cwd, err := os.Getwd(); err == nil {
+			ConfigPath = path.Join(cwd, ConfigPath)
+		}
 		Info["config_path"] = ConfigPath
 	}
 
@@ -65,9 +69,6 @@ func Init() {
 	modules = cfg.Mod
 
 	log.Info().Msgf("go2rtc version %s %s/%s", Version, runtime.GOOS, runtime.GOARCH)
-
-	path, _ := os.Getwd()
-	log.Debug().Str("cwd", path).Send()
 }
 
 func NewLogger(format string, level string) zerolog.Logger {
