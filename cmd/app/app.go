@@ -8,7 +8,7 @@ import (
 	"gopkg.in/yaml.v3"
 	"io"
 	"os"
-	"path"
+	"path/filepath"
 	"runtime"
 	"strings"
 )
@@ -52,8 +52,10 @@ func Init() {
 	}
 
 	if ConfigPath != "" {
-		if cwd, err := os.Getwd(); err == nil {
-			ConfigPath = path.Join(cwd, ConfigPath)
+		if !filepath.IsAbs(ConfigPath) {
+			if cwd, err := os.Getwd(); err == nil {
+				ConfigPath = filepath.Join(cwd, ConfigPath)
+			}
 		}
 		Info["config_path"] = ConfigPath
 	}
