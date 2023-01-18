@@ -655,6 +655,12 @@ func (c *Conn) Accept() error {
 			}
 			return err
 
+		case MethodTeardown:
+			res := &tcp.Response{Request: req}
+			_ = c.Response(res)
+			c.state = StateNone
+			return c.conn.Close()
+
 		default:
 			return fmt.Errorf("unsupported method: %s", req.Method)
 		}
