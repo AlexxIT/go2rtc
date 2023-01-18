@@ -1,18 +1,25 @@
 package mp4
 
 import (
+	"encoding/json"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/pion/rtp"
+	"sync/atomic"
 )
 
 type Segment struct {
 	streamer.Element
 
-	Medias       []*streamer.Media
+	Medias     []*streamer.Media
+	UserAgent  string
+	RemoteAddr string
+
 	MimeType     string
 	OnlyKeyframe bool
+
+	send uint32
 }
 
 func (c *Segment) GetMedias() []*streamer.Media {
@@ -56,6 +63,7 @@ func (c *Segment) AddTrack(media *streamer.Media, track *streamer.Track) *stream
 				}
 
 				buf := muxer.Marshal(0, packet)
+				atomic.AddUint32(&c.send, uint32(len(buf)))
 				c.Fire(append(init, buf...))
 
 				return nil
@@ -73,6 +81,7 @@ func (c *Segment) AddTrack(media *streamer.Media, track *streamer.Track) *stream
 						buf = append(buf, b...)
 					}
 
+					atomic.AddUint32(&c.send, uint32(len(buf)))
 					c.Fire(buf)
 
 					buf = buf[:0]
@@ -106,6 +115,7 @@ func (c *Segment) AddTrack(media *streamer.Media, track *streamer.Track) *stream
 			}
 
 			buf := muxer.Marshal(0, packet)
+			atomic.AddUint32(&c.send, uint32(len(buf)))
 			c.Fire(append(init, buf...))
 
 			return nil
@@ -120,4 +130,14 @@ func (c *Segment) AddTrack(media *streamer.Media, track *streamer.Track) *stream
 	}
 
 	panic("unsupported codec")
+}
+
+func (c *Segment) MarshalJSON() ([]byte, error) {
+	info := &streamer.Info{
+		Type:       "WS/MP4 client",
+		RemoteAddr: c.RemoteAddr,
+		UserAgent:  c.UserAgent,
+		Send:       atomic.LoadUint32(&c.send),
+	}
+	return json.Marshal(info)
 }
