@@ -19,6 +19,8 @@ jobs:
         run: |
           #!/bin/bash
           
+          esport CGO_ENABLED=0
+          
           mkdir artifacts
           export GOOS=windows
           export GOARCH=amd64
