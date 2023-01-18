@@ -2,7 +2,6 @@ package httpflv
 
 import (
 	"bufio"
-	"errors"
 	"github.com/deepch/vdk/av"
 	"github.com/deepch/vdk/codec/h264parser"
 	"github.com/deepch/vdk/format/flv/flvio"
@@ -36,13 +35,10 @@ func Accept(res *http.Response) (*Conn, error) {
 		return nil, err
 	}
 
-	flags, n, err := flvio.ParseFileHeader(c.buf)
+	// ignore flags because Reolink cameras have a buggy realization
+	_, n, err := flvio.ParseFileHeader(c.buf)
 	if err != nil {
 		return nil, err
-	}
-
-	if flags&flvio.FILE_HAS_VIDEO == 0 {
-		return nil, errors.New("not supported")
 	}
 
 	if _, err = c.reader.Discard(n); err != nil {
