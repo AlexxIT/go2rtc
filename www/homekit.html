@@ -65,7 +65,7 @@
         0, location.pathname.lastIndexOf("/")
     );
 
-    fetch(`${baseUrl}/api/homekit`)
+    fetch(`${baseUrl}/api/homekit`, {cache: 'no-cache'})
         .then(r => r.json())
         .then(data => {
             document.querySelector("body > table > tbody").innerHTML =

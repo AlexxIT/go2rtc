@@ -58,7 +58,7 @@
         0, location.pathname.lastIndexOf("/")
     );
 
-    fetch(`${baseUrl}/api/devices`)
+    fetch(`${baseUrl}/api/devices`, {cache: 'no-cache'})
         .then(r => r.json())
         .then(data => {
             document.querySelector("body > table > tbody").innerHTML =

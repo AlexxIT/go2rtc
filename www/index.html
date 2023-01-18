@@ -133,7 +133,7 @@
 
     function reload() {
         const url = new URL("api/streams", location.href);
-        fetch(url).then(r => r.json()).then(data => {
+        fetch(url, {cache: 'no-cache'}).then(r => r.json()).then(data => {
             tbody.innerHTML = "";
 
             for (const [name, value] of Object.entries(data)) {
@@ -153,7 +153,7 @@
     }
 
     const url = new URL("api", location.href);
-    fetch(url).then(r => r.json()).then(data => {
+    fetch(url, {cache: 'no-cache'}).then(r => r.json()).then(data => {
         const info = document.querySelector(".info");
         info.innerText = `Version: ${data.version}, Config: ${data.config_path}`;
 
