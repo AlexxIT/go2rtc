@@ -78,6 +78,7 @@ type Conn struct {
 	// public
 
 	Backchannel bool
+	SessionName string
 
 	Medias    []*streamer.Media
 	Session   string
@@ -618,7 +619,7 @@ func (c *Conn) Accept() error {
 				medias = append(medias, media)
 			}
 
-			res.Body, err = streamer.MarshalSDP(medias)
+			res.Body, err = streamer.MarshalSDP(c.SessionName, medias)
 			if err != nil {
 				return err
 			}

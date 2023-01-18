@@ -162,6 +162,8 @@ func tcpHandler(conn *rtsp.Conn) {
 
 			log.Debug().Str("stream", name).Msg("[rtsp] new consumer")
 
+			conn.SessionName = app.UserAgent
+
 			initMedias(conn)
 
 			if err := stream.AddConsumer(conn); err != nil {
