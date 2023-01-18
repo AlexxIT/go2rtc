@@ -41,7 +41,7 @@
             method: 'POST', body: editor.getValue()
         }).then(r => {
             if (r.ok) {
-                alert("OK");
+                alert('OK');
                 fetch('api/exit', {method: 'POST'});
             } else {
                 r.text().then(alert);
@@ -50,8 +50,18 @@
     });
 
     window.addEventListener('load', () => {
-        fetch('api/config').then(r => r.text()).then(data => {
-            editor.setValue(data);
+        fetch('api/config', {cache: 'no-cache'}).then(r => {
+            if (r.status === 410) {
+                alert('Config file is not set');
+            } else if (r.status === 404) {
+                editor.setValue(''); // config file not exist
+            } else if (r.ok) {
+                r.text().then(data => {
+                    editor.setValue(data);
+                });
+            } else {
+                alert(`Unknown error: ${r.statusText} (${r.status})`);
+            }
         });
     })
 </script>

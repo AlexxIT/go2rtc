@@ -9,11 +9,16 @@ import (
 )
 
 func configHandler(w http.ResponseWriter, r *http.Request) {
+	if app.ConfigPath == "" {
+		http.Error(w, "", http.StatusGone)
+		return
+	}
+
 	switch r.Method {
 	case "GET":
 		data, err := os.ReadFile(app.ConfigPath)
 		if err != nil {
-			http.NotFound(w, r)
+			http.Error(w, "", http.StatusNotFound)
 			return
 		}
 		if _, err = w.Write(data); err != nil {
