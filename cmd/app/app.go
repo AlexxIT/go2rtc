@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 )
 
 var Version = "0.1-rc.9"
@@ -83,7 +84,7 @@ func NewLogger(format string, level string) zerolog.Logger {
 		}
 	}
 
-	zerolog.TimeFieldFormat = zerolog.TimeFormatUnixMs
+	zerolog.TimeFieldFormat = time.RFC3339Nano
 
 	lvl, err := zerolog.ParseLevel(level)
 	if err != nil || lvl == zerolog.NoLevel {
