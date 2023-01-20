@@ -799,12 +799,12 @@ func (c *Conn) Handle() (err error) {
 			msg := &RTCP{Channel: channelID}
 
 			if err = msg.Header.Unmarshal(buf); err != nil {
-				return
+				continue
 			}
 
 			msg.Packets, err = rtcp.Unmarshal(buf)
 			if err != nil {
-				return
+				continue
 			}
 
 			c.Fire(msg)
