@@ -33,13 +33,12 @@ FROM scratch AS rootfs
 
 COPY --from=build /build/go2rtc /usr/local/bin/
 COPY --from=ngrok /bin/ngrok /usr/local/bin/
-COPY ./build/docker/run.sh /
 
 
 # 3. Final image
 FROM base
 
-# Install ffmpeg, bash (for run.sh), tini (for signal handling),
+# Install ffmpeg, tini (for signal handling),
 # and other common tools for the echo source.
 RUN apk add --no-cache tini ffmpeg bash curl jq
 
@@ -55,8 +54,8 @@ RUN if [ "${TARGETARCH}" = "amd64" ]; then apk add --no-cache libva-intel-driver
 
 COPY --from=rootfs / /
 
-RUN chmod a+x /run.sh && mkdir -p /config
-
 ENTRYPOINT ["/sbin/tini", "--"]
+VOLUME /config
+WORKDIR /config
 
-CMD ["/run.sh"]
+CMD ["go2rtc", "-config", "/config/go2rtc.yaml"]
