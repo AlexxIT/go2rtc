@@ -27,6 +27,43 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
 - [MediaSoup](https://mediasoup.org/) framework routing idea
 - HomeKit Accessory Protocol from [@brutella](https://github.com/brutella/hap)
 
+---
+
+<!-- TOC -->
+* [go2rtc](#go2rtc)
+  * [Fast start](#fast-start)
+    * [go2rtc: Binary](#go2rtc--binary)
+    * [go2rtc: Home Assistant Add-on](#go2rtc--home-assistant-add-on)
+    * [go2rtc: Docker](#go2rtc--docker)
+  * [Configuration](#configuration)
+    * [Module: Streams](#module--streams)
+      * [Source: RTSP](#source--rtsp)
+      * [Source: RTMP](#source--rtmp)
+      * [Source: HTTP](#source--http)
+      * [Source: FFmpeg](#source--ffmpeg)
+      * [Source: FFmpeg Device](#source--ffmpeg-device)
+      * [Source: Exec](#source--exec)
+      * [Source: Echo](#source--echo)
+      * [Source: HomeKit](#source--homekit)
+      * [Source: Ivideon](#source--ivideon)
+      * [Source: Hass](#source--hass)
+    * [Module: API](#module--api)
+    * [Module: RTSP](#module--rtsp)
+    * [Module: WebRTC](#module--webrtc)
+    * [Module: Ngrok](#module--ngrok)
+    * [Module: Hass](#module--hass)
+      * [From go2rtc to Hass](#from-go2rtc-to-hass)
+      * [From Hass to go2rtc](#from-hass-to-go2rtc)
+    * [Module: MP4](#module--mp4)
+    * [Module: MJPEG](#module--mjpeg)
+    * [Module: Log](#module--log)
+  * [Security](#security)
+  * [Codecs madness](#codecs-madness)
+  * [Codecs negotiation](#codecs-negotiation)
+  * [TIPS](#tips)
+  * [FAQ](#faq)
+<!-- TOC -->
+
 ## Fast start
 
 1. Download [binary](#go2rtc-binary) or use [Docker](#go2rtc-docker) or [Home Assistant Add-on](#go2rtc-home-assistant-add-on)
@@ -36,7 +73,6 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
 
 - add your [streams](#module-streams) to [config](#configuration) file
 - setup [external access](#module-webrtc) to webrtc
-- setup [external access](#module-ngrok) to web interface
 
 **Developers:**
 
@@ -74,13 +110,13 @@ Container [alexxit/go2rtc](https://hub.docker.com/r/alexxit/go2rtc) with support
 
 ## Configuration
 
-Create file `go2rtc.yaml`. go2rtc will search this file in current work dirrectory by default.
-
-- by default, you need to config only your `streams` links
+- by default go2rtc will search `go2rtc.yaml` in the current work dirrectory
 - `api` server will start on default **1984 port** (TCP)
 - `rtsp` server will start on default **8554 port** (TCP)
 - `webrtc` will use port **8555** (TCP/UDP) for connections
 - `ffmpeg` will use default transcoding options
+
+Configuration options and a complete list of settings can be found in [the wiki](https://github.com/AlexxIT/go2rtc/wiki/Configuration).
 
 Available modules:
 
@@ -94,8 +130,6 @@ Available modules:
 - [ngrok](#module-ngrok) - Ngrok integration (external access for private network)
 - [hass](#module-hass) - Home Assistant integration
 - [log](#module-log) - logs config
-
-Full default config [example](https://github.com/AlexxIT/go2rtc/wiki/Configuration).
 
 ### Module: Streams
 
@@ -359,6 +393,8 @@ go2rtc has simple HTML page (`stream.html`) with support params in URL:
 ```yaml
 api:
   listen: ":1984"    # default ":1984", HTTP API port ("" - disabled)
+  username: "admin"  # default "", Basic auth for WebUI
+  password: "pass"   # default "", Basic auth for WebUI
   base_path: "/rtc"  # default "", API prefix for serve on suburl (/api => /rtc/api)
   static_dir: "www"  # default "", folder for static files (custom web interface)
   origin: "*"        # default "", allow CORS requests (only * supported)
@@ -366,7 +402,7 @@ api:
 
 **PS:**
 
-- go2rtc doesn't provide HTTPS or password protection. Use [Nginx](https://nginx.org/) or [Ngrok](#module-ngrok) or [Home Assistant Add-on](#go2rtc-home-assistant-add-on) for this tasks
+- go2rtc doesn't provide HTTPS. Use [Nginx](https://nginx.org/) or [Ngrok](#module-ngrok) or [Home Assistant Add-on](#go2rtc-home-assistant-add-on) for this tasks
 - you can access microphone (for 2-way audio) only with HTTPS ([read more](https://stackoverflow.com/questions/52759992/how-to-access-camera-and-microphone-in-chrome-without-https))
 - MJPEG over WebSocket plays better than native MJPEG because Chrome [bug](https://bugs.chromium.org/p/chromium/issues/detail?id=527446)
 - MP4 over WebSocket was created only for Apple iOS because it doesn't support MSE and native MP4
@@ -384,9 +420,9 @@ Password protection always disabled for localhost calls (ex. FFmpeg or Hass on s
 
 ```yaml
 rtsp:
-  listen: ":8554"  # RTSP Server TCP port, default - 8554
-  username: admin  # optional, default - disabled
-  password: pass   # optional, default - disabled
+  listen: ":8554"    # RTSP Server TCP port, default - 8554
+  username: "admin"  # optional, default - disabled
+  password: "pass"   # optional, default - disabled
 ```
 
 ### Module: WebRTC
@@ -399,7 +435,7 @@ WebRTC usually works without problems in the local network. But external access 
 
 ```yaml
 webrtc:
-  listen: ":8555" # address of your local server and port (TCP/UDP)
+  listen: ":8555"  # address of your local server and port (TCP/UDP)
 ```
 
 **Static public IP**
