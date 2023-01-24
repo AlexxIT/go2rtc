@@ -81,7 +81,9 @@ func apiWS(w http.ResponseWriter, r *http.Request) {
 	for {
 		msg := new(Message)
 		if err = ws.ReadJSON(msg); err != nil {
-			log.Trace().Err(err).Caller().Send()
+			if !websocket.IsCloseError(err, websocket.CloseNoStatusReceived) {
+				log.Trace().Err(err).Caller().Send()
+			}
 			_ = ws.Close()
 			break
 		}
