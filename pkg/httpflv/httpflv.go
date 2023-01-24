@@ -141,7 +141,7 @@ func (c *Conn) Streams() ([]av.CodecData, error) {
 
 func (c *Conn) ReadPacket() (av.Packet, error) {
 	for {
-		tag, ts, err := flvio.ReadTag(c.reader, c.buf)
+		tag, ts, err := ReadTag(c.reader, c.buf)
 		if err != nil {
 			return av.Packet{}, err
 		}
