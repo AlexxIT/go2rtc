@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-var Version = "1.0.0"
+var Version = "1.0.1"
 var UserAgent = "go2rtc/" + Version
 
 var ConfigPath string
