@@ -75,11 +75,8 @@ func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
 				// https://github.com/AlexxIT/WebRTC/issues/391
 				// https://github.com/AlexxIT/WebRTC/issues/392
 				for i := 0; i < len(payload); {
-					switch NALUType(payload[i:]) {
-					case NALUTypeSPS, NALUTypePPS, NALUTypeIFrame, NALUTypePFrame:
-					default:
-						payload = payload[:i]
-						continue
+					if i+4 >= len(payload) {
+						break
 					}
 
 					size := bytes.Index(payload[i+4:], []byte{0, 0, 0, 1})
@@ -89,6 +86,7 @@ func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
 						}
 						size = len(payload) - (i + 4)
 					}
+
 					binary.BigEndian.PutUint32(payload[i:], uint32(size))
 
 					i += size + 4
