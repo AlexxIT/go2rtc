@@ -1,6 +1,7 @@
 package h264
 
 import (
+	"bytes"
 	"encoding/binary"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/pion/rtp"
@@ -27,7 +28,8 @@ func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
 			}
 
 			// Fix TP-Link Tapo TC70: sends SPS and PPS with packet.Marker = true
-			if packet.Marker {
+			// Reolink Duo 2: sends SPS with Marker and PPS without
+			if packet.Marker && len(payload) < 128 {
 				switch NALUType(payload) {
 				case NALUTypeSPS, NALUTypePPS:
 					buf = append(buf, payload...)
@@ -68,6 +70,29 @@ func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
 			if len(buf) > 0 {
 				payload = append(buf, payload...)
 				buf = buf[:0]
+			} else {
+				// some Chinese buggy cameras has single packet with SPS+PPS+IFrame separated by 00 00 00 01
+				// https://github.com/AlexxIT/WebRTC/issues/391
+				// https://github.com/AlexxIT/WebRTC/issues/392
+				for i := 0; i < len(payload); {
+					switch NALUType(payload[i:]) {
+					case NALUTypeSPS, NALUTypePPS, NALUTypeIFrame, NALUTypePFrame:
+					default:
+						payload = payload[:i]
+						continue
+					}
+
+					size := bytes.Index(payload[i+4:], []byte{0, 0, 0, 1})
+					if size < 0 {
+						if i == 0 {
+							break
+						}
+						size = len(payload) - (i + 4)
+					}
+					binary.BigEndian.PutUint32(payload[i:], uint32(size))
+
+					i += size + 4
+				}
 			}
 
 			//log.Printf("[AVC] %v, len: %d, ts: %10d, seq: %d", Types(payload), len(payload), packet.Timestamp, packet.SequenceNumber)
