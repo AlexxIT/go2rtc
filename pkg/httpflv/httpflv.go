@@ -128,8 +128,10 @@ func (c *Conn) Streams() ([]av.CodecData, error) {
 		return []av.CodecData{video, audio}, nil
 	} else if video != nil {
 		c.videoIdx = 0
+		c.audioIdx = -1
 		return []av.CodecData{video}, nil
 	} else if audio != nil {
+		c.videoIdx = -1
 		c.audioIdx = 0
 		return []av.CodecData{audio}, nil
 	}
@@ -146,9 +148,11 @@ func (c *Conn) ReadPacket() (av.Packet, error) {
 
 		switch tag.Type {
 		case flvio.TAG_VIDEO:
-			if tag.AVCPacketType != flvio.AVC_NALU {
+			if c.videoIdx < 0 || tag.AVCPacketType != flvio.AVC_NALU {
 				continue
 			}
+
+			//log.Printf("[FLV] %v, len: %d, ts: %10d", h264.Types(tag.Data), len(tag.Data), flvio.TsToTime(ts))
 
 			return av.Packet{
 				Idx:             c.videoIdx,
@@ -159,7 +163,7 @@ func (c *Conn) ReadPacket() (av.Packet, error) {
 			}, nil
 
 		case flvio.TAG_AUDIO:
-			if tag.SoundFormat != flvio.SOUND_AAC || tag.AACPacketType != flvio.AAC_RAW {
+			if c.audioIdx < 0 || tag.SoundFormat != flvio.SOUND_AAC || tag.AACPacketType != flvio.AAC_RAW {
 				continue
 			}
 
