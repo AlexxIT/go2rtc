@@ -26,27 +26,24 @@ import (
 
 func main() {
 	app.Init()     // init config and logs
+	api.Init()     // init HTTP API server
 	streams.Init() // load streams list
-
-	api.Init() // init HTTP API server
-
-	echo.Init()
 
 	rtsp.Init()   // add support RTSP client and RTSP server
 	rtmp.Init()   // add support RTMP client
 	exec.Init()   // add support exec scheme (depends on RTSP server)
 	ffmpeg.Init() // add support ffmpeg scheme (depends on exec scheme)
 	hass.Init()   // add support hass scheme
+	echo.Init()
+	ivideon.Init()
+
+	srtp.Init()
+	homekit.Init()
 
 	webrtc.Init()
 	mp4.Init()
 	mjpeg.Init()
 	http.Init()
-
-	srtp.Init()
-	homekit.Init()
-
-	ivideon.Init()
 
 	ngrok.Init()
 	debug.Init()
