@@ -17,9 +17,14 @@ func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
 
 			//log.Printf("[RTP/AAC] units: %d, size: %4d, ts: %10d, %t", headersSize/2, len(packet.Payload), packet.Timestamp, packet.Marker)
 
+			data := packet.Payload[2+headersSize:]
+			if IsADTS(data) {
+				data = data[7:]
+			}
+
 			clone := *packet
 			clone.Version = RTPPacketVersionAAC
-			clone.Payload = packet.Payload[2+headersSize:]
+			clone.Payload = data
 			return push(&clone)
 		}
 	}
@@ -54,4 +59,8 @@ func RTPPay(mtu uint16) streamer.WrapperFunc {
 			return push(&clone)
 		}
 	}
+}
+
+func IsADTS(b []byte) bool {
+	return len(b) > 7 && b[0] == 0xFF && b[1]&0xF0 == 0xF0
 }
