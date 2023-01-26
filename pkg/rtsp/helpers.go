@@ -47,9 +47,14 @@ func UnmarshalSDP(rawSDP []byte) ([]*streamer.Media, error) {
 	return medias, nil
 }
 
-// urlParse fix bug in URL from D-Link camera:
-// Content-Base: rtsp://::ffff:192.168.1.123/onvif/profile.1/
+// urlParse fix bugs:
+// 1. Content-Base: rtsp://::ffff:192.168.1.123/onvif/profile.1/
+// 2. Content-Base: rtsp://rtsp://turret2-cam.lan:554/stream1/
 func urlParse(rawURL string) (*url.URL, error) {
+	if strings.HasPrefix(rawURL, "rtsp://rtsp://") {
+		rawURL = rawURL[7:]
+	}
+
 	u, err := url.Parse(rawURL)
 	if err != nil && strings.HasSuffix(err.Error(), "after host") {
 		if i1 := strings.Index(rawURL, "://"); i1 > 0 {
