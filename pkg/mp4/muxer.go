@@ -1,22 +1,19 @@
 package mp4
 
 import (
-	"encoding/binary"
 	"encoding/hex"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
+	"github.com/AlexxIT/go2rtc/pkg/mov"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
-	"github.com/deepch/vdk/av"
 	"github.com/deepch/vdk/codec/h264parser"
 	"github.com/deepch/vdk/codec/h265parser"
-	"github.com/deepch/vdk/format/fmp4/fmp4io"
-	"github.com/deepch/vdk/format/mp4/mp4io"
-	"github.com/deepch/vdk/format/mp4f/mp4fio"
 	"github.com/pion/rtp"
 )
 
 type Muxer struct {
 	fragIndex uint32
+	flags     []uint32
 	dts       []uint64
 	pts       []uint32
 }
@@ -45,7 +42,11 @@ func (m *Muxer) MimeType(codecs []*streamer.Codec) string {
 }
 
 func (m *Muxer) GetInit(codecs []*streamer.Codec) ([]byte, error) {
-	moov := MOOV()
+	mv := mov.NewMovie(1024)
+	mv.WriteFileType()
+
+	mv.StartAtom(mov.Moov)
+	mv.WriteMovieHeader()
 
 	for i, codec := range codecs {
 		switch codec.Name {
@@ -62,35 +63,13 @@ func (m *Muxer) GetInit(codecs []*streamer.Codec) ([]byte, error) {
 				return nil, err
 			}
 
-			width := codecData.Width()
-			height := codecData.Height()
+			mv.WriteVideoTrack(
+				uint32(i+1), codec.ClockRate,
+				uint16(codecData.Width()), uint16(codecData.Height()),
+				codecData.AVCDecoderConfRecordBytes(), true,
+			)
 
-			trak := TRAK(i + 1)
-			trak.Header.TrackWidth = float64(width)
-			trak.Header.TrackHeight = float64(height)
-			trak.Media.Header.TimeScale = int32(codec.ClockRate)
-			trak.Media.Handler = &mp4io.HandlerRefer{
-				SubType: [4]byte{'v', 'i', 'd', 'e'},
-				Name:    []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 'm', 'a', 'i', 'n', 0},
-			}
-			trak.Media.Info.Video = &mp4io.VideoMediaInfo{
-				Flags: 0x000001,
-			}
-			trak.Media.Info.Sample.SampleDesc.AVC1Desc = &mp4io.AVC1Desc{
-				DataRefIdx:           1,
-				HorizontalResolution: 72,
-				VorizontalResolution: 72,
-				Width:                int16(width),
-				Height:               int16(height),
-				FrameCount:           1,
-				Depth:                24,
-				ColorTableId:         -1,
-				Conf: &mp4io.AVC1Conf{
-					Data: codecData.AVCDecoderConfRecordBytes(),
-				},
-			}
-
-			moov.Tracks = append(moov.Tracks, trak)
+			m.flags = append(m.flags, 0x1010000)
 
 		case streamer.CodecH265:
 			vps, sps, pps := h265.GetParameterSet(codec.FmtpLine)
@@ -106,35 +85,13 @@ func (m *Muxer) GetInit(codecs []*streamer.Codec) ([]byte, error) {
 				return nil, err
 			}
 
-			width := codecData.Width()
-			height := codecData.Height()
+			mv.WriteVideoTrack(
+				uint32(i+1), codec.ClockRate,
+				uint16(codecData.Width()), uint16(codecData.Height()),
+				codecData.AVCDecoderConfRecordBytes(), false,
+			)
 
-			trak := TRAK(i + 1)
-			trak.Header.TrackWidth = float64(width)
-			trak.Header.TrackHeight = float64(height)
-			trak.Media.Header.TimeScale = int32(codec.ClockRate)
-			trak.Media.Handler = &mp4io.HandlerRefer{
-				SubType: [4]byte{'v', 'i', 'd', 'e'},
-				Name:    []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 'm', 'a', 'i', 'n', 0},
-			}
-			trak.Media.Info.Video = &mp4io.VideoMediaInfo{
-				Flags: 0x000001,
-			}
-			trak.Media.Info.Sample.SampleDesc.HV1Desc = &mp4io.HV1Desc{
-				DataRefIdx:           1,
-				HorizontalResolution: 72,
-				VorizontalResolution: 72,
-				Width:                int16(width),
-				Height:               int16(height),
-				FrameCount:           1,
-				Depth:                24,
-				ColorTableId:         -1,
-				Conf: &mp4io.HV1Conf{
-					Data: codecData.AVCDecoderConfRecordBytes(),
-				},
-			}
-
-			moov.Tracks = append(moov.Tracks, trak)
+			m.flags = append(m.flags, 0x1010000)
 
 		case streamer.CodecAAC:
 			s := streamer.Between(codec.FmtpLine, "config=", ";")
@@ -143,44 +100,26 @@ func (m *Muxer) GetInit(codecs []*streamer.Codec) ([]byte, error) {
 				return nil, err
 			}
 
-			trak := TRAK(i + 1)
-			trak.Header.AlternateGroup = 1
-			trak.Header.Duration = 0
-			trak.Header.Volume = 1
-			trak.Media.Header.TimeScale = int32(codec.ClockRate)
+			mv.WriteAudioTrack(
+				uint32(i+1), codec.ClockRate, codec.Channels, 16, b,
+			)
 
-			trak.Media.Handler = &mp4io.HandlerRefer{
-				SubType: [4]byte{'s', 'o', 'u', 'n'},
-				Name:    []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 'm', 'a', 'i', 'n', 0},
-			}
-			trak.Media.Info.Sound = &mp4io.SoundMediaInfo{}
-
-			trak.Media.Info.Sample.SampleDesc.MP4ADesc = &mp4io.MP4ADesc{
-				DataRefIdx:       1,
-				NumberOfChannels: int16(codec.Channels),
-				SampleSize:       int16(av.FLTP.BytesPerSample() * 4),
-				SampleRate:       float64(codec.ClockRate),
-				Unknowns:         []mp4io.Atom{ESDS(b)},
-			}
-
-			moov.Tracks = append(moov.Tracks, trak)
+			m.flags = append(m.flags, 0x2000000)
 		}
-
-		trex := &mp4io.TrackExtend{
-			TrackId:               uint32(i + 1),
-			DefaultSampleDescIdx:  1,
-			DefaultSampleDuration: 0,
-		}
-		moov.MovieExtend.Tracks = append(moov.MovieExtend.Tracks, trex)
 
 		m.pts = append(m.pts, 0)
 		m.dts = append(m.dts, 0)
 	}
 
-	data := make([]byte, moov.Len())
-	moov.Marshal(data)
+	mv.StartAtom(mov.MoovMvex)
+	for i := range codecs {
+		mv.WriteTrackExtend(uint32(i + 1))
+	}
+	mv.EndAtom() // MVEX
 
-	return append(FTYP(), data...), nil
+	mv.EndAtom() // MOOV
+
+	return mv.Bytes(), nil
 }
 
 func (m *Muxer) Reset() {
@@ -192,65 +131,29 @@ func (m *Muxer) Reset() {
 }
 
 func (m *Muxer) Marshal(trackID byte, packet *rtp.Packet) []byte {
-	run := &mp4fio.TrackFragRun{
-		Flags:            0x000b05,
-		FirstSampleFlags: uint32(fmp4io.SampleNoDependencies),
-		DataOffset:       0,
-		Entries:          []mp4io.TrackFragRunEntry{},
-	}
-
-	moof := &mp4fio.MovieFrag{
-		Header: &mp4fio.MovieFragHeader{
-			Seqnum: m.fragIndex + 1,
-		},
-		Tracks: []*mp4fio.TrackFrag{
-			{
-				Header: &mp4fio.TrackFragHeader{
-					Data: []byte{0x00, 0x02, 0x00, 0x20, 0x00, 0x00, 0x00, trackID + 1, 0x01, 0x01, 0x00, 0x00},
-				},
-				DecodeTime: &mp4fio.TrackFragDecodeTime{
-					Version: 1,
-					Flags:   0,
-					Time:    m.dts[trackID],
-				},
-				Run: run,
-			},
-		},
-	}
-
-	entry := mp4io.TrackFragRunEntry{
-		Size: uint32(len(packet.Payload)),
-	}
-
-	newTime := packet.Timestamp
-	if m.pts[trackID] > 0 {
-		entry.Duration = newTime - m.pts[trackID]
-		m.dts[trackID] += uint64(entry.Duration)
-	} else {
-		// important, or Safari will fail with first frame
-		entry.Duration = 1
-	}
-	m.pts[trackID] = newTime
-
-	// important before moof.Len()
-	run.Entries = append(run.Entries, entry)
-
-	moofLen := moof.Len()
-	mdatLen := 8 + len(packet.Payload)
-
-	// important after moof.Len()
-	run.DataOffset = uint32(moofLen + 8)
-
-	buf := make([]byte, moofLen+mdatLen)
-	moof.Marshal(buf)
-
-	binary.BigEndian.PutUint32(buf[moofLen:], uint32(mdatLen))
-	copy(buf[moofLen+4:], "mdat")
-	copy(buf[moofLen+8:], packet.Payload)
+	// important before increment
+	time := m.dts[trackID]
 
 	m.fragIndex++
 
-	//m.total += moofLen + mdatLen
+	var duration uint32
+	newTime := packet.Timestamp
+	if m.pts[trackID] > 0 {
+		duration = newTime - m.pts[trackID]
+		m.dts[trackID] += uint64(duration)
+	} else {
+		// important, or Safari will fail with first frame
+		duration = 1
+	}
+	m.pts[trackID] = newTime
 
-	return buf
+	mv := mov.NewMovie(1024 + len(packet.Payload))
+	mv.WriteMovieFragment(
+		m.fragIndex, uint32(trackID+1), duration,
+		uint32(len(packet.Payload)),
+		m.flags[trackID], time,
+	)
+	mv.WriteData(packet.Payload)
+
+	return mv.Bytes()
 }

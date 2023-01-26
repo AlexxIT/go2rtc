@@ -1,19 +1,30 @@
+## Fragmented MP4
+
+```
+ffmpeg -i "rtsp://..." -movflags +frag_keyframe+separate_moof+default_base_moof+empty_moov -frag_duration 1 -c copy -t 5 sample.mp4
+```
+
+- movflags frag_keyframe 
+  Start a new fragment at each video keyframe.
+- frag_duration duration
+  Create fragments that are duration microseconds long.
+- movflags separate_moof
+  Write a separate moof (movie fragment) atom for each track.
+- movflags default_base_moof
+  Similarly to the omit_tfhd_offset, this flag avoids writing the absolute base_data_offset field in tfhd atoms, but does so by using the new default-base-is-moof flag instead.
+
+https://ffmpeg.org/ffmpeg-formats.html#Options-13
+
 ## HEVC
 
-Browser     | avc1 | hvc1 | hev1
-------------|------|------|---
-Mac Chrome  | +    | -    | +
-Mac Safari  | +    | +    | -
-iOS 15?     | +    | +    | -
-Mac Firefox | +    | -    | -
-iOS 12      | +    | -    | -
-Android 13  | +    | -    | -
-
-```
-ffmpeg -i input-hev1.mp4 -c:v copy -tag:v hvc1 -c:a copy output-hvc1.mp4
-Stream #0:0(eng): Video: hevc (Main) (hev1 / 0x31766568), yuv420p(tv, progressive), 720x404, 164 kb/s, 29.97 fps,
-Stream #0:0(eng): Video: hevc (Main) (hvc1 / 0x31637668), yuv420p(tv, progressive), 720x404, 164 kb/s, 29.97 fps,
-```
+| Browser     | avc1 | hvc1 | hev1 |
+|-------------|------|------|------|
+ | Mac Chrome  | +    | -    | +    |
+ | Mac Safari  | +    | +    | -    |
+ | iOS 15?     | +    | +    | -    |
+ | Mac Firefox | +    | -    | -    |
+ | iOS 12      | +    | -    | -    |
+ | Android 13  | +    | -    | -    |
 
 ## Useful links
 
