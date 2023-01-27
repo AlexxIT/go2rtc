@@ -13,7 +13,6 @@ import (
 
 type Muxer struct {
 	fragIndex uint32
-	flags     []uint32
 	dts       []uint64
 	pts       []uint32
 }
@@ -78,8 +77,6 @@ func (m *Muxer) GetInit(codecs []*streamer.Codec) ([]byte, error) {
 				codecData.AVCDecoderConfRecordBytes(),
 			)
 
-			m.flags = append(m.flags, 0x1010000)
-
 		case streamer.CodecH265:
 			vps, sps, pps := h265.GetParameterSet(codec.FmtpLine)
 			if sps == nil {
@@ -100,8 +97,6 @@ func (m *Muxer) GetInit(codecs []*streamer.Codec) ([]byte, error) {
 				codecData.AVCDecoderConfRecordBytes(),
 			)
 
-			m.flags = append(m.flags, 0x1010000)
-
 		case streamer.CodecAAC:
 			s := streamer.Between(codec.FmtpLine, "config=", ";")
 			b, err := hex.DecodeString(s)
@@ -113,14 +108,10 @@ func (m *Muxer) GetInit(codecs []*streamer.Codec) ([]byte, error) {
 				uint32(i+1), codec.Name, codec.ClockRate, codec.Channels, b,
 			)
 
-			m.flags = append(m.flags, 0x2000000)
-
 		case streamer.CodecOpus:
 			mv.WriteAudioTrack(
 				uint32(i+1), codec.Name, codec.ClockRate, codec.Channels, nil,
 			)
-
-			m.flags = append(m.flags, 0x2000000)
 		}
 
 		m.pts = append(m.pts, 0)
@@ -166,8 +157,7 @@ func (m *Muxer) Marshal(trackID byte, packet *rtp.Packet) []byte {
 	mv := iso.NewMovie(1024 + len(packet.Payload))
 	mv.WriteMovieFragment(
 		m.fragIndex, uint32(trackID+1), duration,
-		uint32(len(packet.Payload)),
-		m.flags[trackID], time,
+		uint32(len(packet.Payload)), time,
 	)
 	mv.WriteData(packet.Payload)
 
