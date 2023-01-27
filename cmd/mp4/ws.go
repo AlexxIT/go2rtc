@@ -106,14 +106,17 @@ func parseMedias(codecs string, parseAudio bool) (medias []*streamer.Media) {
 
 	for _, name := range strings.Split(codecs, ",") {
 		switch name {
-		case "avc1.640029":
+		case mp4.MimeH264:
 			codec := &streamer.Codec{Name: streamer.CodecH264}
 			videos = append(videos, codec)
-		case "hvc1.1.6.L153.B0":
+		case mp4.MimeH265:
 			codec := &streamer.Codec{Name: streamer.CodecH265}
 			videos = append(videos, codec)
-		case "mp4a.40.2":
+		case mp4.MimeAAC:
 			codec := &streamer.Codec{Name: streamer.CodecAAC}
+			audios = append(audios, codec)
+		case mp4.MimeOpus:
+			codec := &streamer.Codec{Name: streamer.CodecOpus}
 			audios = append(audios, codec)
 		}
 	}

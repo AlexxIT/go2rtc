@@ -50,6 +50,7 @@ func (c *Consumer) GetMedias() []*streamer.Media {
 			Direction: streamer.DirectionRecvonly,
 			Codecs: []*streamer.Codec{
 				{Name: streamer.CodecAAC},
+				{Name: streamer.CodecOpus},
 			},
 		},
 	}
@@ -138,6 +139,21 @@ func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 		if codec.IsRTP() {
 			wrapper := aac.RTPDepay(track)
 			push = wrapper(push)
+		}
+
+		return track.Bind(push)
+
+	case streamer.CodecOpus:
+		push := func(packet *rtp.Packet) error {
+			if c.wait != waitNone {
+				return nil
+			}
+
+			buf := c.muxer.Marshal(trackID, packet)
+			atomic.AddUint32(&c.send, uint32(len(buf)))
+			c.Fire(buf)
+
+			return nil
 		}
 
 		return track.Bind(push)

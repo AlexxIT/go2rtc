@@ -56,3 +56,5 @@ pc.ontrack = ev => {
 - https://web.dev/i18n/en/fast-playback-with-preload/#manual_buffering
 - https://developer.mozilla.org/en-US/docs/Web/API/Media_Source_Extensions_API
 - https://chromium.googlesource.com/external/w3c/web-platform-tests/+/refs/heads/master/media-source/mediasource-is-type-supported.html
+- https://googlechrome.github.io/samples/media/sourcebuffer-changetype.html
+- https://chromestatus.com/feature/5100845653819392

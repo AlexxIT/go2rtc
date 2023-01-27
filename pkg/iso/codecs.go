@@ -1,4 +1,6 @@
-package mov
+package iso
+
+import "github.com/AlexxIT/go2rtc/pkg/streamer"
 
 const (
 	MoovTrakMdiaMinfStblStsdAvc1     = "avc1"
@@ -6,14 +8,18 @@ const (
 	MoovTrakMdiaMinfStblStsdHev1     = "hev1"
 	MoovTrakMdiaMinfStblStsdHev1HvcC = "hvcC"
 	MoovTrakMdiaMinfStblStsdMp4a     = "mp4a"
+	MoovTrakMdiaMinfStblStsdOpus     = "Opus"
 )
 
-func (m *Movie) WriteH26X(width, height uint16, conf []byte, h264 bool) {
+func (m *Movie) WriteVideo(codec string, width, height uint16, conf []byte) {
 	// https://developer.apple.com/library/archive/documentation/QuickTime/QTFF/QTFFChap3/qtff3.html
-	if h264 {
+	switch codec {
+	case streamer.CodecH264:
 		m.StartAtom(MoovTrakMdiaMinfStblStsdAvc1)
-	} else {
+	case streamer.CodecH265:
 		m.StartAtom(MoovTrakMdiaMinfStblStsdHev1)
+	default:
+		panic("unsupported iso video: " + codec)
 	}
 	m.Skip(6)
 	m.WriteUint16(1)      // data_reference_index
@@ -32,9 +38,10 @@ func (m *Movie) WriteH26X(width, height uint16, conf []byte, h264 bool) {
 	m.WriteUint16(24)     // depth
 	m.WriteUint16(0xFFFF) // color table id (-1)
 
-	if h264 {
+	switch codec {
+	case streamer.CodecH264:
 		m.StartAtom(MoovTrakMdiaMinfStblStsdAvc1AvcC)
-	} else {
+	case streamer.CodecH265:
 		m.StartAtom(MoovTrakMdiaMinfStblStsdHev1HvcC)
 	}
 	m.Write(conf)
@@ -43,25 +50,37 @@ func (m *Movie) WriteH26X(width, height uint16, conf []byte, h264 bool) {
 	m.EndAtom() // AVC1
 }
 
-func (m *Movie) WriteMP4A(channels, sampleSize uint16, sampleRate uint32, conf []byte) {
-	m.StartAtom(MoovTrakMdiaMinfStblStsdMp4a)
+func (m *Movie) WriteAudio(codec string, channels uint16, sampleRate uint32, conf []byte) {
+	switch codec {
+	case streamer.CodecAAC:
+		m.StartAtom(MoovTrakMdiaMinfStblStsdMp4a)
+	case streamer.CodecOpus:
+		m.StartAtom(MoovTrakMdiaMinfStblStsdOpus)
+	default:
+		panic("unsupported iso audio: " + codec)
+	}
 	m.Skip(6)
 	m.WriteUint16(1)                    // data_reference_index
 	m.Skip(2)                           // version
 	m.Skip(2)                           // revision
 	m.Skip(4)                           // vendor
 	m.WriteUint16(channels)             // channel_count
-	m.WriteUint16(sampleSize)           // sample_size
+	m.WriteUint16(16)                   // sample_size
 	m.Skip(2)                           // compression id
 	m.Skip(2)                           // reserved
 	m.WriteFloat32(float64(sampleRate)) // sample_rate
 
-	m.WriteESDS(conf)
+	switch codec {
+	case streamer.CodecAAC:
+		m.WriteEsdsAAC(conf)
+	case streamer.CodecOpus:
+		m.WriteDops()
+	}
 
-	m.EndAtom() // MP4A
+	m.EndAtom() // MP4A/OPUS
 }
 
-func (m *Movie) WriteESDS(conf []byte) {
+func (m *Movie) WriteEsdsAAC(conf []byte) {
 	m.StartAtom("esds")
 	m.Skip(1) // version
 	m.Skip(3) // flags
@@ -94,4 +113,11 @@ func (m *Movie) WriteESDS(conf []byte) {
 	m.WriteBytes(2) // ?
 
 	m.EndAtom() // ESDS
+}
+
+func (m *Movie) WriteDops() {
+	// don't know what means this magic
+	m.StartAtom("dOps")
+	m.WriteBytes(0, 0x02, 0x01, 0x38, 0, 0, 0xBB, 0x80, 0, 0, 0)
+	m.EndAtom()
 }

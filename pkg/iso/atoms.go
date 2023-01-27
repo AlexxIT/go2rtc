@@ -1,4 +1,4 @@
-package mov
+package iso
 
 const (
 	Ftyp                        = "ftyp"
@@ -210,7 +210,7 @@ func (m *Movie) WriteTrackExtend(id uint32) {
 	m.EndAtom()
 }
 
-func (m *Movie) WriteVideoTrack(id, timescale uint32, width, height uint16, conf []byte, h264 bool) {
+func (m *Movie) WriteVideoTrack(id uint32, codec string, timescale uint32, width, height uint16, conf []byte) {
 	m.StartAtom(MoovTrak)
 	m.WriteTrackHeader(id, width, height)
 
@@ -222,7 +222,7 @@ func (m *Movie) WriteVideoTrack(id, timescale uint32, width, height uint16, conf
 	m.WriteVideoMediaInfo()
 	m.WriteDataInfo()
 	m.WriteSampleTable(func() {
-		m.WriteH26X(width, height, conf, h264)
+		m.WriteVideo(codec, width, height, conf)
 	})
 	m.EndAtom() // MINF
 
@@ -230,7 +230,7 @@ func (m *Movie) WriteVideoTrack(id, timescale uint32, width, height uint16, conf
 	m.EndAtom() // TRAK
 }
 
-func (m *Movie) WriteAudioTrack(id uint32, timescale uint32, channels, sampleSize uint16, conf []byte) {
+func (m *Movie) WriteAudioTrack(id uint32, codec string, timescale uint32, channels uint16, conf []byte) {
 	m.StartAtom(MoovTrak)
 	m.WriteTrackHeader(id, 0, 0)
 
@@ -242,7 +242,7 @@ func (m *Movie) WriteAudioTrack(id uint32, timescale uint32, channels, sampleSiz
 	m.WriteAudioMediaInfo()
 	m.WriteDataInfo()
 	m.WriteSampleTable(func() {
-		m.WriteMP4A(channels, sampleSize, timescale, conf)
+		m.WriteAudio(codec, channels, timescale, conf)
 	})
 	m.EndAtom() // MINF
 

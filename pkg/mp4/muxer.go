@@ -4,7 +4,7 @@ import (
 	"encoding/hex"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
-	"github.com/AlexxIT/go2rtc/pkg/mov"
+	"github.com/AlexxIT/go2rtc/pkg/iso"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/deepch/vdk/codec/h264parser"
 	"github.com/deepch/vdk/codec/h265parser"
@@ -17,6 +17,13 @@ type Muxer struct {
 	dts       []uint64
 	pts       []uint32
 }
+
+const (
+	MimeH264 = "avc1.640029"
+	MimeH265 = "hvc1.1.6.L153.B0"
+	MimeAAC  = "mp4a.40.2"
+	MimeOpus = "opus"
+)
 
 func (m *Muxer) MimeType(codecs []*streamer.Codec) string {
 	s := `video/mp4; codecs="`
@@ -32,9 +39,11 @@ func (m *Muxer) MimeType(codecs []*streamer.Codec) string {
 		case streamer.CodecH265:
 			// H.265 profile=main level=5.1
 			// hvc1 - supported in Safari, hev1 - doesn't, both supported in Chrome
-			s += "hvc1.1.6.L153.B0"
+			s += MimeH265
 		case streamer.CodecAAC:
-			s += "mp4a.40.2"
+			s += MimeAAC
+		case streamer.CodecOpus:
+			s += MimeOpus
 		}
 	}
 
@@ -42,10 +51,10 @@ func (m *Muxer) MimeType(codecs []*streamer.Codec) string {
 }
 
 func (m *Muxer) GetInit(codecs []*streamer.Codec) ([]byte, error) {
-	mv := mov.NewMovie(1024)
+	mv := iso.NewMovie(1024)
 	mv.WriteFileType()
 
-	mv.StartAtom(mov.Moov)
+	mv.StartAtom(iso.Moov)
 	mv.WriteMovieHeader()
 
 	for i, codec := range codecs {
@@ -64,9 +73,9 @@ func (m *Muxer) GetInit(codecs []*streamer.Codec) ([]byte, error) {
 			}
 
 			mv.WriteVideoTrack(
-				uint32(i+1), codec.ClockRate,
+				uint32(i+1), codec.Name, codec.ClockRate,
 				uint16(codecData.Width()), uint16(codecData.Height()),
-				codecData.AVCDecoderConfRecordBytes(), true,
+				codecData.AVCDecoderConfRecordBytes(),
 			)
 
 			m.flags = append(m.flags, 0x1010000)
@@ -86,9 +95,9 @@ func (m *Muxer) GetInit(codecs []*streamer.Codec) ([]byte, error) {
 			}
 
 			mv.WriteVideoTrack(
-				uint32(i+1), codec.ClockRate,
+				uint32(i+1), codec.Name, codec.ClockRate,
 				uint16(codecData.Width()), uint16(codecData.Height()),
-				codecData.AVCDecoderConfRecordBytes(), false,
+				codecData.AVCDecoderConfRecordBytes(),
 			)
 
 			m.flags = append(m.flags, 0x1010000)
@@ -101,7 +110,14 @@ func (m *Muxer) GetInit(codecs []*streamer.Codec) ([]byte, error) {
 			}
 
 			mv.WriteAudioTrack(
-				uint32(i+1), codec.ClockRate, codec.Channels, 16, b,
+				uint32(i+1), codec.Name, codec.ClockRate, codec.Channels, b,
+			)
+
+			m.flags = append(m.flags, 0x2000000)
+
+		case streamer.CodecOpus:
+			mv.WriteAudioTrack(
+				uint32(i+1), codec.Name, codec.ClockRate, codec.Channels, nil,
 			)
 
 			m.flags = append(m.flags, 0x2000000)
@@ -111,7 +127,7 @@ func (m *Muxer) GetInit(codecs []*streamer.Codec) ([]byte, error) {
 		m.dts = append(m.dts, 0)
 	}
 
-	mv.StartAtom(mov.MoovMvex)
+	mv.StartAtom(iso.MoovMvex)
 	for i := range codecs {
 		mv.WriteTrackExtend(uint32(i + 1))
 	}
@@ -147,7 +163,7 @@ func (m *Muxer) Marshal(trackID byte, packet *rtp.Packet) []byte {
 	}
 	m.pts[trackID] = newTime
 
-	mv := mov.NewMovie(1024 + len(packet.Payload))
+	mv := iso.NewMovie(1024 + len(packet.Payload))
 	mv.WriteMovieFragment(
 		m.fragIndex, uint32(trackID+1), duration,
 		uint32(len(packet.Payload)),

@@ -53,7 +53,7 @@
     const video = document.createElement("video");
     out.innerText += "video.canPlayType\n";
     types.forEach(type => {
-        out.innerText += type + "=" + (video.canPlayType(type) ? "true" : "false") + "\n";
+        out.innerText += `${type} = ${MediaSource.isTypeSupported(type)} / ${video.canPlayType(type)}\n`;
     })
 
 </script>
