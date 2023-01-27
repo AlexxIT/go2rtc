@@ -7,7 +7,7 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
 - zero-dependency and zero-config [small app](#go2rtc-binary) for all OS (Windows, macOS, Linux, ARM)
 - zero-delay for many supported protocols (lowest possible streaming latency)
 - streaming from [RTSP](#source-rtsp), [RTMP](#source-rtmp), [HTTP](#source-http) (FLV/MJPEG/JPEG), [FFmpeg](#source-ffmpeg), [USB Cameras](#source-ffmpeg-device) and [other sources](#module-streams)
-- streaming to [RTSP](#module-rtsp), [WebRTC](#module-webrtc), [MSE/MP4](#module-mp4) or [MJPEG](#module-mjpeg)
+- streaming to [RTSP](#module-rtsp), [WebRTC](#module-webrtc), [MSE/MP4](#module-mp4), [HLS](#module-hls) or [MJPEG](#module-mjpeg)
 - first project in the World with support streaming from [HomeKit Cameras](#source-homekit)
 - first project in the World with support H265 for WebRTC in browser (Safari only, [read more](https://github.com/AlexxIT/Blog/issues/5))
 - on the fly transcoding for unsupported codecs via [FFmpeg](#source-ffmpeg)
@@ -53,9 +53,11 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
     * [From go2rtc to Hass](#from-go2rtc-to-hass)
     * [From Hass to go2rtc](#from-hass-to-go2rtc)
   * [Module: MP4](#module-mp4)
+  * [Module: HLS](#module-hls)
   * [Module: MJPEG](#module-mjpeg)
   * [Module: Log](#module-log)
 * [Security](#security)
+* [Codecs filters](#codecs-filters)
 * [Codecs madness](#codecs-madness)
 * [Codecs negotiation](#codecs-negotiation)
 * [TIPS](#tips)
@@ -408,19 +410,24 @@ api:
 
 You can get any stream as RTSP-stream: `rtsp://192.168.1.123:8554/{stream_name}`
 
-- you can omit the codec filters, so one first video and one first audio will be selected
-- you can set `?video=copy` or just `?video`, so only one first video without audio will be selected
-- you can set multiple video or audio, so all of them will be selected
-- you can enable external password protection for your RTSP streams
-
-Password protection always disabled for localhost calls (ex. FFmpeg or Hass on same server)
+You can enable external password protection for your RTSP streams. Password protection always disabled for localhost calls (ex. FFmpeg or Hass on same server).
 
 ```yaml
 rtsp:
   listen: ":8554"    # RTSP Server TCP port, default - 8554
   username: "admin"  # optional, default - disabled
   password: "pass"   # optional, default - disabled
+  default_query: "video&audio"  # optional, default codecs filters 
 ```
+
+By default go2rtc provide RTSP-stream with only one first video and only one first audio. You can change it with the `default_query` setting:
+
+- `default_query: "mp4"` - MP4 compatible codecs (H264, H265, AAC)
+- `default_query: "video=all&audio=all"` - all tracks from all source (not all players can handle this)
+- `default_query: "video=h264,h265"` - only one video track (H264 or H265)
+- `default_query: "video&audio=all"` - only one first any video and all audio as separate tracks
+
+Read more about [codecs filters](#codecs-filters).
 
 ### Module: WebRTC
 
@@ -574,12 +581,27 @@ Provides several features:
 
 1. MSE stream (fMP4 over WebSocket)
 2. Camera snapshots in MP4 format (single frame), can be sent to [Telegram](https://github.com/AlexxIT/go2rtc/wiki/Snapshot-to-Telegram)
-3. MP4 "file stream" - bad format for streaming because of high start delay, doesn't work in Safari 
+3. MP4 "file stream" - bad format for streaming because of high start delay. This format doesn't work in all Safari browsers, but go2rtc will automatically redirect it to HLS/fMP4 it this case.
 
 API examples:
 
 - MP4 stream: `http://192.168.1.123:1984/api/stream.mp4?src=camera1`
 - MP4 snapshot: `http://192.168.1.123:1984/api/frame.mp4?src=camera1`
+
+Read more about [codecs filters](#codecs-filters).
+
+### Module: HLS
+
+[HLS](https://en.wikipedia.org/wiki/HTTP_Live_Streaming) is the worst technology for real-time streaming. It can only be useful on devices that do not support more modern technology, like [WebRTC](#module-webrtc), [MSE/MP4](#module-mp4).
+
+The go2rtc implementation differs from the standards and may not work with all players.
+
+API examples:
+
+- HLS/TS stream: `http://192.168.1.123:1984/api/stream.m3u8?src=camera1` (H264)
+- HLS/fMP4 stream: `http://192.168.1.123:1984/api/stream.m3u8?src=camera1&mp4` (H264, H265, AAC)
+
+Read more about [codecs filters](#codecs-filters).
 
 ### Module: MJPEG
 
@@ -647,21 +669,42 @@ If you need Web interface protection without Home Assistant Add-on - you need to
 
 PS. Additionally WebRTC will try to use the 8555 UDP port for transmit encrypted media. It works without problems on the local network. And sometimes also works for external access, even if you haven't opened this port on your router ([read more](https://en.wikipedia.org/wiki/UDP_hole_punching)). But for stable external WebRTC access, you need to open the 8555 port on your router for both TCP and UDP.
 
+## Codecs filters
+
+go2rtc can automatically detect which codecs your device supports for [WebRTC](#module-webrtc) and [MSE](#module-mp4) technologies.
+
+But it cannot be done for [RTSP](#module-rtsp), [stream.mp4](#module-mp4), [HLS](#module-hls) technologies. You can manually add a codec filter when you create a link to a stream. The filters work the same for all three technologies. Filters do not create a new codec. They only select the suitable codec from existing sources. You can add new codecs to the stream using the [FFmpeg transcoding](#source-ffmpeg).
+
+Without filters:
+
+- RTSP will provide only the first video and only the first audio
+- MP4 will include only compatible codecs (H264, H265, AAC)
+- HLS will output in the legacy TS format (H264 without audio)
+
+Some examples:
+
+- `rtsp://192.168.1.123:8554/camera1?mp4` - useful for recording as MP4 files (e.g. Hass or Frigate)
+- `rtsp://192.168.1.123:8554/camera1?video=h264,h265&audio=aac` - full version of the filter above
+- `rtsp://192.168.1.123:8554/camera1?video=h264&audio=aac&audio=opus` - H264 video codec and two separate audio tracks
+- `rtsp://192.168.1.123:8554/camera1?video&audio=all` - any video codec and all audio codecs as separate tracks
+- `http://192.168.1.123:1984/api/stream.m3u8?src=camera1&mp4` - HLS stream with MP4 compatible codecs (HLS/fMP4)
+- `http://192.168.1.123:1984/api/stream.mp4?src=camera1&video=h264,h265&audio=aac,opus,mp3,pcma,pcmu` - MP4 file with non standard audio codecs, does not work in some players
+
 ## Codecs madness
 
-`AVC/H.264` codec can be played almost anywhere. But `HEVC/H.265` has a lot of limitations in supporting with different devices and browsers. It's all about patents and money, you can't do anything about it.
+`AVC/H.264` video can be played almost anywhere. But `HEVC/H.265` has a lot of limitations in supporting with different devices and browsers. It's all about patents and money, you can't do anything about it.
 
-| Device              | WebRTC      | MSE         | MP4         |
-|---------------------|-------------|-------------|-------------|
-| *latency*           | best        | medium      | bad         |
-| Desktop Chrome 107+ | H264        | H264, H265* | H264, H265* |
-| Desktop Edge        | H264        | H264, H265* | H264, H265* |
-| Desktop Safari      | H264, H265* | H264, H265  | **no!**     |
-| Desktop Firefox     | H264        | H264        | H264        |
-| Android Chrome 107+ | H264        | H264, H265* | H264        |
-| iPad Safari 13+     | H264, H265* | H264, H265  | **no!**     |
-| iPhone Safari 13+   | H264, H265* | **no!**     | **no!**     |
-| masOS Hass App      | no          | no          | no          |
+| Device              | WebRTC                        | MSE                    | stream.mp4                              |
+|---------------------|-------------------------------|------------------------|-----------------------------------------|
+| *latency*           | best                          | medium                 | bad                                     |
+| Desktop Chrome 107+ | H264, OPUS, PCMU, PCMA        | H264, H265*, AAC, OPUS | H264, H265*, AAC, OPUS, PCMU, PCMA, MP3 |
+| Desktop Edge        | H264, OPUS, PCMU, PCMA        | H264, H265*, AAC, OPUS | H264, H265*, AAC, OPUS, PCMU, PCMA, MP3 |
+| Desktop Safari      | H264, H265*, OPUS, PCMU, PCMA | H264, H265, AAC        | **no!**                                 |
+| Desktop Firefox     | H264, OPUS, PCMU, PCMA        | H264, AAC, OPUS        | H264, AAC, OPUS                         |
+| Android Chrome 107+ | H264, OPUS, PCMU, PCMA        | H264, H265*, AAC, OPUS | H264, ?, AAC, OPUS, PCMU, PCMA, MP3     |
+| iPad Safari 13+     | H264, H265*, OPUS, PCMU, PCMA | H264, H265, AAC        | **no!**                                 |
+| iPhone Safari 13+   | H264, H265*, OPUS, PCMU, PCMA | **no!**                | **no!**                                 |
+| masOS Hass App      | no                            | no                     | no                                      |
 
 - Chrome H265: [read this](https://chromestatus.com/feature/5186511939567616) and [read this](https://github.com/StaZhu/enable-chromium-hevc-hardware-decoding)
 - Edge H265: [read this](https://www.reddit.com/r/MicrosoftEdge/comments/v9iw8k/enable_hevc_support_in_edge/)
@@ -670,8 +713,9 @@ PS. Additionally WebRTC will try to use the 8555 UDP port for transmit encrypted
 
 **Audio**
 
-- WebRTC audio codecs: `PCMU/8000`, `PCMA/8000`, `OPUS/48000/2`
-- MSE/MP4 audio codecs: `AAC`
+- **WebRTC** audio codecs: `PCMU/8000`, `PCMA/8000`, `OPUS/48000/2`
+- `OPUS` and `MP3` inside **MP4** is part of the standard, but some players do not support them anyway (especially Apple)
+- `PCMU` and `PCMA` inside **MP4** isn't a standard, but some players support them, for example Chromium browsers
 
 **Apple devices**
 
