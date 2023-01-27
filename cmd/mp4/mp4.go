@@ -5,6 +5,7 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/app"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
 	"github.com/AlexxIT/go2rtc/pkg/mp4"
+	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/rs/zerolog"
 	"net/http"
 	"strconv"
@@ -84,6 +85,8 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 		RemoteAddr: r.RemoteAddr,
 		UserAgent:  r.UserAgent(),
 	}
+	cons.Medias = streamer.ParseQuery(r.URL.Query())
+
 	cons.Listen(func(msg interface{}) {
 		if data, ok := msg.([]byte); ok {
 			if _, err := w.Write(data); err != nil && exit != nil {
