@@ -142,6 +142,8 @@ func parseArgs(s string) *Args {
 			s += "?video"
 		case args.audio > 0 && args.video == 0:
 			s += "?audio"
+		default:
+			s += "?video&audio"
 		}
 		args.input = strings.Replace(defaults["rtsp"], "{input}", s, 1)
 	} else if strings.HasPrefix(s, "device?") {

@@ -3,6 +3,7 @@ package rtsp
 import (
 	"github.com/AlexxIT/go2rtc/cmd/app"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
+	"github.com/AlexxIT/go2rtc/pkg/mp4"
 	"github.com/AlexxIT/go2rtc/pkg/rtsp"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
@@ -164,13 +165,7 @@ func tcpHandler(conn *rtsp.Conn) {
 
 			conn.SessionName = app.UserAgent
 
-			conn.Medias = streamer.ParseQuery(conn.URL.Query())
-			if conn.Medias == nil {
-				conn.Medias = []*streamer.Media{
-					{Kind: streamer.KindVideo, Direction: streamer.DirectionRecvonly},
-					{Kind: streamer.KindAudio, Direction: streamer.DirectionRecvonly},
-				}
-			}
+			conn.Medias = ParseQuery(conn.URL.Query())
 
 			if err := stream.AddConsumer(conn); err != nil {
 				log.Warn().Err(err).Str("stream", name).Msg("[rtsp]")
@@ -235,36 +230,11 @@ func tcpHandler(conn *rtsp.Conn) {
 	_ = conn.Close()
 }
 
-func initMedias(conn *rtsp.Conn) {
-	// set media candidates from query list
-	for key, value := range conn.URL.Query() {
-		switch key {
-		case streamer.KindVideo, streamer.KindAudio:
-			for _, name := range value {
-				name = strings.ToUpper(name)
-
-				// check aliases
-				switch name {
-				case "COPY":
-					name = "" // pass empty codecs list
-				case "MJPEG":
-					name = streamer.CodecJPEG
-				case "AAC":
-					name = streamer.CodecAAC
-				}
-
-				media := &streamer.Media{
-					Kind: key, Direction: streamer.DirectionRecvonly,
-				}
-
-				// empty codecs match all codecs
-				if name != "" {
-					// empty clock rate and channels match any values
-					media.Codecs = []*streamer.Codec{{Name: name}}
-				}
-
-				conn.Medias = append(conn.Medias, media)
-			}
-		}
+func ParseQuery(query map[string][]string) []*streamer.Media {
+	if query["mp4"] != nil {
+		cons := mp4.Consumer{}
+		return cons.GetMedias()
 	}
+
+	return streamer.ParseQuery(query)
 }

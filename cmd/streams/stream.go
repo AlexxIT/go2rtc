@@ -91,7 +91,9 @@ func (s *Stream) AddConsumer(cons streamer.Consumer) (err error) {
 
 					consumer.tracks = append(consumer.tracks, consTrack)
 					producers = append(producers, prod)
-					break producers
+					if !consMedia.MatchAll() {
+						break producers
+					}
 				}
 			}
 		}

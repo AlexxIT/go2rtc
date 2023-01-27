@@ -9,7 +9,26 @@ import (
 // Element Producer
 
 func (c *Conn) GetMedias() []*streamer.Media {
-	return c.Medias
+	if c.Medias != nil {
+		return c.Medias
+	}
+
+	return []*streamer.Media{
+		{
+			Kind:      streamer.KindVideo,
+			Direction: streamer.DirectionRecvonly,
+			Codecs: []*streamer.Codec{
+				{Name: streamer.CodecAll},
+			},
+		},
+		{
+			Kind:      streamer.KindAudio,
+			Direction: streamer.DirectionRecvonly,
+			Codecs: []*streamer.Codec{
+				{Name: streamer.CodecAll},
+			},
+		},
+	}
 }
 
 func (c *Conn) GetTrack(media *streamer.Media, codec *streamer.Codec) *streamer.Track {
@@ -63,11 +82,20 @@ func (c *Conn) AddTrack(media *streamer.Media, track *streamer.Track) *streamer.
 		codec := track.Codec.Clone()
 		codec.PayloadType = uint8(96 + i)
 
-		for i, m := range c.Medias {
-			if m == media {
-				media.Codecs = []*streamer.Codec{codec}
-				c.Medias[i] = media
-				break
+		if media.MatchAll() {
+			// fill consumer medias list
+			c.Medias = append(c.Medias, &streamer.Media{
+				Kind: media.Kind, Direction: media.Direction,
+				Codecs: []*streamer.Codec{codec},
+			})
+		} else {
+			// find consumer media and replace codec with right one
+			for i, m := range c.Medias {
+				if m == media {
+					media.Codecs = []*streamer.Codec{codec}
+					c.Medias[i] = media
+					break
+				}
 			}
 		}
 

@@ -36,6 +36,9 @@ const (
 	CodecMP3  = "MPA" // payload: 14, aka MPEG-1 Layer III
 
 	CodecELD = "ELD" // AAC-ELD
+
+	CodecAll = "ALL"
+	CodecAny = "ANY"
 )
 
 const PayloadTypeRAW byte = 255
@@ -111,10 +114,6 @@ func (m *Media) MatchMedia(media *Media) *Codec {
 	}
 
 	for _, localCodec := range m.Codecs {
-		if media.Codecs == nil {
-			return localCodec
-		}
-
 		for _, remoteCodec := range media.Codecs {
 			if localCodec.Match(remoteCodec) {
 				return localCodec
@@ -122,6 +121,10 @@ func (m *Media) MatchMedia(media *Media) *Codec {
 		}
 	}
 	return nil
+}
+
+func (m *Media) MatchAll() bool {
+	return len(m.Codecs) > 0 && m.Codecs[0].Name == CodecAll
 }
 
 // Codec take best from:
@@ -153,6 +156,11 @@ func (c *Codec) Clone() *Codec {
 }
 
 func (c *Codec) Match(codec *Codec) bool {
+	switch codec.Name {
+	case CodecAll, CodecAny:
+		return true
+	}
+
 	return c.Name == codec.Name &&
 		(c.ClockRate == codec.ClockRate || codec.ClockRate == 0) &&
 		(c.Channels == codec.Channels || codec.Channels == 0)
@@ -307,16 +315,12 @@ func ParseQuery(query map[string][]string) (medias []*Media) {
 				media := &Media{Kind: key, Direction: DirectionRecvonly}
 
 				for _, name := range strings.Split(value, ",") {
-					if name == "" {
-						continue
-					}
-
 					name = strings.ToUpper(name)
 
 					// check aliases
 					switch name {
-					case "COPY":
-						name = "" // pass empty codecs list
+					case "", "COPY":
+						name = CodecAny
 					case "MJPEG":
 						name = CodecJPEG
 					case "AAC":
