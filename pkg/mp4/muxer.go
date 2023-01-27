@@ -108,7 +108,7 @@ func (m *Muxer) GetInit(codecs []*streamer.Codec) ([]byte, error) {
 				uint32(i+1), codec.Name, codec.ClockRate, codec.Channels, b,
 			)
 
-		case streamer.CodecOpus:
+		case streamer.CodecOpus, streamer.CodecMP3, streamer.CodecPCMU, streamer.CodecPCMA:
 			mv.WriteAudioTrack(
 				uint32(i+1), codec.Name, codec.ClockRate, codec.Channels, nil,
 			)

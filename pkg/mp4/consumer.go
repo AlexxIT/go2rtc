@@ -50,7 +50,6 @@ func (c *Consumer) GetMedias() []*streamer.Media {
 			Direction: streamer.DirectionRecvonly,
 			Codecs: []*streamer.Codec{
 				{Name: streamer.CodecAAC},
-				{Name: streamer.CodecOpus},
 			},
 		},
 	}
@@ -143,7 +142,7 @@ func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 
 		return track.Bind(push)
 
-	case streamer.CodecOpus:
+	case streamer.CodecOpus, streamer.CodecMP3, streamer.CodecPCMU, streamer.CodecPCMA:
 		push := func(packet *rtp.Packet) error {
 			if c.wait != waitNone {
 				return nil
