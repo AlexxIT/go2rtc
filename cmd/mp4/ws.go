@@ -22,8 +22,6 @@ func handlerWSMSE(tr *api.Transport, msg *api.Message) error {
 		RemoteAddr: tr.Request.RemoteAddr,
 		UserAgent:  tr.Request.UserAgent(),
 	}
-	cons.UserAgent = tr.Request.UserAgent()
-	cons.RemoteAddr = tr.Request.RemoteAddr
 
 	if codecs, ok := msg.Value.(string); ok {
 		log.Trace().Str("codecs", codecs).Msgf("[mp4] new WS/MSE consumer")
