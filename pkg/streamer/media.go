@@ -33,7 +33,7 @@ const (
 	CodecAAC  = "MPEG4-GENERIC"
 	CodecOpus = "OPUS" // payloadType: 111
 	CodecG722 = "G722"
-	CodecMPA  = "MPA" // payload: 14
+	CodecMP3  = "MPA" // payload: 14, aka MPEG-1 Layer III
 
 	CodecELD = "ELD" // AAC-ELD
 )
@@ -44,7 +44,7 @@ func GetKind(name string) string {
 	switch name {
 	case CodecH264, CodecH265, CodecVP8, CodecVP9, CodecAV1, CodecJPEG:
 		return KindVideo
-	case CodecPCMU, CodecPCMA, CodecAAC, CodecOpus, CodecG722, CodecMPA, CodecELD:
+	case CodecPCMU, CodecPCMA, CodecAAC, CodecOpus, CodecG722, CodecMP3, CodecELD:
 		return KindAudio
 	}
 	return ""
@@ -286,7 +286,7 @@ func UnmarshalCodec(md *sdp.MediaDescription, payloadType string) *Codec {
 			c.Name = CodecPCMA
 			c.ClockRate = 8000
 		case "14":
-			c.Name = CodecMPA
+			c.Name = CodecMP3
 			c.ClockRate = 44100
 		case "26":
 			c.Name = CodecJPEG
@@ -297,6 +297,44 @@ func UnmarshalCodec(md *sdp.MediaDescription, payloadType string) *Codec {
 	}
 
 	return c
+}
+
+func ParseQuery(query map[string][]string) (medias []*Media) {
+	// set media candidates from query list
+	for key, values := range query {
+		switch key {
+		case KindVideo, KindAudio:
+			for _, value := range values {
+				media := &Media{Kind: key, Direction: DirectionRecvonly}
+
+				for _, name := range strings.Split(value, ",") {
+					if name == "" {
+						continue
+					}
+
+					name = strings.ToUpper(name)
+
+					// check aliases
+					switch name {
+					case "COPY":
+						name = "" // pass empty codecs list
+					case "MJPEG":
+						name = CodecJPEG
+					case "AAC":
+						name = CodecAAC
+					case "MP3":
+						name = CodecMP3
+					}
+
+					media.Codecs = append(media.Codecs, &Codec{Name: name})
+				}
+
+				medias = append(medias, media)
+			}
+		}
+	}
+
+	return
 }
 
 func atoi(s string) (i int) {

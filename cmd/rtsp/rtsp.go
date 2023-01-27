@@ -164,7 +164,13 @@ func tcpHandler(conn *rtsp.Conn) {
 
 			conn.SessionName = app.UserAgent
 
-			initMedias(conn)
+			conn.Medias = streamer.ParseQuery(conn.URL.Query())
+			if conn.Medias == nil {
+				conn.Medias = []*streamer.Media{
+					{Kind: streamer.KindVideo, Direction: streamer.DirectionRecvonly},
+					{Kind: streamer.KindAudio, Direction: streamer.DirectionRecvonly},
+				}
+			}
 
 			if err := stream.AddConsumer(conn); err != nil {
 				log.Warn().Err(err).Str("stream", name).Msg("[rtsp]")
@@ -259,14 +265,6 @@ func initMedias(conn *rtsp.Conn) {
 
 				conn.Medias = append(conn.Medias, media)
 			}
-		}
-	}
-
-	// set default media candidates if query is empty
-	if conn.Medias == nil {
-		conn.Medias = []*streamer.Media{
-			{Kind: streamer.KindVideo, Direction: streamer.DirectionRecvonly},
-			{Kind: streamer.KindAudio, Direction: streamer.DirectionRecvonly},
 		}
 	}
 }
