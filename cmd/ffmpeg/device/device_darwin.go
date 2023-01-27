@@ -15,11 +15,11 @@ func deviceInputSuffix(videoIdx, audioIdx int) string {
 	audio := findMedia(streamer.KindAudio, audioIdx)
 	switch {
 	case video != nil && audio != nil:
-		return `"` + video.Title + `:` + audio.Title + `"`
+		return `"` + video.MID + `:` + audio.MID + `"`
 	case video != nil:
-		return `"` + video.Title + `"`
+		return `"` + video.MID + `"`
 	case audio != nil:
-		return `"` + audio.Title + `"`
+		return `"` + audio.MID + `"`
 	}
 	return ""
 }
@@ -57,7 +57,5 @@ process:
 }
 
 func loadMedia(kind, name string) *streamer.Media {
-	return &streamer.Media{
-		Kind: kind, Title: name,
-	}
+	return &streamer.Media{Kind: kind, MID: name}
 }

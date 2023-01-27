@@ -13,7 +13,7 @@ const deviceInputPrefix = "-f v4l2"
 
 func deviceInputSuffix(videoIdx, audioIdx int) string {
 	video := findMedia(streamer.KindVideo, videoIdx)
-	return video.Title
+	return video.MID
 }
 
 func loadMedias() {
@@ -44,7 +44,5 @@ func loadMedia(kind, name string) *streamer.Media {
 		return nil
 	}
 
-	return &streamer.Media{
-		Kind: kind, Title: name,
-	}
+	return &streamer.Media{Kind: kind, MID: name}
 }

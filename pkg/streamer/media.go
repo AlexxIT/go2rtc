@@ -60,7 +60,6 @@ type Media struct {
 
 	MID     string `json:"mid,omitempty"`     // TODO: fixme?
 	Control string `json:"control,omitempty"` // TODO: fixme?
-	Title   string `json:"title,omitempty"`   // TODO: fixme?
 }
 
 func (m *Media) String() string {
