@@ -45,7 +45,7 @@ func (c *Conn) GetTrack(media *streamer.Media, codec *streamer.Codec) *streamer.
 		return streamer.NewTrack(codec, media.Direction)
 	}
 
-	track, err := c.SetupMedia(media, codec)
+	track, err := c.SetupMedia(media, codec, true)
 	if err != nil {
 		return nil
 	}

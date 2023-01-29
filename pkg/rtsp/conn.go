@@ -347,7 +347,7 @@ func (c *Conn) Describe() error {
 
 func (c *Conn) Setup() error {
 	for _, media := range c.Medias {
-		_, err := c.SetupMedia(media, media.Codecs[0])
+		_, err := c.SetupMedia(media, media.Codecs[0], true)
 		if err != nil {
 			return err
 		}
@@ -356,11 +356,12 @@ func (c *Conn) Setup() error {
 	return nil
 }
 
-func (c *Conn) SetupMedia(
-	media *streamer.Media, codec *streamer.Codec,
-) (*streamer.Track, error) {
-	c.stateMu.Lock()
-	defer c.stateMu.Unlock()
+func (c *Conn) SetupMedia(media *streamer.Media, codec *streamer.Codec, first bool) (*streamer.Track, error) {
+	// TODO: rewrite recoonection and first flag
+	if first {
+		c.stateMu.Lock()
+		defer c.stateMu.Unlock()
+	}
 
 	if c.state != StateConn && c.state != StateSetup {
 		return nil, fmt.Errorf("RTSP SETUP from wrong state: %s", c.state)
@@ -412,7 +413,7 @@ func (c *Conn) SetupMedia(
 
 			for _, newMedia := range c.Medias {
 				if newMedia.Control == media.Control {
-					return c.SetupMedia(newMedia, newMedia.Codecs[0])
+					return c.SetupMedia(newMedia, newMedia.Codecs[0], false)
 				}
 			}
 		}
