@@ -1,6 +1,8 @@
 package mp4
 
 import (
+	"encoding/hex"
+	"github.com/AlexxIT/go2rtc/pkg/aac"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/deepch/vdk/av"
@@ -101,7 +103,17 @@ func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 		return track.Bind(push)
 
 	case streamer.CodecAAC:
-		stream, _ := aacparser.NewCodecDataFromMPEG4AudioConfigBytes([]byte{20, 8})
+		s := streamer.Between(codec.FmtpLine, "config=", ";")
+
+		b, err := hex.DecodeString(s)
+		if err != nil {
+			return nil
+		}
+
+		stream, err := aacparser.NewCodecDataFromMPEG4AudioConfigBytes(b)
+		if err != nil {
+			return nil
+		}
 
 		c.mimeType += ",mp4a.40.2"
 		c.streams = append(c.streams, stream)
@@ -129,6 +141,11 @@ func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 			}
 
 			return nil
+		}
+
+		if codec.IsRTP() {
+			wrapper := aac.RTPDepay(track)
+			push = wrapper(push)
 		}
 
 		return track.Bind(push)
