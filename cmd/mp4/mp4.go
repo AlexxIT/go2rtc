@@ -84,8 +84,8 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 	cons := &mp4.Consumer{
 		RemoteAddr: r.RemoteAddr,
 		UserAgent:  r.UserAgent(),
+		Medias:     streamer.ParseQuery(r.URL.Query()),
 	}
-	cons.Medias = streamer.ParseQuery(r.URL.Query())
 
 	cons.Listen(func(msg interface{}) {
 		if data, ok := msg.([]byte); ok {
