@@ -24,6 +24,16 @@ type Consumer struct {
 	send uint32
 }
 
+// ParseQuery - like usual parse, but with mp4 param handler
+func ParseQuery(query map[string][]string) []*streamer.Media {
+	if query["mp4"] != nil {
+		cons := Consumer{}
+		return cons.GetMedias()
+	}
+
+	return streamer.ParseQuery(query)
+}
+
 const (
 	waitNone byte = iota
 	waitKeyframe

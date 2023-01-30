@@ -165,7 +165,7 @@ func tcpHandler(conn *rtsp.Conn) {
 
 			conn.SessionName = app.UserAgent
 
-			conn.Medias = ParseQuery(conn.URL.Query())
+			conn.Medias = mp4.ParseQuery(conn.URL.Query())
 
 			if err := stream.AddConsumer(conn); err != nil {
 				log.Warn().Err(err).Str("stream", name).Msg("[rtsp]")
@@ -228,13 +228,4 @@ func tcpHandler(conn *rtsp.Conn) {
 	}
 
 	_ = conn.Close()
-}
-
-func ParseQuery(query map[string][]string) []*streamer.Media {
-	if query["mp4"] != nil {
-		cons := mp4.Consumer{}
-		return cons.GetMedias()
-	}
-
-	return streamer.ParseQuery(query)
 }
