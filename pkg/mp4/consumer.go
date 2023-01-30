@@ -171,8 +171,12 @@ func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 	panic("unsupported codec")
 }
 
+func (c *Consumer) MimeCodecs() string {
+	return c.muxer.MimeCodecs(c.codecs)
+}
+
 func (c *Consumer) MimeType() string {
-	return c.muxer.MimeType(c.codecs)
+	return `video/mp4; codecs="` + c.MimeCodecs() + `"`
 }
 
 func (c *Consumer) Init() ([]byte, error) {

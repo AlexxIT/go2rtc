@@ -50,7 +50,7 @@ func (c *Segment) AddTrack(media *streamer.Media, track *streamer.Track) *stream
 		return nil
 	}
 
-	c.MimeType = muxer.MimeType(codecs)
+	c.MimeType = `video/mp4; codecs="` + muxer.MimeCodecs(codecs) + `"`
 
 	switch track.Codec.Name {
 	case streamer.CodecH264:
