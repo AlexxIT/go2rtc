@@ -31,8 +31,9 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
 
 * [Fast start](#fast-start)
   * [go2rtc: Binary](#go2rtc-binary)
-  * [go2rtc: Home Assistant Add-on](#go2rtc-home-assistant-add-on)
   * [go2rtc: Docker](#go2rtc-docker)
+  * [go2rtc: Home Assistant Add-on](#go2rtc-home-assistant-add-on)
+  * [go2rtc: Home Assistant Integration](#go2rtc-home-assistant-integration)
 * [Configuration](#configuration)
   * [Module: Streams](#module-streams)
     * [Source: RTSP](#source-rtsp)
@@ -50,8 +51,6 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
   * [Module: WebRTC](#module-webrtc)
   * [Module: Ngrok](#module-ngrok)
   * [Module: Hass](#module-hass)
-    * [From go2rtc to Hass](#from-go2rtc-to-hass)
-    * [From Hass to go2rtc](#from-hass-to-go2rtc)
   * [Module: MP4](#module-mp4)
   * [Module: HLS](#module-hls)
   * [Module: MJPEG](#module-mjpeg)
@@ -65,7 +64,7 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
 
 ## Fast start
 
-1. Download [binary](#go2rtc-binary) or use [Docker](#go2rtc-docker) or [Home Assistant Add-on](#go2rtc-home-assistant-add-on)
+1. Download [binary](#go2rtc-binary) or use [Docker](#go2rtc-docker) or Home Assistant [Add-on](#go2rtc-home-assistant-add-on) or [Integration](#go2rtc-home-assistant-integration)
 2. Open web interface: `http://localhost:1984/`
 
 **Optionally:**
@@ -94,6 +93,10 @@ Download binary for your OS from [latest release](https://github.com/AlexxIT/go2
 
 Don't forget to fix the rights `chmod +x go2rtc_xxx_xxx` on Linux and Mac.
 
+### go2rtc: Docker
+
+Container [alexxit/go2rtc](https://hub.docker.com/r/alexxit/go2rtc) with support `amd64`, `386`, `arm64`, `arm`. This container is the same as [Home Assistant Add-on](#go2rtc-home-assistant-add-on), but can be used separately from Home Assistant. Container has preinstalled [FFmpeg](#source-ffmpeg), [Ngrok](#module-ngrok) and [Python](#source-echo).
+
 ### go2rtc: Home Assistant Add-on
 
 [![](https://my.home-assistant.io/badges/supervisor_addon.svg)](https://my.home-assistant.io/redirect/supervisor_addon/?addon=a889bffc_go2rtc&repository_url=https%3A%2F%2Fgithub.com%2FAlexxIT%2Fhassio-addons)
@@ -103,9 +106,9 @@ Don't forget to fix the rights `chmod +x go2rtc_xxx_xxx` on Linux and Mac.
     - go2rtc > Install > Start
 2. Setup [Integration](#module-hass)
 
-### go2rtc: Docker
+### go2rtc: Home Assistant Integration
 
-Container [alexxit/go2rtc](https://hub.docker.com/r/alexxit/go2rtc) with support `amd64`, `386`, `arm64`, `arm`. This container is the same as [Home Assistant Add-on](#go2rtc-home-assistant-add-on), but can be used separately from Home Assistant. Container has preinstalled [FFmpeg](#source-ffmpeg), [Ngrok](#module-ngrok) and [Python](#source-echo).
+[WebRTC Camera](https://github.com/AlexxIT/WebRTC) custom component can be used on any [Home Assistant installation](https://www.home-assistant.io/installation/), including [HassWP](https://github.com/AlexxIT/HassWP) on Windows. It can automatically download and use the latest version of go2rtc. Or it can connect to an existing version of go2rtc. Addon installation in this case is optional.
 
 ## Configuration
 
@@ -124,6 +127,7 @@ Available modules:
 - [rtsp](#module-rtsp) - RTSP Server (important for FFmpeg support)
 - [webrtc](#module-webrtc) - WebRTC Server
 - [mp4](#module-mp4) - MSE, MP4 stream and MP4 shapshot Server
+- [hls](#module-hls) - HLS TS or fMP4 stream Server
 - [mjpeg](#module-mjpeg) - MJPEG Server
 - [ffmpeg](#source-ffmpeg) - FFmpeg integration
 - [ngrok](#module-ngrok) - Ngrok integration (external access for private network)
@@ -547,24 +551,29 @@ tunnels:
 
 ### Module: Hass
 
-If you install **go2rtc** as [Hass Add-on](#go2rtc-home-assistant-add-on) - you need to use localhost IP-address. In other cases you need to use IP-address of server with **go2rtc** application.
+The best and easiest way to use go2rtc inside the Home Assistant is to install the custom integration [WebRTC Camera](#go2rtc-home-assistant-integration) and custom lovelace card.
 
-#### From go2rtc to Hass
+But go2rtc is also compatible and can be used with [RTSPtoWebRTC](https://www.home-assistant.io/integrations/rtsp_to_webrtc/) built-in integration.
 
-Add any supported [stream source](#module-streams) as [Generic Camera](https://www.home-assistant.io/integrations/generic/) and view stream with built-in [Stream](https://www.home-assistant.io/integrations/stream/) integration. Technology `HLS`, supported codecs: `H264`, poor latency.
+You have several options on how to add a camera to Home Assistant:
 
-1. Add your stream to [go2rtc config](#configuration)
-2. Hass > Settings > Integrations > Add Integration > [Generic Camera](https://my.home-assistant.io/redirect/config_flow_start/?domain=generic) > `rtsp://127.0.0.1:8554/camera1`
+1. Camera RTSP source => [Generic Camera](https://www.home-assistant.io/integrations/generic/)
+2. Camera [any source](#module-streams) => [go2rtc config](#configuration) => [Generic Camera](https://www.home-assistant.io/integrations/generic/)
+   - Install any [go2rtc](#fast-start)
+   - Add your stream to [go2rtc config](#configuration)
+   - Hass > Settings > Integrations > Add Integration > [Generic Camera](https://my.home-assistant.io/redirect/config_flow_start/?domain=generic) > `rtsp://127.0.0.1:8554/camera1` (change to your stream name)
 
-#### From Hass to go2rtc
+You have several options on how to watch the stream from the cameras in Home Assistant:
 
-View almost any Hass camera using `WebRTC` technology, supported codecs `H264`/`PCMU`/`PCMA`/`OPUS`, best latency.
-
-When the stream starts - the camera `entity_id` will be added to go2rtc "on the fly". You don't need to add cameras manually to [go2rtc config](#configuration). Some cameras (like [Nest](https://www.home-assistant.io/integrations/nest/)) have a dynamic link to the stream, it will be updated each time a stream is started from the Hass interface. 
-
-1. Hass > Settings > Integrations > Add Integration > [RTSPtoWebRTC](https://my.home-assistant.io/redirect/config_flow_start/?domain=rtsp_to_webrtc) > `http://127.0.0.1:1984/`
-2. RTSPtoWebRTC > Configure > STUN server: `stun.l.google.com:19302`
-3. Use Picture Entity or Picture Glance lovelace card
+1. `Camera Entity` => `Picture Entity Card` => Technology `HLS`, codecs: `H264/H265/AAC`, poor latency.
+2. `Camera Entity` => [RTSPtoWebRTC](https://www.home-assistant.io/integrations/rtsp_to_webrtc/) => `Picture Entity Card` => Technology `WebRTC`, codecs: `H264/PCMU/PCMA/OPUS`, best latency.
+   - Install any [go2rtc](#fast-start)
+   - Hass > Settings > Integrations > Add Integration > [RTSPtoWebRTC](https://my.home-assistant.io/redirect/config_flow_start/?domain=rtsp_to_webrtc) > `http://127.0.0.1:1984/`
+   - RTSPtoWebRTC > Configure > STUN server: `stun.l.google.com:19302`
+   - Use Picture Entity or Picture Glance lovelace card
+3. `Camera Entity` or `Camera URL` => [WebRTC Camera](https://github.com/AlexxIT/WebRTC) => Technology: `WebRTC/MSE/MP4/MJPEG`, codecs: `H264/H265/AAC/PCMU/PCMA/OPUS`, best latency, best compatibility.
+   - Install and add [WebRTC Camera](https://github.com/AlexxIT/WebRTC) custom integration
+   - Use WebRTC Camera custom lovelace card
 
 You can add camera `entity_id` to [go2rtc config](#configuration) if you need transcoding:
 
@@ -769,17 +778,17 @@ streams:
 
 **go2rtc** is a new version of the server-side [WebRTC Camera](https://github.com/AlexxIT/WebRTC) integration, completely rewritten from scratch, with a number of fixes and a huge number of new features. It is compatible with native Home Assistant [RTSPtoWebRTC](https://www.home-assistant.io/integrations/rtsp_to_webrtc/) integration. So you [can use](#module-hass) default lovelace Picture Entity or Picture Glance.
 
-**Q. Why go2rtc is an addon and not an integration?**
+**Q. Should I use go2rtc addon or WebRTC Camera integration?**
 
-Because **go2rtc** is more than just viewing your stream online with WebRTC. You can use it all the time for your various tasks. But every time the Hass is rebooted - all integrations are also rebooted. So your streams may be interrupted if you use them in additional tasks.
+**go2rtc** is more than just viewing your stream online with WebRTC/MSE/HLS/etc. You can use it all the time for your various tasks. But every time the Hass is rebooted - all integrations are also rebooted. So your streams may be interrupted if you use them in additional tasks.
 
-When **go2rtc** is released, the **WebRTC Camera** integration will be updated. And you can decide whether to use the integration or the addon.
+Basic users can use **WebRTC Camera** integration. Advanced users can use go2rtc addon or Frigate 12+ addon.
 
 **Q. Which RTSP link should I use inside Hass?**
 
 You can use direct link to your cameras there (as you always do). **go2rtc** support zero-config feature. You may leave `streams` config section empty. And your streams will be created on the fly on first start from Hass. And your cameras will have multiple connections. Some from Hass directly and one from **go2rtc**.
 
-Also you can specify your streams in **go2rtc** [config file](#configuration) and use RTSP links to this addon. With additional features: multi-source [codecs negotiation](#codecs-negotiation) or FFmpeg [transcoding](#source-ffmpeg) for unsupported codecs. Or use them as source for Frigate. And your cameras will have one connection from **go2rtc**. And **go2rtc** will have multiple connection - some from Hass via RTSP protocol, some from your browser via WebRTC protocol.
+Also you can specify your streams in **go2rtc** [config file](#configuration) and use RTSP links to this addon. With additional features: multi-source [codecs negotiation](#codecs-negotiation) or FFmpeg [transcoding](#source-ffmpeg) for unsupported codecs. Or use them as source for Frigate. And your cameras will have one connection from **go2rtc**. And **go2rtc** will have multiple connection - some from Hass via RTSP protocol, some from your browser via WebRTC/MSE/HLS protocols.
 
 Use any config what you like.
 
