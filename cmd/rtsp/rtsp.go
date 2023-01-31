@@ -9,20 +9,23 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/rs/zerolog"
 	"net"
+	"net/url"
 	"strings"
 )
 
 func Init() {
 	var conf struct {
 		Mod struct {
-			Listen   string `yaml:"listen" json:"listen"`
-			Username string `yaml:"username" json:"-"`
-			Password string `yaml:"password" json:"-"`
+			Listen       string `yaml:"listen" json:"listen"`
+			Username     string `yaml:"username" json:"-"`
+			Password     string `yaml:"password" json:"-"`
+			DefaultQuery string `yaml:"default_query"`
 		} `yaml:"rtsp"`
 	}
 
 	// default config
 	conf.Mod.Listen = ":8554"
+	conf.Mod.DefaultQuery = "video&audio"
 
 	app.LoadConfig(&conf)
 	app.Info["rtsp"] = conf.Mod
@@ -49,6 +52,10 @@ func Init() {
 	_, Port, _ = net.SplitHostPort(address)
 
 	log.Info().Str("addr", address).Msg("[rtsp] listen")
+
+	if query, err := url.ParseQuery(conf.Mod.DefaultQuery); err == nil {
+		defaultMedias = mp4.ParseQuery(query)
+	}
 
 	go func() {
 		for {
@@ -79,6 +86,7 @@ var Port string
 
 var log zerolog.Logger
 var handlers []Handler
+var defaultMedias []*streamer.Media
 
 func rtspHandler(url string) (streamer.Producer, error) {
 	backchannel := true
@@ -166,6 +174,9 @@ func tcpHandler(conn *rtsp.Conn) {
 			conn.SessionName = app.UserAgent
 
 			conn.Medias = mp4.ParseQuery(conn.URL.Query())
+			if conn.Medias == nil {
+				conn.Medias = defaultMedias
+			}
 
 			if err := stream.AddConsumer(conn); err != nil {
 				log.Warn().Err(err).Str("stream", name).Msg("[rtsp]")
