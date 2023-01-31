@@ -48,7 +48,7 @@
     const links = document.querySelector("#links");
     links.innerHTML = `
         <h2>Any codec in source</h2>
-        <li><a href="stream.html?src=${src}">stream.html</a> with auto-select mode / browsers: all / codecs: H264, H265, MJPEG, JPEG, AAC, PCMU, PCMA, OPUS</li>
+        <li><a href="stream.html?src=${src}">stream.html</a> with auto-select mode / browsers: all / codecs: H264, H265*, MJPEG, JPEG, AAC, PCMU, PCMA, OPUS</li>
         <li><a href="api/streams?src=${src}">info.json</a> page with active connections</li>
     `;
 
@@ -64,13 +64,13 @@
 
         const links = document.querySelector("#links");
         links.innerHTML += `
-            <li><a href="rtsp://${rtsp}/${src}">rtsp</a> with all tracks / codecs: any</li>
+            <li><a href="rtsp://${rtsp}/${src}">rtsp</a> with only one video and one audio / codecs: any</li>
             <li><a href="rtsp://${rtsp}/${src}?mp4">rtsp</a> for MP4 recording (Hass or Frigate) / codecs: H264, H265, AAC</li>
-            <li><a href="rtsp://${rtsp}/${src}?video&audio">rtsp</a> with only one video and one audio / codecs: any</li>
+            <li><a href="rtsp://${rtsp}/${src}?video=all&audio=all">rtsp</a> with all tracks / codecs: any</li>
 
             <h2>H264/H265 source</h2>
-            <li><a href="stream.html?src=${src}&mode=webrtc">stream.html</a> WebRTC stream / browsers: all / codecs: H264, PCMU, PCMA, OPUS</li>
-            <li><a href="stream.html?src=${src}&mode=mse">stream.html</a> MSE stream / browsers: Chrome, Firefox, Safari Mac/iPad / codecs: H264, H265*, AAC, OPUS</li>
+            <li><a href="stream.html?src=${src}&mode=webrtc">stream.html</a> WebRTC stream / browsers: all / codecs: H264, PCMU, PCMA, OPUS / +H265 in Safari</li>
+            <li><a href="stream.html?src=${src}&mode=mse">stream.html</a> MSE stream / browsers: Chrome, Firefox, Safari Mac/iPad / codecs: H264, H265*, AAC / +OPUS in Chrome and Firefox</li>
             <li><a href="api/stream.mp4?src=${src}">stream.mp4</a> MP4 stream with AAC audio / browsers: Chrome, Firefox / codecs: H264, H265*, AAC</li>
             <li><a href="api/stream.mp4?src=${src}&video=h264,h265&audio=aac,opus,mp3,pcma,pcmu">stream.mp4</a> MP4 stream with any audio / browsers: Chrome / codecs: H264, H265*, AAC, OPUS, MP3, PCMU, PCMA</li>
             <li><a href="api/frame.mp4?src=${src}">frame.mp4</a> snapshot in MP4-format / browsers: all / codecs: H264, H265*</li>
