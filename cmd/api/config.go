@@ -1,11 +1,12 @@
 package api
 
 import (
-	"github.com/AlexxIT/go2rtc/cmd/app"
-	"gopkg.in/yaml.v3"
 	"io"
 	"net/http"
 	"os"
+
+	"github.com/AlexxIT/go2rtc/cmd/app"
+	"gopkg.in/yaml.v3"
 )
 
 func configHandler(w http.ResponseWriter, r *http.Request) {

@@ -2,11 +2,12 @@ package streams
 
 import (
 	"encoding/json"
+	"net/http"
+
 	"github.com/AlexxIT/go2rtc/cmd/api"
 	"github.com/AlexxIT/go2rtc/cmd/app"
 	"github.com/AlexxIT/go2rtc/cmd/app/store"
 	"github.com/rs/zerolog"
-	"net/http"
 )
 
 func Init() {
@@ -63,9 +64,15 @@ func streamsHandler(w http.ResponseWriter, r *http.Request) {
 			name = src
 		}
 		New(name, src)
+		if err := storeStreams(); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		}
 		return
 	case "DELETE":
 		delete(streams, src)
+		if err := storeStreams(); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		}
 		return
 	}
 
