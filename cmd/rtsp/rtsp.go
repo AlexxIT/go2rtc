@@ -175,7 +175,9 @@ func tcpHandler(conn *rtsp.Conn) {
 
 			conn.Medias = mp4.ParseQuery(conn.URL.Query())
 			if conn.Medias == nil {
-				conn.Medias = defaultMedias
+				for _, media := range defaultMedias {
+					conn.Medias = append(conn.Medias, media.Clone())
+				}
 			}
 
 			if err := stream.AddConsumer(conn); err != nil {
