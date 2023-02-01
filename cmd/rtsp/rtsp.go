@@ -19,7 +19,7 @@ func Init() {
 			Listen       string `yaml:"listen" json:"listen"`
 			Username     string `yaml:"username" json:"-"`
 			Password     string `yaml:"password" json:"-"`
-			DefaultQuery string `yaml:"default_query"`
+			DefaultQuery string `yaml:"default_query" json:"default_query"`
 		} `yaml:"rtsp"`
 	}
 
