@@ -8,6 +8,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const EMPTY_YAML = `
+streams:
+`
+
 func setDict(root *yaml.Node, path []string, value yaml.Node) error {
 	if len(path) == 0 {
 		*root = value
@@ -39,7 +43,12 @@ func setDict(root *yaml.Node, path []string, value yaml.Node) error {
 func load(cfg *yaml.Node) error {
 	data, err := os.ReadFile(app.ConfigPath)
 	if err != nil {
-		return err
+		if os.IsNotExist(err) {
+			//not exists use default
+			data = []byte(EMPTY_YAML)
+		} else {
+			return err
+		}
 	}
 	if err = yaml.Unmarshal(data, cfg); err != nil {
 		return err
