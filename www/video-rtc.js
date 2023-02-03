@@ -189,8 +189,8 @@ export class VideoRTC extends HTMLElement {
             const seek = this.video.seekable;
             if (seek.length > 0) {
                 this.video.currentTime = seek.end(seek.length - 1);
-                this.play();
             }
+            this.play();
         } else {
             this.oninit();
         }
