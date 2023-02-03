@@ -61,7 +61,10 @@ export class VideoRTC extends HTMLElement {
          * [config] WebRTC configuration
          * @type {RTCConfiguration}
          */
-        this.pcConfig = {iceServers: [{urls: "stun:stun.l.google.com:19302"}]};
+        this.pcConfig = {
+            iceServers: [{urls: 'stun:stun.l.google.com:19302'}],
+            sdpSemantics: 'unified-plan',  // important for Chromecast 1
+        };
 
         /**
          * [info] WebSocket connection state. Values: CONNECTING, OPEN, CLOSED

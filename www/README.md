@@ -48,6 +48,18 @@ pc.ontrack = ev => {
 }
 ```
 
+## Chromecast 1
+
+2023-02-02. Error:
+
+```
+InvalidStateError: Failed to execute 'addTransceiver' on 'RTCPeerConnection': This operation is only supported in 'unified-plan'. 'unified-plan' will become the default behavior in the future, but it is currently experimental. To try it out, construct the RTCPeerConnection with sdpSemantics:'unified-plan' present in the RTCConfiguration argument.
+```
+
+User-Agent: `Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.47 Safari/537.36 CrKey/1.36.159268`
+
+https://webrtc.org/getting-started/unified-plan-transition-guide?hl=en
+
 ## Useful links
 
 - https://www.webrtc-experiment.com/DetectRTC/
@@ -58,3 +70,4 @@ pc.ontrack = ev => {
 - https://chromium.googlesource.com/external/w3c/web-platform-tests/+/refs/heads/master/media-source/mediasource-is-type-supported.html
 - https://googlechrome.github.io/samples/media/sourcebuffer-changetype.html
 - https://chromestatus.com/feature/5100845653819392
+- https://developer.apple.com/documentation/webkit/delivering_video_content_for_safari
