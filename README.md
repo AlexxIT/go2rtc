@@ -59,6 +59,7 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
 * [Codecs filters](#codecs-filters)
 * [Codecs madness](#codecs-madness)
 * [Codecs negotiation](#codecs-negotiation)
+* [Projects using go2rtc](#projects-using-go2rtc)
 * [TIPS](#tips)
 * [FAQ](#faq)
 
@@ -760,6 +761,12 @@ streams:
 ![](assets/codecs.svg)
 
 **PS.** You can select `PCMU` or `PCMA` codec in camera setting and don't use transcoding at all. Or you can select `AAC` codec for main stream and `PCMU` codec for second stream and add both RTSP to YAML config, this also will work fine.
+
+## Projects using go2rtc
+
+- [Frigate 12+](https://frigate.video/) - open source NVR built around real-time AI object detection
+- [ring-mqtt](https://github.com/tsightler/ring-mqtt) - Ring devices to MQTT Bridge
+- [EufyP2PStream](https://github.com/oischinger/eufyp2pstream) - A small project that provides a Video/Audio Stream from Eufy cameras that don't directly support RTSP
 
 ## TIPS
 
