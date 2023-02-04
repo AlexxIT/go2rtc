@@ -304,6 +304,12 @@ func (c *Conn) Describe() error {
 		req.Header.Set("Require", "www.onvif.org/ver20/backchannel")
 	}
 
+	if c.UserAgent != "" {
+		// this camera will answer with 401 on DESCRIBE without User-Agent
+		// https://github.com/AlexxIT/go2rtc/issues/235
+		req.Header.Set("User-Agent", c.UserAgent)
+	}
+
 	res, err := c.Do(req)
 	if err != nil {
 		return err
@@ -347,7 +353,7 @@ func (c *Conn) Describe() error {
 
 func (c *Conn) Setup() error {
 	for _, media := range c.Medias {
-		_, err := c.SetupMedia(media, media.Codecs[0])
+		_, err := c.SetupMedia(media, media.Codecs[0], true)
 		if err != nil {
 			return err
 		}
@@ -356,11 +362,12 @@ func (c *Conn) Setup() error {
 	return nil
 }
 
-func (c *Conn) SetupMedia(
-	media *streamer.Media, codec *streamer.Codec,
-) (*streamer.Track, error) {
-	c.stateMu.Lock()
-	defer c.stateMu.Unlock()
+func (c *Conn) SetupMedia(media *streamer.Media, codec *streamer.Codec, first bool) (*streamer.Track, error) {
+	// TODO: rewrite recoonection and first flag
+	if first {
+		c.stateMu.Lock()
+		defer c.stateMu.Unlock()
+	}
 
 	if c.state != StateConn && c.state != StateSetup {
 		return nil, fmt.Errorf("RTSP SETUP from wrong state: %s", c.state)
@@ -412,7 +419,7 @@ func (c *Conn) SetupMedia(
 
 			for _, newMedia := range c.Medias {
 				if newMedia.Control == media.Control {
-					return c.SetupMedia(newMedia, newMedia.Codecs[0])
+					return c.SetupMedia(newMedia, newMedia.Codecs[0], false)
 				}
 			}
 		}
@@ -742,6 +749,9 @@ func (c *Conn) Handle() (err error) {
 			return
 		}
 
+		var channelID byte
+		var size uint16
+
 		if buf4[0] != '$' {
 			switch string(buf4) {
 			case "RTSP":
@@ -750,26 +760,62 @@ func (c *Conn) Handle() (err error) {
 					return
 				}
 				c.Fire(res)
+				continue
+
 			case "OPTI", "TEAR", "DESC", "SETU", "PLAY", "PAUS", "RECO", "ANNO", "GET_", "SET_":
 				var req *tcp.Request
 				if req, err = tcp.ReadRequest(c.reader); err != nil {
 					return
 				}
 				c.Fire(req)
+				continue
+
 			default:
-				return fmt.Errorf("RTSP wrong input")
+				for i := 0; ; i++ {
+					// search next start symbol
+					if _, err = c.reader.ReadBytes('$'); err != nil {
+						return err
+					}
+
+					if channelID, err = c.reader.ReadByte(); err != nil {
+						return err
+					}
+
+					// check if channel ID exists
+					if c.channels[channelID] == nil {
+						continue
+					}
+
+					buf4 = make([]byte, 2)
+					if _, err = io.ReadFull(c.reader, buf4); err != nil {
+						return err
+					}
+
+					// check if size good for RTP
+					size = binary.BigEndian.Uint16(buf4)
+					if size <= 1500 {
+						break
+					}
+
+					// 10 tries to find good packet
+					if i >= 10 {
+						return fmt.Errorf("RTSP wrong input")
+					}
+				}
+
+				c.Fire("RTSP wrong input")
 			}
-			continue
-		}
+		} else {
+			// hope that the odd channels are always RTCP
+			channelID = buf4[1]
 
-		// hope that the odd channels are always RTCP
-		channelID := buf4[1]
+			// get data size
+			size = binary.BigEndian.Uint16(buf4[2:])
 
-		// get data size
-		size := int(binary.BigEndian.Uint16(buf4[2:]))
-
-		if _, err = c.reader.Discard(4); err != nil {
-			return
+			// skip 4 bytes from c.reader.Peek
+			if _, err = c.reader.Discard(4); err != nil {
+				return
+			}
 		}
 
 		// init memory for data
@@ -778,7 +824,7 @@ func (c *Conn) Handle() (err error) {
 			return
 		}
 
-		c.receive += size
+		c.receive += int(size)
 
 		if channelID&1 == 0 {
 			packet := &rtp.Packet{}
@@ -789,10 +835,8 @@ func (c *Conn) Handle() (err error) {
 			track := c.channels[channelID]
 			if track != nil {
 				_ = track.WriteRTP(packet)
-				//return fmt.Errorf("wrong channelID: %d", channelID)
 			} else {
-				continue // TODO: maybe fix this
-				//panic("wrong channelID")
+				c.Fire("wrong channelID: " + strconv.Itoa(int(channelID)))
 			}
 		} else {
 			msg := &RTCP{Channel: channelID}

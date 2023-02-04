@@ -11,6 +11,7 @@
  * - MediaSource for Safari iOS all
  * - Customized built-in elements (extends HTMLVideoElement) because all Safari
  * - Public class fields because old Safari (before 14.0)
+ * - Autoplay for Safari
  */
 export class VideoRTC extends HTMLElement {
     constructor() {
@@ -60,7 +61,10 @@ export class VideoRTC extends HTMLElement {
          * [config] WebRTC configuration
          * @type {RTCConfiguration}
          */
-        this.pcConfig = {iceServers: [{urls: "stun:stun.l.google.com:19302"}]};
+        this.pcConfig = {
+            iceServers: [{urls: 'stun:stun.l.google.com:19302'}],
+            sdpSemantics: 'unified-plan',  // important for Chromecast 1
+        };
 
         /**
          * [info] WebSocket connection state. Values: CONNECTING, OPEN, CLOSED
@@ -189,8 +193,8 @@ export class VideoRTC extends HTMLElement {
             const seek = this.video.seekable;
             if (seek.length > 0) {
                 this.video.currentTime = seek.end(seek.length - 1);
-                this.play();
             }
+            this.play();
         } else {
             this.oninit();
         }
@@ -558,6 +562,7 @@ export class VideoRTC extends HTMLElement {
         /** @type {HTMLVideoElement} */
         const video2 = document.createElement("video");
         video2.autoplay = true;
+        video2.playsInline = true;
         video2.muted = true;
 
         video2.addEventListener("loadeddata", ev => {

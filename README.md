@@ -7,7 +7,7 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
 - zero-dependency and zero-config [small app](#go2rtc-binary) for all OS (Windows, macOS, Linux, ARM)
 - zero-delay for many supported protocols (lowest possible streaming latency)
 - streaming from [RTSP](#source-rtsp), [RTMP](#source-rtmp), [HTTP](#source-http) (FLV/MJPEG/JPEG), [FFmpeg](#source-ffmpeg), [USB Cameras](#source-ffmpeg-device) and [other sources](#module-streams)
-- streaming to [RTSP](#module-rtsp), [WebRTC](#module-webrtc), [MSE/MP4](#module-mp4) or [MJPEG](#module-mjpeg)
+- streaming to [RTSP](#module-rtsp), [WebRTC](#module-webrtc), [MSE/MP4](#module-mp4), [HLS](#module-hls) or [MJPEG](#module-mjpeg)
 - first project in the World with support streaming from [HomeKit Cameras](#source-homekit)
 - first project in the World with support H265 for WebRTC in browser (Safari only, [read more](https://github.com/AlexxIT/Blog/issues/5))
 - on the fly transcoding for unsupported codecs via [FFmpeg](#source-ffmpeg)
@@ -31,8 +31,9 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
 
 * [Fast start](#fast-start)
   * [go2rtc: Binary](#go2rtc-binary)
-  * [go2rtc: Home Assistant Add-on](#go2rtc-home-assistant-add-on)
   * [go2rtc: Docker](#go2rtc-docker)
+  * [go2rtc: Home Assistant Add-on](#go2rtc-home-assistant-add-on)
+  * [go2rtc: Home Assistant Integration](#go2rtc-home-assistant-integration)
 * [Configuration](#configuration)
   * [Module: Streams](#module-streams)
     * [Source: RTSP](#source-rtsp)
@@ -50,20 +51,21 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
   * [Module: WebRTC](#module-webrtc)
   * [Module: Ngrok](#module-ngrok)
   * [Module: Hass](#module-hass)
-    * [From go2rtc to Hass](#from-go2rtc-to-hass)
-    * [From Hass to go2rtc](#from-hass-to-go2rtc)
   * [Module: MP4](#module-mp4)
+  * [Module: HLS](#module-hls)
   * [Module: MJPEG](#module-mjpeg)
   * [Module: Log](#module-log)
 * [Security](#security)
+* [Codecs filters](#codecs-filters)
 * [Codecs madness](#codecs-madness)
 * [Codecs negotiation](#codecs-negotiation)
+* [Projects using go2rtc](#projects-using-go2rtc)
 * [TIPS](#tips)
 * [FAQ](#faq)
 
 ## Fast start
 
-1. Download [binary](#go2rtc-binary) or use [Docker](#go2rtc-docker) or [Home Assistant Add-on](#go2rtc-home-assistant-add-on)
+1. Download [binary](#go2rtc-binary) or use [Docker](#go2rtc-docker) or Home Assistant [Add-on](#go2rtc-home-assistant-add-on) or [Integration](#go2rtc-home-assistant-integration)
 2. Open web interface: `http://localhost:1984/`
 
 **Optionally:**
@@ -92,6 +94,10 @@ Download binary for your OS from [latest release](https://github.com/AlexxIT/go2
 
 Don't forget to fix the rights `chmod +x go2rtc_xxx_xxx` on Linux and Mac.
 
+### go2rtc: Docker
+
+Container [alexxit/go2rtc](https://hub.docker.com/r/alexxit/go2rtc) with support `amd64`, `386`, `arm64`, `arm`. This container is the same as [Home Assistant Add-on](#go2rtc-home-assistant-add-on), but can be used separately from Home Assistant. Container has preinstalled [FFmpeg](#source-ffmpeg), [Ngrok](#module-ngrok) and [Python](#source-echo).
+
 ### go2rtc: Home Assistant Add-on
 
 [![](https://my.home-assistant.io/badges/supervisor_addon.svg)](https://my.home-assistant.io/redirect/supervisor_addon/?addon=a889bffc_go2rtc&repository_url=https%3A%2F%2Fgithub.com%2FAlexxIT%2Fhassio-addons)
@@ -101,9 +107,9 @@ Don't forget to fix the rights `chmod +x go2rtc_xxx_xxx` on Linux and Mac.
     - go2rtc > Install > Start
 2. Setup [Integration](#module-hass)
 
-### go2rtc: Docker
+### go2rtc: Home Assistant Integration
 
-Container [alexxit/go2rtc](https://hub.docker.com/r/alexxit/go2rtc) with support `amd64`, `386`, `arm64`, `arm`. This container is the same as [Home Assistant Add-on](#go2rtc-home-assistant-add-on), but can be used separately from Home Assistant. Container has preinstalled [FFmpeg](#source-ffmpeg), [Ngrok](#module-ngrok) and [Python](#source-echo).
+[WebRTC Camera](https://github.com/AlexxIT/WebRTC) custom component can be used on any [Home Assistant installation](https://www.home-assistant.io/installation/), including [HassWP](https://github.com/AlexxIT/HassWP) on Windows. It can automatically download and use the latest version of go2rtc. Or it can connect to an existing version of go2rtc. Addon installation in this case is optional.
 
 ## Configuration
 
@@ -122,6 +128,7 @@ Available modules:
 - [rtsp](#module-rtsp) - RTSP Server (important for FFmpeg support)
 - [webrtc](#module-webrtc) - WebRTC Server
 - [mp4](#module-mp4) - MSE, MP4 stream and MP4 shapshot Server
+- [hls](#module-hls) - HLS TS or fMP4 stream Server
 - [mjpeg](#module-mjpeg) - MJPEG Server
 - [ffmpeg](#source-ffmpeg) - FFmpeg integration
 - [ngrok](#module-ngrok) - Ngrok integration (external access for private network)
@@ -408,19 +415,24 @@ api:
 
 You can get any stream as RTSP-stream: `rtsp://192.168.1.123:8554/{stream_name}`
 
-- you can omit the codec filters, so one first video and one first audio will be selected
-- you can set `?video=copy` or just `?video`, so only one first video without audio will be selected
-- you can set multiple video or audio, so all of them will be selected
-- you can enable external password protection for your RTSP streams
-
-Password protection always disabled for localhost calls (ex. FFmpeg or Hass on same server)
+You can enable external password protection for your RTSP streams. Password protection always disabled for localhost calls (ex. FFmpeg or Hass on same server).
 
 ```yaml
 rtsp:
   listen: ":8554"    # RTSP Server TCP port, default - 8554
   username: "admin"  # optional, default - disabled
   password: "pass"   # optional, default - disabled
+  default_query: "video&audio"  # optional, default codecs filters 
 ```
+
+By default go2rtc provide RTSP-stream with only one first video and only one first audio. You can change it with the `default_query` setting:
+
+- `default_query: "mp4"` - MP4 compatible codecs (H264, H265, AAC)
+- `default_query: "video=all&audio=all"` - all tracks from all source (not all players can handle this)
+- `default_query: "video=h264,h265"` - only one video track (H264 or H265)
+- `default_query: "video&audio=all"` - only one first any video and all audio as separate tracks
+
+Read more about [codecs filters](#codecs-filters).
 
 ### Module: WebRTC
 
@@ -540,24 +552,29 @@ tunnels:
 
 ### Module: Hass
 
-If you install **go2rtc** as [Hass Add-on](#go2rtc-home-assistant-add-on) - you need to use localhost IP-address. In other cases you need to use IP-address of server with **go2rtc** application.
+The best and easiest way to use go2rtc inside the Home Assistant is to install the custom integration [WebRTC Camera](#go2rtc-home-assistant-integration) and custom lovelace card.
 
-#### From go2rtc to Hass
+But go2rtc is also compatible and can be used with [RTSPtoWebRTC](https://www.home-assistant.io/integrations/rtsp_to_webrtc/) built-in integration.
 
-Add any supported [stream source](#module-streams) as [Generic Camera](https://www.home-assistant.io/integrations/generic/) and view stream with built-in [Stream](https://www.home-assistant.io/integrations/stream/) integration. Technology `HLS`, supported codecs: `H264`, poor latency.
+You have several options on how to add a camera to Home Assistant:
 
-1. Add your stream to [go2rtc config](#configuration)
-2. Hass > Settings > Integrations > Add Integration > [Generic Camera](https://my.home-assistant.io/redirect/config_flow_start/?domain=generic) > `rtsp://127.0.0.1:8554/camera1`
+1. Camera RTSP source => [Generic Camera](https://www.home-assistant.io/integrations/generic/)
+2. Camera [any source](#module-streams) => [go2rtc config](#configuration) => [Generic Camera](https://www.home-assistant.io/integrations/generic/)
+   - Install any [go2rtc](#fast-start)
+   - Add your stream to [go2rtc config](#configuration)
+   - Hass > Settings > Integrations > Add Integration > [Generic Camera](https://my.home-assistant.io/redirect/config_flow_start/?domain=generic) > `rtsp://127.0.0.1:8554/camera1` (change to your stream name)
 
-#### From Hass to go2rtc
+You have several options on how to watch the stream from the cameras in Home Assistant:
 
-View almost any Hass camera using `WebRTC` technology, supported codecs `H264`/`PCMU`/`PCMA`/`OPUS`, best latency.
-
-When the stream starts - the camera `entity_id` will be added to go2rtc "on the fly". You don't need to add cameras manually to [go2rtc config](#configuration). Some cameras (like [Nest](https://www.home-assistant.io/integrations/nest/)) have a dynamic link to the stream, it will be updated each time a stream is started from the Hass interface. 
-
-1. Hass > Settings > Integrations > Add Integration > [RTSPtoWebRTC](https://my.home-assistant.io/redirect/config_flow_start/?domain=rtsp_to_webrtc) > `http://127.0.0.1:1984/`
-2. RTSPtoWebRTC > Configure > STUN server: `stun.l.google.com:19302`
-3. Use Picture Entity or Picture Glance lovelace card
+1. `Camera Entity` => `Picture Entity Card` => Technology `HLS`, codecs: `H264/H265/AAC`, poor latency.
+2. `Camera Entity` => [RTSPtoWebRTC](https://www.home-assistant.io/integrations/rtsp_to_webrtc/) => `Picture Entity Card` => Technology `WebRTC`, codecs: `H264/PCMU/PCMA/OPUS`, best latency.
+   - Install any [go2rtc](#fast-start)
+   - Hass > Settings > Integrations > Add Integration > [RTSPtoWebRTC](https://my.home-assistant.io/redirect/config_flow_start/?domain=rtsp_to_webrtc) > `http://127.0.0.1:1984/`
+   - RTSPtoWebRTC > Configure > STUN server: `stun.l.google.com:19302`
+   - Use Picture Entity or Picture Glance lovelace card
+3. `Camera Entity` or `Camera URL` => [WebRTC Camera](https://github.com/AlexxIT/WebRTC) => Technology: `WebRTC/MSE/MP4/MJPEG`, codecs: `H264/H265/AAC/PCMU/PCMA/OPUS`, best latency, best compatibility.
+   - Install and add [WebRTC Camera](https://github.com/AlexxIT/WebRTC) custom integration
+   - Use WebRTC Camera custom lovelace card
 
 You can add camera `entity_id` to [go2rtc config](#configuration) if you need transcoding:
 
@@ -574,12 +591,27 @@ Provides several features:
 
 1. MSE stream (fMP4 over WebSocket)
 2. Camera snapshots in MP4 format (single frame), can be sent to [Telegram](https://github.com/AlexxIT/go2rtc/wiki/Snapshot-to-Telegram)
-3. MP4 "file stream" - bad format for streaming because of high start delay, doesn't work in Safari 
+3. MP4 "file stream" - bad format for streaming because of high start delay. This format doesn't work in all Safari browsers, but go2rtc will automatically redirect it to HLS/fMP4 it this case.
 
 API examples:
 
 - MP4 stream: `http://192.168.1.123:1984/api/stream.mp4?src=camera1`
 - MP4 snapshot: `http://192.168.1.123:1984/api/frame.mp4?src=camera1`
+
+Read more about [codecs filters](#codecs-filters).
+
+### Module: HLS
+
+[HLS](https://en.wikipedia.org/wiki/HTTP_Live_Streaming) is the worst technology for real-time streaming. It can only be useful on devices that do not support more modern technology, like [WebRTC](#module-webrtc), [MSE/MP4](#module-mp4).
+
+The go2rtc implementation differs from the standards and may not work with all players.
+
+API examples:
+
+- HLS/TS stream: `http://192.168.1.123:1984/api/stream.m3u8?src=camera1` (H264)
+- HLS/fMP4 stream: `http://192.168.1.123:1984/api/stream.m3u8?src=camera1&mp4` (H264, H265, AAC)
+
+Read more about [codecs filters](#codecs-filters).
 
 ### Module: MJPEG
 
@@ -647,21 +679,42 @@ If you need Web interface protection without Home Assistant Add-on - you need to
 
 PS. Additionally WebRTC will try to use the 8555 UDP port for transmit encrypted media. It works without problems on the local network. And sometimes also works for external access, even if you haven't opened this port on your router ([read more](https://en.wikipedia.org/wiki/UDP_hole_punching)). But for stable external WebRTC access, you need to open the 8555 port on your router for both TCP and UDP.
 
+## Codecs filters
+
+go2rtc can automatically detect which codecs your device supports for [WebRTC](#module-webrtc) and [MSE](#module-mp4) technologies.
+
+But it cannot be done for [RTSP](#module-rtsp), [stream.mp4](#module-mp4), [HLS](#module-hls) technologies. You can manually add a codec filter when you create a link to a stream. The filters work the same for all three technologies. Filters do not create a new codec. They only select the suitable codec from existing sources. You can add new codecs to the stream using the [FFmpeg transcoding](#source-ffmpeg).
+
+Without filters:
+
+- RTSP will provide only the first video and only the first audio
+- MP4 will include only compatible codecs (H264, H265, AAC)
+- HLS will output in the legacy TS format (H264 without audio)
+
+Some examples:
+
+- `rtsp://192.168.1.123:8554/camera1?mp4` - useful for recording as MP4 files (e.g. Hass or Frigate)
+- `rtsp://192.168.1.123:8554/camera1?video=h264,h265&audio=aac` - full version of the filter above
+- `rtsp://192.168.1.123:8554/camera1?video=h264&audio=aac&audio=opus` - H264 video codec and two separate audio tracks
+- `rtsp://192.168.1.123:8554/camera1?video&audio=all` - any video codec and all audio codecs as separate tracks
+- `http://192.168.1.123:1984/api/stream.m3u8?src=camera1&mp4` - HLS stream with MP4 compatible codecs (HLS/fMP4)
+- `http://192.168.1.123:1984/api/stream.mp4?src=camera1&video=h264,h265&audio=aac,opus,mp3,pcma,pcmu` - MP4 file with non standard audio codecs, does not work in some players
+
 ## Codecs madness
 
-`AVC/H.264` codec can be played almost anywhere. But `HEVC/H.265` has a lot of limitations in supporting with different devices and browsers. It's all about patents and money, you can't do anything about it.
+`AVC/H.264` video can be played almost anywhere. But `HEVC/H.265` has a lot of limitations in supporting with different devices and browsers. It's all about patents and money, you can't do anything about it.
 
-| Device              | WebRTC      | MSE         | MP4         |
-|---------------------|-------------|-------------|-------------|
-| *latency*           | best        | medium      | bad         |
-| Desktop Chrome 107+ | H264        | H264, H265* | H264, H265* |
-| Desktop Edge        | H264        | H264, H265* | H264, H265* |
-| Desktop Safari      | H264, H265* | H264, H265  | **no!**     |
-| Desktop Firefox     | H264        | H264        | H264        |
-| Android Chrome 107+ | H264        | H264, H265* | H264        |
-| iPad Safari 13+     | H264, H265* | H264, H265  | **no!**     |
-| iPhone Safari 13+   | H264, H265* | **no!**     | **no!**     |
-| masOS Hass App      | no          | no          | no          |
+| Device              | WebRTC                        | MSE                    | stream.mp4                              |
+|---------------------|-------------------------------|------------------------|-----------------------------------------|
+| *latency*           | best                          | medium                 | bad                                     |
+| Desktop Chrome 107+ | H264, OPUS, PCMU, PCMA        | H264, H265*, AAC, OPUS | H264, H265*, AAC, OPUS, PCMU, PCMA, MP3 |
+| Desktop Edge        | H264, OPUS, PCMU, PCMA        | H264, H265*, AAC, OPUS | H264, H265*, AAC, OPUS, PCMU, PCMA, MP3 |
+| Desktop Safari      | H264, H265*, OPUS, PCMU, PCMA | H264, H265, AAC        | **no!**                                 |
+| Desktop Firefox     | H264, OPUS, PCMU, PCMA        | H264, AAC, OPUS        | H264, AAC, OPUS                         |
+| Android Chrome 107+ | H264, OPUS, PCMU, PCMA        | H264, H265*, AAC, OPUS | H264, ?, AAC, OPUS, PCMU, PCMA, MP3     |
+| iPad Safari 13+     | H264, H265*, OPUS, PCMU, PCMA | H264, H265, AAC        | **no!**                                 |
+| iPhone Safari 13+   | H264, H265*, OPUS, PCMU, PCMA | **no!**                | **no!**                                 |
+| masOS Hass App      | no                            | no                     | no                                      |
 
 - Chrome H265: [read this](https://chromestatus.com/feature/5186511939567616) and [read this](https://github.com/StaZhu/enable-chromium-hevc-hardware-decoding)
 - Edge H265: [read this](https://www.reddit.com/r/MicrosoftEdge/comments/v9iw8k/enable_hevc_support_in_edge/)
@@ -670,8 +723,9 @@ PS. Additionally WebRTC will try to use the 8555 UDP port for transmit encrypted
 
 **Audio**
 
-- WebRTC audio codecs: `PCMU/8000`, `PCMA/8000`, `OPUS/48000/2`
-- MSE/MP4 audio codecs: `AAC`
+- **WebRTC** audio codecs: `PCMU/8000`, `PCMA/8000`, `OPUS/48000/2`
+- `OPUS` and `MP3` inside **MP4** is part of the standard, but some players do not support them anyway (especially Apple)
+- `PCMU` and `PCMA` inside **MP4** isn't a standard, but some players support them, for example Chromium browsers
 
 **Apple devices**
 
@@ -708,6 +762,12 @@ streams:
 
 **PS.** You can select `PCMU` or `PCMA` codec in camera setting and don't use transcoding at all. Or you can select `AAC` codec for main stream and `PCMU` codec for second stream and add both RTSP to YAML config, this also will work fine.
 
+## Projects using go2rtc
+
+- [Frigate 12+](https://frigate.video/) - open source NVR built around real-time AI object detection
+- [ring-mqtt](https://github.com/tsightler/ring-mqtt) - Ring devices to MQTT Bridge
+- [EufyP2PStream](https://github.com/oischinger/eufyp2pstream) - A small project that provides a Video/Audio Stream from Eufy cameras that don't directly support RTSP
+
 ## TIPS
 
 **Using apps for low RTSP delay**
@@ -725,17 +785,17 @@ streams:
 
 **go2rtc** is a new version of the server-side [WebRTC Camera](https://github.com/AlexxIT/WebRTC) integration, completely rewritten from scratch, with a number of fixes and a huge number of new features. It is compatible with native Home Assistant [RTSPtoWebRTC](https://www.home-assistant.io/integrations/rtsp_to_webrtc/) integration. So you [can use](#module-hass) default lovelace Picture Entity or Picture Glance.
 
-**Q. Why go2rtc is an addon and not an integration?**
+**Q. Should I use go2rtc addon or WebRTC Camera integration?**
 
-Because **go2rtc** is more than just viewing your stream online with WebRTC. You can use it all the time for your various tasks. But every time the Hass is rebooted - all integrations are also rebooted. So your streams may be interrupted if you use them in additional tasks.
+**go2rtc** is more than just viewing your stream online with WebRTC/MSE/HLS/etc. You can use it all the time for your various tasks. But every time the Hass is rebooted - all integrations are also rebooted. So your streams may be interrupted if you use them in additional tasks.
 
-When **go2rtc** is released, the **WebRTC Camera** integration will be updated. And you can decide whether to use the integration or the addon.
+Basic users can use **WebRTC Camera** integration. Advanced users can use go2rtc addon or Frigate 12+ addon.
 
 **Q. Which RTSP link should I use inside Hass?**
 
 You can use direct link to your cameras there (as you always do). **go2rtc** support zero-config feature. You may leave `streams` config section empty. And your streams will be created on the fly on first start from Hass. And your cameras will have multiple connections. Some from Hass directly and one from **go2rtc**.
 
-Also you can specify your streams in **go2rtc** [config file](#configuration) and use RTSP links to this addon. With additional features: multi-source [codecs negotiation](#codecs-negotiation) or FFmpeg [transcoding](#source-ffmpeg) for unsupported codecs. Or use them as source for Frigate. And your cameras will have one connection from **go2rtc**. And **go2rtc** will have multiple connection - some from Hass via RTSP protocol, some from your browser via WebRTC protocol.
+Also you can specify your streams in **go2rtc** [config file](#configuration) and use RTSP links to this addon. With additional features: multi-source [codecs negotiation](#codecs-negotiation) or FFmpeg [transcoding](#source-ffmpeg) for unsupported codecs. Or use them as source for Frigate. And your cameras will have one connection from **go2rtc**. And **go2rtc** will have multiple connection - some from Hass via RTSP protocol, some from your browser via WebRTC/MSE/HLS protocols.
 
 Use any config what you like.
 

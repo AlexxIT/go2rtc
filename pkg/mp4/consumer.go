@@ -24,6 +24,16 @@ type Consumer struct {
 	send uint32
 }
 
+// ParseQuery - like usual parse, but with mp4 param handler
+func ParseQuery(query map[string][]string) []*streamer.Media {
+	if query["mp4"] != nil {
+		cons := Consumer{}
+		return cons.GetMedias()
+	}
+
+	return streamer.ParseQuery(query)
+}
+
 const (
 	waitNone byte = iota
 	waitKeyframe
@@ -161,8 +171,12 @@ func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 	panic("unsupported codec")
 }
 
+func (c *Consumer) MimeCodecs() string {
+	return c.muxer.MimeCodecs(c.codecs)
+}
+
 func (c *Consumer) MimeType() string {
-	return c.muxer.MimeType(c.codecs)
+	return `video/mp4; codecs="` + c.MimeCodecs() + `"`
 }
 
 func (c *Consumer) Init() ([]byte, error) {

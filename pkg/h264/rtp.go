@@ -10,6 +10,8 @@ import (
 
 const RTPPacketVersionAVC = 0
 
+const PSMaxSize = 128 // the biggest SPS I've seen is 48 (EZVIZ CS-CV210)
+
 func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
 	depack := &codecs.H264Packet{IsAVC: true}
 
@@ -29,7 +31,7 @@ func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
 
 			// Fix TP-Link Tapo TC70: sends SPS and PPS with packet.Marker = true
 			// Reolink Duo 2: sends SPS with Marker and PPS without
-			if packet.Marker && len(payload) < 128 {
+			if packet.Marker && len(payload) < PSMaxSize {
 				switch NALUType(payload) {
 				case NALUTypeSPS, NALUTypePPS:
 					buf = append(buf, payload...)
@@ -70,7 +72,10 @@ func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
 			if len(buf) > 0 {
 				payload = append(buf, payload...)
 				buf = buf[:0]
-			} else {
+			}
+
+			// should not be that huge SPS
+			if NALUType(payload) == NALUTypeSPS && binary.BigEndian.Uint32(payload) >= PSMaxSize {
 				// some Chinese buggy cameras has single packet with SPS+PPS+IFrame separated by 00 00 00 01
 				// https://github.com/AlexxIT/WebRTC/issues/391
 				// https://github.com/AlexxIT/WebRTC/issues/392

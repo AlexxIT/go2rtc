@@ -89,9 +89,7 @@
     const templates = [
         '<a href="stream.html?src={name}">stream</a>',
         '<a href="webrtc.html?src={name}">2-way-aud</a>',
-        '<a href="api/stream.mp4?src={name}">mp4</a>',
-        '<a href="api/stream.mjpeg?src={name}">mjpeg</a>',
-        '<a href="api/streams?src={name}">info</a>',
+        '<a href="links.html?src={name}">links</a>',
         '<a href="#" data-name="{name}">delete</a>',
     ];
 
@@ -138,15 +136,17 @@
 
             for (const [name, value] of Object.entries(data)) {
                 const online = value && value.consumers ? value.consumers.length : 0;
+                const src = encodeURIComponent(name);
                 const links = templates.map(link => {
-                    return link.replace("{name}", encodeURIComponent(name));
+                    return link.replace("{name}", src);
                 }).join(" ");
 
                 const tr = document.createElement("tr");
                 tr.dataset["id"] = name;
                 tr.innerHTML =
                     `<td><label><input type="checkbox" name="${name}">${name}</label></td>` +
-                    `<td>${online}</td><td>${links}</td>`;
+                    `<td><a href="api/streams?src=${src}">${online} / info</a></td>` +
+                    `<td>${links}</td>`;
                 tbody.appendChild(tr);
             }
         });
@@ -156,17 +156,9 @@
     fetch(url, {cache: 'no-cache'}).then(r => r.json()).then(data => {
         const info = document.querySelector(".info");
         info.innerText = `Version: ${data.version}, Config: ${data.config_path}`;
-
-        try {
-            const host = data.host.match(/^[^:]+/)[0];
-            const port = data.rtsp.listen.match(/[0-9]+$/)[0];
-            templates.splice(4, 0, `<a href="rtsp://${host}:${port}/{name}">rtsp</a>`);
-        } catch (e) {
-            templates.splice(4, 0, `<a href="rtsp://${location.host}:8554/{name}">rtsp</a>`);
-        }
-
-        reload();
     });
+
+    reload();
 </script>
 </body>
 </html>

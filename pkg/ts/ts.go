@@ -1,6 +1,7 @@
-package mp4
+package ts
 
 import (
+	"bytes"
 	"encoding/hex"
 	"github.com/AlexxIT/go2rtc/pkg/aac"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
@@ -8,46 +9,44 @@ import (
 	"github.com/deepch/vdk/av"
 	"github.com/deepch/vdk/codec/aacparser"
 	"github.com/deepch/vdk/codec/h264parser"
-	"github.com/deepch/vdk/format/mp4f"
+	"github.com/deepch/vdk/format/ts"
 	"github.com/pion/rtp"
+	"sync/atomic"
 	"time"
 )
 
 type Consumer struct {
 	streamer.Element
 
-	Medias     []*streamer.Media
 	UserAgent  string
 	RemoteAddr string
 
-	muxer    *mp4f.Muxer
-	streams  []av.CodecData
+	buf      *bytes.Buffer
+	muxer    *ts.Muxer
 	mimeType string
+	streams  []av.CodecData
 	start    bool
+	init     []byte
 
-	send int
+	send uint32
 }
 
 func (c *Consumer) GetMedias() []*streamer.Media {
-	if c.Medias != nil {
-		return c.Medias
-	}
-
 	return []*streamer.Media{
 		{
 			Kind:      streamer.KindVideo,
 			Direction: streamer.DirectionRecvonly,
 			Codecs: []*streamer.Codec{
-				{Name: streamer.CodecH264, ClockRate: 90000},
+				{Name: streamer.CodecH264},
 			},
 		},
-		{
-			Kind:      streamer.KindAudio,
-			Direction: streamer.DirectionRecvonly,
-			Codecs: []*streamer.Codec{
-				{Name: streamer.CodecAAC, ClockRate: 16000},
-			},
-		},
+		//{
+		//	Kind:      streamer.KindAudio,
+		//	Direction: streamer.DirectionRecvonly,
+		//	Codecs: []*streamer.Codec{
+		//		{Name: streamer.CodecAAC},
+		//	},
+		//},
 	}
 }
 
@@ -63,7 +62,18 @@ func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 			return nil
 		}
 
-		c.mimeType += "avc1." + h264.GetProfileLevelID(codec.FmtpLine)
+		if len(c.mimeType) > 0 {
+			c.mimeType += ","
+		}
+
+		// TODO: fixme
+		// some devices won't play high level
+		if stream.RecordInfo.AVCLevelIndication <= 0x29 {
+			c.mimeType += "avc1." + h264.GetProfileLevelID(codec.FmtpLine)
+		} else {
+			c.mimeType += "avc1.640029"
+		}
+
 		c.streams = append(c.streams, stream)
 
 		pkt := av.Packet{Idx: trackID, CompositionTime: time.Millisecond}
@@ -86,11 +96,16 @@ func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 			}
 			pkt.Time = newTime
 
-			ready, buf, _ := c.muxer.WritePacket(pkt, false)
-			if ready {
-				c.send += len(buf)
-				c.Fire(buf)
+			if err = c.muxer.WritePacket(pkt); err != nil {
+				return err
 			}
+
+			// clone bytes from buffer, so next packet won't overwrite it
+			buf := append([]byte{}, c.buf.Bytes()...)
+			atomic.AddUint32(&c.send, uint32(len(buf)))
+			c.Fire(buf)
+
+			c.buf.Reset()
 
 			return nil
 		}
@@ -115,7 +130,11 @@ func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 			return nil
 		}
 
-		c.mimeType += ",mp4a.40.2"
+		if len(c.mimeType) > 0 {
+			c.mimeType += ","
+		}
+
+		c.mimeType += "mp4a.40.2"
 		c.streams = append(c.streams, stream)
 
 		pkt := av.Packet{Idx: trackID, CompositionTime: time.Millisecond}
@@ -134,11 +153,16 @@ func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 			}
 			pkt.Time = newTime
 
-			ready, buf, _ := c.muxer.WritePacket(pkt, false)
-			if ready {
-				c.send += len(buf)
-				c.Fire(buf)
+			if err := c.muxer.WritePacket(pkt); err != nil {
+				return err
 			}
+
+			// clone bytes from buffer, so next packet won't overwrite it
+			buf := append([]byte{}, c.buf.Bytes()...)
+			atomic.AddUint32(&c.send, uint32(len(buf)))
+			c.Fire(buf)
+
+			c.buf.Reset()
 
 			return nil
 		}
@@ -154,16 +178,20 @@ func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 	panic("unsupported codec")
 }
 
-func (c *Consumer) MimeType() string {
-	return `video/mp4; codecs="` + c.mimeType + `"`
+func (c *Consumer) MimeCodecs() string {
+	return c.mimeType
 }
 
 func (c *Consumer) Init() ([]byte, error) {
-	c.muxer = mp4f.NewMuxer(nil)
+	c.buf = bytes.NewBuffer(nil)
+	c.muxer = ts.NewMuxer(c.buf)
+
+	// first packet will be with header, it's ok
 	if err := c.muxer.WriteHeader(c.streams); err != nil {
 		return nil, err
 	}
-	_, data := c.muxer.GetInit(c.streams)
+	data := append([]byte{}, c.buf.Bytes()...)
+
 	return data, nil
 }
 

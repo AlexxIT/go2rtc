@@ -24,8 +24,8 @@ const (
 	MimeOpus = "opus"
 )
 
-func (m *Muxer) MimeType(codecs []*streamer.Codec) string {
-	s := `video/mp4; codecs="`
+func (m *Muxer) MimeCodecs(codecs []*streamer.Codec) string {
+	var s string
 
 	for i, codec := range codecs {
 		if i > 0 {
@@ -46,7 +46,7 @@ func (m *Muxer) MimeType(codecs []*streamer.Codec) string {
 		}
 	}
 
-	return s + `"`
+	return s
 }
 
 func (m *Muxer) GetInit(codecs []*streamer.Codec) ([]byte, error) {

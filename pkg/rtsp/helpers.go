@@ -5,6 +5,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/pion/rtcp"
 	"net/url"
+	"regexp"
 	"strings"
 )
 
@@ -22,9 +23,12 @@ t=0 0`
 func UnmarshalSDP(rawSDP []byte) ([]*streamer.Media, error) {
 	medias, err := streamer.UnmarshalSDP(rawSDP)
 	if err != nil {
+		// fix multiple `s=` https://github.com/AlexxIT/WebRTC/issues/417
+		re, _ := regexp.Compile("\ns=[^\n]+")
+		rawSDP = re.ReplaceAll(rawSDP, nil)
+
 		// fix SDP header for some cameras
-		i := bytes.Index(rawSDP, []byte("\nm="))
-		if i > 0 {
+		if i := bytes.Index(rawSDP, []byte("\nm=")); i > 0 {
 			rawSDP = append([]byte(sdpHeader), rawSDP[i:]...)
 			medias, err = streamer.UnmarshalSDP(rawSDP)
 		}

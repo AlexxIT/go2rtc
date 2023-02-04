@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>go2rtc - links</title>
+    <meta name="viewport" content="width=device-width, user-scalable=yes, initial-scale=1, maximum-scale=1">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <style>
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        html, body, #config {
+            width: 100%;
+            height: 100%;
+        }
+
+        div {
+            padding: 10px;
+        }
+
+        div > li {
+            list-style-type: none;
+            padding-left: 10px;
+            position: relative;
+        }
+
+        div > li:before {
+            content: "-";
+            position: absolute;
+            left: 0;
+        }
+    </style>
+</head>
+<body>
+<script src="main.js"></script>
+<div id="links"></div>
+<script>
+    const params = new URLSearchParams(location.search);
+    const src = params.get("src");
+
+    const links = document.querySelector("#links");
+    links.innerHTML = `
+        <h2>Any codec in source</h2>
+        <li><a href="stream.html?src=${src}">stream.html</a> with auto-select mode / browsers: all / codecs: H264, H265*, MJPEG, JPEG, AAC, PCMU, PCMA, OPUS</li>
+        <li><a href="api/streams?src=${src}">info.json</a> page with active connections</li>
+    `;
+
+    const url = new URL('api', location.href);
+    fetch(url, {cache: 'no-cache'}).then(r => r.json()).then(data => {
+        let rtsp = location.host + ':8554';
+        try {
+            const host = data.host.match(/^[^:]+/)[0];
+            const port = data.rtsp.listen.match(/[0-9]+$/)[0];
+            rtsp = `${host}:${port}`;
+        } catch (e) {
+        }
+
+        const links = document.querySelector("#links");
+        links.innerHTML += `
+            <li><a href="rtsp://${rtsp}/${src}">rtsp</a> with only one video and one audio / codecs: any</li>
+            <li><a href="rtsp://${rtsp}/${src}?mp4">rtsp</a> for MP4 recording (Hass or Frigate) / codecs: H264, H265, AAC</li>
+            <li><a href="rtsp://${rtsp}/${src}?video=all&audio=all">rtsp</a> with all tracks / codecs: any</li>
+
+            <h2>H264/H265 source</h2>
+            <li><a href="stream.html?src=${src}&mode=webrtc">stream.html</a> WebRTC stream / browsers: all / codecs: H264, PCMU, PCMA, OPUS / +H265 in Safari</li>
+            <li><a href="stream.html?src=${src}&mode=mse">stream.html</a> MSE stream / browsers: Chrome, Firefox, Safari Mac/iPad / codecs: H264, H265*, AAC / +OPUS in Chrome and Firefox</li>
+            <li><a href="api/stream.mp4?src=${src}">stream.mp4</a> MP4 stream with AAC audio / browsers: Chrome, Firefox / codecs: H264, H265*, AAC</li>
+            <li><a href="api/stream.mp4?src=${src}&video=h264,h265&audio=aac,opus,mp3,pcma,pcmu">stream.mp4</a> MP4 stream with any audio / browsers: Chrome / codecs: H264, H265*, AAC, OPUS, MP3, PCMU, PCMA</li>
+            <li><a href="api/frame.mp4?src=${src}">frame.mp4</a> snapshot in MP4-format / browsers: all / codecs: H264, H265*</li>
+            <li><a href="api/stream.m3u8?src=${src}">stream.m3u8</a> HLS/TS / browsers: Safari all, Chrome Android / codecs: H264</li>
+            <li><a href="api/stream.m3u8?src=${src}&mp4">stream.m3u8</a> HLS/fMP4 / browsers: Safari all, Chrome Android / codecs: H264, H265*, AAC</li>
+            <li><a href="webrtc.html?src=${src}">webrtc.html</a> with two-way audio for supported cameras / browsers: all / codecs: H264, PCMU, PCMA, OPUS</li>
+
+            <h2>MJPEG source</h2>
+            <li><a href="stream.html?src=${src}&mode=mjpeg">stream.html</a> with MJPEG mode / browsers: all / codecs: MJPEG, JPEG</li>
+            <li><a href="api/stream.mjpeg?src=${src}">stream.mjpeg</a> MJPEG stream / browsers: all / codecs: MJPEG, JPEG</li>
+            <li><a href="api/frame.jpeg?src=${src}">frame.jpeg</a> snapshot in JPEG-format / browsers: all / codecs: MJPEG, JPEG</li>
+        `;
+    });
+</script>
+</body>
+</html>

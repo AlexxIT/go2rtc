@@ -26,8 +26,14 @@ func Init() {
 var log zerolog.Logger
 
 func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
-	if isChromeFirst(w, r) {
-		return
+	// Chrome 105 does two requests: without Range and with `Range: bytes=0-`
+	ua := r.UserAgent()
+	if strings.Contains(ua, " Chrome/") {
+		if r.Header.Values("Range") == nil {
+			w.Header().Set("Content-Type", "video/mp4")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
 	}
 
 	src := r.URL.Query().Get("src")
@@ -68,7 +74,22 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 func handlerMP4(w http.ResponseWriter, r *http.Request) {
 	log.Trace().Msgf("[mp4] %s %+v", r.Method, r.Header)
 
-	if isChromeFirst(w, r) || isSafari(w, r) {
+	// Chrome has Safari in UA, so check first Chrome and later Safari
+	ua := r.UserAgent()
+	if strings.Contains(ua, " Chrome/") {
+		if r.Header.Values("Range") == nil {
+			w.Header().Set("Content-Type", "video/mp4")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+	} else if strings.Contains(ua, " Safari/") {
+		// auto redirect to HLS/fMP4 format, because Safari not support MP4 stream
+		url := "stream.m3u8?" + r.URL.RawQuery
+		if !r.URL.Query().Has("mp4") {
+			url += "&mp4"
+		}
+
+		http.Redirect(w, r, url, http.StatusMovedPermanently)
 		return
 	}
 
@@ -84,8 +105,8 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 	cons := &mp4.Consumer{
 		RemoteAddr: r.RemoteAddr,
 		UserAgent:  r.UserAgent(),
+		Medias:     streamer.ParseQuery(r.URL.Query()),
 	}
-	cons.Medias = streamer.ParseQuery(r.URL.Query())
 
 	cons.Listen(func(msg interface{}) {
 		if data, ok := msg.([]byte); ok {
@@ -137,24 +158,4 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 	if duration != nil {
 		duration.Stop()
 	}
-}
-
-func isChromeFirst(w http.ResponseWriter, r *http.Request) bool {
-	// Chrome 105 does two requests: without Range and with `Range: bytes=0-`
-	if strings.Contains(r.UserAgent(), " Chrome/") {
-		if r.Header.Values("Range") == nil {
-			w.Header().Set("Content-Type", "video/mp4")
-			w.WriteHeader(http.StatusOK)
-			return true
-		}
-	}
-	return false
-}
-
-func isSafari(w http.ResponseWriter, r *http.Request) bool {
-	if r.Header.Get("Range") == "bytes=0-1" {
-		handlerKeyframe(w, r)
-		return true
-	}
-	return false
 }
