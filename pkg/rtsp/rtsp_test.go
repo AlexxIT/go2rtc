@@ -20,6 +20,7 @@ func TestURLParse(t *testing.T) {
 }
 
 func TestMultipleSinSDP(t *testing.T) {
+	// https://github.com/AlexxIT/WebRTC/issues/417
 	s := `v=0
 o=- 91674849066 1 IN IP4 192.168.1.123
 s=RtspServer
@@ -49,4 +50,26 @@ a=control:track1
 	medias, err := UnmarshalSDP([]byte(s))
 	assert.Nil(t, err)
 	assert.NotNil(t, medias)
+}
+
+func TestFindFmtp(t *testing.T) {
+	// https://github.com/AlexxIT/WebRTC/issues/419
+	s := `v=0
+o=- 1675628282 1675628283 IN IP4 192.168.1.123
+s=streamed by the RTSP server
+t=0 0
+m=video 0 RTP/AVP 96
+a=rtpmap:96 H264/90000
+a=control:track0
+m=audio 0 RTP/AVP 8
+a=rtpmap:0 pcma/8000/1
+a=control:track1
+a=framerate:25
+a=range:npt=now-
+a=fmtp:96 packetization-mode=1;profile-level-id=64001F;sprop-parameter-sets=Z0IAH5WoFAFuQA==,aM48gA==
+`
+	medias, err := UnmarshalSDP([]byte(s))
+	assert.Nil(t, err)
+	assert.NotNil(t, medias)
+	assert.NotEqual(t, "", medias[0].Codecs[0].FmtpLine)
 }

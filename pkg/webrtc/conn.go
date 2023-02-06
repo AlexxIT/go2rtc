@@ -2,6 +2,7 @@ package webrtc
 
 import (
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
+	"github.com/pion/sdp/v3"
 	"github.com/pion/webrtc/v3"
 )
 
@@ -90,11 +91,14 @@ func (c *Conn) SetOffer(offer string) (err error) {
 	if err = c.Conn.SetRemoteDescription(sdOffer); err != nil {
 		return
 	}
+
 	rawSDP := []byte(c.Conn.RemoteDescription().SDP)
-	medias, err := streamer.UnmarshalSDP(rawSDP)
-	if err != nil {
+	sd := &sdp.SessionDescription{}
+	if err = sd.Unmarshal(rawSDP); err != nil {
 		return
 	}
+
+	medias := streamer.UnmarshalMedias(sd.MediaDescriptions)
 
 	// sort medias, so video will always be before audio
 	// and ignore application media from Hass default lovelace card

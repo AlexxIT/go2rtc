@@ -166,14 +166,8 @@ func (c *Codec) Match(codec *Codec) bool {
 		(c.Channels == codec.Channels || codec.Channels == 0)
 }
 
-func UnmarshalSDP(rawSDP []byte) ([]*Media, error) {
-	sd := &sdp.SessionDescription{}
-	if err := sd.Unmarshal(rawSDP); err != nil {
-		return nil, err
-	}
-
-	var medias []*Media
-	for _, md := range sd.MediaDescriptions {
+func UnmarshalMedias(descriptions []*sdp.MediaDescription) (medias []*Media) {
+	for _, md := range descriptions {
 		media := UnmarshalMedia(md)
 
 		if media.Direction == DirectionSendRecv {
@@ -187,7 +181,7 @@ func UnmarshalSDP(rawSDP []byte) ([]*Media, error) {
 		medias = append(medias, media)
 	}
 
-	return medias, nil
+	return
 }
 
 func MarshalSDP(name string, medias []*Media) ([]byte, error) {

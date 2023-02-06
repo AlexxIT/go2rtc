@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/pion/rtcp"
+	"github.com/pion/sdp/v3"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -21,8 +23,8 @@ s=-
 t=0 0`
 
 func UnmarshalSDP(rawSDP []byte) ([]*streamer.Media, error) {
-	medias, err := streamer.UnmarshalSDP(rawSDP)
-	if err != nil {
+	sd := &sdp.SessionDescription{}
+	if err := sd.Unmarshal(rawSDP); err != nil {
 		// fix multiple `s=` https://github.com/AlexxIT/WebRTC/issues/417
 		re, _ := regexp.Compile("\ns=[^\n]+")
 		rawSDP = re.ReplaceAll(rawSDP, nil)
@@ -30,16 +32,28 @@ func UnmarshalSDP(rawSDP []byte) ([]*streamer.Media, error) {
 		// fix SDP header for some cameras
 		if i := bytes.Index(rawSDP, []byte("\nm=")); i > 0 {
 			rawSDP = append([]byte(sdpHeader), rawSDP[i:]...)
-			medias, err = streamer.UnmarshalSDP(rawSDP)
+			sd = &sdp.SessionDescription{}
+			err = sd.Unmarshal(rawSDP)
 		}
+
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	// fix bug in ONVIF spec
-	// https://www.onvif.org/specs/stream/ONVIF-Streaming-Spec-v241.pdf
+	medias := streamer.UnmarshalMedias(sd.MediaDescriptions)
+
 	for _, media := range medias {
+		// Check buggy SDP with fmtp for H264 on another track
+		// https://github.com/AlexxIT/WebRTC/issues/419
+		for _, codec := range media.Codecs {
+			if codec.Name == streamer.CodecH264 && codec.FmtpLine == "" {
+				codec.FmtpLine = findFmtpLine(codec.PayloadType, sd.MediaDescriptions)
+			}
+		}
+
+		// fix bug in ONVIF spec
+		// https://www.onvif.org/specs/stream/ONVIF-Streaming-Spec-v241.pdf
 		switch media.Direction {
 		case streamer.DirectionRecvonly, "":
 			media.Direction = streamer.DirectionSendonly
@@ -49,6 +63,17 @@ func UnmarshalSDP(rawSDP []byte) ([]*streamer.Media, error) {
 	}
 
 	return medias, nil
+}
+
+func findFmtpLine(payloadType uint8, descriptions []*sdp.MediaDescription) string {
+	s := strconv.Itoa(int(payloadType))
+	for _, md := range descriptions {
+		codec := streamer.UnmarshalCodec(md, s)
+		if codec.FmtpLine != "" {
+			return codec.FmtpLine
+		}
+	}
+	return ""
 }
 
 // urlParse fix bugs:
