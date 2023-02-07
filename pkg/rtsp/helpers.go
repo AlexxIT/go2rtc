@@ -23,6 +23,12 @@ s=-
 t=0 0`
 
 func UnmarshalSDP(rawSDP []byte) ([]*streamer.Media, error) {
+	// fix bug from Reolink Doorbell
+	if i := bytes.Index(rawSDP, []byte("a=sendonlym=")); i > 0 {
+		rawSDP = append(rawSDP[:i+11], rawSDP[i+10:]...)
+		rawSDP[i+10] = '\n'
+	}
+
 	sd := &sdp.SessionDescription{}
 	if err := sd.Unmarshal(rawSDP); err != nil {
 		// fix multiple `s=` https://github.com/AlexxIT/WebRTC/issues/417
