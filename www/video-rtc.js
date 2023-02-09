@@ -42,6 +42,12 @@ export class VideoRTC extends HTMLElement {
         this.background = false;
 
         /**
+         * [config] Enable controls. Default `true`.
+         * @type {boolean}
+         */
+        this.controlEnable = true
+
+        /**
          * [config] Run stream only when player in the viewport. Stop when user scroll out player.
          * Value is percentage of visibility from `0` (not visible) to `1` (full visible).
          * Default `0` - disable;
@@ -223,7 +229,7 @@ export class VideoRTC extends HTMLElement {
      */
     oninit() {
         this.video = document.createElement("video");
-        this.video.controls = true;
+        this.video.controls = this.controlEnable;
         this.video.playsInline = true;
         this.video.preload = "auto";
 

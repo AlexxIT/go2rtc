@@ -33,6 +33,8 @@
     const streams = params.getAll("src");
     const modes = params.getAll("mode");
     if (modes.length === 0) modes.push("");
+    const ctrls = params.getAll("controls");
+    if (ctrls.length === 0) ctrls.push(true);
 
     while (modes.length > streams.length) {
         streams.push(streams[0]);
@@ -54,6 +56,7 @@
         video.background = background;
         video.mode = modes[i] || video.mode;
         video.style.flex = width;
+        video.controlEnable = (ctrls[0] === 'true');
         video.src = new URL("api/ws?src=" + encodeURIComponent(streams[i]), location.href);
         document.body.appendChild(video);
     }
