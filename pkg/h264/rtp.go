@@ -36,6 +36,10 @@ func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
 				case NALUTypeSPS, NALUTypePPS:
 					buf = append(buf, payload...)
 					return nil
+				case NALUTypeSEI:
+					// RtspServer https://github.com/AlexxIT/go2rtc/issues/244
+					// sends, marked SPS, marked PPS, marked SEI, marked IFrame
+					return nil
 				}
 			}
 
