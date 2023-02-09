@@ -70,7 +70,9 @@ func (a *Auth) Write(req *Request) {
 	case AuthBasic:
 		req.Header.Set("Authorization", a.header)
 	case AuthDigest:
-		uri := req.URL.RequestURI()
+		// important to use String except RequestURL for RtspServer:
+		// https://github.com/AlexxIT/go2rtc/issues/244
+		uri := req.URL.String()
 		h2 := HexMD5(req.Method, uri)
 		response := HexMD5(a.h1nonce, h2)
 		header := a.header + fmt.Sprintf(
