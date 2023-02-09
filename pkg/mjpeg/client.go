@@ -122,7 +122,11 @@ func (c *Client) startJPEG() error {
 }
 
 func (c *Client) startMJPEG(boundary string) error {
-	boundary = "--" + boundary
+	// some cameras add prefix to boundary header:
+	// https://github.com/TheTimeWalker/wallpanel-android
+	if !strings.HasPrefix(boundary, "--") {
+		boundary = "--" + boundary
+	}
 
 	r := bufio.NewReader(c.res.Body)
 	tp := textproto.NewReader(r)
