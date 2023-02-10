@@ -220,12 +220,15 @@ func (c *Conn) Do(req *tcp.Request) (*tcp.Response, error) {
 	if res.StatusCode == http.StatusUnauthorized {
 		switch c.auth.Method {
 		case tcp.AuthNone:
+			if c.auth.ReadNone(res) {
+				return c.Do(req)
+			}
 			return nil, errors.New("user/pass not provided")
 		case tcp.AuthUnknown:
 			if c.auth.Read(res) {
 				return c.Do(req)
 			}
-		case tcp.AuthBasic, tcp.AuthDigest:
+		default:
 			return nil, errors.New("wrong user/pass")
 		}
 	}
