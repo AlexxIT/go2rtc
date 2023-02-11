@@ -357,7 +357,7 @@ func (c *Client) AddVideoTrack(mediaCode byte, payload []byte) {
 			}
 		}
 
-	case 3:
+	case 0x03, 0x13:
 		codec = &streamer.Codec{
 			Name:        streamer.CodecH265,
 			ClockRate:   90000,
