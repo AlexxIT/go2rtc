@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/AlexxIT/go2rtc/pkg/aac"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
+	"github.com/AlexxIT/go2rtc/pkg/h265"
 	"github.com/AlexxIT/go2rtc/pkg/mjpeg"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
@@ -916,6 +917,9 @@ func (c *Conn) bindTrack(
 		switch track.Codec.Name {
 		case streamer.CodecH264:
 			wrapper := h264.RTPPay(1500)
+			push = wrapper(push)
+		case streamer.CodecH265:
+			wrapper := h265.RTPPay(1500)
 			push = wrapper(push)
 		case streamer.CodecAAC:
 			wrapper := aac.RTPPay(1500)

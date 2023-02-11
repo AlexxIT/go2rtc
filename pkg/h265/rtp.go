@@ -77,6 +77,39 @@ func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
 	}
 }
 
+func RTPPay(mtu uint16) streamer.WrapperFunc {
+	payloader := &Payloader{}
+	sequencer := rtp.NewRandomSequencer()
+	mtu -= 12 // rtp.Header size
+
+	return func(push streamer.WriterFunc) streamer.WriterFunc {
+		return func(packet *rtp.Packet) error {
+			if packet.Version != h264.RTPPacketVersionAVC {
+				return push(packet)
+			}
+
+			payloads := payloader.Payload(mtu, packet.Payload)
+			last := len(payloads) - 1
+			for i, payload := range payloads {
+				clone := rtp.Packet{
+					Header: rtp.Header{
+						Version:        2,
+						Marker:         i == last,
+						SequenceNumber: sequencer.NextSequenceNumber(),
+						Timestamp:      packet.Timestamp,
+					},
+					Payload: payload,
+				}
+				if err := push(&clone); err != nil {
+					return err
+				}
+			}
+
+			return nil
+		}
+	}
+}
+
 // SafariPay - generate Safari friendly payload for H265
 // https://github.com/AlexxIT/Blog/issues/5
 func SafariPay(mtu uint16) streamer.WrapperFunc {

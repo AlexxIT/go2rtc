@@ -1,38 +1,6 @@
 # H264
 
-Access Unit (AU) can contain one or multiple NAL Unit:
-
-1. [SEI,] SPS, PPS, IFrame, [IFrame...]
-2. BFrame, [BFrame...]
-3. IFrame, [IFrame...]
-
-## RTP H264
-
-Camera | NALu
--------|-----
-EZVIZ C3S          | 7f, 8f, 28:28:28 -> 5t, 28:28:28 -> 1t, 1t, 1t, 1t
-Sonoff GK-200MP2-B | 28:28:28 -> 5t, 1t, 1t, 1t
-Dahua IPC-K42      | 7f, 8f, 28:28:28 -> 5t, 28:28:28 -> 1t, 28:28:28 -> 1t
-FFmpeg copy        | 5t, 1t, 1t, 28:28:28 -> 1t, 28:28:28 -> 1t
-FFmpeg h264        | 24 -> 6:5:5:5:5t, 24 -> 1:1:1:1t, 28:28:28 -> 5f, 28:28:28 -> 5f, 28:28:28 -> 5t
-FFmpeg resize      | 6f, 28:28:28 -> 5f, 28... -> 5t, 24 -> 1:1f, 24 -> 1:1t
-
-## WebRTC
-
-Video codec	    | Media string | Device
-----------------|--------------|-------
-H.264/baseline! | avc1.42E0xx  | Chromecast
-H.264/baseline! | avc1.42E0xx  | Chrome/Safari WebRTC
-H.264/baseline! | avc1.42C0xx  | FFmpeg ultrafast
-H.264/baseline! | avc1.4240xx  | Dahua H264B
-H.264/baseline  | avc1.4200xx  | Chrome WebRTC
-H.264/main!     | avc1.4D40xx  | Chromecast
-H.264/main!     | avc1.4D40xx  | FFmpeg superfast main
-H.264/main!     | avc1.4D40xx  | Dahua H264
-H.264/main      | avc1.4D00xx  | Chrome WebRTC
-H.264/high!     | avc1.640Cxx  | Safari WebRTC
-H.264/high      | avc1.6400xx  | Chromecast
-H.264/high      | avc1.6400xx  | FFmpeg superfast
+Payloader code taken from [pion](https://github.com/pion/rtp) library. And changed to AVC packets support.
 
 ## Useful Links
 
