@@ -119,11 +119,7 @@ func (c *Client) Play() (err error) {
 	}
 
 	data = fmt.Sprintf(format, c.session, "Start", c.stream)
-	if err = c.Request(OPMonitorStart, data); err != nil {
-		return
-	}
-
-	return
+	return c.Request(OPMonitorStart, data)
 }
 
 func (c *Client) Handle() error {
@@ -170,6 +166,8 @@ func (c *Client) Handle() error {
 			continue // need to collect data from next packets
 		}
 
+		//log.Printf("[DVR] type: %d, len: %d", dataType, len(b))
+
 		switch dataType {
 		case 0x1FC, 0x1FE: // video IFrame
 			payload := h264.AnnexB2AVC(b[16:])
@@ -178,6 +176,7 @@ func (c *Client) Handle() error {
 				fps := b[5]
 				//width := uint16(b[6]) * 8
 				//height := uint16(b[7]) * 8
+				//println(width, height)
 				ts := b[8:]
 
 				// the exact value of the start TS does not matter
@@ -364,6 +363,7 @@ func (c *Client) AddVideoTrack(mediaCode byte, payload []byte) {
 			}
 		}
 	default:
+		println("[DVRIP] unsupported video codec:", mediaCode)
 		return
 	}
 
@@ -393,6 +393,7 @@ func (c *Client) AddAudioTrack(mediaCode byte, sampleRate byte) {
 			Name: streamer.CodecPCMA,
 		}
 	default:
+		println("[DVRIP] unsupported audio codec:", mediaCode)
 		return
 	}
 
