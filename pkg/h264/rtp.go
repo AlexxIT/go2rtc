@@ -1,7 +1,6 @@
 package h264
 
 import (
-	"bytes"
 	"encoding/binary"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/pion/rtp"
@@ -83,23 +82,7 @@ func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
 				// some Chinese buggy cameras has single packet with SPS+PPS+IFrame separated by 00 00 00 01
 				// https://github.com/AlexxIT/WebRTC/issues/391
 				// https://github.com/AlexxIT/WebRTC/issues/392
-				for i := 0; i < len(payload); {
-					if i+4 >= len(payload) {
-						break
-					}
-
-					size := bytes.Index(payload[i+4:], []byte{0, 0, 0, 1})
-					if size < 0 {
-						if i == 0 {
-							break
-						}
-						size = len(payload) - (i + 4)
-					}
-
-					binary.BigEndian.PutUint32(payload[i:], uint32(size))
-
-					i += size + 4
-				}
+				AnnexB2AVC(payload)
 			}
 
 			//log.Printf("[AVC] %v, len: %d, ts: %10d, seq: %d", Types(payload), len(payload), packet.Timestamp, packet.SequenceNumber)
