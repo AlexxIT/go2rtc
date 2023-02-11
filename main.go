@@ -4,6 +4,7 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/api"
 	"github.com/AlexxIT/go2rtc/cmd/app"
 	"github.com/AlexxIT/go2rtc/cmd/debug"
+	"github.com/AlexxIT/go2rtc/cmd/dvrip"
 	"github.com/AlexxIT/go2rtc/cmd/echo"
 	"github.com/AlexxIT/go2rtc/cmd/exec"
 	"github.com/AlexxIT/go2rtc/cmd/ffmpeg"
@@ -37,6 +38,8 @@ func main() {
 	hass.Init()   // add support hass scheme
 	echo.Init()
 	ivideon.Init()
+	http.Init()
+	dvrip.Init()
 
 	srtp.Init()
 	homekit.Init()
@@ -45,7 +48,6 @@ func main() {
 	mp4.Init()
 	hls.Init()
 	mjpeg.Init()
-	http.Init()
 
 	ngrok.Init()
 	debug.Init()
