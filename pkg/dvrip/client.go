@@ -66,10 +66,24 @@ func (c *Client) Dial() (err error) {
 
 	c.reader = bufio.NewReader(c.conn)
 
-	c.stream = u.Path
-	if c.stream == "" {
-		c.stream = "Main"
+	query := u.Query()
+	channel := query.Get("channel")
+	if channel == "" {
+		channel = "0"
 	}
+
+	subtype := query.Get("subtype")
+	switch subtype {
+	case "", "0":
+		subtype = "Main"
+	case "1":
+		subtype = "Extra1"
+	}
+
+	c.stream = fmt.Sprintf(
+		`{"Channel":%s,"CombinMode":"NONE","StreamType":"%s","TransMode":"TCP"}`,
+		channel, subtype,
+	)
 
 	if u.User != nil {
 		pass, _ := u.User.Password()
@@ -94,8 +108,7 @@ func (c *Client) Login(user, pass string) (err error) {
 }
 
 func (c *Client) Play() (err error) {
-	format := `{"Name":"OPMonitor","SessionID":"0x%08X","OPMonitor":{"Action":"%s","Parameter":` +
-		`{"Channel":0,"CombinMode":"NONE","StreamType":"%s","TransMode":"TCP"}}}`
+	format := `{"Name":"OPMonitor","SessionID":"0x%08X","OPMonitor":{"Action":"%s","Parameter":%s}}`
 
 	data := fmt.Sprintf(format, c.session, "Claim", c.stream)
 	if err = c.Request(OPMonitorClaim, data); err != nil {
