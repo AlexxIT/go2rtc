@@ -1,4 +1,4 @@
-package ts
+package mpegts
 
 import (
 	"bytes"
