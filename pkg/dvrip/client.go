@@ -5,7 +5,6 @@ import (
 	"crypto/md5"
 	"encoding/base64"
 	"encoding/binary"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -336,25 +335,7 @@ func (c *Client) AddVideoTrack(mediaCode byte, payload []byte) {
 			Name:        streamer.CodecH264,
 			ClockRate:   90000,
 			PayloadType: streamer.PayloadTypeRAW,
-			FmtpLine:    "packetization-mode=1",
-		}
-
-		for {
-			size := 4 + int(binary.BigEndian.Uint32(payload))
-
-			switch h264.NALUType(payload) {
-			case h264.NALUTypeSPS:
-				codec.FmtpLine += ";profile-level-id=" + hex.EncodeToString(payload[5:8])
-				codec.FmtpLine += ";sprop-parameter-sets=" + base64.StdEncoding.EncodeToString(payload[4:size])
-			case h264.NALUTypePPS:
-				codec.FmtpLine += "," + base64.StdEncoding.EncodeToString(payload[4:size])
-			}
-
-			if size < len(payload) {
-				payload = payload[size:]
-			} else {
-				break
-			}
+			FmtpLine:    h264.GetFmtpLine(payload),
 		}
 
 	case 0x03, 0x13:

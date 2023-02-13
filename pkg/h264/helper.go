@@ -104,3 +104,26 @@ func GetParameterSet(fmtp string) (sps, pps []byte) {
 
 	return
 }
+
+// GetFmtpLine from SPS+PPS+IFrame in AVC format
+func GetFmtpLine(avc []byte) string {
+	s := "packetization-mode=1"
+
+	for {
+		size := 4 + int(binary.BigEndian.Uint32(avc))
+
+		switch NALUType(avc) {
+		case NALUTypeSPS:
+			s += ";profile-level-id=" + hex.EncodeToString(avc[5:8])
+			s += ";sprop-parameter-sets=" + base64.StdEncoding.EncodeToString(avc[4:size])
+		case NALUTypePPS:
+			s += "," + base64.StdEncoding.EncodeToString(avc[4:size])
+		}
+
+		if size < len(avc) {
+			avc = avc[size:]
+		} else {
+			return s
+		}
+	}
+}
