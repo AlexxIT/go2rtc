@@ -1,8 +1,10 @@
 package tcp
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -10,8 +12,22 @@ import (
 
 // Do - http.Client with support Digest Authorization
 func Do(req *http.Request) (*http.Response, error) {
-	// need to create new client each time to reset timeout
+	var conn net.Conn
+
 	client := http.Client{Timeout: time.Second * 5000}
+
+	// for multipart requests return conn as Body (for write support)
+	if ct := req.Header.Get("Content-Type"); strings.HasPrefix(ct, "multipart/mixed") {
+		var d net.Dialer
+		client.Transport = &http.Transport{
+			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				var err error
+				conn, err = d.DialContext(ctx, network, addr)
+				return conn, err
+			},
+		}
+	}
+
 	res, err := client.Do(req)
 	if err != nil {
 		return nil, err
@@ -62,6 +78,10 @@ func Do(req *http.Request) (*http.Response, error) {
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	if conn != nil {
+		res.Body = conn
 	}
 
 	return res, nil
