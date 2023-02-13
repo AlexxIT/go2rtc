@@ -21,6 +21,13 @@ func NewTrack(codec *Codec, direction string) *Track {
 	return &Track{Codec: codec, Direction: direction, sinkMu: new(sync.RWMutex)}
 }
 
+func NewTrack2(media *Media, codec *Codec) *Track {
+	if codec == nil {
+		codec = media.Codecs[0]
+	}
+	return &Track{Codec: codec, Direction: media.Direction, sinkMu: new(sync.RWMutex)}
+}
+
 func (t *Track) String() string {
 	s := t.Codec.String()
 	if t.sinkMu.TryRLock() {

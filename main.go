@@ -20,6 +20,7 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/rtsp"
 	"github.com/AlexxIT/go2rtc/cmd/srtp"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
+	"github.com/AlexxIT/go2rtc/cmd/tapo"
 	"github.com/AlexxIT/go2rtc/cmd/webrtc"
 	"os"
 	"os/signal"
@@ -40,6 +41,7 @@ func main() {
 	ivideon.Init()
 	http.Init()
 	dvrip.Init()
+	tapo.Init()
 
 	srtp.Init()
 	homekit.Init()

@@ -1,6 +1,8 @@
 package mpegts
 
 import (
+	"github.com/AlexxIT/go2rtc/pkg/h264"
+	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"time"
 )
 
@@ -56,4 +58,36 @@ func (p *PES) Packet() *Packet {
 func ParseTime(b []byte) time.Duration {
 	ts := (uint64(b[0]) >> 1 & 0x7 << 30) | (uint64(b[1]) << 22) | (uint64(b[2]) >> 1 & 0x7F << 15) | (uint64(b[3]) << 7) | (uint64(b[4]) >> 1 & 0x7F)
 	return time.Duration(ts)
+}
+
+func GetMedia(pkt *Packet) *streamer.Media {
+	var codec *streamer.Codec
+	var kind string
+
+	switch pkt.StreamType {
+	case StreamTypeH264:
+		codec = &streamer.Codec{
+			Name:        streamer.CodecH264,
+			ClockRate:   90000,
+			PayloadType: streamer.PayloadTypeRAW,
+			FmtpLine:    h264.GetFmtpLine(pkt.Payload),
+		}
+		kind = streamer.KindVideo
+
+	case StreamTypePCMA:
+		codec = &streamer.Codec{
+			Name:      streamer.CodecPCMA,
+			ClockRate: 8000,
+		}
+		kind = streamer.KindAudio
+
+	default:
+		return nil
+	}
+
+	return &streamer.Media{
+		Kind:      kind,
+		Direction: streamer.DirectionSendonly,
+		Codecs:    []*streamer.Codec{codec},
+	}
 }
