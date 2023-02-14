@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
 	"github.com/AlexxIT/go2rtc/pkg/mjpeg"
+	"github.com/AlexxIT/go2rtc/pkg/mpegts"
 	"github.com/AlexxIT/go2rtc/pkg/rtmp"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
@@ -41,6 +42,7 @@ func handle(url string) (streamer.Producer, error) {
 	switch ct {
 	case "image/jpeg", "multipart/x-mixed-replace":
 		return mjpeg.NewClient(res), nil
+
 	case "video/x-flv":
 		var conn *rtmp.Client
 		if conn, err = rtmp.Accept(res); err != nil {
@@ -50,6 +52,13 @@ func handle(url string) (streamer.Producer, error) {
 			return nil, err
 		}
 		return conn, nil
+
+	case "video/mpeg":
+		client := mpegts.NewClient(res)
+		if err = client.Handle(); err != nil {
+			return nil, err
+		}
+		return client, nil
 	}
 
 	return nil, fmt.Errorf("unsupported Content-Type: %s", ct)

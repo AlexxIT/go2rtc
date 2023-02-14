@@ -15,6 +15,7 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/ivideon"
 	"github.com/AlexxIT/go2rtc/cmd/mjpeg"
 	"github.com/AlexxIT/go2rtc/cmd/mp4"
+	"github.com/AlexxIT/go2rtc/cmd/mpegts"
 	"github.com/AlexxIT/go2rtc/cmd/ngrok"
 	"github.com/AlexxIT/go2rtc/cmd/rtmp"
 	"github.com/AlexxIT/go2rtc/cmd/rtsp"
@@ -42,6 +43,7 @@ func main() {
 	http.Init()
 	dvrip.Init()
 	tapo.Init()
+	mpegts.Init()
 
 	srtp.Init()
 	homekit.Init()

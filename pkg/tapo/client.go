@@ -6,11 +6,9 @@ import (
 	"crypto/md5"
 	"errors"
 	"fmt"
-	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/mpegts"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
-	"github.com/pion/rtp"
 	"mime/multipart"
 	"net"
 	"net/http"
@@ -138,9 +136,6 @@ func (c *Client) Handle() error {
 		c.tracks = map[byte]*streamer.Track{}
 	}
 
-	var audioSeq uint16
-	var audioTS uint32
-
 	reader := mpegts.NewReader()
 
 	probe := streamer.NewProbe(c.medias == nil)
@@ -182,10 +177,10 @@ func (c *Client) Handle() error {
 				break
 			}
 
-			track := c.tracks[pkt.StreamType]
+			track := c.tracks[pkt.PayloadType]
 			if track == nil {
 				// count track on probe state even if not support it
-				probe.Append(pkt.StreamType)
+				probe.Append(pkt.PayloadType)
 
 				media := mpegts.GetMedia(pkt)
 				if media == nil {
@@ -195,35 +190,10 @@ func (c *Client) Handle() error {
 				track = streamer.NewTrack2(media, nil)
 
 				c.medias = append(c.medias, media)
-				c.tracks[pkt.StreamType] = track
+				c.tracks[pkt.PayloadType] = track
 			}
 
-			switch track.Codec.Name {
-			case streamer.CodecH264:
-				packet := &rtp.Packet{
-					Header:  rtp.Header{Timestamp: uint32(pkt.PTS)},
-					Payload: h264.AnnexB2AVC(pkt.Payload),
-				}
-				_ = track.WriteRTP(packet)
-
-				//log.Printf("[AVC] %v, len: %d, pts: %d ts: %10d", h264.Types(packet.Payload), len(packet.Payload), pkt.PTS, packet.Timestamp)
-
-			case streamer.CodecPCMA:
-				audioSeq++
-				audioTS += uint32(len(pkt.Payload))
-
-				packet := &rtp.Packet{
-					Header: rtp.Header{
-						Version:        2,
-						Timestamp:      audioTS,
-						SequenceNumber: audioSeq,
-					},
-					Payload: pkt.Payload,
-				}
-				_ = track.WriteRTP(packet)
-				//log.Printf("[PCM]len: %d, pts: %d ts: %10d, buf: %x", len(packet.Payload), pkt.PTS, packet.Timestamp, packet.Payload[:32])
-			}
-
+			_ = track.WriteRTP(pkt)
 		}
 	}
 

@@ -1,8 +1,11 @@
 package mpegts
 
+import "github.com/pion/rtp"
+
 type Reader struct {
 	b []byte // packets buffer
 	i byte   // read position
+	s byte   // end position
 
 	pmt uint16 // Program Map Table (PMT) PID
 	pes map[uint16]*PES
@@ -15,20 +18,26 @@ func NewReader() *Reader {
 func (r *Reader) SetBuffer(b []byte) {
 	r.b = b
 	r.i = 0
+	r.s = PacketSize
 }
 
 func (r *Reader) AppendBuffer(b []byte) {
 	r.b = append(r.b, b...)
 }
 
-func (r *Reader) GetPacket() *Packet {
+func (r *Reader) GetPacket() *rtp.Packet {
 	for r.Sync() {
 		r.Skip(1) // Sync byte
 
 		pid := r.ReadUint16() & 0x1FFF // PID
 		flag := r.ReadByte()           // flags...
 
-		const hasAdaptionField = 0x20
+		const pidNullPacket = 0x1FFF
+		if pid == pidNullPacket {
+			continue
+		}
+
+		const hasAdaptionField = 0b0010_0000
 		if flag&hasAdaptionField != 0 {
 			adSize := r.ReadByte() // Adaptation field length
 			if adSize > PacketSize-6 {
@@ -39,17 +48,14 @@ func (r *Reader) GetPacket() *Packet {
 		}
 
 		// PAT: Program Association Table
-		const PAT = 0
-		if pid == PAT {
+		const pidPAT = 0
+		if pid == pidPAT {
 			// already processed
 			if r.pmt != 0 {
 				continue
 			}
 
-			if size := r.ReadPSIHeader(); size <= 4 {
-				println("WARNING: mpegts: wrong PAT")
-				continue
-			}
+			r.ReadPSIHeader()
 
 			const CRCSize = 4
 			for r.Left() > CRCSize {
@@ -71,26 +77,25 @@ func (r *Reader) GetPacket() *Packet {
 				continue
 			}
 
-			if size := r.ReadPSIHeader(); size == 0 {
-				println("WARNING: mpegts: wrong PMT")
-				continue
-			}
+			r.ReadPSIHeader()
 
-			pesPID := r.ReadUint16() & 0x1FFF
-			pSize := r.ReadUint16() & 0x03FF
+			pesPID := r.ReadUint16() & 0x1FFF // ? PCR PID
+			pSize := r.ReadUint16() & 0x03FF  // ? 0x0FFF
 			r.Skip(byte(pSize))
 
 			r.pes = map[uint16]*PES{}
 
-			const minItemSize = 5
-			for r.Left() > minItemSize {
+			const CRCSize = 4
+			for r.Left() > CRCSize {
 				streamType := r.ReadByte()
-				pesPID = r.ReadUint16() & 0x1FFF
-				iSize := r.ReadUint16() & 0x03FF
+				pesPID = r.ReadUint16() & 0x1FFF // Elementary PID
+				iSize := r.ReadUint16() & 0x03FF // ? 0x0FFF
 				r.Skip(byte(iSize))
 
 				r.pes[pesPID] = &PES{StreamType: streamType}
 			}
+
+			r.Skip(4) // ? CRC32
 			continue
 		}
 
@@ -103,37 +108,22 @@ func (r *Reader) GetPacket() *Packet {
 			continue // unknown PID
 		}
 
-		if pes.Payload != nil {
-			// how many bytes left to collect
-			left := cap(pes.Payload) - len(pes.Payload) - int(r.Left())
-
-			// buffer overflow
-			if left < 0 {
-				println("WARNING: mpegts: buffer overflow")
-				pes.Payload = nil
+		if pes.Payload == nil {
+			// PES Packet start code prefix
+			if r.ReadByte() != 0 || r.ReadByte() != 0 || r.ReadByte() != 1 {
 				continue
 			}
 
-			pes.Payload = append(pes.Payload, r.Bytes()...)
-
-			if left == 0 {
-				pkt := pes.Packet()
-				pes.Payload = nil
-				return pkt
-			}
-
-			continue
+			// read stream ID and total payload size
+			pes.StreamID = r.ReadByte()
+			pes.SetBuffer(r.ReadUint16(), r.Bytes())
+		} else {
+			pes.AppendBuffer(r.Bytes())
 		}
 
-		// PES Packet start code prefix
-		if r.ReadByte() != 0 || r.ReadByte() != 0 || r.ReadByte() != 1 {
-			continue
+		if pkt := pes.GetPacket(); pkt != nil {
+			return pkt
 		}
-
-		// read stream ID and total payload size
-		pes.StreamID = r.ReadByte()
-		pes.Payload = make([]byte, 0, r.ReadUint16())
-		pes.Payload = append(pes.Payload, r.Bytes()...)
 	}
 
 	return nil
@@ -145,6 +135,7 @@ func (r *Reader) Sync() bool {
 	if r.i != 0 {
 		r.b = r.b[PacketSize:]
 		r.i = 0
+		r.s = PacketSize
 	}
 
 	// if packet available
@@ -167,23 +158,18 @@ func (r *Reader) Sync() bool {
 	return false
 }
 
-func (r *Reader) ReadPSIHeader() uint16 {
+func (r *Reader) ReadPSIHeader() {
 	pointer := r.ReadByte() // Pointer field
 	r.Skip(pointer)         // Pointer filler bytes
 
 	r.Skip(1)                       // Table ID
 	size := r.ReadUint16() & 0x03FF // Section length
-
-	if uint16(r.i)+size != uint16(PacketSize) {
-		return 0
-	}
+	r.SetSize(byte(size))
 
 	r.Skip(2) // Table ID extension
 	r.Skip(1) // flags...
 	r.Skip(1) // Section number
 	r.Skip(1) // Last section number
-
-	return size - 5
 }
 
 func (r *Reader) Skip(i byte) {
@@ -207,5 +193,9 @@ func (r *Reader) Bytes() []byte {
 }
 
 func (r *Reader) Left() byte {
-	return PacketSize - r.i
+	return r.s - r.i
+}
+
+func (r *Reader) SetSize(size byte) {
+	r.s = r.i + size
 }
