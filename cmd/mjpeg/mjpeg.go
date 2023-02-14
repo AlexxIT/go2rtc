@@ -6,6 +6,7 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/streams"
 	"github.com/AlexxIT/go2rtc/pkg/mjpeg"
 	"github.com/rs/zerolog/log"
+	"io"
 	"net/http"
 	"strconv"
 )
@@ -62,6 +63,14 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 const header = "--frame\r\nContent-Type: image/jpeg\r\nContent-Length: "
 
 func handlerStream(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		outputMjpeg(w, r)
+	} else {
+		inputMjpeg(w, r)
+	}
+}
+
+func outputMjpeg(w http.ResponseWriter, r *http.Request) {
 	src := r.URL.Query().Get("src")
 	stream := streams.GetOrNew(src)
 	if stream == nil {
@@ -106,6 +115,27 @@ func handlerStream(w http.ResponseWriter, r *http.Request) {
 	stream.RemoveConsumer(cons)
 
 	//log.Trace().Msg("[api.mjpeg] close")
+}
+
+func inputMjpeg(w http.ResponseWriter, r *http.Request) {
+	dst := r.URL.Query().Get("dst")
+	stream := streams.Get(dst)
+	if stream == nil {
+		http.Error(w, api.StreamNotFound, http.StatusNotFound)
+		return
+	}
+
+	res := &http.Response{Body: r.Body, Header: r.Header, Request: r}
+	res.Header.Set("Content-Type", "multipart/mixed;boundary=")
+
+	client := mjpeg.NewClient(res)
+	stream.AddProducer(client)
+
+	if err := client.Start(); err != nil && err != io.EOF {
+		log.Warn().Err(err).Caller().Send()
+	}
+
+	stream.RemoveProducer(client)
 }
 
 func handlerWS(tr *api.Transport, _ *api.Message) error {

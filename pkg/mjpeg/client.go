@@ -136,7 +136,7 @@ func (c *Client) startMJPEG(boundary string) error {
 		if err != nil {
 			return err
 		}
-		if s != boundary {
+		if !strings.HasPrefix(s, boundary) {
 			return errors.New("wrong boundary: " + s)
 		}
 
