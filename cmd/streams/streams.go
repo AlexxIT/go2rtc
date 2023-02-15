@@ -56,6 +56,7 @@ func GetOrNew(src string) *Stream {
 func streamsHandler(w http.ResponseWriter, r *http.Request) {
 	src := r.URL.Query().Get("src")
 
+	// Not sure about all this API. Should be rewrited...
 	switch r.Method {
 	case "PUT":
 		name := r.URL.Query().Get("name")
@@ -64,6 +65,18 @@ func streamsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		New(name, src)
 		return
+	case "PATCH":
+		name := r.URL.Query().Get("name")
+		if name == "" {
+			http.Error(w, "", http.StatusBadRequest)
+			return
+		}
+
+		if stream := Get(name); stream != nil {
+			stream.SetSource(src)
+		} else {
+			New(name, src)
+		}
 	case "DELETE":
 		delete(streams, src)
 		return
