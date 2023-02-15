@@ -22,6 +22,7 @@ const (
 	AuthUnknown
 	AuthBasic
 	AuthDigest
+	AuthTPLink // https://drmnsamoliu.github.io/video.html
 )
 
 func NewAuth(user *url.Userinfo) *Auth {
@@ -70,13 +71,17 @@ func (a *Auth) Write(req *Request) {
 	case AuthBasic:
 		req.Header.Set("Authorization", a.header)
 	case AuthDigest:
-		uri := req.URL.RequestURI()
+		// important to use String except RequestURL for RtspServer:
+		// https://github.com/AlexxIT/go2rtc/issues/244
+		uri := req.URL.String()
 		h2 := HexMD5(req.Method, uri)
 		response := HexMD5(a.h1nonce, h2)
 		header := a.header + fmt.Sprintf(
 			`, uri="%s", response="%s"`, uri, response,
 		)
 		req.Header.Set("Authorization", header)
+	case AuthTPLink:
+		req.URL.Host = "127.0.0.1"
 	}
 }
 
@@ -96,6 +101,15 @@ func (a *Auth) Validate(req *Request) bool {
 	}
 
 	return header == a.header
+}
+
+func (a *Auth) ReadNone(res *Response) bool {
+	auth := res.Header.Get("WWW-Authenticate")
+	if strings.Contains(auth, "TP-LINK Streaming Media") {
+		a.Method = AuthTPLink
+		return true
+	}
+	return false
 }
 
 func Between(s, sub1, sub2 string) string {

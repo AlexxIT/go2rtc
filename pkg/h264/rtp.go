@@ -1,7 +1,6 @@
 package h264
 
 import (
-	"bytes"
 	"encoding/binary"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/pion/rtp"
@@ -9,6 +8,8 @@ import (
 )
 
 const RTPPacketVersionAVC = 0
+
+const PSMaxSize = 128 // the biggest SPS I've seen is 48 (EZVIZ CS-CV210)
 
 func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
 	depack := &codecs.H264Packet{IsAVC: true}
@@ -29,10 +30,14 @@ func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
 
 			// Fix TP-Link Tapo TC70: sends SPS and PPS with packet.Marker = true
 			// Reolink Duo 2: sends SPS with Marker and PPS without
-			if packet.Marker && len(payload) < 128 {
+			if packet.Marker && len(payload) < PSMaxSize {
 				switch NALUType(payload) {
 				case NALUTypeSPS, NALUTypePPS:
 					buf = append(buf, payload...)
+					return nil
+				case NALUTypeSEI:
+					// RtspServer https://github.com/AlexxIT/go2rtc/issues/244
+					// sends, marked SPS, marked PPS, marked SEI, marked IFrame
 					return nil
 				}
 			}
@@ -70,27 +75,14 @@ func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
 			if len(buf) > 0 {
 				payload = append(buf, payload...)
 				buf = buf[:0]
-			} else {
+			}
+
+			// should not be that huge SPS
+			if NALUType(payload) == NALUTypeSPS && binary.BigEndian.Uint32(payload) >= PSMaxSize {
 				// some Chinese buggy cameras has single packet with SPS+PPS+IFrame separated by 00 00 00 01
 				// https://github.com/AlexxIT/WebRTC/issues/391
 				// https://github.com/AlexxIT/WebRTC/issues/392
-				for i := 0; i < len(payload); {
-					if i+4 >= len(payload) {
-						break
-					}
-
-					size := bytes.Index(payload[i+4:], []byte{0, 0, 0, 1})
-					if size < 0 {
-						if i == 0 {
-							break
-						}
-						size = len(payload) - (i + 4)
-					}
-
-					binary.BigEndian.PutUint32(payload[i:], uint32(size))
-
-					i += size + 4
-				}
+				AnnexB2AVC(payload)
 			}
 
 			//log.Printf("[AVC] %v, len: %d, ts: %10d, seq: %d", Types(payload), len(payload), packet.Timestamp, packet.SequenceNumber)

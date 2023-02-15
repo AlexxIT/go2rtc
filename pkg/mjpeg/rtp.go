@@ -43,9 +43,18 @@ func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
 				w := uint16(packet.Payload[6]) << 3
 				h := uint16(packet.Payload[7]) << 3
 
-				// fix 2560x1920 and 2560x1440
-				if w == 512 && (h == 1920 || h == 1440) {
+				// fix sizes more than 2040
+				switch {
+				// 512x1920 512x1440
+				case w == cutSize(2560) && (h == 1920 || h == 1440):
 					w = 2560
+				// 1792x112
+				case w == cutSize(3840) && h == cutSize(2160):
+					w = 3840
+					h = 2160
+				// 256x1296
+				case w == cutSize(2304) && h == 1296:
+					w = 2304
 				}
 
 				//fmt.Printf("t: %d, q: %d, w: %d, h: %d\n", t, q, w, h)
@@ -79,6 +88,10 @@ func RTPPay() streamer.WrapperFunc {
 			return nil
 		}
 	}
+}
+
+func cutSize(size uint16) uint16 {
+	return ((size >> 3) & 0xFF) << 3
 }
 
 //func RTPPay() streamer.WrapperFunc {

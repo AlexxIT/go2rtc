@@ -31,7 +31,7 @@ const (
 
 //func annexbNALUStartCode() []byte { return []byte{0x00, 0x00, 0x00, 0x01} }
 
-func emitNalus(nals []byte, isAVC bool, emit func([]byte)) {
+func EmitNalus(nals []byte, isAVC bool, emit func([]byte)) {
 	if !isAVC {
 		nextInd := func(nalu []byte, start int) (indStart int, indLen int) {
 			zeroCount := 0
@@ -84,7 +84,7 @@ func (p *Payloader) Payload(mtu uint16, payload []byte) [][]byte {
 		return payloads
 	}
 
-	emitNalus(payload, p.IsAVC, func(nalu []byte) {
+	EmitNalus(payload, p.IsAVC, func(nalu []byte) {
 		if len(nalu) == 0 {
 			return
 		}

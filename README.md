@@ -59,6 +59,8 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
 * [Codecs filters](#codecs-filters)
 * [Codecs madness](#codecs-madness)
 * [Codecs negotiation](#codecs-negotiation)
+* [Projects using go2rtc](#projects-using-go2rtc)
+* [Camera experience](#cameras-experience)
 * [TIPS](#tips)
 * [FAQ](#faq)
 
@@ -760,6 +762,21 @@ streams:
 ![](assets/codecs.svg)
 
 **PS.** You can select `PCMU` or `PCMA` codec in camera setting and don't use transcoding at all. Or you can select `AAC` codec for main stream and `PCMU` codec for second stream and add both RTSP to YAML config, this also will work fine.
+
+## Projects using go2rtc
+
+- [Frigate 12+](https://frigate.video/) - open source NVR built around real-time AI object detection
+- [ring-mqtt](https://github.com/tsightler/ring-mqtt) - Ring devices to MQTT Bridge
+- [EufyP2PStream](https://github.com/oischinger/eufyp2pstream) - A small project that provides a Video/Audio Stream from Eufy cameras that don't directly support RTSP
+
+## Cameras experience
+
+- [Dahua](https://www.dahuasecurity.com/) - reference implementation streaming protocols, a lot of settings, high stream quality, multiple streaming clients
+- [Hikvision](https://www.hikvision.com/) - a lot of proprietary streaming technologies
+- [Reolink](https://reolink.com/) - some models has awful unusable RTSP realisation and not best HTTP-FLV alternative (I recommend that you contact Reolink support for new firmware), few settings
+- [Sonoff](https://sonoff.tech/) - very low stream quality, no settings, not best protocol implementation
+- [TP-Link](https://www.tp-link.com/) - few streaming clients, packet loss?
+- Chinese cheap noname cameras, Wyze Cams, Xiaomi cameras with hacks (usual has `/live/ch00_1` in RTSP URL) - awful but usable RTSP protocol realisation, low stream quality, few settings, packet loss?
 
 ## TIPS
 

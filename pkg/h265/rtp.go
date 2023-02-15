@@ -20,6 +20,16 @@ func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
 			nuType := (data[0] >> 1) & 0x3F
 			//log.Printf("[RTP] codec: %s, nalu: %2d, size: %6d, ts: %10d, pt: %2d, ssrc: %d, seq: %d, %v", track.Codec.Name, nuType, len(packet.Payload), packet.Timestamp, packet.PayloadType, packet.SSRC, packet.SequenceNumber, packet.Marker)
 
+			// Fix for RtspServer https://github.com/AlexxIT/go2rtc/issues/244
+			if packet.Marker && len(data) < h264.PSMaxSize {
+				switch nuType {
+				case NALUTypeVPS, NALUTypeSPS, NALUTypePPS:
+					packet.Marker = false
+				case NALUTypePrefixSEI, NALUTypeSuffixSEI:
+					return nil
+				}
+			}
+
 			if nuType == NALUTypeFU {
 				switch data[2] >> 6 {
 				case 2: // begin
@@ -63,6 +73,39 @@ func RTPDepay(track *streamer.Track) streamer.WrapperFunc {
 			buf = buf[:0]
 
 			return push(&clone)
+		}
+	}
+}
+
+func RTPPay(mtu uint16) streamer.WrapperFunc {
+	payloader := &Payloader{}
+	sequencer := rtp.NewRandomSequencer()
+	mtu -= 12 // rtp.Header size
+
+	return func(push streamer.WriterFunc) streamer.WriterFunc {
+		return func(packet *rtp.Packet) error {
+			if packet.Version != h264.RTPPacketVersionAVC {
+				return push(packet)
+			}
+
+			payloads := payloader.Payload(mtu, packet.Payload)
+			last := len(payloads) - 1
+			for i, payload := range payloads {
+				clone := rtp.Packet{
+					Header: rtp.Header{
+						Version:        2,
+						Marker:         i == last,
+						SequenceNumber: sequencer.NextSequenceNumber(),
+						Timestamp:      packet.Timestamp,
+					},
+					Payload: payload,
+				}
+				if err := push(&clone); err != nil {
+					return err
+				}
+			}
+
+			return nil
 		}
 	}
 }

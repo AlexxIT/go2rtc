@@ -66,13 +66,7 @@ func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 			c.mimeType += ","
 		}
 
-		// TODO: fixme
-		// some devices won't play high level
-		if stream.RecordInfo.AVCLevelIndication <= 0x29 {
-			c.mimeType += "avc1." + h264.GetProfileLevelID(codec.FmtpLine)
-		} else {
-			c.mimeType += "avc1.640029"
-		}
+		c.mimeType += "avc1." + h264.GetProfileLevelID(codec.FmtpLine)
 
 		c.streams = append(c.streams, stream)
 

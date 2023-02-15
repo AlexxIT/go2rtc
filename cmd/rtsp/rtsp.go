@@ -112,6 +112,8 @@ func rtspHandler(url string) (streamer.Producer, error) {
 				log.Trace().Msgf("[rtsp] client request:\n%s", msg)
 			case *tcp.Response:
 				log.Trace().Msgf("[rtsp] client response:\n%s", msg)
+			case string:
+				log.Trace().Msgf("[rtsp] client msg: %s", msg)
 			}
 		})
 	}

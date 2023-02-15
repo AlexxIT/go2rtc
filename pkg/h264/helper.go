@@ -3,6 +3,7 @@ package h264
 import (
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"strings"
@@ -48,21 +49,39 @@ func Join(ps, iframe []byte) []byte {
 	return b
 }
 
+// GetProfileLevelID - get profile from fmtp line
+// Some devices won't play video with high level, so limit max profile and max level.
+// And return some profile even if fmtp line is empty.
 func GetProfileLevelID(fmtp string) string {
-	if fmtp == "" {
-		return ""
-	}
+	// avc1.640029 - H.264 high 4.1 (Chromecast 1st and 2nd Gen)
+	profile := byte(0x64)
+	capab := byte(0)
+	level := byte(0x29)
 
-	// some cameras has wrong profile-level-id
-	// https://github.com/AlexxIT/go2rtc/issues/155
-	if s := streamer.Between(fmtp, "sprop-parameter-sets=", ","); s != "" {
-		sps, _ := base64.StdEncoding.DecodeString(s)
-		if len(sps) >= 4 {
-			return fmt.Sprintf("%06X", sps[1:4])
+	if fmtp != "" {
+		var conf []byte
+		// some cameras has wrong profile-level-id
+		// https://github.com/AlexxIT/go2rtc/issues/155
+		if s := streamer.Between(fmtp, "sprop-parameter-sets=", ","); s != "" {
+			if sps, _ := base64.StdEncoding.DecodeString(s); len(sps) >= 4 {
+				conf = sps[1:4]
+			}
+		} else if s = streamer.Between(fmtp, "profile-level-id=", ";"); s != "" {
+			conf, _ = hex.DecodeString(s)
+		}
+
+		if conf != nil {
+			if conf[0] < profile {
+				profile = conf[0]
+				capab = conf[1]
+			}
+			if conf[2] < level {
+				level = conf[2]
+			}
 		}
 	}
 
-	return streamer.Between(fmtp, "profile-level-id=", ";")
+	return fmt.Sprintf("%02X%02X%02X", profile, capab, level)
 }
 
 func GetParameterSet(fmtp string) (sps, pps []byte) {

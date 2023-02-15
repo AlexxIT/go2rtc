@@ -7,14 +7,16 @@ import (
 )
 
 const (
-	NALUTypePFrame  = 1
-	NALUTypeIFrame  = 19
-	NALUTypeIFrame2 = 20
-	NALUTypeIFrame3 = 21
-	NALUTypeVPS     = 32
-	NALUTypeSPS     = 33
-	NALUTypePPS     = 34
-	NALUTypeFU      = 49
+	NALUTypePFrame    = 1
+	NALUTypeIFrame    = 19
+	NALUTypeIFrame2   = 20
+	NALUTypeIFrame3   = 21
+	NALUTypeVPS       = 32
+	NALUTypeSPS       = 33
+	NALUTypePPS       = 34
+	NALUTypePrefixSEI = 39
+	NALUTypeSuffixSEI = 40
+	NALUTypeFU        = 49
 )
 
 func NALUType(b []byte) byte {

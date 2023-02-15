@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/AlexxIT/go2rtc/pkg/aac"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
+	"github.com/AlexxIT/go2rtc/pkg/h265"
 	"github.com/AlexxIT/go2rtc/pkg/mjpeg"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
@@ -220,12 +221,15 @@ func (c *Conn) Do(req *tcp.Request) (*tcp.Response, error) {
 	if res.StatusCode == http.StatusUnauthorized {
 		switch c.auth.Method {
 		case tcp.AuthNone:
+			if c.auth.ReadNone(res) {
+				return c.Do(req)
+			}
 			return nil, errors.New("user/pass not provided")
 		case tcp.AuthUnknown:
 			if c.auth.Read(res) {
 				return c.Do(req)
 			}
-		case tcp.AuthBasic, tcp.AuthDigest:
+		default:
 			return nil, errors.New("wrong user/pass")
 		}
 	}
@@ -302,6 +306,12 @@ func (c *Conn) Describe() error {
 
 	if c.Backchannel {
 		req.Header.Set("Require", "www.onvif.org/ver20/backchannel")
+	}
+
+	if c.UserAgent != "" {
+		// this camera will answer with 401 on DESCRIBE without User-Agent
+		// https://github.com/AlexxIT/go2rtc/issues/235
+		req.Header.Set("User-Agent", c.UserAgent)
 	}
 
 	res, err := c.Do(req)
@@ -743,6 +753,9 @@ func (c *Conn) Handle() (err error) {
 			return
 		}
 
+		var channelID byte
+		var size uint16
+
 		if buf4[0] != '$' {
 			switch string(buf4) {
 			case "RTSP":
@@ -751,26 +764,62 @@ func (c *Conn) Handle() (err error) {
 					return
 				}
 				c.Fire(res)
+				continue
+
 			case "OPTI", "TEAR", "DESC", "SETU", "PLAY", "PAUS", "RECO", "ANNO", "GET_", "SET_":
 				var req *tcp.Request
 				if req, err = tcp.ReadRequest(c.reader); err != nil {
 					return
 				}
 				c.Fire(req)
+				continue
+
 			default:
-				return fmt.Errorf("RTSP wrong input")
+				for i := 0; ; i++ {
+					// search next start symbol
+					if _, err = c.reader.ReadBytes('$'); err != nil {
+						return err
+					}
+
+					if channelID, err = c.reader.ReadByte(); err != nil {
+						return err
+					}
+
+					// check if channel ID exists
+					if c.channels[channelID] == nil {
+						continue
+					}
+
+					buf4 = make([]byte, 2)
+					if _, err = io.ReadFull(c.reader, buf4); err != nil {
+						return err
+					}
+
+					// check if size good for RTP
+					size = binary.BigEndian.Uint16(buf4)
+					if size <= 1500 {
+						break
+					}
+
+					// 10 tries to find good packet
+					if i >= 10 {
+						return fmt.Errorf("RTSP wrong input")
+					}
+				}
+
+				c.Fire("RTSP wrong input")
 			}
-			continue
-		}
+		} else {
+			// hope that the odd channels are always RTCP
+			channelID = buf4[1]
 
-		// hope that the odd channels are always RTCP
-		channelID := buf4[1]
+			// get data size
+			size = binary.BigEndian.Uint16(buf4[2:])
 
-		// get data size
-		size := int(binary.BigEndian.Uint16(buf4[2:]))
-
-		if _, err = c.reader.Discard(4); err != nil {
-			return
+			// skip 4 bytes from c.reader.Peek
+			if _, err = c.reader.Discard(4); err != nil {
+				return
+			}
 		}
 
 		// init memory for data
@@ -779,7 +828,7 @@ func (c *Conn) Handle() (err error) {
 			return
 		}
 
-		c.receive += size
+		c.receive += int(size)
 
 		if channelID&1 == 0 {
 			packet := &rtp.Packet{}
@@ -790,10 +839,8 @@ func (c *Conn) Handle() (err error) {
 			track := c.channels[channelID]
 			if track != nil {
 				_ = track.WriteRTP(packet)
-				//return fmt.Errorf("wrong channelID: %d", channelID)
 			} else {
-				continue // TODO: maybe fix this
-				//panic("wrong channelID")
+				//c.Fire("wrong channelID: " + strconv.Itoa(int(channelID)))
 			}
 		} else {
 			msg := &RTCP{Channel: channelID}
@@ -870,6 +917,9 @@ func (c *Conn) bindTrack(
 		switch track.Codec.Name {
 		case streamer.CodecH264:
 			wrapper := h264.RTPPay(1500)
+			push = wrapper(push)
+		case streamer.CodecH265:
+			wrapper := h265.RTPPay(1500)
 			push = wrapper(push)
 		case streamer.CodecAAC:
 			wrapper := aac.RTPPay(1500)
