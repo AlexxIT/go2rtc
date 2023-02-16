@@ -154,6 +154,10 @@ func (c *Conn) GetCompleteAnswer() (answer string, err error) {
 	return c.Conn.LocalDescription().SDP, nil
 }
 
+func (c *Conn) AddCandidate(candidate string) {
+	_ = c.Conn.AddICECandidate(webrtc.ICECandidateInit{Candidate: candidate})
+}
+
 func (c *Conn) remote() string {
 	if c.Conn == nil {
 		return ""

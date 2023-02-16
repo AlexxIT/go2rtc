@@ -106,12 +106,6 @@ func (c *Conn) AddTrack(media *streamer.Media, track *streamer.Track) *streamer.
 	panic("wrong direction")
 }
 
-//
-
-func (c *Conn) AddCandidate(candidate string) {
-	_ = c.Conn.AddICECandidate(webrtc.ICECandidateInit{Candidate: candidate})
-}
-
 func (c *Conn) MarshalJSON() ([]byte, error) {
 	info := &streamer.Info{
 		Type:       "WebRTC client",
