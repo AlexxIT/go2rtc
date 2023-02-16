@@ -6,8 +6,6 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 )
 
-// Element Producer
-
 func (c *Conn) GetMedias() []*streamer.Media {
 	if c.Medias != nil {
 		return c.Medias
@@ -69,50 +67,6 @@ func (c *Conn) Start() error {
 func (c *Conn) Stop() error {
 	return c.Close()
 }
-
-// Consumer
-
-func (c *Conn) AddTrack(media *streamer.Media, track *streamer.Track) *streamer.Track {
-	switch track.Direction {
-	// send our track to RTSP consumer (ex. FFmpeg)
-	case streamer.DirectionSendonly:
-		i := len(c.tracks)
-		channelID := byte(i << 1)
-
-		codec := track.Codec.Clone()
-		codec.PayloadType = uint8(96 + i)
-
-		if media.MatchAll() {
-			// fill consumer medias list
-			c.Medias = append(c.Medias, &streamer.Media{
-				Kind: media.Kind, Direction: media.Direction,
-				Codecs: []*streamer.Codec{codec},
-			})
-		} else {
-			// find consumer media and replace codec with right one
-			for i, m := range c.Medias {
-				if m == media {
-					media.Codecs = []*streamer.Codec{codec}
-					c.Medias[i] = media
-					break
-				}
-			}
-		}
-
-		track = c.bindTrack(track, channelID, codec.PayloadType)
-		track.Codec = codec
-		c.tracks = append(c.tracks, track)
-
-		return track
-
-	case streamer.DirectionRecvonly:
-		panic("not implemented")
-	}
-
-	panic("wrong direction")
-}
-
-//
 
 func (c *Conn) MarshalJSON() ([]byte, error) {
 	info := &streamer.Info{
