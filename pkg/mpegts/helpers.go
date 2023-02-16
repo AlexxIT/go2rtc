@@ -14,6 +14,7 @@ const (
 )
 
 const (
+	StreamTypePrivate  = 0x06 // PCMU or PCMA from FFmpeg
 	StreamTypeAAC      = 0x0F
 	StreamTypeH264     = 0x1B
 	StreamTypePCMATapo = 0x90
@@ -93,7 +94,7 @@ func (p *PES) GetPacket() (pkt *rtp.Packet) {
 		flags := p.Payload[1]
 		optSize := p.Payload[2] // optional fields
 
-		p.Payload = p.Payload[minHeaderSize+optSize:]
+		payload := p.Payload[minHeaderSize+optSize:]
 
 		switch p.StreamType {
 		case StreamTypeH264:
@@ -101,7 +102,7 @@ func (p *PES) GetPacket() (pkt *rtp.Packet) {
 
 			const hasPTS = 0b1000_0000
 			if flags&hasPTS != 0 {
-				ts = uint32(ParseTime(p.Payload[minHeaderSize:]))
+				ts = ParseTime(p.Payload[minHeaderSize:])
 			}
 
 			pkt = &rtp.Packet{
@@ -109,12 +110,12 @@ func (p *PES) GetPacket() (pkt *rtp.Packet) {
 					PayloadType: p.StreamType,
 					Timestamp:   ts,
 				},
-				Payload: h264.AnnexB2AVC(p.Payload),
+				Payload: h264.AnnexB2AVC(payload),
 			}
 
 		case StreamTypePCMATapo:
 			p.Sequence++
-			p.Timestamp += uint32(len(p.Payload))
+			p.Timestamp += uint32(len(payload))
 
 			pkt = &rtp.Packet{
 				Header: rtp.Header{
@@ -123,7 +124,7 @@ func (p *PES) GetPacket() (pkt *rtp.Packet) {
 					SequenceNumber: p.Sequence,
 					Timestamp:      p.Timestamp,
 				},
-				Payload: p.Payload,
+				Payload: payload,
 			}
 		}
 
@@ -155,9 +156,8 @@ func (p *PES) GetPacket() (pkt *rtp.Packet) {
 	return
 }
 
-func ParseTime(b []byte) time.Duration {
-	ts := (uint64(b[0]) >> 1 & 0x7 << 30) | (uint64(b[1]) << 22) | (uint64(b[2]) >> 1 & 0x7F << 15) | (uint64(b[3]) << 7) | (uint64(b[4]) >> 1 & 0x7F)
-	return time.Duration(ts)
+func ParseTime(b []byte) uint32 {
+	return (uint32(b[0]&0x0E) << 29) | (uint32(b[1]) << 22) | (uint32(b[2]&0xFE) << 14) | (uint32(b[3]) << 7) | (uint32(b[4]) >> 1)
 }
 
 func GetMedia(pkt *rtp.Packet) *streamer.Media {
