@@ -48,6 +48,8 @@ var defaults = map[string]string{
 	"http": "-fflags nobuffer -flags low_delay -i {input}",
 	"rtsp": "-fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_transport tcp -i {input}",
 
+	"rtsp/udp": "-fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -i {input}",
+
 	// output
 	"output": "-user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}",
 
@@ -95,6 +97,21 @@ var defaults = map[string]string{
 	"h265/videotoolbox": "-c:v hevc_videotoolbox -g 50 -bf 0 -profile:v high -level:v 5.1",
 }
 
+// inputTemplate - select input template from YAML config by template name
+// if query has input param - select another tempalte by this name
+// if there is no another template - use input param as template
+func inputTemplate(name, s string, query url.Values) string {
+	var template string
+	if input := query.Get("input"); input != "" {
+		if template = defaults[input]; template == "" {
+			template = input
+		}
+	} else {
+		template = defaults[name]
+	}
+	return strings.Replace(template, "{input}", s, 1)
+}
+
 func parseArgs(s string) *Args {
 	// init FFmpeg arguments
 	args := &Args{
@@ -118,7 +135,7 @@ func parseArgs(s string) *Args {
 	if i := strings.Index(s, "://"); i > 0 {
 		switch s[:i] {
 		case "http", "https", "rtmp":
-			args.input = strings.Replace(defaults["http"], "{input}", s, 1)
+			args.input = inputTemplate("http", s, query)
 		case "rtsp", "rtsps":
 			// https://ffmpeg.org/ffmpeg-protocols.html#rtsp
 			// skip unnecessary input tracks
@@ -131,7 +148,7 @@ func parseArgs(s string) *Args {
 				args.input = "-allowed_media_types audio "
 			}
 
-			args.input += strings.Replace(defaults["rtsp"], "{input}", s, 1)
+			args.input += inputTemplate("rtsp", s, query)
 		default:
 			args.input = "-i " + s
 		}
@@ -145,7 +162,7 @@ func parseArgs(s string) *Args {
 		default:
 			s += "?video&audio"
 		}
-		args.input = strings.Replace(defaults["rtsp"], "{input}", s, 1)
+		args.input = inputTemplate("rtsp", s, query)
 	} else if strings.HasPrefix(s, "device?") {
 		var err error
 		args.input, err = device.GetInput(s)
@@ -153,7 +170,7 @@ func parseArgs(s string) *Args {
 			return nil
 		}
 	} else {
-		args.input = strings.Replace(defaults["file"], "{input}", s, 1)
+		args.input = inputTemplate("file", s, query)
 	}
 
 	if query["async"] != nil {
