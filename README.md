@@ -6,15 +6,17 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
 
 - zero-dependency and zero-config [small app](#go2rtc-binary) for all OS (Windows, macOS, Linux, ARM)
 - zero-delay for many supported protocols (lowest possible streaming latency)
-- streaming from [RTSP](#source-rtsp), [RTMP](#source-rtmp), [HTTP](#source-http) (FLV/MJPEG/JPEG), [FFmpeg](#source-ffmpeg), [USB Cameras](#source-ffmpeg-device) and [other sources](#module-streams)
+- streaming from [RTSP](#source-rtsp), [RTMP](#source-rtmp), [DVRIP](#source-dvrip), [HTTP](#source-http) (FLV/MJPEG/JPEG/TS), [USB Cameras](#source-ffmpeg-device) and [other sources](#module-streams)
+- streaming from any sources, supported by [FFmpeg](#source-ffmpeg)
 - streaming to [RTSP](#module-rtsp), [WebRTC](#module-webrtc), [MSE/MP4](#module-mp4), [HLS](#module-hls) or [MJPEG](#module-mjpeg)
 - first project in the World with support streaming from [HomeKit Cameras](#source-homekit)
 - first project in the World with support H265 for WebRTC in browser (Safari only, [read more](https://github.com/AlexxIT/Blog/issues/5))
 - on the fly transcoding for unsupported codecs via [FFmpeg](#source-ffmpeg)
+- play audio files and live streams on some cameras with [speaker](#stream-to-camera)
 - multi-source 2-way [codecs negotiation](#codecs-negotiation)
    - mixing tracks from different sources to single stream
    - auto match client supported codecs
-   - 2-way audio for `ONVIF Profile T` Cameras
+   - [2-way audio](#two-way-audio) for some cameras
 - streaming from private networks via [Ngrok](#module-ngrok)
 - can be [integrated to](#module-api) any smart home platform or be used as [standalone app](#go2rtc-binary)
 
@@ -36,6 +38,7 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
   * [go2rtc: Home Assistant Integration](#go2rtc-home-assistant-integration)
 * [Configuration](#configuration)
   * [Module: Streams](#module-streams)
+    * [Two way audio](#two-way-audio)
     * [Source: RTSP](#source-rtsp)
     * [Source: RTMP](#source-rtmp)
     * [Source: HTTP](#source-http)
@@ -44,8 +47,12 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
     * [Source: Exec](#source-exec)
     * [Source: Echo](#source-echo)
     * [Source: HomeKit](#source-homekit)
+    * [Source: DVRIP](#source-dvrip)
+    * [Source: Tapo](#source-tapo)
     * [Source: Ivideon](#source-ivideon)
     * [Source: Hass](#source-hass)
+    * [Incoming sources](#incoming-sources)
+    * [Stream to camera](#stream-to-camera)
   * [Module: API](#module-api)
   * [Module: RTSP](#module-rtsp)
   * [Module: WebRTC](#module-webrtc)
@@ -142,41 +149,54 @@ Available modules:
 
 Available source types:
 
-- [rtsp](#source-rtsp) - `RTSP` and `RTSPS` cameras
+- [rtsp](#source-rtsp) - `RTSP` and `RTSPS` cameras with [two way audio](#two-way-audio) support
 - [rtmp](#source-rtmp) - `RTMP` streams
-- [http](#source-http) - `HTTP-FLV`, `JPEG` (snapshots), `MJPEG` streams 
+- [http](#source-http) - `HTTP-FLV`, `MPEG TS`, `JPEG` (snapshots), `MJPEG` streams 
 - [ffmpeg](#source-ffmpeg) - FFmpeg integration (`HLS`, `files` and many others)
 - [ffmpeg:device](#source-ffmpeg-device) - local USB Camera or Webcam
 - [exec](#source-exec) - advanced FFmpeg and GStreamer integration
 - [echo](#source-echo) - get stream link from bash or python
 - [homekit](#source-homekit) - streaming from HomeKit Camera
+- [dvrip](#source-dvrip) - streaming from DVR-IP NVR
+- [tapo](#source-tapo) - TP-Link Tapo cameras with [two way audio](#two-way-audio) support
 - [ivideon](#source-ivideon) - public cameras from [Ivideon](https://tv.ivideon.com/) service
 - [hass](#source-hass) - Home Assistant integration
 
+Read more about [incoming sources](#incoming-sources)
+
+#### Two way audio
+
+Supported for sources:
+
+- RTSP cameras with [ONVIF Profile T](https://www.onvif.org/specs/stream/ONVIF-Streaming-Spec.pdf) (back channel connection)
+- TP-Link Tapo cameras
+
+Two way audio can be used in browser with [WebRTC](#module-webrtc) technology. The browser will give access to the microphone only for HTTPS sites ([read more](https://stackoverflow.com/questions/52759992/how-to-access-camera-and-microphone-in-chrome-without-https)).
+
+go2rtc also support [play audio](#stream-to-camera) files and live streams on this cameras.
+
 #### Source: RTSP
-
-- Support **RTSP and RTSPS** links with multiple video and audio tracks
-- Support **2-way audio** ONLY for [ONVIF Profile T](https://www.onvif.org/specs/stream/ONVIF-Streaming-Spec.pdf) cameras (back channel connection)
-
-**Attention:** other 2-way audio standards are not supported! ONVIF without Profile T is not supported!
 
 ```yaml
 streams:
   sonoff_camera: rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0
-```
-
-If your camera has two RTSP links - you can add both of them as sources. This is useful when streams has different codecs, as example AAC audio with main stream and PCMU/PCMA audio with second stream.
-
-**Attention:** Dahua cameras has different capabilities for different RTSP links. For example, it has support multiple codecs for 2-way audio with `&proto=Onvif` in link and only one codec without it.
-
-```yaml
-streams:
   dahua_camera:
     - rtsp://admin:password@192.168.1.123/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif
     - rtsp://admin:password@192.168.1.123/cam/realmonitor?channel=1&subtype=1
+  amcrest_doorbell:
+    - rtsp://username:password@192.168.1.123:554/cam/realmonitor?channel=1&subtype=0#backchannel=0
+  unify_camera: rtspx://192.168.1.123:7441/fD6ouM72bWoFijxK
+  glichy_camera: ffmpeg:rstp://username:password@192.168.1.123/live/ch00_1 
 ```
 
-**PS.** For disable bachannel just add `#backchannel=0` to end of RTSP link.
+**Recommendations**
+
+- **Amcrest Doorbell** users may want to disable two way audio, because with an active stream you won't have a call button working. You need to add `#backchannel=0` to the end of your RTSP link in YAML config file
+- **Dahua Doorbell** users may want to change backchannel [audio codec](https://github.com/AlexxIT/go2rtc/issues/52)
+- **Unify** users may want to disable HTTPS verification. Use `rtspx://` prefix instead of `rtsps://`. And don't use `?enableSrtp` [suffix](https://github.com/AlexxIT/go2rtc/issues/81)
+- If your camera has two RTSP links - you can add both of them as sources. This is useful when streams has different codecs, as example AAC audio with main stream and PCMU/PCMA audio with second stream
+- If the stream from your camera is glitchy, try using [ffmpeg source](#source-ffmpeg). It will not add CPU load if you won't use transcoding
+- If the stream from your camera is very glitchy, try to use transcoding with [ffmpeg source](#source-ffmpeg)
 
 #### Source: RTMP
 
@@ -194,6 +214,7 @@ Support Content-Type:
 - **HTTP-FLV** (`video/x-flv`) - same as RTMP, but over HTTP
 - **HTTP-JPEG** (`image/jpeg`) - camera snapshot link, can be converted by go2rtc to MJPEG stream
 - **HTTP-MJPEG** (`multipart/x`) - simple MJPEG stream over HTTP
+- **MPEG TS** (`video/mpeg`) - legacy [streaming format](https://en.wikipedia.org/wiki/MPEG_transport_stream)
 
 ```yaml
 streams:
@@ -239,7 +260,7 @@ streams:
   rotate: ffmpeg:rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0#video=h264#rotate=90
 ```
 
-All trascoding formats has [built-in templates](https://github.com/AlexxIT/go2rtc/blob/master/cmd/ffmpeg/ffmpeg.go): `h264`, `h264/ultra`, `h264/high`, `h265`, `opus`, `pcmu`, `pcmu/16000`, `pcmu/48000`, `pcma`, `pcma/16000`, `pcma/48000`, `aac`, `aac/16000`.
+All trascoding formats has [built-in templates](https://github.com/AlexxIT/go2rtc/blob/master/cmd/ffmpeg/ffmpeg.go): `h264`, `h265`, `opus`, `pcmu`, `pcmu/16000`, `pcmu/48000`, `pcma`, `pcma/16000`, `pcma/48000`, `aac`, `aac/16000`.
 
 But you can override them via YAML config. You can also add your own formats to config and use them with source params.
 
@@ -248,13 +269,17 @@ ffmpeg:
   bin: ffmpeg  # path to ffmpeg binary
   h264: "-codec:v libx264 -g:v 30 -preset:v superfast -tune:v zerolatency -profile:v main -level:v 4.1"
   mycodec: "-any args that support ffmpeg..."
+  myinput: "-fflags nobuffer -flags low_delay -timeout 5000000 -i {input}"
 ```
 
 - You can use `video` and `audio` params multiple times (ex. `#video=copy#audio=copy#audio=pcmu`)
 - You can use go2rtc stream name as ffmpeg input (ex. `ffmpeg:camera1#video=h264`)
 - You can use `rotate` params with `90`, `180`, `270` or `-90` values, important with transcoding (ex. `#video=h264#rotate=90`)
 - You can use `width` and/or `height` params, important with transcoding (ex. `#video=h264#width=1280`)
-- You can use `raw` param for any additional FFmpeg arguments (ex. `#raw=-vf transpose=1`).
+- You can use `raw` param for any additional FFmpeg arguments (ex. `#raw=-vf transpose=1`)
+- You can use `input` param to override default input template (ex. `#input=rtsp/udp` will change RTSP transport from TCP to UDP+TCP)
+  - You can use raw input value (ex. `#input=-timeout 5000000 -i {input}`)
+  - You can add your own input templates
 
 Read more about encoding [hardware acceleration](https://github.com/AlexxIT/go2rtc/wiki/Hardware-acceleration).
 
@@ -331,6 +356,36 @@ RTSP link with "normal" audio for any player: `rtsp://192.168.1.123:8554/aqara_g
 
 **This source is in active development!** Tested only with [Aqara Camera Hub G3](https://www.aqara.com/eu/product/camera-hub-g3) (both EU and CN versions).
 
+#### Source: DVRIP
+
+Other names: DVR-IP, NetSurveillance, Sofia protocol (NETsurveillance ActiveX plugin XMeye SDK).
+
+- you can skip `username`, `password`, `port`, `channel` and `subtype` if they are default
+- setup separate streams for different channels
+- use `subtype=0` for Main stream, and `subtype=1` for Extra1 stream
+- only the TCP protocol is supported
+
+```yaml
+streams:
+  camera1: dvrip://username:password@192.168.1.123:34567?channel=0&subtype=0
+```
+
+#### Source: Tapo
+
+[TP-Link Tapo](https://www.tapo.com/) proprietary camera protocol with **two way audio** support.
+
+- stream quality is the same as [RTSP protocol](https://www.tapo.com/en/faq/34/)
+- use the **cloud password**, this is not the RTSP password! you do not need to add a login!
+- you can also use UPPERCASE MD5 hash from your cloud password with `admin` username
+
+```yaml
+streams:
+  # cloud password without username
+  camera1: tapo://cloud-password@192.168.1.123
+  # admin username and UPPERCASE MD5 cloud-password hash
+  camera2: tapo://admin:MD5-PASSWORD-HASH@192.168.1.123
+```
+
 #### Source: Ivideon
 
 Support public cameras from service [Ivideon](https://tv.ivideon.com/).
@@ -357,6 +412,55 @@ streams:
 ```
 
 More cameras, like [Tuya](https://www.home-assistant.io/integrations/tuya/), [ONVIF](https://www.home-assistant.io/integrations/onvif/), and possibly others can also be imported by using [this method](https://github.com/felipecrs/hass-expose-camera-stream-source#importing-home-assistant-cameras-to-go2rtc-andor-frigate).
+
+### Incoming sources
+
+By default, go2rtc establishes a connection to the source when any client requests it. Go2rtc drops the connection to the source when it has no clients left.
+
+- Go2rtc also can accepts incoming sources in [RTSP](#source-rtsp) and [HTTP](#source-http) formats
+- Go2rtc won't stop such a source if it has no clients
+- You can push data only to existing stream (create stream with empty source in config)
+- You can push multiple incoming sources to same stream
+- You can push data to non empty stream, so it will have additional codecs inside
+
+**Examples**
+
+- RTSP with any codec
+  ```yaml
+  ffmpeg -re -i BigBuckBunny.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/camera1
+  ```
+- HTTP-MJPEG with MJPEG codec
+  ```yaml
+  ffmpeg -re -i BigBuckBunny.mp4 -c mjpeg -f mpjpeg http://localhost:1984/api/stream.mjpeg?dst=camera1
+  ```
+- HTTP-FLV with H264, AAC codecs
+  ```yaml
+  ffmpeg -re -i BigBuckBunny.mp4 -c copy -f flv http://localhost:1984/api/stream.flv?dst=camera1
+  ```
+- MPEG TS with H264 codec
+  ```yaml
+  ffmpeg -re -i BigBuckBunny.mp4 -c copy -f flv http://localhost:1984/api/stream.ts?dst=camera1
+  ```
+
+#### Stream to camera
+
+go2rtc support play audio files (ex. music or [TTS](https://www.home-assistant.io/integrations/#text-to-speech)) and live streams (ex. radio) on cameras with [two way audio](#two-way-audio) support.
+
+API example:
+
+```
+POST http://localhost:1984/api/streams?dst=camera1&src=ffmpeg:http://example.com/song.mp3#audio=pcma#input=file
+```
+
+- you can stream: local files, web files, live streams or any format, supported by FFmpeg 
+- you should use [ffmpeg source](#source-ffmpeg) for transcoding audio to codec, that your camera supports
+- you can check camera codecs on the go2rtc WebUI info page when the stream is active
+- some cameras support only low quality `PCMA/8000` codec (ex. [Tapo](#source-tapo))
+- it is recommended to choose higher quality formats if your camera supports them (ex. `PCMA/48000` for some Dahua cameras)
+- if you play files over http-link, you need to add `#input=file` params for transcoding, so file will be transcoded and played in real time
+- if you play live streams, you should skip `#input` param, because it is already in real time
+- you can stop active playback by calling the API with the empty `src` parameter
+- you will see one active producer and one active consumer in go2rtc WebUI info page during streaming
 
 ### Module: API
 
@@ -408,7 +512,6 @@ api:
 **PS:**
 
 - go2rtc doesn't provide HTTPS. Use [Nginx](https://nginx.org/) or [Ngrok](#module-ngrok) or [Home Assistant Add-on](#go2rtc-home-assistant-add-on) for this tasks
-- you can access microphone (for 2-way audio) only with HTTPS ([read more](https://stackoverflow.com/questions/52759992/how-to-access-camera-and-microphone-in-chrome-without-https))
 - MJPEG over WebSocket plays better than native MJPEG because Chrome [bug](https://bugs.chromium.org/p/chromium/issues/detail?id=527446)
 - MP4 over WebSocket was created only for Apple iOS because it doesn't support MSE and native MP4
 
