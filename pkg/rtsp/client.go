@@ -319,24 +319,26 @@ func (c *Conn) Describe() error {
 	return nil
 }
 
-//func (c *Conn) Announce() (err error) {
-//	req := &tcp.Request{
-//		Method: MethodAnnounce,
-//		URL:    c.URL,
-//		Header: map[string][]string{
-//			"Content-Type": {"application/sdp"},
-//		},
-//	}
-//
-//	//req.Body, err = c.sdp.Marshal()
-//	if err != nil {
-//		return
-//	}
-//
-//	_, err = c.Do(req)
-//
-//	return
-//}
+func (c *Conn) Announce() (err error) {
+	req := &tcp.Request{
+		Method: MethodAnnounce,
+		URL:    c.URL,
+		Header: map[string][]string{
+			"Content-Type": {"application/sdp"},
+		},
+	}
+
+	req.Body, err = streamer.MarshalSDP(c.SessionName, c.Medias)
+	if err != nil {
+		return err
+	}
+
+	res, err := c.Do(req)
+
+	_ = res
+
+	return
+}
 
 func (c *Conn) Setup() error {
 	for _, media := range c.Medias {
