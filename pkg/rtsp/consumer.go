@@ -11,9 +11,9 @@ import (
 )
 
 func (c *Conn) AddTrack(media *streamer.Media, track *streamer.Track) *streamer.Track {
-	switch track.Direction {
+	switch c.mode {
 	// send our track to RTSP consumer (ex. FFmpeg)
-	case streamer.DirectionSendonly:
+	case ModeServerConsumer:
 		i := len(c.tracks)
 		channelID := byte(i << 1)
 
@@ -43,11 +43,21 @@ func (c *Conn) AddTrack(media *streamer.Media, track *streamer.Track) *streamer.
 
 		return track
 
-	case streamer.DirectionRecvonly:
-		panic("not implemented")
+	// camera with backchannel support
+	case ModeClientProducer:
+		consCodec := media.MatchCodec(track.Codec)
+		consTrack := c.GetTrack(media, consCodec)
+		if consTrack == nil {
+			return nil
+		}
+
+		return track.Bind(func(packet *rtp.Packet) error {
+			return consTrack.WriteRTP(packet)
+		})
 	}
 
-	panic("wrong direction")
+	println("WARNING: rtsp: AddTrack to wrong mode")
+	return nil
 }
 
 func (c *Conn) bindTrack(

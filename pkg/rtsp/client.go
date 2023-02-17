@@ -35,11 +35,11 @@ const (
 type Mode byte
 
 const (
-	ModeUnknown Mode = iota
-	ModeClientProducer
+	ModeUnknown        Mode = iota
+	ModeClientProducer      // conn act as RTSP client that receive data from RTSP server (ex. camera)
 	ModeServerUnknown
-	ModeServerProducer
-	ModeServerConsumer
+	ModeServerProducer // conn act as RTSP server that reseive data from RTSP client (ex. ffmpeg output)
+	ModeServerConsumer // conn act as RTSP server that send data to RTSP client (ex. ffmpeg input)
 )
 
 type State byte
