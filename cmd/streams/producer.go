@@ -16,6 +16,7 @@ const (
 	stateTracks
 	stateStart
 	stateExternal
+	stateInternal
 )
 
 type Producer struct {
