@@ -1,7 +1,10 @@
 package rtsp
 
 import (
+	"github.com/AlexxIT/go2rtc/pkg/h264"
+	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/stretchr/testify/assert"
+	"strings"
 	"testing"
 )
 
@@ -105,4 +108,34 @@ a=control:track3
 	medias, err := UnmarshalSDP([]byte(s))
 	assert.Nil(t, err)
 	assert.Len(t, medias, 3)
+}
+
+func TestBugSDP4(t *testing.T) {
+	s := `v=0
+o=- 1676583297494652 1676583297494652 IN IP4 192.168.1.58
+s=Media Presentation
+e=NONE
+b=AS:5050
+t=0 0
+a=control:rtsp://192.168.1.58:554/h264_stream/
+m=video 0 RTP/AVP 96
+b=AS:5000
+a=control:rtsp://192.168.1.58:554/h264_stream/trackID=1
+a=rtpmap:96 H265/90000
+a=fmtp:96 profile-level-id=420029; packetization-mode=1; sprop-parameter-sets=
+a=Media_header:MEDIAINFO=494D4B48010100000400050000000000000000000000000000000000000000000000000000000000;
+a=appversion:1.0
+`
+	s = strings.ReplaceAll(s, "\n", "\r\n")
+	medias, err := UnmarshalSDP([]byte(s))
+	assert.Nil(t, err)
+
+	codec := medias[0].Codecs[0]
+	assert.Equal(t, streamer.CodecH264, codec.Name)
+
+	sps, _ := h264.GetParameterSet(codec.FmtpLine)
+	assert.Nil(t, sps)
+
+	profile := h264.GetProfileLevelID(codec.FmtpLine)
+	assert.Equal(t, "420029", profile)
 }

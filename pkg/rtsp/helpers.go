@@ -29,6 +29,11 @@ func UnmarshalSDP(rawSDP []byte) ([]*streamer.Media, error) {
 		rawSDP[i+10] = '\n'
 	}
 
+	// fix bug from Ezviz C6N
+	if i := bytes.Index(rawSDP, []byte("H265/90000\r\na=fmtp:96 profile-level-id=420029;")); i > 0 {
+		rawSDP[i+3] = '4'
+	}
+
 	sd := &sdp.SessionDescription{}
 	if err := sd.Unmarshal(rawSDP); err != nil {
 		// fix multiple `s=` https://github.com/AlexxIT/WebRTC/issues/417
