@@ -225,7 +225,11 @@ func parseArgs(s string) *Args {
 		if args.video > 0 {
 			for _, video := range query["video"] {
 				if video != "copy" {
-					args.AddCodec(defaults[video])
+					if codec := defaults[video]; codec != "" {
+						args.AddCodec(codec)
+					} else {
+						args.AddCodec(video)
+					}
 				} else {
 					args.AddCodec("-c:v copy")
 				}
@@ -238,7 +242,11 @@ func parseArgs(s string) *Args {
 		if args.audio > 0 {
 			for _, audio := range query["audio"] {
 				if audio != "copy" {
-					args.AddCodec(defaults[audio])
+					if codec := defaults[audio]; codec != "" {
+						args.AddCodec(codec)
+					} else {
+						args.AddCodec(audio)
+					}
 				} else {
 					args.AddCodec("-c:a copy")
 				}
