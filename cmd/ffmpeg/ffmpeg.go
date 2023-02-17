@@ -44,7 +44,7 @@ var defaults = map[string]string{
 	"global": "-hide_banner",
 
 	// inputs
-	"file": "-re -stream_loop -1 -i {input}",
+	"file": "-re -i {input}",
 	"http": "-fflags nobuffer -flags low_delay -i {input}",
 	"rtsp": "-fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_transport tcp -i {input}",
 
