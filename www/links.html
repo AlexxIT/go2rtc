@@ -41,9 +41,23 @@
 <body>
 <script src="main.js"></script>
 <div id="links"></div>
+<div id="audio">
+    <h2>Play audio</h2>
+    <input id="source" type="text" placeholder="source">
+    <a id="send" href="#">send</a> / cameras with two way audio support
+</div>
 <script>
     const params = new URLSearchParams(location.search);
     const src = params.get("src");
+
+    document.querySelector("#send")
+        .addEventListener("click", () => {
+            const source = document.querySelector("#source");
+            const url = new URL("api/streams", location.href);
+            url.searchParams.set("dst", src);
+            url.searchParams.set("src", source.value);
+            fetch(url, {method: "POST"});
+        });
 
     const links = document.querySelector("#links");
     links.innerHTML = `
