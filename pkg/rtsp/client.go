@@ -559,8 +559,15 @@ func (c *Conn) Handle() (err error) {
 	switch c.mode {
 	case ModeClientProducer:
 		// polling frames from remote RTSP Server (ex Camera)
-		timeout = time.Second * 5
 		go c.keepalive()
+
+		if c.HasSendTracks() {
+			// if we receiving video/audio from camera
+			timeout = time.Second * 5
+		} else {
+			// if we only send audio to camera
+			timeout = time.Second * 30
+		}
 
 	case ModeServerProducer:
 		// polling frames from remote RTSP Client (ex FFmpeg)
@@ -720,4 +727,13 @@ func (c *Conn) GetChannel(media *streamer.Media) int {
 		}
 	}
 	return -1
+}
+
+func (c *Conn) HasSendTracks() bool {
+	for _, track := range c.tracks {
+		if track.Direction == streamer.DirectionSendonly {
+			return true
+		}
+	}
+	return false
 }
