@@ -26,8 +26,8 @@ func (s *Stream) Play(source string) error {
 		}
 
 		// check if client support consumer interface
-		cons := client.(streamer.Consumer)
-		if cons == nil {
+		cons, ok := client.(streamer.Consumer)
+		if !ok {
 			continue
 		}
 
