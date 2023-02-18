@@ -15,11 +15,6 @@ import (
 	"net/http"
 )
 
-type jsonSdp struct {
-	Type string `json:"type"`
-	Sdp  string `json:"sdp"`
-}
-
 func Init() {
 	var cfg struct {
 		Mod struct {
@@ -145,6 +140,12 @@ func asyncHandler(tr *api.Transport, msg *api.Message) error {
 	return nil
 }
 
+type SDP struct {
+	Type string `json:"type"`
+	Sdp  string `json:"sdp"`
+}
+
+// syncHandler
 func syncHandler(w http.ResponseWriter, r *http.Request) {
 	url := r.URL.Query().Get("src")
 	stream := streams.Get(url)
@@ -152,74 +153,52 @@ func syncHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mediaType, err := DetermineMediaType(r)
-	if err != nil {
-		log.Error().Err(err).Caller().Msg("DetermineMediaType")
-		return
+	var offer string
+
+	ct := r.Header.Get("Content-Type")
+	if ct != "" {
+		ct, _, _ = mime.ParseMediaType(ct)
 	}
 
-	// get offer
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		log.Error().Err(err).Caller().Msg("ioutil.ReadAll")
-		return
-	}
-
-	offer, err := DeserializeOffer(mediaType, body)
-	if err != nil {
-		log.Error().Err(err).Caller().Msg("DeserializeOffer")
-		return
+	if ct == "application/json" {
+		var v SDP
+		if err := json.NewDecoder(r.Body).Decode(&v); err != nil {
+			log.Error().Err(err).Caller().Send()
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		offer = v.Sdp
+	} else {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			log.Error().Err(err).Caller().Send()
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		offer = string(body)
 	}
 
 	answer, err := ExchangeSDP(stream, offer, r.UserAgent())
 	if err != nil {
-		log.Error().Err(err).Caller().Msg("ExchangeSDP")
-		return
-	}
-
-	response, err := SerializeAnswer(mediaType, answer)
-	if err != nil {
-		log.Error().Err(err).Caller().Msg("SerializeAnswer")
+		log.Error().Err(err).Caller().Send()
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	// send SDP to client
-	if _, err = w.Write(response); err != nil {
-		log.Error().Err(err).Caller().Msg("w.Write")
-	}
-}
+	if ct == "application/json" {
+		w.Header().Set("Content-Type", ct)
 
-func DetermineMediaType(r *http.Request) (mediaType string, err error) {
-	contentType := r.Header.Get("Content-Type")
-	if contentType != "" {
-		mediaType, _, err = mime.ParseMediaType(contentType)
-		if err != nil {
-			log.Error().Err(err).Caller().Msg("mime.ParseMediaType")
-			return
+		v := SDP{Sdp: answer, Type: "answer"}
+		if err = json.NewEncoder(w).Encode(v); err != nil {
+			log.Error().Err(err).Caller().Send()
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	} else {
-		mediaType = "text/plain"
-	}
-	return
-}
-
-func DeserializeOffer(mediaType string, body []byte) (offer string, err error) {
-	switch mediaType {
-	case "application/json":
-		var jsonOffer jsonSdp
-		err = json.Unmarshal(body, &jsonOffer)
-		if err != nil {
-			log.Error().Err(err).Caller().Msg("json.Unmarshal")
-			return
+		if _, err = w.Write([]byte(answer)); err != nil {
+			log.Error().Err(err).Caller().Send()
 		}
-
-		offer = jsonOffer.Sdp
-		break
-	default:
-		offer = string(body)
-		break
 	}
-	return
 }
 
 func ExchangeSDP(
@@ -272,25 +251,5 @@ func ExchangeSDP(
 		log.Error().Err(err).Caller().Msg("conn.GetCompleteAnswer")
 	}
 
-	return
-}
-
-func SerializeAnswer(mediaType string, answer string) (response []byte, err error) {
-	switch mediaType {
-	case "application/json":
-		jsonAnswer := jsonSdp{
-			Sdp:  answer,
-			Type: "answer",
-		}
-		response, err = json.Marshal(jsonAnswer)
-		if err != nil {
-			log.Error().Err(err).Caller().Msg("json.Marshal")
-			return
-		}
-		break
-	default:
-		response = []byte(answer)
-		break
-	}
 	return
 }
