@@ -1,7 +1,6 @@
 package mpegts
 
 import (
-	"bytes"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/pion/rtp"
@@ -54,13 +53,8 @@ func (p *PES) SetBuffer(size uint16, b []byte) {
 		b = b[minHeaderSize+optSize:]
 
 		if p.StreamType == StreamTypeH264 {
-			if bytes.HasPrefix(b, []byte{0, 0, 0, 1, h264.NALUTypeAUD}) {
-				p.Mode = ModeStream
-				b = b[5:]
-			}
-		}
-
-		if p.Mode == ModeUnknown {
+			p.Mode = ModeStream
+		} else {
 			println("WARNING: mpegts: unknown zero-size stream")
 		}
 	} else {
@@ -131,23 +125,22 @@ func (p *PES) GetPacket() (pkt *rtp.Packet) {
 		p.Payload = nil
 
 	case ModeStream:
-		i := bytes.Index(p.Payload, []byte{0, 0, 0, 1, h264.NALUTypeAUD})
-		if i < 0 {
+		payload, i := h264.DecodeStream(p.Payload)
+		if payload == nil {
 			return
 		}
-		if i2 := IndexFrom(p.Payload, []byte{0, 0, 1}, i); i2 < 0 && i2 > 9 {
-			return
-		}
+
+		//log.Printf("[AVC] %v, len: %d", h264.Types(payload), len(payload))
+
+		p.Payload = p.Payload[i:]
 
 		pkt = &rtp.Packet{
 			Header: rtp.Header{
 				PayloadType: p.StreamType,
 				Timestamp:   uint32(time.Duration(time.Now().UnixNano()) * 90000 / time.Second),
 			},
-			Payload: DecodeAnnex3B(p.Payload[:i]),
+			Payload: payload,
 		}
-
-		p.Payload = p.Payload[i+5:]
 
 	default:
 		p.Payload = nil
@@ -190,62 +183,4 @@ func GetMedia(pkt *rtp.Packet) *streamer.Media {
 		Direction: streamer.DirectionSendonly,
 		Codecs:    []*streamer.Codec{codec},
 	}
-}
-
-func DecodeAnnex3B(annexb []byte) (avc []byte) {
-	// depends on AU delimeter size
-	i0 := bytes.Index(annexb, []byte{0, 0, 1})
-	if i0 < 0 || i0 > 9 {
-		return nil
-	}
-
-	annexb = annexb[i0+3:] // skip first separator
-	i0 = 0
-
-	for {
-		// search next separato
-		iN := IndexFrom(annexb, []byte{0, 0, 1}, i0)
-		if iN < 0 {
-			break
-		}
-
-		// move i0 to next AU
-		if i0 = iN + 3; i0 >= len(annexb) {
-			break
-		}
-
-		// check if AU type valid
-		octet := annexb[i0]
-		const forbiddenZeroBit = 0x80
-		if octet&forbiddenZeroBit == 0 {
-			const nalUnitType = 0x1F
-			switch octet & nalUnitType {
-			case h264.NALUTypePFrame, h264.NALUTypeIFrame, h264.NALUTypeSPS, h264.NALUTypePPS:
-				// add AU in AVC format
-				avc = append(avc, byte(iN>>24), byte(iN>>16), byte(iN>>8), byte(iN))
-				avc = append(avc, annexb[:iN]...)
-
-				// cut search to next AU start
-				annexb = annexb[i0:]
-				i0 = 0
-			}
-		}
-	}
-
-	size := len(annexb)
-	avc = append(avc, byte(size>>24), byte(size>>16), byte(size>>8), byte(size))
-	return append(avc, annexb...)
-}
-
-func IndexFrom(b []byte, sep []byte, from int) int {
-	if from > 0 {
-		if from < len(b) {
-			if i := bytes.Index(b[from:], sep); i >= 0 {
-				return from + i
-			}
-		}
-		return -1
-	}
-
-	return bytes.Index(b, sep)
 }
