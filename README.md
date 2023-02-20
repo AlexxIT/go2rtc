@@ -880,6 +880,7 @@ streams:
 - [Reolink](https://reolink.com/) - some models has awful unusable RTSP realisation and not best HTTP-FLV alternative (I recommend that you contact Reolink support for new firmware), few settings
 - [Sonoff](https://sonoff.tech/) - very low stream quality, no settings, not best protocol implementation
 - [TP-Link](https://www.tp-link.com/) - few streaming clients, packet loss?
+- [Ubiquiti Unifi](https://store.ui.com/collections/unifi-protect-cameras) - requires specific [rtspx protocol to be used](https://github.com/AlexxIT/go2rtc/issues/15#issuecomment-1226713334)
 - Chinese cheap noname cameras, Wyze Cams, Xiaomi cameras with hacks (usual has `/live/ch00_1` in RTSP URL) - awful but usable RTSP protocol realisation, low stream quality, few settings, packet loss?
 
 ## TIPS
