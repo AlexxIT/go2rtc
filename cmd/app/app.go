@@ -2,16 +2,18 @@ package app
 
 import (
 	"flag"
-	"github.com/AlexxIT/go2rtc/pkg/shell"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
-	"gopkg.in/yaml.v3"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/AlexxIT/go2rtc/pkg/shell"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+	"gopkg.in/yaml.v3"
 )
 
 var Version = "1.2.0"
@@ -24,9 +26,16 @@ var Info = map[string]interface{}{
 
 func Init() {
 	var confs Config
+	var version bool
 
 	flag.Var(&confs, "config", "go2rtc config (path to file or raw text), support multiple")
+	flag.BoolVar(&version, "version", false, "Print the version of the application and exit")
 	flag.Parse()
+
+	if version {
+		fmt.Println("Current version: ", Version)
+		os.Exit(0)
+	}
 
 	if confs == nil {
 		confs = []string{"go2rtc.yaml"}
