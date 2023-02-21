@@ -1,0 +1,60 @@
+name: Test Build and Run
+
+on:
+  push:
+    branches:
+      - '*'
+  pull_request:
+  merge_group:
+  workflow_dispatch:
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+        arch: [amd64, arm64]
+
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+    env:
+      GOARCH: ${{ matrix.arch }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Setup Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.19'
+
+      - name: Build Go binary
+        run: go build -ldflags "-s -w" -trimpath -o ./go2rtc
+
+      - name: Test Go binary on linux
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+            if [ "${{ matrix.arch }}" = "amd64" ]; then
+              ./go2rtc --help
+            else
+              sudo apt-get update && sudo apt-get install -y qemu-user-static
+              sudo cp /usr/bin/qemu-aarch64-static .
+              sudo chown $USER:$USER ./qemu-aarch64-static
+              qemu-aarch64-static ./go2rtc --help
+            fi
+      - name: Test Go binary on macos
+        if: matrix.os == 'macos-latest'
+        run: |
+            if [ "${{ matrix.arch }}" = "amd64" ]; then
+              ./go2rtc --help
+            else
+              echo "ARM64 architecture is not yet supported on macOS"
+            fi
+      - name: Test Go binary on windows
+        if: matrix.os == 'windows-latest'
+        run: |
+            if ("${{ matrix.arch }}" -eq "amd64") {
+                .\go2rtc* --help
+            } else {
+                Write-Host "ARM64 architecture is not yet supported on Windows"
+            }
