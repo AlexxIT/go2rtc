@@ -104,6 +104,8 @@ func apiWS(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 
+		log.Trace().Str("type", msg.Type).Msg("[api.ws] msg")
+
 		if handler := wsHandlers[msg.Type]; handler != nil {
 			go func() {
 				if err = handler(tr, msg); err != nil {
@@ -119,8 +121,9 @@ func apiWS(w http.ResponseWriter, r *http.Request) {
 var wsUp *websocket.Upgrader
 
 type Transport struct {
-	Request  *http.Request
-	Consumer interface{} // TODO: rewrite
+	Request *http.Request
+
+	ctx map[any]any
 
 	closed bool
 	mx     sync.Mutex
@@ -168,5 +171,15 @@ func (t *Transport) OnClose(f func()) {
 	} else {
 		t.onClose = append(t.onClose, f)
 	}
+	t.mx.Unlock()
+}
+
+// WithContext - run function with Context variable
+func (t *Transport) WithContext(f func(ctx map[any]any)) {
+	t.mx.Lock()
+	if t.ctx == nil {
+		t.ctx = map[any]any{}
+	}
+	f(t.ctx)
 	t.mx.Unlock()
 }

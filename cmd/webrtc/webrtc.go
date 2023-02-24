@@ -141,11 +141,9 @@ func asyncHandler(tr *api.Transport, msg *api.Message) error {
 		return err
 	}
 
-	tr.Consumer = cons
-
 	tr.Write(&api.Message{Type: "webrtc/answer", Value: answer})
 
-	asyncCandidates(tr)
+	asyncCandidates(tr, cons)
 
 	return nil
 }
