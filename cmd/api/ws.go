@@ -11,8 +11,24 @@ import (
 
 // Message - struct for data exchange in Web API
 type Message struct {
-	Type  string      `json:"type"`
-	Value interface{} `json:"value,omitempty"`
+	Type  string `json:"type"`
+	Value any    `json:"value,omitempty"`
+}
+
+func (m *Message) String() string {
+	if s, ok := m.Value.(string); ok {
+		return s
+	}
+	return ""
+}
+
+func (m *Message) GetString(key string) string {
+	if v, ok := m.Value.(map[string]any); ok {
+		if s, ok := v[key].(string); ok {
+			return s
+		}
+	}
+	return ""
 }
 
 type WSHandler func(tr *Transport, msg *Message) error

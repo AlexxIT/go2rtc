@@ -87,10 +87,10 @@ func candidateHandler(tr *api.Transport, msg *api.Message) error {
 	if tr.Consumer == nil {
 		return nil
 	}
-	if conn := tr.Consumer.(*webrtc.Conn); conn != nil {
-		s := msg.Value.(string)
-		log.Trace().Str("candidate", s).Msg("[webrtc] remote")
-		conn.AddCandidate(s)
+	if conn := tr.Consumer.(*webrtc.Server); conn != nil {
+		candidate := msg.String()
+		log.Trace().Str("candidate", candidate).Msg("[webrtc] remote")
+		conn.AddCandidate(candidate)
 	}
 	return nil
 }

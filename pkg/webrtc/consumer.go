@@ -9,13 +9,11 @@ import (
 	"github.com/pion/webrtc/v3"
 )
 
-// Consumer
-
-func (c *Conn) GetMedias() []*streamer.Media {
+func (c *Server) GetMedias() []*streamer.Media {
 	return c.medias
 }
 
-func (c *Conn) AddTrack(media *streamer.Media, track *streamer.Track) *streamer.Track {
+func (c *Server) AddTrack(media *streamer.Media, track *streamer.Track) *streamer.Track {
 	switch track.Direction {
 	// send our track to WebRTC consumer
 	case streamer.DirectionSendonly:
@@ -43,7 +41,7 @@ func (c *Conn) AddTrack(media *streamer.Media, track *streamer.Track) *streamer.
 			return nil
 		}
 
-		if _, err = c.Conn.AddTrack(trackLocal); err != nil {
+		if _, err = c.conn.AddTrack(trackLocal); err != nil {
 			return nil
 		}
 
@@ -80,7 +78,7 @@ func (c *Conn) AddTrack(media *streamer.Media, track *streamer.Track) *streamer.
 
 	// receive track from WebRTC consumer (microphone, backchannel, two way audio)
 	case streamer.DirectionRecvonly:
-		for _, tr := range c.Conn.GetTransceivers() {
+		for _, tr := range c.conn.GetTransceivers() {
 			if tr.Mid() != media.MID {
 				continue
 			}
@@ -106,7 +104,7 @@ func (c *Conn) AddTrack(media *streamer.Media, track *streamer.Track) *streamer.
 	panic("wrong direction")
 }
 
-func (c *Conn) MarshalJSON() ([]byte, error) {
+func (c *Server) MarshalJSON() ([]byte, error) {
 	info := &streamer.Info{
 		Type:       "WebRTC client",
 		RemoteAddr: c.remote(),

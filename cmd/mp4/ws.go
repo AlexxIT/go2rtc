@@ -21,7 +21,7 @@ func handlerWSMSE(tr *api.Transport, msg *api.Message) error {
 		UserAgent:  tr.Request.UserAgent(),
 	}
 
-	if codecs, ok := msg.Value.(string); ok {
+	if codecs := msg.String(); codecs != "" {
 		log.Trace().Str("codecs", codecs).Msgf("[mp4] new WS/MSE consumer")
 		cons.Medias = parseMedias(codecs, true)
 	}
@@ -69,7 +69,7 @@ func handlerWSMP4(tr *api.Transport, msg *api.Message) error {
 		OnlyKeyframe: true,
 	}
 
-	if codecs, ok := msg.Value.(string); ok {
+	if codecs := msg.String(); codecs != "" {
 		log.Trace().Str("codecs", codecs).Msgf("[mp4] new WS/MP4 consumer")
 		cons.Medias = parseMedias(codecs, false)
 	}
