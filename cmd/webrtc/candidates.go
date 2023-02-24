@@ -4,39 +4,67 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/api"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	"github.com/pion/sdp/v3"
+	"strconv"
+	"strings"
 )
 
-var candidates []string
-var networks = []string{"udp", "tcp"}
+type Address struct {
+	Host string
+	Port int
+}
+
+var addresses []Address
 
 func AddCandidate(address string) {
-	candidates = append(candidates, address)
+	var port int
+
+	// try to get port from address string
+	if i := strings.LastIndexByte(address, ':'); i > 0 {
+		if v, _ := strconv.Atoi(address[i+1:]); v != 0 {
+			address = address[:i]
+			port = v
+		}
+	}
+
+	// use default WebRTC port
+	if port == 0 {
+		port, _ = strconv.Atoi(Port)
+	}
+
+	addresses = append(addresses, Address{Host: address, Port: port})
+}
+
+func GetCandidates() (candidates []string) {
+	for _, address := range addresses {
+		// using stun server for receive public IP-address
+		if address.Host == "stun" {
+			ip, err := webrtc.GetCachedPublicIP()
+			if err != nil {
+				continue
+			}
+			// this is a copy, original host unchanged
+			address.Host = ip.String()
+		}
+
+		candidates = append(
+			candidates,
+			webrtc.CandidateHostUDP(address.Host, address.Port),
+			webrtc.CandidateHostTCPPassive(address.Host, address.Port),
+		)
+	}
+
+	return
 }
 
 func asyncCandidates(tr *api.Transport) {
-	for _, address := range candidates {
-		address, err := webrtc.LookupIP(address)
-		if err != nil {
-			log.Warn().Err(err).Caller().Send()
-			continue
-		}
-
-		for _, network := range networks {
-			cand, err := webrtc.NewCandidate(network, address)
-			if err != nil {
-				log.Warn().Err(err).Caller().Send()
-				continue
-			}
-
-			log.Trace().Str("candidate", cand).Msg("[webrtc] config")
-
-			tr.Write(&api.Message{Type: "webrtc/candidate", Value: cand})
-		}
+	for _, candidate := range GetCandidates() {
+		log.Trace().Str("candidate", candidate).Msg("[webrtc] config")
+		tr.Write(&api.Message{Type: "webrtc/candidate", Value: candidate})
 	}
 }
 
 func syncCanditates(answer string) (string, error) {
-	if len(candidates) == 0 {
+	if len(addresses) == 0 {
 		return answer, nil
 	}
 
@@ -52,23 +80,8 @@ func syncCanditates(answer string) (string, error) {
 		md.Attributes = md.Attributes[:len(md.Attributes)-1]
 	}
 
-	for _, address := range candidates {
-		var err error
-		address, err = webrtc.LookupIP(address)
-		if err != nil {
-			log.Warn().Err(err).Msg("[webrtc] candidate")
-			continue
-		}
-
-		for _, network := range networks {
-			cand, err := webrtc.NewCandidate(network, address)
-			if err != nil {
-				log.Warn().Err(err).Msg("[webrtc] candidate")
-				continue
-			}
-
-			md.WithPropertyAttribute(cand)
-		}
+	for _, candidate := range GetCandidates() {
+		md.WithPropertyAttribute(candidate)
 	}
 
 	if end {

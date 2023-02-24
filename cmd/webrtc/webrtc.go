@@ -58,7 +58,9 @@ func Init() {
 		return pionAPI.NewPeerConnection(pionConf)
 	}
 
-	candidates = cfg.Mod.Candidates
+	for _, candidate := range cfg.Mod.Candidates {
+		AddCandidate(candidate)
+	}
 
 	api.HandleWS("webrtc", asyncHandler)
 	api.HandleWS("webrtc/offer", asyncHandler)

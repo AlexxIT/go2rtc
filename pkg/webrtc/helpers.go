@@ -7,6 +7,7 @@ import (
 	"github.com/pion/ice/v2"
 	"github.com/pion/stun"
 	"github.com/pion/webrtc/v3"
+	"hash/crc32"
 	"net"
 	"strconv"
 	"strings"
@@ -156,4 +157,36 @@ func MimeType(codec *streamer.Codec) string {
 		return webrtc.MimeTypeG722
 	}
 	panic("not implemented")
+}
+
+const PriorityHost = (1 << 24) * uint32(126)
+const PriorityLocalUDP = (1 << 8) * uint32(65535)
+const PriorityLocalTCPPassive = (1 << 8) * uint32((1<<13)*4+8191)
+const PriorityComponentRTP = uint32(256 - ice.ComponentRTP)
+
+func CandidateHostUDP(host string, port int) string {
+	foundation := crc32.ChecksumIEEE([]byte("host" + host + "udp4"))
+	priority := PriorityHost + PriorityLocalUDP + PriorityComponentRTP
+
+	// 1. Foundation
+	// 2. Component, always 1 because RTP
+	// 3. udp or tcp
+	// 4. Priority
+	// 5. Host - IP4 or IP6 or domain name
+	// 6. Port
+	// 7. typ host
+	return fmt.Sprintf(
+		"candidate:%d 1 udp %d %s %d typ host",
+		foundation, priority, host, port,
+	)
+}
+
+func CandidateHostTCPPassive(address string, port int) string {
+	foundation := crc32.ChecksumIEEE([]byte("host" + address + "tcp4"))
+	priority := PriorityHost + PriorityLocalTCPPassive + PriorityComponentRTP
+
+	return fmt.Sprintf(
+		"candidate:%d 1 tcp %d %s %d typ host tcptype passive",
+		foundation, priority, address, port,
+	)
 }

@@ -5,19 +5,31 @@ import (
 	"github.com/pion/sdp/v3"
 	"github.com/pion/webrtc/v3"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"testing"
 )
 
-func TestName(t *testing.T) {
-	i, _ := ice.NewCandidateHost(&ice.CandidateHostConfig{
+func TestCandidates(t *testing.T) {
+	conf := &ice.CandidateHostConfig{
+		Network:   "udp",
+		Address:   "192.168.1.123",
+		Port:      8555,
+		Component: ice.ComponentRTP,
+	}
+	cand, err := ice.NewCandidateHost(conf)
+	require.Nil(t, err)
+	assert.Equal(t, "candidate:"+cand.Marshal(), CandidateHostUDP(conf.Address, conf.Port))
+
+	conf = &ice.CandidateHostConfig{
 		Network:   "tcp",
 		Address:   "192.168.1.123",
 		Port:      8555,
 		Component: ice.ComponentRTP,
 		TCPType:   ice.TCPTypePassive,
-	})
-	a := i.Marshal()
-	println(a)
+	}
+	cand, err = ice.NewCandidateHost(conf)
+	require.Nil(t, err)
+	assert.Equal(t, "candidate:"+cand.Marshal(), CandidateHostTCPPassive(conf.Address, conf.Port))
 }
 
 func TestPublicIP(t *testing.T) {
