@@ -90,9 +90,6 @@ func asyncHandler(tr *api.Transport, msg *api.Message) error {
 		return err
 	}
 
-	// apiV2 - json/object exchange, V2 - raw SDP and raw Candidates exchange
-	apiV2 := msg.Type == "webrtc"
-
 	cons := webrtc.NewServer(pc)
 	cons.UserAgent = tr.Request.UserAgent()
 	cons.Listen(func(msg any) {
@@ -109,6 +106,9 @@ func asyncHandler(tr *api.Transport, msg *api.Message) error {
 			}
 		}
 	})
+
+	// V2 - json/object exchange, V1 - raw SDP exchange
+	apiV2 := msg.Type == "webrtc"
 
 	// 1. SetOffer, so we can get remote client codecs
 	var offer string
@@ -141,14 +141,18 @@ func asyncHandler(tr *api.Transport, msg *api.Message) error {
 		return err
 	}
 
-	tr.Write(&api.Message{Type: "webrtc/answer", Value: answer})
+	if apiV2 {
+		desc := pion.SessionDescription{Type: pion.SDPTypeAnswer, SDP: answer}
+		tr.Write(&api.Message{Type: "webrtc", Value: desc})
+	} else {
+		tr.Write(&api.Message{Type: "webrtc/answer", Value: answer})
+	}
 
 	asyncCandidates(tr, cons)
 
 	return nil
 }
 
-// syncHandler
 func syncHandler(w http.ResponseWriter, r *http.Request) {
 	url := r.URL.Query().Get("src")
 	stream := streams.Get(url)
@@ -161,18 +165,18 @@ func syncHandler(w http.ResponseWriter, r *http.Request) {
 		ct, _, _ = mime.ParseMediaType(ct)
 	}
 
-	// apiV2 - json/object exchange, V1 - raw SDP exchange
+	// V2 - json/object exchange, V1 - raw SDP exchange
 	apiV2 := ct == "application/json"
 
 	var offer string
 	if apiV2 {
-		var sd pion.SessionDescription
-		if err := json.NewDecoder(r.Body).Decode(&sd); err != nil {
+		var desc pion.SessionDescription
+		if err := json.NewDecoder(r.Body).Decode(&desc); err != nil {
 			log.Error().Err(err).Caller().Send()
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		offer = sd.SDP
+		offer = desc.SDP
 	} else {
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
@@ -211,7 +215,7 @@ func syncHandler(w http.ResponseWriter, r *http.Request) {
 func ExchangeSDP(stream *streams.Stream, offer string, userAgent string) (answer string, err error) {
 	pc, err := newPeerConnection()
 	if err != nil {
-		log.Error().Err(err).Caller().Msg("NewPConn")
+		log.Error().Err(err).Caller().Send()
 		return
 	}
 
@@ -231,19 +235,17 @@ func ExchangeSDP(stream *streams.Stream, offer string, userAgent string) (answer
 	log.Trace().Msgf("[webrtc] offer:\n%s", offer)
 
 	if err = conn.SetOffer(offer); err != nil {
-		log.Warn().Err(err).Caller().Msg("conn.SetOffer")
+		log.Warn().Err(err).Caller().Send()
 		return
 	}
 
 	// 2. AddConsumer, so we get new tracks
 	if err = stream.AddConsumer(conn); err != nil {
-		log.Warn().Err(err).Caller().Msg("stream.AddConsumer")
+		log.Warn().Err(err).Caller().Send()
 		_ = conn.Close()
 		return
 	}
 
-	// exchange sdp without waiting all candidates
-	//answer, err := conn.ExchangeSDP(offer, false)
 	answer, err = conn.GetCompleteAnswer()
 	if err == nil {
 		answer, err = syncCanditates(answer)
@@ -251,7 +253,7 @@ func ExchangeSDP(stream *streams.Stream, offer string, userAgent string) (answer
 	log.Trace().Msgf("[webrtc] answer\n%s", answer)
 
 	if err != nil {
-		log.Error().Err(err).Caller().Msg("conn.GetCompleteAnswer")
+		log.Error().Err(err).Caller().Send()
 	}
 
 	return
