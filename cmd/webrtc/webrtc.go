@@ -50,8 +50,12 @@ func Init() {
 		SDPSemantics: pion.SDPSemanticsUnifiedPlanWithFallback,
 	}
 
-	newPeerConnection = func() (*pion.PeerConnection, error) {
-		return pionAPI.NewPeerConnection(pionConf)
+	newPeerConnection = func(isServer bool) (*pion.PeerConnection, error) {
+		if isServer {
+			return pionAPI.NewPeerConnection(pionConf)
+		} else {
+			return pion.NewPeerConnection(pionConf)
+		}
 	}
 
 	for _, candidate := range cfg.Mod.Candidates {
@@ -73,7 +77,7 @@ func Init() {
 var Port string
 var log zerolog.Logger
 
-var newPeerConnection func() (*pion.PeerConnection, error)
+var newPeerConnection func(isServer bool) (*pion.PeerConnection, error)
 
 func asyncHandler(tr *api.Transport, msg *api.Message) error {
 	src := tr.Request.URL.Query().Get("src")
@@ -85,7 +89,7 @@ func asyncHandler(tr *api.Transport, msg *api.Message) error {
 	log.Debug().Str("url", src).Msg("[webrtc] new consumer")
 
 	// create new PeerConnection instance
-	pc, err := newPeerConnection()
+	pc, err := newPeerConnection(true)
 	if err != nil {
 		log.Error().Err(err).Caller().Send()
 		return err
@@ -155,7 +159,7 @@ func asyncHandler(tr *api.Transport, msg *api.Message) error {
 }
 
 func ExchangeSDP(stream *streams.Stream, offer string, userAgent string) (answer string, err error) {
-	pc, err := newPeerConnection()
+	pc, err := newPeerConnection(true)
 	if err != nil {
 		log.Error().Err(err).Caller().Send()
 		return

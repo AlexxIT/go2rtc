@@ -1,6 +1,8 @@
 package webrtc
 
-import "github.com/AlexxIT/go2rtc/pkg/streamer"
+import (
+	"github.com/AlexxIT/go2rtc/pkg/streamer"
+)
 
 func (c *Conn) GetTrack(media *streamer.Media, codec *streamer.Codec) *streamer.Track {
 	for _, track := range c.tracks {
@@ -8,10 +10,14 @@ func (c *Conn) GetTrack(media *streamer.Media, codec *streamer.Codec) *streamer.
 			return track
 		}
 	}
-	return nil
+
+	track := streamer.NewTrack(codec, media.Direction)
+	c.tracks = append(c.tracks, track)
+	return track
 }
 
 func (c *Conn) Start() error {
+	<-c.start
 	return nil
 }
 

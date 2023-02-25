@@ -19,10 +19,11 @@ type Conn struct {
 	send    int
 
 	offer string
+	start chan struct{}
 }
 
 func NewConn(pc *webrtc.PeerConnection) *Conn {
-	c := &Conn{pc: pc}
+	c := &Conn{pc: pc, start: make(chan struct{})}
 
 	pc.OnICECandidate(func(candidate *webrtc.ICECandidate) {
 		c.Fire(candidate)
@@ -64,14 +65,11 @@ func NewConn(pc *webrtc.PeerConnection) *Conn {
 	pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		c.Fire(state)
 
-		// TODO: rewrite?
 		switch state {
-		case webrtc.PeerConnectionStateDisconnected:
+		case webrtc.PeerConnectionStateDisconnected, webrtc.PeerConnectionStateFailed, webrtc.PeerConnectionStateClosed:
 			// disconnect event comes earlier, than failed
 			// but it comes only for success connections
-			_ = pc.Close()
-		case webrtc.PeerConnectionStateFailed:
-			_ = pc.Close()
+			_ = c.Close()
 		}
 	})
 
@@ -79,6 +77,11 @@ func NewConn(pc *webrtc.PeerConnection) *Conn {
 }
 
 func (c *Conn) Close() error {
+	// unblocked write to chan
+	select {
+	case c.start <- struct{}{}:
+	default:
+	}
 	return c.pc.Close()
 }
 

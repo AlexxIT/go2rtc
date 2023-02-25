@@ -1,6 +1,10 @@
 package webrtc
 
-import "github.com/pion/webrtc/v3"
+import (
+	"github.com/AlexxIT/go2rtc/pkg/streamer"
+	"github.com/pion/sdp/v3"
+	"github.com/pion/webrtc/v3"
+)
 
 func (c *Conn) CreateOffer() (string, error) {
 	init := webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionRecvonly}
@@ -30,5 +34,29 @@ func (c *Conn) CreateCompleteOffer() (string, error) {
 
 func (c *Conn) SetAnswer(answer string) (err error) {
 	desc := webrtc.SessionDescription{SDP: answer, Type: webrtc.SDPTypeAnswer}
-	return c.pc.SetRemoteDescription(desc)
+	if err = c.pc.SetRemoteDescription(desc); err != nil {
+		return
+	}
+
+	sd := &sdp.SessionDescription{}
+	if err = sd.Unmarshal([]byte(answer)); err != nil {
+		return
+	}
+
+	medias := streamer.UnmarshalMedias(sd.MediaDescriptions)
+
+	// sort medias, so video will always be before audio
+	// and ignore application media from Hass default lovelace card
+	for _, media := range medias {
+		if media.Kind == streamer.KindVideo {
+			c.medias = append(c.medias, media)
+		}
+	}
+	for _, media := range medias {
+		if media.Kind == streamer.KindAudio {
+			c.medias = append(c.medias, media)
+		}
+	}
+
+	return nil
 }
