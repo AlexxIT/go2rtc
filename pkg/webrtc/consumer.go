@@ -9,11 +9,11 @@ import (
 	"github.com/pion/webrtc/v3"
 )
 
-func (c *Server) GetMedias() []*streamer.Media {
+func (c *Conn) GetMedias() []*streamer.Media {
 	return c.medias
 }
 
-func (c *Server) AddTrack(media *streamer.Media, track *streamer.Track) *streamer.Track {
+func (c *Conn) AddTrack(media *streamer.Media, track *streamer.Track) *streamer.Track {
 	switch track.Direction {
 	// send our track to WebRTC consumer
 	case streamer.DirectionSendonly:
@@ -41,7 +41,14 @@ func (c *Server) AddTrack(media *streamer.Media, track *streamer.Track) *streame
 			return nil
 		}
 
-		if _, err = c.conn.AddTrack(trackLocal); err != nil {
+		init := webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionSendonly}
+		tr, err := c.pc.AddTransceiverFromTrack(trackLocal, init)
+		if err != nil {
+			return nil
+		}
+
+		codecs := []webrtc.RTPCodecParameters{{RTPCodecCapability: caps}}
+		if err = tr.SetCodecPreferences(codecs); err != nil {
 			return nil
 		}
 
@@ -78,37 +85,39 @@ func (c *Server) AddTrack(media *streamer.Media, track *streamer.Track) *streame
 
 	// receive track from WebRTC consumer (microphone, backchannel, two way audio)
 	case streamer.DirectionRecvonly:
-		for _, tr := range c.conn.GetTransceivers() {
-			if tr.Mid() != media.MID {
-				continue
-			}
-
-			codec := track.Codec
-			caps := webrtc.RTPCodecCapability{
-				MimeType:  MimeType(codec),
-				ClockRate: codec.ClockRate,
-				Channels:  codec.Channels,
-			}
-			codecs := []webrtc.RTPCodecParameters{
-				{RTPCodecCapability: caps},
-			}
-			if err := tr.SetCodecPreferences(codecs); err != nil {
-				return nil
-			}
-
-			c.tracks = append(c.tracks, track)
-			return track
+		caps := webrtc.RTPCodecCapability{
+			MimeType:  MimeType(track.Codec),
+			ClockRate: track.Codec.ClockRate,
+			Channels:  track.Codec.Channels,
 		}
+
+		init := webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionRecvonly}
+		tr, err := c.pc.AddTransceiverFromKind(webrtc.RTPCodecTypeAudio, init)
+		if err != nil {
+			return nil
+		}
+
+		codecs := []webrtc.RTPCodecParameters{
+			{RTPCodecCapability: caps, PayloadType: webrtc.PayloadType(track.Codec.PayloadType)},
+		}
+		if err = tr.SetCodecPreferences(codecs); err != nil {
+			return nil
+		}
+
+		c.tracks = append(c.tracks, track)
+		return track
 	}
 
 	panic("wrong direction")
 }
 
-func (c *Server) MarshalJSON() ([]byte, error) {
+func (c *Conn) MarshalJSON() ([]byte, error) {
 	info := &streamer.Info{
-		Type:       "WebRTC client",
+		Type:       "WebRTC",
 		RemoteAddr: c.remote(),
 		UserAgent:  c.UserAgent,
+		Medias:     c.medias,
+		Tracks:     c.tracks,
 		Recv:       uint32(c.receive),
 		Send:       uint32(c.send),
 	}

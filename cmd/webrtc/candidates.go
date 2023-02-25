@@ -56,7 +56,7 @@ func GetCandidates() (candidates []string) {
 	return
 }
 
-func asyncCandidates(tr *api.Transport, cons *webrtc.Server) {
+func asyncCandidates(tr *api.Transport, cons *webrtc.Conn) {
 	tr.WithContext(func(ctx map[any]any) {
 		if candidates, ok := ctx["candidate"].([]string); ok {
 			// process candidates that receive before this moment
@@ -117,9 +117,9 @@ func candidateHandler(tr *api.Transport, msg *api.Message) error {
 		candidate := msg.String()
 		log.Trace().Str("candidate", candidate).Msg("[webrtc] remote")
 
-		if cons, ok := ctx["webrtc"].(*webrtc.Server); ok {
+		if cons, ok := ctx["webrtc"].(*webrtc.Conn); ok {
 			// if webrtc.Server already initialized - process candidate
-			cons.AddCandidate(candidate)
+			_ = cons.AddCandidate(candidate)
 		} else {
 			// or collect candidate and process it later
 			list, _ := ctx["candidate"].([]string)

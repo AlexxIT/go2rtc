@@ -1,7 +1,6 @@
 package webrtc
 
 import (
-	"encoding/json"
 	"errors"
 	"github.com/AlexxIT/go2rtc/cmd/api"
 	"github.com/AlexxIT/go2rtc/cmd/app"
@@ -9,10 +8,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	pion "github.com/pion/webrtc/v3"
 	"github.com/rs/zerolog"
-	"io"
-	"mime"
 	"net"
-	"net/http"
 )
 
 func Init() {
@@ -62,11 +58,16 @@ func Init() {
 		AddCandidate(candidate)
 	}
 
+	// async WebRTC server (two API versions)
 	api.HandleWS("webrtc", asyncHandler)
 	api.HandleWS("webrtc/offer", asyncHandler)
 	api.HandleWS("webrtc/candidate", candidateHandler)
 
+	// sync WebRTC server (two API versions)
 	api.HandleFunc("api/webrtc", syncHandler)
+
+	// WebRTC client
+	streams.HandleFunc("webrtc", streamsHandler)
 }
 
 var Port string
@@ -90,7 +91,7 @@ func asyncHandler(tr *api.Transport, msg *api.Message) error {
 		return err
 	}
 
-	cons := webrtc.NewServer(pc)
+	cons := webrtc.NewConn(pc)
 	cons.UserAgent = tr.Request.UserAgent()
 	cons.Listen(func(msg any) {
 		switch msg := msg.(type) {
@@ -153,65 +154,6 @@ func asyncHandler(tr *api.Transport, msg *api.Message) error {
 	return nil
 }
 
-func syncHandler(w http.ResponseWriter, r *http.Request) {
-	url := r.URL.Query().Get("src")
-	stream := streams.Get(url)
-	if stream == nil {
-		return
-	}
-
-	ct := r.Header.Get("Content-Type")
-	if ct != "" {
-		ct, _, _ = mime.ParseMediaType(ct)
-	}
-
-	// V2 - json/object exchange, V1 - raw SDP exchange
-	apiV2 := ct == "application/json"
-
-	var offer string
-	if apiV2 {
-		var desc pion.SessionDescription
-		if err := json.NewDecoder(r.Body).Decode(&desc); err != nil {
-			log.Error().Err(err).Caller().Send()
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		offer = desc.SDP
-	} else {
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			log.Error().Err(err).Caller().Send()
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		offer = string(body)
-	}
-
-	answer, err := ExchangeSDP(stream, offer, r.UserAgent())
-	if err != nil {
-		log.Error().Err(err).Caller().Send()
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// send SDP to client
-	if apiV2 {
-		w.Header().Set("Content-Type", ct)
-
-		v := pion.SessionDescription{
-			Type: pion.SDPTypeAnswer, SDP: answer,
-		}
-		if err = json.NewEncoder(w).Encode(v); err != nil {
-			log.Error().Err(err).Caller().Send()
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-	} else {
-		if _, err = w.Write([]byte(answer)); err != nil {
-			log.Error().Err(err).Caller().Send()
-		}
-	}
-}
-
 func ExchangeSDP(stream *streams.Stream, offer string, userAgent string) (answer string, err error) {
 	pc, err := newPeerConnection()
 	if err != nil {
@@ -220,7 +162,7 @@ func ExchangeSDP(stream *streams.Stream, offer string, userAgent string) (answer
 	}
 
 	// create new webrtc instance
-	conn := webrtc.NewServer(pc)
+	conn := webrtc.NewConn(pc)
 	conn.UserAgent = userAgent
 	conn.Listen(func(msg interface{}) {
 		switch msg := msg.(type) {
