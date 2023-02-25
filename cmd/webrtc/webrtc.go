@@ -32,17 +32,20 @@ func Init() {
 	address := cfg.Mod.Listen
 
 	// create pionAPI with custom codecs list and custom network settings
-	pionAPI, err := webrtc.NewAPI(address)
-	if pionAPI == nil {
+	serverAPI, err := webrtc.NewAPI(address)
+	if err != nil {
 		log.Error().Err(err).Caller().Send()
 		return
 	}
 
-	if err != nil {
-		log.Warn().Err(err).Caller().Send()
-	} else if address != "" {
+	// use same API for WebRTC server and client if no address
+	clientAPI := serverAPI
+
+	if address != "" {
 		log.Info().Str("addr", address).Msg("[webrtc] listen")
 		_, Port, _ = net.SplitHostPort(address)
+
+		clientAPI, _ = webrtc.NewAPI("")
 	}
 
 	pionConf := pion.Configuration{
@@ -52,9 +55,9 @@ func Init() {
 
 	newPeerConnection = func(isServer bool) (*pion.PeerConnection, error) {
 		if isServer {
-			return pionAPI.NewPeerConnection(pionConf)
+			return serverAPI.NewPeerConnection(pionConf)
 		} else {
-			return pion.NewPeerConnection(pionConf)
+			return clientAPI.NewPeerConnection(pionConf)
 		}
 	}
 
