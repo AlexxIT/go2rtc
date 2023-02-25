@@ -9,8 +9,6 @@ import (
 	"strings"
 )
 
-const packetSize = 1400
-
 func handlerWSMSE(tr *api.Transport, msg *api.Message) error {
 	src := tr.Request.URL.Query().Get("src")
 	stream := streams.GetOrNew(src)
@@ -30,10 +28,6 @@ func handlerWSMSE(tr *api.Transport, msg *api.Message) error {
 
 	cons.Listen(func(msg interface{}) {
 		if data, ok := msg.([]byte); ok {
-			for len(data) > packetSize {
-				tr.Write(data[:packetSize])
-				data = data[packetSize:]
-			}
 			tr.Write(data)
 		}
 	})
