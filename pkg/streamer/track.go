@@ -30,6 +30,9 @@ func NewTrack2(media *Media, codec *Codec) *Track {
 
 func (t *Track) String() string {
 	s := t.Codec.String()
+	if t.Codec.FmtpLine != "" {
+		s += " " + t.Codec.FmtpLine
+	}
 	if t.sinkMu.TryRLock() {
 		s += fmt.Sprintf(", sinks=%d", len(t.sink))
 		t.sinkMu.RUnlock()
