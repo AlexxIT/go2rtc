@@ -18,41 +18,46 @@ func (s *Stream) Play(source string) error {
 		return nil
 	}
 
+	var src streamer.Producer
+
 	for _, producer := range s.producers {
 		// start new client
-		client, err := GetProducer(producer.url)
+		dst, err := GetProducer(producer.url)
 		if err != nil {
-			return err
+			continue
 		}
 
 		// check if client support consumer interface
-		cons, ok := client.(streamer.Consumer)
+		cons, ok := dst.(streamer.Consumer)
 		if !ok {
+			_ = dst.Stop()
 			continue
 		}
 
 		// start new producer
-		prod, err := GetProducer(source)
-		if err != nil {
-			return err
+		if src == nil {
+			if src, err = GetProducer(source); err != nil {
+				return err
+			}
 		}
 
-		if !matchMedia(prod, cons) {
-			return errors.New("can't match media")
+		if !matchMedia(src, cons) {
+			_ = dst.Stop()
+			continue
 		}
 
-		s.AddInternalProducer(prod)
+		s.AddInternalProducer(src)
 		s.AddInternalConsumer(cons)
 
 		go func() {
-			_ = prod.Start()
-			_ = client.Stop()
-			s.RemoveProducer(prod)
+			_ = src.Start()
+			_ = dst.Stop()
+			s.RemoveProducer(src)
 		}()
 
 		go func() {
-			_ = client.Start()
-			_ = prod.Stop()
+			_ = dst.Start()
+			_ = src.Stop()
 			s.RemoveInternalConsumer(cons)
 		}()
 
