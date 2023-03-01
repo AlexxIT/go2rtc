@@ -139,7 +139,10 @@ type Codec struct {
 }
 
 func (c *Codec) String() string {
-	s := fmt.Sprintf("%d %s/%d", c.PayloadType, c.Name, c.ClockRate)
+	s := fmt.Sprintf("%d %s", c.PayloadType, c.Name)
+	if c.ClockRate != 90000 {
+		s = fmt.Sprintf("%s/%d", s, c.ClockRate)
+	}
 	if c.Channels > 0 {
 		s = fmt.Sprintf("%s/%d", s, c.Channels)
 	}
