@@ -5,6 +5,7 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/api"
 	"github.com/AlexxIT/go2rtc/cmd/app"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	pion "github.com/pion/webrtc/v3"
 	"github.com/rs/zerolog"
@@ -98,6 +99,8 @@ func asyncHandler(tr *api.Transport, msg *api.Message) error {
 		return err
 	}
 
+	var sendAnswer core.Waiter
+
 	cons := webrtc.NewConn(pc)
 	cons.UserAgent = tr.Request.UserAgent()
 	cons.Listen(func(msg any) {
@@ -106,12 +109,17 @@ func asyncHandler(tr *api.Transport, msg *api.Message) error {
 			if msg == pion.PeerConnectionStateClosed {
 				stream.RemoveConsumer(cons)
 			}
+
 		case *pion.ICECandidate:
-			if msg != nil {
-				s := msg.ToJSON().Candidate
-				log.Trace().Str("candidate", s).Msg("[webrtc] local")
-				tr.Write(&api.Message{Type: "webrtc/candidate", Value: s})
+			if msg == nil {
+				return
 			}
+
+			sendAnswer.Wait()
+
+			s := msg.ToJSON().Candidate
+			log.Trace().Str("candidate", s).Msg("[webrtc] local")
+			tr.Write(&api.Message{Type: "webrtc/candidate", Value: s})
 		}
 	})
 
@@ -155,6 +163,8 @@ func asyncHandler(tr *api.Transport, msg *api.Message) error {
 	} else {
 		tr.Write(&api.Message{Type: "webrtc/answer", Value: answer})
 	}
+
+	sendAnswer.Done()
 
 	asyncCandidates(tr, cons)
 
