@@ -61,7 +61,7 @@ func asyncCandidates(tr *api.Transport, cons *webrtc.Conn) {
 		if candidates, ok := ctx["candidate"].([]string); ok {
 			// process candidates that receive before this moment
 			for _, candidate := range candidates {
-				cons.AddCandidate(candidate)
+				_ = cons.AddCandidate(candidate)
 			}
 
 			// remove already processed candidates

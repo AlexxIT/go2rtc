@@ -61,7 +61,7 @@
 
             if (ev.candidate !== null) {
                 ws.send(JSON.stringify({
-                    type: 'webrtc/candidate', value: ev.candidate.toJSON().candidate
+                    type: 'webrtc/candidate', value: ev.candidate.candidate
                 }));
             }
         }

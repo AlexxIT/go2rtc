@@ -27,14 +27,17 @@
 <video id="video" autoplay controls playsinline muted></video>
 <script>
     // support api_path
-    let baseUrl = location.origin + location.pathname.substr(
+    const baseUrl = location.origin + location.pathname.substr(
         0, location.pathname.lastIndexOf("/")
     );
 
-    let pc = new RTCPeerConnection({
-        iceServers: [{urls: 'stun:stun.l.google.com:19302'}]
+    const pc = new RTCPeerConnection({
+        iceServers: [
+            {urls: 'stun:stun.l.google.com:19302'},
+        ]
     });
-    pc.onicegatheringstatechange = async () => {
+
+    pc.addEventListener('icegatheringstatechange', async () => {
         if (pc.iceGatheringState !== 'complete') return;
 
         let r = await fetch(`${baseUrl}/api/webrtc${location.search}`, {
@@ -43,20 +46,18 @@
         await pc.setRemoteDescription({
             type: 'answer', sdp: await r.text()
         });
-    }
-    pc.ontrack = ev => {
+    });
+    pc.addEventListener('track', ev => {
         let video = document.getElementById('video');
         if (video.srcObject === null) {
             video.srcObject = ev.streams[0];
         }
-    }
+    });
 
-    pc.addTransceiver('video');
-    pc.addTransceiver('audio');
+    pc.addTransceiver('video', {direction: 'recvonly'});
+    pc.addTransceiver('audio', {direction: 'recvonly'});
 
-    pc.createOffer({
-        offerToReceiveVideo: true, offerToReceiveAudio: true
-    }).then(offer => {
+    pc.createOffer().then(offer => {
         pc.setLocalDescription(offer);
     });
 </script>

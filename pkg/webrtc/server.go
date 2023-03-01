@@ -57,7 +57,7 @@ func (c *Conn) GetAnswer() (answer string, err error) {
 		return
 	}
 
-	return desc.SDP, nil
+	return c.pc.LocalDescription().SDP, nil
 }
 
 func (c *Conn) GetCompleteAnswer() (answer string, err error) {

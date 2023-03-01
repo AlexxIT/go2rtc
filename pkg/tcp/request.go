@@ -84,8 +84,7 @@ func Do(req *http.Request) (*http.Response, error) {
 
 		req.Header.Set("Authorization", header)
 
-		res, err = client.Do(req)
-		if err != nil {
+		if res, err = client.Do(req); err != nil {
 			return nil, err
 		}
 	}
