@@ -20,6 +20,7 @@ type Conn struct {
 	send    int
 
 	offer  string
+	remote string
 	closed core.Waiter
 }
 
@@ -32,6 +33,17 @@ func NewConn(pc *webrtc.PeerConnection) *Conn {
 
 	pc.OnDataChannel(func(channel *webrtc.DataChannel) {
 		c.Fire(channel)
+	})
+
+	pc.OnICEConnectionStateChange(func(state webrtc.ICEConnectionState) {
+		if state != webrtc.ICEConnectionStateChecking {
+			return
+		}
+		pc.SCTP().Transport().ICETransport().OnSelectedCandidatePairChange(
+			func(pair *webrtc.ICECandidatePair) {
+				c.remote = pair.Remote.String()
+			},
+		)
 	})
 
 	pc.OnTrack(func(remote *webrtc.TrackRemote, _ *webrtc.RTPReceiver) {
@@ -109,40 +121,4 @@ func (c *Conn) getTrack(remote *webrtc.TrackRemote) *streamer.Track {
 	}
 
 	return nil
-}
-
-func (c *Conn) remote() string {
-	if c.pc == nil {
-		return ""
-	}
-
-	for _, trans := range c.pc.GetTransceivers() {
-		if trans == nil {
-			continue
-		}
-
-		receiver := trans.Receiver()
-		if receiver == nil {
-			continue
-		}
-
-		transport := receiver.Transport()
-		if transport == nil {
-			continue
-		}
-
-		iceTransport := transport.ICETransport()
-		if iceTransport == nil {
-			continue
-		}
-
-		pair, _ := iceTransport.GetSelectedCandidatePair()
-		if pair == nil || pair.Remote == nil {
-			continue
-		}
-
-		return pair.Remote.String()
-	}
-
-	return ""
 }
