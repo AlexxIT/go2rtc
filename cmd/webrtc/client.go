@@ -60,8 +60,13 @@ func asyncClient(url string) (streamer.Producer, error) {
 		}
 	})
 
+	medias := []*streamer.Media{
+		{Kind: streamer.KindVideo, Direction: streamer.DirectionRecvonly},
+		{Kind: streamer.KindAudio, Direction: streamer.DirectionRecvonly},
+	}
+
 	// 3. Create offer
-	offer, err := prod.CreateOffer()
+	offer, err := prod.CreateOffer(medias)
 	if err != nil {
 		return nil, err
 	}
@@ -123,8 +128,13 @@ func syncClient(url string) (streamer.Producer, error) {
 
 	prod := webrtc.NewConn(pc)
 
+	medias := []*streamer.Media{
+		{Kind: streamer.KindVideo, Direction: streamer.DirectionRecvonly},
+		{Kind: streamer.KindAudio, Direction: streamer.DirectionRecvonly},
+	}
+
 	// 3. Create offer
-	offer, err := prod.CreateCompleteOffer()
+	offer, err := prod.CreateCompleteOffer(medias)
 	if err != nil {
 		return nil, err
 	}

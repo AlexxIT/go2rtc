@@ -6,10 +6,16 @@ import (
 	"github.com/pion/webrtc/v3"
 )
 
-func (c *Conn) CreateOffer() (string, error) {
-	init := webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionRecvonly}
-	_, _ = c.pc.AddTransceiverFromKind(webrtc.RTPCodecTypeVideo, init)
-	_, _ = c.pc.AddTransceiverFromKind(webrtc.RTPCodecTypeAudio, init)
+func (c *Conn) CreateOffer(medias []*streamer.Media) (string, error) {
+	for _, media := range medias {
+		if _, err := c.pc.AddTransceiverFromKind(
+			webrtc.NewRTPCodecType(media.Kind), webrtc.RTPTransceiverInit{
+				Direction: webrtc.NewRTPTransceiverDirection(media.Direction),
+			},
+		); err != nil {
+			return "", err
+		}
+	}
 
 	desc, err := c.pc.CreateOffer(nil)
 	if err != nil {
@@ -20,11 +26,11 @@ func (c *Conn) CreateOffer() (string, error) {
 		return "", err
 	}
 
-	return desc.SDP, nil
+	return c.pc.LocalDescription().SDP, nil
 }
 
-func (c *Conn) CreateCompleteOffer() (string, error) {
-	if _, err := c.CreateOffer(); err != nil {
+func (c *Conn) CreateCompleteOffer(medias []*streamer.Media) (string, error) {
+	if _, err := c.CreateOffer(medias); err != nil {
 		return "", err
 	}
 
@@ -47,13 +53,14 @@ func (c *Conn) SetAnswer(answer string) (err error) {
 
 	// sort medias, so video will always be before audio
 	// and ignore application media from Hass default lovelace card
+	// ignore media without direction (inactive media)
 	for _, media := range medias {
-		if media.Kind == streamer.KindVideo {
+		if media.Kind == streamer.KindVideo && media.Direction != "" {
 			c.medias = append(c.medias, media)
 		}
 	}
 	for _, media := range medias {
-		if media.Kind == streamer.KindAudio {
+		if media.Kind == streamer.KindAudio && media.Direction != "" {
 			c.medias = append(c.medias, media)
 		}
 	}
