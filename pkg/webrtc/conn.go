@@ -1,6 +1,7 @@
 package webrtc
 
 import (
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/pion/webrtc/v3"
 )
@@ -18,12 +19,12 @@ type Conn struct {
 	receive int
 	send    int
 
-	offer string
-	start chan struct{}
+	offer  string
+	closed core.Waiter
 }
 
 func NewConn(pc *webrtc.PeerConnection) *Conn {
-	c := &Conn{pc: pc, start: make(chan struct{})}
+	c := &Conn{pc: pc}
 
 	pc.OnICECandidate(func(candidate *webrtc.ICECandidate) {
 		c.Fire(candidate)
@@ -77,11 +78,7 @@ func NewConn(pc *webrtc.PeerConnection) *Conn {
 }
 
 func (c *Conn) Close() error {
-	// unblocked write to chan
-	select {
-	case c.start <- struct{}{}:
-	default:
-	}
+	c.closed.Done()
 	return c.pc.Close()
 }
 

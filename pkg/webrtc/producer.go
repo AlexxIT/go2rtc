@@ -17,7 +17,7 @@ func (c *Conn) GetTrack(media *streamer.Media, codec *streamer.Codec) *streamer.
 }
 
 func (c *Conn) Start() error {
-	<-c.start
+	c.closed.Wait()
 	return nil
 }
 
