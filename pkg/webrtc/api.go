@@ -22,9 +22,7 @@ func NewAPI(address string) (*webrtc.API, error) {
 		return nil, err
 	}
 
-	s := webrtc.SettingEngine{
-		//LoggerFactory: customLoggerFactory{},
-	}
+	s := webrtc.SettingEngine{}
 
 	// disable listen on Hassio docker interfaces
 	s.SetInterfaceFilter(func(name string) bool {
@@ -34,12 +32,15 @@ func NewAPI(address string) (*webrtc.API, error) {
 	// disable mDNS listener
 	s.SetICEMulticastDNSMode(ice.MulticastDNSModeDisabled)
 
-	if address != "" {
-		s.SetNetworkTypes([]webrtc.NetworkType{
-			webrtc.NetworkTypeUDP4, webrtc.NetworkTypeUDP6,
-			webrtc.NetworkTypeTCP4, webrtc.NetworkTypeTCP6,
-		})
+	// UDP6 may have problems with DNS resolving for STUN servers
+	s.SetNetworkTypes([]webrtc.NetworkType{
+		webrtc.NetworkTypeUDP4, webrtc.NetworkTypeTCP4,
+	})
 
+	// fix https://github.com/pion/webrtc/pull/2407
+	s.SetDTLSInsecureSkipHelloVerify(true)
+
+	if address != "" {
 		if ln, err := net.ListenPacket("udp", address); err == nil {
 			udpMux := webrtc.NewICEUDPMux(nil, ln)
 			s.SetICEUDPMux(udpMux)
@@ -61,14 +62,22 @@ func NewAPI(address string) (*webrtc.API, error) {
 func RegisterDefaultCodecs(m *webrtc.MediaEngine) error {
 	for _, codec := range []webrtc.RTPCodecParameters{
 		{
-			RTPCodecCapability: webrtc.RTPCodecCapability{webrtc.MimeTypeOpus, 48000, 2, "minptime=10;useinbandfec=1", nil},
-			PayloadType:        101, //111,
-		}, {
-			RTPCodecCapability: webrtc.RTPCodecCapability{webrtc.MimeTypePCMU, 8000, 0, "", nil},
-			PayloadType:        0,
-		}, {
-			RTPCodecCapability: webrtc.RTPCodecCapability{webrtc.MimeTypePCMA, 8000, 0, "", nil},
-			PayloadType:        8,
+			RTPCodecCapability: webrtc.RTPCodecCapability{
+				MimeType: webrtc.MimeTypeOpus, ClockRate: 48000, Channels: 2, SDPFmtpLine: "minptime=10;useinbandfec=1",
+			},
+			PayloadType: 101, //111,
+		},
+		{
+			RTPCodecCapability: webrtc.RTPCodecCapability{
+				MimeType: webrtc.MimeTypePCMU, ClockRate: 8000,
+			},
+			PayloadType: 0,
+		},
+		{
+			RTPCodecCapability: webrtc.RTPCodecCapability{
+				MimeType: webrtc.MimeTypePCMA, ClockRate: 8000,
+			},
+			PayloadType: 8,
 		},
 	} {
 		if err := m.RegisterCodec(codec, webrtc.RTPCodecTypeAudio); err != nil {
@@ -76,23 +85,48 @@ func RegisterDefaultCodecs(m *webrtc.MediaEngine) error {
 		}
 	}
 
-	videoRTCPFeedback := []webrtc.RTCPFeedback{{"goog-remb", ""}, {"ccm", "fir"}, {"nack", ""}, {"nack", "pli"}}
+	videoRTCPFeedback := []webrtc.RTCPFeedback{
+		{"goog-remb", ""},
+		{"ccm", "fir"},
+		{"nack", ""},
+		{"nack", "pli"},
+	}
 	for _, codec := range []webrtc.RTPCodecParameters{
 		// macOS Google Chrome 103.0.5060.134
 		{
-			RTPCodecCapability: webrtc.RTPCodecCapability{webrtc.MimeTypeH264, 90000, 0, "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f", videoRTCPFeedback},
-			PayloadType:        96, //102,
-		}, {
-			RTPCodecCapability: webrtc.RTPCodecCapability{webrtc.MimeTypeH264, 90000, 0, "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f", videoRTCPFeedback},
-			PayloadType:        97, //125,
-		}, {
-			RTPCodecCapability: webrtc.RTPCodecCapability{webrtc.MimeTypeH264, 90000, 0, "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640032", videoRTCPFeedback},
-			PayloadType:        98, //123,
+			RTPCodecCapability: webrtc.RTPCodecCapability{
+				MimeType:     webrtc.MimeTypeH264,
+				ClockRate:    90000,
+				SDPFmtpLine:  "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f",
+				RTCPFeedback: videoRTCPFeedback,
+			},
+			PayloadType: 96, //102,
+		},
+		{
+			RTPCodecCapability: webrtc.RTPCodecCapability{
+				MimeType:     webrtc.MimeTypeH264,
+				ClockRate:    90000,
+				SDPFmtpLine:  "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f",
+				RTCPFeedback: videoRTCPFeedback,
+			},
+			PayloadType: 97, //125,
+		},
+		{
+			RTPCodecCapability: webrtc.RTPCodecCapability{
+				MimeType:     webrtc.MimeTypeH264,
+				ClockRate:    90000,
+				SDPFmtpLine:  "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640032",
+				RTCPFeedback: videoRTCPFeedback},
+			PayloadType: 98, //123,
 		},
 		// macOS Safari 15.1
 		{
-			RTPCodecCapability: webrtc.RTPCodecCapability{webrtc.MimeTypeH265, 90000, 0, "", videoRTCPFeedback},
-			PayloadType:        100,
+			RTPCodecCapability: webrtc.RTPCodecCapability{
+				MimeType:     webrtc.MimeTypeH265,
+				ClockRate:    90000,
+				RTCPFeedback: videoRTCPFeedback,
+			},
+			PayloadType: 100,
 		},
 	} {
 		if err := m.RegisterCodec(codec, webrtc.RTPCodecTypeVideo); err != nil {

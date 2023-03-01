@@ -56,4 +56,6 @@ replace (
 	github.com/brutella/hap v0.0.17 => github.com/AlexxIT/hap v0.0.15-0.20221108133010-d8a45b7a7045
 	// fix reading AAC config bytes
 	github.com/deepch/vdk v0.0.19 => github.com/AlexxIT/vdk v0.0.18-0.20221108193131-6168555b4f92
+	// fix DTLS InsecureSkipHelloVerify option
+	github.com/pion/webrtc/v3 v3.1.56 => github.com/AlexxIT/pion-webrtc/v3 v3.0.0-20230228104617-597d4c8aefbf
 )
