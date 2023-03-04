@@ -71,3 +71,4 @@ https://webrtc.org/getting-started/unified-plan-transition-guide?hl=en
 - https://googlechrome.github.io/samples/media/sourcebuffer-changetype.html
 - https://chromestatus.com/feature/5100845653819392
 - https://developer.apple.com/documentation/webkit/delivering_video_content_for_safari
+- https://dirask.com/posts/JavaScript-supported-Audio-Video-MIME-Types-by-MediaRecorder-Chrome-and-Firefox-jERn81
