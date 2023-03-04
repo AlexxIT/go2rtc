@@ -78,8 +78,17 @@ func (m *Media) MarshalJSON() ([]byte, error) {
 }
 
 func (m *Media) Clone() *Media {
-	clone := *m
-	return &clone
+	clone := &Media{
+		Kind:      m.Kind,
+		Direction: m.Direction,
+		Codecs:    make([]*Codec, len(m.Codecs)),
+		MID:       m.MID,
+		Control:   m.Control,
+	}
+	for i, codec := range m.Codecs {
+		clone.Codecs[i] = codec.Clone()
+	}
+	return clone
 }
 
 func (m *Media) AV() bool {

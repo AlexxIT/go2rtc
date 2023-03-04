@@ -77,7 +77,7 @@ func (c *Client) GetTrack(media *streamer.Media, codec *streamer.Codec) *streame
 		}
 	}
 
-	track := streamer.NewTrack(codec, media.Direction)
+	track := streamer.NewTrack(media, codec)
 	c.tracks = append(c.tracks, track)
 	return track
 }

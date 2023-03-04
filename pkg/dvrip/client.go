@@ -376,7 +376,7 @@ func (c *Client) AddVideoTrack(mediaCode byte, payload []byte) {
 	}
 	c.medias = append(c.medias, media)
 
-	c.videoTrack = streamer.NewTrack(codec, media.Direction)
+	c.videoTrack = streamer.NewTrack(media, codec)
 }
 
 var sampleRates = []uint32{4000, 8000, 11025, 16000, 20000, 22050, 32000, 44100, 48000}
@@ -410,7 +410,7 @@ func (c *Client) AddAudioTrack(mediaCode byte, sampleRate byte) {
 	}
 	c.medias = append(c.medias, media)
 
-	c.audioTrack = streamer.NewTrack(codec, media.Direction)
+	c.audioTrack = streamer.NewTrack(media, codec)
 }
 
 func SofiaHash(password string) string {

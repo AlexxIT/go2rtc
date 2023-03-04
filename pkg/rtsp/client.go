@@ -463,7 +463,7 @@ func (c *Conn) SetupMedia(media *streamer.Media, codec *streamer.Codec, first bo
 		return nil, err
 	}
 
-	track := streamer.NewTrack(codec, media.Direction)
+	track := streamer.NewTrack(media, codec)
 
 	switch track.Direction {
 	case streamer.DirectionSendonly:

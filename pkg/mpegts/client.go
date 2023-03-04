@@ -52,7 +52,7 @@ func (c *Client) Handle() error {
 					continue // unsupported codec
 				}
 
-				track = streamer.NewTrack2(media, nil)
+				track = streamer.NewTrack(media, nil)
 
 				c.medias = append(c.medias, media)
 				c.tracks[packet.PayloadType] = track

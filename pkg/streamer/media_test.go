@@ -1,8 +1,10 @@
 package streamer
 
 import (
+	"fmt"
 	"github.com/pion/sdp/v3"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"net/url"
 	"testing"
 )
@@ -39,4 +41,23 @@ func TestParseQuery(t *testing.T) {
 			{Kind: KindVideo, Direction: DirectionRecvonly, Codecs: []*Codec{{Name: CodecAny}}},
 		}, medias)
 	}
+}
+
+func TestClone(t *testing.T) {
+	media1 := &Media{
+		Kind:      KindVideo,
+		Direction: DirectionRecvonly,
+		Codecs: []*Codec{
+			{Name: CodecPCMU, ClockRate: 8000},
+		},
+	}
+	media2 := media1.Clone()
+
+	p1 := fmt.Sprintf("%p", media1)
+	p2 := fmt.Sprintf("%p", media2)
+	require.NotEqualValues(t, p1, p2)
+
+	p3 := fmt.Sprintf("%p", media1.Codecs[0])
+	p4 := fmt.Sprintf("%p", media2.Codecs[0])
+	require.NotEqualValues(t, p3, p4)
 }

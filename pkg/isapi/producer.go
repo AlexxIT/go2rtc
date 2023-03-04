@@ -17,7 +17,7 @@ func (c *Client) GetTrack(media *streamer.Media, codec *streamer.Codec) *streame
 		}
 	}
 
-	track := streamer.NewTrack(codec, media.Direction)
+	track := streamer.NewTrack(media, codec)
 	track = track.Bind(func(packet *rtp.Packet) (err error) {
 		if c.conn != nil {
 			c.send += len(packet.Payload)

@@ -113,7 +113,7 @@ func (c *Conn) getTrack(remote *webrtc.TrackRemote) *streamer.Track {
 	for _, media := range c.medias {
 		for _, codec := range media.Codecs {
 			if codec.PayloadType == payloadType {
-				track := streamer.NewTrack(codec, media.Direction)
+				track := streamer.NewTrack(media, codec)
 				c.tracks = append(c.tracks, track)
 				return track
 			}

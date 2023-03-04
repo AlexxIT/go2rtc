@@ -40,7 +40,7 @@ func (c *Conn) GetTrack(media *streamer.Media, codec *streamer.Codec) *streamer.
 	switch c.state {
 	case StatePlay, StateHandle:
 		go c.Close()
-		return streamer.NewTrack(codec, media.Direction)
+		return streamer.NewTrack(media, codec)
 	}
 
 	track, err := c.SetupMedia(media, codec, true)

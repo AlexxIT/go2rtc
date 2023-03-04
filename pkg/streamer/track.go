@@ -17,11 +17,7 @@ type Track struct {
 	sinkMu    *sync.RWMutex
 }
 
-func NewTrack(codec *Codec, direction string) *Track {
-	return &Track{Codec: codec, Direction: direction, sinkMu: new(sync.RWMutex)}
-}
-
-func NewTrack2(media *Media, codec *Codec) *Track {
+func NewTrack(media *Media, codec *Codec) *Track {
 	if codec == nil {
 		codec = media.Codecs[0]
 	}
@@ -55,6 +51,8 @@ func (t *Track) WriteRTP(p *rtp.Packet) error {
 	return nil
 }
 
+// Bind - attach WriterFunc (Consumer) for receiving rtp.Packet(s)
+// and return new Track copy. Later you can run Unbind for new Track
 func (t *Track) Bind(w WriterFunc) *Track {
 	t.sinkMu.Lock()
 
@@ -70,6 +68,8 @@ func (t *Track) Bind(w WriterFunc) *Track {
 	return &clone
 }
 
+// Unbind - detach WriterFunc that related to this Track from
+// consuming track data
 func (t *Track) Unbind() {
 	t.sinkMu.Lock()
 	delete(t.sink, t)

@@ -53,7 +53,7 @@ func (c *Client) GetTrack(media *streamer.Media, codec *streamer.Codec) (track *
 			return nil
 		}
 
-		track = streamer.NewTrack2(media, codec)
+		track = streamer.NewTrack(media, codec)
 		c.tracks[mpegts.StreamTypeH264] = track
 	} else {
 		if media.Direction == streamer.DirectionSendonly {
@@ -61,7 +61,7 @@ func (c *Client) GetTrack(media *streamer.Media, codec *streamer.Codec) (track *
 				return nil
 			}
 
-			track = streamer.NewTrack2(media, codec)
+			track = streamer.NewTrack(media, codec)
 			c.tracks[mpegts.StreamTypePCMATapo] = track
 		} else {
 			if err := c.SetupBackchannel(); err != nil {
@@ -69,7 +69,7 @@ func (c *Client) GetTrack(media *streamer.Media, codec *streamer.Codec) (track *
 			}
 
 			if w := c.backchannelWriter(); w != nil {
-				track = streamer.NewTrack2(media, codec)
+				track = streamer.NewTrack(media, codec)
 				track.Bind(w)
 				c.tracks[0] = track
 			}

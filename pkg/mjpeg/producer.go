@@ -25,7 +25,7 @@ func (c *Client) GetMedias() []*streamer.Media {
 
 func (c *Client) GetTrack(media *streamer.Media, codec *streamer.Codec) *streamer.Track {
 	if c.track == nil {
-		c.track = streamer.NewTrack(codec, streamer.DirectionSendonly)
+		c.track = streamer.NewTrack(media, codec)
 	}
 	return c.track
 }

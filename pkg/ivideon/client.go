@@ -232,7 +232,7 @@ func (c *Client) getTracks() error {
 				}
 				c.medias = append(c.medias, media)
 
-				track := streamer.NewTrack(codec, streamer.DirectionSendonly)
+				track := streamer.NewTrack(media, codec)
 				c.tracks[msg.TrackID] = track
 
 			case "mp4a": // mp4a.40.2
