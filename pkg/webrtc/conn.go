@@ -28,7 +28,10 @@ func NewConn(pc *webrtc.PeerConnection) *Conn {
 	c := &Conn{pc: pc}
 
 	pc.OnICECandidate(func(candidate *webrtc.ICECandidate) {
-		c.Fire(candidate)
+		// last candidate will be empty
+		if candidate != nil {
+			c.Fire(candidate)
+		}
 	})
 
 	pc.OnDataChannel(func(channel *webrtc.DataChannel) {

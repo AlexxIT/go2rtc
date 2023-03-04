@@ -111,10 +111,6 @@ func asyncHandler(tr *api.Transport, msg *api.Message) error {
 			}
 
 		case *pion.ICECandidate:
-			if msg == nil {
-				return
-			}
-
 			sendAnswer.Wait()
 
 			s := msg.ToJSON().Candidate

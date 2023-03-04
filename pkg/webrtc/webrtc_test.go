@@ -18,7 +18,7 @@ func TestCandidates(t *testing.T) {
 	}
 	cand, err := ice.NewCandidateHost(conf)
 	require.Nil(t, err)
-	assert.Equal(t, "candidate:"+cand.Marshal(), CandidateHostUDP(conf.Address, conf.Port))
+	assert.Equal(t, "candidate:"+cand.Marshal(), CandidateManualHostUDP(conf.Address, conf.Port))
 
 	conf = &ice.CandidateHostConfig{
 		Network:   "tcp",
@@ -29,7 +29,7 @@ func TestCandidates(t *testing.T) {
 	}
 	cand, err = ice.NewCandidateHost(conf)
 	require.Nil(t, err)
-	assert.Equal(t, "candidate:"+cand.Marshal(), CandidateHostTCPPassive(conf.Address, conf.Port))
+	assert.Equal(t, "candidate:"+cand.Marshal(), CandidateManualHostTCPPassive(conf.Address, conf.Port))
 }
 
 func TestPublicIP(t *testing.T) {

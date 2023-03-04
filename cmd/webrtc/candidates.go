@@ -48,8 +48,8 @@ func GetCandidates() (candidates []string) {
 
 		candidates = append(
 			candidates,
-			webrtc.CandidateHostUDP(address.Host, address.Port),
-			webrtc.CandidateHostTCPPassive(address.Host, address.Port),
+			webrtc.CandidateManualHostUDP(address.Host, address.Port),
+			webrtc.CandidateManualHostTCPPassive(address.Host, address.Port),
 		)
 	}
 
@@ -90,17 +90,8 @@ func syncCanditates(answer string) (string, error) {
 
 	md := sd.MediaDescriptions[0]
 
-	_, end := md.Attribute("end-of-candidates")
-	if end {
-		md.Attributes = md.Attributes[:len(md.Attributes)-1]
-	}
-
 	for _, candidate := range GetCandidates() {
 		md.WithPropertyAttribute(candidate)
-	}
-
-	if end {
-		md.WithPropertyAttribute("end-of-candidates")
 	}
 
 	data, err := sd.Marshal()

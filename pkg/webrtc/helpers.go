@@ -159,14 +159,22 @@ func MimeType(codec *streamer.Codec) string {
 	panic("not implemented")
 }
 
-const PriorityHost = (1 << 24) * uint32(126)
+// 4.1.2.2.  Guidelines for Choosing Type and Local Preferences
+// The RECOMMENDED values are 126 for host candidates, 100
+// for server reflexive candidates, 110 for peer reflexive candidates,
+// and 0 for relayed candidates.
+
+// We use new priority 120 for Manual Host. It is lower than real Host,
+// but more then any other candidates.
+
+const PriorityManualHost = (1 << 24) * uint32(120)
 const PriorityLocalUDP = (1 << 8) * uint32(65535)
 const PriorityLocalTCPPassive = (1 << 8) * uint32((1<<13)*4+8191)
 const PriorityComponentRTP = uint32(256 - ice.ComponentRTP)
 
-func CandidateHostUDP(host string, port int) string {
+func CandidateManualHostUDP(host string, port int) string {
 	foundation := crc32.ChecksumIEEE([]byte("host" + host + "udp4"))
-	priority := PriorityHost + PriorityLocalUDP + PriorityComponentRTP
+	priority := PriorityManualHost + PriorityLocalUDP + PriorityComponentRTP
 
 	// 1. Foundation
 	// 2. Component, always 1 because RTP
@@ -181,9 +189,9 @@ func CandidateHostUDP(host string, port int) string {
 	)
 }
 
-func CandidateHostTCPPassive(address string, port int) string {
+func CandidateManualHostTCPPassive(address string, port int) string {
 	foundation := crc32.ChecksumIEEE([]byte("host" + address + "tcp4"))
-	priority := PriorityHost + PriorityLocalTCPPassive + PriorityComponentRTP
+	priority := PriorityManualHost + PriorityLocalTCPPassive + PriorityComponentRTP
 
 	return fmt.Sprintf(
 		"candidate:%d 1 tcp %d %s %d typ host tcptype passive",

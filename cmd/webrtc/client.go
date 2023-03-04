@@ -3,6 +3,7 @@ package webrtc
 import (
 	"errors"
 	"github.com/AlexxIT/go2rtc/cmd/api"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	"github.com/gorilla/websocket"
@@ -45,6 +46,8 @@ func asyncClient(url string) (streamer.Producer, error) {
 		return nil, err
 	}
 
+	var sendOffer core.Waiter
+
 	prod := webrtc.NewConn(pc)
 	prod.Listen(func(msg any) {
 		switch msg := msg.(type) {
@@ -52,11 +55,11 @@ func asyncClient(url string) (streamer.Producer, error) {
 			_ = ws.Close()
 
 		case *pion.ICECandidate:
-			if msg != nil {
-				s := msg.ToJSON().Candidate
-				log.Trace().Str("candidate", s).Msg("[webrtc] local")
-				_ = ws.WriteJSON(&api.Message{Type: "webrtc/candidate", Value: s})
-			}
+			sendOffer.Wait()
+
+			s := msg.ToJSON().Candidate
+			log.Trace().Str("candidate", s).Msg("[webrtc] local")
+			_ = ws.WriteJSON(&api.Message{Type: "webrtc/candidate", Value: s})
 		}
 	})
 
@@ -76,6 +79,8 @@ func asyncClient(url string) (streamer.Producer, error) {
 	if err = ws.WriteJSON(msg); err != nil {
 		return nil, err
 	}
+
+	sendOffer.Done()
 
 	// 5. Get answer
 	if err = ws.ReadJSON(msg); err != nil {

@@ -51,3 +51,21 @@ func (w *Waiter) Done() {
 
 	w.mu.Unlock()
 }
+
+func (w *Waiter) WaitChan() <-chan struct{} {
+	var ch chan struct{}
+
+	w.mu.Lock()
+
+	if w.state >= 0 {
+		ch = make(chan struct{})
+		go func() {
+			w.Wait()
+			ch <- struct{}{}
+		}()
+	}
+
+	w.mu.Unlock()
+
+	return ch
+}
