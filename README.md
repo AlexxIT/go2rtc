@@ -541,7 +541,12 @@ Read more about [codecs filters](#codecs-filters).
 
 ### Module: WebRTC
 
-WebRTC usually works without problems in the local network. But external access may require additional settings. It depends on what type of Internet do you have.
+In most cases [WebRTC](https://en.wikipedia.org/wiki/WebRTC) uses direct peer-to-peer connection from your browser to go2rtc and sends media data via UDP.
+It **can't pass** media data through your Nginx or Cloudflare or [Nabu Casa](https://www.nabucasa.com/) HTTP TCP connection!
+It can automatically detects your external IP via public [STUN](https://en.wikipedia.org/wiki/STUN) server.
+It can establish a external direct connection via [UDP hole punching](https://en.wikipedia.org/wiki/UDP_hole_punching) technology even if you not open your server to the World.
+
+But about 10-20% of users may need to configure additional settings for external access if **mobile phone** or **go2rtc server** behing [Symmetric NAT](https://tomchen.github.io/symmetric-nat-test/).
 
 - by default, WebRTC uses both TCP and UDP on port 8555 for connections
 - you can use this port for external access
