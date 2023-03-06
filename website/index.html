@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>go2rtc</title>
+    <style>
+        body {
+            background-color: black;
+            margin: 0;
+            padding: 0;
+        }
+
+        html, body, video {
+            height: 100%;
+            width: 100%;
+        }
+
+        div {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            display: flex;
+            flex-direction: column;
+            transform: translateX(-50%) translateY(-50%);
+        }
+    </style>
+</head>
+<body>
+<video id="video" autoplay controls playsinline muted></video>
+<div id="login">
+    <input id="share" type="text" placeholder="share">
+    <input id="pwd" type="text" placeholder="password">
+    <button id="connect">connect</button>
+</div>
+<script>
+    function decode(buffer) {
+        return String.fromCharCode(...new Uint8Array(buffer))
+    }
+
+    function encode(string) {
+        return Uint8Array.from(string, c => c.charCodeAt(0))
+    }
+
+    async function cipher(share, pwd) {
+        const hash = await crypto.subtle.digest('SHA-256', encode(share))
+        const nonce = (Date.now() * 1000000).toString(36)
+
+        const ivData = await crypto.subtle.digest('SHA-256', encode(share + ':' + nonce))
+        const keyData = await crypto.subtle.digest('SHA-256', encode(nonce + ':' + pwd))
+        const key = await crypto.subtle.importKey(
+            'raw', keyData, {name: 'AES-GCM'}, false, ['encrypt', 'decrypt'],
+        )
+
+        return {
+            hash: btoa(decode(hash)),
+            nonce: nonce,
+            encrypt: async function (plaintext) {
+                const cryptotext = await crypto.subtle.encrypt(
+                    {name: 'AES-GCM', iv: ivData.slice(0, 12), additionalData: encode(nonce)},
+                    key, encode(plaintext),
+                )
+                return btoa(decode(cryptotext))
+            },
+            decrypt: async function (cryptotext) {
+                const plaintext = await crypto.subtle.decrypt(
+                    {name: 'AES-GCM', iv: ivData.slice(0, 12), additionalData: encode(nonce)},
+                    key, encode(atob(cryptotext)),
+                )
+                return decode(plaintext)
+            }
+        }
+    }
+
+    function PeerConnection() {
+        return new Promise((resolve, reject) => {
+            const pc = new RTCPeerConnection({
+                iceServers: [{urls: 'stun:stun.l.google.com:19302'}]
+            })
+
+            pc.addEventListener('icegatheringstatechange', () => {
+                if (pc.iceGatheringState === 'complete') resolve(pc)
+            })
+
+            pc.addEventListener('track', ev => {
+                const video = document.getElementById('video')
+
+                // when audio track not exist in Chrome
+                if (ev.streams.length === 0) return
+
+                // when audio track not exist in Firefox
+                if (ev.streams[0].id[0] === '{') return
+
+                // when stream already init
+                if (video.srcObject !== null) return
+
+                video.srcObject = ev.streams[0]
+            })
+
+            pc.addTransceiver('video', {direction: 'recvonly'})
+            pc.addTransceiver('audio', {direction: 'recvonly'})
+
+            pc.createOffer().then(offer => pc.setLocalDescription(offer))
+
+            setTimeout(() => resolve(pc), 3000)
+        })
+    }
+
+    async function connect(share, pwd, tracker) {
+        const crypto = await cipher(share, pwd)
+        const pc = await PeerConnection()
+        const offer = await crypto.encrypt(pc.localDescription.sdp)
+
+        const ws = new WebSocket(tracker || 'wss://tracker.openwebtorrent.com/')
+        ws.addEventListener('open', () => {
+            ws.send(JSON.stringify({
+                action: 'announce',
+                info_hash: crypto.hash,
+                peer_id: Math.random().toString(36).substring(2),
+                offers: [{
+                    offer_id: crypto.nonce,
+                    offer: {type: 'offer', sdp: offer},
+                }],
+                numwant: 1,
+            }))
+        })
+
+        ws.addEventListener('message', async (ev) => {
+            const msg = JSON.parse(ev.data)
+            if (!msg.answer) return
+
+            const answer = await crypto.decrypt(msg.answer.sdp)
+            await pc.setRemoteDescription({type: 'answer', sdp: answer})
+
+            ws.close()
+        })
+    }
+
+    document.getElementById('connect').addEventListener('click', () => {
+        const share = document.getElementById('share').value
+        const pwd = document.getElementById('pwd').value
+        connect(share, pwd)
+        document.getElementById('login').style.display = 'none'
+    })
+
+    if (location.hash) {
+        const params = new URLSearchParams(location.hash.substring(1))
+        const share = params.get('share')
+        const pwd = params.get('pwd')
+        const tracker = params.get('tr')
+        connect(share, pwd, tracker)
+        document.getElementById('login').style.display = 'none'
+    }
+</script>
+</body>
+</html>
