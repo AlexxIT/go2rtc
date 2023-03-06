@@ -16,7 +16,7 @@
             flex-direction: column;
         }
 
-        html, body, #config {
+        html, body {
             width: 100%;
             height: 100%;
         }
@@ -41,43 +41,26 @@
 <body>
 <script src="main.js"></script>
 <div id="links"></div>
-<div id="audio">
-    <h2>Play audio</h2>
-    <input id="source" type="text" placeholder="source">
-    <a id="send" href="#">send</a> / cameras with two way audio support
-</div>
 <script>
-    const params = new URLSearchParams(location.search);
-    const src = params.get("src");
+    const src = new URLSearchParams(location.search).get('src')
 
-    document.querySelector("#send")
-        .addEventListener("click", () => {
-            const source = document.querySelector("#source");
-            const url = new URL("api/streams", location.href);
-            url.searchParams.set("dst", src);
-            url.searchParams.set("src", source.value);
-            fetch(url, {method: "POST"});
-        });
-
-    const links = document.querySelector("#links");
-    links.innerHTML = `
+    document.getElementById('links').innerHTML = `
         <h2>Any codec in source</h2>
         <li><a href="stream.html?src=${src}">stream.html</a> with auto-select mode / browsers: all / codecs: H264, H265*, MJPEG, JPEG, AAC, PCMU, PCMA, OPUS</li>
         <li><a href="api/streams?src=${src}">info.json</a> page with active connections</li>
-    `;
+    `
 
-    const url = new URL('api', location.href);
+    const url = new URL('api', location.href)
     fetch(url, {cache: 'no-cache'}).then(r => r.json()).then(data => {
-        let rtsp = location.host + ':8554';
+        let rtsp = location.host + ':8554'
         try {
-            const host = data.host.match(/^[^:]+/)[0];
-            const port = data.rtsp.listen.match(/[0-9]+$/)[0];
-            rtsp = `${host}:${port}`;
+            const host = data.host.match(/^[^:]+/)[0]
+            const port = data.rtsp.listen.match(/[0-9]+$/)[0]
+            rtsp = `${host}:${port}`
         } catch (e) {
         }
 
-        const links = document.querySelector("#links");
-        links.innerHTML += `
+        document.getElementById('links').innerHTML += `
             <li><a href="rtsp://${rtsp}/${src}">rtsp</a> with only one video and one audio / codecs: any</li>
             <li><a href="rtsp://${rtsp}/${src}?mp4">rtsp</a> for MP4 recording (Hass or Frigate) / codecs: H264, H265, AAC</li>
             <li><a href="rtsp://${rtsp}/${src}?video=all&audio=all">rtsp</a> with all tracks / codecs: any</li>
@@ -96,8 +79,71 @@
             <li><a href="stream.html?src=${src}&mode=mjpeg">stream.html</a> with MJPEG mode / browsers: all / codecs: MJPEG, JPEG</li>
             <li><a href="api/stream.mjpeg?src=${src}">stream.mjpeg</a> MJPEG stream / browsers: all / codecs: MJPEG, JPEG</li>
             <li><a href="api/frame.jpeg?src=${src}">frame.jpeg</a> snapshot in JPEG-format / browsers: all / codecs: MJPEG, JPEG</li>
-        `;
-    });
+        `
+    })
 </script>
+
+<div>
+    <h2>Play audio</h2>
+    <input id="source" type="text" placeholder="source">
+    <a id="send" href="#">send</a> / cameras with two way audio support
+</div>
+<script>
+    document.getElementById('send').addEventListener('click', ev => {
+        ev.preventDefault()
+        const url = new URL('api/streams', location.href)
+        url.searchParams.set('dst', src)
+        url.searchParams.set('src', document.getElementById('source').value)
+        fetch(url, {method: 'POST'})
+    })
+</script>
+
+<div>
+    <h2>Share stream</h2>
+    <a id="shareadd" href="#">share</a>
+    <a id="shareget" href="#">copy link</a>
+    <a id="sharedel" href="#">delete</a>
+</div>
+<script>
+    function share(method) {
+        const url = new URL('api/webtorrent', location.href)
+        url.searchParams.set('src', src)
+        return fetch(url, {method: method, cache: 'no-cache'})
+    }
+
+    function onshareadd(r) {
+        document.getElementById('shareadd').style.display = 'none'
+        document.getElementById('shareget').style.display = ''
+        document.getElementById('sharedel').style.display = ''
+        document.getElementById('shareget').href = `https://alexxit.github.io/go2rtc/#share=${r.share}&pwd=${r.pwd}`
+    }
+
+    function onsharedel() {
+        document.getElementById('shareadd').style.display = ''
+        document.getElementById('shareget').style.display = 'none'
+        document.getElementById('sharedel').style.display = 'none'
+    }
+
+    document.getElementById('shareadd').addEventListener('click', ev => {
+        ev.preventDefault()
+        share('POST').then(r => r.json()).then(r => onshareadd(r))
+    })
+
+    document.getElementById('shareget').addEventListener('click', ev => {
+        ev.preventDefault()
+        navigator.clipboard.writeText(ev.target.href)
+    })
+
+    document.getElementById('sharedel').addEventListener('click', ev => {
+        ev.preventDefault()
+        share('DELETE').then(r => onsharedel())
+    })
+
+    share('GET').then(r => {
+        if (r.ok) r.json().then(r => onshareadd(r))
+        else onsharedel()
+    })
+</script>
+
 </body>
 </html>

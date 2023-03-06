@@ -24,6 +24,7 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/streams"
 	"github.com/AlexxIT/go2rtc/cmd/tapo"
 	"github.com/AlexxIT/go2rtc/cmd/webrtc"
+	"github.com/AlexxIT/go2rtc/cmd/webtorrent"
 	"os"
 	"os/signal"
 	"syscall"
@@ -55,6 +56,7 @@ func main() {
 	hls.Init()
 	mjpeg.Init()
 
+	webtorrent.Init()
 	ngrok.Init()
 	debug.Init()
 
