@@ -139,7 +139,7 @@ func inputWebRTC(w http.ResponseWriter, r *http.Request) {
 
 	log.Trace().Msgf("[webrtc] WHIP offer\n%s", offer)
 
-	pc, err := newPeerConnection(true)
+	pc, err := PeerConnection(false)
 	if err != nil {
 		log.Error().Err(err).Caller().Send()
 		http.Error(w, err.Error(), http.StatusInternalServerError)

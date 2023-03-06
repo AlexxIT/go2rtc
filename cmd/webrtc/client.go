@@ -40,7 +40,7 @@ func asyncClient(url string) (streamer.Producer, error) {
 	}()
 
 	// 2. Create PeerConnection
-	pc, err := newPeerConnection(false)
+	pc, err := PeerConnection(true)
 	if err != nil {
 		log.Error().Err(err).Caller().Send()
 		return nil, err
@@ -125,7 +125,7 @@ func asyncClient(url string) (streamer.Producer, error) {
 // syncClient - support WebRTC-HTTP Egress Protocol (WHEP)
 func syncClient(url string) (streamer.Producer, error) {
 	// 2. Create PeerConnection
-	pc, err := newPeerConnection(false)
+	pc, err := PeerConnection(true)
 	if err != nil {
 		log.Error().Err(err).Caller().Send()
 		return nil, err
