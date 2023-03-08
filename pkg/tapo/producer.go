@@ -48,31 +48,29 @@ func (c *Client) GetTrack(media *streamer.Media, codec *streamer.Codec) (track *
 		c.tracks = map[byte]*streamer.Track{}
 	}
 
-	if media.Kind == streamer.KindVideo {
+	if media.Direction == streamer.DirectionSendonly {
+		var payloadType byte
+		if media.Kind == streamer.KindVideo {
+			payloadType = mpegts.StreamTypeH264
+		} else {
+			payloadType = mpegts.StreamTypePCMATapo
+		}
+
 		if err := c.SetupStream(); err != nil {
 			return nil
 		}
 
 		track = streamer.NewTrack(media, codec)
-		c.tracks[mpegts.StreamTypeH264] = track
+		c.tracks[payloadType] = track
 	} else {
-		if media.Direction == streamer.DirectionSendonly {
-			if err := c.SetupStream(); err != nil {
-				return nil
-			}
+		if err := c.SetupBackchannel(); err != nil {
+			return nil
+		}
 
+		if w := c.backchannelWriter(); w != nil {
 			track = streamer.NewTrack(media, codec)
-			c.tracks[mpegts.StreamTypePCMATapo] = track
-		} else {
-			if err := c.SetupBackchannel(); err != nil {
-				return nil
-			}
-
-			if w := c.backchannelWriter(); w != nil {
-				track = streamer.NewTrack(media, codec)
-				track.Bind(w)
-				c.tracks[0] = track
-			}
+			track.Bind(w)
+			c.tracks[0] = track
 		}
 	}
 
