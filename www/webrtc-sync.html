@@ -5,61 +5,63 @@
     <title>go2rtc - WebRTC</title>
     <style>
         body {
+            background-color: black;
             margin: 0;
             padding: 0;
         }
 
-        html, body {
+        html, body, video {
             height: 100%;
             width: 100%;
-        }
-
-        #video {
-            /* video "container" size */
-            width: 100%;
-            height: 100%;
-            background: black;
         }
     </style>
 </head>
 <body>
-<!-- muted is important for autoplay -->
 <video id="video" autoplay controls playsinline muted></video>
 <script>
-    // support api_path
-    const baseUrl = location.origin + location.pathname.substr(
-        0, location.pathname.lastIndexOf("/")
-    );
+    function PeerConnection(userMedia) {
+        return new Promise((resolve, reject) => {
+            const pc = new RTCPeerConnection({
+                iceServers: [{urls: 'stun:stun.l.google.com:19302'}]
+            })
 
-    const pc = new RTCPeerConnection({
-        iceServers: [
-            {urls: 'stun:stun.l.google.com:19302'},
-        ]
-    });
+            pc.addEventListener('icegatheringstatechange', () => {
+                if (pc.iceGatheringState === 'complete') resolve(pc)
+            })
 
-    pc.addEventListener('icegatheringstatechange', async () => {
-        if (pc.iceGatheringState !== 'complete') return;
+            document.getElementById('video').srcObject = new MediaStream([
+                pc.addTransceiver('video', {direction: 'recvonly'}).receiver.track,
+                pc.addTransceiver('audio', {direction: 'recvonly'}).receiver.track
+            ])
 
-        let r = await fetch(`${baseUrl}/api/webrtc${location.search}`, {
-            method: 'POST', body: pc.localDescription.sdp,
-        });
-        await pc.setRemoteDescription({
-            type: 'answer', sdp: await r.text()
-        });
-    });
-    pc.addEventListener('track', ev => {
-        let video = document.getElementById('video');
-        if (video.srcObject === null) {
-            video.srcObject = ev.streams[0];
+            if (userMedia) {
+                userMedia.getTracks().forEach(track => {
+                    pc.addTransceiver(track, {direction: 'sendonly'})
+                })
+            }
+
+            pc.createOffer().then(offer => pc.setLocalDescription(offer))
+
+            setTimeout(() => resolve(pc), 3000)
+        })
+    }
+
+    async function userMedia() {
+        try {
+            return await navigator.mediaDevices.getUserMedia({audio: true})
+        } catch (e) {
+            return null
         }
-    });
+    }
 
-    pc.addTransceiver('video', {direction: 'recvonly'});
-    pc.addTransceiver('audio', {direction: 'recvonly'});
+    async function connect() {
+        const pc = await PeerConnection(await userMedia())
+        const url = new URL('api/webrtc' + location.search, location.href)
+        const r = await fetch(url, {method: 'POST', body: pc.localDescription.sdp})
+        await pc.setRemoteDescription({type: 'answer', sdp: await r.text()})
+    }
 
-    pc.createOffer().then(offer => {
-        pc.setLocalDescription(offer);
-    });
+    connect()
 </script>
 </body>
 </html>
