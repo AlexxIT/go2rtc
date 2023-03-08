@@ -3,6 +3,7 @@ package webrtc
 import (
 	"encoding/json"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
+	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	pion "github.com/pion/webrtc/v3"
 	"io"
@@ -90,7 +91,18 @@ func outputWebRTC(w http.ResponseWriter, r *http.Request) {
 		offer = string(body)
 	}
 
-	answer, err := ExchangeSDP(stream, offer, r.UserAgent())
+	var desc string
+
+	switch mediaType {
+	case "application/json":
+		desc = "WebRTC/JSON sync"
+	case MimeSDP:
+		desc = "WebRTC/WHEP sync"
+	default:
+		desc = "WebRTC/HTTP sync"
+	}
+
+	answer, err := ExchangeSDP(stream, offer, desc, r.UserAgent())
 	if err != nil {
 		log.Error().Err(err).Caller().Send()
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -147,16 +159,18 @@ func inputWebRTC(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// create new webrtc instance
-	conn := webrtc.NewConn(pc)
-	conn.UserAgent = r.UserAgent()
+	prod := webrtc.NewConn(pc)
+	prod.Desc = "WebRTC/WHIP sync"
+	prod.Mode = streamer.ModePassiveProducer
+	prod.UserAgent = r.UserAgent()
 
-	if err = conn.SetOffer(string(offer)); err != nil {
+	if err = prod.SetOffer(string(offer)); err != nil {
 		log.Warn().Err(err).Caller().Send()
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	answer, err := conn.GetCompleteAnswer()
+	answer, err := prod.GetCompleteAnswer()
 	if err == nil {
 		answer, err = syncCanditates(answer)
 	}
@@ -169,13 +183,13 @@ func inputWebRTC(w http.ResponseWriter, r *http.Request) {
 	log.Trace().Msgf("[webrtc] WHIP answer\n%s", answer)
 
 	id := strconv.FormatInt(time.Now().UnixNano(), 36)
-	sessions[id] = conn
+	sessions[id] = prod
 
-	conn.Listen(func(msg interface{}) {
+	prod.Listen(func(msg interface{}) {
 		switch msg := msg.(type) {
 		case pion.PeerConnectionState:
 			if msg == pion.PeerConnectionStateClosed {
-				stream.RemoveProducer(conn)
+				stream.RemoveProducer(prod)
 				if _, ok := sessions[id]; ok {
 					delete(sessions, id)
 				}
@@ -183,7 +197,7 @@ func inputWebRTC(w http.ResponseWriter, r *http.Request) {
 		}
 	})
 
-	stream.AddProducer(conn)
+	stream.AddProducer(prod)
 
 	w.Header().Set("Content-Type", MimeSDP)
 	w.Header().Set("Location", "webrtc?id="+id)

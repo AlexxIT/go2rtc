@@ -79,7 +79,7 @@ func initAPI() {
 				return
 			}
 
-			s, err = webrtc.ExchangeSDP(stream, string(offer), r.UserAgent())
+			s, err = webrtc.ExchangeSDP(stream, string(offer), "WebRTC/Hass sync", r.UserAgent())
 			if err != nil {
 				log.Error().Err(err).Msg("[api.hass] exchange SDP")
 				return
@@ -117,7 +117,7 @@ func initAPI() {
 			}
 		}
 
-		str, err = webrtc.ExchangeSDP(stream, string(offer), r.UserAgent())
+		str, err = webrtc.ExchangeSDP(stream, string(offer), "WebRTC/Hass sync", r.UserAgent())
 		if err != nil {
 			return
 		}

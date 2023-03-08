@@ -5,6 +5,29 @@ import (
 	"time"
 )
 
+type Mode byte
+
+const (
+	ModeActiveProducer Mode = iota + 1 // typical source (client)
+	ModePassiveConsumer
+	ModePassiveProducer
+	ModeActiveConsumer
+)
+
+func (m Mode) String() string {
+	switch m {
+	case ModeActiveProducer:
+		return "active producer"
+	case ModePassiveConsumer:
+		return "passive consumer"
+	case ModePassiveProducer:
+		return "passive producer"
+	case ModeActiveConsumer:
+		return "active consumer"
+	}
+	return "unknown"
+}
+
 type Info struct {
 	Type       string   `json:"type,omitempty"`
 	URL        string   `json:"url,omitempty"`

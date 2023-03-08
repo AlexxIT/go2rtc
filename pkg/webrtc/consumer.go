@@ -113,7 +113,7 @@ func (c *Conn) AddTrack(media *streamer.Media, track *streamer.Track) *streamer.
 
 func (c *Conn) MarshalJSON() ([]byte, error) {
 	info := &streamer.Info{
-		Type:       "WebRTC",
+		Type:       c.Desc + " " + c.Mode.String(),
 		RemoteAddr: c.remote,
 		UserAgent:  c.UserAgent,
 		Medias:     c.medias,

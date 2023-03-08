@@ -6,6 +6,7 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/app"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	pion "github.com/pion/webrtc/v3"
 	"github.com/rs/zerolog"
@@ -103,6 +104,8 @@ func asyncHandler(tr *api.Transport, msg *api.Message) error {
 	var sendAnswer core.Waiter
 
 	cons := webrtc.NewConn(pc)
+	cons.Desc = "WebRTC/WebSocket async"
+	cons.Mode = streamer.ModePassiveConsumer
 	cons.UserAgent = tr.Request.UserAgent()
 	cons.Listen(func(msg any) {
 		switch msg := msg.(type) {
@@ -168,7 +171,7 @@ func asyncHandler(tr *api.Transport, msg *api.Message) error {
 	return nil
 }
 
-func ExchangeSDP(stream *streams.Stream, offer string, userAgent string) (answer string, err error) {
+func ExchangeSDP(stream *streams.Stream, offer, desc, userAgent string) (answer string, err error) {
 	pc, err := PeerConnection(false)
 	if err != nil {
 		log.Error().Err(err).Caller().Send()
@@ -177,6 +180,8 @@ func ExchangeSDP(stream *streams.Stream, offer string, userAgent string) (answer
 
 	// create new webrtc instance
 	conn := webrtc.NewConn(pc)
+	conn.Desc = desc
+	conn.Mode = streamer.ModePassiveConsumer
 	conn.UserAgent = userAgent
 	conn.Listen(func(msg interface{}) {
 		switch msg := msg.(type) {

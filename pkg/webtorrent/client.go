@@ -15,6 +15,8 @@ import (
 func NewClient(tracker, share, pwd string, pc *pion.PeerConnection) (*webrtc.Conn, error) {
 	// 1. Create WebRTC producer
 	prod := webrtc.NewConn(pc)
+	prod.Desc = "WebRTC/WebTorrent sync"
+	prod.Mode = streamer.ModeActiveProducer
 
 	medias := []*streamer.Media{
 		{Kind: streamer.KindVideo, Direction: streamer.DirectionRecvonly},

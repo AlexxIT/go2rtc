@@ -27,6 +27,8 @@ func streamsHandler(url string) (streamer.Producer, error) {
 	return nil, errors.New("unsupported url: " + url)
 }
 
+// asyncClient can connect only to go2rtc server
+// ex: ws://localhost:1984/api/ws?src=camera1
 func asyncClient(url string) (streamer.Producer, error) {
 	// 1. Connect to signalign server
 	ws, _, err := websocket.DefaultDialer.Dial(url, nil)
@@ -49,6 +51,8 @@ func asyncClient(url string) (streamer.Producer, error) {
 	var sendOffer core.Waiter
 
 	prod := webrtc.NewConn(pc)
+	prod.Desc = "WebRTC/WebSocket async"
+	prod.Mode = streamer.ModeActiveProducer
 	prod.Listen(func(msg any) {
 		switch msg := msg.(type) {
 		case pion.PeerConnectionState:
@@ -123,6 +127,7 @@ func asyncClient(url string) (streamer.Producer, error) {
 }
 
 // syncClient - support WebRTC-HTTP Egress Protocol (WHEP)
+// ex: http://localhost:1984/api/webrtc?src=camera1
 func syncClient(url string) (streamer.Producer, error) {
 	// 2. Create PeerConnection
 	pc, err := PeerConnection(true)
@@ -132,6 +137,8 @@ func syncClient(url string) (streamer.Producer, error) {
 	}
 
 	prod := webrtc.NewConn(pc)
+	prod.Desc = "WebRTC/WHEP sync"
+	prod.Mode = streamer.ModeActiveProducer
 
 	medias := []*streamer.Media{
 		{Kind: streamer.KindVideo, Direction: streamer.DirectionRecvonly},

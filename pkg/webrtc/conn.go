@@ -10,6 +10,8 @@ type Conn struct {
 	streamer.Element
 
 	UserAgent string
+	Desc      string
+	Mode      streamer.Mode
 
 	pc *webrtc.PeerConnection
 
