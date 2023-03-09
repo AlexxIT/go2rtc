@@ -73,7 +73,9 @@ func (c *Client) newConn() (net.Conn, error) {
 		u.Host += ":8800"
 	}
 
-	req, err := http.NewRequest("POST", u.String(), nil)
+	// TODO: fix closing connection
+	ctx, pconn := tcp.WithConn()
+	req, err := http.NewRequestWithContext(ctx, "POST", u.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +95,7 @@ func (c *Client) newConn() (net.Conn, error) {
 		c.newDectypter(res, username, password)
 	}
 
-	return res.Body.(net.Conn), nil
+	return *pconn, nil
 }
 
 func (c *Client) newDectypter(res *http.Response, username, password string) {

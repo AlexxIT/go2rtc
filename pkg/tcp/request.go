@@ -12,20 +12,29 @@ import (
 
 // Do - http.Client with support Digest Authorization
 func Do(req *http.Request) (*http.Response, error) {
-	var conn net.Conn
+	if client == nil {
+		transport := http.DefaultTransport.(*http.Transport).Clone()
 
-	client := http.Client{Timeout: time.Second * 5000}
-
-	// for multipart requests return conn as Body (for write support)
-	if ct := req.Header.Get("Content-Type"); strings.HasPrefix(ct, "multipart/mixed") {
-		var d net.Dialer
-		client.Transport = &http.Transport{
-			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-				var err error
-				conn, err = d.DialContext(ctx, network, addr)
-				return conn, err
-			},
+		dial := transport.DialContext
+		transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+			conn, err := dial(ctx, network, addr)
+			if pconn, ok := ctx.Value(connKey).(*net.Conn); ok {
+				*pconn = conn
+			}
+			return conn, err
 		}
+
+		client = &http.Client{
+			Timeout:   time.Second * 5000,
+			Transport: transport,
+		}
+	}
+
+	user := req.URL.User
+
+	// Hikvision won't answer on Basic auth with any headers
+	if strings.HasPrefix(req.URL.Path, "/ISAPI/") {
+		req.URL.User = nil
 	}
 
 	res, err := client.Do(req)
@@ -33,7 +42,9 @@ func Do(req *http.Request) (*http.Response, error) {
 		return nil, err
 	}
 
-	if res.StatusCode == http.StatusUnauthorized && req.URL.User != nil {
+	if res.StatusCode == http.StatusUnauthorized && user != nil {
+		Close(res)
+
 		auth := res.Header.Get("WWW-Authenticate")
 		if !strings.HasPrefix(auth, "Digest") {
 			return nil, errors.New("unsupported auth: " + auth)
@@ -43,7 +54,6 @@ func Do(req *http.Request) (*http.Response, error) {
 		nonce := Between(auth, `nonce="`, `"`)
 		qop := Between(auth, `qop="`, `"`)
 
-		user := req.URL.User
 		username := user.Username()
 		password, _ := user.Password()
 		ha1 := HexMD5(username, realm, password)
@@ -80,9 +90,19 @@ func Do(req *http.Request) (*http.Response, error) {
 		}
 	}
 
-	if conn != nil {
-		res.Body = conn
-	}
-
 	return res, nil
+}
+
+var client *http.Client
+var connKey struct{}
+
+func WithConn() (context.Context, *net.Conn) {
+	pconn := new(net.Conn)
+	return context.WithValue(context.Background(), connKey, pconn), pconn
+}
+
+func Close(res *http.Response) {
+	if res.Body != nil {
+		_ = res.Body.Close()
+	}
 }
