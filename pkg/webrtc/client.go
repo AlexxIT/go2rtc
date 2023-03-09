@@ -39,7 +39,10 @@ func (c *Conn) CreateCompleteOffer(medias []*streamer.Media) (string, error) {
 }
 
 func (c *Conn) SetAnswer(answer string) (err error) {
-	desc := webrtc.SessionDescription{SDP: answer, Type: webrtc.SDPTypeAnswer}
+	desc := webrtc.SessionDescription{
+		Type: webrtc.SDPTypeAnswer,
+		SDP:  fakeFormatsInAnswer(c.pc.LocalDescription().SDP, answer),
+	}
 	if err = c.pc.SetRemoteDescription(desc); err != nil {
 		return
 	}
@@ -66,4 +69,69 @@ func (c *Conn) SetAnswer(answer string) (err error) {
 	}
 
 	return nil
+}
+
+func fakeFormatsInAnswer(offer, answer string) string {
+	sd2 := &sdp.SessionDescription{}
+	if err := sd2.Unmarshal([]byte(answer)); err != nil {
+		return answer
+	}
+
+	// check if answer has recvonly audio
+	var ok bool
+	for _, md2 := range sd2.MediaDescriptions {
+		if md2.MediaName.Media == "audio" {
+			if _, ok = md2.Attribute("recvonly"); ok {
+				break
+			}
+		}
+	}
+	if !ok {
+		return answer
+	}
+
+	sd1 := &sdp.SessionDescription{}
+	if err := sd1.Unmarshal([]byte(offer)); err != nil {
+		return answer
+	}
+
+	var formats []string
+	var attrs []sdp.Attribute
+
+	for _, md1 := range sd1.MediaDescriptions {
+		if md1.MediaName.Media == "audio" {
+			for _, attr := range md1.Attributes {
+				switch attr.Key {
+				case "rtpmap", "fmtp", "rtcp-fb", "extmap":
+					attrs = append(attrs, attr)
+				}
+			}
+
+			formats = md1.MediaName.Formats
+			break
+		}
+	}
+
+	for _, md2 := range sd2.MediaDescriptions {
+		if md2.MediaName.Media == "audio" {
+			for _, attr := range md2.Attributes {
+				switch attr.Key {
+				case "rtpmap", "fmtp", "rtcp-fb", "extmap":
+				default:
+					attrs = append(attrs, attr)
+				}
+			}
+
+			md2.MediaName.Formats = formats
+			md2.Attributes = attrs
+			break
+		}
+	}
+
+	b, err := sd2.Marshal()
+	if err != nil {
+		return answer
+	}
+
+	return string(b)
 }

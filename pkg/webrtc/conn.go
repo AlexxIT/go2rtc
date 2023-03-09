@@ -52,10 +52,9 @@ func NewConn(pc *webrtc.PeerConnection) *Conn {
 	})
 
 	pc.OnTrack(func(remote *webrtc.TrackRemote, _ *webrtc.RTPReceiver) {
-		track := c.getTrack(remote)
+		track := c.getRecvTrack(remote)
 		if track == nil {
-			println("ERROR: webrtc: can't find track")
-			return
+			return // it's OK when we not need, for example, audio from producer
 		}
 
 		for {
@@ -104,25 +103,40 @@ func (c *Conn) AddCandidate(candidate string) error {
 	return c.pc.AddICECandidate(webrtc.ICECandidateInit{Candidate: candidate})
 }
 
-func (c *Conn) getTrack(remote *webrtc.TrackRemote) *streamer.Track {
+func (c *Conn) getRecvTrack(remote *webrtc.TrackRemote) *streamer.Track {
 	payloadType := uint8(remote.PayloadType())
 
-	// search existing track (two way audio)
-	for _, track := range c.tracks {
-		if track.Codec.PayloadType == payloadType {
-			return track
-		}
-	}
-
-	// create new track (incoming WebRTC WHIP)
-	for _, media := range c.medias {
-		for _, codec := range media.Codecs {
-			if codec.PayloadType == payloadType {
-				track := streamer.NewTrack(media, codec)
-				c.tracks = append(c.tracks, track)
+	switch c.Mode {
+	// browser microphone (backchannel)
+	case streamer.ModePassiveConsumer:
+		for _, track := range c.tracks {
+			if track.Direction == streamer.DirectionRecvonly && track.Codec.PayloadType == payloadType {
 				return track
 			}
 		}
+
+	case streamer.ModeActiveProducer:
+		// remote track from WebRTC active producer (audio/video)
+		for _, track := range c.tracks {
+			if track.Direction == streamer.DirectionSendonly && track.Codec.PayloadType == payloadType {
+				return track
+			}
+		}
+
+	case streamer.ModePassiveProducer:
+		// remote track from WebRTC passive producer (incoming WebRTC WHIP)
+		for _, media := range c.medias {
+			for _, codec := range media.Codecs {
+				if codec.PayloadType == payloadType {
+					track := streamer.NewTrack(media, codec)
+					c.tracks = append(c.tracks, track)
+					return track
+				}
+			}
+		}
+
+	default:
+		panic("not implemented")
 	}
 
 	return nil

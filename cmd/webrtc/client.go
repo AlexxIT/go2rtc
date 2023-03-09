@@ -70,6 +70,7 @@ func asyncClient(url string) (streamer.Producer, error) {
 	medias := []*streamer.Media{
 		{Kind: streamer.KindVideo, Direction: streamer.DirectionRecvonly},
 		{Kind: streamer.KindAudio, Direction: streamer.DirectionRecvonly},
+		{Kind: streamer.KindAudio, Direction: streamer.DirectionSendonly},
 	}
 
 	// 3. Create offer
