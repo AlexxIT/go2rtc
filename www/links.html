@@ -73,7 +73,6 @@
             <li><a href="api/frame.mp4?src=${src}">frame.mp4</a> snapshot in MP4-format / browsers: all / codecs: H264, H265*</li>
             <li><a href="api/stream.m3u8?src=${src}">stream.m3u8</a> HLS/TS / browsers: Safari all, Chrome Android / codecs: H264</li>
             <li><a href="api/stream.m3u8?src=${src}&mp4">stream.m3u8</a> HLS/fMP4 / browsers: Safari all, Chrome Android / codecs: H264, H265*, AAC</li>
-            <li><a href="webrtc.html?src=${src}">webrtc.html</a> with two-way audio for supported cameras / browsers: all / codecs: H264, PCMU, PCMA, OPUS</li>
 
             <h2>MJPEG source</h2>
             <li><a href="stream.html?src=${src}&mode=mjpeg">stream.html</a> with MJPEG mode / browsers: all / codecs: MJPEG, JPEG</li>
@@ -85,6 +84,7 @@
 
 <div>
     <h2>Play audio</h2>
+    <pre>example: ffmpeg:https://example.com/song.mp3#audio=pcma#input=file</pre>
     <input id="source" type="text" placeholder="source">
     <a id="send" href="#">send</a> / cameras with two way audio support
 </div>
@@ -98,13 +98,50 @@
     })
 </script>
 
-<div>
-    <h2>Share stream</h2>
-    <a id="shareadd" href="#">share</a>
-    <a id="shareget" href="#">copy link</a>
-    <a id="sharedel" href="#">delete</a>
+<div id="webrtc">
+    <h2>WebRTC Magic</h2>
+    <li>video+audio+microphone = two way audio camera</li>
+    <li>camera+microphone+audio = two way audio browser</li>
+    <li>display = broadcaster software</li>
+
+    <br>
+    <label><input type="radio" name="video" value="video" checked>remote video</label>
+    <label><input type="radio" name="video" value="camera">local camera</label>
+    <label><input type="radio" name="video" value="display">local display</label>
+    <label><input type="radio" name="video" value="">none</label>
+
+    <br>
+    <label><input type="radio" name="audio1" value="audio" checked>remote audio</label>
+    <label><input type="radio" name="audio1" value="">none</label>
+
+    <br>
+    <label><input type="radio" name="audio2" value="microphone" checked>local microphone</label>
+    <label><input type="radio" name="audio2" value="speaker">local speaker</label>
+    <label><input type="radio" name="audio2" value="">none</label>
+
+    <br>
+    <br>
+    <li><a id="local" href="webrtc.html?src=">webrtc.html</a> local WebRTC viewer</li>
+
+    <li>
+        <a id="shareadd" href="#">share link</a>
+        <a id="shareget" href="#">copy link</a>
+        <a id="sharedel" href="#">delete</a>
+        external WebRTC viewer
+    </li>
 </div>
 <script>
+    function webrtcLinksUpdate() {
+        let media = document.querySelectorAll('#webrtc input')
+        media = Array.from(media).filter(i => i.value && i.checked).map(i => i.value).join('+')
+
+        const direction = media.indexOf('video') >= 0 || media === 'audio' ? 'src' : 'dst'
+        document.getElementById('local').href = `webrtc.html?${direction}=${src}&media=${media}`
+
+        const share = document.getElementById('shareget')
+        share.href = `https://alexxit.github.io/go2rtc/#${share.dataset.auth}&media=${media}`
+    }
+
     function share(method) {
         const url = new URL('api/webtorrent', location.href)
         url.searchParams.set('src', src)
@@ -112,10 +149,13 @@
     }
 
     function onshareadd(r) {
+        document.getElementById('shareget').dataset['auth'] = `share=${r.share}&pwd=${r.pwd}`
+
         document.getElementById('shareadd').style.display = 'none'
         document.getElementById('shareget').style.display = ''
         document.getElementById('sharedel').style.display = ''
-        document.getElementById('shareget').href = `https://alexxit.github.io/go2rtc/#share=${r.share}&pwd=${r.pwd}`
+
+        webrtcLinksUpdate()
     }
 
     function onsharedel() {
@@ -139,10 +179,16 @@
         share('DELETE').then(r => onsharedel())
     })
 
+    document.getElementById('webrtc').addEventListener('click', ev => {
+        if (ev.target.tagName === 'INPUT') webrtcLinksUpdate()
+    })
+
     share('GET').then(r => {
         if (r.ok) r.json().then(r => onshareadd(r))
         else onsharedel()
     })
+
+    webrtcLinksUpdate()
 </script>
 
 </body>
