@@ -5,6 +5,7 @@ import (
 	"github.com/pion/interceptor"
 	"github.com/pion/webrtc/v3"
 	"net"
+	"strings"
 )
 
 func NewAPI(address string) (*webrtc.API, error) {
@@ -41,14 +42,18 @@ func NewAPI(address string) (*webrtc.API, error) {
 	s.SetDTLSInsecureSkipHelloVerify(true)
 
 	if address != "" {
-		if ln, err := net.ListenPacket("udp", address); err == nil {
-			udpMux := webrtc.NewICEUDPMux(nil, ln)
-			s.SetICEUDPMux(udpMux)
+		address, network, _ := strings.Cut(address, "/")
+		if network == "" || network == "udp" {
+			if ln, err := net.ListenPacket("udp", address); err == nil {
+				udpMux := webrtc.NewICEUDPMux(nil, ln)
+				s.SetICEUDPMux(udpMux)
+			}
 		}
-
-		if ln, err := net.Listen("tcp", address); err == nil {
-			tcpMux := webrtc.NewICETCPMux(nil, ln, 8)
-			s.SetICETCPMux(tcpMux)
+		if network == "" || network == "tcp" {
+			if ln, err := net.Listen("tcp", address); err == nil {
+				tcpMux := webrtc.NewICETCPMux(nil, ln, 8)
+				s.SetICETCPMux(tcpMux)
+			}
 		}
 	}
 
@@ -92,7 +97,6 @@ func RegisterDefaultCodecs(m *webrtc.MediaEngine) error {
 		{"nack", "pli"},
 	}
 	for _, codec := range []webrtc.RTPCodecParameters{
-		// macOS Google Chrome 103.0.5060.134
 		{
 			RTPCodecCapability: webrtc.RTPCodecCapability{
 				MimeType:     webrtc.MimeTypeH264,
@@ -100,7 +104,7 @@ func RegisterDefaultCodecs(m *webrtc.MediaEngine) error {
 				SDPFmtpLine:  "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f",
 				RTCPFeedback: videoRTCPFeedback,
 			},
-			PayloadType: 96, //102,
+			PayloadType: 96, // Chrome v110 - PayloadType: 102
 		},
 		{
 			RTPCodecCapability: webrtc.RTPCodecCapability{
@@ -109,15 +113,16 @@ func RegisterDefaultCodecs(m *webrtc.MediaEngine) error {
 				SDPFmtpLine:  "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f",
 				RTCPFeedback: videoRTCPFeedback,
 			},
-			PayloadType: 97, //125,
+			PayloadType: 97, // Chrome v110 - PayloadType: 106
 		},
 		{
 			RTPCodecCapability: webrtc.RTPCodecCapability{
 				MimeType:     webrtc.MimeTypeH264,
 				ClockRate:    90000,
 				SDPFmtpLine:  "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640032",
-				RTCPFeedback: videoRTCPFeedback},
-			PayloadType: 98, //123,
+				RTCPFeedback: videoRTCPFeedback,
+			},
+			PayloadType: 98, // Chrome v110 - PayloadType: 112
 		},
 		// macOS Safari 15.1
 		{
