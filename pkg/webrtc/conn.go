@@ -125,13 +125,20 @@ func (c *Conn) getRecvTrack(remote *webrtc.TrackRemote) *streamer.Track {
 
 	case streamer.ModePassiveProducer:
 		// remote track from WebRTC passive producer (incoming WebRTC WHIP)
-		for _, media := range c.medias {
+		for i, media := range c.medias {
 			for _, codec := range media.Codecs {
-				if codec.PayloadType == payloadType {
-					track := streamer.NewTrack(media, codec)
-					c.tracks = append(c.tracks, track)
-					return track
+				if codec.PayloadType != payloadType {
+					continue
 				}
+
+				// leave only one codec in supported media list
+				if len(media.Codecs) > 1 {
+					c.medias[i].Codecs = []*streamer.Codec{codec}
+				}
+
+				track := streamer.NewTrack(media, codec)
+				c.tracks = append(c.tracks, track)
+				return track
 			}
 		}
 
