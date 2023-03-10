@@ -139,6 +139,16 @@ func (c *Conn) getRecvTrack(remote *webrtc.TrackRemote) *streamer.Track {
 	case streamer.ModePassiveProducer:
 		// remote track from WebRTC passive producer (incoming WebRTC WHIP)
 		for i, media := range c.medias {
+			// check only tracks with same kind
+			if media.Kind != remote.Kind().String() {
+				continue
+			}
+
+			// check only incoming tracks (remote media "sendonly")
+			if media.Direction != streamer.DirectionSendonly {
+				continue
+			}
+
 			for _, codec := range media.Codecs {
 				if codec.PayloadType != payloadType {
 					continue
