@@ -3,7 +3,9 @@ package webrtc
 import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
+	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v3"
+	"time"
 )
 
 type Conn struct {
@@ -55,6 +57,17 @@ func NewConn(pc *webrtc.PeerConnection) *Conn {
 		track := c.getRecvTrack(remote)
 		if track == nil {
 			return // it's OK when we not need, for example, audio from producer
+		}
+
+		if c.Mode == streamer.ModePassiveProducer && remote.Kind() == webrtc.RTPCodecTypeVideo {
+			go func() {
+				pkts := []rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: uint32(remote.SSRC())}}
+				for range time.NewTicker(time.Second * 2).C {
+					if err := pc.WriteRTCP(pkts); err != nil {
+						return
+					}
+				}
+			}()
 		}
 
 		for {
