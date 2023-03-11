@@ -41,6 +41,9 @@ func NewAPI(address string) (*webrtc.API, error) {
 	// fix https://github.com/pion/webrtc/pull/2407
 	s.SetDTLSInsecureSkipHelloVerify(true)
 
+	// Ethernet MTU (1500) - IP Header (20) - UDP Header (8)
+	s.SetReceiveMTU(1472)
+
 	if address != "" {
 		address, network, _ := strings.Cut(address, "/")
 		if network == "" || network == "udp" {
