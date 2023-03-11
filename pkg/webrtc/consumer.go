@@ -25,6 +25,18 @@ func (c *Conn) AddTrack(media *streamer.Media, track *streamer.Track) *streamer.
 			// receive track from WebRTC consumer (microphone, backchannel, two way audio)
 			return c.addConsumerRecvTrack(track)
 		}
+
+	case streamer.ModePassiveProducer:
+		// "Stream to camera" function
+		consCodec := media.MatchCodec(track.Codec)
+		consTrack := c.GetTrack(media, consCodec)
+		if consTrack == nil {
+			return nil
+		}
+
+		return track.Bind(func(packet *rtp.Packet) error {
+			return consTrack.WriteRTP(packet)
+		})
 	}
 
 	panic("not implemented")

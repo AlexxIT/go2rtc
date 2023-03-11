@@ -21,6 +21,37 @@ func (s *Stream) Play(source string) error {
 	var src streamer.Producer
 
 	for _, producer := range s.producers {
+		if producer.element == nil {
+			continue
+		}
+
+		cons, ok := producer.element.(streamer.Consumer)
+		if !ok {
+			continue
+		}
+
+		if src == nil {
+			var err error
+			if src, err = GetProducer(source); err != nil {
+				return err
+			}
+		}
+
+		if !matchMedia(src, cons) {
+			continue
+		}
+
+		s.AddInternalProducer(src)
+
+		go func() {
+			_ = src.Start()
+			s.RemoveProducer(src)
+		}()
+
+		return nil
+	}
+
+	for _, producer := range s.producers {
 		// start new client
 		dst, err := GetProducer(producer.url)
 		if err != nil {
