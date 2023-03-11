@@ -33,6 +33,31 @@ func (c *Conn) SetOffer(offer string) (err error) {
 }
 
 func (c *Conn) GetAnswer() (answer string, err error) {
+	if c.Mode == streamer.ModePassiveProducer {
+		// init all Sender(s) for passive producer or they will be nil
+		// sender for passive producer is backchannel
+		sd := &sdp.SessionDescription{}
+		if err = sd.Unmarshal([]byte(c.offer)); err != nil {
+			return
+		}
+
+		for _, md := range sd.MediaDescriptions {
+			for _, attr := range md.Attributes {
+				switch attr.Key {
+				case "recvonly":
+					_, _ = c.pc.AddTransceiverFromKind(
+						webrtc.NewRTPCodecType(md.MediaName.Media),
+						webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionSendonly},
+					)
+				case "sendrecv":
+					_, _ = c.pc.AddTransceiverFromKind(
+						webrtc.NewRTPCodecType(md.MediaName.Media),
+					)
+				}
+			}
+		}
+	}
+
 	// we need to process remote offer after we create transeivers
 	desc := webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: c.offer}
 	if err = c.pc.SetRemoteDescription(desc); err != nil {

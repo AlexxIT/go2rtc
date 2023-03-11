@@ -26,13 +26,6 @@
 
         const localTracks = []
 
-        if (/video|audio/.test(media)) {
-            const tracks = ['video', 'audio']
-                .filter(kind => media.indexOf(kind) >= 0)
-                .map(kind => pc.addTransceiver(kind, {direction: 'recvonly'}).receiver.track)
-            localTracks.push(...tracks)
-        }
-
         if (/camera|microphone/.test(media)) {
             const tracks = await getMediaTracks('user', {
                 video: media.indexOf('camera') >= 0,
@@ -53,6 +46,13 @@
                 pc.addTransceiver(track, {direction: 'sendonly'})
                 if (track.kind === 'video') localTracks.push(track)
             })
+        }
+
+        if (/video|audio/.test(media)) {
+            const tracks = ['video', 'audio']
+                .filter(kind => media.indexOf(kind) >= 0)
+                .map(kind => pc.addTransceiver(kind, {direction: 'recvonly'}).receiver.track)
+            localTracks.push(...tracks)
         }
 
         document.getElementById('video').srcObject = new MediaStream(localTracks)

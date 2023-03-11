@@ -120,8 +120,12 @@ func (c *Conn) getRecvTrack(remote *webrtc.TrackRemote) *streamer.Track {
 	payloadType := uint8(remote.PayloadType())
 
 	switch c.Mode {
-	// browser microphone (backchannel)
 	case streamer.ModePassiveConsumer:
+		// Situation:
+		// - Browser (passive consumer) connects to go2rtc for receiving AV from IP-camera
+		// - Video and audio tracks marked as local "sendonly"
+		// - Browser sends microphone remote track to go2rtc, this track marked as local "recvonly"
+		// - go2rtc should ReadRTP from this remote track and sends it to camera
 		for _, track := range c.tracks {
 			if track.Direction == streamer.DirectionRecvonly && track.Codec.PayloadType == payloadType {
 				return track
@@ -129,7 +133,9 @@ func (c *Conn) getRecvTrack(remote *webrtc.TrackRemote) *streamer.Track {
 		}
 
 	case streamer.ModeActiveProducer:
-		// remote track from WebRTC active producer (audio/video)
+		// Situation:
+		// - go2rtc (active producer) connects to remote server (ex. webtorrent) for receiving AV
+		// - remote server sends remote tracks, this tracks marked as remote "sendonly"
 		for _, track := range c.tracks {
 			if track.Direction == streamer.DirectionSendonly && track.Codec.PayloadType == payloadType {
 				return track
@@ -137,7 +143,9 @@ func (c *Conn) getRecvTrack(remote *webrtc.TrackRemote) *streamer.Track {
 		}
 
 	case streamer.ModePassiveProducer:
-		// remote track from WebRTC passive producer (incoming WebRTC WHIP)
+		// Situation:
+		// - OBS Studio (passive producer) connects to go2rtc for send AV
+		// - OBS sends remote tracks, this tracks marked as remote "sendonly"
 		for i, media := range c.medias {
 			// check only tracks with same kind
 			if media.Kind != remote.Kind().String() {
@@ -159,9 +167,9 @@ func (c *Conn) getRecvTrack(remote *webrtc.TrackRemote) *streamer.Track {
 					c.medias[i].Codecs = []*streamer.Codec{codec}
 				}
 
-				track := streamer.NewTrack(media, codec)
-				c.tracks = append(c.tracks, track)
-				return track
+				// forward request to passive producer GetTrack
+				// will create NewTrack for sendonly media
+				return c.GetTrack(media, codec)
 			}
 		}
 

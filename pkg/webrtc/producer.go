@@ -7,38 +7,25 @@ import (
 )
 
 func (c *Conn) GetTrack(media *streamer.Media, codec *streamer.Codec) *streamer.Track {
-	switch c.Mode {
-	case streamer.ModeActiveProducer:
-		// active producer (webrtc source, webtorrent source):
-		// - creates empty track for remote sendonly media
-		// - bind go2rtc with pion track for remote recv media (backchannel)
-		for _, track := range c.tracks {
-			if track.Codec == codec {
-				return track
-			}
-		}
-
-		var track *streamer.Track
-		if media.Direction == streamer.DirectionSendonly {
-			track = streamer.NewTrack(media, codec)
-		} else {
-			track = c.getProducerSendTrack(media, codec)
-		}
-
-		c.tracks = append(c.tracks, track)
-		return track
-
-	case streamer.ModePassiveProducer:
-		// passive producer (WHIP)
-		for _, track := range c.tracks {
-			if track.Codec == codec {
-				return track
-			}
-		}
-		return nil
+	if c.Mode != streamer.ModeActiveProducer && c.Mode != streamer.ModePassiveProducer {
+		panic("not implemented")
 	}
 
-	panic("not implemented")
+	for _, track := range c.tracks {
+		if track.Codec == codec {
+			return track
+		}
+	}
+
+	var track *streamer.Track
+	if media.Direction == streamer.DirectionSendonly {
+		track = streamer.NewTrack(media, codec)
+	} else {
+		track = c.getProducerSendTrack(media, codec)
+	}
+
+	c.tracks = append(c.tracks, track)
+	return track
 }
 
 func (c *Conn) Start() error {
@@ -98,6 +85,7 @@ type Track struct {
 	rid         string
 	streamID    string
 	payloadType byte
+	sequence    uint16
 	ssrc        uint32
 	writer      webrtc.TrackLocalWriter
 }
@@ -136,9 +124,13 @@ func (t *Track) Kind() webrtc.RTPCodecType {
 }
 
 func (t *Track) WriteRTP(packet *rtp.Packet) error {
+	// important to have internal counter if input packets from different sources
+	t.sequence++
+
 	header := packet.Header
 	header.SSRC = t.ssrc
 	header.PayloadType = t.payloadType
+	header.SequenceNumber = t.sequence
 	_, err := t.writer.WriteRTP(&header, packet.Payload)
 	return err
 }
