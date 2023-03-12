@@ -130,23 +130,29 @@ func (s *Server) reader(ws *websocket.Conn, peerID string) error {
 		return nil
 	}
 
+	s.Fire("new offer: " + v.OfferId)
+
 	cipher, err := NewCipher(share.name, share.pwd, v.OfferId)
 	if err != nil {
+		s.Fire(err)
 		return nil
 	}
 
 	enc, err := base64.StdEncoding.DecodeString(v.Offer.SDP)
 	if err != nil {
+		s.Fire(err)
 		return nil
 	}
 
 	offer, err := cipher.Decrypt(enc)
 	if err != nil {
+		s.Fire(err)
 		return nil
 	}
 
 	answer, err := s.Exchange(share.src, string(offer))
 	if err != nil {
+		s.Fire(err)
 		return nil
 	}
 

@@ -54,7 +54,7 @@ func Init() {
 	if log.Debug().Enabled() {
 		srv.Listen(func(msg interface{}) {
 			switch msg.(type) {
-			case string:
+			case string, error:
 				log.Debug().Msgf("[webtorrent] %s", msg)
 			case *webtorrent.Message:
 				log.Trace().Any("msg", msg).Msgf("[webtorrent]")
