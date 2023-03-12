@@ -43,15 +43,18 @@ func (c *Conn) GetAnswer() (answer string, err error) {
 
 		for _, md := range sd.MediaDescriptions {
 			for _, attr := range md.Attributes {
+				var direction webrtc.RTPTransceiverDirection
 				switch attr.Key {
 				case "recvonly":
-					_, _ = c.pc.AddTransceiverFromKind(
-						webrtc.NewRTPCodecType(md.MediaName.Media),
-						webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionSendonly},
-					)
+					direction = webrtc.RTPTransceiverDirectionSendonly
 				case "sendrecv":
-					_, _ = c.pc.AddTransceiverFromKind(
-						webrtc.NewRTPCodecType(md.MediaName.Media),
+					direction = webrtc.RTPTransceiverDirectionSendrecv
+				}
+
+				if direction > 0 {
+					_, _ = c.pc.AddTransceiverFromTrack(
+						NewTrack(md.MediaName.Media),
+						webrtc.RTPTransceiverInit{Direction: direction},
 					)
 				}
 			}

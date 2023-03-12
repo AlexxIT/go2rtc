@@ -1,6 +1,7 @@
 package webrtc
 
 import (
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
@@ -48,23 +49,14 @@ func (c *Conn) getProducerSendTrack(media *streamer.Media, codec *streamer.Codec
 		return nil
 	}
 
-	oldTrack := sender.Track()
-	track := &Track{
-		kind:        media.Kind,
-		payloadType: codec.PayloadType,
-
-		id:       oldTrack.ID(),
-		rid:      oldTrack.RID(),
-		streamID: oldTrack.StreamID(),
-	}
-
-	if err := sender.ReplaceTrack(track); err != nil {
+	track, ok := sender.Track().(*Track)
+	if !ok {
 		return nil
 	}
 
 	push := func(packet *rtp.Packet) error {
 		c.send += packet.MarshalSize()
-		return track.WriteRTP(packet)
+		return track.WriteRTP(codec.PayloadType, packet)
 	}
 
 	return streamer.NewTrack(media, codec).Bind(push)
@@ -80,14 +72,20 @@ func (c *Conn) getTranseiver(mid string) *webrtc.RTPTransceiver {
 }
 
 type Track struct {
-	kind        string
-	id          string
-	rid         string
-	streamID    string
-	payloadType byte
-	sequence    uint16
-	ssrc        uint32
-	writer      webrtc.TrackLocalWriter
+	kind     string
+	id       string
+	streamID string
+	sequence uint16
+	ssrc     uint32
+	writer   webrtc.TrackLocalWriter
+}
+
+func NewTrack(kind string) *Track {
+	return &Track{
+		kind:     kind,
+		id:       core.RandString(16),
+		streamID: core.RandString(16),
+	}
 }
 
 func (t *Track) Bind(context webrtc.TrackLocalContext) (webrtc.RTPCodecParameters, error) {
@@ -95,9 +93,8 @@ func (t *Track) Bind(context webrtc.TrackLocalContext) (webrtc.RTPCodecParameter
 	t.writer = context.WriteStream()
 
 	for _, parameters := range context.CodecParameters() {
-		if byte(parameters.PayloadType) == t.payloadType {
-			return parameters, nil
-		}
+		// return first parameters
+		return parameters, nil
 	}
 
 	return webrtc.RTPCodecParameters{}, nil
@@ -112,7 +109,7 @@ func (t *Track) ID() string {
 }
 
 func (t *Track) RID() string {
-	return t.rid
+	return "" // don't know what it is
 }
 
 func (t *Track) StreamID() string {
@@ -123,13 +120,13 @@ func (t *Track) Kind() webrtc.RTPCodecType {
 	return webrtc.NewRTPCodecType(t.kind)
 }
 
-func (t *Track) WriteRTP(packet *rtp.Packet) error {
+func (t *Track) WriteRTP(payloadType uint8, packet *rtp.Packet) error {
 	// important to have internal counter if input packets from different sources
 	t.sequence++
 
 	header := packet.Header
 	header.SSRC = t.ssrc
-	header.PayloadType = t.payloadType
+	header.PayloadType = payloadType
 	header.SequenceNumber = t.sequence
 	_, err := t.writer.WriteRTP(&header, packet.Payload)
 	return err
