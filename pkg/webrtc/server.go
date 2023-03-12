@@ -33,7 +33,8 @@ func (c *Conn) SetOffer(offer string) (err error) {
 }
 
 func (c *Conn) GetAnswer() (answer string, err error) {
-	if c.Mode == streamer.ModePassiveProducer {
+	switch c.Mode {
+	case streamer.ModePassiveProducer:
 		// init all Sender(s) for passive producer or they will be nil
 		// sender for passive producer is backchannel
 		sd := &sdp.SessionDescription{}
@@ -56,6 +57,22 @@ func (c *Conn) GetAnswer() (answer string, err error) {
 						NewTrack(md.MediaName.Media),
 						webrtc.RTPTransceiverInit{Direction: direction},
 					)
+				}
+			}
+		}
+
+	case streamer.ModePassiveConsumer:
+		// fix sendrecv transeivers - set for sendonly codecs from recvonly
+		for _, tr1 := range c.pc.GetTransceivers() {
+			for _, tr2 := range c.pc.GetTransceivers() {
+				if tr1 == tr2 {
+					continue
+				}
+				if tr1.Mid() == tr2.Mid() && tr2.Direction() == webrtc.RTPTransceiverDirectionRecvonly {
+					codecs := tr2.Receiver().GetParameters().Codecs
+					if err = tr1.SetCodecPreferences(codecs); err != nil {
+						return "", err
+					}
 				}
 			}
 		}

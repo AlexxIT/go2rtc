@@ -19,11 +19,11 @@ func (c *Conn) AddTrack(media *streamer.Media, track *streamer.Track) *streamer.
 		switch track.Direction {
 		case streamer.DirectionSendonly:
 			// send our track to WebRTC consumer
-			return c.addConsumerSendTrack(track)
+			return c.addConsumerSendTrack(media, track)
 
 		case streamer.DirectionRecvonly:
 			// receive track from WebRTC consumer (microphone, backchannel, two way audio)
-			return c.addConsumerRecvTrack(track)
+			return c.addConsumerRecvTrack(media, track)
 		}
 
 	case streamer.ModePassiveProducer:
@@ -42,7 +42,7 @@ func (c *Conn) AddTrack(media *streamer.Media, track *streamer.Track) *streamer.
 	panic("not implemented")
 }
 
-func (c *Conn) addConsumerSendTrack(track *streamer.Track) *streamer.Track {
+func (c *Conn) addConsumerSendTrack(media *streamer.Media, track *streamer.Track) *streamer.Track {
 	codec := track.Codec
 
 	// webrtc.codecParametersFuzzySearch
@@ -70,6 +70,10 @@ func (c *Conn) addConsumerSendTrack(track *streamer.Track) *streamer.Track {
 	init := webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionSendonly}
 	tr, err := c.pc.AddTransceiverFromTrack(trackLocal, init)
 	if err != nil {
+		return nil
+	}
+
+	if err = tr.SetMid(media.MID); err != nil {
 		return nil
 	}
 
@@ -110,7 +114,7 @@ func (c *Conn) addConsumerSendTrack(track *streamer.Track) *streamer.Track {
 	return track
 }
 
-func (c *Conn) addConsumerRecvTrack(track *streamer.Track) *streamer.Track {
+func (c *Conn) addConsumerRecvTrack(media *streamer.Media, track *streamer.Track) *streamer.Track {
 	caps := webrtc.RTPCodecCapability{
 		MimeType:  MimeType(track.Codec),
 		ClockRate: track.Codec.ClockRate,
@@ -120,6 +124,10 @@ func (c *Conn) addConsumerRecvTrack(track *streamer.Track) *streamer.Track {
 	init := webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionRecvonly}
 	tr, err := c.pc.AddTransceiverFromKind(webrtc.RTPCodecTypeAudio, init)
 	if err != nil {
+		return nil
+	}
+
+	if err = tr.SetMid(media.MID); err != nil {
 		return nil
 	}
 
