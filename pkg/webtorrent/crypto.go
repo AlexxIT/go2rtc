@@ -17,7 +17,7 @@ type Cipher struct {
 }
 
 func NewCipher(share, pwd, nonce string) (*Cipher, error) {
-	timestamp, err := strconv.ParseInt(nonce, 36, 0)
+	timestamp, err := strconv.ParseInt(nonce, 36, 64)
 	if err != nil {
 		return nil, err
 	}
