@@ -23,6 +23,9 @@ func (c *Conn) GetTrack(media *streamer.Media, codec *streamer.Codec) *streamer.
 		track = streamer.NewTrack(media, codec)
 	} else {
 		track = c.getProducerSendTrack(media, codec)
+		if track == nil {
+			panic("getProducerSendTrack return nil track")
+		}
 	}
 
 	c.tracks = append(c.tracks, track)

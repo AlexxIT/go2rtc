@@ -8,12 +8,23 @@ import (
 
 func (c *Conn) CreateOffer(medias []*streamer.Media) (string, error) {
 	for _, media := range medias {
-		if _, err := c.pc.AddTransceiverFromKind(
-			webrtc.NewRTPCodecType(media.Kind), webrtc.RTPTransceiverInit{
-				Direction: webrtc.NewRTPTransceiverDirection(media.Direction),
-			},
-		); err != nil {
-			return "", err
+		switch media.Direction {
+		case streamer.DirectionRecvonly:
+			if _, err := c.pc.AddTransceiverFromKind(
+				webrtc.NewRTPCodecType(media.Kind),
+				webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionRecvonly},
+			); err != nil {
+				return "", err
+			}
+		case streamer.DirectionSendonly:
+			if _, err := c.pc.AddTransceiverFromTrack(
+				NewTrack(media.Kind),
+				webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionSendonly},
+			); err != nil {
+				return "", err
+			}
+		case streamer.DirectionSendRecv:
+			panic("not implemented")
 		}
 	}
 
