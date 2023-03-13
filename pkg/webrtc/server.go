@@ -14,6 +14,34 @@ func (c *Conn) SetOffer(offer string) (err error) {
 		return
 	}
 
+	// create transceivers with opposite direction
+	for _, md := range sd.MediaDescriptions {
+		var mid string
+		var tr *webrtc.RTPTransceiver
+		for _, attr := range md.Attributes {
+			switch attr.Key {
+			case streamer.DirectionSendRecv:
+				tr, _ = c.pc.AddTransceiverFromTrack(NewTrack(md.MediaName.Media))
+			case streamer.DirectionSendonly:
+				tr, _ = c.pc.AddTransceiverFromKind(
+					webrtc.NewRTPCodecType(md.MediaName.Media),
+					webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionRecvonly},
+				)
+			case streamer.DirectionRecvonly:
+				tr, _ = c.pc.AddTransceiverFromTrack(
+					NewTrack(md.MediaName.Media),
+					webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionSendonly},
+				)
+			case "mid":
+				mid = attr.Value
+			}
+		}
+
+		if mid != "" && tr != nil {
+			_ = tr.SetMid(mid)
+		}
+	}
+
 	medias := streamer.UnmarshalMedias(sd.MediaDescriptions)
 
 	// sort medias, so video will always be before audio
@@ -33,51 +61,6 @@ func (c *Conn) SetOffer(offer string) (err error) {
 }
 
 func (c *Conn) GetAnswer() (answer string, err error) {
-	switch c.Mode {
-	case streamer.ModePassiveProducer:
-		// init all Sender(s) for passive producer or they will be nil
-		// sender for passive producer is backchannel
-		sd := &sdp.SessionDescription{}
-		if err = sd.Unmarshal([]byte(c.offer)); err != nil {
-			return
-		}
-
-		for _, md := range sd.MediaDescriptions {
-			for _, attr := range md.Attributes {
-				var direction webrtc.RTPTransceiverDirection
-				switch attr.Key {
-				case "recvonly":
-					direction = webrtc.RTPTransceiverDirectionSendonly
-				case "sendrecv":
-					direction = webrtc.RTPTransceiverDirectionSendrecv
-				}
-
-				if direction > 0 {
-					_, _ = c.pc.AddTransceiverFromTrack(
-						NewTrack(md.MediaName.Media),
-						webrtc.RTPTransceiverInit{Direction: direction},
-					)
-				}
-			}
-		}
-
-	case streamer.ModePassiveConsumer:
-		// fix sendrecv transeivers - set for sendonly codecs from recvonly
-		for _, tr1 := range c.pc.GetTransceivers() {
-			for _, tr2 := range c.pc.GetTransceivers() {
-				if tr1 == tr2 {
-					continue
-				}
-				if tr1.Mid() == tr2.Mid() && tr2.Direction() == webrtc.RTPTransceiverDirectionRecvonly {
-					codecs := tr2.Receiver().GetParameters().Codecs
-					if err = tr1.SetCodecPreferences(codecs); err != nil {
-						return "", err
-					}
-				}
-			}
-		}
-	}
-
 	// we need to process remote offer after we create transeivers
 	desc := webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: c.offer}
 	if err = c.pc.SetRemoteDescription(desc); err != nil {

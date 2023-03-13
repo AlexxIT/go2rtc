@@ -7,32 +7,37 @@ import (
 )
 
 func (c *Conn) CreateOffer(medias []*streamer.Media) (string, error) {
+	// 1. Create transeivers with proper kind and direction
 	for _, media := range medias {
+		var err error
 		switch media.Direction {
 		case streamer.DirectionRecvonly:
-			if _, err := c.pc.AddTransceiverFromKind(
+			_, err = c.pc.AddTransceiverFromKind(
 				webrtc.NewRTPCodecType(media.Kind),
 				webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionRecvonly},
-			); err != nil {
-				return "", err
-			}
+			)
 		case streamer.DirectionSendonly:
-			if _, err := c.pc.AddTransceiverFromTrack(
+			_, err = c.pc.AddTransceiverFromTrack(
 				NewTrack(media.Kind),
 				webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionSendonly},
-			); err != nil {
-				return "", err
-			}
+			)
 		case streamer.DirectionSendRecv:
-			panic("not implemented")
+			// default transceiver is sendrecv
+			_, err = c.pc.AddTransceiverFromTrack(NewTrack(media.Kind))
+		}
+
+		if err != nil {
+			return "", err
 		}
 	}
 
+	// 2. Create local offer
 	desc, err := c.pc.CreateOffer(nil)
 	if err != nil {
 		return "", err
 	}
 
+	// 3. Start gathering phase
 	if err = c.pc.SetLocalDescription(desc); err != nil {
 		return "", err
 	}
@@ -82,6 +87,9 @@ func (c *Conn) SetAnswer(answer string) (err error) {
 	return nil
 }
 
+// fakeFormatsInAnswer - fix pion bug with remote SDP parsing:
+// pion will process formats only from first media of each kind
+// so we add all formats from first offer media to the first answer media
 func fakeFormatsInAnswer(offer, answer string) string {
 	sd2 := &sdp.SessionDescription{}
 	if err := sd2.Unmarshal([]byte(answer)); err != nil {

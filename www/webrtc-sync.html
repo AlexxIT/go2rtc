@@ -19,45 +19,44 @@
 <body>
 <video id="video" autoplay controls playsinline muted></video>
 <script>
-    function PeerConnection(userMedia) {
+    async function PeerConnection(media) {
+        const pc = new RTCPeerConnection({
+            iceServers: [{urls: 'stun:stun.l.google.com:19302'}]
+        })
+
+        document.getElementById('video').srcObject = new MediaStream([
+            pc.addTransceiver('audio', {direction: 'sendrecv'}).receiver.track,
+            pc.addTransceiver('video', {direction: 'sendrecv'}).receiver.track,
+        ])
+
+        const tracks = await navigator.mediaDevices.getUserMedia({
+            video: media.indexOf('camera') >= 0,
+            audio: media.indexOf('microphone') >= 0,
+        })
+        tracks.getTracks().forEach(track => {
+            pc.addTrack(track)
+        })
+
+        return pc
+    }
+
+    function getCompleteOffer(pc, timeout) {
         return new Promise((resolve, reject) => {
-            const pc = new RTCPeerConnection({
-                iceServers: [{urls: 'stun:stun.l.google.com:19302'}]
-            })
-
             pc.addEventListener('icegatheringstatechange', () => {
-                if (pc.iceGatheringState === 'complete') resolve(pc)
+                if (pc.iceGatheringState === 'complete') resolve(pc.localDescription.sdp)
             })
-
-            document.getElementById('video').srcObject = new MediaStream([
-                pc.addTransceiver('video', {direction: 'recvonly'}).receiver.track,
-                pc.addTransceiver('audio', {direction: 'recvonly'}).receiver.track
-            ])
-
-            if (userMedia) {
-                userMedia.getTracks().forEach(track => {
-                    pc.addTransceiver(track, {direction: 'sendonly'})
-                })
-            }
 
             pc.createOffer().then(offer => pc.setLocalDescription(offer))
 
-            setTimeout(() => resolve(pc), 3000)
+            setTimeout(() => resolve(pc.localDescription.sdp), timeout || 3000)
         })
     }
 
-    async function userMedia() {
-        try {
-            return await navigator.mediaDevices.getUserMedia({audio: true})
-        } catch (e) {
-            return null
-        }
-    }
-
     async function connect() {
-        const pc = await PeerConnection(await userMedia())
+        const media = new URLSearchParams(location.search).get('media')
+        const pc = await PeerConnection(media)
         const url = new URL('api/webrtc' + location.search, location.href)
-        const r = await fetch(url, {method: 'POST', body: pc.localDescription.sdp})
+        const r = await fetch(url, {method: 'POST', body: await getCompleteOffer(pc)})
         await pc.setRemoteDescription({type: 'answer', sdp: await r.text()})
     }
 

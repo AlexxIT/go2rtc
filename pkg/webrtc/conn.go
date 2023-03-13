@@ -2,8 +2,11 @@ package webrtc
 
 import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/h264"
+	"github.com/AlexxIT/go2rtc/pkg/h265"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/pion/rtcp"
+	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
 	"time"
 )
@@ -114,6 +117,54 @@ func (c *Conn) Close() error {
 func (c *Conn) AddCandidate(candidate string) error {
 	// pion uses only candidate value from json/object candidate struct
 	return c.pc.AddICECandidate(webrtc.ICECandidateInit{Candidate: candidate})
+}
+
+func (c *Conn) getTranseiver(mid string) *webrtc.RTPTransceiver {
+	for _, tr := range c.pc.GetTransceivers() {
+		if tr.Mid() == mid {
+			return tr
+		}
+	}
+	return nil
+}
+func (c *Conn) addSendTrack(media *streamer.Media, track *streamer.Track) *streamer.Track {
+	tr := c.getTranseiver(media.MID)
+	sender := tr.Sender()
+	localTrack := sender.Track().(*Track)
+
+	codec := track.Codec
+
+	// important to get remote PayloadType
+	payloadType := media.MatchCodec(codec).PayloadType
+
+	push := func(packet *rtp.Packet) error {
+		c.send += packet.MarshalSize()
+		return localTrack.WriteRTP(payloadType, packet)
+	}
+
+	switch codec.Name {
+	case streamer.CodecH264:
+		wrapper := h264.RTPPay(1200)
+		push = wrapper(push)
+
+		if codec.IsRTP() {
+			wrapper = h264.RTPDepay(track)
+		} else {
+			wrapper = h264.RepairAVC(track)
+		}
+		push = wrapper(push)
+
+	case streamer.CodecH265:
+		// SafariPay because it is the only browser in the world
+		// that supports WebRTC + H265
+		wrapper := h265.SafariPay(1200)
+		push = wrapper(push)
+
+		wrapper = h265.RTPDepay(track)
+		push = wrapper(push)
+	}
+
+	return track.Bind(push)
 }
 
 func (c *Conn) getRecvTrack(remote *webrtc.TrackRemote) *streamer.Track {
