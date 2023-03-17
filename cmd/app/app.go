@@ -18,7 +18,7 @@ var Version = "1.2.0"
 var UserAgent = "go2rtc/" + Version
 
 var ConfigPath string
-var Info = map[string]interface{}{
+var Info = map[string]any{
 	"version": Version,
 }
 
@@ -94,7 +94,7 @@ func NewLogger(format string, level string) zerolog.Logger {
 	return zerolog.New(writer).With().Timestamp().Logger().Level(lvl)
 }
 
-func LoadConfig(v interface{}) {
+func LoadConfig(v any) {
 	for _, data := range configs {
 		if err := yaml.Unmarshal(data, v); err != nil {
 			log.Warn().Err(err).Msg("[app] read config")

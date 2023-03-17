@@ -84,7 +84,7 @@ func apiWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tr := &Transport{Request: r}
-	tr.OnWrite(func(msg interface{}) {
+	tr.OnWrite(func(msg any) {
 		_ = ws.SetWriteDeadline(time.Now().Add(time.Second * 5))
 
 		if data, ok := msg.([]byte); ok {
@@ -130,11 +130,11 @@ type Transport struct {
 	wrmx   sync.Mutex
 
 	onChange func()
-	onWrite  func(msg interface{})
+	onWrite  func(msg any)
 	onClose  []func()
 }
 
-func (t *Transport) OnWrite(f func(msg interface{})) {
+func (t *Transport) OnWrite(f func(msg any)) {
 	t.mx.Lock()
 	if t.onChange != nil {
 		t.onChange()
@@ -143,7 +143,7 @@ func (t *Transport) OnWrite(f func(msg interface{})) {
 	t.mx.Unlock()
 }
 
-func (t *Transport) Write(msg interface{}) {
+func (t *Transport) Write(msg any) {
 	t.wrmx.Lock()
 	t.onWrite(msg)
 	t.wrmx.Unlock()

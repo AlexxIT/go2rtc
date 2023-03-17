@@ -46,7 +46,7 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 	exit := make(chan []byte)
 
 	cons := &mp4.Segment{OnlyKeyframe: true}
-	cons.Listen(func(msg interface{}) {
+	cons.Listen(func(msg any) {
 		if data, ok := msg.([]byte); ok && exit != nil {
 			exit <- data
 			exit = nil

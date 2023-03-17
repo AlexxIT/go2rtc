@@ -91,7 +91,7 @@ func (c *Character) GenerateEvent() (data []byte, err error) {
 }
 
 // Set new value and NotifyListeners
-func (c *Character) Set(v interface{}) (err error) {
+func (c *Character) Set(v any) (err error) {
 	if err = c.Write(v); err != nil {
 		return
 	}
@@ -99,7 +99,7 @@ func (c *Character) Set(v interface{}) (err error) {
 }
 
 // Write new value with right format
-func (c *Character) Write(v interface{}) (err error) {
+func (c *Character) Write(v any) (err error) {
 	switch c.Format {
 	case characteristic.FormatTLV8:
 		var data []byte
@@ -120,7 +120,7 @@ func (c *Character) Write(v interface{}) (err error) {
 }
 
 // ReadTLV8 value to right struct
-func (c *Character) ReadTLV8(v interface{}) (err error) {
+func (c *Character) ReadTLV8(v any) (err error) {
 	var data []byte
 	if data, err = base64.StdEncoding.DecodeString(c.Value.(string)); err != nil {
 		return

@@ -32,7 +32,7 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 		RemoteAddr: r.RemoteAddr,
 		UserAgent:  r.UserAgent(),
 	}
-	cons.Listen(func(msg interface{}) {
+	cons.Listen(func(msg any) {
 		switch msg := msg.(type) {
 		case []byte:
 			exit <- msg
@@ -84,7 +84,7 @@ func outputMjpeg(w http.ResponseWriter, r *http.Request) {
 		RemoteAddr: r.RemoteAddr,
 		UserAgent:  r.UserAgent(),
 	}
-	cons.Listen(func(msg interface{}) {
+	cons.Listen(func(msg any) {
 		switch msg := msg.(type) {
 		case []byte:
 			data := []byte(header + strconv.Itoa(len(msg)))
@@ -149,7 +149,7 @@ func handlerWS(tr *api.Transport, _ *api.Message) error {
 		RemoteAddr: tr.Request.RemoteAddr,
 		UserAgent:  tr.Request.UserAgent(),
 	}
-	cons.Listen(func(msg interface{}) {
+	cons.Listen(func(msg any) {
 		if data, ok := msg.([]byte); ok {
 			tr.Write(data)
 		}

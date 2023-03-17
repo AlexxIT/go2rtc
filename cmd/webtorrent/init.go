@@ -52,7 +52,7 @@ func Init() {
 	}
 
 	if log.Debug().Enabled() {
-		srv.Listen(func(msg interface{}) {
+		srv.Listen(func(msg any) {
 			switch msg.(type) {
 			case string, error:
 				log.Debug().Msgf("[webtorrent] %s", msg)

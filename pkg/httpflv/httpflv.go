@@ -176,7 +176,7 @@ func (c *Conn) Close() (err error) {
 	return c.conn.Close()
 }
 
-func parseAudioConfig(meta map[string]interface{}) av.CodecData {
+func parseAudioConfig(meta map[string]any) av.CodecData {
 	if meta["audiocodecid"] != float64(10) {
 		return nil
 	}

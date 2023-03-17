@@ -30,7 +30,7 @@ func Init() {
 		log.Error().Err(err).Msg("[ngrok] start")
 	}
 
-	ngr.Listen(func(msg interface{}) {
+	ngr.Listen(func(msg any) {
 		if msg := msg.(*ngrok.Message); msg != nil {
 			if strings.HasPrefix(msg.Line, "ERROR:") {
 				log.Warn().Msg("[ngrok] " + msg.Line)

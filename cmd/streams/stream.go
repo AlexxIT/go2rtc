@@ -24,7 +24,7 @@ func NewStream(source interface{}) *Stream {
 		prod := &Producer{url: source}
 		s.producers = append(s.producers, prod)
 		return s
-	case []interface{}:
+	case []any:
 		s := new(Stream)
 		for _, source := range source {
 			prod := &Producer{url: source.(string)}
@@ -33,7 +33,7 @@ func NewStream(source interface{}) *Stream {
 		return s
 	case *Stream:
 		return source
-	case map[string]interface{}:
+	case map[string]any:
 		return NewStream(source["url"])
 	case nil:
 		return new(Stream)

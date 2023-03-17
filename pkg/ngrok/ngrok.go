@@ -24,7 +24,7 @@ type Message struct {
 	Line string
 }
 
-func NewNgrok(command interface{}) (*Ngrok, error) {
+func NewNgrok(command any) (*Ngrok, error) {
 	var arg []string
 	switch command.(type) {
 	case string:

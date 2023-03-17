@@ -185,7 +185,7 @@ func inputWebRTC(w http.ResponseWriter, r *http.Request) {
 	id := strconv.FormatInt(time.Now().UnixNano(), 36)
 	sessions[id] = prod
 
-	prod.Listen(func(msg interface{}) {
+	prod.Listen(func(msg any) {
 		switch msg := msg.(type) {
 		case pion.PeerConnectionState:
 			if msg == pion.PeerConnectionStateClosed {

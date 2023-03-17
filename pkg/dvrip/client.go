@@ -38,7 +38,7 @@ type Client struct {
 	audioSeq uint16
 }
 
-type Response map[string]interface{}
+type Response map[string]any
 
 const Login = uint16(1000)
 const OPMonitorClaim = uint16(1413)

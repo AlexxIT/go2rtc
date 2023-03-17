@@ -63,13 +63,13 @@ func mergeYAML(file1 string, yaml2 []byte) ([]byte, error) {
 	}
 
 	// Unmarshal the first YAML file into a map
-	var config1 map[string]interface{}
+	var config1 map[string]any
 	if err = yaml.Unmarshal(data1, &config1); err != nil {
 		return nil, err
 	}
 
 	// Unmarshal the second YAML document into a map
-	var config2 map[string]interface{}
+	var config2 map[string]any
 	if err = yaml.Unmarshal(yaml2, &config2); err != nil {
 		return nil, err
 	}
@@ -81,15 +81,15 @@ func mergeYAML(file1 string, yaml2 []byte) ([]byte, error) {
 	return yaml.Marshal(&config1)
 }
 
-func merge(dst, src map[string]interface{}) map[string]interface{} {
+func merge(dst, src map[string]any) map[string]any {
 	for k, v := range src {
 		if vv, ok := dst[k]; ok {
 			switch vv := vv.(type) {
-			case map[string]interface{}:
-				v := v.(map[string]interface{})
+			case map[string]any:
+				v := v.(map[string]any)
 				dst[k] = merge(vv, v)
-			case []interface{}:
-				v := v.([]interface{})
+			case []any:
+				v := v.([]any)
 				dst[k] = v
 			default:
 				dst[k] = v

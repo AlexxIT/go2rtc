@@ -26,7 +26,7 @@ func handlerWSMSE(tr *api.Transport, msg *api.Message) error {
 		cons.Medias = parseMedias(codecs, true)
 	}
 
-	cons.Listen(func(msg interface{}) {
+	cons.Listen(func(msg any) {
 		if data, ok := msg.([]byte); ok {
 			tr.Write(data)
 		}
@@ -74,7 +74,7 @@ func handlerWSMP4(tr *api.Transport, msg *api.Message) error {
 		cons.Medias = parseMedias(codecs, false)
 	}
 
-	cons.Listen(func(msg interface{}) {
+	cons.Listen(func(msg any) {
 		if data, ok := msg.([]byte); ok {
 			tr.Write(data)
 		}

@@ -106,7 +106,7 @@ func rtspHandler(url string) (streamer.Producer, error) {
 	conn.UserAgent = app.UserAgent
 
 	if log.Trace().Enabled() {
-		conn.Listen(func(msg interface{}) {
+		conn.Listen(func(msg any) {
 			switch msg := msg.(type) {
 			case *tcp.Request:
 				log.Trace().Msgf("[rtsp] client request:\n%s", msg)
@@ -147,7 +147,7 @@ func tcpHandler(conn *rtsp.Conn) {
 
 	trace := log.Trace().Enabled()
 
-	conn.Listen(func(msg interface{}) {
+	conn.Listen(func(msg any) {
 		if trace {
 			switch msg := msg.(type) {
 			case *tcp.Request:

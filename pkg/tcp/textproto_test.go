@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func assert(t *testing.T, one, two interface{}) {
+func assert(t *testing.T, one, two any) {
 	if one != two {
 		t.FailNow()
 	}

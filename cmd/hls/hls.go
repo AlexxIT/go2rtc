@@ -83,7 +83,7 @@ func handlerStream(w http.ResponseWriter, r *http.Request) {
 
 	session := &Session{cons: cons}
 
-	cons.Listen(func(msg interface{}) {
+	cons.(any).(*core.Listener).Listen(func(msg any) {
 		if data, ok := msg.([]byte); ok {
 			session.mu.Lock()
 			session.segment = append(session.segment, data...)

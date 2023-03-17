@@ -35,7 +35,7 @@ type Conn struct {
 	ClientPrivate []byte
 
 	OnEvent func(res *http.Response)
-	Output  func(msg interface{})
+	Output  func(msg any)
 
 	conn         net.Conn
 	secure       *Secure
