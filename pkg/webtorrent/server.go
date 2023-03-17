@@ -4,14 +4,13 @@ import (
 	"encoding/base64"
 	"fmt"
 	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/gorilla/websocket"
 	"sync"
 	"time"
 )
 
 type Server struct {
-	streamer.Element
+	core.Listener
 
 	URL      string
 	Exchange func(src, offer string) (answer string, err error)

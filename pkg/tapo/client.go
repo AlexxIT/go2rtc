@@ -8,8 +8,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/mpegts"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"mime/multipart"
 	"net"
@@ -19,12 +19,13 @@ import (
 )
 
 type Client struct {
-	streamer.Element
+	core.Listener
 
 	url string
 
-	medias []*streamer.Media
-	tracks map[byte]*streamer.Track
+	medias    []*core.Media
+	receivers []*core.Receiver
+	sender    *core.Sender
 
 	conn1 net.Conn
 	conn2 net.Conn
@@ -33,6 +34,9 @@ type Client struct {
 
 	session1 string
 	session2 string
+
+	recv int
+	send int
 }
 
 // block ciphers using cipher block chaining.
@@ -102,7 +106,7 @@ func (c *Client) newDectypter(res *http.Response, username, password string) {
 	// extract nonce from response
 	// cipher="AES_128_CBC" username="admin" padding="PKCS7_16" algorithm="MD5" nonce="***"
 	nonce := res.Header.Get("Key-Exchange")
-	nonce = streamer.Between(nonce, `nonce="`, `"`)
+	nonce = core.Between(nonce, `nonce="`, `"`)
 
 	key := md5.Sum([]byte(nonce + ":" + password))
 	iv := md5.Sum([]byte(username + ":" + nonce))
@@ -158,6 +162,8 @@ func (c *Client) Handle() error {
 			return err
 		}
 
+		c.recv += size
+
 		body := make([]byte, size)
 
 		b := body
@@ -178,8 +184,11 @@ func (c *Client) Handle() error {
 				break
 			}
 
-			if track := c.tracks[pkt.PayloadType]; track != nil {
-				_ = track.WriteRTP(pkt)
+			for _, receiver := range c.receivers {
+				if receiver.ID == pkt.PayloadType {
+					receiver.WriteRTP(pkt)
+					break
+				}
 			}
 		}
 	}

@@ -1,4 +1,4 @@
-package streamer
+package core
 
 import (
 	"fmt"

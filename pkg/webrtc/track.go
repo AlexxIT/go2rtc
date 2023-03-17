@@ -1,7 +1,6 @@
 package webrtc
 
 import (
-	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
 )
@@ -18,8 +17,8 @@ type Track struct {
 func NewTrack(kind string) *Track {
 	return &Track{
 		kind:     kind,
-		id:       core.RandString(16),
-		streamID: core.RandString(16),
+		id:       "go2rtc-" + kind,
+		streamID: "go2rtc",
 	}
 }
 

@@ -2,9 +2,6 @@ package webrtc
 
 import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/h264"
-	"github.com/AlexxIT/go2rtc/pkg/h265"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
@@ -12,19 +9,20 @@ import (
 )
 
 type Conn struct {
-	streamer.Element
+	core.Listener
 
 	UserAgent string
 	Desc      string
-	Mode      streamer.Mode
+	Mode      core.Mode
 
 	pc *webrtc.PeerConnection
 
-	medias []*streamer.Media
-	tracks []*streamer.Track
+	medias    []*core.Media
+	receivers []*core.Receiver
+	senders   []*core.Sender
 
-	receive int
-	send    int
+	recv int
+	send int
 
 	offer  string
 	remote string
@@ -56,13 +54,26 @@ func NewConn(pc *webrtc.PeerConnection) *Conn {
 		)
 	})
 
-	pc.OnTrack(func(remote *webrtc.TrackRemote, _ *webrtc.RTPReceiver) {
-		track := c.getRecvTrack(remote)
-		if track == nil {
-			return // it's OK when we not need, for example, audio from producer
+	pc.OnTrack(func(remote *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
+		media, codec := c.getMediaCodec(remote)
+		if media == nil {
+			return
 		}
 
-		if c.Mode == streamer.ModePassiveProducer && remote.Kind() == webrtc.RTPCodecTypeVideo {
+		track, err := c.GetTrack(media, codec)
+		if err != nil {
+			return
+		}
+
+		switch c.Mode {
+		case core.ModePassiveProducer, core.ModeActiveProducer:
+			// replace the theoretical list of codecs with the actual list of codecs
+			if len(media.Codecs) > 1 {
+				media.Codecs = []*core.Codec{codec}
+			}
+		}
+
+		if c.Mode == core.ModePassiveProducer && remote.Kind() == webrtc.RTPCodecTypeVideo {
 			go func() {
 				pkts := []rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: uint32(remote.SSRC())}}
 				for range time.NewTicker(time.Second * 2).C {
@@ -74,15 +85,20 @@ func NewConn(pc *webrtc.PeerConnection) *Conn {
 		}
 
 		for {
-			packet, _, err := remote.ReadRTP()
+			b := make([]byte, ReceiveMTU)
+			n, _, err := remote.Read(b)
 			if err != nil {
 				return
 			}
-			if len(packet.Payload) == 0 {
-				continue
+
+			c.recv += n
+
+			packet := &rtp.Packet{}
+			if err := packet.Unmarshal(b[:n]); err != nil {
+				return
 			}
-			c.receive += len(packet.Payload)
-			_ = track.WriteRTP(packet)
+
+			track.WriteRTP(packet)
 		}
 	})
 
@@ -127,106 +143,34 @@ func (c *Conn) getTranseiver(mid string) *webrtc.RTPTransceiver {
 	}
 	return nil
 }
-func (c *Conn) addSendTrack(media *streamer.Media, track *streamer.Track) *streamer.Track {
-	tr := c.getTranseiver(media.MID)
-	sender := tr.Sender()
-	localTrack := sender.Track().(*Track)
 
-	codec := track.Codec
-
-	// important to get remote PayloadType
-	payloadType := media.MatchCodec(codec).PayloadType
-
-	push := func(packet *rtp.Packet) error {
-		c.send += packet.MarshalSize()
-		return localTrack.WriteRTP(payloadType, packet)
-	}
-
-	switch codec.Name {
-	case streamer.CodecH264:
-		wrapper := h264.RTPPay(1200)
-		push = wrapper(push)
-
-		if codec.IsRTP() {
-			wrapper = h264.RTPDepay(track)
-		} else {
-			wrapper = h264.RepairAVC(track)
-		}
-		push = wrapper(push)
-
-	case streamer.CodecH265:
-		// SafariPay because it is the only browser in the world
-		// that supports WebRTC + H265
-		wrapper := h265.SafariPay(1200)
-		push = wrapper(push)
-
-		wrapper = h265.RTPDepay(track)
-		push = wrapper(push)
-	}
-
-	return track.Bind(push)
-}
-
-func (c *Conn) getRecvTrack(remote *webrtc.TrackRemote) *streamer.Track {
-	payloadType := uint8(remote.PayloadType())
-
-	switch c.Mode {
-	case streamer.ModePassiveConsumer:
-		// Situation:
-		// - Browser (passive consumer) connects to go2rtc for receiving AV from IP-camera
-		// - Video and audio tracks marked as local "sendonly"
-		// - Browser sends microphone remote track to go2rtc, this track marked as local "recvonly"
-		// - go2rtc should ReadRTP from this remote track and sends it to camera
-		for _, track := range c.tracks {
-			if track.Direction == streamer.DirectionRecvonly && track.Codec.PayloadType == payloadType {
-				return track
-			}
+func (c *Conn) getMediaCodec(remote *webrtc.TrackRemote) (*core.Media, *core.Codec) {
+	for _, tr := range c.pc.GetTransceivers() {
+		// search Transeiver for this TrackRemote
+		if tr.Receiver() == nil || tr.Receiver().Track() != remote {
+			continue
 		}
 
-	case streamer.ModeActiveProducer:
-		// Situation:
-		// - go2rtc (active producer) connects to remote server (ex. webtorrent) for receiving AV
-		// - remote server sends remote tracks, this tracks marked as remote "sendonly"
-		for _, track := range c.tracks {
-			if track.Direction == streamer.DirectionSendonly && track.Codec.PayloadType == payloadType {
-				return track
-			}
-		}
-
-	case streamer.ModePassiveProducer:
-		// Situation:
-		// - OBS Studio (passive producer) connects to go2rtc for send AV
-		// - OBS sends remote tracks, this tracks marked as remote "sendonly"
-		for i, media := range c.medias {
-			// check only tracks with same kind
-			if media.Kind != remote.Kind().String() {
+		// search Media for this MID
+		for _, media := range c.medias {
+			if media.ID != tr.Mid() || media.Direction != core.DirectionRecvonly {
 				continue
 			}
 
-			// check only incoming tracks (remote media "sendonly")
-			if media.Direction != streamer.DirectionSendonly {
-				continue
-			}
-
+			// search codec for this PayloadType
 			for _, codec := range media.Codecs {
-				if codec.PayloadType != payloadType {
+				if codec.PayloadType != uint8(remote.PayloadType()) {
 					continue
 				}
-
-				// leave only one codec in supported media list
-				if len(media.Codecs) > 1 {
-					c.medias[i].Codecs = []*streamer.Codec{codec}
-				}
-
-				// forward request to passive producer GetTrack
-				// will create NewTrack for sendonly media
-				return c.GetTrack(media, codec)
+				return media, codec
 			}
 		}
-
-	default:
-		panic("not implemented")
 	}
 
-	return nil
+	// fix moment when core.ModePassiveProducer or core.ModeActiveProducer
+	// sends new codec with new payload type to same media
+	// check GetTrack
+	panic(core.Caller())
+
+	return nil, nil
 }

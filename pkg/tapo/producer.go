@@ -1,34 +1,34 @@
 package tapo
 
 import (
+	"encoding/json"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/mpegts"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
 )
 
-func (c *Client) GetMedias() []*streamer.Media {
-	// producer should have persistent medias
+func (c *Client) GetMedias() []*core.Media {
 	if c.medias == nil {
 		// don't know if all Tapo has this capabilities...
-		c.medias = []*streamer.Media{
+		c.medias = []*core.Media{
 			{
-				Kind:      streamer.KindVideo,
-				Direction: streamer.DirectionSendonly,
-				Codecs: []*streamer.Codec{
-					{Name: streamer.CodecH264, ClockRate: 90000, PayloadType: streamer.PayloadTypeRAW},
+				Kind:      core.KindVideo,
+				Direction: core.DirectionRecvonly,
+				Codecs: []*core.Codec{
+					{Name: core.CodecH264, ClockRate: 90000, PayloadType: core.PayloadTypeRAW},
 				},
 			},
 			{
-				Kind:      streamer.KindAudio,
-				Direction: streamer.DirectionSendonly,
-				Codecs: []*streamer.Codec{
-					{Name: streamer.CodecPCMA, ClockRate: 8000, PayloadType: 8},
+				Kind:      core.KindAudio,
+				Direction: core.DirectionRecvonly,
+				Codecs: []*core.Codec{
+					{Name: core.CodecPCMA, ClockRate: 8000, PayloadType: 8},
 				},
 			},
 			{
-				Kind:      streamer.KindAudio,
-				Direction: streamer.DirectionRecvonly,
-				Codecs: []*streamer.Codec{
-					{Name: streamer.CodecPCMA, ClockRate: 8000, PayloadType: 8},
+				Kind:      core.KindAudio,
+				Direction: core.DirectionSendonly,
+				Codecs: []*core.Codec{
+					{Name: core.CodecPCMA, ClockRate: 8000, PayloadType: 8},
 				},
 			},
 		}
@@ -37,44 +37,26 @@ func (c *Client) GetMedias() []*streamer.Media {
 	return c.medias
 }
 
-func (c *Client) GetTrack(media *streamer.Media, codec *streamer.Codec) (track *streamer.Track) {
-	for _, track := range c.tracks {
+func (c *Client) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
+	for _, track := range c.receivers {
 		if track.Codec == codec {
-			return track
+			return track, nil
 		}
 	}
 
-	if c.tracks == nil {
-		c.tracks = map[byte]*streamer.Track{}
+	if err := c.SetupStream(); err != nil {
+		return nil, err
 	}
 
-	if media.Direction == streamer.DirectionSendonly {
-		var payloadType byte
-		if media.Kind == streamer.KindVideo {
-			payloadType = mpegts.StreamTypeH264
-		} else {
-			payloadType = mpegts.StreamTypePCMATapo
-		}
-
-		if err := c.SetupStream(); err != nil {
-			return nil
-		}
-
-		track = streamer.NewTrack(media, codec)
-		c.tracks[payloadType] = track
-	} else {
-		if err := c.SetupBackchannel(); err != nil {
-			return nil
-		}
-
-		if w := c.backchannelWriter(); w != nil {
-			track = streamer.NewTrack(media, codec)
-			track.Bind(w)
-			c.tracks[0] = track
-		}
+	track := core.NewReceiver(media, codec)
+	switch media.Kind {
+	case core.KindVideo:
+		track.ID = mpegts.StreamTypeH264
+	case core.KindAudio:
+		track.ID = mpegts.StreamTypePCMATapo
 	}
-
-	return
+	c.receivers = append(c.receivers, track)
+	return track, nil
 }
 
 func (c *Client) Start() error {
@@ -82,5 +64,25 @@ func (c *Client) Start() error {
 }
 
 func (c *Client) Stop() error {
+	for _, receiver := range c.receivers {
+		receiver.Close()
+	}
+	if c.sender != nil {
+		c.sender.Close()
+	}
 	return c.Close()
+}
+
+func (c *Client) MarshalJSON() ([]byte, error) {
+	info := &core.Info{
+		Type:      "Tapo active producer",
+		Medias:    c.medias,
+		Recv:      c.recv,
+		Receivers: c.receivers,
+		Send:      c.send,
+	}
+	if c.sender != nil {
+		info.Senders = []*core.Sender{c.sender}
+	}
+	return json.Marshal(info)
 }

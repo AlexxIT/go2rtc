@@ -11,14 +11,14 @@ import (
 )
 
 type Character struct {
-	AID         int         `json:"aid,omitempty"`
-	IID         int         `json:"iid"`
-	Type        string      `json:"type,omitempty"`
-	Format      string      `json:"format,omitempty"`
-	Value       interface{} `json:"value,omitempty"`
-	Event       interface{} `json:"ev,omitempty"`
-	Perms       []string    `json:"perms,omitempty"`
-	Description string      `json:"description,omitempty"`
+	AID         int      `json:"aid,omitempty"`
+	IID         int      `json:"iid"`
+	Type        string   `json:"type,omitempty"`
+	Format      string   `json:"format,omitempty"`
+	Value       any      `json:"value,omitempty"`
+	Event       any      `json:"ev,omitempty"`
+	Perms       []string `json:"perms,omitempty"`
+	Description string   `json:"description,omitempty"`
 	//MaxDataLen int      `json:"maxDataLen"`
 
 	listeners map[io.Writer]bool

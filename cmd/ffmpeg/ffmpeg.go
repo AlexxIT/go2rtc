@@ -8,7 +8,7 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/ffmpeg/device"
 	"github.com/AlexxIT/go2rtc/cmd/rtsp"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"net/url"
 	"strconv"
 	"strings"
@@ -27,7 +27,7 @@ func Init() {
 		defaults["global"] += " -v error"
 	}
 
-	streams.HandleFunc("ffmpeg", func(url string) (streamer.Producer, error) {
+	streams.HandleFunc("ffmpeg", func(url string) (core.Producer, error) {
 		args := parseArgs(url[7:]) // remove `ffmpeg:`
 		if args == nil {
 			return nil, errors.New("can't generate ffmpeg command")

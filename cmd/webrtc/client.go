@@ -4,7 +4,6 @@ import (
 	"errors"
 	"github.com/AlexxIT/go2rtc/cmd/api"
 	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	"github.com/gorilla/websocket"
 	pion "github.com/pion/webrtc/v3"
@@ -14,7 +13,7 @@ import (
 	"time"
 )
 
-func streamsHandler(url string) (streamer.Producer, error) {
+func streamsHandler(url string) (core.Producer, error) {
 	url = url[7:]
 	if i := strings.Index(url, "://"); i > 0 {
 		switch url[:i] {
@@ -29,7 +28,7 @@ func streamsHandler(url string) (streamer.Producer, error) {
 
 // asyncClient can connect only to go2rtc server
 // ex: ws://localhost:1984/api/ws?src=camera1
-func asyncClient(url string) (streamer.Producer, error) {
+func asyncClient(url string) (core.Producer, error) {
 	// 1. Connect to signalign server
 	ws, _, err := websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
@@ -52,7 +51,7 @@ func asyncClient(url string) (streamer.Producer, error) {
 
 	prod := webrtc.NewConn(pc)
 	prod.Desc = "WebRTC/WebSocket async"
-	prod.Mode = streamer.ModeActiveProducer
+	prod.Mode = core.ModeActiveProducer
 	prod.Listen(func(msg any) {
 		switch msg := msg.(type) {
 		case pion.PeerConnectionState:
@@ -67,10 +66,10 @@ func asyncClient(url string) (streamer.Producer, error) {
 		}
 	})
 
-	medias := []*streamer.Media{
-		{Kind: streamer.KindVideo, Direction: streamer.DirectionRecvonly},
-		{Kind: streamer.KindAudio, Direction: streamer.DirectionRecvonly},
-		{Kind: streamer.KindAudio, Direction: streamer.DirectionSendonly},
+	medias := []*core.Media{
+		{Kind: core.KindVideo, Direction: core.DirectionRecvonly},
+		{Kind: core.KindAudio, Direction: core.DirectionRecvonly},
+		{Kind: core.KindAudio, Direction: core.DirectionSendonly},
 	}
 
 	// 3. Create offer
@@ -129,7 +128,7 @@ func asyncClient(url string) (streamer.Producer, error) {
 
 // syncClient - support WebRTC-HTTP Egress Protocol (WHEP)
 // ex: http://localhost:1984/api/webrtc?src=camera1
-func syncClient(url string) (streamer.Producer, error) {
+func syncClient(url string) (core.Producer, error) {
 	// 2. Create PeerConnection
 	pc, err := PeerConnection(true)
 	if err != nil {
@@ -139,11 +138,11 @@ func syncClient(url string) (streamer.Producer, error) {
 
 	prod := webrtc.NewConn(pc)
 	prod.Desc = "WebRTC/WHEP sync"
-	prod.Mode = streamer.ModeActiveProducer
+	prod.Mode = core.ModeActiveProducer
 
-	medias := []*streamer.Media{
-		{Kind: streamer.KindVideo, Direction: streamer.DirectionRecvonly},
-		{Kind: streamer.KindAudio, Direction: streamer.DirectionRecvonly},
+	medias := []*core.Media{
+		{Kind: core.KindVideo, Direction: core.DirectionRecvonly},
+		{Kind: core.KindAudio, Direction: core.DirectionRecvonly},
 	}
 
 	// 3. Create offer

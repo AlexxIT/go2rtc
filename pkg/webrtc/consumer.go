@@ -2,72 +2,77 @@ package webrtc
 
 import (
 	"encoding/json"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
+	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/h264"
+	"github.com/AlexxIT/go2rtc/pkg/h265"
 	"github.com/pion/rtp"
-	"github.com/pion/webrtc/v3"
 )
 
-func (c *Conn) GetMedias() []*streamer.Media {
+func (c *Conn) GetMedias() []*core.Media {
 	return c.medias
 }
 
-func (c *Conn) AddTrack(media *streamer.Media, track *streamer.Track) *streamer.Track {
-	switch c.Mode {
-	case streamer.ModePassiveConsumer:
-		switch track.Direction {
-		case streamer.DirectionSendonly:
-			// send our track to WebRTC consumer
-			return c.addSendTrack(media, track)
+func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
+	core.Assert(media.Direction == core.DirectionSendonly)
 
-		case streamer.DirectionRecvonly:
-			// receive track from WebRTC consumer (microphone, backchannel, two way audio)
-			return c.addConsumerRecvTrack(media, track)
-		}
-
-	case streamer.ModePassiveProducer:
-		// "Stream to camera" function
-		consCodec := media.MatchCodec(track.Codec)
-		consTrack := c.GetTrack(media, consCodec)
-		if consTrack == nil {
+	for _, sender := range c.senders {
+		if sender.Codec == codec {
+			sender.HandleRTP(track)
 			return nil
 		}
-
-		return track.Bind(func(packet *rtp.Packet) error {
-			return consTrack.WriteRTP(packet)
-		})
 	}
 
-	panic("not implemented")
-}
-
-func (c *Conn) addConsumerRecvTrack(media *streamer.Media, track *streamer.Track) *streamer.Track {
-	params := webrtc.RTPCodecParameters{
-		RTPCodecCapability: webrtc.RTPCodecCapability{
-			MimeType:  MimeType(track.Codec),
-			ClockRate: track.Codec.ClockRate,
-			Channels:  track.Codec.Channels,
-		},
-		PayloadType: 0, // don't know if this necessary
+	switch c.Mode {
+	case core.ModePassiveConsumer: // video/audio for browser
+	case core.ModeActiveProducer: // go2rtc as WebRTC client (backchannel)
+	case core.ModePassiveProducer: // WebRTC/WHIP
+	default:
+		panic(core.Caller())
 	}
 
-	tr := c.getTranseiver(media.MID)
+	localTrack := c.getTranseiver(media.ID).Sender().Track().(*Track)
 
-	// set codec for consumer recv track so remote peer should send media with this codec
-	_ = tr.SetCodecPreferences([]webrtc.RTPCodecParameters{params})
+	sender := core.NewSender(media, track.Codec)
+	sender.Handler = func(packet *rtp.Packet) {
+		c.send += packet.MarshalSize()
+		//important to send with remote PayloadType
+		_ = localTrack.WriteRTP(codec.PayloadType, packet)
+	}
 
-	c.tracks = append(c.tracks, track)
-	return track
+	switch codec.Name {
+	case core.CodecH264:
+		sender.Handler = h264.RTPPay(1200, sender.Handler)
+		if track.Codec.IsRTP() {
+			sender.Handler = h264.RTPDepay(track.Codec, sender.Handler)
+		} else {
+			sender.Handler = h264.RepairAVC(track.Codec, sender.Handler)
+		}
+
+	case core.CodecH265:
+		// SafariPay because it is the only browser in the world
+		// that supports WebRTC + H265
+		sender.Handler = h265.SafariPay(1200, sender.Handler)
+		if track.Codec.IsRTP() {
+			sender.Handler = h265.RTPDepay(track.Codec, sender.Handler)
+		}
+	}
+
+	sender.HandleRTP(track)
+
+	c.senders = append(c.senders, sender)
+	return nil
 }
 
 func (c *Conn) MarshalJSON() ([]byte, error) {
-	info := &streamer.Info{
+	info := &core.Info{
 		Type:       c.Desc + " " + c.Mode.String(),
 		RemoteAddr: c.remote,
 		UserAgent:  c.UserAgent,
 		Medias:     c.medias,
-		Tracks:     c.tracks,
-		Recv:       uint32(c.receive),
-		Send:       uint32(c.send),
+		Receivers:  c.receivers,
+		Senders:    c.senders,
+		Recv:       c.recv,
+		Send:       c.send,
 	}
 	return json.Marshal(info)
 }

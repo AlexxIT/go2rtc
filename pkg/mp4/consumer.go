@@ -3,176 +3,165 @@ package mp4
 import (
 	"encoding/json"
 	"github.com/AlexxIT/go2rtc/pkg/aac"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/pion/rtp"
-	"sync/atomic"
 )
 
 type Consumer struct {
-	streamer.Element
+	core.Listener
 
-	Medias     []*streamer.Media
+	Medias     []*core.Media
 	UserAgent  string
 	RemoteAddr string
 
-	muxer  *Muxer
-	codecs []*streamer.Codec
-	wait   byte
+	senders []*core.Sender
 
-	send uint32
+	muxer *Muxer
+	wait  byte
+
+	send int
 }
 
-// ParseQuery - like usual parse, but with mp4 param handler
-func ParseQuery(query map[string][]string) []*streamer.Media {
-	if query["mp4"] != nil {
-		cons := Consumer{}
-		return cons.GetMedias()
-	}
-
-	return streamer.ParseQuery(query)
-}
-
-const (
-	waitNone byte = iota
-	waitKeyframe
-	waitInit
-)
-
-func (c *Consumer) GetMedias() []*streamer.Media {
-	if c.Medias != nil {
-		return c.Medias
-	}
-
-	// default medias
-	return []*streamer.Media{
-		{
-			Kind:      streamer.KindVideo,
-			Direction: streamer.DirectionRecvonly,
-			Codecs: []*streamer.Codec{
-				{Name: streamer.CodecH264},
-				{Name: streamer.CodecH265},
+func (c *Consumer) GetMedias() []*core.Media {
+	if c.Medias == nil {
+		// default local medias
+		c.Medias = []*core.Media{
+			{
+				Kind:      core.KindVideo,
+				Direction: core.DirectionSendonly,
+				Codecs: []*core.Codec{
+					{Name: core.CodecH264},
+					{Name: core.CodecH265},
+				},
 			},
-		},
-		{
-			Kind:      streamer.KindAudio,
-			Direction: streamer.DirectionRecvonly,
-			Codecs: []*streamer.Codec{
-				{Name: streamer.CodecAAC},
+			{
+				Kind:      core.KindAudio,
+				Direction: core.DirectionSendonly,
+				Codecs: []*core.Codec{
+					{Name: core.CodecAAC},
+				},
 			},
-		},
+		}
 	}
+
+	return c.Medias
 }
 
-func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *streamer.Track {
-	trackID := byte(len(c.codecs))
-	c.codecs = append(c.codecs, track.Codec)
+func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver) error {
+	trackID := byte(len(c.senders))
 
-	codec := track.Codec
-	switch codec.Name {
-	case streamer.CodecH264:
+	handler := core.NewSender(media, track.Codec)
+
+	switch track.Codec.Name {
+	case core.CodecH264:
 		c.wait = waitInit
 
-		push := func(packet *rtp.Packet) error {
+		handler.Handler = func(packet *rtp.Packet) {
 			if packet.Version != h264.RTPPacketVersionAVC {
-				return nil
+				return
 			}
 
 			if c.wait != waitNone {
 				if c.wait == waitInit || !h264.IsKeyframe(packet.Payload) {
-					return nil
+					return
 				}
 				c.wait = waitNone
 			}
 
 			buf := c.muxer.Marshal(trackID, packet)
-			atomic.AddUint32(&c.send, uint32(len(buf)))
 			c.Fire(buf)
 
-			return nil
+			c.send += len(buf)
 		}
 
-		var wrapper streamer.WrapperFunc
-		if codec.IsRTP() {
-			wrapper = h264.RTPDepay(track)
+		if track.Codec.IsRTP() {
+			handler.Handler = h264.RTPDepay(track.Codec, handler.Handler)
 		} else {
-			wrapper = h264.RepairAVC(track)
+			handler.Handler = h264.RepairAVC(track.Codec, handler.Handler)
 		}
-		push = wrapper(push)
 
-		return track.Bind(push)
-
-	case streamer.CodecH265:
+	case core.CodecH265:
 		c.wait = waitInit
 
-		push := func(packet *rtp.Packet) error {
+		handler.Handler = func(packet *rtp.Packet) {
 			if packet.Version != h264.RTPPacketVersionAVC {
-				return nil
+				return
 			}
 
 			if c.wait != waitNone {
 				if c.wait == waitInit || !h265.IsKeyframe(packet.Payload) {
-					return nil
+					return
 				}
 				c.wait = waitNone
 			}
 
 			buf := c.muxer.Marshal(trackID, packet)
-			atomic.AddUint32(&c.send, uint32(len(buf)))
 			c.Fire(buf)
 
-			return nil
+			c.send += len(buf)
 		}
 
-		if codec.IsRTP() {
-			wrapper := h265.RTPDepay(track)
-			push = wrapper(push)
+		if track.Codec.IsRTP() {
+			handler.Handler = h265.RTPDepay(track.Codec, handler.Handler)
 		}
 
-		return track.Bind(push)
-
-	case streamer.CodecAAC:
-		push := func(packet *rtp.Packet) error {
+	case core.CodecAAC:
+		handler.Handler = func(packet *rtp.Packet) {
 			if c.wait != waitNone {
-				return nil
+				return
 			}
 
 			buf := c.muxer.Marshal(trackID, packet)
-			atomic.AddUint32(&c.send, uint32(len(buf)))
 			c.Fire(buf)
 
-			return nil
+			c.send += len(buf)
 		}
 
-		if codec.IsRTP() {
-			wrapper := aac.RTPDepay(track)
-			push = wrapper(push)
+		if track.Codec.IsRTP() {
+			handler.Handler = aac.RTPDepay(handler.Handler)
 		}
 
-		return track.Bind(push)
-
-	case streamer.CodecOpus, streamer.CodecMP3, streamer.CodecPCMU, streamer.CodecPCMA:
-		push := func(packet *rtp.Packet) error {
+	case core.CodecOpus, core.CodecMP3, core.CodecPCMU, core.CodecPCMA:
+		handler.Handler = func(packet *rtp.Packet) {
 			if c.wait != waitNone {
-				return nil
+				return
 			}
 
 			buf := c.muxer.Marshal(trackID, packet)
-			atomic.AddUint32(&c.send, uint32(len(buf)))
 			c.Fire(buf)
 
-			return nil
+			c.send += len(buf)
 		}
 
-		return track.Bind(push)
+	default:
+		panic("unsupported codec")
 	}
 
-	panic("unsupported codec")
+	handler.HandleRTP(track)
+	c.senders = append(c.senders, handler)
+
+	return nil
+}
+
+func (c *Consumer) Stop() error {
+	for _, sender := range c.senders {
+		sender.Close()
+	}
+	return nil
+}
+
+func (c *Consumer) Codecs() []*core.Codec {
+	codecs := make([]*core.Codec, len(c.senders))
+	for i, sender := range c.senders {
+		codecs[i] = sender.Codec
+	}
+	return codecs
 }
 
 func (c *Consumer) MimeCodecs() string {
-	return c.muxer.MimeCodecs(c.codecs)
+	return c.muxer.MimeCodecs(c.Codecs())
 }
 
 func (c *Consumer) MimeType() string {
@@ -181,7 +170,7 @@ func (c *Consumer) MimeType() string {
 
 func (c *Consumer) Init() ([]byte, error) {
 	c.muxer = &Muxer{}
-	return c.muxer.GetInit(c.codecs)
+	return c.muxer.GetInit(c.Codecs())
 }
 
 func (c *Consumer) Start() {
@@ -190,14 +179,14 @@ func (c *Consumer) Start() {
 	}
 }
 
-//
-
 func (c *Consumer) MarshalJSON() ([]byte, error) {
-	info := &streamer.Info{
-		Type:       "MP4 client",
+	info := &core.Info{
+		Type:       "MP4 passive consumer",
 		RemoteAddr: c.RemoteAddr,
 		UserAgent:  c.UserAgent,
-		Send:       atomic.LoadUint32(&c.send),
+		Medias:     c.Medias,
+		Senders:    c.senders,
+		Send:       c.send,
 	}
 	return json.Marshal(info)
 }

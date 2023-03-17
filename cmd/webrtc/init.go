@@ -6,7 +6,6 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/app"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	pion "github.com/pion/webrtc/v3"
 	"github.com/rs/zerolog"
@@ -87,16 +86,16 @@ var PeerConnection func(active bool) (*pion.PeerConnection, error)
 
 func asyncHandler(tr *api.Transport, msg *api.Message) error {
 	var stream *streams.Stream
-	var mode streamer.Mode
+	var mode core.Mode
 
 	query := tr.Request.URL.Query()
 	if name := query.Get("src"); name != "" {
 		stream = streams.GetOrNew(name)
-		mode = streamer.ModePassiveConsumer
+		mode = core.ModePassiveConsumer
 		log.Debug().Str("src", name).Msg("[webrtc] new consumer")
 	} else if name = query.Get("dst"); name != "" {
 		stream = streams.Get(name)
-		mode = streamer.ModePassiveProducer
+		mode = core.ModePassiveProducer
 		log.Debug().Str("src", name).Msg("[webrtc] new producer")
 	}
 
@@ -124,9 +123,9 @@ func asyncHandler(tr *api.Transport, msg *api.Message) error {
 				return
 			}
 			switch mode {
-			case streamer.ModePassiveConsumer:
+			case core.ModePassiveConsumer:
 				stream.RemoveConsumer(conn)
-			case streamer.ModePassiveProducer:
+			case core.ModePassiveProducer:
 				stream.RemoveProducer(conn)
 			}
 
@@ -158,14 +157,14 @@ func asyncHandler(tr *api.Transport, msg *api.Message) error {
 	}
 
 	switch mode {
-	case streamer.ModePassiveConsumer:
+	case core.ModePassiveConsumer:
 		// 2. AddConsumer, so we get new tracks
 		if err = stream.AddConsumer(conn); err != nil {
 			log.Debug().Err(err).Msg("[webrtc] add consumer")
 			_ = conn.Close()
 			return err
 		}
-	case streamer.ModePassiveProducer:
+	case core.ModePassiveProducer:
 		stream.AddProducer(conn)
 	}
 
@@ -202,9 +201,9 @@ func ExchangeSDP(stream *streams.Stream, offer, desc, userAgent string) (answer 
 	// create new webrtc instance
 	conn := webrtc.NewConn(pc)
 	conn.Desc = desc
-	conn.Mode = streamer.ModePassiveConsumer
+	conn.Mode = core.ModePassiveConsumer
 	conn.UserAgent = userAgent
-	conn.Listen(func(msg interface{}) {
+	conn.Listen(func(msg any) {
 		switch msg := msg.(type) {
 		case pion.PeerConnectionState:
 			if msg == pion.PeerConnectionStateClosed {

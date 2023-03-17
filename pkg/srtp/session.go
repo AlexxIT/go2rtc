@@ -1,7 +1,7 @@
 package srtp
 
 import (
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/pion/srtp/v2"
@@ -16,7 +16,7 @@ type Session struct {
 	remoteCtx *srtp.Context // read context
 
 	Write func(b []byte) (int, error)
-	Track *streamer.Track
+	Track *core.Receiver
 	Recv  uint32
 
 	lastSequence  uint32
@@ -82,7 +82,7 @@ func (s *Session) HandleRTP(data []byte) (err error) {
 	s.lastTimestamp = packet.Timestamp
 	s.lastTime = now
 
-	_ = s.Track.WriteRTP(packet)
+	s.Track.WriteRTP(packet)
 
 	return
 }

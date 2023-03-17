@@ -6,7 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/deepch/vdk/codec/h264parser"
 	"github.com/deepch/vdk/format/fmp4/fmp4io"
 	"github.com/gorilla/websocket"
@@ -15,7 +15,6 @@ import (
 	"net/http"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -28,13 +27,14 @@ const (
 )
 
 type Client struct {
-	streamer.Element
+	core.Listener
 
 	ID string
 
-	conn   *websocket.Conn
-	medias []*streamer.Media
-	tracks map[byte]*streamer.Track
+	conn *websocket.Conn
+
+	medias   []*core.Media
+	receiver *core.Receiver
 
 	msg *message
 	t0  time.Time
@@ -43,7 +43,7 @@ type Client struct {
 	state  State
 	mu     sync.Mutex
 
-	recv uint32
+	recv int
 }
 
 func NewClient(id string) *Client {
@@ -107,12 +107,11 @@ func (c *Client) Handle() error {
 		return err
 	}
 
-	track := c.tracks[c.msg.Track]
-	if track != nil {
+	if c.receiver != nil && c.receiver.ID == c.msg.Track {
 		c.mu.Lock()
 		if c.state == StateHandle {
 			c.buffer <- data
-			atomic.AddUint32(&c.recv, uint32(len(data)))
+			c.recv += len(data)
 		}
 		c.mu.Unlock()
 	}
@@ -139,12 +138,11 @@ func (c *Client) Handle() error {
 				return err
 			}
 
-			track = c.tracks[msg.Track]
-			if track != nil {
+			if c.receiver != nil && c.receiver.ID == msg.Track {
 				c.mu.Lock()
 				if c.state == StateHandle {
 					c.buffer <- data
-					atomic.AddUint32(&c.recv, uint32(len(data)))
+					c.recv += len(data)
 				}
 				c.mu.Unlock()
 			}
@@ -173,8 +171,6 @@ func (c *Client) Close() error {
 }
 
 func (c *Client) getTracks() error {
-	c.tracks = map[byte]*streamer.Track{}
-
 	for {
 		_, data, err := c.conn.ReadMessage()
 		if err != nil {
@@ -197,15 +193,15 @@ func (c *Client) getTracks() error {
 			switch s {
 			case "avc1": // avc1.4d0029
 				// skip multiple identical init
-				if c.tracks[msg.TrackID] != nil {
+				if c.receiver != nil {
 					continue
 				}
 
-				codec := &streamer.Codec{
-					Name:        streamer.CodecH264,
+				codec := &core.Codec{
+					Name:        core.CodecH264,
 					ClockRate:   90000,
 					FmtpLine:    "profile-level-id=" + msg.CodecString[i+1:],
-					PayloadType: streamer.PayloadTypeRAW,
+					PayloadType: core.PayloadTypeRAW,
 				}
 
 				i = bytes.Index(msg.Data, []byte("avcC")) - 4
@@ -225,15 +221,15 @@ func (c *Client) getTracks() error {
 					base64.StdEncoding.EncodeToString(record.SPS[0]) + "," +
 					base64.StdEncoding.EncodeToString(record.PPS[0])
 
-				media := &streamer.Media{
-					Kind:      streamer.KindVideo,
-					Direction: streamer.DirectionSendonly,
-					Codecs:    []*streamer.Codec{codec},
+				media := &core.Media{
+					Kind:      core.KindVideo,
+					Direction: core.DirectionRecvonly,
+					Codecs:    []*core.Codec{codec},
 				}
 				c.medias = append(c.medias, media)
 
-				track := streamer.NewTrack(media, codec)
-				c.tracks[msg.TrackID] = track
+				c.receiver = core.NewReceiver(media, codec)
+				c.receiver.ID = msg.TrackID
 
 			case "mp4a": // mp4a.40.2
 			}
@@ -249,11 +245,6 @@ func (c *Client) getTracks() error {
 }
 
 func (c *Client) worker(buffer chan []byte) {
-	var track *streamer.Track
-	for _, track = range c.tracks {
-		break
-	}
-
 	for data := range buffer {
 		moof := &fmp4io.MovieFrag{}
 		if _, err := moof.Unmarshal(data, 0); err != nil {
@@ -289,7 +280,7 @@ func (c *Client) worker(buffer chan []byte) {
 				Header:  rtp.Header{Timestamp: ts * 90},
 				Payload: data[:entry.Size],
 			}
-			_ = track.WriteRTP(packet)
+			c.receiver.WriteRTP(packet)
 
 			data = data[entry.Size:]
 			ts += entry.Duration

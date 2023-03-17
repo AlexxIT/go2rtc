@@ -1,4 +1,4 @@
-package dvrip
+package rtmp
 
 import (
 	"encoding/json"
@@ -31,11 +31,11 @@ func (c *Client) Stop() error {
 
 func (c *Client) MarshalJSON() ([]byte, error) {
 	info := &core.Info{
-		Type:       "DVRIP active producer",
-		RemoteAddr: c.conn.RemoteAddr().String(),
-		Medias:     c.medias,
-		Receivers:  c.receivers,
-		Recv:       int(c.recv),
+		Type:      "RTMP active producer",
+		URL:       c.URI,
+		Medias:    c.medias,
+		Receivers: c.receivers,
+		Recv:      c.recv,
 	}
 	return json.Marshal(info)
 }

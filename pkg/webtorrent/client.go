@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	"github.com/gorilla/websocket"
 	pion "github.com/pion/webrtc/v3"
@@ -16,11 +15,11 @@ func NewClient(tracker, share, pwd string, pc *pion.PeerConnection) (*webrtc.Con
 	// 1. Create WebRTC producer
 	prod := webrtc.NewConn(pc)
 	prod.Desc = "WebRTC/WebTorrent sync"
-	prod.Mode = streamer.ModeActiveProducer
+	prod.Mode = core.ModeActiveProducer
 
-	medias := []*streamer.Media{
-		{Kind: streamer.KindVideo, Direction: streamer.DirectionRecvonly},
-		{Kind: streamer.KindAudio, Direction: streamer.DirectionRecvonly},
+	medias := []*core.Media{
+		{Kind: core.KindVideo, Direction: core.DirectionRecvonly},
+		{Kind: core.KindAudio, Direction: core.DirectionRecvonly},
 	}
 
 	// 2. Create offer

@@ -3,7 +3,7 @@ package webrtc
 import (
 	"encoding/json"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	pion "github.com/pion/webrtc/v3"
 	"io"
@@ -161,7 +161,7 @@ func inputWebRTC(w http.ResponseWriter, r *http.Request) {
 	// create new webrtc instance
 	prod := webrtc.NewConn(pc)
 	prod.Desc = "WebRTC/WHIP sync"
-	prod.Mode = streamer.ModePassiveProducer
+	prod.Mode = core.ModePassiveProducer
 	prod.UserAgent = r.UserAgent()
 
 	if err = prod.SetOffer(string(offer)); err != nil {

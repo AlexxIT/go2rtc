@@ -4,15 +4,15 @@ import (
 	"bytes"
 	"github.com/AlexxIT/go2rtc/cmd/app"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/shell"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"os/exec"
 )
 
 func Init() {
 	log := app.GetLogger("echo")
 
-	streams.HandleFunc("echo", func(url string) (streamer.Producer, error) {
+	streams.HandleFunc("echo", func(url string) (core.Producer, error) {
 		args := shell.QuoteSplit(url[5:])
 
 		b, err := exec.Command(args[0], args[1:]...).Output()

@@ -1,17 +1,19 @@
 package mpegts
 
 import (
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"net/http"
 )
 
 type Client struct {
-	streamer.Element
+	core.Listener
 
-	medias []*streamer.Media
-	tracks map[byte]*streamer.Track
+	medias    []*core.Media
+	receivers []*core.Receiver
 
 	res *http.Response
+
+	recv int
 }
 
 func NewClient(res *http.Response) *Client {
@@ -19,46 +21,50 @@ func NewClient(res *http.Response) *Client {
 }
 
 func (c *Client) Handle() error {
-	if c.tracks == nil {
-		c.tracks = map[byte]*streamer.Track{}
-	}
-
 	reader := NewReader()
 
 	b := make([]byte, 1024*1024*256) // 256K
 
-	probe := streamer.NewProbe(c.medias == nil)
+	probe := core.NewProbe(c.medias == nil)
 	for probe == nil || probe.Active() {
 		n, err := c.res.Body.Read(b)
 		if err != nil {
 			return err
 		}
 
+		c.recv += n
+
 		reader.AppendBuffer(b[:n])
 
+	reading:
 		for {
 			packet := reader.GetPacket()
 			if packet == nil {
 				break
 			}
 
-			track := c.tracks[packet.PayloadType]
-			if track == nil {
-				// count track on probe state even if not support it
-				probe.Append(packet.PayloadType)
-
-				media := GetMedia(packet)
-				if media == nil {
-					continue // unsupported codec
+			for _, receiver := range c.receivers {
+				if receiver.ID == packet.PayloadType {
+					receiver.WriteRTP(packet)
+					continue reading
 				}
-
-				track = streamer.NewTrack(media, nil)
-
-				c.medias = append(c.medias, media)
-				c.tracks[packet.PayloadType] = track
 			}
 
-			_ = track.WriteRTP(packet)
+			// count track on probe state even if not support it
+			probe.Append(packet.PayloadType)
+
+			media := GetMedia(packet)
+			if media == nil {
+				continue // unsupported codec
+			}
+
+			c.medias = append(c.medias, media)
+
+			receiver := core.NewReceiver(media, media.Codecs[0])
+			receiver.ID = packet.PayloadType
+			c.receivers = append(c.receivers, receiver)
+
+			receiver.WriteRTP(packet)
 
 			//log.Printf("[AVC] %v, len: %d, pts: %d ts: %10d", h264.Types(packet.Payload), len(packet.Payload), pkt.PTS, packet.Timestamp)
 		}

@@ -4,15 +4,14 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/httpflv"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/deepch/vdk/av"
 	"github.com/deepch/vdk/codec/aacparser"
 	"github.com/deepch/vdk/codec/h264parser"
 	"github.com/deepch/vdk/format/rtmp"
 	"github.com/pion/rtp"
 	"net/http"
-	"sync/atomic"
 	"time"
 )
 
@@ -24,17 +23,17 @@ type Conn interface {
 }
 
 type Client struct {
-	streamer.Element
+	core.Listener
 
 	URI string
 
-	medias []*streamer.Media
-	tracks []*streamer.Track
+	medias    []*core.Media
+	receivers []*core.Receiver
 
 	conn   Conn
 	closed bool
 
-	recv uint32
+	recv int
 }
 
 func NewClient(uri string) *Client {
@@ -74,61 +73,55 @@ func (c *Client) Describe() (err error) {
 				base64.StdEncoding.EncodeToString(info.PPS[0]),
 			)
 
-			codec := &streamer.Codec{
-				Name:        streamer.CodecH264,
+			codec := &core.Codec{
+				Name:        core.CodecH264,
 				ClockRate:   90000,
 				FmtpLine:    fmtp,
-				PayloadType: streamer.PayloadTypeRAW,
+				PayloadType: core.PayloadTypeRAW,
 			}
 
-			media := &streamer.Media{
-				Kind:      streamer.KindVideo,
-				Direction: streamer.DirectionSendonly,
-				Codecs:    []*streamer.Codec{codec},
+			media := &core.Media{
+				Kind:      core.KindVideo,
+				Direction: core.DirectionRecvonly,
+				Codecs:    []*core.Codec{codec},
 			}
 			c.medias = append(c.medias, media)
 
-			track := streamer.NewTrack(media, codec)
-			c.tracks = append(c.tracks, track)
+			track := core.NewReceiver(media, codec)
+			c.receivers = append(c.receivers, track)
 
 		case av.AAC:
 			// TODO: fix support
 			cd := stream.(aacparser.CodecData)
 
-			codec := &streamer.Codec{
-				Name:      streamer.CodecAAC,
+			codec := &core.Codec{
+				Name:      core.CodecAAC,
 				ClockRate: uint32(cd.Config.SampleRate),
 				Channels:  uint16(cd.Config.ChannelConfig),
 				//  a=fmtp:97 streamtype=5;profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;config=1588
 				FmtpLine:    "streamtype=5;profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;config=" + hex.EncodeToString(cd.ConfigBytes),
-				PayloadType: streamer.PayloadTypeRAW,
+				PayloadType: core.PayloadTypeRAW,
 			}
 
-			media := &streamer.Media{
-				Kind:      streamer.KindAudio,
-				Direction: streamer.DirectionSendonly,
-				Codecs:    []*streamer.Codec{codec},
+			media := &core.Media{
+				Kind:      core.KindAudio,
+				Direction: core.DirectionRecvonly,
+				Codecs:    []*core.Codec{codec},
 			}
 			c.medias = append(c.medias, media)
 
-			track := streamer.NewTrack(media, codec)
-			c.tracks = append(c.tracks, track)
+			track := core.NewReceiver(media, codec)
+			c.receivers = append(c.receivers, track)
 
 		default:
 			fmt.Printf("[rtmp] unsupported codec %+v\n", stream)
 		}
 	}
 
-	c.Fire(streamer.StateReady)
-
 	return
 }
 
 func (c *Client) Handle() (err error) {
-	defer c.Fire(streamer.StateNull)
-
-	c.Fire(streamer.StatePlaying)
-
 	for {
 		var pkt av.Packet
 		pkt, err = c.conn.ReadPacket()
@@ -139,9 +132,9 @@ func (c *Client) Handle() (err error) {
 			return
 		}
 
-		atomic.AddUint32(&c.recv, uint32(len(pkt.Data)))
+		c.recv += len(pkt.Data)
 
-		track := c.tracks[int(pkt.Idx)]
+		track := c.receivers[int(pkt.Idx)]
 
 		// convert seconds to RTP timestamp
 		timestamp := uint32(pkt.Time * time.Duration(track.Codec.ClockRate) / time.Second)
@@ -150,7 +143,7 @@ func (c *Client) Handle() (err error) {
 			Header:  rtp.Header{Timestamp: timestamp},
 			Payload: pkt.Data,
 		}
-		_ = track.WriteRTP(packet)
+		track.WriteRTP(packet)
 	}
 }
 

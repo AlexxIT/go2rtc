@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -12,12 +12,12 @@ import (
 
 type Stream struct {
 	producers []*Producer
-	consumers []*Consumer
+	consumers []core.Consumer
 	mu        sync.Mutex
 	requests  int32
 }
 
-func NewStream(source interface{}) *Stream {
+func NewStream(source any) *Stream {
 	switch source := source.(type) {
 	case string:
 		s := new(Stream)
@@ -38,7 +38,7 @@ func NewStream(source interface{}) *Stream {
 	case nil:
 		return new(Stream)
 	default:
-		panic("wrong source type")
+		panic(core.Caller())
 	}
 }
 
@@ -48,57 +48,71 @@ func (s *Stream) SetSource(source string) {
 	}
 }
 
-func (s *Stream) AddConsumer(cons streamer.Consumer) (err error) {
+func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
 	// support for multiple simultaneous requests from different consumers
 	atomic.AddInt32(&s.requests, 1)
 
-	ic := len(s.consumers)
-
-	consumer := &Consumer{element: cons}
 	var producers []*Producer // matched producers for consumer
 
 	var codecs string
 
 	// Step 1. Get consumer medias
-	for icc, consMedia := range cons.GetMedias() {
-		log.Trace().Stringer("media", consMedia).
-			Msgf("[streams] consumer=%d candidate=%d", ic, icc)
+	for _, consMedia := range cons.GetMedias() {
 
 	producers:
-		for ip, prod := range s.producers {
-			// Step 2. Get producer medias (not tracks yet)
-			for ipc, prodMedia := range prod.GetMedias() {
-				log.Trace().Stringer("media", prodMedia).
-					Msgf("[streams] producer=%d candidate=%d", ip, ipc)
+		for _, prod := range s.producers {
+			if err = prod.Dial(); err != nil {
+				continue
+			}
 
+			// Step 2. Get producer medias (not tracks yet)
+			for _, prodMedia := range prod.GetMedias() {
 				collectCodecs(prodMedia, &codecs)
 
 				// Step 3. Match consumer/producer codecs list
-				prodCodec := prodMedia.MatchMedia(consMedia)
-				if prodCodec != nil {
-					log.Trace().Stringer("codec", prodCodec).
-						Msgf("[streams] match producer:%d:%d => consumer:%d:%d", ip, ipc, ic, icc)
+				prodCodec, consCodec := prodMedia.MatchMedia(consMedia)
+				if prodCodec == nil {
+					continue
+				}
 
-					// Step 4. Get producer track
-					prodTrack := prod.GetTrack(prodMedia, prodCodec)
-					if prodTrack == nil {
-						log.Warn().Str("url", prod.url).Msg("[streams] can't get track")
+				var track *core.Receiver
+
+				switch prodMedia.Direction {
+				case core.DirectionRecvonly:
+					// Step 4. Get recvonly track from producer
+					if track, err = prod.GetTrack(prodMedia, prodCodec); err != nil {
+						log.Info().Err(err).Msg("[streams] can't get track")
+						continue
+					}
+					// Step 5. Add track to consumer
+					if err = cons.AddTrack(consMedia, consCodec, track); err != nil {
+						log.Info().Err(err).Msg("[streams] can't add track")
 						continue
 					}
 
-					// Step 5. Add track to consumer and get new track
-					consTrack := consumer.element.AddTrack(consMedia, prodTrack)
-
-					consumer.tracks = append(consumer.tracks, consTrack)
-					producers = append(producers, prod)
-					if !consMedia.MatchAll() {
-						break producers
+				case core.DirectionSendonly:
+					// Step 4. Get recvonly track from consumer (backchannel)
+					if track, err = cons.(core.Producer).GetTrack(consMedia, consCodec); err != nil {
+						log.Info().Err(err).Msg("[streams] can't get track")
+						continue
 					}
+					// Step 5. Add track to producer
+					if err = prod.AddTrack(prodMedia, prodCodec, track); err != nil {
+						log.Info().Err(err).Msg("[streams] can't add track")
+						continue
+					}
+				}
+
+				producers = append(producers, prod)
+
+				if !consMedia.MatchAll() {
+					break producers
 				}
 			}
 		}
 	}
 
+	// stop producers if they don't have readers
 	if atomic.AddInt32(&s.requests, -1) == 0 {
 		s.stopProducers()
 	}
@@ -118,7 +132,7 @@ func (s *Stream) AddConsumer(cons streamer.Consumer) (err error) {
 	}
 
 	s.mu.Lock()
-	s.consumers = append(s.consumers, consumer)
+	s.consumers = append(s.consumers, cons)
 	s.mu.Unlock()
 
 	// there may be duplicates, but that's not a problem
@@ -129,16 +143,13 @@ func (s *Stream) AddConsumer(cons streamer.Consumer) (err error) {
 	return nil
 }
 
-func (s *Stream) RemoveConsumer(cons streamer.Consumer) {
+func (s *Stream) RemoveConsumer(cons core.Consumer) {
+	_ = cons.Stop()
+
 	s.mu.Lock()
 	for i, consumer := range s.consumers {
-		if consumer.element == cons {
-			// remove consumer pads from all producers
-			for _, track := range consumer.tracks {
-				track.Unbind()
-			}
-			// remove consumer from slice
-			s.removeConsumer(i)
+		if consumer == cons {
+			s.consumers = append(s.consumers[:i], s.consumers[i+1:]...)
 			break
 		}
 	}
@@ -147,18 +158,18 @@ func (s *Stream) RemoveConsumer(cons streamer.Consumer) {
 	s.stopProducers()
 }
 
-func (s *Stream) AddProducer(prod streamer.Producer) {
-	producer := &Producer{element: prod, state: stateExternal}
+func (s *Stream) AddProducer(prod core.Producer) {
+	producer := &Producer{conn: prod, state: stateExternal}
 	s.mu.Lock()
 	s.producers = append(s.producers, producer)
 	s.mu.Unlock()
 }
 
-func (s *Stream) RemoveProducer(prod streamer.Producer) {
+func (s *Stream) RemoveProducer(prod core.Producer) {
 	s.mu.Lock()
 	for i, producer := range s.producers {
-		if producer.element == prod {
-			s.removeProducer(i)
+		if producer.conn == prod {
+			s.producers = append(s.producers[:i], s.producers[i+1:]...)
 			break
 		}
 	}
@@ -169,8 +180,8 @@ func (s *Stream) stopProducers() {
 	s.mu.Lock()
 producers:
 	for _, producer := range s.producers {
-		for _, track := range producer.tracks {
-			if track.HasSink() {
+		for _, track := range producer.receivers {
+			if len(track.Senders()) > 0 {
 				continue producers
 			}
 		}
@@ -179,20 +190,6 @@ producers:
 	s.mu.Unlock()
 }
 
-//func (s *Stream) Active() bool {
-//	if len(s.consumers) > 0 {
-//		return true
-//	}
-//
-//	for _, prod := range s.producers {
-//		if prod.element != nil {
-//			return true
-//		}
-//	}
-//
-//	return false
-//}
-
 func (s *Stream) MarshalJSON() ([]byte, error) {
 	if !s.mu.TryLock() {
 		log.Warn().Msgf("[streams] json locked")
@@ -200,8 +197,8 @@ func (s *Stream) MarshalJSON() ([]byte, error) {
 	}
 
 	var info struct {
-		Producers []*Producer `json:"producers"`
-		Consumers []*Consumer `json:"consumers"`
+		Producers []*Producer     `json:"producers"`
+		Consumers []core.Consumer `json:"consumers"`
 	}
 	info.Producers = s.producers
 	info.Consumers = s.consumers
@@ -211,40 +208,14 @@ func (s *Stream) MarshalJSON() ([]byte, error) {
 	return json.Marshal(info)
 }
 
-func (s *Stream) removeConsumer(i int) {
-	switch {
-	case len(s.consumers) == 1: // only one element
-		s.consumers = nil
-	case i == 0: // first element
-		s.consumers = s.consumers[1:]
-	case i == len(s.consumers)-1: // last element
-		s.consumers = s.consumers[:i]
-	default: // middle element
-		s.consumers = append(s.consumers[:i], s.consumers[i+1:]...)
-	}
-}
-
-func (s *Stream) removeProducer(i int) {
-	switch {
-	case len(s.producers) == 1: // only one element
-		s.producers = nil
-	case i == 0: // first element
-		s.producers = s.producers[1:]
-	case i == len(s.producers)-1: // last element
-		s.producers = s.producers[:i]
-	default: // middle element
-		s.producers = append(s.producers[:i], s.producers[i+1:]...)
-	}
-}
-
-func collectCodecs(media *streamer.Media, codecs *string) {
-	if media.Direction == streamer.DirectionRecvonly {
+func collectCodecs(media *core.Media, codecs *string) {
+	if media.Direction == core.DirectionRecvonly {
 		return
 	}
 
 	for _, codec := range media.Codecs {
 		name := codec.Name
-		if name == streamer.CodecAAC {
+		if name == core.CodecAAC {
 			name = "AAC"
 		}
 		if strings.Contains(*codecs, name) {

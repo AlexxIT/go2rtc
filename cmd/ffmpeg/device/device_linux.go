@@ -2,7 +2,7 @@ package device
 
 import (
 	"bytes"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"io/ioutil"
 	"os/exec"
 	"strings"
@@ -12,8 +12,8 @@ import (
 const deviceInputPrefix = "-f v4l2"
 
 func deviceInputSuffix(videoIdx, audioIdx int) string {
-	video := findMedia(streamer.KindVideo, videoIdx)
-	return video.MID
+	video := findMedia(core.KindVideo, videoIdx)
+	return video.ID
 }
 
 func loadMedias() {
@@ -23,8 +23,8 @@ func loadMedias() {
 	}
 	for _, file := range files {
 		log.Trace().Msg("[ffmpeg] " + file.Name())
-		if strings.HasPrefix(file.Name(), streamer.KindVideo) {
-			media := loadMedia(streamer.KindVideo, "/dev/"+file.Name())
+		if strings.HasPrefix(file.Name(), core.KindVideo) {
+			media := loadMedia(core.KindVideo, "/dev/"+file.Name())
 			if media != nil {
 				medias = append(medias, media)
 			}
@@ -32,7 +32,7 @@ func loadMedias() {
 	}
 }
 
-func loadMedia(kind, name string) *streamer.Media {
+func loadMedia(kind, name string) *core.Media {
 	cmd := exec.Command(
 		Bin, "-hide_banner", "-f", "v4l2", "-list_formats", "all", "-i", name,
 	)
@@ -44,5 +44,5 @@ func loadMedia(kind, name string) *streamer.Media {
 		return nil
 	}
 
-	return &streamer.Media{Kind: kind, MID: name}
+	return &core.Media{Kind: kind, ID: name}
 }

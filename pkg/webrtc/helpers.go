@@ -3,8 +3,9 @@ package webrtc
 import (
 	"errors"
 	"fmt"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/pion/ice/v2"
+	"github.com/pion/sdp/v3"
 	"github.com/pion/stun"
 	"github.com/pion/webrtc/v3"
 	"hash/crc32"
@@ -13,6 +14,43 @@ import (
 	"strings"
 	"time"
 )
+
+func UnmarshalMedias(descriptions []*sdp.MediaDescription) (medias []*core.Media) {
+	// 1. Sort medias, so video will always be before audio
+	// 2. Ignore application media from Hass default lovelace card
+	// 3. Ignore media without direction (inactive media)
+	// 4. Inverse media direction (because it is remote peer medias list)
+	for _, kind := range []string{core.KindVideo, core.KindAudio} {
+		for _, md := range descriptions {
+			if md.MediaName.Media != kind {
+				continue
+			}
+
+			media := core.UnmarshalMedia(md)
+			switch media.Direction {
+			case core.DirectionSendRecv:
+				media.Direction = core.DirectionRecvonly
+				medias = append(medias, media)
+
+				media = media.Clone()
+				media.Direction = core.DirectionSendonly
+
+			case core.DirectionRecvonly:
+				media.Direction = core.DirectionSendonly
+
+			case core.DirectionSendonly:
+				media.Direction = core.DirectionRecvonly
+
+			case "":
+				continue
+			}
+
+			medias = append(medias, media)
+		}
+	}
+
+	return
+}
 
 func NewCandidate(network, address string) (string, error) {
 	i := strings.LastIndexByte(address, ':')
@@ -135,25 +173,25 @@ func IsIP(host string) bool {
 	return true
 }
 
-func MimeType(codec *streamer.Codec) string {
+func MimeType(codec *core.Codec) string {
 	switch codec.Name {
-	case streamer.CodecH264:
+	case core.CodecH264:
 		return webrtc.MimeTypeH264
-	case streamer.CodecH265:
+	case core.CodecH265:
 		return webrtc.MimeTypeH265
-	case streamer.CodecVP8:
+	case core.CodecVP8:
 		return webrtc.MimeTypeVP8
-	case streamer.CodecVP9:
+	case core.CodecVP9:
 		return webrtc.MimeTypeVP9
-	case streamer.CodecAV1:
+	case core.CodecAV1:
 		return webrtc.MimeTypeAV1
-	case streamer.CodecPCMU:
+	case core.CodecPCMU:
 		return webrtc.MimeTypePCMU
-	case streamer.CodecPCMA:
+	case core.CodecPCMA:
 		return webrtc.MimeTypePCMA
-	case streamer.CodecOpus:
+	case core.CodecOpus:
 		return webrtc.MimeTypeOpus
-	case streamer.CodecG722:
+	case core.CodecG722:
 		return webrtc.MimeTypeG722
 	}
 	panic("not implemented")

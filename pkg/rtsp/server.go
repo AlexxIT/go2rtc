@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"net"
 	"net/url"
@@ -14,7 +14,6 @@ import (
 func NewServer(conn net.Conn) *Conn {
 	c := new(Conn)
 	c.conn = conn
-	c.mode = ModeServerUnknown
 	c.reader = bufio.NewReader(conn)
 	return c
 }
@@ -23,8 +22,6 @@ func (c *Conn) Auth(username, password string) {
 	info := url.UserPassword(username, password)
 	c.auth = tcp.NewAuth(info)
 }
-
-const transport = "RTP/AVP/TCP;unicast;interleaved="
 
 func (c *Conn) Accept() error {
 	for {
@@ -76,14 +73,13 @@ func (c *Conn) Accept() error {
 			}
 
 			// TODO: fix someday...
-			c.channels = map[byte]*streamer.Track{}
 			for i, media := range c.Medias {
-				track := streamer.NewTrack(media, nil)
-				c.tracks = append(c.tracks, track)
-				c.channels[byte(i<<1)] = track
+				track := core.NewReceiver(media, media.Codecs[0])
+				track.ID = byte(i * 2)
+				c.receivers = append(c.receivers, track)
 			}
 
-			c.mode = ModeServerProducer
+			c.mode = core.ModePassiveProducer
 			c.Fire(MethodAnnounce)
 
 			res := &tcp.Response{Request: req}
@@ -92,10 +88,10 @@ func (c *Conn) Accept() error {
 			}
 
 		case MethodDescribe:
-			c.mode = ModeServerConsumer
+			c.mode = core.ModePassiveConsumer
 			c.Fire(MethodDescribe)
 
-			if c.tracks == nil {
+			if c.senders == nil {
 				res := &tcp.Response{
 					Status:  "404 Not Found",
 					Request: req,
@@ -111,17 +107,17 @@ func (c *Conn) Accept() error {
 			}
 
 			// convert tracks to real output medias medias
-			var medias []*streamer.Media
-			for _, track := range c.tracks {
-				media := &streamer.Media{
-					Kind:      streamer.GetKind(track.Codec.Name),
-					Direction: streamer.DirectionSendonly,
-					Codecs:    []*streamer.Codec{track.Codec},
+			var medias []*core.Media
+			for _, track := range c.senders {
+				media := &core.Media{
+					Kind:      core.GetKind(track.Codec.Name),
+					Direction: core.DirectionRecvonly,
+					Codecs:    []*core.Codec{track.Codec},
 				}
 				medias = append(medias, media)
 			}
 
-			res.Body, err = streamer.MarshalSDP(c.SessionName, medias)
+			res.Body, err = core.MarshalSDP(c.SessionName, medias)
 			if err != nil {
 				return err
 			}
@@ -138,6 +134,7 @@ func (c *Conn) Accept() error {
 				Request: req,
 			}
 
+			const transport = "RTP/AVP/TCP;unicast;interleaved="
 			if strings.HasPrefix(tr, transport) {
 				c.Session = "1" // TODO: fixme
 				c.state = StateSetup

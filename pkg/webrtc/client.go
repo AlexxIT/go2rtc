@@ -1,27 +1,27 @@
 package webrtc
 
 import (
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/pion/sdp/v3"
 	"github.com/pion/webrtc/v3"
 )
 
-func (c *Conn) CreateOffer(medias []*streamer.Media) (string, error) {
+func (c *Conn) CreateOffer(medias []*core.Media) (string, error) {
 	// 1. Create transeivers with proper kind and direction
 	for _, media := range medias {
 		var err error
 		switch media.Direction {
-		case streamer.DirectionRecvonly:
+		case core.DirectionRecvonly:
 			_, err = c.pc.AddTransceiverFromKind(
 				webrtc.NewRTPCodecType(media.Kind),
 				webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionRecvonly},
 			)
-		case streamer.DirectionSendonly:
+		case core.DirectionSendonly:
 			_, err = c.pc.AddTransceiverFromTrack(
 				NewTrack(media.Kind),
 				webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionSendonly},
 			)
-		case streamer.DirectionSendRecv:
+		case core.DirectionSendRecv:
 			// default transceiver is sendrecv
 			_, err = c.pc.AddTransceiverFromTrack(NewTrack(media.Kind))
 		}
@@ -45,7 +45,7 @@ func (c *Conn) CreateOffer(medias []*streamer.Media) (string, error) {
 	return c.pc.LocalDescription().SDP, nil
 }
 
-func (c *Conn) CreateCompleteOffer(medias []*streamer.Media) (string, error) {
+func (c *Conn) CreateCompleteOffer(medias []*core.Media) (string, error) {
 	if _, err := c.CreateOffer(medias); err != nil {
 		return "", err
 	}
@@ -68,21 +68,7 @@ func (c *Conn) SetAnswer(answer string) (err error) {
 		return
 	}
 
-	medias := streamer.UnmarshalMedias(sd.MediaDescriptions)
-
-	// sort medias, so video will always be before audio
-	// and ignore application media from Hass default lovelace card
-	// ignore media without direction (inactive media)
-	for _, media := range medias {
-		if media.Kind == streamer.KindVideo && media.Direction != "" {
-			c.medias = append(c.medias, media)
-		}
-	}
-	for _, media := range medias {
-		if media.Kind == streamer.KindAudio && media.Direction != "" {
-			c.medias = append(c.medias, media)
-		}
-	}
+	c.medias = UnmarshalMedias(sd.MediaDescriptions)
 
 	return nil
 }

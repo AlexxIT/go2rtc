@@ -8,7 +8,6 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/streams"
 	"github.com/AlexxIT/go2rtc/cmd/webrtc"
 	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/AlexxIT/go2rtc/pkg/webtorrent"
 	"github.com/rs/zerolog"
 	"net/http"
@@ -142,7 +141,7 @@ func apiHandle(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func streamHandle(rawURL string) (streamer.Producer, error) {
+func streamHandle(rawURL string) (core.Producer, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, err

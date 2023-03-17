@@ -3,9 +3,9 @@ package mp4
 import (
 	"encoding/binary"
 	"encoding/hex"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/deepch/vdk/av"
 	"github.com/deepch/vdk/codec/h264parser"
 	"github.com/deepch/vdk/codec/h265parser"
@@ -21,7 +21,7 @@ type Muxer struct {
 	pts       []uint32
 }
 
-func (m *Muxer) MimeType(codecs []*streamer.Codec) string {
+func (m *Muxer) MimeType(codecs []*core.Codec) string {
 	s := `video/mp4; codecs="`
 
 	for i, codec := range codecs {
@@ -30,13 +30,13 @@ func (m *Muxer) MimeType(codecs []*streamer.Codec) string {
 		}
 
 		switch codec.Name {
-		case streamer.CodecH264:
+		case core.CodecH264:
 			s += "avc1." + h264.GetProfileLevelID(codec.FmtpLine)
-		case streamer.CodecH265:
+		case core.CodecH265:
 			// H.265 profile=main level=5.1
 			// hvc1 - supported in Safari, hev1 - doesn't, both supported in Chrome
 			s += "hvc1.1.6.L153.B0"
-		case streamer.CodecAAC:
+		case core.CodecAAC:
 			s += "mp4a.40.2"
 		}
 	}
@@ -44,12 +44,12 @@ func (m *Muxer) MimeType(codecs []*streamer.Codec) string {
 	return s + `"`
 }
 
-func (m *Muxer) GetInit(codecs []*streamer.Codec) ([]byte, error) {
+func (m *Muxer) GetInit(codecs []*core.Codec) ([]byte, error) {
 	moov := MOOV()
 
 	for i, codec := range codecs {
 		switch codec.Name {
-		case streamer.CodecH264:
+		case core.CodecH264:
 			sps, pps := h264.GetParameterSet(codec.FmtpLine)
 			if sps == nil {
 				// some dummy SPS and PPS not a problem
@@ -92,7 +92,7 @@ func (m *Muxer) GetInit(codecs []*streamer.Codec) ([]byte, error) {
 
 			moov.Tracks = append(moov.Tracks, trak)
 
-		case streamer.CodecH265:
+		case core.CodecH265:
 			vps, sps, pps := h265.GetParameterSet(codec.FmtpLine)
 			if sps == nil {
 				// some dummy SPS and PPS not a problem
@@ -136,8 +136,8 @@ func (m *Muxer) GetInit(codecs []*streamer.Codec) ([]byte, error) {
 
 			moov.Tracks = append(moov.Tracks, trak)
 
-		case streamer.CodecAAC:
-			s := streamer.Between(codec.FmtpLine, "config=", ";")
+		case core.CodecAAC:
+			s := core.Between(codec.FmtpLine, "config=", ";")
 			b, err := hex.DecodeString(s)
 			if err != nil {
 				return nil, err

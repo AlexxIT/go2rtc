@@ -1,28 +1,46 @@
 package webrtc
 
 import (
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
+	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/pion/webrtc/v3"
 )
 
-func (c *Conn) GetTrack(media *streamer.Media, codec *streamer.Codec) *streamer.Track {
-	if c.Mode != streamer.ModeActiveProducer && c.Mode != streamer.ModePassiveProducer {
-		panic("not implemented")
-	}
+func (c *Conn) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
+	core.Assert(media.Direction == core.DirectionRecvonly)
 
-	for _, track := range c.tracks {
+	for _, track := range c.receivers {
 		if track.Codec == codec {
-			return track
+			return track, nil
 		}
 	}
 
-	track := streamer.NewTrack(media, codec)
+	switch c.Mode {
+	case core.ModePassiveConsumer: // backchannel from browser
+		// set codec for consumer recv track so remote peer should send media with this codec
+		params := webrtc.RTPCodecParameters{
+			RTPCodecCapability: webrtc.RTPCodecCapability{
+				MimeType:  MimeType(codec),
+				ClockRate: codec.ClockRate,
+				Channels:  codec.Channels,
+			},
+			PayloadType: 0, // don't know if this necessary
+		}
 
-	if media.Direction == streamer.DirectionRecvonly {
-		track = c.addSendTrack(media, track)
+		tr := c.getTranseiver(media.ID)
+
+		_ = tr.SetCodecPreferences([]webrtc.RTPCodecParameters{params})
+
+	case core.ModePassiveProducer, core.ModeActiveProducer:
+		// Passive producers: OBS Studio via WHIP or Browser
+		// Active producers: go2rtc as WebRTC client or WebTorrent
+
+	default:
+		panic(core.Caller())
 	}
 
-	c.tracks = append(c.tracks, track)
-	return track
+	track := core.NewReceiver(media, codec)
+	c.receivers = append(c.receivers, track)
+	return track, nil
 }
 
 func (c *Conn) Start() error {
@@ -31,5 +49,11 @@ func (c *Conn) Start() error {
 }
 
 func (c *Conn) Stop() error {
+	for _, receiver := range c.receivers {
+		receiver.Close()
+	}
+	for _, sender := range c.senders {
+		sender.Close()
+	}
 	return c.pc.Close()
 }

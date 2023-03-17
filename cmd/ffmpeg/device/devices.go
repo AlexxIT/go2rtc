@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"github.com/AlexxIT/go2rtc/cmd/api"
 	"github.com/AlexxIT/go2rtc/cmd/app"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/rs/zerolog"
 	"net/http"
 	"net/url"
@@ -52,9 +52,9 @@ func GetInput(src string) (string, error) {
 
 var Bin string
 var log zerolog.Logger
-var medias []*streamer.Media
+var medias []*core.Media
 
-func findMedia(kind string, index int) *streamer.Media {
+func findMedia(kind string, index int) *core.Media {
 	for _, media := range medias {
 		if media.Kind != kind {
 			continue

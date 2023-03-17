@@ -3,14 +3,14 @@ package ngrok
 import (
 	"bufio"
 	"encoding/json"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"io"
 	"os/exec"
 	"strings"
 )
 
 type Ngrok struct {
-	streamer.Element
+	core.Listener
 
 	Tunnels map[string]string
 

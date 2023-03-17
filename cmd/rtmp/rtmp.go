@@ -3,8 +3,8 @@ package rtmp
 import (
 	"github.com/AlexxIT/go2rtc/cmd/api"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/rtmp"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/rs/zerolog/log"
 	"io"
 	"net/http"
@@ -16,7 +16,7 @@ func Init() {
 	api.HandleFunc("api/stream.flv", apiHandle)
 }
 
-func streamsHandle(url string) (streamer.Producer, error) {
+func streamsHandle(url string) (core.Producer, error) {
 	conn := rtmp.NewClient(url)
 	if err := conn.Dial(); err != nil {
 		return nil, err

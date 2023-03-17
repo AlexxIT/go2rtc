@@ -2,22 +2,18 @@ package ivideon
 
 import (
 	"encoding/json"
-	"fmt"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
-	"sync/atomic"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
-func (c *Client) GetMedias() []*streamer.Media {
+func (c *Client) GetMedias() []*core.Media {
 	return c.medias
 }
 
-func (c *Client) GetTrack(media *streamer.Media, codec *streamer.Codec) *streamer.Track {
-	for _, track := range c.tracks {
-		if track.Codec == codec {
-			return track
-		}
+func (c *Client) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
+	if c.receiver != nil {
+		return c.receiver, nil
 	}
-	panic(fmt.Sprintf("wrong media/codec: %+v %+v", media, codec))
+	return nil, core.ErrCantGetTrack
 }
 
 func (c *Client) Start() error {
@@ -29,21 +25,21 @@ func (c *Client) Start() error {
 }
 
 func (c *Client) Stop() error {
+	if c.receiver != nil {
+		c.receiver.Close()
+	}
 	return c.Close()
 }
 
 func (c *Client) MarshalJSON() ([]byte, error) {
-	var tracks []*streamer.Track
-	for _, track := range c.tracks {
-		tracks = append(tracks, track)
-	}
-
-	info := &streamer.Info{
-		Type:   "Ivideon source",
+	info := &core.Info{
+		Type:   "Ivideon active producer",
 		URL:    c.ID,
 		Medias: c.medias,
-		Tracks: tracks,
-		Recv:   atomic.LoadUint32(&c.recv),
+		Recv:   c.recv,
+	}
+	if c.receiver != nil {
+		info.Receivers = []*core.Receiver{c.receiver}
 	}
 	return json.Marshal(info)
 }

@@ -3,87 +3,74 @@ package rtsp
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
-func (c *Conn) GetMedias() []*streamer.Media {
-	if c.Medias != nil {
-		return c.Medias
-	}
+func (c *Conn) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
+	core.Assert(media.Direction == core.DirectionRecvonly)
 
-	return []*streamer.Media{
-		{
-			Kind:      streamer.KindVideo,
-			Direction: streamer.DirectionRecvonly,
-			Codecs: []*streamer.Codec{
-				{Name: streamer.CodecAll},
-			},
-		},
-		{
-			Kind:      streamer.KindAudio,
-			Direction: streamer.DirectionRecvonly,
-			Codecs: []*streamer.Codec{
-				{Name: streamer.CodecAll},
-			},
-		},
-	}
-}
-
-func (c *Conn) GetTrack(media *streamer.Media, codec *streamer.Codec) *streamer.Track {
-	for _, track := range c.tracks {
+	for _, track := range c.receivers {
 		if track.Codec == codec {
-			return track
+			return track, nil
 		}
 	}
 
-	// can't setup new tracks from play state - forcing a reconnection feature
 	switch c.state {
-	case StatePlay, StateHandle:
-		go c.Close()
-		return streamer.NewTrack(media, codec)
+	case StateConn, StateSetup:
+	default:
+		return nil, fmt.Errorf("RTSP GetTrack from wrong state: %s", c.state)
 	}
 
-	track, err := c.SetupMedia(media, codec, true)
+	channel, err := c.SetupMedia(media, true)
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	return track
+
+	track := core.NewReceiver(media, codec)
+	track.ID = byte(channel)
+	c.receivers = append(c.receivers, track)
+
+	return track, nil
 }
 
 func (c *Conn) Start() error {
 	switch c.mode {
-	case ModeClientProducer:
+	case core.ModeActiveProducer:
 		if err := c.Play(); err != nil {
 			return err
 		}
-	case ModeServerProducer:
+	case core.ModePassiveProducer:
 	default:
 		return fmt.Errorf("start wrong mode: %d", c.mode)
 	}
 
-	return c.Handle()
+	if err := c.Handle(); c.state != StateNone {
+		_ = c.conn.Close()
+		return err
+	}
+
+	return nil
 }
 
 func (c *Conn) Stop() error {
+	for _, receiver := range c.receivers {
+		receiver.Close()
+	}
+	for _, sender := range c.senders {
+		sender.Close()
+	}
 	return c.Close()
 }
 
 func (c *Conn) MarshalJSON() ([]byte, error) {
-	info := &streamer.Info{
+	info := &core.Info{
+		Type:      "RTSP " + c.mode.String(),
 		UserAgent: c.UserAgent,
 		Medias:    c.Medias,
-		Tracks:    c.tracks,
-		Recv:      uint32(c.receive),
-		Send:      uint32(c.send),
-	}
-
-	switch c.mode {
-	case ModeUnknown:
-		info.Type = "RTSP unknown"
-	case ModeClientProducer, ModeServerProducer:
-		info.Type = "RTSP source"
-	case ModeServerConsumer:
-		info.Type = "RTSP client"
+		Receivers: c.receivers,
+		Senders:   c.senders,
+		Recv:      c.recv,
+		Send:      c.send,
 	}
 
 	if c.URL != nil {
@@ -92,15 +79,6 @@ func (c *Conn) MarshalJSON() ([]byte, error) {
 	if c.conn != nil {
 		info.RemoteAddr = c.conn.RemoteAddr().String()
 	}
-
-	//for i, track := range c.tracks {
-	//	k := "track:" + strconv.Itoa(i+1)
-	//	if track.MimeType() == streamer.MimeTypeH264 {
-	//		v[k] = h264.Describe(track.Caps())
-	//	} else {
-	//		v[k] = track.MimeType()
-	//	}
-	//}
 
 	return json.Marshal(info)
 }

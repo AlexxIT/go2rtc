@@ -3,19 +3,18 @@ package mjpeg
 import (
 	"encoding/json"
 	"errors"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"strings"
-	"sync/atomic"
 )
 
-func (c *Client) GetMedias() []*streamer.Media {
+func (c *Client) GetMedias() []*core.Media {
 	if c.medias == nil {
-		c.medias = []*streamer.Media{{
-			Kind:      streamer.KindVideo,
-			Direction: streamer.DirectionSendonly,
-			Codecs: []*streamer.Codec{
+		c.medias = []*core.Media{{
+			Kind:      core.KindVideo,
+			Direction: core.DirectionRecvonly,
+			Codecs: []*core.Codec{
 				{
-					Name: streamer.CodecJPEG, ClockRate: 90000, PayloadType: streamer.PayloadTypeRAW,
+					Name: core.CodecJPEG, ClockRate: 90000, PayloadType: core.PayloadTypeRAW,
 				},
 			},
 		}}
@@ -23,11 +22,11 @@ func (c *Client) GetMedias() []*streamer.Media {
 	return c.medias
 }
 
-func (c *Client) GetTrack(media *streamer.Media, codec *streamer.Codec) *streamer.Track {
-	if c.track == nil {
-		c.track = streamer.NewTrack(media, codec)
+func (c *Client) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
+	if c.receiver == nil {
+		c.receiver = core.NewReceiver(media, codec)
 	}
-	return c.track
+	return c.receiver, nil
 }
 
 func (c *Client) Start() error {
@@ -46,6 +45,9 @@ func (c *Client) Start() error {
 }
 
 func (c *Client) Stop() error {
+	if c.receiver != nil {
+		c.receiver.Close()
+	}
 	// important for close reader/writer gorutines
 	_ = c.res.Body.Close()
 	c.closed = true
@@ -53,12 +55,16 @@ func (c *Client) Stop() error {
 }
 
 func (c *Client) MarshalJSON() ([]byte, error) {
-	info := &streamer.Info{
-		Type:       "MJPEG source",
+	info := &core.Info{
+		Type:       "MJPEG active producer",
 		URL:        c.res.Request.URL.String(),
 		RemoteAddr: c.RemoteAddr,
 		UserAgent:  c.UserAgent,
-		Recv:       atomic.LoadUint32(&c.recv),
+		Medias:     c.medias,
+		Recv:       c.recv,
+	}
+	if c.receiver != nil {
+		info.Receivers = []*core.Receiver{c.receiver}
 	}
 	return json.Marshal(info)
 }

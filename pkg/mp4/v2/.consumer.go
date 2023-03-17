@@ -3,6 +3,7 @@ package mp4
 import (
 	"encoding/json"
 	"github.com/AlexxIT/go2rtc/pkg/aac"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
 	"github.com/AlexxIT/go2rtc/pkg/streamer"
@@ -11,14 +12,14 @@ import (
 )
 
 type Consumer struct {
-	streamer.Element
+	core.Listener
 
-	Medias     []*streamer.Media
+	Medias     []*core.Media
 	UserAgent  string
 	RemoteAddr string
 
 	muxer  *Muxer
-	codecs []*streamer.Codec
+	codecs []*core.Codec
 	wait   byte
 
 	send uint32
@@ -30,38 +31,38 @@ const (
 	waitInit
 )
 
-func (c *Consumer) GetMedias() []*streamer.Media {
+func (c *Consumer) GetMedias() []*core.Media {
 	if c.Medias != nil {
 		return c.Medias
 	}
 
 	// default medias
-	return []*streamer.Media{
+	return []*core.Media{
 		{
-			Kind:      streamer.KindVideo,
-			Direction: streamer.DirectionRecvonly,
-			Codecs: []*streamer.Codec{
-				{Name: streamer.CodecH264},
-				{Name: streamer.CodecH265},
+			Kind:      core.KindVideo,
+			Direction: core.DirectionSendonly,
+			Codecs: []*core.Codec{
+				{Name: core.CodecH264},
+				{Name: core.CodecH265},
 			},
 		},
 		{
-			Kind:      streamer.KindAudio,
-			Direction: streamer.DirectionRecvonly,
-			Codecs: []*streamer.Codec{
-				{Name: streamer.CodecAAC},
+			Kind:      core.KindAudio,
+			Direction: core.DirectionSendonly,
+			Codecs: []*core.Codec{
+				{Name: core.CodecAAC},
 			},
 		},
 	}
 }
 
-func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *streamer.Track {
+func (c *Consumer) AddTrack(media *core.Media, track *core.Track) *core.Track {
 	trackID := byte(len(c.codecs))
 	c.codecs = append(c.codecs, track.Codec)
 
 	codec := track.Codec
 	switch codec.Name {
-	case streamer.CodecH264:
+	case core.CodecH264:
 		c.wait = waitInit
 
 		push := func(packet *rtp.Packet) error {
@@ -93,7 +94,7 @@ func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 
 		return track.Bind(push)
 
-	case streamer.CodecH265:
+	case core.CodecH265:
 		c.wait = waitInit
 
 		push := func(packet *rtp.Packet) error {
@@ -164,7 +165,7 @@ func (c *Consumer) Start() {
 //
 
 func (c *Consumer) MarshalJSON() ([]byte, error) {
-	info := &streamer.Info{
+	info := &core.Info{
 		Type:       "MP4 client",
 		RemoteAddr: c.RemoteAddr,
 		UserAgent:  c.UserAgent,

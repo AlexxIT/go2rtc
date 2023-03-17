@@ -8,9 +8,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/pion/rtp"
 	"io"
 	"net"
@@ -19,7 +19,7 @@ import (
 )
 
 type Client struct {
-	streamer.Element
+	core.Listener
 
 	uri     string
 	conn    net.Conn
@@ -28,14 +28,17 @@ type Client struct {
 	seq     uint32
 	stream  string
 
-	medias     []*streamer.Media
-	videoTrack *streamer.Track
-	audioTrack *streamer.Track
+	medias     []*core.Media
+	receivers  []*core.Receiver
+	videoTrack *core.Receiver
+	audioTrack *core.Receiver
 
 	videoTS  uint32
 	videoDT  uint32
 	audioTS  uint32
 	audioSeq uint16
+
+	recv uint32
 }
 
 type Response map[string]any
@@ -196,7 +199,7 @@ func (c *Client) Handle() error {
 
 				//log.Printf("[AVC] %v, len: %d, ts: %10d", h265.Types(payload), len(payload), packet.Timestamp)
 
-				_ = c.videoTrack.WriteRTP(packet)
+				c.videoTrack.WriteRTP(packet)
 			}
 
 		case 0x1FD: // PFrame
@@ -210,7 +213,7 @@ func (c *Client) Handle() error {
 
 				//log.Printf("[DVR] %v, len: %d, ts: %10d", h265.Types(packet.Payload), len(packet.Payload), packet.Timestamp)
 
-				_ = c.videoTrack.WriteRTP(packet)
+				c.videoTrack.WriteRTP(packet)
 			}
 
 		case 0x1FA, 0x1F9: // audio
@@ -245,7 +248,7 @@ func (c *Client) Handle() error {
 
 					//log.Printf("[DVR] len: %d, ts: %10d", len(packet.Payload), packet.Timestamp)
 
-					_ = c.audioTrack.WriteRTP(packet)
+					c.audioTrack.WriteRTP(packet)
 				}
 			}
 		}
@@ -295,6 +298,8 @@ func (c *Client) Response() (b []byte, err error) {
 		return
 	}
 
+	c.recv += 20
+
 	if b[0] != 255 {
 		return nil, errors.New("read error")
 	}
@@ -306,6 +311,8 @@ func (c *Client) Response() (b []byte, err error) {
 	if _, err = io.ReadFull(c.reader, b); err != nil {
 		return
 	}
+
+	c.recv += size
 
 	return
 }
@@ -328,21 +335,21 @@ func (c *Client) ResponseJSON() (res Response, err error) {
 }
 
 func (c *Client) AddVideoTrack(mediaCode byte, payload []byte) {
-	var codec *streamer.Codec
+	var codec *core.Codec
 	switch mediaCode {
 	case 2:
-		codec = &streamer.Codec{
-			Name:        streamer.CodecH264,
+		codec = &core.Codec{
+			Name:        core.CodecH264,
 			ClockRate:   90000,
-			PayloadType: streamer.PayloadTypeRAW,
+			PayloadType: core.PayloadTypeRAW,
 			FmtpLine:    h264.GetFmtpLine(payload),
 		}
 
 	case 0x03, 0x13:
-		codec = &streamer.Codec{
-			Name:        streamer.CodecH265,
+		codec = &core.Codec{
+			Name:        core.CodecH265,
 			ClockRate:   90000,
-			PayloadType: streamer.PayloadTypeRAW,
+			PayloadType: core.PayloadTypeRAW,
 			FmtpLine:    "profile-id=1",
 		}
 
@@ -369,14 +376,15 @@ func (c *Client) AddVideoTrack(mediaCode byte, payload []byte) {
 		return
 	}
 
-	media := &streamer.Media{
-		Kind:      streamer.KindVideo,
-		Direction: streamer.DirectionSendonly,
-		Codecs:    []*streamer.Codec{codec},
+	media := &core.Media{
+		Kind:      core.KindVideo,
+		Direction: core.DirectionRecvonly,
+		Codecs:    []*core.Codec{codec},
 	}
 	c.medias = append(c.medias, media)
 
-	c.videoTrack = streamer.NewTrack(media, codec)
+	c.videoTrack = core.NewReceiver(media, codec)
+	c.receivers = append(c.receivers, c.videoTrack)
 }
 
 var sampleRates = []uint32{4000, 8000, 11025, 16000, 20000, 22050, 32000, 44100, 48000}
@@ -384,15 +392,15 @@ var sampleRates = []uint32{4000, 8000, 11025, 16000, 20000, 22050, 32000, 44100,
 func (c *Client) AddAudioTrack(mediaCode byte, sampleRate byte) {
 	// https://github.com/vigoss30611/buildroot-ltc/blob/master/system/qm/ipc/ProtocolService/src/ZhiNuo/inc/zn_dh_base_type.h
 	// PCM8 = 7, G729, IMA_ADPCM, G711U, G721, PCM8_VWIS, MS_ADPCM, G711A, PCM16
-	var codec *streamer.Codec
+	var codec *core.Codec
 	switch mediaCode {
 	case 10: // G711U
-		codec = &streamer.Codec{
-			Name: streamer.CodecPCMU,
+		codec = &core.Codec{
+			Name: core.CodecPCMU,
 		}
 	case 14: // G711A
-		codec = &streamer.Codec{
-			Name: streamer.CodecPCMA,
+		codec = &core.Codec{
+			Name: core.CodecPCMA,
 		}
 	default:
 		println("[DVRIP] unsupported audio codec:", mediaCode)
@@ -403,14 +411,15 @@ func (c *Client) AddAudioTrack(mediaCode byte, sampleRate byte) {
 		codec.ClockRate = sampleRates[sampleRate-1]
 	}
 
-	media := &streamer.Media{
-		Kind:      streamer.KindAudio,
-		Direction: streamer.DirectionSendonly,
-		Codecs:    []*streamer.Codec{codec},
+	media := &core.Media{
+		Kind:      core.KindAudio,
+		Direction: core.DirectionRecvonly,
+		Codecs:    []*core.Codec{codec},
 	}
 	c.medias = append(c.medias, media)
 
-	c.audioTrack = streamer.NewTrack(media, codec)
+	c.audioTrack = core.NewReceiver(media, codec)
+	c.receivers = append(c.receivers, c.audioTrack)
 }
 
 func SofiaHash(password string) string {

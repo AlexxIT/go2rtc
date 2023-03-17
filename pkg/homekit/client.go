@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/hap"
 	"github.com/AlexxIT/go2rtc/pkg/hap/camera"
 	"github.com/AlexxIT/go2rtc/pkg/srtp"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/brutella/hap/characteristic"
 	"github.com/brutella/hap/rtp"
 	"net"
@@ -16,15 +16,15 @@ import (
 )
 
 type Client struct {
-	streamer.Element
+	core.Listener
 
 	conn   *hap.Conn
 	exit   chan error
 	server *srtp.Server
 	url    string
 
-	medias []*streamer.Media
-	tracks []*streamer.Track
+	medias    []*core.Media
+	receivers []*core.Receiver
 
 	sessions []*srtp.Session
 }
@@ -62,7 +62,7 @@ func (c *Client) Dial() error {
 	return nil
 }
 
-func (c *Client) GetMedias() []*streamer.Media {
+func (c *Client) GetMedias() []*core.Media {
 	if c.medias == nil {
 		c.medias = c.getMedias()
 	}
@@ -70,20 +70,20 @@ func (c *Client) GetMedias() []*streamer.Media {
 	return c.medias
 }
 
-func (c *Client) GetTrack(media *streamer.Media, codec *streamer.Codec) *streamer.Track {
-	for _, track := range c.tracks {
+func (c *Client) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
+	for _, track := range c.receivers {
 		if track.Codec == codec {
-			return track
+			return track, nil
 		}
 	}
 
-	track := streamer.NewTrack(media, codec)
-	c.tracks = append(c.tracks, track)
-	return track
+	track := core.NewReceiver(media, codec)
+	c.receivers = append(c.receivers, track)
+	return track, nil
 }
 
 func (c *Client) Start() error {
-	if c.tracks == nil {
+	if c.receivers == nil {
 		return errors.New("producer without tracks")
 	}
 
@@ -161,11 +161,11 @@ func (c *Client) Start() error {
 		return err
 	}
 
-	for _, track := range c.tracks {
+	for _, track := range c.receivers {
 		switch track.Codec.Name {
-		case streamer.CodecH264:
+		case core.CodecH264:
 			vs.Track = track
-		case streamer.CodecELD:
+		case core.CodecELD:
 			as.Track = track
 		}
 	}
@@ -188,8 +188,8 @@ func (c *Client) Stop() error {
 	return err
 }
 
-func (c *Client) getMedias() []*streamer.Media {
-	var medias []*streamer.Media
+func (c *Client) getMedias() []*core.Media {
+	var medias []*core.Media
 
 	accs, err := c.conn.GetAccessories()
 	if err != nil {
@@ -206,20 +206,20 @@ func (c *Client) getMedias() []*streamer.Media {
 	}
 
 	for _, hkCodec := range v1.Codecs {
-		codec := &streamer.Codec{ClockRate: 90000}
+		codec := &core.Codec{ClockRate: 90000}
 
 		switch hkCodec.Type {
 		case rtp.VideoCodecType_H264:
-			codec.Name = streamer.CodecH264
+			codec.Name = core.CodecH264
 			codec.FmtpLine = "profile-level-id=420029"
 		default:
 			fmt.Printf("unknown codec: %d", hkCodec.Type)
 			continue
 		}
 
-		media := &streamer.Media{
-			Kind: streamer.KindVideo, Direction: streamer.DirectionSendonly,
-			Codecs: []*streamer.Codec{codec},
+		media := &core.Media{
+			Kind: core.KindVideo, Direction: core.DirectionRecvonly,
+			Codecs: []*core.Codec{codec},
 		}
 		medias = append(medias, media)
 	}
@@ -231,7 +231,7 @@ func (c *Client) getMedias() []*streamer.Media {
 	}
 
 	for _, hkCodec := range v2.Codecs {
-		codec := &streamer.Codec{
+		codec := &core.Codec{
 			Channels: uint16(hkCodec.Parameters.Channels),
 		}
 
@@ -248,7 +248,7 @@ func (c *Client) getMedias() []*streamer.Media {
 
 		switch hkCodec.Type {
 		case rtp.AudioCodecType_AAC_ELD:
-			codec.Name = streamer.CodecELD
+			codec.Name = core.CodecELD
 			// only this value supported by FFmpeg
 			codec.FmtpLine = "profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;config=F8EC3000"
 		default:
@@ -256,9 +256,9 @@ func (c *Client) getMedias() []*streamer.Media {
 			continue
 		}
 
-		media := &streamer.Media{
-			Kind: streamer.KindAudio, Direction: streamer.DirectionSendonly,
-			Codecs: []*streamer.Codec{codec},
+		media := &core.Media{
+			Kind: core.KindAudio, Direction: core.DirectionRecvonly,
+			Codecs: []*core.Codec{codec},
 		}
 		medias = append(medias, media)
 	}
@@ -272,12 +272,12 @@ func (c *Client) MarshalJSON() ([]byte, error) {
 		recv += atomic.LoadUint32(&session.Recv)
 	}
 
-	info := &streamer.Info{
-		Type:   "HomeKit source",
-		URL:    c.conn.URL(),
-		Medias: c.medias,
-		Tracks: c.tracks,
-		Recv:   recv,
+	info := &core.Info{
+		Type:      "HomeKit active producer",
+		URL:       c.conn.URL(),
+		Medias:    c.medias,
+		Receivers: c.receivers,
+		Recv:      int(recv),
 	}
 	return json.Marshal(info)
 }

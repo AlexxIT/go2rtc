@@ -1,7 +1,7 @@
 package webrtc
 
 import (
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/pion/webrtc/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,10 +17,10 @@ func TestClient(t *testing.T) {
 
 	prod := NewConn(pc)
 
-	medias := []*streamer.Media{
-		{Kind: streamer.KindVideo, Direction: streamer.DirectionRecvonly},
-		{Kind: streamer.KindAudio, Direction: streamer.DirectionRecvonly},
-		{Kind: streamer.KindAudio, Direction: streamer.DirectionSendonly},
+	medias := []*core.Media{
+		{Kind: core.KindVideo, Direction: core.DirectionRecvonly},
+		{Kind: core.KindAudio, Direction: core.DirectionRecvonly},
+		{Kind: core.KindAudio, Direction: core.DirectionSendonly},
 	}
 
 	offer, err := prod.CreateOffer(medias)

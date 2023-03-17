@@ -8,6 +8,9 @@ import (
 	"strings"
 )
 
+// ReceiveMTU = Ethernet MTU (1500) - IP Header (20) - UDP Header (8)
+const ReceiveMTU = 1472
+
 func NewAPI(address string) (*webrtc.API, error) {
 	// for debug logs add to env: `PION_LOG_DEBUG=all`
 	m := &webrtc.MediaEngine{}
@@ -41,8 +44,7 @@ func NewAPI(address string) (*webrtc.API, error) {
 	// fix https://github.com/pion/webrtc/pull/2407
 	s.SetDTLSInsecureSkipHelloVerify(true)
 
-	// Ethernet MTU (1500) - IP Header (20) - UDP Header (8)
-	s.SetReceiveMTU(1472)
+	s.SetReceiveMTU(ReceiveMTU)
 
 	if address != "" {
 		address, network, _ := strings.Cut(address, "/")

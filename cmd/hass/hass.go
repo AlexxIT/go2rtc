@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/AlexxIT/go2rtc/cmd/app"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/rs/zerolog"
 	"os"
 	"path"
@@ -38,7 +38,7 @@ func Init() {
 
 	urls := map[string]string{}
 
-	streams.HandleFunc("hass", func(url string) (streamer.Producer, error) {
+	streams.HandleFunc("hass", func(url string) (core.Producer, error) {
 		if hurl := urls[url[5:]]; hurl != "" {
 			return streams.GetProducer(hurl)
 		}
