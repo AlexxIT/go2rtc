@@ -118,8 +118,8 @@ func apiHandle(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// create new random share
-		share = core.RandString(16)
-		pwd := core.RandString(16)
+		share = core.RandString(10, 62)
+		pwd := core.RandString(10, 62)
 		srv.AddShare(share, pwd, src)
 
 		if shares == nil {

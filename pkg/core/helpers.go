@@ -8,16 +8,16 @@ import (
 	"strings"
 )
 
-const digits = "0123456789abcdefghijklmnopqrstuvwxyz"
-const maxSize = byte(len(digits))
+const symbols = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_"
 
-func RandString(size byte) string {
+// RandString base10 - numbers, base16 - hex, base36 - digits+letters, base64 - URL safe symbols
+func RandString(size, base byte) string {
 	b := make([]byte, size)
 	if _, err := cryptorand.Read(b); err != nil {
 		panic(err)
 	}
 	for i := byte(0); i < size; i++ {
-		b[i] = digits[b[i]%maxSize]
+		b[i] = symbols[b[i]%base]
 	}
 	return string(b)
 }

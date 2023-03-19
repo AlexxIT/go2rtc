@@ -80,7 +80,7 @@ func (s *Server) Serve() error {
 			continue
 		}
 
-		peerID := core.RandString(16)
+		peerID := core.RandString(16, 36)
 
 		// instant run announce worker
 		s.announce = core.NewWorker(0, func() time.Duration {

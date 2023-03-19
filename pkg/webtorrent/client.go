@@ -49,7 +49,7 @@ func NewClient(tracker, share, pwd string, pc *pion.PeerConnection) (*webrtc.Con
 	// 5. Send offer
 	msg := fmt.Sprintf(
 		`{"action":"announce","info_hash":"%s","peer_id":"%s","offers":[{"offer_id":"%s","offer":{"type":"offer","sdp":"%s"}}],"numwant":1}`,
-		InfoHash(share), core.RandString(16), nonce, base64.StdEncoding.EncodeToString(enc),
+		InfoHash(share), core.RandString(16, 36), nonce, base64.StdEncoding.EncodeToString(enc),
 	)
 	if err = ws.WriteMessage(websocket.TextMessage, []byte(msg)); err != nil {
 		return nil, err

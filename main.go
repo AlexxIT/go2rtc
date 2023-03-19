@@ -18,6 +18,7 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/mp4"
 	"github.com/AlexxIT/go2rtc/cmd/mpegts"
 	"github.com/AlexxIT/go2rtc/cmd/ngrok"
+	"github.com/AlexxIT/go2rtc/cmd/roborock"
 	"github.com/AlexxIT/go2rtc/cmd/rtmp"
 	"github.com/AlexxIT/go2rtc/cmd/rtsp"
 	"github.com/AlexxIT/go2rtc/cmd/srtp"
@@ -47,6 +48,7 @@ func main() {
 	tapo.Init()
 	isapi.Init()
 	mpegts.Init()
+	roborock.Init()
 
 	srtp.Init()
 	homekit.Init()
