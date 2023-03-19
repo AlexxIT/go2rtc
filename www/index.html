@@ -73,7 +73,7 @@
 <table id="streams">
     <thead>
     <tr>
-        <th>Name</th>
+        <th><input id="selectall" type="checkbox">Name</th>
         <th>Online</th>
         <th>Commands</th>
     </tr>
@@ -116,6 +116,12 @@
         url.searchParams.set("src", ev.target.dataset.name);
         fetch(url, {method: "DELETE"}).then(reload);
     });
+
+    document.getElementById('selectall').addEventListener('change', ev => {
+        document.querySelectorAll('#streams input').forEach(el => {
+            el.checked = ev.target.checked
+        })
+    })
 
     function reload() {
         const url = new URL("api/streams", location.href);
