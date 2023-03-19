@@ -35,7 +35,7 @@ func apiHandle(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
 		if Auth.UserData == nil {
-			http.Error(w, "", http.StatusNotFound)
+			http.Error(w, "no auth", http.StatusNotFound)
 			return
 		}
 

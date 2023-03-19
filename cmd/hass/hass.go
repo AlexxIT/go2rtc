@@ -1,6 +1,7 @@
 package hass
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"github.com/AlexxIT/go2rtc/cmd/api"
@@ -62,12 +63,16 @@ func Init() {
 			var options struct {
 				StreamSource string `json:"stream_source"`
 			}
-			if err = json.Unmarshal(entrie.Data, &options); err != nil {
+			if err = json.Unmarshal(entrie.Options, &options); err != nil {
 				continue
 			}
 			urls[entrie.Title] = options.StreamSource
 
 		case "homekit_controller":
+			if !bytes.Contains(entrie.Data, []byte("iOSPairingId")) {
+				continue
+			}
+
 			var data struct {
 				ClientID      string `json:"iOSPairingId"`
 				ClientPrivate string `json:"iOSDeviceLTSK"`
