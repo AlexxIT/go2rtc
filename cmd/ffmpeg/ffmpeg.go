@@ -70,6 +70,10 @@ var defaults = map[string]string{
 	"aac":        "-c:a aac", // keep sample rate and channels
 	"aac/16000":  "-c:a aac -ar:a 16000 -ac:a 1",
 	"mp3":        "-c:a libmp3lame -q:a 8",
+	"pcm":        "-c:a pcm_s16be",
+	"pcm/8000":   "-c:a pcm_s16be -ar:a 8000 -ac:a 1",
+	"pcm/16000":  "-c:a pcm_s16be -ar:a 16000 -ac:a 1",
+	"pcm/48000":  "-c:a pcm_s16be -ar:a 48000 -ac:a 1",
 
 	// hardware Intel and AMD on Linux
 	// better not to set `-async_depth:v 1` like for QSV, because framedrops
