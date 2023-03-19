@@ -76,12 +76,15 @@ func Init() {
 		}
 
 		srv.AddShare(name, share.Pwd, share.Src)
+
+		// adds to GET /api/webtorrent
+		shares[name] = name
 	}
 }
 
 var log zerolog.Logger
 
-var shares map[string]string
+var shares = map[string]string{}
 var srv *webtorrent.Server
 
 func apiHandle(w http.ResponseWriter, r *http.Request) {
@@ -97,11 +100,19 @@ func apiHandle(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if ok {
+			// response one share
 			pwd := srv.GetSharePwd(share)
 			data := fmt.Sprintf(`{"share":%q,"pwd":%q}`, share, pwd)
 			_, _ = w.Write([]byte(data))
 		} else {
-			http.Error(w, "", http.StatusNotFound)
+			// response all shares
+			var items []api.Stream
+			for src, share := range shares {
+				pwd := srv.GetSharePwd(share)
+				source := fmt.Sprintf("webtorrent:?share=%s&pwd=%s", share, pwd)
+				items = append(items, api.Stream{Name: src, URL: source})
+			}
+			api.ResponseStreams(w, items)
 		}
 
 	case "POST":
@@ -122,9 +133,6 @@ func apiHandle(w http.ResponseWriter, r *http.Request) {
 		pwd := core.RandString(10, 62)
 		srv.AddShare(share, pwd, src)
 
-		if shares == nil {
-			shares = map[string]string{}
-		}
 		shares[src] = share
 
 		w.WriteHeader(http.StatusCreated)

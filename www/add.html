@@ -218,5 +218,18 @@
     })
 </script>
 
+
+<button id="webtorrent">WebTorrent Shares</button>
+<div class="module">
+    <table id="webtorrent-table"></table>
+</div>
+<script>
+    document.getElementById('webtorrent').addEventListener('click', async ev => {
+        ev.target.nextElementSibling.style.display = 'block'
+        await getStreams('api/webtorrent', 'webtorrent-table')
+    })
+</script>
+
+
 </body>
 </html>
