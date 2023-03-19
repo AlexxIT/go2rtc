@@ -3,11 +3,13 @@ package hass
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/AlexxIT/go2rtc/cmd/api"
 	"github.com/AlexxIT/go2rtc/cmd/app"
 	"github.com/AlexxIT/go2rtc/cmd/roborock"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/rs/zerolog"
+	"net/http"
 	"os"
 	"path"
 )
@@ -38,6 +40,14 @@ func Init() {
 	}
 
 	urls := map[string]string{}
+
+	api.HandleFunc("api/hass", func(w http.ResponseWriter, r *http.Request) {
+		var items []api.Stream
+		for name, url := range urls {
+			items = append(items, api.Stream{Name: name, URL: url})
+		}
+		api.ResponseStreams(w, items)
+	})
 
 	streams.HandleFunc("hass", func(url string) (core.Producer, error) {
 		if hurl := urls[url[5:]]; hurl != "" {

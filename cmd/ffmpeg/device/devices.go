@@ -1,7 +1,6 @@
 package device
 
 import (
-	"encoding/json"
 	"github.com/AlexxIT/go2rtc/cmd/api"
 	"github.com/AlexxIT/go2rtc/cmd/app"
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -72,12 +71,21 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		loadMedias()
 	}
 
-	data, err := json.Marshal(medias)
-	if err != nil {
-		log.Error().Err(err).Msg("[api.ffmpeg]")
-		return
+	var items []api.Stream
+	var iv, ia int
+
+	for _, media := range medias {
+		var source string
+		switch media.Kind {
+		case core.KindVideo:
+			source = "ffmpeg:device?video=" + strconv.Itoa(iv)
+			iv++
+		case core.KindAudio:
+			source = "ffmpeg:device?audio=" + strconv.Itoa(ia)
+			ia++
+		}
+		items = append(items, api.Stream{Name: media.ID, URL: source})
 	}
-	if _, err = w.Write(data); err != nil {
-		log.Error().Err(err).Msg("[api.ffmpeg]")
-	}
+
+	api.ResponseStreams(w, items)
 }

@@ -63,10 +63,6 @@
 <body>
 <script src="main.js"></script>
 <div class="info"></div>
-<div class="header">
-    <input id="src" type="text" placeholder="url">
-    <a id="add" href="#">add</a>
-</div>
 <div class="controls">
     <button>stream</button>
     <label><input type="checkbox" name="webrtc" checked>webrtc</label>
@@ -92,14 +88,6 @@
         '<a href="links.html?src={name}">links</a>',
         '<a href="#" data-name="{name}">delete</a>',
     ];
-
-    document.querySelector("#add")
-        .addEventListener("click", () => {
-            const src = document.querySelector("#src");
-            const url = new URL("api/streams", location.href);
-            url.searchParams.set("src", src.value);
-            fetch(url, {method: "PUT"}).then(reload);
-        });
 
     document.querySelector(".controls > button")
         .addEventListener("click", () => {

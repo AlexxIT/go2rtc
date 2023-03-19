@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Add Stream</title>
+    <meta name="viewport" content="width=device-width, user-scalable=yes, initial-scale=1, maximum-scale=1">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <style>
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+        }
+
+        .module {
+            display: none;
+            padding: 10px;
+        }
+
+        table {
+            background-color: white;
+            text-align: left;
+            border-collapse: collapse;
+        }
+
+        table td, table th {
+            border: 1px solid black;
+            padding: 5px 5px;
+        }
+
+        table tbody td {
+            font-size: 13px;
+        }
+
+        table thead {
+            background: #CFCFCF;
+            background: linear-gradient(to bottom, #dbdbdb 0%, #d3d3d3 66%, #CFCFCF 100%);
+            border-bottom: 3px solid black;
+        }
+
+        table thead th {
+            font-size: 15px;
+            font-weight: bold;
+            color: black;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+<script src="main.js"></script>
+<script>
+    async function getStreams(url, tableID) {
+        const table = document.getElementById(tableID)
+
+        const r = typeof url === 'string' ? await fetch(url, {cache: 'no-cache'}) : url
+        if (!r.ok) {
+            table.innerText = await r.text()
+            return
+        }
+
+        /** @type {{streams:Array<{name:string,url:string}>}} */
+        const data = await r.json()
+        table.innerHTML = data.streams.reduce((html, item) => {
+            return html + `<tr><td>${item.name}</td><td>${item.url}</td></tr>`
+        }, '<thead><tr><th>Name</th><th>Source</th></tr></thead><tbody>') + '</tbody>'
+    }
+</script>
+
+
+<button id="stream">Temporary stream</button>
+<div class="module">
+    <form id="stream-form" style="padding: 10px">
+        <input type="text" name="name" placeholder="name">
+        <input type="text" name="src" placeholder="url">
+        <input type="submit" value="add">
+    </form>
+</div>
+<script>
+    document.getElementById('stream').addEventListener('click', async ev => {
+        ev.target.nextElementSibling.style.display = 'block'
+    })
+
+    document.getElementById('stream-form').addEventListener('submit', async ev => {
+        ev.preventDefault()
+
+        const url = new URL('api/streams', location.href)
+        url.searchParams.set('name', ev.target.elements['name'].value)
+        url.searchParams.set('src', ev.target.elements['src'].value)
+
+        const r = await fetch(url, {method: 'PUT'})
+        alert(r.ok ? 'OK' : 'ERROR')
+    })
+</script>
+
+
+<button id="homekit">Apple HomeKit</button>
+<div class="module">
+    <div style="margin-bottom: 10px">
+        <label for="pin">PIN</label>
+        <input id="pin" type="text">
+    </div>
+    <table>
+        <thead>
+        <tr>
+            <th>Name</th>
+            <th>Address</th>
+            <th>Model</th>
+            <th>Commands</th>
+        </tr>
+        </thead>
+        <tbody id="homekit-body">
+        </tbody>
+    </table>
+</div>
+<script>
+    document.getElementById('homekit').addEventListener('click', async ev => {
+        ev.target.nextElementSibling.style.display = 'block'
+        const r = await fetch('api/homekit', {cache: 'no-cache'})
+
+        /** @type {Array<{id:string,name:string,addr:string,model:string,paired:boolean}>} */
+        const data = await r.json()
+
+        const tbody = document.getElementById('homekit-body')
+        tbody.innerHTML =
+            data.reduce((res, item) => {
+                let commands = ''
+                if (item.id === "") {
+                    commands = `<a href="#" onclick="unpair('${item.name}')">unpair</a>`
+                } else if (item.paired === false) {
+                    commands = `<a href="#" onclick="pair('${item.id}','${item.name}')">pair</a>`
+                }
+                return res + `<tr>
+                        <td>${item.name}</td>
+                        <td>${item.addr}</td>
+                        <td>${item.model}</td>
+                        <td>${commands}</td>
+                    </tr>`
+            }, '')
+    })
+
+    function pair(id, name) {
+        const pin = document.querySelector('#pin').value
+        fetch(`api/homekit?id=${id}&name=${name}&pin=${pin}`, {method: 'POST'})
+            .then(r => r.text())
+            .then(data => {
+                if (data.length > 0) alert(data)
+                else window.location.reload()
+            })
+            .catch(console.error)
+    }
+
+    function unpair(src) {
+        fetch(`api/homekit?src=${src}`, {method: 'DELETE'})
+            .then(r => r.text())
+            .then(data => {
+                if (data.length > 0) alert(data)
+                else window.location.reload()
+            })
+            .catch(console.error)
+    }
+</script>
+
+
+<button id="hass">Home Assistant</button>
+<div class="module">
+    <table id="hass-table"></table>
+</div>
+<script>
+    document.getElementById('hass').addEventListener('click', async ev => {
+        ev.target.nextElementSibling.style.display = 'block'
+        await getStreams('api/hass', 'hass-table')
+    })
+</script>
+
+
+<button id="roborock">Roborock</button>
+<div class="module">
+    <form id="roborock-form" style="margin-bottom: 10px">
+        <input type="text" name="username" placeholder="username">
+        <input type="password" name="password" placeholder="password">
+        <input type="submit" value="Login">
+    </form>
+    <table id="roborock-table">
+    </table>
+</div>
+<script>
+    document.getElementById('roborock').addEventListener('click', async ev => {
+        ev.target.nextElementSibling.style.display = 'block'
+        await getStreams('api/roborock', 'roborock-table')
+    })
+
+    document.getElementById('roborock-form').addEventListener('submit', async ev => {
+        ev.preventDefault()
+        const r = await fetch('api/roborock', {method: 'POST', body: new FormData(ev.target)})
+        await getStreams(r, 'roborock-table')
+    })
+</script>
+
+
+<button id="devices">USB Devices</button>
+<div class="module">
+    <table id="devices-table">
+    </table>
+</div>
+<script>
+    document.getElementById('devices').addEventListener('click', async ev => {
+        ev.target.nextElementSibling.style.display = 'block'
+        await getStreams('api/devices', 'devices-table')
+    })
+</script>
+
+</body>
+</html>

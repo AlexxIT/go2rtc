@@ -1,7 +1,6 @@
 package roborock
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/AlexxIT/go2rtc/cmd/api"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
@@ -85,17 +84,7 @@ func apiHandle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(devices) == 0 {
-		http.Error(w, "no devices in the account", http.StatusNotFound)
-		return
-	}
-
-	var response struct {
-		Devices []struct {
-			Name   string `json:"name"`
-			Source string `json:"source"`
-		} `json:"devices"`
-	}
+	var items []api.Stream
 
 	for _, device := range devices {
 		source := fmt.Sprintf(
@@ -104,17 +93,8 @@ func apiHandle(w http.ResponseWriter, r *http.Request) {
 			Auth.UserData.IoT.User, Auth.UserData.IoT.Pass, Auth.UserData.IoT.Domain,
 			device.DID, device.Key,
 		)
-
-		response.Devices = append(response.Devices, struct {
-			Name   string `json:"name"`
-			Source string `json:"source"`
-		}{
-			Name:   device.Name,
-			Source: source,
-		})
+		items = append(items, api.Stream{Name: device.Name, URL: source})
 	}
 
-	if err = json.NewEncoder(w).Encode(response); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
+	api.ResponseStreams(w, items)
 }
