@@ -99,11 +99,15 @@ func apiHandle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if ok {
+		if src != "" {
 			// response one share
-			pwd := srv.GetSharePwd(share)
-			data := fmt.Sprintf(`{"share":%q,"pwd":%q}`, share, pwd)
-			_, _ = w.Write([]byte(data))
+			if ok {
+				pwd := srv.GetSharePwd(share)
+				data := fmt.Sprintf(`{"share":%q,"pwd":%q}`, share, pwd)
+				_, _ = w.Write([]byte(data))
+			} else {
+				http.Error(w, "", http.StatusNotFound)
+			}
 		} else {
 			// response all shares
 			var items []api.Stream
