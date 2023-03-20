@@ -100,26 +100,11 @@
 
 <div id="webrtc">
     <h2>WebRTC Magic</h2>
-    <li>video+audio+microphone = two way audio camera</li>
-    <li>camera+microphone+audio = two way audio browser</li>
-    <li>display = broadcaster software</li>
+    <label><input type="radio" name="webrtc" value="video+audio" checked>video+audio = simple viewer</label><br>
+    <label><input type="radio" name="webrtc" value="video+audio+microphone">video+audio+microphone = two way audio from camera</label><br>
+    <label><input type="radio" name="webrtc" value="camera+microphone">camera+microphone = stream from browser</label><br>
+    <label><input type="radio" name="webrtc" value="display+speaker">display+speaker = broadcast software</label><br>
 
-    <br>
-    <label><input type="radio" name="video" value="video" checked>remote video</label>
-    <label><input type="radio" name="video" value="camera">local camera</label>
-    <label><input type="radio" name="video" value="display">local display</label>
-    <label><input type="radio" name="video" value="">none</label>
-
-    <br>
-    <label><input type="radio" name="audio1" value="audio" checked>remote audio</label>
-    <label><input type="radio" name="audio1" value="">none</label>
-
-    <br>
-    <label><input type="radio" name="audio2" value="microphone">local microphone</label>
-    <label><input type="radio" name="audio2" value="speaker">local speaker</label>
-    <label><input type="radio" name="audio2" value="" checked>none</label>
-
-    <br>
     <br>
     <li><a id="local" href="webrtc.html?src=">webrtc.html</a> local WebRTC viewer</li>
 
@@ -132,8 +117,7 @@
 </div>
 <script>
     function webrtcLinksUpdate() {
-        let media = document.querySelectorAll('#webrtc input')
-        media = Array.from(media).filter(i => i.value && i.checked).map(i => i.value).join('+')
+        const media = document.querySelector('input[name="webrtc"]:checked').value
 
         const direction = media.indexOf('video') >= 0 || media === 'audio' ? 'src' : 'dst'
         document.getElementById('local').href = `webrtc.html?${direction}=${src}&media=${media}`
