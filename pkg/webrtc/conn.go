@@ -98,6 +98,10 @@ func NewConn(pc *webrtc.PeerConnection) *Conn {
 				return
 			}
 
+			if len(packet.Payload) == 0 {
+				continue
+			}
+
 			track.WriteRTP(packet)
 		}
 	})
