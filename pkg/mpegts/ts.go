@@ -3,23 +3,25 @@ package mpegts
 import (
 	"bytes"
 	"encoding/hex"
+	"encoding/json"
 	"github.com/AlexxIT/go2rtc/pkg/aac"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/deepch/vdk/av"
 	"github.com/deepch/vdk/codec/aacparser"
 	"github.com/deepch/vdk/codec/h264parser"
 	"github.com/deepch/vdk/format/ts"
 	"github.com/pion/rtp"
-	"sync/atomic"
 	"time"
 )
 
 type Consumer struct {
-	streamer.Element
+	core.Listener
 
 	UserAgent  string
 	RemoteAddr string
+
+	senders []*core.Sender
 
 	buf      *bytes.Buffer
 	muxer    *ts.Muxer
@@ -28,35 +30,36 @@ type Consumer struct {
 	start    bool
 	init     []byte
 
-	send uint32
+	send int
 }
 
-func (c *Consumer) GetMedias() []*streamer.Media {
-	return []*streamer.Media{
+func (c *Consumer) GetMedias() []*core.Media {
+	return []*core.Media{
 		{
-			Kind:      streamer.KindVideo,
-			Direction: streamer.DirectionRecvonly,
-			Codecs: []*streamer.Codec{
-				{Name: streamer.CodecH264},
+			Kind:      core.KindVideo,
+			Direction: core.DirectionSendonly,
+			Codecs: []*core.Codec{
+				{Name: core.CodecH264},
 			},
 		},
 		//{
-		//	Kind:      streamer.KindAudio,
-		//	Direction: streamer.DirectionRecvonly,
-		//	Codecs: []*streamer.Codec{
-		//		{Name: streamer.CodecAAC},
+		//	Kind:      core.KindAudio,
+		//	Direction: core.DirectionSendonly,
+		//	Codecs: []*core.Codec{
+		//		{Name: core.CodecAAC},
 		//	},
 		//},
 	}
 }
 
-func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *streamer.Track {
-	codec := track.Codec
+func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver) error {
 	trackID := int8(len(c.streams))
 
-	switch codec.Name {
-	case streamer.CodecH264:
-		sps, pps := h264.GetParameterSet(codec.FmtpLine)
+	handler := core.NewSender(media, track.Codec)
+
+	switch track.Codec.Name {
+	case core.CodecH264:
+		sps, pps := h264.GetParameterSet(track.Codec.FmtpLine)
 		stream, err := h264parser.NewCodecDataFromSPSAndPPS(sps, pps)
 		if err != nil {
 			return nil
@@ -66,21 +69,21 @@ func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 			c.mimeType += ","
 		}
 
-		c.mimeType += "avc1." + h264.GetProfileLevelID(codec.FmtpLine)
+		c.mimeType += "avc1." + h264.GetProfileLevelID(track.Codec.FmtpLine)
 
 		c.streams = append(c.streams, stream)
 
 		pkt := av.Packet{Idx: trackID, CompositionTime: time.Millisecond}
 
-		ts2time := time.Second / time.Duration(codec.ClockRate)
+		ts2time := time.Second / time.Duration(track.Codec.ClockRate)
 
-		push := func(packet *rtp.Packet) error {
+		handler.Handler = func(packet *rtp.Packet) {
 			if packet.Version != h264.RTPPacketVersionAVC {
-				return nil
+				return
 			}
 
 			if !c.start {
-				return nil
+				return
 			}
 
 			pkt.Data = packet.Payload
@@ -91,28 +94,26 @@ func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 			pkt.Time = newTime
 
 			if err = c.muxer.WritePacket(pkt); err != nil {
-				return err
+				return
 			}
 
 			// clone bytes from buffer, so next packet won't overwrite it
 			buf := append([]byte{}, c.buf.Bytes()...)
-			atomic.AddUint32(&c.send, uint32(len(buf)))
 			c.Fire(buf)
 
+			c.send += len(buf)
+
 			c.buf.Reset()
-
-			return nil
 		}
 
-		if codec.IsRTP() {
-			wrapper := h264.RTPDepay(track)
-			push = wrapper(push)
+		if track.Codec.IsRTP() {
+			handler.Handler = h264.RTPDepay(track.Codec, handler.Handler)
+		} else {
+			handler.Handler = h264.RepairAVC(track.Codec, handler.Handler)
 		}
 
-		return track.Bind(push)
-
-	case streamer.CodecAAC:
-		s := streamer.Between(codec.FmtpLine, "config=", ";")
+	case core.CodecAAC:
+		s := core.Between(track.Codec.FmtpLine, "config=", ";")
 
 		b, err := hex.DecodeString(s)
 		if err != nil {
@@ -133,11 +134,11 @@ func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 
 		pkt := av.Packet{Idx: trackID, CompositionTime: time.Millisecond}
 
-		ts2time := time.Second / time.Duration(codec.ClockRate)
+		ts2time := time.Second / time.Duration(track.Codec.ClockRate)
 
-		push := func(packet *rtp.Packet) error {
+		handler.Handler = func(packet *rtp.Packet) {
 			if !c.start {
-				return nil
+				return
 			}
 
 			pkt.Data = packet.Payload
@@ -147,29 +148,31 @@ func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 			}
 			pkt.Time = newTime
 
-			if err := c.muxer.WritePacket(pkt); err != nil {
-				return err
+			if err = c.muxer.WritePacket(pkt); err != nil {
+				return
 			}
 
 			// clone bytes from buffer, so next packet won't overwrite it
 			buf := append([]byte{}, c.buf.Bytes()...)
-			atomic.AddUint32(&c.send, uint32(len(buf)))
 			c.Fire(buf)
 
+			c.send += len(buf)
+
 			c.buf.Reset()
-
-			return nil
 		}
 
-		if codec.IsRTP() {
-			wrapper := aac.RTPDepay(track)
-			push = wrapper(push)
+		if track.Codec.IsRTP() {
+			handler.Handler = aac.RTPDepay(handler.Handler)
 		}
 
-		return track.Bind(push)
+	default:
+		panic("unsupported codec")
 	}
 
-	panic("unsupported codec")
+	handler.HandleRTP(track)
+	c.senders = append(c.senders, handler)
+
+	return nil
 }
 
 func (c *Consumer) MimeCodecs() string {
@@ -191,4 +194,23 @@ func (c *Consumer) Init() ([]byte, error) {
 
 func (c *Consumer) Start() {
 	c.start = true
+}
+
+func (c *Consumer) Stop() error {
+	for _, sender := range c.senders {
+		sender.Close()
+	}
+	return nil
+}
+
+func (c *Consumer) MarshalJSON() ([]byte, error) {
+	info := &core.Info{
+		Type:       "TS passive consumer",
+		RemoteAddr: c.RemoteAddr,
+		UserAgent:  c.UserAgent,
+		Medias:     c.GetMedias(),
+		Senders:    c.senders,
+		Send:       c.send,
+	}
+	return json.Marshal(info)
 }

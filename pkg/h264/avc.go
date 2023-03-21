@@ -3,7 +3,7 @@ package h264
 import (
 	"bytes"
 	"encoding/binary"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/pion/rtp"
 )
 
@@ -164,17 +164,15 @@ func EncodeAVC(nals ...[]byte) (avc []byte) {
 	return
 }
 
-func RepairAVC(track *streamer.Track) streamer.WrapperFunc {
-	sps, pps := GetParameterSet(track.Codec.FmtpLine)
+func RepairAVC(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
+	sps, pps := GetParameterSet(codec.FmtpLine)
 	ps := EncodeAVC(sps, pps)
 
-	return func(push streamer.WriterFunc) streamer.WriterFunc {
-		return func(packet *rtp.Packet) (err error) {
-			if NALUType(packet.Payload) == NALUTypeIFrame {
-				packet.Payload = Join(ps, packet.Payload)
-			}
-			return push(packet)
+	return func(packet *rtp.Packet) {
+		if NALUType(packet.Payload) == NALUTypeIFrame {
+			packet.Payload = Join(ps, packet.Payload)
 		}
+		handler(packet)
 	}
 }
 

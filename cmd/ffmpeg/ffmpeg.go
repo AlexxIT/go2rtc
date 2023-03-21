@@ -8,7 +8,7 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/ffmpeg/device"
 	"github.com/AlexxIT/go2rtc/cmd/rtsp"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"net/url"
 	"strconv"
 	"strings"
@@ -27,7 +27,7 @@ func Init() {
 		defaults["global"] += " -v error"
 	}
 
-	streams.HandleFunc("ffmpeg", func(url string) (streamer.Producer, error) {
+	streams.HandleFunc("ffmpeg", func(url string) (core.Producer, error) {
 		args := parseArgs(url[7:]) // remove `ffmpeg:`
 		if args == nil {
 			return nil, errors.New("can't generate ffmpeg command")
@@ -70,6 +70,10 @@ var defaults = map[string]string{
 	"aac":        "-c:a aac", // keep sample rate and channels
 	"aac/16000":  "-c:a aac -ar:a 16000 -ac:a 1",
 	"mp3":        "-c:a libmp3lame -q:a 8",
+	"pcm":        "-c:a pcm_s16be",
+	"pcm/8000":   "-c:a pcm_s16be -ar:a 8000 -ac:a 1",
+	"pcm/16000":  "-c:a pcm_s16be -ar:a 16000 -ac:a 1",
+	"pcm/48000":  "-c:a pcm_s16be -ar:a 48000 -ac:a 1",
 
 	// hardware Intel and AMD on Linux
 	// better not to set `-async_depth:v 1` like for QSV, because framedrops

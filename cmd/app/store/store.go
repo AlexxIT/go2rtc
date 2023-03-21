@@ -8,7 +8,7 @@ import (
 
 const name = "go2rtc.json"
 
-var store map[string]interface{}
+var store map[string]any
 
 func load() {
 	data, _ := os.ReadFile(name)
@@ -20,7 +20,7 @@ func load() {
 	}
 
 	if store == nil {
-		store = make(map[string]interface{})
+		store = make(map[string]any)
 	}
 }
 
@@ -33,7 +33,7 @@ func save() error {
 	return os.WriteFile(name, data, 0644)
 }
 
-func GetRaw(key string) interface{} {
+func GetRaw(key string) any {
 	if store == nil {
 		load()
 	}
@@ -41,16 +41,16 @@ func GetRaw(key string) interface{} {
 	return store[key]
 }
 
-func GetDict(key string) map[string]interface{} {
+func GetDict(key string) map[string]any {
 	raw := GetRaw(key)
 	if raw != nil {
-		return raw.(map[string]interface{})
+		return raw.(map[string]any)
 	}
 
-	return make(map[string]interface{})
+	return make(map[string]any)
 }
 
-func Set(key string, v interface{}) error {
+func Set(key string, v any) error {
 	if store == nil {
 		load()
 	}

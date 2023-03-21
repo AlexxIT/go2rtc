@@ -1,13 +1,15 @@
 package iso
 
-import "github.com/AlexxIT/go2rtc/pkg/streamer"
+import (
+	"github.com/AlexxIT/go2rtc/pkg/core"
+)
 
 func (m *Movie) WriteVideo(codec string, width, height uint16, conf []byte) {
 	// https://developer.apple.com/library/archive/documentation/QuickTime/QTFF/QTFFChap3/qtff3.html
 	switch codec {
-	case streamer.CodecH264:
+	case core.CodecH264:
 		m.StartAtom("avc1")
-	case streamer.CodecH265:
+	case core.CodecH265:
 		m.StartAtom("hev1")
 	default:
 		panic("unsupported iso video: " + codec)
@@ -30,9 +32,9 @@ func (m *Movie) WriteVideo(codec string, width, height uint16, conf []byte) {
 	m.WriteUint16(0xFFFF) // color table id (-1)
 
 	switch codec {
-	case streamer.CodecH264:
+	case core.CodecH264:
 		m.StartAtom("avcC")
-	case streamer.CodecH265:
+	case core.CodecH265:
 		m.StartAtom("hvcC")
 	}
 	m.Write(conf)
@@ -43,13 +45,13 @@ func (m *Movie) WriteVideo(codec string, width, height uint16, conf []byte) {
 
 func (m *Movie) WriteAudio(codec string, channels uint16, sampleRate uint32, conf []byte) {
 	switch codec {
-	case streamer.CodecAAC, streamer.CodecMP3:
+	case core.CodecAAC, core.CodecMP3:
 		m.StartAtom("mp4a")
-	case streamer.CodecOpus:
+	case core.CodecOpus:
 		m.StartAtom("Opus")
-	case streamer.CodecPCMU:
+	case core.CodecPCMU:
 		m.StartAtom("ulaw")
-	case streamer.CodecPCMA:
+	case core.CodecPCMA:
 		m.StartAtom("alaw")
 	default:
 		panic("unsupported iso audio: " + codec)
@@ -66,16 +68,16 @@ func (m *Movie) WriteAudio(codec string, channels uint16, sampleRate uint32, con
 	m.WriteFloat32(float64(sampleRate)) // sample_rate
 
 	switch codec {
-	case streamer.CodecAAC:
+	case core.CodecAAC:
 		m.WriteEsdsAAC(conf)
-	case streamer.CodecMP3:
+	case core.CodecMP3:
 		m.WriteEsdsMP3()
-	case streamer.CodecOpus:
+	case core.CodecOpus:
 		// don't know what means this magic
 		m.StartAtom("dOps")
 		m.WriteBytes(0, 0x02, 0x01, 0x38, 0, 0, 0xBB, 0x80, 0, 0, 0)
 		m.EndAtom()
-	case streamer.CodecPCMU, streamer.CodecPCMA:
+	case core.CodecPCMU, core.CodecPCMA:
 		// don't know what means this magic
 		m.StartAtom("chan")
 		m.WriteBytes(0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0)

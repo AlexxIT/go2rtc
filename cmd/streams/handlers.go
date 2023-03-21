@@ -2,12 +2,12 @@ package streams
 
 import (
 	"fmt"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"strings"
 	"sync"
 )
 
-type Handler func(url string) (streamer.Producer, error)
+type Handler func(url string) (core.Producer, error)
 
 var handlers = map[string]Handler{}
 var handlersMu sync.Mutex
@@ -32,7 +32,7 @@ func HasProducer(url string) bool {
 	return getHandler(url) != nil
 }
 
-func GetProducer(url string) (streamer.Producer, error) {
+func GetProducer(url string) (core.Producer, error) {
 	handler := getHandler(url)
 	if handler == nil {
 		return nil, fmt.Errorf("unsupported scheme: %s", url)

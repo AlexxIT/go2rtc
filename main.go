@@ -12,17 +12,20 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/hls"
 	"github.com/AlexxIT/go2rtc/cmd/homekit"
 	"github.com/AlexxIT/go2rtc/cmd/http"
+	"github.com/AlexxIT/go2rtc/cmd/isapi"
 	"github.com/AlexxIT/go2rtc/cmd/ivideon"
 	"github.com/AlexxIT/go2rtc/cmd/mjpeg"
 	"github.com/AlexxIT/go2rtc/cmd/mp4"
 	"github.com/AlexxIT/go2rtc/cmd/mpegts"
 	"github.com/AlexxIT/go2rtc/cmd/ngrok"
+	"github.com/AlexxIT/go2rtc/cmd/roborock"
 	"github.com/AlexxIT/go2rtc/cmd/rtmp"
 	"github.com/AlexxIT/go2rtc/cmd/rtsp"
 	"github.com/AlexxIT/go2rtc/cmd/srtp"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
 	"github.com/AlexxIT/go2rtc/cmd/tapo"
 	"github.com/AlexxIT/go2rtc/cmd/webrtc"
+	"github.com/AlexxIT/go2rtc/cmd/webtorrent"
 	"os"
 	"os/signal"
 	"syscall"
@@ -43,7 +46,9 @@ func main() {
 	http.Init()
 	dvrip.Init()
 	tapo.Init()
+	isapi.Init()
 	mpegts.Init()
+	roborock.Init()
 
 	srtp.Init()
 	homekit.Init()
@@ -53,6 +58,7 @@ func main() {
 	hls.Init()
 	mjpeg.Init()
 
+	webtorrent.Init()
 	ngrok.Init()
 	debug.Init()
 

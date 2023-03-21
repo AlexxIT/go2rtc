@@ -2,7 +2,7 @@ package rtsp
 
 import (
 	"bytes"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/pion/rtcp"
 	"github.com/pion/sdp/v3"
 	"net/url"
@@ -22,16 +22,11 @@ o=- 0 0 IN IP4 0.0.0.0
 s=-
 t=0 0`
 
-func UnmarshalSDP(rawSDP []byte) ([]*streamer.Media, error) {
+func UnmarshalSDP(rawSDP []byte) ([]*core.Media, error) {
 	// fix bug from Reolink Doorbell
 	if i := bytes.Index(rawSDP, []byte("a=sendonlym=")); i > 0 {
 		rawSDP = append(rawSDP[:i+11], rawSDP[i+10:]...)
 		rawSDP[i+10] = '\n'
-	}
-
-	// fix bug from Ezviz C6N
-	if i := bytes.Index(rawSDP, []byte("H265/90000\r\na=fmtp:96 profile-level-id=420029;")); i > 0 {
-		rawSDP[i+3] = '4'
 	}
 
 	sd := &sdp.SessionDescription{}
@@ -52,25 +47,24 @@ func UnmarshalSDP(rawSDP []byte) ([]*streamer.Media, error) {
 		}
 	}
 
-	medias := streamer.UnmarshalMedias(sd.MediaDescriptions)
+	var medias []*core.Media
 
-	for _, media := range medias {
+	for _, md := range sd.MediaDescriptions {
+		media := core.UnmarshalMedia(md)
+
 		// Check buggy SDP with fmtp for H264 on another track
 		// https://github.com/AlexxIT/WebRTC/issues/419
 		for _, codec := range media.Codecs {
-			if codec.Name == streamer.CodecH264 && codec.FmtpLine == "" {
+			if codec.Name == core.CodecH264 && codec.FmtpLine == "" {
 				codec.FmtpLine = findFmtpLine(codec.PayloadType, sd.MediaDescriptions)
 			}
 		}
 
-		// fix bug in ONVIF spec
-		// https://www.onvif.org/specs/stream/ONVIF-Streaming-Spec-v241.pdf
-		switch media.Direction {
-		case streamer.DirectionRecvonly, "":
-			media.Direction = streamer.DirectionSendonly
-		case streamer.DirectionSendonly:
-			media.Direction = streamer.DirectionRecvonly
+		if media.Direction == "" {
+			media.Direction = core.DirectionRecvonly
 		}
+
+		medias = append(medias, media)
 	}
 
 	return medias, nil
@@ -79,7 +73,7 @@ func UnmarshalSDP(rawSDP []byte) ([]*streamer.Media, error) {
 func findFmtpLine(payloadType uint8, descriptions []*sdp.MediaDescription) string {
 	s := strconv.Itoa(int(payloadType))
 	for _, md := range descriptions {
-		codec := streamer.UnmarshalCodec(md, s)
+		codec := core.UnmarshalCodec(md, s)
 		if codec.FmtpLine != "" {
 			return codec.FmtpLine
 		}

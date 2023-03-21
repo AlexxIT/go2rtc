@@ -151,7 +151,7 @@ Available source types:
 
 - [rtsp](#source-rtsp) - `RTSP` and `RTSPS` cameras with [two way audio](#two-way-audio) support
 - [rtmp](#source-rtmp) - `RTMP` streams
-- [http](#source-http) - `HTTP-FLV`, `MPEG TS`, `JPEG` (snapshots), `MJPEG` streams 
+- [http](#source-http) - `HTTP-FLV`, `MPEG-TS`, `JPEG` (snapshots), `MJPEG` streams 
 - [ffmpeg](#source-ffmpeg) - FFmpeg integration (`HLS`, `files` and many others)
 - [ffmpeg:device](#source-ffmpeg-device) - local USB Camera or Webcam
 - [exec](#source-exec) - advanced FFmpeg and GStreamer integration
@@ -215,7 +215,7 @@ Support Content-Type:
 - **HTTP-FLV** (`video/x-flv`) - same as RTMP, but over HTTP
 - **HTTP-JPEG** (`image/jpeg`) - camera snapshot link, can be converted by go2rtc to MJPEG stream
 - **HTTP-MJPEG** (`multipart/x`) - simple MJPEG stream over HTTP
-- **MPEG TS** (`video/mpeg`) - legacy [streaming format](https://en.wikipedia.org/wiki/MPEG_transport_stream)
+- **MPEG-TS** (`video/mpeg`) - legacy [streaming format](https://en.wikipedia.org/wiki/MPEG_transport_stream)
 
 ```yaml
 streams:
@@ -438,9 +438,9 @@ By default, go2rtc establishes a connection to the source when any client reques
   ```yaml
   ffmpeg -re -i BigBuckBunny.mp4 -c copy -f flv http://localhost:1984/api/stream.flv?dst=camera1
   ```
-- MPEG TS with H264 codec
+- MPEG-TS with H264 codec
   ```yaml
-  ffmpeg -re -i BigBuckBunny.mp4 -c copy -f flv http://localhost:1984/api/stream.ts?dst=camera1
+  ffmpeg -re -i BigBuckBunny.mp4 -c copy -f mpegts http://localhost:1984/api/stream.ts?dst=camera1
   ```
 
 #### Stream to camera
@@ -541,7 +541,12 @@ Read more about [codecs filters](#codecs-filters).
 
 ### Module: WebRTC
 
-WebRTC usually works without problems in the local network. But external access may require additional settings. It depends on what type of Internet do you have.
+In most cases [WebRTC](https://en.wikipedia.org/wiki/WebRTC) uses direct peer-to-peer connection from your browser to go2rtc and sends media data via UDP.
+It **can't pass** media data through your Nginx or Cloudflare or [Nabu Casa](https://www.nabucasa.com/) HTTP TCP connection!
+It can automatically detects your external IP via public [STUN](https://en.wikipedia.org/wiki/STUN) server.
+It can establish a external direct connection via [UDP hole punching](https://en.wikipedia.org/wiki/UDP_hole_punching) technology even if you not open your server to the World.
+
+But about 10-20% of users may need to configure additional settings for external access if **mobile phone** or **go2rtc server** behing [Symmetric NAT](https://tomchen.github.io/symmetric-nat-test/).
 
 - by default, WebRTC uses both TCP and UDP on port 8555 for connections
 - you can use this port for external access
@@ -696,7 +701,7 @@ Provides several features:
 
 1. MSE stream (fMP4 over WebSocket)
 2. Camera snapshots in MP4 format (single frame), can be sent to [Telegram](https://github.com/AlexxIT/go2rtc/wiki/Snapshot-to-Telegram)
-3. MP4 "file stream" - bad format for streaming because of high start delay. This format doesn't work in all Safari browsers, but go2rtc will automatically redirect it to HLS/fMP4 it this case.
+3. HTTP progressive streaming (MP4 file stream) - bad format for streaming because of high start delay. This format doesn't work in all Safari browsers, but go2rtc will automatically redirect it to HLS/fMP4 it this case.
 
 API examples:
 
@@ -788,7 +793,7 @@ PS. Additionally WebRTC will try to use the 8555 UDP port for transmit encrypted
 
 go2rtc can automatically detect which codecs your device supports for [WebRTC](#module-webrtc) and [MSE](#module-mp4) technologies.
 
-But it cannot be done for [RTSP](#module-rtsp), [stream.mp4](#module-mp4), [HLS](#module-hls) technologies. You can manually add a codec filter when you create a link to a stream. The filters work the same for all three technologies. Filters do not create a new codec. They only select the suitable codec from existing sources. You can add new codecs to the stream using the [FFmpeg transcoding](#source-ffmpeg).
+But it cannot be done for [RTSP](#module-rtsp), [HTTP progressive streaming](#module-mp4), [HLS](#module-hls) technologies. You can manually add a codec filter when you create a link to a stream. The filters work the same for all three technologies. Filters do not create a new codec. They only select the suitable codec from existing sources. You can add new codecs to the stream using the [FFmpeg transcoding](#source-ffmpeg).
 
 Without filters:
 
@@ -809,7 +814,7 @@ Some examples:
 
 `AVC/H.264` video can be played almost anywhere. But `HEVC/H.265` has a lot of limitations in supporting with different devices and browsers. It's all about patents and money, you can't do anything about it.
 
-| Device              | WebRTC                        | MSE                    | stream.mp4                              |
+| Device              | WebRTC                        | MSE                    | HTTP Progressive Streaming              |
 |---------------------|-------------------------------|------------------------|-----------------------------------------|
 | *latency*           | best                          | medium                 | bad                                     |
 | Desktop Chrome 107+ | H264, OPUS, PCMU, PCMA        | H264, H265*, AAC, OPUS | H264, H265*, AAC, OPUS, PCMU, PCMA, MP3 |
@@ -834,8 +839,8 @@ Some examples:
 
 **Apple devices**
 
-- all Apple devices don't support MP4 stream (they only support progressive loading of static files)
-- iPhones don't support MSE technology because it competes with the HLS technology, invented by Apple
+- all Apple devices don't support HTTP progressive streaming
+- iPhones don't support MSE technology because it competes with the HTTP Live Streaming (HLS) technology, invented by Apple
 - HLS is the worst technology for **live** streaming, it still exists only because of iPhones
 
 ## Codecs negotiation
@@ -872,6 +877,8 @@ streams:
 - [Frigate 12+](https://frigate.video/) - open source NVR built around real-time AI object detection
 - [ring-mqtt](https://github.com/tsightler/ring-mqtt) - Ring devices to MQTT Bridge
 - [EufyP2PStream](https://github.com/oischinger/eufyp2pstream) - A small project that provides a Video/Audio Stream from Eufy cameras that don't directly support RTSP
+- [Proxmox Helper Scripts](https://tteck.github.io/Proxmox/)
+- [Unraid](https://unraid.net/community/apps?q=go2rtc)
 
 ## Cameras experience
 

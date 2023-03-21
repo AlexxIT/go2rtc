@@ -4,10 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/mjpeg"
 	"github.com/AlexxIT/go2rtc/pkg/mpegts"
 	"github.com/AlexxIT/go2rtc/pkg/rtmp"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"net/http"
 	"strings"
@@ -18,7 +18,7 @@ func Init() {
 	streams.HandleFunc("https", handle)
 }
 
-func handle(url string) (streamer.Producer, error) {
+func handle(url string) (core.Producer, error) {
 	// first we get the Content-Type to define supported producer
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {

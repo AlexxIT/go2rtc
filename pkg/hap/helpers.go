@@ -38,7 +38,7 @@ type PairVerifyPayload struct {
 	Signature     []byte `tlv8:"10,optional"`
 }
 
-//func (c *Character) Unmarshal(value interface{}) error {
+//func (c *Character) Unmarshal(value any) error {
 //	switch c.Format {
 //	case characteristic.FormatTLV8:
 //		data, err := base64.StdEncoding.DecodeString(c.Value.(string))
@@ -50,7 +50,7 @@ type PairVerifyPayload struct {
 //	return nil
 //}
 
-//func (c *Character) Marshal(value interface{}) error {
+//func (c *Character) Marshal(value any) error {
 //	switch c.Format {
 //	case characteristic.FormatTLV8:
 //		data, err := tlv8.Marshal(value)

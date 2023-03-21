@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>go2rtc - WebTorrent</title>
+    <style>
+        body {
+            background-color: black;
+            margin: 0;
+            padding: 0;
+        }
+
+        html, body, video {
+            height: 100%;
+            width: 100%;
+        }
+
+        div {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            display: flex;
+            flex-direction: column;
+            transform: translateX(-50%) translateY(-50%);
+        }
+    </style>
+</head>
+<body>
+<video id="video" autoplay controls playsinline muted></video>
+<div id="login">
+    <input id="share" type="text" placeholder="share">
+    <input id="pwd" type="text" placeholder="password">
+    <button id="connect">connect</button>
+</div>
+<script>
+    async function PeerConnection(media) {
+        const pc = new RTCPeerConnection({
+            iceServers: [{urls: 'stun:stun.l.google.com:19302'}]
+        })
+
+        const localTracks = []
+
+        if (/camera|microphone/.test(media)) {
+            const tracks = await getMediaTracks('user', {
+                video: media.indexOf('camera') >= 0,
+                audio: media.indexOf('microphone') >= 0,
+            })
+            tracks.forEach(track => {
+                pc.addTransceiver(track, {direction: 'sendonly'})
+                if (track.kind === 'video') localTracks.push(track)
+            })
+        }
+
+        if (media.indexOf('display') >= 0) {
+            const tracks = await getMediaTracks('display', {
+                video: true,
+                audio: media.indexOf('speaker') >= 0,
+            })
+            tracks.forEach(track => {
+                pc.addTransceiver(track, {direction: 'sendonly'})
+                if (track.kind === 'video') localTracks.push(track)
+            })
+        }
+
+        if (/video|audio/.test(media)) {
+            const tracks = ['video', 'audio']
+                .filter(kind => media.indexOf(kind) >= 0)
+                .map(kind => pc.addTransceiver(kind, {direction: 'recvonly'}).receiver.track)
+            localTracks.push(...tracks)
+        }
+
+        document.getElementById('video').srcObject = new MediaStream(localTracks)
+
+        return pc
+    }
+
+    async function getMediaTracks(media, constraints) {
+        try {
+            const stream = media === 'user'
+                ? await navigator.mediaDevices.getUserMedia(constraints)
+                : await navigator.mediaDevices.getDisplayMedia(constraints)
+            return stream.getTracks()
+        } catch (e) {
+            console.warn(e)
+            return []
+        }
+    }
+
+    function getOffer(pc, timeout) {
+        return new Promise((resolve, reject) => {
+            pc.addEventListener('icegatheringstatechange', () => {
+                if (pc.iceGatheringState === 'complete') resolve(pc.localDescription.sdp)
+            })
+
+            pc.createOffer().then(offer => pc.setLocalDescription(offer))
+
+            setTimeout(() => resolve(pc.localDescription.sdp), timeout || 5000)
+        })
+    }
+</script>
+<script>
+    function decode(buffer) {
+        return String.fromCharCode(...new Uint8Array(buffer))
+    }
+
+    function encode(string) {
+        return Uint8Array.from(string, c => c.charCodeAt(0))
+    }
+
+    async function cipher(share, pwd) {
+        const hash = await crypto.subtle.digest('SHA-256', encode(share))
+        const nonce = (Date.now() * 1000000).toString(36)
+
+        const ivData = await crypto.subtle.digest('SHA-256', encode(share + ':' + nonce))
+        const keyData = await crypto.subtle.digest('SHA-256', encode(nonce + ':' + pwd))
+        const key = await crypto.subtle.importKey(
+            'raw', keyData, {name: 'AES-GCM'}, false, ['encrypt', 'decrypt'],
+        )
+
+        return {
+            hash: btoa(decode(hash)),
+            nonce: nonce,
+            encrypt: async function (plaintext) {
+                const cryptotext = await crypto.subtle.encrypt(
+                    {name: 'AES-GCM', iv: ivData.slice(0, 12), additionalData: encode(nonce)},
+                    key, encode(plaintext),
+                )
+                return btoa(decode(cryptotext))
+            },
+            decrypt: async function (cryptotext) {
+                const plaintext = await crypto.subtle.decrypt(
+                    {name: 'AES-GCM', iv: ivData.slice(0, 12), additionalData: encode(nonce)},
+                    key, encode(atob(cryptotext)),
+                )
+                return decode(plaintext)
+            }
+        }
+    }
+</script>
+<script>
+    async function connect(share, pwd, media, tracker) {
+        const crypto = await cipher(share, pwd)
+        const pc = await PeerConnection(media || 'video+audio')
+        const offer = await crypto.encrypt(await getOffer(pc))
+
+        const ws = new WebSocket(tracker || 'wss://tracker.openwebtorrent.com/')
+        ws.addEventListener('open', () => {
+            ws.send(JSON.stringify({
+                action: 'announce',
+                info_hash: crypto.hash,
+                peer_id: Math.random().toString(36).substring(2),
+                offers: [{
+                    offer_id: crypto.nonce,
+                    offer: {type: 'offer', sdp: offer},
+                }],
+                numwant: 1,
+            }))
+        })
+
+        ws.addEventListener('message', async (ev) => {
+            const msg = JSON.parse(ev.data)
+            if (!msg.answer) return
+
+            const answer = await crypto.decrypt(msg.answer.sdp)
+            await pc.setRemoteDescription({type: 'answer', sdp: answer})
+
+            ws.close()
+        })
+    }
+
+    document.getElementById('connect').addEventListener('click', () => {
+        const share = document.getElementById('share').value
+        const pwd = document.getElementById('pwd').value
+        connect(share, pwd)
+        document.getElementById('login').style.display = 'none'
+    })
+
+    if (location.hash) {
+        const params = new URLSearchParams(location.hash.substring(1))
+        const share = params.get('share')
+        const pwd = params.get('pwd')
+        const media = params.get('media')
+        const tracker = params.get('tr')
+        connect(share, pwd, media, tracker)
+        document.getElementById('login').style.display = 'none'
+    }
+</script>
+</body>
+</html>

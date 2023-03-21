@@ -2,7 +2,7 @@ package device
 
 import (
 	"bytes"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"os/exec"
 	"strings"
 )
@@ -11,15 +11,15 @@ import (
 const deviceInputPrefix = "-f avfoundation"
 
 func deviceInputSuffix(videoIdx, audioIdx int) string {
-	video := findMedia(streamer.KindVideo, videoIdx)
-	audio := findMedia(streamer.KindAudio, audioIdx)
+	video := findMedia(core.KindVideo, videoIdx)
+	audio := findMedia(core.KindAudio, audioIdx)
 	switch {
 	case video != nil && audio != nil:
-		return `"` + video.MID + `:` + audio.MID + `"`
+		return `"` + video.ID + `:` + audio.ID + `"`
 	case video != nil:
-		return `"` + video.MID + `"`
+		return `"` + video.ID + `"`
 	case audio != nil:
-		return `"` + audio.MID + `"`
+		return `"` + audio.ID + `"`
 	}
 	return ""
 }
@@ -40,10 +40,10 @@ process:
 	for _, line := range lines {
 		switch {
 		case strings.HasSuffix(line, "video devices:"):
-			kind = streamer.KindVideo
+			kind = core.KindVideo
 			continue
 		case strings.HasSuffix(line, "audio devices:"):
-			kind = streamer.KindAudio
+			kind = core.KindAudio
 			continue
 		case strings.HasPrefix(line, "dummy"):
 			break process
@@ -56,6 +56,6 @@ process:
 	}
 }
 
-func loadMedia(kind, name string) *streamer.Media {
-	return &streamer.Media{Kind: kind, MID: name}
+func loadMedia(kind, name string) *core.Media {
+	return &core.Media{Kind: kind, ID: name}
 }

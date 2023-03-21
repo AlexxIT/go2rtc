@@ -2,10 +2,10 @@ package mp4
 
 import (
 	"encoding/hex"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
 	"github.com/AlexxIT/go2rtc/pkg/iso"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/deepch/vdk/codec/h264parser"
 	"github.com/deepch/vdk/codec/h265parser"
 	"github.com/pion/rtp"
@@ -24,7 +24,7 @@ const (
 	MimeOpus = "opus"
 )
 
-func (m *Muxer) MimeCodecs(codecs []*streamer.Codec) string {
+func (m *Muxer) MimeCodecs(codecs []*core.Codec) string {
 	var s string
 
 	for i, codec := range codecs {
@@ -33,15 +33,15 @@ func (m *Muxer) MimeCodecs(codecs []*streamer.Codec) string {
 		}
 
 		switch codec.Name {
-		case streamer.CodecH264:
+		case core.CodecH264:
 			s += "avc1." + h264.GetProfileLevelID(codec.FmtpLine)
-		case streamer.CodecH265:
+		case core.CodecH265:
 			// H.265 profile=main level=5.1
 			// hvc1 - supported in Safari, hev1 - doesn't, both supported in Chrome
 			s += MimeH265
-		case streamer.CodecAAC:
+		case core.CodecAAC:
 			s += MimeAAC
-		case streamer.CodecOpus:
+		case core.CodecOpus:
 			s += MimeOpus
 		}
 	}
@@ -49,7 +49,7 @@ func (m *Muxer) MimeCodecs(codecs []*streamer.Codec) string {
 	return s
 }
 
-func (m *Muxer) GetInit(codecs []*streamer.Codec) ([]byte, error) {
+func (m *Muxer) GetInit(codecs []*core.Codec) ([]byte, error) {
 	mv := iso.NewMovie(1024)
 	mv.WriteFileType()
 
@@ -58,7 +58,7 @@ func (m *Muxer) GetInit(codecs []*streamer.Codec) ([]byte, error) {
 
 	for i, codec := range codecs {
 		switch codec.Name {
-		case streamer.CodecH264:
+		case core.CodecH264:
 			sps, pps := h264.GetParameterSet(codec.FmtpLine)
 			if sps == nil {
 				// some dummy SPS and PPS not a problem
@@ -77,7 +77,7 @@ func (m *Muxer) GetInit(codecs []*streamer.Codec) ([]byte, error) {
 				codecData.AVCDecoderConfRecordBytes(),
 			)
 
-		case streamer.CodecH265:
+		case core.CodecH265:
 			vps, sps, pps := h265.GetParameterSet(codec.FmtpLine)
 			if sps == nil {
 				// some dummy SPS and PPS not a problem
@@ -97,8 +97,8 @@ func (m *Muxer) GetInit(codecs []*streamer.Codec) ([]byte, error) {
 				codecData.AVCDecoderConfRecordBytes(),
 			)
 
-		case streamer.CodecAAC:
-			s := streamer.Between(codec.FmtpLine, "config=", ";")
+		case core.CodecAAC:
+			s := core.Between(codec.FmtpLine, "config=", ";")
 			b, err := hex.DecodeString(s)
 			if err != nil {
 				return nil, err
@@ -108,7 +108,7 @@ func (m *Muxer) GetInit(codecs []*streamer.Codec) ([]byte, error) {
 				uint32(i+1), codec.Name, codec.ClockRate, codec.Channels, b,
 			)
 
-		case streamer.CodecOpus, streamer.CodecMP3, streamer.CodecPCMU, streamer.CodecPCMA:
+		case core.CodecOpus, core.CodecMP3, core.CodecPCMU, core.CodecPCMA:
 			mv.WriteAudioTrack(
 				uint32(i+1), codec.Name, codec.ClockRate, codec.Channels, nil,
 			)

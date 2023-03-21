@@ -27,7 +27,7 @@ func NewReader(b []byte) *AMF0 {
 	return &AMF0{buf: b}
 }
 
-func (a *AMF0) ReadMetaData() map[string]interface{} {
+func (a *AMF0) ReadMetaData() map[string]any {
 	if b, _ := a.ReadByte(); b != TypeString {
 		return nil
 	}
@@ -48,8 +48,8 @@ func (a *AMF0) ReadMetaData() map[string]interface{} {
 	return nil
 }
 
-func (a *AMF0) ReadMap() (map[interface{}]interface{}, error) {
-	dict := make(map[interface{}]interface{})
+func (a *AMF0) ReadMap() (map[any]any, error) {
+	dict := make(map[any]any)
 
 	for a.pos < len(a.buf) {
 		k, err := a.ReadItem()
@@ -66,7 +66,7 @@ func (a *AMF0) ReadMap() (map[interface{}]interface{}, error) {
 	return dict, nil
 }
 
-func (a *AMF0) ReadItem() (interface{}, error) {
+func (a *AMF0) ReadItem() (any, error) {
 	dataType, err := a.ReadByte()
 	if err != nil {
 		return nil, err
@@ -131,8 +131,8 @@ func (a *AMF0) ReadString() (string, error) {
 	return s, nil
 }
 
-func (a *AMF0) ReadObject() (map[string]interface{}, error) {
-	obj := make(map[string]interface{})
+func (a *AMF0) ReadObject() (map[string]any, error) {
+	obj := make(map[string]any)
 
 	for {
 		k, err := a.ReadString()
@@ -155,7 +155,7 @@ func (a *AMF0) ReadObject() (map[string]interface{}, error) {
 	return obj, nil
 }
 
-func (a *AMF0) ReadEcmaArray() (map[string]interface{}, error) {
+func (a *AMF0) ReadEcmaArray() (map[string]any, error) {
 	if a.pos+4 >= len(a.buf) {
 		return nil, Err
 	}
