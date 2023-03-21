@@ -1,12 +1,16 @@
 package hass
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/AlexxIT/go2rtc/cmd/api"
 	"github.com/AlexxIT/go2rtc/cmd/app"
+	"github.com/AlexxIT/go2rtc/cmd/roborock"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/rs/zerolog"
+	"net/http"
 	"os"
 	"path"
 )
@@ -26,19 +30,27 @@ func Init() {
 
 	// support load cameras from Hass config file
 	filename := path.Join(conf.Mod.Config, ".storage/core.config_entries")
-	data, err := os.ReadFile(filename)
+	b, err := os.ReadFile(filename)
 	if err != nil {
 		return
 	}
 
 	storage := new(entries)
-	if err = json.Unmarshal(data, storage); err != nil {
+	if err = json.Unmarshal(b, storage); err != nil {
 		return
 	}
 
 	urls := map[string]string{}
 
-	streams.HandleFunc("hass", func(url string) (streamer.Producer, error) {
+	api.HandleFunc("api/hass", func(w http.ResponseWriter, r *http.Request) {
+		var items []api.Stream
+		for name, url := range urls {
+			items = append(items, api.Stream{Name: name, URL: url})
+		}
+		api.ResponseStreams(w, items)
+	})
+
+	streams.HandleFunc("hass", func(url string) (core.Producer, error) {
 		if hurl := urls[url[5:]]; hurl != "" {
 			return streams.GetProducer(hurl)
 		}
@@ -48,21 +60,40 @@ func Init() {
 	for _, entrie := range storage.Data.Entries {
 		switch entrie.Domain {
 		case "generic":
-			if entrie.Options.StreamSource == "" {
+			var options struct {
+				StreamSource string `json:"stream_source"`
+			}
+			if err = json.Unmarshal(entrie.Options, &options); err != nil {
 				continue
 			}
-			urls[entrie.Title] = entrie.Options.StreamSource
+			urls[entrie.Title] = options.StreamSource
 
 		case "homekit_controller":
-			if entrie.Data.ClientID == "" {
+			if !bytes.Contains(entrie.Data, []byte("iOSPairingId")) {
+				continue
+			}
+
+			var data struct {
+				ClientID      string `json:"iOSPairingId"`
+				ClientPrivate string `json:"iOSDeviceLTSK"`
+				ClientPublic  string `json:"iOSDeviceLTPK"`
+				DeviceID      string `json:"AccessoryPairingID"`
+				DevicePublic  string `json:"AccessoryLTPK"`
+				DeviceHost    string `json:"AccessoryIP"`
+				DevicePort    uint16 `json:"AccessoryPort"`
+			}
+			if err = json.Unmarshal(entrie.Data, &data); err != nil {
 				continue
 			}
 			urls[entrie.Title] = fmt.Sprintf(
 				"homekit://%s:%d?client_id=%s&client_private=%s%s&device_id=%s&device_public=%s",
-				entrie.Data.DeviceHost, entrie.Data.DevicePort,
-				entrie.Data.ClientID, entrie.Data.ClientPrivate, entrie.Data.ClientPublic,
-				entrie.Data.DeviceID, entrie.Data.DevicePublic,
+				data.DeviceHost, data.DevicePort,
+				data.ClientID, data.ClientPrivate, data.ClientPublic,
+				data.DeviceID, data.DevicePublic,
 			)
+
+		case "roborock":
+			_ = json.Unmarshal(entrie.Data, &roborock.Auth)
 
 		default:
 			continue
@@ -78,20 +109,10 @@ var log zerolog.Logger
 type entries struct {
 	Data struct {
 		Entries []struct {
-			Title  string `json:"title"`
-			Domain string `json:"domain"`
-			Data   struct {
-				ClientID      string `json:"iOSPairingId"`
-				ClientPrivate string `json:"iOSDeviceLTSK"`
-				ClientPublic  string `json:"iOSDeviceLTPK"`
-				DeviceID      string `json:"AccessoryPairingID"`
-				DevicePublic  string `json:"AccessoryLTPK"`
-				DeviceHost    string `json:"AccessoryIP"`
-				DevicePort    uint16 `json:"AccessoryPort"`
-			} `json:"data"`
-			Options struct {
-				StreamSource string `json:"stream_source"`
-			}
+			Title   string          `json:"title"`
+			Domain  string          `json:"domain"`
+			Data    json.RawMessage `json:"data"`
+			Options json.RawMessage `json:"options"`
 		} `json:"entries"`
 	} `json:"data"`
 }

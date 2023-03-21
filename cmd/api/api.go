@@ -144,3 +144,23 @@ func exitHandler(w http.ResponseWriter, r *http.Request) {
 	code, _ := strconv.Atoi(s)
 	os.Exit(code)
 }
+
+type Stream struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}
+
+func ResponseStreams(w http.ResponseWriter, streams []Stream) {
+	if len(streams) == 0 {
+		http.Error(w, "no streams", http.StatusNotFound)
+		return
+	}
+
+	var response struct {
+		Streams []Stream `json:"streams"`
+	}
+	response.Streams = streams
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}

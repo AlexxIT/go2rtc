@@ -1,8 +1,8 @@
 package rtsp
 
 import (
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/stretchr/testify/assert"
 	"strings"
 	"testing"
@@ -131,7 +131,7 @@ a=appversion:1.0
 	assert.Nil(t, err)
 
 	codec := medias[0].Codecs[0]
-	assert.Equal(t, streamer.CodecH264, codec.Name)
+	assert.Equal(t, core.CodecH264, codec.Name)
 
 	sps, _ := h264.GetParameterSet(codec.FmtpLine)
 	assert.Nil(t, sps)

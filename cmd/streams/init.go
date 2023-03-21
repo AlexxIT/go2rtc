@@ -11,7 +11,7 @@ import (
 
 func Init() {
 	var cfg struct {
-		Mod map[string]interface{} `yaml:"streams"`
+		Mod map[string]any `yaml:"streams"`
 	}
 
 	app.LoadConfig(&cfg)
@@ -33,7 +33,7 @@ func Get(name string) *Stream {
 	return streams[name]
 }
 
-func New(name string, source interface{}) *Stream {
+func New(name string, source any) *Stream {
 	stream := NewStream(source)
 	streams[name] = stream
 	return stream

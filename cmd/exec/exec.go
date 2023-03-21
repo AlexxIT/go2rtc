@@ -8,9 +8,9 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/app"
 	"github.com/AlexxIT/go2rtc/cmd/rtsp"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	pkg "github.com/AlexxIT/go2rtc/pkg/rtsp"
 	"github.com/AlexxIT/go2rtc/pkg/shell"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/rs/zerolog"
 	"os"
 	"os/exec"
@@ -48,7 +48,7 @@ func Init() {
 	log = app.GetLogger("exec")
 }
 
-func Handle(url string) (streamer.Producer, error) {
+func Handle(url string) (core.Producer, error) {
 	sum := md5.Sum([]byte(url))
 	path := "/" + hex.EncodeToString(sum[:])
 
@@ -67,7 +67,7 @@ func Handle(url string) (streamer.Producer, error) {
 		cmd.Stderr = os.Stderr
 	}
 
-	ch := make(chan streamer.Producer)
+	ch := make(chan core.Producer)
 
 	waitersMu.Lock()
 	waiters[path] = ch
@@ -116,5 +116,5 @@ func Handle(url string) (streamer.Producer, error) {
 // internal
 
 var log zerolog.Logger
-var waiters = map[string]chan streamer.Producer{}
+var waiters = map[string]chan core.Producer{}
 var waitersMu sync.Mutex

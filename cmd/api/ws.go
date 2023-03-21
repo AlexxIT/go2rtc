@@ -11,8 +11,24 @@ import (
 
 // Message - struct for data exchange in Web API
 type Message struct {
-	Type  string      `json:"type"`
-	Value interface{} `json:"value,omitempty"`
+	Type  string `json:"type"`
+	Value any    `json:"value,omitempty"`
+}
+
+func (m *Message) String() string {
+	if s, ok := m.Value.(string); ok {
+		return s
+	}
+	return ""
+}
+
+func (m *Message) GetString(key string) string {
+	if v, ok := m.Value.(map[string]any); ok {
+		if s, ok := v[key].(string); ok {
+			return s
+		}
+	}
+	return ""
 }
 
 type WSHandler func(tr *Transport, msg *Message) error
@@ -25,8 +41,8 @@ var wsHandlers = make(map[string]WSHandler)
 
 func initWS(origin string) {
 	wsUp = &websocket.Upgrader{
-		ReadBufferSize:  1024,
-		WriteBufferSize: 2028,
+		ReadBufferSize:  4096,       // for SDP
+		WriteBufferSize: 512 * 1024, // 512K
 	}
 
 	switch origin {
@@ -68,7 +84,7 @@ func apiWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tr := &Transport{Request: r}
-	tr.OnWrite(func(msg interface{}) {
+	tr.OnWrite(func(msg any) {
 		_ = ws.SetWriteDeadline(time.Now().Add(time.Second * 5))
 
 		if data, ok := msg.([]byte); ok {
@@ -88,6 +104,8 @@ func apiWS(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 
+		log.Trace().Str("type", msg.Type).Msg("[api.ws] msg")
+
 		if handler := wsHandlers[msg.Type]; handler != nil {
 			go func() {
 				if err = handler(tr, msg); err != nil {
@@ -103,19 +121,20 @@ func apiWS(w http.ResponseWriter, r *http.Request) {
 var wsUp *websocket.Upgrader
 
 type Transport struct {
-	Request  *http.Request
-	Consumer interface{} // TODO: rewrite
+	Request *http.Request
+
+	ctx map[any]any
 
 	closed bool
 	mx     sync.Mutex
 	wrmx   sync.Mutex
 
 	onChange func()
-	onWrite  func(msg interface{})
+	onWrite  func(msg any)
 	onClose  []func()
 }
 
-func (t *Transport) OnWrite(f func(msg interface{})) {
+func (t *Transport) OnWrite(f func(msg any)) {
 	t.mx.Lock()
 	if t.onChange != nil {
 		t.onChange()
@@ -124,7 +143,7 @@ func (t *Transport) OnWrite(f func(msg interface{})) {
 	t.mx.Unlock()
 }
 
-func (t *Transport) Write(msg interface{}) {
+func (t *Transport) Write(msg any) {
 	t.wrmx.Lock()
 	t.onWrite(msg)
 	t.wrmx.Unlock()
@@ -152,5 +171,15 @@ func (t *Transport) OnClose(f func()) {
 	} else {
 		t.onClose = append(t.onClose, f)
 	}
+	t.mx.Unlock()
+}
+
+// WithContext - run function with Context variable
+func (t *Transport) WithContext(f func(ctx map[any]any)) {
+	t.mx.Lock()
+	if t.ctx == nil {
+		t.ctx = map[any]any{}
+	}
+	f(t.ctx)
 	t.mx.Unlock()
 }

@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"github.com/AlexxIT/go2rtc/cmd/api"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/mp4"
 	"github.com/AlexxIT/go2rtc/pkg/mpegts"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/rs/zerolog/log"
 	"net/http"
 	"strconv"
@@ -27,7 +27,7 @@ func Init() {
 }
 
 type Consumer interface {
-	streamer.Consumer
+	core.Consumer
 	Init() ([]byte, error)
 	MimeCodecs() string
 	Start()
@@ -83,7 +83,7 @@ func handlerStream(w http.ResponseWriter, r *http.Request) {
 
 	session := &Session{cons: cons}
 
-	cons.Listen(func(msg interface{}) {
+	cons.(any).(*core.Listener).Listen(func(msg any) {
 		if data, ok := msg.([]byte); ok {
 			session.mu.Lock()
 			session.segment = append(session.segment, data...)

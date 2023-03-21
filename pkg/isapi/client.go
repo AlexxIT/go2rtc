@@ -2,7 +2,7 @@ package isapi
 
 import (
 	"errors"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"io"
 	"net"
@@ -11,16 +11,15 @@ import (
 )
 
 type Client struct {
-	streamer.Element
+	core.Listener
 
-	url string
-
-	medias []*streamer.Media
-	tracks []*streamer.Track
-
+	url     string
 	channel string
 	conn    net.Conn
-	send    int
+
+	medias []*core.Media
+	sender *core.Sender
+	send   int
 }
 
 func NewClient(rawURL string) (*Client, error) {
@@ -60,22 +59,22 @@ func (c *Client) Dial() (err error) {
 
 	xml := string(b)
 
-	codec := streamer.Between(xml, `<audioCompressionType>`, `<`)
+	codec := core.Between(xml, `<audioCompressionType>`, `<`)
 	switch codec {
 	case "G.711ulaw":
-		codec = streamer.CodecPCMU
+		codec = core.CodecPCMU
 	case "G.711alaw":
-		codec = streamer.CodecPCMA
+		codec = core.CodecPCMA
 	default:
 		return nil
 	}
 
-	c.channel = streamer.Between(xml, `<id>`, `<`)
+	c.channel = core.Between(xml, `<id>`, `<`)
 
-	media := &streamer.Media{
-		Kind:      streamer.KindAudio,
-		Direction: streamer.DirectionRecvonly,
-		Codecs: []*streamer.Codec{
+	media := &core.Media{
+		Kind:      core.KindAudio,
+		Direction: core.DirectionSendonly,
+		Codecs: []*core.Codec{
 			{Name: codec, ClockRate: 8000},
 		},
 	}

@@ -1,8 +1,8 @@
 package mpegts
 
 import (
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/pion/rtp"
 	"time"
 )
@@ -13,7 +13,7 @@ const (
 )
 
 const (
-	StreamTypePrivate  = 0x06 // PCMU or PCMA from FFmpeg
+	StreamTypePrivate  = 0x06 // PCMU or PCMA or FLAC from FFmpeg
 	StreamTypeAAC      = 0x0F
 	StreamTypeH264     = 0x1B
 	StreamTypePCMATapo = 0x90
@@ -153,34 +153,34 @@ func ParseTime(b []byte) uint32 {
 	return (uint32(b[0]&0x0E) << 29) | (uint32(b[1]) << 22) | (uint32(b[2]&0xFE) << 14) | (uint32(b[3]) << 7) | (uint32(b[4]) >> 1)
 }
 
-func GetMedia(pkt *rtp.Packet) *streamer.Media {
-	var codec *streamer.Codec
+func GetMedia(pkt *rtp.Packet) *core.Media {
+	var codec *core.Codec
 	var kind string
 
 	switch pkt.PayloadType {
 	case StreamTypeH264:
-		codec = &streamer.Codec{
-			Name:        streamer.CodecH264,
+		codec = &core.Codec{
+			Name:        core.CodecH264,
 			ClockRate:   90000,
-			PayloadType: streamer.PayloadTypeRAW,
+			PayloadType: core.PayloadTypeRAW,
 			FmtpLine:    h264.GetFmtpLine(pkt.Payload),
 		}
-		kind = streamer.KindVideo
+		kind = core.KindVideo
 
 	case StreamTypePCMATapo:
-		codec = &streamer.Codec{
-			Name:      streamer.CodecPCMA,
+		codec = &core.Codec{
+			Name:      core.CodecPCMA,
 			ClockRate: 8000,
 		}
-		kind = streamer.KindAudio
+		kind = core.KindAudio
 
 	default:
 		return nil
 	}
 
-	return &streamer.Media{
+	return &core.Media{
 		Kind:      kind,
-		Direction: streamer.DirectionSendonly,
-		Codecs:    []*streamer.Codec{codec},
+		Direction: core.DirectionRecvonly,
+		Codecs:    []*core.Codec{codec},
 	}
 }

@@ -3,7 +3,7 @@ package mjpeg
 import (
 	"bufio"
 	"errors"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/pion/rtp"
 	"io"
@@ -11,12 +11,11 @@ import (
 	"net/textproto"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 )
 
 type Client struct {
-	streamer.Element
+	core.Listener
 
 	UserAgent  string
 	RemoteAddr string
@@ -24,9 +23,10 @@ type Client struct {
 	closed bool
 	res    *http.Response
 
-	medias []*streamer.Media
-	track  *streamer.Track
-	recv   uint32
+	medias   []*core.Media
+	receiver *core.Receiver
+
+	recv int
 }
 
 func NewClient(res *http.Response) *Client {
@@ -40,9 +40,9 @@ func (c *Client) startJPEG() error {
 	}
 
 	packet := &rtp.Packet{Header: rtp.Header{Timestamp: now()}, Payload: buf}
-	_ = c.track.WriteRTP(packet)
+	c.receiver.WriteRTP(packet)
 
-	atomic.AddUint32(&c.recv, uint32(len(buf)))
+	c.recv += len(buf)
 
 	req := c.res.Request
 
@@ -61,10 +61,12 @@ func (c *Client) startJPEG() error {
 			return err
 		}
 
-		packet = &rtp.Packet{Header: rtp.Header{Timestamp: now()}, Payload: buf}
-		_ = c.track.WriteRTP(packet)
+		if c.receiver != nil {
+			packet = &rtp.Packet{Header: rtp.Header{Timestamp: now()}, Payload: buf}
+			c.receiver.WriteRTP(packet)
+		}
 
-		atomic.AddUint32(&c.recv, uint32(len(buf)))
+		c.recv += len(buf)
 	}
 
 	return nil
@@ -109,10 +111,12 @@ func (c *Client) startMJPEG(boundary string) error {
 			return err
 		}
 
-		packet := &rtp.Packet{Header: rtp.Header{Timestamp: now()}, Payload: buf}
-		_ = c.track.WriteRTP(packet)
+		if c.receiver != nil {
+			packet := &rtp.Packet{Header: rtp.Header{Timestamp: now()}, Payload: buf}
+			c.receiver.WriteRTP(packet)
+		}
 
-		atomic.AddUint32(&c.recv, uint32(len(buf)))
+		c.recv += len(buf)
 
 		if _, err = r.Discard(2); err != nil {
 			return err

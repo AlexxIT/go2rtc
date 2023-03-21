@@ -3,8 +3,8 @@ package mp4
 import (
 	"encoding/hex"
 	"github.com/AlexxIT/go2rtc/pkg/aac"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/deepch/vdk/av"
 	"github.com/deepch/vdk/codec/aacparser"
 	"github.com/deepch/vdk/codec/h264parser"
@@ -14,9 +14,9 @@ import (
 )
 
 type Consumer struct {
-	streamer.Element
+	core.Listener
 
-	Medias     []*streamer.Media
+	Medias     []*core.Media
 	UserAgent  string
 	RemoteAddr string
 
@@ -28,35 +28,35 @@ type Consumer struct {
 	send int
 }
 
-func (c *Consumer) GetMedias() []*streamer.Media {
+func (c *Consumer) GetMedias() []*core.Media {
 	if c.Medias != nil {
 		return c.Medias
 	}
 
-	return []*streamer.Media{
+	return []*core.Media{
 		{
-			Kind:      streamer.KindVideo,
-			Direction: streamer.DirectionRecvonly,
-			Codecs: []*streamer.Codec{
-				{Name: streamer.CodecH264, ClockRate: 90000},
+			Kind:      core.KindVideo,
+			Direction: core.DirectionSendonly,
+			Codecs: []*core.Codec{
+				{Name: core.CodecH264, ClockRate: 90000},
 			},
 		},
 		{
-			Kind:      streamer.KindAudio,
-			Direction: streamer.DirectionRecvonly,
-			Codecs: []*streamer.Codec{
-				{Name: streamer.CodecAAC, ClockRate: 16000},
+			Kind:      core.KindAudio,
+			Direction: core.DirectionSendonly,
+			Codecs: []*core.Codec{
+				{Name: core.CodecAAC, ClockRate: 16000},
 			},
 		},
 	}
 }
 
-func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *streamer.Track {
+func (c *Consumer) AddTrack(media *core.Media, track *core.Track) *core.Track {
 	codec := track.Codec
 	trackID := int8(len(c.streams))
 
 	switch codec.Name {
-	case streamer.CodecH264:
+	case core.CodecH264:
 		sps, pps := h264.GetParameterSet(codec.FmtpLine)
 		stream, err := h264parser.NewCodecDataFromSPSAndPPS(sps, pps)
 		if err != nil {
@@ -102,8 +102,8 @@ func (c *Consumer) AddTrack(media *streamer.Media, track *streamer.Track) *strea
 
 		return track.Bind(push)
 
-	case streamer.CodecAAC:
-		s := streamer.Between(codec.FmtpLine, "config=", ";")
+	case core.CodecAAC:
+		s := core.Between(codec.FmtpLine, "config=", ";")
 
 		b, err := hex.DecodeString(s)
 		if err != nil {

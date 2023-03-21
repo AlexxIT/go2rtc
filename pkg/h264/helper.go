@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"strings"
 )
 
@@ -62,11 +62,11 @@ func GetProfileLevelID(fmtp string) string {
 		var conf []byte
 		// some cameras has wrong profile-level-id
 		// https://github.com/AlexxIT/go2rtc/issues/155
-		if s := streamer.Between(fmtp, "sprop-parameter-sets=", ","); s != "" {
+		if s := core.Between(fmtp, "sprop-parameter-sets=", ","); s != "" {
 			if sps, _ := base64.StdEncoding.DecodeString(s); len(sps) >= 4 {
 				conf = sps[1:4]
 			}
-		} else if s = streamer.Between(fmtp, "profile-level-id=", ";"); s != "" {
+		} else if s = core.Between(fmtp, "profile-level-id=", ";"); s != "" {
 			conf, _ = hex.DecodeString(s)
 		}
 
@@ -89,7 +89,7 @@ func GetParameterSet(fmtp string) (sps, pps []byte) {
 		return
 	}
 
-	s := streamer.Between(fmtp, "sprop-parameter-sets=", ";")
+	s := core.Between(fmtp, "sprop-parameter-sets=", ";")
 	if s == "" {
 		return
 	}

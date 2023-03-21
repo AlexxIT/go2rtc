@@ -2,48 +2,49 @@ package mp4
 
 import (
 	"encoding/json"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/pion/rtp"
-	"sync/atomic"
 )
 
 type Segment struct {
-	streamer.Element
+	core.Listener
 
-	Medias     []*streamer.Media
+	Medias     []*core.Media
 	UserAgent  string
 	RemoteAddr string
+
+	senders []*core.Sender
 
 	MimeType     string
 	OnlyKeyframe bool
 
-	send uint32
+	send int
 }
 
-func (c *Segment) GetMedias() []*streamer.Media {
+func (c *Segment) GetMedias() []*core.Media {
 	if c.Medias != nil {
 		return c.Medias
 	}
 
-	// default medias
-	return []*streamer.Media{
+	// default local medias
+	return []*core.Media{
 		{
-			Kind:      streamer.KindVideo,
-			Direction: streamer.DirectionRecvonly,
-			Codecs: []*streamer.Codec{
-				{Name: streamer.CodecH264},
-				{Name: streamer.CodecH265},
+			Kind:      core.KindVideo,
+			Direction: core.DirectionSendonly,
+			Codecs: []*core.Codec{
+				{Name: core.CodecH264},
+				{Name: core.CodecH265},
 			},
 		},
 	}
 }
 
-func (c *Segment) AddTrack(media *streamer.Media, track *streamer.Track) *streamer.Track {
+func (c *Segment) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver) error {
 	muxer := &Muxer{}
 
-	codecs := []*streamer.Codec{track.Codec}
+	codecs := []*core.Codec{track.Codec}
 
 	init, err := muxer.GetInit(codecs)
 	if err != nil {
@@ -52,26 +53,26 @@ func (c *Segment) AddTrack(media *streamer.Media, track *streamer.Track) *stream
 
 	c.MimeType = `video/mp4; codecs="` + muxer.MimeCodecs(codecs) + `"`
 
+	handler := core.NewSender(media, track.Codec)
+
 	switch track.Codec.Name {
-	case streamer.CodecH264:
-		var push streamer.WriterFunc
+	case core.CodecH264:
 
 		if c.OnlyKeyframe {
-			push = func(packet *rtp.Packet) error {
+			handler.Handler = func(packet *rtp.Packet) {
 				if !h264.IsKeyframe(packet.Payload) {
-					return nil
+					return
 				}
 
 				buf := muxer.Marshal(0, packet)
-				atomic.AddUint32(&c.send, uint32(len(buf)))
 				c.Fire(append(init, buf...))
 
-				return nil
+				c.send += len(buf)
 			}
 		} else {
 			var buf []byte
 
-			push = func(packet *rtp.Packet) error {
+			handler.Handler = func(packet *rtp.Packet) {
 				if h264.IsKeyframe(packet.Payload) {
 					// fist frame - send only IFrame
 					// other frames - send IFrame and all PFrames
@@ -81,8 +82,9 @@ func (c *Segment) AddTrack(media *streamer.Media, track *streamer.Track) *stream
 						buf = append(buf, b...)
 					}
 
-					atomic.AddUint32(&c.send, uint32(len(buf)))
 					c.Fire(buf)
+
+					c.send += len(buf)
 
 					buf = buf[:0]
 					buf = append(buf, init...)
@@ -93,51 +95,56 @@ func (c *Segment) AddTrack(media *streamer.Media, track *streamer.Track) *stream
 					b := muxer.Marshal(0, packet)
 					buf = append(buf, b...)
 				}
-
-				return nil
 			}
 		}
 
-		var wrapper streamer.WrapperFunc
 		if track.Codec.IsRTP() {
-			wrapper = h264.RTPDepay(track)
+			handler.Handler = h264.RTPDepay(track.Codec, handler.Handler)
 		} else {
-			wrapper = h264.RepairAVC(track)
+			handler.Handler = h264.RepairAVC(track.Codec, handler.Handler)
 		}
-		push = wrapper(push)
 
-		return track.Bind(push)
-
-	case streamer.CodecH265:
-		push := func(packet *rtp.Packet) error {
+	case core.CodecH265:
+		handler.Handler = func(packet *rtp.Packet) {
 			if !h265.IsKeyframe(packet.Payload) {
-				return nil
+				return
 			}
 
 			buf := muxer.Marshal(0, packet)
-			atomic.AddUint32(&c.send, uint32(len(buf)))
 			c.Fire(append(init, buf...))
 
-			return nil
+			c.send += len(buf)
 		}
 
 		if track.Codec.IsRTP() {
-			wrapper := h265.RTPDepay(track)
-			push = wrapper(push)
+			handler.Handler = h265.RTPDepay(track.Codec, handler.Handler)
 		}
 
-		return track.Bind(push)
+	default:
+		panic(core.UnsupportedCodec)
 	}
 
-	panic("unsupported codec")
+	handler.HandleRTP(track)
+	c.senders = append(c.senders, handler)
+
+	return nil
+}
+
+func (c *Segment) Stop() error {
+	for _, sender := range c.senders {
+		sender.Close()
+	}
+	return nil
 }
 
 func (c *Segment) MarshalJSON() ([]byte, error) {
-	info := &streamer.Info{
-		Type:       "WS/MP4 client",
+	info := &core.Info{
+		Type:       "MP4/WebSocket passive consumer",
 		RemoteAddr: c.RemoteAddr,
 		UserAgent:  c.UserAgent,
-		Send:       atomic.LoadUint32(&c.send),
+		Medias:     c.Medias,
+		Senders:    c.senders,
+		Send:       c.send,
 	}
 	return json.Marshal(info)
 }

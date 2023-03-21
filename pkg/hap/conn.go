@@ -7,8 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/hap/mdns"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/brutella/hap"
 	"github.com/brutella/hap/chacha20poly1305"
 	"github.com/brutella/hap/curve25519"
@@ -26,7 +26,7 @@ import (
 
 // Conn for HomeKit. DevicePublic can be null.
 type Conn struct {
-	streamer.Element
+	core.Listener
 
 	DeviceAddress string // including port
 	DeviceID      string
@@ -35,7 +35,7 @@ type Conn struct {
 	ClientPrivate []byte
 
 	OnEvent func(res *http.Response)
-	Output  func(msg interface{})
+	Output  func(msg any)
 
 	conn         net.Conn
 	secure       *Secure

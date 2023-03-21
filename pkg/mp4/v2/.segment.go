@@ -2,17 +2,17 @@ package mp4
 
 import (
 	"encoding/json"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/pion/rtp"
 	"sync/atomic"
 )
 
 type Segment struct {
-	streamer.Element
+	core.Listener
 
-	Medias     []*streamer.Media
+	Medias     []*core.Media
 	UserAgent  string
 	RemoteAddr string
 
@@ -22,28 +22,28 @@ type Segment struct {
 	send uint32
 }
 
-func (c *Segment) GetMedias() []*streamer.Media {
+func (c *Segment) GetMedias() []*core.Media {
 	if c.Medias != nil {
 		return c.Medias
 	}
 
 	// default medias
-	return []*streamer.Media{
+	return []*core.Media{
 		{
-			Kind:      streamer.KindVideo,
-			Direction: streamer.DirectionRecvonly,
-			Codecs: []*streamer.Codec{
-				{Name: streamer.CodecH264},
-				{Name: streamer.CodecH265},
+			Kind:      core.KindVideo,
+			Direction: core.DirectionSendonly,
+			Codecs: []*core.Codec{
+				{Name: core.CodecH264},
+				{Name: core.CodecH265},
 			},
 		},
 	}
 }
 
-func (c *Segment) AddTrack(media *streamer.Media, track *streamer.Track) *streamer.Track {
+func (c *Segment) AddTrack(media *core.Media, track *core.Track) *core.Track {
 	muxer := &Muxer{}
 
-	codecs := []*streamer.Codec{track.Codec}
+	codecs := []*core.Codec{track.Codec}
 
 	init, err := muxer.GetInit(codecs)
 	if err != nil {
@@ -53,8 +53,8 @@ func (c *Segment) AddTrack(media *streamer.Media, track *streamer.Track) *stream
 	c.MimeType = muxer.MimeType(codecs)
 
 	switch track.Codec.Name {
-	case streamer.CodecH264:
-		var push streamer.WriterFunc
+	case core.CodecH264:
+		var push core.WriterFunc
 
 		if c.OnlyKeyframe {
 			push = func(packet *rtp.Packet) error {
@@ -98,7 +98,7 @@ func (c *Segment) AddTrack(media *streamer.Media, track *streamer.Track) *stream
 			}
 		}
 
-		var wrapper streamer.WrapperFunc
+		var wrapper core.WrapperFunc
 		if track.Codec.IsRTP() {
 			wrapper = h264.RTPDepay(track)
 		} else {
@@ -108,7 +108,7 @@ func (c *Segment) AddTrack(media *streamer.Media, track *streamer.Track) *stream
 
 		return track.Bind(push)
 
-	case streamer.CodecH265:
+	case core.CodecH265:
 		push := func(packet *rtp.Packet) error {
 			if !h265.IsKeyframe(packet.Payload) {
 				return nil
@@ -133,7 +133,7 @@ func (c *Segment) AddTrack(media *streamer.Media, track *streamer.Track) *stream
 }
 
 func (c *Segment) MarshalJSON() ([]byte, error) {
-	info := &streamer.Info{
+	info := &core.Info{
 		Type:       "WS/MP4 client",
 		RemoteAddr: c.RemoteAddr,
 		UserAgent:  c.UserAgent,

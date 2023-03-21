@@ -3,9 +3,9 @@ package rtsp
 import (
 	"github.com/AlexxIT/go2rtc/cmd/app"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/mp4"
 	"github.com/AlexxIT/go2rtc/pkg/rtsp"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/rs/zerolog"
 	"net"
@@ -86,9 +86,9 @@ var Port string
 
 var log zerolog.Logger
 var handlers []Handler
-var defaultMedias []*streamer.Media
+var defaultMedias []*core.Media
 
-func rtspHandler(url string) (streamer.Producer, error) {
+func rtspHandler(url string) (core.Producer, error) {
 	backchannel := true
 
 	if i := strings.IndexByte(url, '#'); i > 0 {
@@ -98,15 +98,11 @@ func rtspHandler(url string) (streamer.Producer, error) {
 		url = url[:i]
 	}
 
-	conn, err := rtsp.NewClient(url)
-	if err != nil {
-		return nil, err
-	}
-
+	conn := rtsp.NewClient(url)
 	conn.UserAgent = app.UserAgent
 
 	if log.Trace().Enabled() {
-		conn.Listen(func(msg interface{}) {
+		conn.Listen(func(msg any) {
 			switch msg := msg.(type) {
 			case *tcp.Request:
 				log.Trace().Msgf("[rtsp] client request:\n%s", msg)
@@ -118,12 +114,12 @@ func rtspHandler(url string) (streamer.Producer, error) {
 		})
 	}
 
-	if err = conn.Dial(); err != nil {
+	if err := conn.Dial(); err != nil {
 		return nil, err
 	}
 
 	conn.Backchannel = backchannel
-	if err = conn.Describe(); err != nil {
+	if err := conn.Describe(); err != nil {
 		if !backchannel {
 			return nil, err
 		}
@@ -147,7 +143,7 @@ func tcpHandler(conn *rtsp.Conn) {
 
 	trace := log.Trace().Enabled()
 
-	conn.Listen(func(msg interface{}) {
+	conn.Listen(func(msg any) {
 		if trace {
 			switch msg := msg.(type) {
 			case *tcp.Request:
@@ -211,9 +207,6 @@ func tcpHandler(conn *rtsp.Conn) {
 			closer = func() {
 				stream.RemoveProducer(conn)
 			}
-
-		case streamer.StatePlaying:
-			log.Debug().Str("stream", name).Msg("[rtsp] start")
 		}
 	})
 

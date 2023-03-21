@@ -63,10 +63,6 @@
 <body>
 <script src="main.js"></script>
 <div class="info"></div>
-<div class="header">
-    <input id="src" type="text" placeholder="url">
-    <a id="add" href="#">add</a>
-</div>
 <div class="controls">
     <button>stream</button>
     <label><input type="checkbox" name="webrtc" checked>webrtc</label>
@@ -77,7 +73,7 @@
 <table id="streams">
     <thead>
     <tr>
-        <th>Name</th>
+        <th><input id="selectall" type="checkbox">Name</th>
         <th>Online</th>
         <th>Commands</th>
     </tr>
@@ -88,18 +84,9 @@
 <script>
     const templates = [
         '<a href="stream.html?src={name}">stream</a>',
-        '<a href="webrtc.html?src={name}">2-way-aud</a>',
         '<a href="links.html?src={name}">links</a>',
         '<a href="#" data-name="{name}">delete</a>',
     ];
-
-    document.querySelector("#add")
-        .addEventListener("click", () => {
-            const src = document.querySelector("#src");
-            const url = new URL("api/streams", location.href);
-            url.searchParams.set("src", src.value);
-            fetch(url, {method: "PUT"}).then(reload);
-        });
 
     document.querySelector(".controls > button")
         .addEventListener("click", () => {
@@ -128,6 +115,12 @@
         url.searchParams.set("src", ev.target.dataset.name);
         fetch(url, {method: "DELETE"}).then(reload);
     });
+
+    document.getElementById('selectall').addEventListener('change', ev => {
+        document.querySelectorAll('#streams input').forEach(el => {
+            el.checked = ev.target.checked
+        })
+    })
 
     function reload() {
         const url = new URL("api/streams", location.href);

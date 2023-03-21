@@ -3,7 +3,7 @@ package h265
 import (
 	"encoding/base64"
 	"encoding/binary"
-	"github.com/AlexxIT/go2rtc/pkg/streamer"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
 const (
@@ -62,13 +62,13 @@ func GetParameterSet(fmtp string) (vps, sps, pps []byte) {
 		return
 	}
 
-	s := streamer.Between(fmtp, "sprop-vps=", ";")
+	s := core.Between(fmtp, "sprop-vps=", ";")
 	vps, _ = base64.StdEncoding.DecodeString(s)
 
-	s = streamer.Between(fmtp, "sprop-sps=", ";")
+	s = core.Between(fmtp, "sprop-sps=", ";")
 	sps, _ = base64.StdEncoding.DecodeString(s)
 
-	s = streamer.Between(fmtp, "sprop-pps=", ";")
+	s = core.Between(fmtp, "sprop-pps=", ";")
 	pps, _ = base64.StdEncoding.DecodeString(s)
 
 	return

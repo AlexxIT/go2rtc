@@ -4,8 +4,8 @@ import "encoding/binary"
 
 // Payloader payloads H264 packets
 type Payloader struct {
-	IsAVC            bool
-	spsNalu, ppsNalu []byte
+	IsAVC     bool
+	stapANalu []byte
 }
 
 const (
@@ -92,36 +92,25 @@ func (p *Payloader) Payload(mtu uint16, payload []byte) [][]byte {
 		naluType := nalu[0] & naluTypeBitmask
 		naluRefIdc := nalu[0] & naluRefIdcBitmask
 
-		switch {
-		case naluType == audNALUType || naluType == fillerNALUType:
+		switch naluType {
+		case audNALUType, fillerNALUType:
 			return
-		case naluType == spsNALUType:
-			p.spsNalu = nalu
-			return
-		case naluType == ppsNALUType:
-			p.ppsNalu = nalu
-			return
-		case p.spsNalu != nil && p.ppsNalu != nil:
-			// Pack current NALU with SPS and PPS as STAP-A
-			spsLen := make([]byte, 2)
-			binary.BigEndian.PutUint16(spsLen, uint16(len(p.spsNalu)))
-
-			ppsLen := make([]byte, 2)
-			binary.BigEndian.PutUint16(ppsLen, uint16(len(p.ppsNalu)))
-
-			stapANalu := []byte{outputStapAHeader}
-			stapANalu = append(stapANalu, spsLen...)
-			stapANalu = append(stapANalu, p.spsNalu...)
-			stapANalu = append(stapANalu, ppsLen...)
-			stapANalu = append(stapANalu, p.ppsNalu...)
-			if len(stapANalu) <= int(mtu) {
-				out := make([]byte, len(stapANalu))
-				copy(out, stapANalu)
-				payloads = append(payloads, out)
+		case spsNALUType, ppsNALUType:
+			if p.stapANalu == nil {
+				p.stapANalu = []byte{outputStapAHeader}
 			}
+			p.stapANalu = append(p.stapANalu, byte(len(nalu)>>8), byte(len(nalu)))
+			p.stapANalu = append(p.stapANalu, nalu...)
+			return
+		}
 
-			p.spsNalu = nil
-			p.ppsNalu = nil
+		if p.stapANalu != nil {
+			// Pack current NALU with SPS and PPS as STAP-A
+			// Supports multiple PPS in a row
+			if len(p.stapANalu) <= int(mtu) {
+				payloads = append(payloads, p.stapANalu)
+			}
+			p.stapANalu = nil
 		}
 
 		// Single NALU

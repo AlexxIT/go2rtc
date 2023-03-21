@@ -15,7 +15,7 @@ import (
 func apiHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
-		items := make([]interface{}, 0)
+		items := make([]any, 0)
 
 		for name, src := range store.GetDict("streams") {
 			if src := src.(string); strings.HasPrefix(src, "homekit") {
