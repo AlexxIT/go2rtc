@@ -4,16 +4,19 @@
     <title>Add Stream</title>
     <meta name="viewport" content="width=device-width, user-scalable=yes, initial-scale=1, maximum-scale=1">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
-        body {
-            font-family: Arial, Helvetica, sans-serif;
+        * {
+            box-sizing: border-box;
         }
 
         body {
+            font-family: 'Poppins', Arial, Helvetica, sans-serif;
             margin: 0;
             padding: 0;
             display: flex;
             flex-direction: column;
+            align-items: center;
         }
 
         html, body {
@@ -23,18 +26,24 @@
 
         .module {
             display: none;
-            padding: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+            width: 80%;
+            max-width: 800px;
+            background-color: white;
+            border-radius: 4px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
         }
 
         table {
-            background-color: white;
+            width: 100%;
             text-align: left;
             border-collapse: collapse;
         }
 
         table td, table th {
-            border: 1px solid black;
-            padding: 5px 5px;
+            border: 1px solid #ddd;
+            padding: 8px 10px;
         }
 
         table tbody td {
@@ -59,24 +68,31 @@
 <script src="main.js"></script>
 <script>
     async function getStreams(url, tableID) {
-        const table = document.getElementById(tableID)
+    const table = document.getElementById(tableID)
 
-        const r = typeof url === 'string' ? await fetch(url, {cache: 'no-cache'}) : url
-        if (!r.ok) {
-            table.innerText = await r.text()
-            return
-        }
-
-        /** @type {{streams:Array<{name:string,url:string}>}} */
-        const data = await r.json()
-        table.innerHTML = data.streams.reduce((html, item) => {
-            return html + `<tr><td>${item.name}</td><td>${item.url}</td></tr>`
-        }, '<thead><tr><th>Name</th><th>Source</th></tr></thead><tbody>') + '</tbody>'
+    const r = typeof url === 'string' ? await fetch(url, {cache: 'no-cache'}) : url
+    if (!r.ok) {
+        table.innerText = await r.text()
+        return
     }
+
+    /** @type {{streams:Array<{name:string,url:string}>}} */
+    const data = await r.json()
+    table.innerHTML = data.streams.reduce((html, item) => {
+        return html + `<tr><td>${item.name}</td><td>${item.url}</td></tr>`
+    }, '<thead><tr><th>Name</th><th>Source</th></tr></thead><tbody>') + '</tbody>'
+}
 </script>
 
 
-<button id="stream">Temporary stream</button>
+<div class="button-container">
+    <button id="stream">Temporary stream</button>
+    <button id="homekit">Apple HomeKit</button>
+    <button id="hass">Home Assistant</button>
+    <button id="roborock">Roborock</button>
+    <button id="devices">USB Devices</button>
+    <button id="webtorrent">WebTorrent Shares</button>
+</div>
 <div class="module">
     <form id="stream-form" style="padding: 10px">
         <input type="text" name="name" placeholder="name">
@@ -88,7 +104,6 @@
     document.getElementById('stream').addEventListener('click', async ev => {
         ev.target.nextElementSibling.style.display = 'block'
     })
-
     document.getElementById('stream-form').addEventListener('submit', async ev => {
         ev.preventDefault()
 
@@ -102,7 +117,7 @@
 </script>
 
 
-<button id="homekit">Apple HomeKit</button>
+<!-- HomeKit section -->
 <div class="module">
     <div style="margin-bottom: 10px">
         <label for="pin">PIN</label>
@@ -170,7 +185,7 @@
 </script>
 
 
-<button id="hass">Home Assistant</button>
+<!-- Home Assistant section -->
 <div class="module">
     <table id="hass-table"></table>
 </div>
@@ -182,7 +197,7 @@
 </script>
 
 
-<button id="roborock">Roborock</button>
+<!-- Roborock section -->
 <div class="module">
     <form id="roborock-form" style="margin-bottom: 10px">
         <input type="text" name="username" placeholder="username">
@@ -206,7 +221,7 @@
 </script>
 
 
-<button id="devices">USB Devices</button>
+<!-- USB Devices section -->
 <div class="module">
     <table id="devices-table">
     </table>
@@ -219,7 +234,7 @@
 </script>
 
 
-<button id="webtorrent">WebTorrent Shares</button>
+<!-- WebTorrent Shares section -->
 <div class="module">
     <table id="webtorrent-table"></table>
 </div>
@@ -229,7 +244,20 @@
         await getStreams('api/webtorrent', 'webtorrent-table')
     })
 </script>
+<script>
+    // Button click event listeners
+    const buttons = document.querySelectorAll('.button-container button');
+    const modules = document.querySelectorAll('.module');
 
+    buttons.forEach((button, index) => {
+        button.addEventListener('click', () => {
+            modules.forEach(module => {
+                module.style.display = 'none';
+            });
+            modules[index].style.display = 'block';
+        });
+    });
+</script>
 
 </body>
 </html>
