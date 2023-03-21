@@ -111,6 +111,9 @@ func (c *Client) Connect() error {
 				_ = c.SendICEtoRobot(msg.ToJSON().Candidate, "0")
 			}
 		case pion.PeerConnectionState:
+			if msg == pion.PeerConnectionStateConnecting {
+				return
+			}
 			// unblocking write to channel
 			select {
 			case connected <- msg == pion.PeerConnectionStateConnected:
@@ -131,8 +134,9 @@ func (c *Client) Connect() error {
 		return err
 	}
 
-	log.Printf("[roborock] offer\n%s", pc.LocalDescription().SDP)
-	if err = c.SendSDPtoRobot(pc.LocalDescription()); err != nil {
+	offer := pc.LocalDescription()
+	log.Printf("[roborock] offer\n%s", offer.SDP)
+	if err = c.SendSDPtoRobot(offer); err != nil {
 		return err
 	}
 
