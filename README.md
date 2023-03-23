@@ -51,11 +51,16 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
     * [Source: Tapo](#source-tapo)
     * [Source: Ivideon](#source-ivideon)
     * [Source: Hass](#source-hass)
+    * [Source: ISAPI](#source-isapi)
+    * [Source: Roborock](#source-roborock)
+    * [Source: WebRTC](#source-webrtc)
+    * [Source: WebTorrent](#source-webtorrent)
     * [Incoming sources](#incoming-sources)
     * [Stream to camera](#stream-to-camera)
   * [Module: API](#module-api)
   * [Module: RTSP](#module-rtsp)
   * [Module: WebRTC](#module-webrtc)
+  * [Module: WebTorrent](#module-webtorrent)
   * [Module: Ngrok](#module-ngrok)
   * [Module: Hass](#module-hass)
   * [Module: MP4](#module-mp4)
@@ -161,6 +166,10 @@ Available source types:
 - [tapo](#source-tapo) - TP-Link Tapo cameras with [two way audio](#two-way-audio) support
 - [ivideon](#source-ivideon) - public cameras from [Ivideon](https://tv.ivideon.com/) service
 - [hass](#source-hass) - Home Assistant integration
+- [isapi](#source-isapi) - two way audio for Hikvision (ISAPI) cameras
+- [roborock](#source-roborock) - Roborock vacuums with cameras
+- [webrtc](#source-webrtc) - WebRTC/WHEP sources
+- [webtorrent](#source-webtorrent) - WebTorrent source from another go2rtc
 
 Read more about [incoming sources](#incoming-sources)
 
@@ -168,8 +177,11 @@ Read more about [incoming sources](#incoming-sources)
 
 Supported for sources:
 
-- RTSP cameras with [ONVIF Profile T](https://www.onvif.org/specs/stream/ONVIF-Streaming-Spec.pdf) (back channel connection)
-- TP-Link Tapo cameras
+- [RTSP cameras](#source-rtsp) with [ONVIF Profile T](https://www.onvif.org/specs/stream/ONVIF-Streaming-Spec.pdf) (back channel connection)
+- [TP-Link Tapo](#source-tapo) cameras
+- [Hikvision ISAPI](#source-isapi) cameras
+- [Roborock vacuums](#source-roborock) models with cameras
+- [Any Browser](#incoming-browser) as IP-camera
 
 Two way audio can be used in browser with [WebRTC](#module-webrtc) technology. The browser will give access to the microphone only for HTTPS sites ([read more](https://stackoverflow.com/questions/52759992/how-to-access-camera-and-microphone-in-chrome-without-https)).
 
@@ -414,11 +426,53 @@ streams:
 
 More cameras, like [Tuya](https://www.home-assistant.io/integrations/tuya/), [ONVIF](https://www.home-assistant.io/integrations/onvif/), and possibly others can also be imported by using [this method](https://github.com/felipecrs/hass-expose-camera-stream-source#importing-home-assistant-cameras-to-go2rtc-andor-frigate).
 
-### Incoming sources
+#### Source: ISAPI
+
+This source type support only backchannel audio for Hikvision ISAPI protocol. So it should be used as second source in addition to the RTSP protocol.
+
+```yaml
+streams:
+  hikvision1:
+    - rtsp://admin:password@192.168.1.123:554/Streaming/Channels/101
+    - isapi://admin:password@192.168.1.123:80/
+```
+
+#### Source: Roborock
+
+This source type support Roborock vacuums with cameras. Known working models:
+
+- Roborock S6 MaxV - only video (the vacuum has no microphone)
+- Roborock S7 MaxV - video and two way audio
+
+Source support load Roborock credentials from Home Assistant [custom integration](https://github.com/humbertogontijo/homeassistant-roborock). Otherwise, you need to log in to your Roborock account (MiHome account is not supported). Go to: go2rtc WebUI > Add webpage. Copy `roborock://...` source for your vacuum and paste it to `go2rtc.yaml` config.
+
+#### Source: WebRTC
+
+This source type support two connection formats:
+
+- [WebRTC/WHEP](https://www.ietf.org/id/draft-murillo-whep-01.html) - is an unapproved standard for WebRTC video/audio viewers. But it may already be supported in some third-party software. It is supported in go2rtc.
+- `go2rtc/WebSocket` - This format is only supported in go2rtc. Unlike WHEP it supports asynchronous WebRTC connection and two way audio.
+
+```yaml
+streams:
+  webrtc1: webrtc:http://192.168.1.123:1984/api/webrtc?src=dahua1
+  webrtc2: webrtc:ws://192.168.1.123:1984/api/ws?src=dahua1
+```
+
+#### Source: WebTorrent
+
+This source can get a stream from another go2rtc via [WebTorrent](#module-webtorrent) protocol.
+
+```yaml
+streams:
+  webtorrent1: webtorrent:?share=huofssuxaty00izc&pwd=k3l2j9djeg8v8r7e
+```
+
+#### Incoming sources
 
 By default, go2rtc establishes a connection to the source when any client requests it. Go2rtc drops the connection to the source when it has no clients left.
 
-- Go2rtc also can accepts incoming sources in [RTSP](#source-rtsp) and [HTTP](#source-http) formats
+- Go2rtc also can accepts incoming sources in [RTSP](#source-rtsp), [HTTP](#source-http) and **WebRTC/WHIP** formats
 - Go2rtc won't stop such a source if it has no clients
 - You can push data only to existing stream (create stream with empty source in config)
 - You can push multiple incoming sources to same stream
@@ -443,9 +497,25 @@ By default, go2rtc establishes a connection to the source when any client reques
   ffmpeg -re -i BigBuckBunny.mp4 -c copy -f mpegts http://localhost:1984/api/stream.ts?dst=camera1
   ```
 
+#### Incoming: Browser
+
+You can turn the browser of any PC or mobile into an IP-camera with support video and two way audio. Or even broadcast your PC screen:
+
+1. Create empty stream in the `go2rtc.yaml`
+2. Go to go2rtc WebUI
+3. Open `links` page for you stream
+4. Select `camera+microphone` or `display+speaker` option
+5. Open `webrtc` local page (your go2rtc **should work over HTTPS!**) or `share link` via [WebTorrent](#module-webtorrent) technology (work over HTTPS by default)
+
+#### Incoming: WebRTC/WHIP
+
+You can use **OBS Studio** or any other broadcast software with [WHIP](https://www.ietf.org/archive/id/draft-ietf-wish-whip-01.html) protocol support. This standard has not yet been approved. But you can download OBS Studio [dev version](https://github.com/obsproject/obs-studio/actions/runs/3969201209):
+
+- Settings > Stream > Service: WHIP > http://192.168.1.123:1984/api/webrtc?dst=camera1
+
 #### Stream to camera
 
-go2rtc support play audio files (ex. music or [TTS](https://www.home-assistant.io/integrations/#text-to-speech)) and live streams (ex. radio) on cameras with [two way audio](#two-way-audio) support.
+go2rtc support play audio files (ex. music or [TTS](https://www.home-assistant.io/integrations/#text-to-speech)) and live streams (ex. radio) on cameras with [two way audio](#two-way-audio) support (RTSP/ONVIF cameras, TP-Link Tapo, Hikvision ISAPI, Roborock vacuums, any Browser).
 
 API example:
 
@@ -605,6 +675,32 @@ webrtc:
       username: your_user
       credential: your_pass
 ```
+
+### Module: WebTorrent
+
+This module support:
+
+- Share any local stream via [WebTorrent](https://webtorrent.io/) technology
+- Get any [incoming stream](#incoming-browser) from PC or mobile via [WebTorrent](https://webtorrent.io/) technology
+- Get any remote [go2rtc source](#source-webtorrent) via [WebTorrent](https://webtorrent.io/) technology
+
+Securely and free. You do not need to open a public access to the go2rtc server. But in some cases (Symmetric NAT) you may need to set up external access to [WebRTC module](#module-webrtc).
+
+To generate sharing link or incoming link - goto go2rtc WebUI (stream links page). This link is **temporary** and will stop working after go2rtc is restarted!
+
+You can create permanent external links in go2rtc config:
+
+```yaml
+webtorrent:
+  shares:
+    super-secret-share:  # share name, should be unique among all go2rtc users!
+      pwd: super-secret-password
+      src: rtsp-dahua1   # stream name from streams section
+```
+
+Link example: https://alexxit.github.io/go2rtc/#share=02SNtgjKXY&pwd=wznEQqznxW&media=video+audio
+
+TODO: article how it works...
 
 ### Module: Ngrok
 
