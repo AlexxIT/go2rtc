@@ -446,6 +446,8 @@ This source type support Roborock vacuums with cameras. Known working models:
 
 Source support load Roborock credentials from Home Assistant [custom integration](https://github.com/humbertogontijo/homeassistant-roborock). Otherwise, you need to log in to your Roborock account (MiHome account is not supported). Go to: go2rtc WebUI > Add webpage. Copy `roborock://...` source for your vacuum and paste it to `go2rtc.yaml` config.
 
+If you have graphic pin for your vacuum - add it as numeric pin (lines: 123, 456, 678) to the end of the roborock-link.
+
 #### Source: WebRTC
 
 This source type support two connection formats:
