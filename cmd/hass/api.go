@@ -6,6 +6,7 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/api"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
 	"github.com/AlexxIT/go2rtc/cmd/webrtc"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -131,6 +132,25 @@ func initAPI() {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(v)
 	})
+}
+
+func HassioAddr() string {
+	ints, _ := net.Interfaces()
+
+	for _, i := range ints {
+		if i.Name != "hassio" {
+			continue
+		}
+
+		addrs, _ := i.Addrs()
+		for _, addr := range addrs {
+			if addr, ok := addr.(*net.IPNet); ok {
+				return addr.IP.String()
+			}
+		}
+	}
+
+	return ""
 }
 
 func rtspStream(url string) *streams.Stream {

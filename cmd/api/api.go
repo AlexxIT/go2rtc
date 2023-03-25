@@ -54,27 +54,30 @@ func Init() {
 
 	log.Info().Str("addr", cfg.Mod.Listen).Msg("[api] listen")
 
-	s := http.Server{}
-	s.Handler = http.DefaultServeMux // 4th
+	Handler = http.DefaultServeMux // 4th
 
 	if cfg.Mod.Origin == "*" {
-		s.Handler = middlewareCORS(s.Handler) // 3rd
+		Handler = middlewareCORS(Handler) // 3rd
 	}
 
 	if cfg.Mod.Username != "" {
-		s.Handler = middlewareAuth(cfg.Mod.Username, cfg.Mod.Password, s.Handler) // 2nd
+		Handler = middlewareAuth(cfg.Mod.Username, cfg.Mod.Password, Handler) // 2nd
 	}
 
 	if log.Trace().Enabled() {
-		s.Handler = middlewareLog(s.Handler) // 1st
+		Handler = middlewareLog(Handler) // 1st
 	}
 
 	go func() {
+		s := http.Server{}
+		s.Handler = Handler
 		if err = s.Serve(listener); err != nil {
 			log.Fatal().Err(err).Msg("[api] serve")
 		}
 	}()
 }
+
+var Handler http.Handler
 
 // HandleFunc handle pattern with relative path:
 // - "api/streams" => "{basepath}/api/streams"
