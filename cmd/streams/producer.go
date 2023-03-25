@@ -171,7 +171,8 @@ func (p *Producer) reconnect(workerID int) {
 
 	log.Debug().Msgf("[streams] reconnect to url=%s", p.url)
 
-	if err := p.Dial(); err != nil {
+	var err error
+	if p.conn, err = GetProducer(p.url); err != nil {
 		log.Debug().Msgf("[streams] producer=%s", err)
 		// TODO: dynamic timeout
 		time.AfterFunc(30*time.Second, func() {
