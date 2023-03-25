@@ -6,6 +6,7 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/mp4"
+	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/rs/zerolog"
 	"net/http"
 	"strconv"
@@ -103,7 +104,7 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 	exit := make(chan error)
 
 	cons := &mp4.Consumer{
-		RemoteAddr: r.RemoteAddr,
+		RemoteAddr: tcp.RemoteAddr(r),
 		UserAgent:  r.UserAgent(),
 		Medias:     core.ParseQuery(r.URL.Query()),
 	}

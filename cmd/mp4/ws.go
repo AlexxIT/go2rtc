@@ -6,6 +6,7 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/mp4"
+	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"strings"
 )
 
@@ -17,7 +18,7 @@ func handlerWSMSE(tr *api.Transport, msg *api.Message) error {
 	}
 
 	cons := &mp4.Consumer{
-		RemoteAddr: tr.Request.RemoteAddr,
+		RemoteAddr: tcp.RemoteAddr(tr.Request),
 		UserAgent:  tr.Request.UserAgent(),
 	}
 
@@ -64,7 +65,7 @@ func handlerWSMP4(tr *api.Transport, msg *api.Message) error {
 	}
 
 	cons := &mp4.Segment{
-		RemoteAddr:   tr.Request.RemoteAddr,
+		RemoteAddr:   tcp.RemoteAddr(tr.Request),
 		UserAgent:    tr.Request.UserAgent(),
 		OnlyKeyframe: true,
 	}
