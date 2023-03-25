@@ -201,13 +201,17 @@ func ExchangeSDP(stream *streams.Stream, offer, desc, userAgent string) (answer 
 	// create new webrtc instance
 	conn := webrtc.NewConn(pc)
 	conn.Desc = desc
-	conn.Mode = core.ModePassiveConsumer
 	conn.UserAgent = userAgent
 	conn.Listen(func(msg any) {
 		switch msg := msg.(type) {
 		case pion.PeerConnectionState:
-			if msg == pion.PeerConnectionStateClosed {
+			if msg != pion.PeerConnectionStateClosed {
+				return
+			}
+			if conn.Mode == core.ModePassiveConsumer {
 				stream.RemoveConsumer(conn)
+			} else {
+				stream.RemoveProducer(conn)
 			}
 		}
 	})
@@ -220,11 +224,19 @@ func ExchangeSDP(stream *streams.Stream, offer, desc, userAgent string) (answer 
 		return
 	}
 
-	// 2. AddConsumer, so we get new tracks
-	if err = stream.AddConsumer(conn); err != nil {
-		log.Warn().Err(err).Caller().Send()
-		_ = conn.Close()
-		return
+	if IsConsumer(conn) {
+		conn.Mode = core.ModePassiveConsumer
+
+		// 2. AddConsumer, so we get new tracks
+		if err = stream.AddConsumer(conn); err != nil {
+			log.Warn().Err(err).Caller().Send()
+			_ = conn.Close()
+			return
+		}
+	} else {
+		conn.Mode = core.ModePassiveProducer
+
+		stream.AddProducer(conn)
 	}
 
 	answer, err = conn.GetCompleteAnswer()
@@ -238,4 +250,26 @@ func ExchangeSDP(stream *streams.Stream, offer, desc, userAgent string) (answer 
 	}
 
 	return
+}
+
+func IsConsumer(conn *webrtc.Conn) bool {
+	// if wants get video - consumer
+	for _, media := range conn.GetMedias() {
+		if media.Kind == core.KindVideo && media.Direction == core.DirectionSendonly {
+			return true
+		}
+	}
+	// if wants send video - producer
+	for _, media := range conn.GetMedias() {
+		if media.Kind == core.KindVideo && media.Direction == core.DirectionRecvonly {
+			return false
+		}
+	}
+	// if wants something - consumer
+	for _, media := range conn.GetMedias() {
+		if media.Direction == core.DirectionSendonly {
+			return true
+		}
+	}
+	return false
 }
