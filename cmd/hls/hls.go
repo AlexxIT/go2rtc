@@ -10,7 +10,6 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/rs/zerolog/log"
 	"net/http"
-	"strconv"
 	"sync"
 	"time"
 )
@@ -105,7 +104,7 @@ func handlerStream(w http.ResponseWriter, r *http.Request) {
 
 	cons.Start()
 
-	sid := strconv.FormatInt(time.Now().UnixNano(), 10)
+	sid := core.RandString(8, 62)
 
 	// two segments important for Chromecast
 	if medias != nil {
