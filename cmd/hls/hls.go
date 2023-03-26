@@ -29,6 +29,7 @@ func Init() {
 
 type Consumer interface {
 	core.Consumer
+	Listen(f core.EventFunc)
 	Init() ([]byte, error)
 	MimeCodecs() string
 	Start()
@@ -84,7 +85,7 @@ func handlerStream(w http.ResponseWriter, r *http.Request) {
 
 	session := &Session{cons: cons}
 
-	cons.(any).(*core.Listener).Listen(func(msg any) {
+	cons.Listen(func(msg any) {
 		if data, ok := msg.([]byte); ok {
 			session.mu.Lock()
 			session.segment = append(session.segment, data...)
