@@ -171,8 +171,8 @@ func (p *Producer) reconnect(workerID, retry int) {
 
 	log.Debug().Msgf("[streams] retry=%d to url=%s", retry, p.url)
 
-	var err error
-	if p.conn, err = GetProducer(p.url); err != nil {
+	conn, err := GetProducer(p.url)
+	if err != nil {
 		log.Debug().Msgf("[streams] producer=%s", err)
 
 		timeout := time.Minute
@@ -190,7 +190,7 @@ func (p *Producer) reconnect(workerID, retry int) {
 		return
 	}
 
-	for _, media := range p.conn.GetMedias() {
+	for _, media := range conn.GetMedias() {
 		switch media.Direction {
 		case core.DirectionRecvonly:
 			for _, receiver := range p.receivers {
@@ -199,7 +199,7 @@ func (p *Producer) reconnect(workerID, retry int) {
 					continue
 				}
 
-				track, err := p.conn.GetTrack(media, codec)
+				track, err := conn.GetTrack(media, codec)
 				if err != nil {
 					continue
 				}
@@ -215,12 +215,14 @@ func (p *Producer) reconnect(workerID, retry int) {
 					continue
 				}
 
-				_ = p.conn.(core.Consumer).AddTrack(media, codec, sender)
+				_ = conn.(core.Consumer).AddTrack(media, codec, sender)
 			}
 		}
 	}
 
-	go p.worker(p.conn, workerID)
+	p.conn = conn
+
+	go p.worker(conn, workerID)
 }
 
 func (p *Producer) stop() {
