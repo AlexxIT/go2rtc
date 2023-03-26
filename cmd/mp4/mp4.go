@@ -75,6 +75,8 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 func handlerMP4(w http.ResponseWriter, r *http.Request) {
 	log.Trace().Msgf("[mp4] %s %+v", r.Method, r.Header)
 
+	query := r.URL.Query()
+
 	// Chrome has Safari in UA, so check first Chrome and later Safari
 	ua := r.UserAgent()
 	if strings.Contains(ua, " Chrome/") {
@@ -83,10 +85,10 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-	} else if strings.Contains(ua, " Safari/") {
+	} else if strings.Contains(ua, " Safari/") && !query.Has("duration") {
 		// auto redirect to HLS/fMP4 format, because Safari not support MP4 stream
 		url := "stream.m3u8?" + r.URL.RawQuery
-		if !r.URL.Query().Has("mp4") {
+		if !query.Has("mp4") {
 			url += "&mp4"
 		}
 
@@ -94,7 +96,7 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	src := r.URL.Query().Get("src")
+	src := query.Get("src")
 	stream := streams.GetOrNew(src)
 	if stream == nil {
 		http.Error(w, api.StreamNotFound, http.StatusNotFound)
@@ -141,7 +143,7 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 	cons.Start()
 
 	var duration *time.Timer
-	if s := r.URL.Query().Get("duration"); s != "" {
+	if s := query.Get("duration"); s != "" {
 		if i, _ := strconv.Atoi(s); i > 0 {
 			duration = time.AfterFunc(time.Second*time.Duration(i), func() {
 				if exit != nil {
