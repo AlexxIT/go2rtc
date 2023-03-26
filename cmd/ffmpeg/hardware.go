@@ -56,7 +56,7 @@ func MakeHardware(args *Args, engine string) {
 					args.filters[i] = "scale_vaapi=" + filter[6:]
 				}
 				if strings.HasPrefix(filter, "transpose=") {
-					if strings.HasPrefix(filter, "transpose=1,transpose=1") { // 180 degrees half-turn
+					if filter == "transpose=1,transpose=1" { // 180 degrees half-turn
 						args.filters[i] = "transpose_vaapi=4" // reversal
 					} else {
 						args.filters[i] = "transpose_vaapi=" + filter[10:]
