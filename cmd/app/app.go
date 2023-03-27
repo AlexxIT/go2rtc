@@ -127,8 +127,6 @@ func GetLogger(module string) zerolog.Logger {
 func ReloadConfig() {
 	configs = nil
 
-	log.Info().Msg("Received SIGHUP, reloading configuration")
-
 	for _, conf := range confs {
 		if conf[0] != '{' {
 			// config as file

@@ -13,15 +13,17 @@ import (
 	"strings"
 )
 
+var listener net.Listener // Declare a global variable to store the net.Listener instance
+var conf struct {
+	Mod struct {
+		Listen       string `yaml:"listen" json:"listen"`
+		Username     string `yaml:"username" json:"-"`
+		Password     string `yaml:"password" json:"-"`
+		DefaultQuery string `yaml:"default_query" json:"default_query"`
+	} `yaml:"rtsp"`
+}
+
 func Init() {
-	var conf struct {
-		Mod struct {
-			Listen       string `yaml:"listen" json:"listen"`
-			Username     string `yaml:"username" json:"-"`
-			Password     string `yaml:"password" json:"-"`
-			DefaultQuery string `yaml:"default_query" json:"default_query"`
-		} `yaml:"rtsp"`
-	}
 
 	// default config
 	conf.Mod.Listen = ":8554"
@@ -49,6 +51,8 @@ func Init() {
 		return
 	}
 
+	listener = ln // Set listener to the new net.Listener instance
+
 	_, Port, _ = net.SplitHostPort(address)
 
 	log.Info().Str("addr", address).Msg("[rtsp] listen")
@@ -72,6 +76,29 @@ func Init() {
 			go tcpHandler(c)
 		}
 	}()
+}
+
+// ReloadConfig reloads the rtsp configuration
+func ReloadConfig() {
+	// load the new configuration from YAML
+	app.LoadConfig(&conf)
+	app.Info["rtsp"] = conf.Mod
+
+	// Stop the old listener and start a new one with the updated configuration
+	StopServer()
+	Init()
+}
+
+// StopServer gracefully stops the listener
+func StopServer() {
+	if listener != nil {
+		err := listener.Close()
+		if err != nil {
+			log.Error().Err(err).Msg("[rtsp] listener close")
+		} else {
+			log.Info().Msg("[rtsp] listener stopped")
+		}
+	}
 }
 
 type Handler func(conn *rtsp.Conn) bool

@@ -27,6 +27,7 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/tcp"
 	"github.com/AlexxIT/go2rtc/cmd/webrtc"
 	"github.com/AlexxIT/go2rtc/cmd/webtorrent"
+	"github.com/rs/zerolog/log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -66,16 +67,26 @@ func main() {
 
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-	<-sigs
 
 	sighup := make(chan os.Signal, 1)
 	signal.Notify(sighup, syscall.SIGHUP)
 
 	go func() {
 		for range sighup {
+			log.Info().Msg("Received SIGHUP, reloading configuration")
 			app.ReloadConfig()
+			api.ReloadConfig()
+			streams.ReloadConfig()
+			rtsp.ReloadConfig()
 		}
 	}()
+
+	// Wait for signals
+	<-sigs
+
+	// Release signal handlers
+	signal.Stop(sighup)
+	signal.Stop(sigs)
 
 	println("exit OK")
 }

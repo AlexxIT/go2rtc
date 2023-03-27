@@ -9,13 +9,40 @@ import (
 	"net/http"
 )
 
+var cfg struct {
+	Mod map[string]any `yaml:"streams"`
+}
+
 func Init() {
-	var cfg struct {
-		Mod map[string]any `yaml:"streams"`
-	}
 
 	app.LoadConfig(&cfg)
 
+	log = app.GetLogger("streams")
+
+	for name, item := range cfg.Mod {
+		streams[name] = NewStream(item)
+	}
+
+	for name, item := range store.GetDict("streams") {
+		streams[name] = NewStream(item)
+	}
+
+	api.HandleFunc("api/streams", streamsHandler)
+}
+
+func ReloadConfig() {
+
+	for name, stream := range streams {
+		for _, consumer := range stream.consumers {
+			stream.RemoveConsumer(consumer)
+		}
+		stream.stopProducers()
+		delete(streams, name)
+	}
+	app.LoadConfig(&cfg)
+
+	streams = make(map[string]*Stream)
+	handlers = map[string]Handler{}
 	log = app.GetLogger("streams")
 
 	for name, item := range cfg.Mod {

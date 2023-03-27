@@ -1,16 +1,21 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
-	"github.com/AlexxIT/go2rtc/cmd/app"
-	"github.com/rs/zerolog"
 	"net"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
+
+	"github.com/AlexxIT/go2rtc/cmd/app"
+	"github.com/rs/zerolog"
 )
+
+var srv *http.Server // Declare a global variable to store the http.Server instance
 
 func Init() {
 	var cfg struct {
@@ -69,12 +74,19 @@ func Init() {
 	}
 
 	go func() {
-		s := http.Server{}
-		s.Handler = Handler
-		if err = s.Serve(listener); err != nil {
+		srv = &http.Server{} // Set srv to the new http.Server instance
+		srv.Handler = Handler
+		if err = srv.Serve(listener); err != nil && err != http.ErrServerClosed {
 			log.Fatal().Err(err).Msg("[api] serve")
 		}
 	}()
+}
+
+// ReloadConfig reloads the api configuration
+func ReloadConfig() {
+	// Stop the old server and start a new one with the updated configuration
+	StopServer()
+	Init()
 }
 
 var Handler http.Handler
@@ -166,4 +178,19 @@ func ResponseStreams(w http.ResponseWriter, streams []Stream) {
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+// StopServer gracefully stops the http.Server
+func StopServer() {
+	if srv != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		err := srv.Shutdown(ctx)
+		if err != nil {
+			log.Error().Err(err).Msg("[api] server shutdown")
+		} else {
+			log.Info().Msg("[api] server stopped")
+		}
+	}
+	http.DefaultServeMux = new(http.ServeMux)
 }
