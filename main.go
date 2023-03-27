@@ -82,7 +82,7 @@ func main() {
 			rtmp.ReloadConfig()
 			exec.ReloadConfig()
 			ffmpeg.ReloadConfig()
-			//hass.ReloadConfig()
+			hass.ReloadConfig()
 			echo.ReloadConfig()
 			ivideon.ReloadConfig()
 			http.ReloadConfig()
