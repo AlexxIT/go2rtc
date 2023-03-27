@@ -8,10 +8,9 @@ import (
 	"strings"
 )
 
-// ReceiveMTU = Ethernet MTU (1500) - IP Header (20) - UDP Header (8)
-const ReceiveMTU = 1472
-
 func NewAPI(address string) (*webrtc.API, error) {
+	// ReceiveMTU = Ethernet MTU (1500) - IP Header (20) - UDP Header (8)
+	ReceiveMTU := GetMinimumMTU() - 20 - 8
 	// for debug logs add to env: `PION_LOG_DEBUG=all`
 	m := &webrtc.MediaEngine{}
 	//if err := m.RegisterDefaultCodecs(); err != nil {
