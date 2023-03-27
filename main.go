@@ -102,7 +102,7 @@ func main() {
 			mjpeg.ReloadConfig()
 
 			webtorrent.ReloadConfig()
-			//ngrok.ReloadConfig()
+			ngrok.ReloadConfig()
 			debug.ReloadConfig()
 		}
 	}()
