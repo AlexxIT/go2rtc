@@ -27,3 +27,7 @@ func Init() {
 		return streams.GetProducer(string(b))
 	})
 }
+
+func ReloadConfig() {
+	Init()
+}

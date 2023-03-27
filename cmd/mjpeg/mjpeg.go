@@ -19,6 +19,10 @@ func Init() {
 	api.HandleWS("mjpeg", handlerWS)
 }
 
+func ReloadConfig() {
+	Init()
+}
+
 func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 	src := r.URL.Query().Get("src")
 	stream := streams.GetOrNew(src)

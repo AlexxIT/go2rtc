@@ -10,6 +10,10 @@ func Init() {
 	streams.HandleFunc("tapo", handle)
 }
 
+func ReloadConfig() {
+	Init()
+}
+
 func handle(url string) (core.Producer, error) {
 	conn := tapo.NewClient(url)
 	if err := conn.Dial(); err != nil {

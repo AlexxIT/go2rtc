@@ -15,6 +15,10 @@ func Init() {
 	api.HandleFunc("api/roborock", apiHandle)
 }
 
+func ReloadConfig() {
+	Init()
+}
+
 func handle(url string) (core.Producer, error) {
 	conn := roborock.NewClient(url)
 	if err := conn.Dial(); err != nil {

@@ -12,6 +12,10 @@ func Init() {
 	streams.HandleFunc("null", nullHandler)
 }
 
+func ReloadConfig() {
+	Init()
+}
+
 func nullHandler(string) (core.Producer, error) {
 	return nil, nil
 }

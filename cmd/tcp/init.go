@@ -14,6 +14,10 @@ func Init() {
 	streams.HandleFunc("tcp", handle)
 }
 
+func ReloadConfig() {
+	Init()
+}
+
 func handle(rawURL string) (core.Producer, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {

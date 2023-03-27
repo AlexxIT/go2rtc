@@ -74,6 +74,7 @@ func main() {
 	go func() {
 		for range sighup {
 			log.Info().Msg("Received SIGHUP, reloading configuration")
+
 			app.ReloadConfig()
 			api.ReloadConfig()
 			streams.ReloadConfig()
@@ -81,6 +82,28 @@ func main() {
 			rtmp.ReloadConfig()
 			exec.ReloadConfig()
 			ffmpeg.ReloadConfig()
+			//hass.ReloadConfig()
+			echo.ReloadConfig()
+			ivideon.ReloadConfig()
+			http.ReloadConfig()
+			dvrip.ReloadConfig()
+			tapo.ReloadConfig()
+			isapi.ReloadConfig()
+			mpegts.ReloadConfig()
+			roborock.ReloadConfig()
+			tcp.ReloadConfig()
+
+			srtp.ReloadConfig()
+			//homekit.ReloadConfig()
+
+			//webrtc.ReloadConfig()
+			mp4.ReloadConfig()
+			hls.ReloadConfig()
+			mjpeg.ReloadConfig()
+
+			//webtorrent.ReloadConfig()
+			//ngrok.ReloadConfig()
+			debug.ReloadConfig()
 		}
 	}()
 
