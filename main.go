@@ -94,14 +94,14 @@ func main() {
 			tcp.ReloadConfig()
 
 			srtp.ReloadConfig()
-			//homekit.ReloadConfig()
+			homekit.ReloadConfig()
 
 			//webrtc.ReloadConfig()
 			mp4.ReloadConfig()
 			hls.ReloadConfig()
 			mjpeg.ReloadConfig()
 
-			//webtorrent.ReloadConfig()
+			webtorrent.ReloadConfig()
 			//ngrok.ReloadConfig()
 			debug.ReloadConfig()
 		}

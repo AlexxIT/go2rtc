@@ -3,6 +3,10 @@ package webtorrent
 import (
 	"errors"
 	"fmt"
+	"net/http"
+	"net/url"
+	"sync"
+
 	"github.com/AlexxIT/go2rtc/cmd/api"
 	"github.com/AlexxIT/go2rtc/cmd/app"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
@@ -10,20 +14,20 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/webtorrent"
 	"github.com/rs/zerolog"
-	"net/http"
-	"net/url"
 )
 
+var cfg struct {
+	Mod struct {
+		Trackers []string `yaml:"trackers"`
+		Shares   map[string]struct {
+			Pwd string `yaml:"pwd"`
+			Src string `yaml:"src"`
+		} `yaml:"shares"`
+	} `yaml:"webtorrent"`
+}
+var sharesMutex sync.RWMutex // Add a mutex to protect concurrent access to the shares map
+
 func Init() {
-	var cfg struct {
-		Mod struct {
-			Trackers []string `yaml:"trackers"`
-			Shares   map[string]struct {
-				Pwd string `yaml:"pwd"`
-				Src string `yaml:"src"`
-			} `yaml:"shares"`
-		} `yaml:"webtorrent"`
-	}
 
 	cfg.Mod.Trackers = []string{"wss://tracker.openwebtorrent.com"}
 
@@ -61,6 +65,47 @@ func Init() {
 		})
 	}
 
+	for name, share := range cfg.Mod.Shares {
+		if len(name) < 8 {
+			log.Warn().Str("name", name).Msgf("min share name len - 8 symbols")
+			continue
+		}
+		if len(share.Pwd) < 4 {
+			log.Warn().Str("name", name).Str("pwd", share.Pwd).Msgf("min share pwd len - 4 symbols")
+			continue
+		}
+		if streams.Get(share.Src) == nil {
+			log.Warn().Str("stream", share.Src).Msgf("stream not exists")
+			continue
+		}
+
+		srv.AddShare(name, share.Pwd, share.Src)
+
+		// adds to GET /api/webtorrent
+		shares[name] = name
+	}
+}
+func ReloadConfig() {
+	cfg.Mod.Trackers = []string{"wss://tracker.openwebtorrent.com"}
+
+	app.LoadConfig(&cfg)
+
+	// Update the trackers if needed
+	if len(cfg.Mod.Trackers) > 0 && cfg.Mod.Trackers[0] != srv.URL {
+		srv.URL = cfg.Mod.Trackers[0]
+	}
+
+	// Update the shares map
+	sharesMutex.Lock()
+	defer sharesMutex.Unlock()
+
+	// Remove old shares
+	for src, share := range shares {
+		srv.RemoveShare(share)
+		delete(shares, src)
+	}
+
+	// Add new shares
 	for name, share := range cfg.Mod.Shares {
 		if len(name) < 8 {
 			log.Warn().Str("name", name).Msgf("min share name len - 8 symbols")

@@ -18,6 +18,10 @@ func Init() {
 	api.HandleFunc("api/homekit", apiHandler)
 }
 
+func ReloadConfig() {
+	Init()
+}
+
 var log zerolog.Logger
 
 func streamHandler(url string) (core.Producer, error) {
