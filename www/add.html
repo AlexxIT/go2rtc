@@ -79,7 +79,7 @@
     /** @type {{streams:Array<{name:string,url:string}>}} */
     const data = await r.json()
     table.innerHTML = data.streams.reduce((html, item) => {
-        return html + `<tr><td>${item.name}</td><td>${item.url}</td></tr>`
+        return html + `<tr><td>${item.name}</td><td class="source-cell" title="${item.url}">${item.url}</td></tr>`
     }, '<thead><tr><th>Name</th><th>Source</th></tr></thead><tbody>') + '</tbody>'
 }
 </script>
@@ -102,7 +102,7 @@
 </div>
 <script>
     document.getElementById('stream').addEventListener('click', async ev => {
-        ev.target.nextElementSibling.style.display = 'block'
+        
     })
     document.getElementById('stream-form').addEventListener('submit', async ev => {
         ev.preventDefault()
@@ -112,7 +112,7 @@
         url.searchParams.set('src', ev.target.elements['src'].value)
 
         const r = await fetch(url, {method: 'PUT'})
-        alert(r.ok ? 'OK' : 'ERROR')
+        showAlert(r.ok ? 'OK' : 'ERROR')
     })
 </script>
 
@@ -138,7 +138,6 @@
 </div>
 <script>
     document.getElementById('homekit').addEventListener('click', async ev => {
-        ev.target.nextElementSibling.style.display = 'block'
         const r = await fetch('api/homekit', {cache: 'no-cache'})
 
         /** @type {Array<{id:string,name:string,addr:string,model:string,paired:boolean}>} */
@@ -167,7 +166,7 @@
         fetch(`api/homekit?id=${id}&name=${name}&pin=${pin}`, {method: 'POST'})
             .then(r => r.text())
             .then(data => {
-                if (data.length > 0) alert(data)
+                if (data.length > 0) showAlert(data)
                 else window.location.reload()
             })
             .catch(console.error)
@@ -177,7 +176,7 @@
         fetch(`api/homekit?src=${src}`, {method: 'DELETE'})
             .then(r => r.text())
             .then(data => {
-                if (data.length > 0) alert(data)
+                if (data.length > 0) showAlert(data)
                 else window.location.reload()
             })
             .catch(console.error)
@@ -191,7 +190,17 @@
 </div>
 <script>
     document.getElementById('hass').addEventListener('click', async ev => {
-        ev.target.nextElementSibling.style.display = 'block'
+        // Check if the clicked element has the "source-cell" class
+        if (ev.target.classList.contains('source-cell')) {
+            // Get the content of the clicked element and copy it to the clipboard
+            var content = ev.target.textContent;
+            try {
+                await navigator.clipboard.writeText(content);
+                console.log('Copied to clipboard: ' + content);
+            } catch (err) {
+                console.error('Failed to copy to clipboard: ' + err);
+            }
+        }
         await getStreams('api/hass', 'hass-table')
     })
 </script>
@@ -209,7 +218,6 @@
 </div>
 <script>
     document.getElementById('roborock').addEventListener('click', async ev => {
-        ev.target.nextElementSibling.style.display = 'block'
         await getStreams('api/roborock', 'roborock-table')
     })
 
@@ -228,7 +236,6 @@
 </div>
 <script>
     document.getElementById('devices').addEventListener('click', async ev => {
-        ev.target.nextElementSibling.style.display = 'block'
         await getStreams('api/devices', 'devices-table')
     })
 </script>
@@ -240,7 +247,6 @@
 </div>
 <script>
     document.getElementById('webtorrent').addEventListener('click', async ev => {
-        ev.target.nextElementSibling.style.display = 'block'
         await getStreams('api/webtorrent', 'webtorrent-table')
     })
 </script>
@@ -251,9 +257,20 @@
 
     buttons.forEach((button, index) => {
         button.addEventListener('click', () => {
+            // Remove active class from all buttons
+            buttons.forEach((btn) => {
+                btn.classList.remove('button-active');
+            });
+
+            // Add active class to the clicked button
+            button.classList.add('button-active');
+
+            // Hide all modules
             modules.forEach(module => {
                 module.style.display = 'none';
             });
+
+            // Show the corresponding module
             modules[index].style.display = 'block';
         });
     });

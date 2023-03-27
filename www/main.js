@@ -1,3 +1,23 @@
+function showAlert(message, timeout = 0) {
+    const alertElement = document.getElementById('custom-alert');
+    const alertText = alertElement.querySelector('.alert-text');
+    
+    alertText.textContent = message;
+    alertElement.classList.remove('hidden');
+
+    if (timeout > 0)
+    {
+        setTimeout(() => {
+            closeAlert();
+        }, timeout);
+    }
+}
+
+function closeAlert() {
+    const alertElement = document.getElementById('custom-alert');
+    alertElement.classList.add('hidden');
+}
+
 // main menu
 document.body.innerHTML = `
 <style>
@@ -66,6 +86,10 @@ button {
 button:hover {
     background-color: #b19891;
 }
+.button-active {
+    background-color: #b19891;
+    color: white;
+}
 form input[type="submit"] {
     font-family: 'Poppins', Arial, Helvetica, sans-serif;
     background-color: rgba(177, 152, 145, .3);
@@ -82,6 +106,44 @@ form input[type="submit"] {
 form input[type="submit"]:hover {
     background-color: #b19891;
 }
+.source-cell {
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.hidden {
+    display: none;
+}
+
+.custom-alert {
+    position: fixed;
+    top: 200px;
+    left: 50%;
+    transform: translateX(-50%);
+    min-width: 200px;
+
+    padding: 10px 20px;
+    background-color: #b19891;
+    font-family: 'Poppins', Arial, Helvetica, sans-serif;
+    color: white;
+    font-size: 16px;
+    border-radius: 4px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+}
+
+.alert-close {
+    float: right;
+    font-size: 20px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.alert-close:hover {
+    color: #ddd;
+}
+
 </style>
 <nav>
     <ul>
@@ -90,4 +152,9 @@ form input[type="submit"]:hover {
         <li><a href="editor.html">Config</a></li>
     </ul>
 </nav>
-` + document.body.innerHTML;
+` + document.body.innerHTML + `
+<div id="custom-alert" class="custom-alert hidden">
+    <span class="alert-text"></span>
+    <span class="alert-close" onclick="closeAlert()">&times;</span>
+</div>
+`;

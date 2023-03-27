@@ -39,10 +39,10 @@
             method: 'POST', body: editor.getValue()
         }).then(r => {
             if (r.ok) {
-                alert('OK');
+                showAlert('OK');
                 fetch('api/exit', {method: 'POST'});
             } else {
-                r.text().then(alert);
+                r.text().then(showAlert);
             }
         });
     });
@@ -50,7 +50,7 @@
     window.addEventListener('load', () => {
         fetch('api/config', {cache: 'no-cache'}).then(r => {
             if (r.status === 410) {
-                alert('Config file is not set');
+                showAlert('Config file is not set');
             } else if (r.status === 404) {
                 editor.setValue(''); // config file not exist
             } else if (r.ok) {
@@ -58,7 +58,7 @@
                     editor.setValue(data);
                 });
             } else {
-                alert(`Unknown error: ${r.statusText} (${r.status})`);
+                showAlert(`Unknown error: ${r.statusText} (${r.status})`);
             }
         });
     })
