@@ -68,5 +68,14 @@ func main() {
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	<-sigs
 
+	sighup := make(chan os.Signal, 1)
+	signal.Notify(sighup, syscall.SIGHUP)
+
+	go func() {
+		for range sighup {
+			app.ReloadConfig()
+		}
+	}()
+
 	println("exit OK")
 }

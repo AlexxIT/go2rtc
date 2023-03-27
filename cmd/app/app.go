@@ -23,9 +23,9 @@ var ConfigPath string
 var Info = map[string]any{
 	"version": Version,
 }
+var confs Config
 
 func Init() {
-	var confs Config
 	var version bool
 
 	flag.Var(&confs, "config", "go2rtc config (path to file or raw text), support multiple")
@@ -121,6 +121,32 @@ func GetLogger(module string) zerolog.Logger {
 	}
 
 	return log.Logger
+}
+
+// ReloadConfig clears the current config and reloads it from the source(s)
+func ReloadConfig() {
+	configs = nil
+
+	log.Info().Msg("Received SIGHUP, reloading configuration")
+
+	for _, conf := range confs {
+		if conf[0] != '{' {
+			// config as file
+			data, _ := os.ReadFile(conf)
+			if data == nil {
+				continue
+			}
+
+			data = []byte(shell.ReplaceEnvVars(string(data)))
+			configs = append(configs, data)
+		} else {
+			// config as raw YAML
+			configs = append(configs, []byte(conf))
+		}
+	}
+
+	// Reload any specific configuration settings that need to be reloaded
+	// after the config has been updated.
 }
 
 // internal
