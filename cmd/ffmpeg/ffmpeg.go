@@ -14,11 +14,13 @@ import (
 	"strings"
 )
 
+var defaults map[string]string
+
 func Init() {
+	defaults = setDefaults()
 	var cfg struct {
 		Mod map[string]string `yaml:"ffmpeg"`
 	}
-
 	cfg.Mod = defaults // will be overriden from yaml
 
 	app.LoadConfig(&cfg)
@@ -39,66 +41,72 @@ func Init() {
 	device.Init()
 }
 
-var defaults = map[string]string{
-	"bin":    "ffmpeg",
-	"global": "-hide_banner",
+func ReloadConfig() {
+	Init()
+}
 
-	// inputs
-	"file": "-re -i {input}",
-	"http": "-fflags nobuffer -flags low_delay -i {input}",
-	"rtsp": "-fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_transport tcp -i {input}",
+func setDefaults() map[string]string {
+	return map[string]string{
+		"bin":    "ffmpeg",
+		"global": "-hide_banner",
 
-	"rtsp/udp": "-fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -i {input}",
+		// inputs
+		"file": "-re -i {input}",
+		"http": "-fflags nobuffer -flags low_delay -i {input}",
+		"rtsp": "-fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_transport tcp -i {input}",
 
-	// output
-	"output": "-user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}",
+		"rtsp/udp": "-fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -i {input}",
 
-	// `-preset superfast` - we can't use ultrafast because it doesn't support `-profile main -level 4.1`
-	// `-tune zerolatency` - for minimal latency
-	// `-profile high -level 4.1` - most used streaming profile
-	"h264":  "-c:v libx264 -g 50 -profile:v high -level:v 4.1 -preset:v superfast -tune:v zerolatency",
-	"h265":  "-c:v libx265 -g 50 -profile:v high -level:v 5.1 -preset:v superfast -tune:v zerolatency",
-	"mjpeg": "-c:v mjpeg -force_duplicated_matrix:v 1 -huffman:v 0 -pix_fmt:v yuvj420p",
+		// output
+		"output": "-user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}",
 
-	"opus":       "-c:a libopus -ar:a 48000 -ac:a 2",
-	"pcmu":       "-c:a pcm_mulaw -ar:a 8000 -ac:a 1",
-	"pcmu/16000": "-c:a pcm_mulaw -ar:a 16000 -ac:a 1",
-	"pcmu/48000": "-c:a pcm_mulaw -ar:a 48000 -ac:a 1",
-	"pcma":       "-c:a pcm_alaw -ar:a 8000 -ac:a 1",
-	"pcma/16000": "-c:a pcm_alaw -ar:a 16000 -ac:a 1",
-	"pcma/48000": "-c:a pcm_alaw -ar:a 48000 -ac:a 1",
-	"aac":        "-c:a aac", // keep sample rate and channels
-	"aac/16000":  "-c:a aac -ar:a 16000 -ac:a 1",
-	"mp3":        "-c:a libmp3lame -q:a 8",
-	"pcm":        "-c:a pcm_s16be",
-	"pcm/8000":   "-c:a pcm_s16be -ar:a 8000 -ac:a 1",
-	"pcm/16000":  "-c:a pcm_s16be -ar:a 16000 -ac:a 1",
-	"pcm/48000":  "-c:a pcm_s16be -ar:a 48000 -ac:a 1",
+		// `-preset superfast` - we can't use ultrafast because it doesn't support `-profile main -level 4.1`
+		// `-tune zerolatency` - for minimal latency
+		// `-profile high -level 4.1` - most used streaming profile
+		"h264":  "-c:v libx264 -g 50 -profile:v high -level:v 4.1 -preset:v superfast -tune:v zerolatency",
+		"h265":  "-c:v libx265 -g 50 -profile:v high -level:v 5.1 -preset:v superfast -tune:v zerolatency",
+		"mjpeg": "-c:v mjpeg -force_duplicated_matrix:v 1 -huffman:v 0 -pix_fmt:v yuvj420p",
 
-	// hardware Intel and AMD on Linux
-	// better not to set `-async_depth:v 1` like for QSV, because framedrops
-	// `-bf 0` - disable B-frames is very important
-	"h264/vaapi":  "-c:v h264_vaapi -g 50 -bf 0 -profile:v high -level:v 4.1 -sei:v 0",
-	"h265/vaapi":  "-c:v hevc_vaapi -g 50 -bf 0 -profile:v high -level:v 5.1 -sei:v 0",
-	"mjpeg/vaapi": "-c:v mjpeg_vaapi",
+		"opus":       "-c:a libopus -ar:a 48000 -ac:a 2",
+		"pcmu":       "-c:a pcm_mulaw -ar:a 8000 -ac:a 1",
+		"pcmu/16000": "-c:a pcm_mulaw -ar:a 16000 -ac:a 1",
+		"pcmu/48000": "-c:a pcm_mulaw -ar:a 48000 -ac:a 1",
+		"pcma":       "-c:a pcm_alaw -ar:a 8000 -ac:a 1",
+		"pcma/16000": "-c:a pcm_alaw -ar:a 16000 -ac:a 1",
+		"pcma/48000": "-c:a pcm_alaw -ar:a 48000 -ac:a 1",
+		"aac":        "-c:a aac", // keep sample rate and channels
+		"aac/16000":  "-c:a aac -ar:a 16000 -ac:a 1",
+		"mp3":        "-c:a libmp3lame -q:a 8",
+		"pcm":        "-c:a pcm_s16be",
+		"pcm/8000":   "-c:a pcm_s16be -ar:a 8000 -ac:a 1",
+		"pcm/16000":  "-c:a pcm_s16be -ar:a 16000 -ac:a 1",
+		"pcm/48000":  "-c:a pcm_s16be -ar:a 48000 -ac:a 1",
 
-	// hardware Raspberry
-	"h264/v4l2m2m": "-c:v h264_v4l2m2m -g 50 -bf 0",
-	"h265/v4l2m2m": "-c:v hevc_v4l2m2m -g 50 -bf 0",
+		// hardware Intel and AMD on Linux
+		// better not to set `-async_depth:v 1` like for QSV, because framedrops
+		// `-bf 0` - disable B-frames is very important
+		"h264/vaapi":  "-c:v h264_vaapi -g 50 -bf 0 -profile:v high -level:v 4.1 -sei:v 0",
+		"h265/vaapi":  "-c:v hevc_vaapi -g 50 -bf 0 -profile:v high -level:v 5.1 -sei:v 0",
+		"mjpeg/vaapi": "-c:v mjpeg_vaapi",
 
-	// hardware NVidia on Linux and Windows
-	// preset=p2 - faster, tune=ll - low latency
-	"h264/cuda": "-c:v h264_nvenc -g 50 -profile:v high -level:v auto -preset:v p2 -tune:v ll",
-	"h265/cuda": "-c:v hevc_nvenc -g 50 -profile:v high -level:v auto",
+		// hardware Raspberry
+		"h264/v4l2m2m": "-c:v h264_v4l2m2m -g 50 -bf 0",
+		"h265/v4l2m2m": "-c:v hevc_v4l2m2m -g 50 -bf 0",
 
-	// hardware Intel on Windows
-	"h264/dxva2":  "-c:v h264_qsv -g 50 -bf 0 -profile:v high -level:v 4.1 -async_depth:v 1",
-	"h265/dxva2":  "-c:v hevc_qsv -g 50 -bf 0 -profile:v high -level:v 5.1 -async_depth:v 1",
-	"mjpeg/dxva2": "-c:v mjpeg_qsv -profile:v high -level:v 5.1",
+		// hardware NVidia on Linux and Windows
+		// preset=p2 - faster, tune=ll - low latency
+		"h264/cuda": "-c:v h264_nvenc -g 50 -profile:v high -level:v auto -preset:v p2 -tune:v ll",
+		"h265/cuda": "-c:v hevc_nvenc -g 50 -profile:v high -level:v auto",
 
-	// hardware macOS
-	"h264/videotoolbox": "-c:v h264_videotoolbox -g 50 -bf 0 -profile:v high -level:v 4.1",
-	"h265/videotoolbox": "-c:v hevc_videotoolbox -g 50 -bf 0 -profile:v high -level:v 5.1",
+		// hardware Intel on Windows
+		"h264/dxva2":  "-c:v h264_qsv -g 50 -bf 0 -profile:v high -level:v 4.1 -async_depth:v 1",
+		"h265/dxva2":  "-c:v hevc_qsv -g 50 -bf 0 -profile:v high -level:v 5.1 -async_depth:v 1",
+		"mjpeg/dxva2": "-c:v mjpeg_qsv -profile:v high -level:v 5.1",
+
+		// hardware macOS
+		"h264/videotoolbox": "-c:v h264_videotoolbox -g 50 -bf 0 -profile:v high -level:v 4.1",
+		"h265/videotoolbox": "-c:v hevc_videotoolbox -g 50 -bf 0 -profile:v high -level:v 5.1",
+	}
 }
 
 // inputTemplate - select input template from YAML config by template name

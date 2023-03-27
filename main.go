@@ -80,6 +80,7 @@ func main() {
 			rtsp.ReloadConfig()
 			rtmp.ReloadConfig()
 			exec.ReloadConfig()
+			ffmpeg.ReloadConfig()
 		}
 	}()
 
