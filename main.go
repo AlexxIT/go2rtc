@@ -78,6 +78,7 @@ func main() {
 			api.ReloadConfig()
 			streams.ReloadConfig()
 			rtsp.ReloadConfig()
+			rtmp.ReloadConfig()
 		}
 	}()
 

@@ -16,6 +16,10 @@ func Init() {
 	api.HandleFunc("api/stream.flv", apiHandle)
 }
 
+func ReloadConfig() {
+	Init()
+}
+
 func streamsHandle(url string) (core.Producer, error) {
 	conn := rtmp.NewClient(url)
 	if err := conn.Dial(); err != nil {
