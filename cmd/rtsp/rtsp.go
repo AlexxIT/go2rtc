@@ -1,6 +1,11 @@
 package rtsp
 
 import (
+	"io"
+	"net"
+	"net/url"
+	"strings"
+
 	"github.com/AlexxIT/go2rtc/cmd/app"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -8,9 +13,6 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/rtsp"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/rs/zerolog"
-	"net"
-	"net/url"
-	"strings"
 )
 
 func Init() {
@@ -211,7 +213,9 @@ func tcpHandler(conn *rtsp.Conn) {
 	})
 
 	if err := conn.Accept(); err != nil {
-		log.Warn().Err(err).Caller().Send()
+		if err != io.EOF {
+			log.Warn().Err(err).Caller().Send()
+		}
 		if closer != nil {
 			closer()
 		}
