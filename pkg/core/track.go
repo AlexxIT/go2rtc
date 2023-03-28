@@ -42,11 +42,11 @@ func (t *Receiver) WriteRTP(packet *rtp.Packet) {
 }
 
 func (t *Receiver) Senders() (senders []*Sender) {
-	t.mu.Lock()
+	t.mu.RLock()
 	for sender := range t.senders {
 		senders = append(senders, sender)
 	}
-	t.mu.Unlock()
+	t.mu.RUnlock()
 	return
 }
 
@@ -73,12 +73,9 @@ func (t *Receiver) Replace(target *Receiver) {
 
 func (t *Receiver) String() string {
 	s := t.Codec.String() + ", bytes=" + strconv.Itoa(t.bytes)
-	if t.mu.TryLock() {
-		s += fmt.Sprintf(", senders=%d", len(t.senders))
-		t.mu.Unlock()
-	} else {
-		s += fmt.Sprintf(", senders=?")
-	}
+	t.mu.RLock()
+	s += fmt.Sprintf(", senders=%d", len(t.senders))
+	t.mu.RUnlock()
 	return s
 }
 
@@ -127,7 +124,6 @@ func (s *Sender) HandleRTP(track *Receiver) {
 	}
 	track.senders[s] = buffer
 	track.mu.Unlock()
-
 	s.mu.Lock()
 	s.receivers = append(s.receivers, track)
 	s.mu.Unlock()
@@ -173,12 +169,9 @@ func (s *Sender) Close() {
 
 func (s *Sender) String() string {
 	info := s.Codec.String() + ", bytes=" + strconv.Itoa(s.bytes)
-	if s.mu.TryLock() {
-		info += ", receivers=" + strconv.Itoa(len(s.receivers))
-		s.mu.Unlock()
-	} else {
-		info += ", receivers=?"
-	}
+	s.mu.RLock()
+	info += ", receivers=" + strconv.Itoa(len(s.receivers))
+	s.mu.RUnlock()
 	if s.overflow > 0 {
 		info += ", overflow=" + strconv.Itoa(s.overflow)
 	}
