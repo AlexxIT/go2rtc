@@ -18,7 +18,7 @@ type Receiver struct {
 	ID byte // Channel for RTSP, PayloadType for MPEG-TS
 
 	senders map[*Sender]chan *rtp.Packet
-	mu      sync.Mutex
+	mu      sync.RWMutex
 	bytes   int
 }
 
@@ -32,9 +32,9 @@ func (t *Receiver) WriteRTP(packet *rtp.Packet) {
 	t.mu.Lock()
 	t.bytes += len(packet.Payload)
 	for sender, buffer := range t.senders {
-		if len(buffer) < cap(buffer) {
-			buffer <- packet
-		} else {
+		select {
+		case buffer <- packet:
+		default:
 			sender.overflow++
 		}
 	}
@@ -93,7 +93,7 @@ type Sender struct {
 	Handler HandlerFunc
 
 	receivers []*Receiver
-	mu        sync.Mutex
+	mu        sync.RWMutex
 	bytes     int
 
 	overflow int
@@ -135,7 +135,9 @@ func (s *Sender) HandleRTP(track *Receiver) {
 	go func() {
 		// read packets from buffer channel until it will be closed
 		for packet := range buffer {
+			s.mu.Lock()
 			s.bytes += len(packet.Payload)
+			s.mu.Unlock()
 			s.Handler(packet)
 		}
 
