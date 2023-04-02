@@ -63,7 +63,8 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
       - name: Build and push Hardware
         uses: docker/build-push-action@v3
         with:
@@ -73,3 +74,5 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta-hw.outputs.tags }}
           labels: ${{ steps.meta-hw.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
