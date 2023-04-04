@@ -185,6 +185,11 @@ producers:
 				continue producers
 			}
 		}
+		for _, track := range producer.senders {
+			if len(track.Senders()) > 0 {
+				continue producers
+			}
+		}
 		producer.stop()
 	}
 	s.mu.Unlock()
