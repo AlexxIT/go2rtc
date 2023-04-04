@@ -3,7 +3,7 @@
 # 0. Prepare images
 # only debian 12 (bookworm) has latest ffmpeg
 ARG DEBIAN_VERSION="bookworm-slim"
-ARG GO_VERSION="1.19-buster"
+ARG GO_VERSION="1.20-buster"
 ARG NGROK_VERSION="3"
 
 FROM debian:${DEBIAN_VERSION} AS base
