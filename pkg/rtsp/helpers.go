@@ -5,6 +5,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/pion/rtcp"
 	"github.com/pion/sdp/v3"
+	"io"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -23,12 +24,6 @@ s=-
 t=0 0`
 
 func UnmarshalSDP(rawSDP []byte) ([]*core.Media, error) {
-	// fix bug from Reolink Doorbell
-	if i := bytes.Index(rawSDP, []byte("a=sendonlym=")); i > 0 {
-		rawSDP = append(rawSDP[:i+11], rawSDP[i+10:]...)
-		rawSDP[i+10] = '\n'
-	}
-
 	sd := &sdp.SessionDescription{}
 	if err := sd.Unmarshal(rawSDP); err != nil {
 		// fix multiple `s=` https://github.com/AlexxIT/WebRTC/issues/417
@@ -38,10 +33,14 @@ func UnmarshalSDP(rawSDP []byte) ([]*core.Media, error) {
 		// fix SDP header for some cameras
 		if i := bytes.Index(rawSDP, []byte("\nm=")); i > 0 {
 			rawSDP = append([]byte(sdpHeader), rawSDP[i:]...)
-			sd = &sdp.SessionDescription{}
-			err = sd.Unmarshal(rawSDP)
 		}
 
+		if err == io.EOF {
+			rawSDP = append(rawSDP, '\n')
+		}
+
+		sd = &sdp.SessionDescription{}
+		err = sd.Unmarshal(rawSDP)
 		if err != nil {
 			return nil, err
 		}
