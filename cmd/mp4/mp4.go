@@ -1,6 +1,12 @@
 package mp4
 
 import (
+	"net/http"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/AlexxIT/go2rtc/cmd/api"
 	"github.com/AlexxIT/go2rtc/cmd/app"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
@@ -8,10 +14,6 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/mp4"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/rs/zerolog"
-	"net/http"
-	"strconv"
-	"strings"
-	"time"
 )
 
 func Init() {
@@ -111,8 +113,11 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 		Medias:     core.ParseQuery(r.URL.Query()),
 	}
 
+	mu := &sync.Mutex{}
 	cons.Listen(func(msg any) {
 		if data, ok := msg.([]byte); ok {
+			mu.Lock()
+			defer mu.Unlock()
 			if _, err := w.Write(data); err != nil && exit != nil {
 				exit <- err
 				exit = nil
