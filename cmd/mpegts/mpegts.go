@@ -11,6 +11,10 @@ func Init() {
 	api.HandleFunc("api/stream.ts", apiHandle)
 }
 
+func ReloadConfig() {
+	Init()
+}
+
 func apiHandle(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		http.Error(w, "", http.StatusMethodNotAllowed)

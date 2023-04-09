@@ -15,6 +15,7 @@ type Ngrok struct {
 	Tunnels map[string]string
 
 	reader *bufio.Reader
+	cmd    *exec.Cmd
 }
 
 type Message struct {
@@ -46,6 +47,7 @@ func NewNgrok(command any) (*Ngrok, error) {
 	n := &Ngrok{
 		Tunnels: map[string]string{},
 		reader:  bufio.NewReader(r),
+		cmd:     cmd,
 	}
 
 	if err = cmd.Start(); err != nil {
@@ -76,4 +78,10 @@ func (n *Ngrok) Serve() error {
 
 		n.Fire(msg)
 	}
+}
+func (n *Ngrok) Stop() error {
+	if n.cmd != nil && n.cmd.Process != nil {
+		return n.cmd.Process.Kill()
+	}
+	return nil
 }

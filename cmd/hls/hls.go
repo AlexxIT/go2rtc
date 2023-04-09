@@ -26,6 +26,10 @@ func Init() {
 	api.HandleFunc("api/hls/segment.m4s", handlerSegmentMP4)
 }
 
+func ReloadConfig() {
+	Init()
+}
+
 type Consumer interface {
 	core.Consumer
 	Listen(f core.EventFunc)

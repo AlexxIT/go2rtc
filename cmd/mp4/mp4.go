@@ -24,6 +24,10 @@ func Init() {
 	api.HandleFunc("api/stream.mp4", handlerMP4)
 }
 
+func ReloadConfig() {
+	Init()
+}
+
 var log zerolog.Logger
 
 func handlerKeyframe(w http.ResponseWriter, r *http.Request) {

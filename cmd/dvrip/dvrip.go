@@ -10,6 +10,10 @@ func Init() {
 	streams.HandleFunc("dvrip", handle)
 }
 
+func ReloadConfig() {
+	Init()
+}
+
 func handle(url string) (core.Producer, error) {
 	conn := dvrip.NewClient(url)
 	if err := conn.Dial(); err != nil {

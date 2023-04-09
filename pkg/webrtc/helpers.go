@@ -236,3 +236,29 @@ func CandidateManualHostTCPPassive(address string, port int) string {
 		foundation, priority, address, port,
 	)
 }
+
+func GetMinimumMTU() uint {
+	const DefaultMTU uint = 1500
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return DefaultMTU
+	}
+
+	var minMTU uint = DefaultMTU
+	for _, iface := range interfaces {
+		// Skip tunnel and loopback interfaces
+		if (iface.Flags&net.FlagLoopback != 0) || (iface.Flags&net.FlagPointToPoint != 0) {
+			continue
+		}
+
+		// Get the MTU of the current interface
+		mtu := uint(iface.MTU)
+
+		// Update the minimum MTU if it hasn't been set yet or if the current MTU is smaller
+		if minMTU == DefaultMTU || mtu < minMTU {
+			minMTU = mtu
+		}
+	}
+
+	return minMTU
+}

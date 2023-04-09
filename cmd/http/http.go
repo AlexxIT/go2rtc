@@ -18,6 +18,10 @@ func Init() {
 	streams.HandleFunc("https", handle)
 }
 
+func ReloadConfig() {
+	Init()
+}
+
 func handle(url string) (core.Producer, error) {
 	// first we get the Content-Type to define supported producer
 	req, err := http.NewRequest("GET", url, nil)

@@ -17,3 +17,7 @@ func Init() {
 		return prod, nil
 	})
 }
+
+func ReloadConfig() {
+	Init()
+}

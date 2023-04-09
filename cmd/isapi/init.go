@@ -10,6 +10,10 @@ func Init() {
 	streams.HandleFunc("isapi", handle)
 }
 
+func ReloadConfig() {
+	Init()
+}
+
 func handle(url string) (core.Producer, error) {
 	conn, err := isapi.NewClient(url)
 	if err != nil {

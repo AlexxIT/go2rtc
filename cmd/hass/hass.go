@@ -15,15 +15,16 @@ import (
 	"path"
 )
 
+var conf struct {
+	API struct {
+		Listen string `json:"listen"`
+	} `yaml:"api"`
+	Mod struct {
+		Config string `yaml:"config"`
+	} `yaml:"hass"`
+}
+
 func Init() {
-	var conf struct {
-		API struct {
-			Listen string `json:"listen"`
-		} `yaml:"api"`
-		Mod struct {
-			Config string `yaml:"config"`
-		} `yaml:"hass"`
-	}
 
 	app.LoadConfig(&conf)
 
@@ -39,6 +40,51 @@ func Init() {
 		return
 	}
 
+	api.HandleFunc("api/hass", func(w http.ResponseWriter, _ *http.Request) {
+		var items []api.Stream
+		for name, url := range entries {
+			items = append(items, api.Stream{Name: name, URL: url})
+		}
+		api.ResponseStreams(w, items)
+	})
+
+	streams.HandleFunc("hass", func(url string) (core.Producer, error) {
+		if hurl := entries[url[5:]]; hurl != "" {
+			return streams.GetProducer(hurl)
+		}
+		return nil, fmt.Errorf("can't get url: %s", url)
+	})
+
+	// for Addon listen on hassio interface, so WebUI feature will work
+	if conf.API.Listen == "127.0.0.1:1984" {
+		if addr := HassioAddr(); addr != "" {
+			addr += ":1984"
+			go func() {
+				log.Info().Str("addr", addr).Msg("[hass] listen")
+				if err := http.ListenAndServe(addr, api.Handler); err != nil {
+					log.Error().Err(err).Caller().Send()
+				}
+			}()
+		}
+	}
+}
+
+func ReloadConfig() {
+	app.LoadConfig(&conf)
+
+	log = app.GetLogger("hass")
+
+	initAPI()
+
+	entries := importEntries(conf.Mod.Config)
+	if entries == nil {
+		api.HandleFunc("api/hass", func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, "no hass config", http.StatusNotFound)
+		})
+		return
+	}
+
+	// Update the "api/hass" handler with the new entries
 	api.HandleFunc("api/hass", func(w http.ResponseWriter, _ *http.Request) {
 		var items []api.Stream
 		for name, url := range entries {

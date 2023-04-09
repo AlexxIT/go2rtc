@@ -48,6 +48,16 @@ func Init() {
 	log = app.GetLogger("exec")
 }
 
+func ReloadConfig() {
+	// depends on RTSP server
+	if rtsp.Port == "" {
+		return
+	}
+	streams.HandleFunc("exec", Handle)
+
+	log = app.GetLogger("exec")
+}
+
 func Handle(url string) (core.Producer, error) {
 	sum := md5.Sum([]byte(url))
 	path := "/" + hex.EncodeToString(sum[:])
