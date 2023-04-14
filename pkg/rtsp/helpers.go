@@ -2,14 +2,15 @@ package rtsp
 
 import (
 	"bytes"
-	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/pion/rtcp"
-	"github.com/pion/sdp/v3"
 	"io"
 	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/pion/rtcp"
+	"github.com/pion/sdp/v3"
 )
 
 type RTCP struct {
@@ -34,6 +35,10 @@ func UnmarshalSDP(rawSDP []byte) ([]*core.Media, error) {
 		if i := bytes.Index(rawSDP, []byte("\nm=")); i > 0 {
 			rawSDP = append([]byte(sdpHeader), rawSDP[i:]...)
 		}
+
+		// Fix invalid media type (errSDPInvalidValue) caused by
+		// some TP-LINK IP camera, e.g. TL-IPC44GW
+		rawSDP = bytes.ReplaceAll(rawSDP, []byte("m=application/TP-LINK "), []byte("m=application "))
 
 		if err == io.EOF {
 			rawSDP = append(rawSDP, '\n')

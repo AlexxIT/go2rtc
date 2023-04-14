@@ -5,14 +5,15 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"net"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/tcp"
 )
 
 func NewClient(uri string) *Conn {
@@ -309,6 +310,7 @@ func (c *Conn) SetupMedia(media *core.Media, first bool) (byte, error) {
 		// some Dahua/Amcrest cameras fail here because two simultaneous
 		// backchannel connections
 		if c.Backchannel {
+			c.Close()
 			c.Backchannel = false
 			if err := c.Dial(); err != nil {
 				return 0, err
