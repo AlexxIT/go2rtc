@@ -46,12 +46,15 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	exit := make(chan []byte)
+	exit := make(chan []byte, 1)
 
 	cons := &mp4.Segment{OnlyKeyframe: true}
 	cons.Listen(func(msg any) {
 		if data, ok := msg.([]byte); ok && exit != nil {
-			exit <- data
+			select {
+			case exit <- data:
+			default:
+			}
 			exit = nil
 		}
 	})
@@ -105,7 +108,7 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	exit := make(chan error)
+	exit := make(chan error, 1) // Add buffer to prevent blocking
 
 	cons := &mp4.Consumer{
 		RemoteAddr: tcp.RemoteAddr(r),
@@ -119,7 +122,10 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 			mu.Lock()
 			defer mu.Unlock()
 			if _, err := w.Write(data); err != nil && exit != nil {
-				exit <- err
+				select {
+				case exit <- err:
+				default:
+				}
 				exit = nil
 			}
 		}
