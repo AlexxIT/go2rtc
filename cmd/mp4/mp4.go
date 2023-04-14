@@ -117,10 +117,14 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 	}
 
 	mu := &sync.Mutex{}
+	exiting := false
 	cons.Listen(func(msg any) {
 		if data, ok := msg.([]byte); ok {
 			mu.Lock()
 			defer mu.Unlock()
+			if exiting {
+				return
+			}
 			if _, err := w.Write(data); err != nil && exit != nil {
 				select {
 				case exit <- err:
@@ -136,7 +140,12 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	defer stream.RemoveConsumer(cons)
+	defer func() {
+		mu.Lock()
+		exiting = true
+		mu.Unlock()
+		stream.RemoveConsumer(cons)
+	}()
 
 	w.Header().Set("Content-Type", cons.MimeType())
 
