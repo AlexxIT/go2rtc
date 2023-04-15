@@ -50,7 +50,7 @@ func (s *Stream) SetSource(source string) {
 
 func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
 	// support for multiple simultaneous requests from different consumers
-	atomic.AddInt32(&s.requests, 1)
+	consN := atomic.AddInt32(&s.requests, 1)
 
 	var producers []*Producer // matched producers for consumer
 
@@ -58,15 +58,19 @@ func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
 
 	// Step 1. Get consumer medias
 	for _, consMedia := range cons.GetMedias() {
+		log.Trace().Msgf("[streams] check cons=%d media=%s", consN, consMedia)
 
 	producers:
-		for _, prod := range s.producers {
+		for prodN, prod := range s.producers {
 			if err = prod.Dial(); err != nil {
+				log.Trace().Err(err).Msgf("[streams] skip prod=%s", prod.url)
 				continue
 			}
 
 			// Step 2. Get producer medias (not tracks yet)
 			for _, prodMedia := range prod.GetMedias() {
+				log.Trace().Msgf("[streams] check prod=%d media=%s", prodN, prodMedia)
+
 				collectCodecs(prodMedia, &codecs)
 
 				// Step 3. Match consumer/producer codecs list
@@ -79,6 +83,8 @@ func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
 
 				switch prodMedia.Direction {
 				case core.DirectionRecvonly:
+					log.Trace().Msgf("[streams] match prod=%d => cons=%d", prodN, consN)
+
 					// Step 4. Get recvonly track from producer
 					if track, err = prod.GetTrack(prodMedia, prodCodec); err != nil {
 						log.Info().Err(err).Msg("[streams] can't get track")
@@ -91,6 +97,8 @@ func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
 					}
 
 				case core.DirectionSendonly:
+					log.Trace().Msgf("[streams] match cons=%d => prod=%d", consN, prodN)
+
 					// Step 4. Get recvonly track from consumer (backchannel)
 					if track, err = cons.(core.Producer).GetTrack(consMedia, consCodec); err != nil {
 						log.Info().Err(err).Msg("[streams] can't get track")
