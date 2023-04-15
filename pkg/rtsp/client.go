@@ -16,6 +16,8 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 )
 
+var Timeout = time.Second * 5
+
 func NewClient(uri string) *Conn {
 	return &Conn{uri: uri}
 }
@@ -93,6 +95,11 @@ func (c *Conn) Request(req *tcp.Request) error {
 
 // Do send Request and receive and process Response
 func (c *Conn) Do(req *tcp.Request) (*tcp.Response, error) {
+	// https://blog.cloudflare.com/the-complete-guide-to-golang-net-http-timeouts/
+	if err := c.conn.SetDeadline(time.Now().Add(Timeout)); err != nil {
+		return nil, err
+	}
+
 	if err := c.Request(req); err != nil {
 		return nil, err
 	}
