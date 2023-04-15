@@ -310,7 +310,8 @@ func (c *Conn) SetupMedia(media *core.Media, first bool) (byte, error) {
 		// some Dahua/Amcrest cameras fail here because two simultaneous
 		// backchannel connections
 		if c.Backchannel {
-			c.Close()
+			_ = c.conn.Close()
+
 			c.Backchannel = false
 			if err := c.Dial(); err != nil {
 				return 0, err
