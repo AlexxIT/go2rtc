@@ -276,7 +276,7 @@ func (c *Conn) SetupMedia(media *core.Media, first bool) (byte, error) {
 
 	// try to use media position as channel number
 	for i, m := range c.Medias {
-		if m.ID == media.ID {
+		if m.Equal(media) {
 			transport = fmt.Sprintf(
 				// i   - RTP (data channel)
 				// i+1 - RTCP (control channel)
@@ -327,9 +327,9 @@ func (c *Conn) SetupMedia(media *core.Media, first bool) (byte, error) {
 				return 0, err
 			}
 
-			for _, newMedia := range c.Medias {
-				if newMedia.ID == media.ID {
-					return c.SetupMedia(newMedia, false)
+			for _, m := range c.Medias {
+				if m.Equal(media) {
+					return c.SetupMedia(m, false)
 				}
 			}
 		}

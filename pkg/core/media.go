@@ -82,6 +82,13 @@ func (m *Media) MatchAll() bool {
 	return false
 }
 
+func (m *Media) Equal(media *Media) bool {
+	if media.ID != "" {
+		return m.ID == media.ID
+	}
+	return m.String() == media.String()
+}
+
 func GetKind(name string) string {
 	switch name {
 	case CodecH264, CodecH265, CodecVP8, CodecVP9, CodecAV1, CodecJPEG:
