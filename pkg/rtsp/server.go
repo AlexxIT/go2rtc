@@ -136,7 +136,7 @@ func (c *Conn) Accept() error {
 
 			const transport = "RTP/AVP/TCP;unicast;interleaved="
 			if strings.HasPrefix(tr, transport) {
-				c.Session = "1" // TODO: fixme
+				c.Session = core.RandString(8, 10)
 				c.state = StateSetup
 				res.Header.Set("Transport", tr[:len(transport)+3])
 			} else {
