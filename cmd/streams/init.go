@@ -7,6 +7,7 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/app/store"
 	"github.com/rs/zerolog"
 	"net/http"
+	"net/url"
 )
 
 func Init() {
@@ -37,6 +38,20 @@ func New(name string, source any) *Stream {
 	stream := NewStream(source)
 	streams[name] = stream
 	return stream
+}
+
+func NewTemplate(name string, source any) *Stream {
+	// check if source links to some stream name from go2rtc
+	if rawURL, ok := source.(string); ok {
+		if u, err := url.Parse(rawURL); err == nil && u.Scheme == "rtsp" {
+			if stream, ok := streams[u.Path[1:]]; ok {
+				streams[name] = stream
+				return stream
+			}
+		}
+	}
+
+	return New(name, "{input}")
 }
 
 func GetOrNew(src string) *Stream {
@@ -85,11 +100,12 @@ func streamsHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if stream := Get(name); stream != nil {
-			stream.SetSource(src)
-		} else {
-			New(name, src)
+		// support {input} templates: https://github.com/AlexxIT/go2rtc#module-hass
+		stream := Get(name)
+		if stream == nil {
+			stream = NewTemplate(name, src)
 		}
+		stream.SetSource(src)
 
 	case "POST":
 		// with dst - redirect source to dst

@@ -8,7 +8,6 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/webrtc"
 	"net"
 	"net/http"
-	"net/url"
 	"strings"
 )
 
@@ -25,6 +24,7 @@ func initAPI() {
 
 	api.HandleFunc("/streams", ok)
 
+	// api from RTSPtoWeb
 	api.HandleFunc("/stream/", func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		// /stream/{id}/add
@@ -40,13 +40,7 @@ func initAPI() {
 			// 3. dynamic link to Hass camera
 			stream := streams.Get(v.Name)
 			if stream == nil {
-				// check if it is rtsp link to go2rtc
-				stream = rtspStream(v.Channels.First.Url)
-				if stream != nil {
-					streams.New(v.Name, stream)
-				} else {
-					stream = streams.New(v.Name, "{input}")
-				}
+				stream = streams.NewTemplate(v.Name, v.Channels.First.Url)
 			}
 
 			stream.SetSource(v.Channels.First.Url)
@@ -90,48 +84,6 @@ func initAPI() {
 			_, _ = w.Write([]byte(s))
 		}
 	})
-
-	// api from RTSPtoWebRTC
-	api.HandleFunc("/stream", func(w http.ResponseWriter, r *http.Request) {
-		if err := r.ParseForm(); err != nil {
-			return
-		}
-
-		str := r.FormValue("sdp64")
-		offer, err := base64.StdEncoding.DecodeString(str)
-		if err != nil {
-			return
-		}
-
-		src := r.FormValue("url")
-		src, err = url.QueryUnescape(src)
-		if err != nil {
-			return
-		}
-
-		stream := streams.Get(src)
-		if stream == nil {
-			if stream = rtspStream(src); stream != nil {
-				streams.New(src, stream)
-			} else {
-				stream = streams.New(src, src)
-			}
-		}
-
-		str, err = webrtc.ExchangeSDP(stream, string(offer), "WebRTC/Hass sync", r.UserAgent())
-		if err != nil {
-			return
-		}
-
-		v := struct {
-			Answer string `json:"sdp64"`
-		}{
-			Answer: base64.StdEncoding.EncodeToString([]byte(str)),
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(v)
-	})
 }
 
 func HassioAddr() string {
@@ -151,15 +103,6 @@ func HassioAddr() string {
 	}
 
 	return ""
-}
-
-func rtspStream(url string) *streams.Stream {
-	if strings.HasPrefix(url, "rtsp://") {
-		if i := strings.IndexByte(url[7:], '/'); i > 0 {
-			return streams.Get(url[8+i:])
-		}
-	}
-	return nil
 }
 
 type addJSON struct {

@@ -31,8 +31,6 @@ func NewStream(source any) *Stream {
 			s.producers = append(s.producers, prod)
 		}
 		return s
-	case *Stream:
-		return source
 	case map[string]any:
 		return NewStream(source["url"])
 	case nil:
