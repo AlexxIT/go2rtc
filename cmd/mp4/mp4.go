@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/cmd/api"
@@ -116,11 +115,8 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 		Medias:     core.ParseQuery(r.URL.Query()),
 	}
 
-	mu := &sync.Mutex{}
 	cons.Listen(func(msg any) {
 		if data, ok := msg.([]byte); ok {
-			mu.Lock()
-			defer mu.Unlock()
 			if _, err := w.Write(data); err != nil && exit != nil {
 				select {
 				case exit <- err:
