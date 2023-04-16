@@ -89,11 +89,13 @@ const (
 func (c *Conn) Handle() (err error) {
 	var timeout time.Duration
 
+	var keepalive time.Time
+
 	switch c.mode {
 	case core.ModeActiveProducer:
-		// polling frames from remote RTSP Server (ex Camera)
-		go c.keepalive()
+		keepalive = time.Now().Add(time.Second * 25)
 
+		// polling frames from remote RTSP Server (ex Camera)
 		if len(c.receivers) > 0 {
 			// if we receiving video/audio from camera
 			timeout = time.Second * 5
@@ -115,7 +117,9 @@ func (c *Conn) Handle() (err error) {
 	}
 
 	for c.state != StateNone {
-		if err = c.conn.SetReadDeadline(time.Now().Add(timeout)); err != nil {
+		ts := time.Now()
+
+		if err = c.conn.SetReadDeadline(ts.Add(timeout)); err != nil {
 			return
 		}
 
@@ -232,6 +236,15 @@ func (c *Conn) Handle() (err error) {
 
 			c.Fire(msg)
 		}
+
+		if !keepalive.IsZero() && ts.After(keepalive) {
+			req := &tcp.Request{Method: MethodOptions, URL: c.URL}
+			if err = c.WriteRequest(req); err != nil {
+				return
+			}
+
+			keepalive = ts.Add(time.Second * 25)
+		}
 	}
 
 	return
@@ -321,18 +334,4 @@ func (c *Conn) ReadResponse() (*tcp.Response, error) {
 		return nil, err
 	}
 	return tcp.ReadResponse(c.reader)
-}
-
-func (c *Conn) keepalive() {
-	// TODO: rewrite to RTCP
-	req := &tcp.Request{Method: MethodOptions, URL: c.URL}
-	for {
-		time.Sleep(time.Second * 25)
-		if c.state == StateNone {
-			return
-		}
-		if err := c.WriteRequest(req); err != nil {
-			return
-		}
-	}
 }
