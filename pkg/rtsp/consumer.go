@@ -7,6 +7,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/h265"
 	"github.com/AlexxIT/go2rtc/pkg/mjpeg"
 	"github.com/pion/rtp"
+	"time"
 )
 
 func (c *Conn) GetMedias() []*core.Media {
@@ -40,6 +41,8 @@ func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiv
 		if channel, err = c.SetupMedia(media); err != nil {
 			return
 		}
+
+		c.state = StateSetup
 
 	case core.ModePassiveConsumer:
 		channel = byte(len(c.senders)) * 2
@@ -82,6 +85,10 @@ func (c *Conn) packetWriter(codec *core.Codec, channel uint8) core.HandlerFunc {
 		data[3] = byte(size)
 
 		if _, err := clone.MarshalTo(data[4:]); err != nil {
+			return
+		}
+
+		if err := c.conn.SetWriteDeadline(time.Now().Add(Timeout)); err != nil {
 			return
 		}
 

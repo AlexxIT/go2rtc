@@ -130,6 +130,11 @@ func (c *Conn) Reconnect() error {
 			return err
 		}
 	}
+	for _, sender := range c.senders {
+		if _, err := c.SetupMedia(sender.Media); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
