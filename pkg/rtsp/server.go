@@ -25,7 +25,7 @@ func (c *Conn) Auth(username, password string) {
 
 func (c *Conn) Accept() error {
 	for {
-		req, err := tcp.ReadRequest(c.reader)
+		req, err := c.ReadRequest()
 		if err != nil {
 			return err
 		}
@@ -42,7 +42,7 @@ func (c *Conn) Accept() error {
 				Status: "401 Unauthorized",
 				Header: map[string][]string{"Www-Authenticate": {`Basic realm="go2rtc"`}},
 			}
-			if err = c.Response(res); err != nil {
+			if err = c.WriteResponse(res); err != nil {
 				return err
 			}
 			continue
@@ -58,7 +58,7 @@ func (c *Conn) Accept() error {
 				},
 				Request: req,
 			}
-			if err = c.Response(res); err != nil {
+			if err = c.WriteResponse(res); err != nil {
 				return err
 			}
 
@@ -83,7 +83,7 @@ func (c *Conn) Accept() error {
 			c.Fire(MethodAnnounce)
 
 			res := &tcp.Response{Request: req}
-			if err = c.Response(res); err != nil {
+			if err = c.WriteResponse(res); err != nil {
 				return err
 			}
 
@@ -96,7 +96,7 @@ func (c *Conn) Accept() error {
 					Status:  "404 Not Found",
 					Request: req,
 				}
-				return c.Response(res)
+				return c.WriteResponse(res)
 			}
 
 			res := &tcp.Response{
@@ -122,7 +122,7 @@ func (c *Conn) Accept() error {
 				return err
 			}
 
-			if err = c.Response(res); err != nil {
+			if err = c.WriteResponse(res); err != nil {
 				return err
 			}
 
@@ -136,27 +136,27 @@ func (c *Conn) Accept() error {
 
 			const transport = "RTP/AVP/TCP;unicast;interleaved="
 			if strings.HasPrefix(tr, transport) {
-				c.Session = core.RandString(8, 10)
+				c.session = core.RandString(8, 10)
 				c.state = StateSetup
 				res.Header.Set("Transport", tr[:len(transport)+3])
 			} else {
 				res.Status = "461 Unsupported transport"
 			}
 
-			if err = c.Response(res); err != nil {
+			if err = c.WriteResponse(res); err != nil {
 				return err
 			}
 
 		case MethodRecord, MethodPlay:
 			res := &tcp.Response{Request: req}
-			if err = c.Response(res); err == nil {
+			if err = c.WriteResponse(res); err == nil {
 				c.state = StatePlay
 			}
 			return err
 
 		case MethodTeardown:
 			res := &tcp.Response{Request: req}
-			_ = c.Response(res)
+			_ = c.WriteResponse(res)
 			c.state = StateNone
 			return c.conn.Close()
 

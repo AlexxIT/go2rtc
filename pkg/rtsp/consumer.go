@@ -28,7 +28,16 @@ func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiv
 
 	switch c.mode {
 	case core.ModeActiveProducer: // backchannel
-		if channel, err = c.SetupMedia(media, true); err != nil {
+		c.stateMu.Lock()
+		defer c.stateMu.Unlock()
+
+		if c.state == StatePlay {
+			if err = c.Reconnect(); err != nil {
+				return
+			}
+		}
+
+		if channel, err = c.SetupMedia(media); err != nil {
 			return
 		}
 
