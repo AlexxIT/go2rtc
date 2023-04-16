@@ -8,6 +8,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"net"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -108,11 +109,12 @@ func (c *Conn) Accept() error {
 
 			// convert tracks to real output medias medias
 			var medias []*core.Media
-			for _, track := range c.senders {
+			for i, track := range c.senders {
 				media := &core.Media{
 					Kind:      core.GetKind(track.Codec.Name),
 					Direction: core.DirectionRecvonly,
 					Codecs:    []*core.Codec{track.Codec},
+					ID:        "trackID=" + strconv.Itoa(i),
 				}
 				medias = append(medias, media)
 			}
