@@ -30,8 +30,6 @@ type Producer struct {
 	receivers []*core.Receiver
 	senders   []*core.Receiver
 
-	lastErr error
-
 	state    state
 	mu       sync.Mutex
 	workerID int
