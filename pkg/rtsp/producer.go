@@ -51,11 +51,19 @@ func (c *Conn) Start() (err error) {
 		case StateConn:
 			err = errors.New("start from CONN state")
 		case StateSetup:
-			if err = c.Play(); err == nil {
+			switch c.mode {
+			case core.ModeActiveProducer:
+				err = c.Play()
+			case core.ModePassiveProducer:
+				err = nil
+			default:
+				err = errors.New("start from wrong mode: " + c.mode.String())
+			}
+
+			if err == nil {
 				c.state = StatePlay
 				ok = true
 			}
-		case StatePlay:
 		}
 		c.stateMu.Unlock()
 

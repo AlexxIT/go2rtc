@@ -151,10 +151,7 @@ func (c *Conn) Accept() error {
 
 		case MethodRecord, MethodPlay:
 			res := &tcp.Response{Request: req}
-			if err = c.WriteResponse(res); err == nil {
-				c.state = StatePlay
-			}
-			return err
+			return c.WriteResponse(res)
 
 		case MethodTeardown:
 			res := &tcp.Response{Request: req}
