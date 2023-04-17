@@ -30,13 +30,14 @@ type Conn struct {
 
 	// internal
 
-	auth     *tcp.Auth
-	conn     net.Conn
-	mode     core.Mode
-	reader   *bufio.Reader
-	sequence int
-	session  string
-	uri      string
+	auth      *tcp.Auth
+	conn      net.Conn
+	keepalive int
+	mode      core.Mode
+	reader    *bufio.Reader
+	sequence  int
+	session   string
+	uri       string
 
 	state   State
 	stateMu sync.Mutex
@@ -89,11 +90,17 @@ const (
 func (c *Conn) Handle() (err error) {
 	var timeout time.Duration
 
-	var keepalive time.Time
+	var keepaliveDT time.Duration
+	var keepaliveTS time.Time
 
 	switch c.mode {
 	case core.ModeActiveProducer:
-		keepalive = time.Now().Add(time.Second * 25)
+		if c.keepalive > 5 {
+			keepaliveDT = time.Duration(c.keepalive-5) * time.Second
+		} else {
+			keepaliveDT = 25 * time.Second
+		}
+		keepaliveTS = time.Now().Add(keepaliveDT)
 
 		// polling frames from remote RTSP Server (ex Camera)
 		if len(c.receivers) > 0 {
@@ -237,13 +244,13 @@ func (c *Conn) Handle() (err error) {
 			c.Fire(msg)
 		}
 
-		if !keepalive.IsZero() && ts.After(keepalive) {
+		if keepaliveDT != 0 && ts.After(keepaliveTS) {
 			req := &tcp.Request{Method: MethodOptions, URL: c.URL}
 			if err = c.WriteRequest(req); err != nil {
 				return
 			}
 
-			keepalive = ts.Add(time.Second * 25)
+			keepaliveTS = ts.Add(keepaliveDT)
 		}
 	}
 
