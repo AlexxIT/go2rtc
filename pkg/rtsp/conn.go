@@ -72,9 +72,9 @@ func (s State) String() string {
 
 		return "CONN"
 	case StateSetup:
-		return "SETUP"
+		return MethodSetup
 	case StatePlay:
-		return "PLAY"
+		return MethodPlay
 	}
 	return strconv.Itoa(int(s))
 }
@@ -312,7 +312,11 @@ func (c *Conn) WriteResponse(res *tcp.Response) error {
 	}
 
 	if c.session != "" {
-		res.Header.Set("Session", c.session)
+		if res.Request != nil && res.Request.Method == MethodSetup {
+			res.Header.Set("Session", c.session+";timeout=60")
+		} else {
+			res.Header.Set("Session", c.session)
+		}
 	}
 
 	if res.Body != nil {
