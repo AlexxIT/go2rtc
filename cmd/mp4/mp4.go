@@ -81,15 +81,8 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 
 	query := r.URL.Query()
 
-	// Chrome has Safari in UA, so check first Chrome and later Safari
 	ua := r.UserAgent()
-	if strings.Contains(ua, " Chrome/") {
-		if r.Header.Values("Range") == nil {
-			w.Header().Set("Content-Type", "video/mp4")
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-	} else if strings.Contains(ua, " Safari/") && !query.Has("duration") {
+	if strings.Contains(ua, " Safari/") && !strings.Contains(ua, " Chrome/") && !query.Has("duration") {
 		// auto redirect to HLS/fMP4 format, because Safari not support MP4 stream
 		url := "stream.m3u8?" + r.URL.RawQuery
 		if !query.Has("mp4") {
