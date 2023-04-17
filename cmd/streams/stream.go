@@ -48,7 +48,7 @@ func (s *Stream) SetSource(source string) {
 
 func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
 	// support for multiple simultaneous requests from different consumers
-	consN := atomic.AddInt32(&s.requests, 1)
+	consN := atomic.AddInt32(&s.requests, 1) - 1
 
 	var producers []*Producer // matched producers for consumer
 
