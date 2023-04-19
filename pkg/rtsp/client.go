@@ -288,6 +288,8 @@ func (c *Conn) Teardown() (err error) {
 }
 
 func (c *Conn) Close() error {
-	_ = c.Teardown()
+	if c.mode == core.ModeActiveProducer {
+		_ = c.Teardown()
+	}
 	return c.conn.Close()
 }
