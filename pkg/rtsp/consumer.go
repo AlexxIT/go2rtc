@@ -58,21 +58,22 @@ func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiv
 
 	// save original codec to sender (can have Codec.Name = ANY)
 	sender := core.NewSender(media, codec)
-	sender.Handler = c.packetWriter(codec, channel)
+	// important to send original codec for valid IsRTP check
+	sender.Handler = c.packetWriter(track.Codec, channel, codec.PayloadType)
 	sender.HandleRTP(track)
 
 	c.senders = append(c.senders, sender)
 	return nil
 }
 
-func (c *Conn) packetWriter(codec *core.Codec, channel uint8) core.HandlerFunc {
+func (c *Conn) packetWriter(codec *core.Codec, channel, payloadType uint8) core.HandlerFunc {
 	handlerFunc := func(packet *rtp.Packet) {
 		if c.state == StateNone {
 			return
 		}
 
 		clone := *packet
-		clone.Header.PayloadType = codec.PayloadType
+		clone.Header.PayloadType = payloadType
 
 		size := clone.MarshalSize()
 
