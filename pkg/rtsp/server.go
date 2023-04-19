@@ -40,8 +40,9 @@ func (c *Conn) Accept() error {
 
 		if !c.auth.Validate(req) {
 			res := &tcp.Response{
-				Status: "401 Unauthorized",
-				Header: map[string][]string{"Www-Authenticate": {`Basic realm="go2rtc"`}},
+				Status:  "401 Unauthorized",
+				Header:  map[string][]string{"Www-Authenticate": {`Basic realm="go2rtc"`}},
+				Request: req,
 			}
 			if err = c.WriteResponse(res); err != nil {
 				return err

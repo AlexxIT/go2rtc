@@ -136,6 +136,10 @@ func MarshalSDP(name string, medias []*Media) ([]byte, error) {
 		}
 		md.WithCodec(codec.PayloadType, name, codec.ClockRate, codec.Channels, codec.FmtpLine)
 
+		if media.ID != "" {
+			md.WithValueAttribute("control", media.ID)
+		}
+
 		sd.MediaDescriptions = append(sd.MediaDescriptions, md)
 	}
 
