@@ -61,6 +61,7 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 
 	if err := stream.AddConsumer(cons); err != nil {
 		log.Error().Err(err).Caller().Send()
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -128,6 +129,7 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 
 	if err := stream.AddConsumer(cons); err != nil {
 		log.Error().Err(err).Caller().Send()
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -138,11 +140,13 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 	data, err := cons.Init()
 	if err != nil {
 		log.Error().Err(err).Caller().Send()
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	if _, err = w.Write(data); err != nil {
 		log.Error().Err(err).Caller().Send()
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
