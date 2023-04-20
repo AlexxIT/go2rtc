@@ -10,6 +10,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/rs/zerolog/log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -47,6 +48,9 @@ type Session struct {
 const keepalive = 5 * time.Second
 
 var sessions = map[string]*Session{}
+
+// once I saw 404 on MP4 segment, so better to use mutex
+var sessionsMu sync.RWMutex
 
 func handlerStream(w http.ResponseWriter, r *http.Request) {
 	// CORS important for Chromecast
@@ -128,11 +132,16 @@ segment.ts?id=` + sid + `&n=%d
 segment.ts?id=` + sid + `&n=%d`
 	}
 
+	sessionsMu.Lock()
 	sessions[sid] = session
+	sessionsMu.Unlock()
+
+	// Apple Safari can play FLAC codec, but fail it it in m3u8 playlist
+	codecs := strings.Replace(cons.MimeCodecs(), mp4.MimeFlac, mp4.MimeAAC, 1)
 
 	// bandwidth important for Safari, codecs useful for smooth playback
 	data := []byte(`#EXTM3U
-#EXT-X-STREAM-INF:BANDWIDTH=1000000,CODECS="` + cons.MimeCodecs() + `"
+#EXT-X-STREAM-INF:BANDWIDTH=1000000,CODECS="` + codecs + `"
 hls/playlist.m3u8?id=` + sid)
 
 	if _, err := w.Write(data); err != nil {
@@ -150,7 +159,9 @@ func handlerPlaylist(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sid := r.URL.Query().Get("id")
+	sessionsMu.RLock()
 	session := sessions[sid]
+	sessionsMu.RUnlock()
 	if session == nil {
 		http.NotFound(w, r)
 		return
@@ -173,7 +184,9 @@ func handlerSegmentTS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sid := r.URL.Query().Get("id")
+	sessionsMu.RLock()
 	session := sessions[sid]
+	sessionsMu.RUnlock()
 	if session == nil {
 		http.NotFound(w, r)
 		return
@@ -212,7 +225,9 @@ func handlerInit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sid := r.URL.Query().Get("id")
+	sessionsMu.RLock()
 	session := sessions[sid]
+	sessionsMu.RUnlock()
 	if session == nil {
 		http.NotFound(w, r)
 		return
@@ -233,7 +248,9 @@ func handlerSegmentMP4(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sid := r.URL.Query().Get("id")
+	sessionsMu.RLock()
 	session := sessions[sid]
+	sessionsMu.RUnlock()
 	if session == nil {
 		http.NotFound(w, r)
 		return
