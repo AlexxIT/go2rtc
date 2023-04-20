@@ -7,6 +7,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
 	"github.com/pion/rtp"
+	"sync"
 )
 
 type Consumer struct {
@@ -19,6 +20,7 @@ type Consumer struct {
 	senders []*core.Sender
 
 	muxer *Muxer
+	mu    sync.Mutex
 	wait  byte
 
 	send int
@@ -70,10 +72,12 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 				c.wait = waitNone
 			}
 
+			// important to use Mutex because right fragment order
+			c.mu.Lock()
 			buf := c.muxer.Marshal(trackID, packet)
 			c.Fire(buf)
-
 			c.send += len(buf)
+			c.mu.Unlock()
 		}
 
 		if track.Codec.IsRTP() {
@@ -97,10 +101,11 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 				c.wait = waitNone
 			}
 
+			c.mu.Lock()
 			buf := c.muxer.Marshal(trackID, packet)
 			c.Fire(buf)
-
 			c.send += len(buf)
+			c.mu.Unlock()
 		}
 
 		if track.Codec.IsRTP() {
@@ -113,10 +118,11 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 				return
 			}
 
+			c.mu.Lock()
 			buf := c.muxer.Marshal(trackID, packet)
 			c.Fire(buf)
-
 			c.send += len(buf)
+			c.mu.Unlock()
 		}
 
 		if track.Codec.IsRTP() {
@@ -129,10 +135,11 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 				return
 			}
 
+			c.mu.Lock()
 			buf := c.muxer.Marshal(trackID, packet)
 			c.Fire(buf)
-
 			c.send += len(buf)
+			c.mu.Unlock()
 		}
 
 	default:
