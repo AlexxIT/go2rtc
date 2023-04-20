@@ -15,12 +15,14 @@ type Muxer struct {
 	fragIndex uint32
 	dts       []uint64
 	pts       []uint32
+	codecs    []*core.Codec
 }
 
 const (
 	MimeH264 = "avc1.640029"
 	MimeH265 = "hvc1.1.6.L153.B0"
 	MimeAAC  = "mp4a.40.2"
+	MimeFlac = "flac"
 	MimeOpus = "opus"
 )
 
@@ -43,6 +45,8 @@ func (m *Muxer) MimeCodecs(codecs []*core.Codec) string {
 			s += MimeAAC
 		case core.CodecOpus:
 			s += MimeOpus
+		case core.CodecFLAC:
+			s += MimeFlac
 		}
 	}
 
@@ -108,14 +112,15 @@ func (m *Muxer) GetInit(codecs []*core.Codec) ([]byte, error) {
 				uint32(i+1), codec.Name, codec.ClockRate, codec.Channels, b,
 			)
 
-		case core.CodecOpus, core.CodecMP3, core.CodecPCMU, core.CodecPCMA:
+		case core.CodecOpus, core.CodecMP3, core.CodecPCMA, core.CodecPCMU, core.CodecPCM, core.CodecFLAC:
 			mv.WriteAudioTrack(
 				uint32(i+1), codec.Name, codec.ClockRate, codec.Channels, nil,
 			)
 		}
 
-		m.pts = append(m.pts, 0)
 		m.dts = append(m.dts, 0)
+		m.pts = append(m.pts, 0)
+		m.codecs = append(m.codecs, codec)
 	}
 
 	mv.StartAtom(iso.MoovMvex)
@@ -138,28 +143,49 @@ func (m *Muxer) Reset() {
 }
 
 func (m *Muxer) Marshal(trackID byte, packet *rtp.Packet) []byte {
-	// important before increment
-	time := m.dts[trackID]
+	codec := m.codecs[trackID]
+
+	duration := packet.Timestamp - m.pts[trackID]
+	m.pts[trackID] = packet.Timestamp
+
+	// minumum duration important for MSE in Apple Safari
+	if duration == 0 || duration > codec.ClockRate {
+		duration = codec.ClockRate/1000 + 1
+		m.pts[trackID] += duration
+	}
+
+	size := len(packet.Payload)
+
+	// flags important for Apple Finder video preview
+	var flags uint32
+	switch codec.Name {
+	case core.CodecH264:
+		if h264.IsKeyframe(packet.Payload) {
+			flags = iso.SampleVideoIFrame
+		} else {
+			flags = iso.SampleVideoNonIFrame
+		}
+	case core.CodecH265:
+		if h265.IsKeyframe(packet.Payload) {
+			flags = iso.SampleVideoIFrame
+		} else {
+			flags = iso.SampleVideoNonIFrame
+		}
+	default:
+		flags = iso.SampleAudio // not important
+	}
 
 	m.fragIndex++
 
-	var duration uint32
-	newTime := packet.Timestamp
-	if m.pts[trackID] > 0 {
-		duration = newTime - m.pts[trackID]
-		m.dts[trackID] += uint64(duration)
-	} else {
-		// important, or Safari will fail with first frame
-		duration = 1
-	}
-	m.pts[trackID] = newTime
-
-	mv := iso.NewMovie(1024 + len(packet.Payload))
+	mv := iso.NewMovie(1024 + size)
 	mv.WriteMovieFragment(
-		m.fragIndex, uint32(trackID+1), duration,
-		uint32(len(packet.Payload)), time,
+		m.fragIndex, uint32(trackID+1), duration, uint32(size), flags, m.dts[trackID],
 	)
 	mv.WriteData(packet.Payload)
+
+	//log.Printf("[MP4] track=%d ts=%6d dur=%5d idx=%3d len=%d", trackID+1, m.dts[trackID], duration, m.fragIndex, len(packet.Payload))
+
+	m.dts[trackID] += uint64(duration)
 
 	return mv.Bytes()
 }

@@ -110,6 +110,12 @@ func parseMedias(codecs string, parseAudio bool) (medias []*core.Media) {
 		case mp4.MimeAAC:
 			codec := &core.Codec{Name: core.CodecAAC}
 			audios = append(audios, codec)
+		case mp4.MimeFlac:
+			audios = append(audios,
+				&core.Codec{Name: core.CodecPCMA},
+				&core.Codec{Name: core.CodecPCMU},
+				&core.Codec{Name: core.CodecPCM},
+			)
 		case mp4.MimeOpus:
 			codec := &core.Codec{Name: core.CodecOpus}
 			audios = append(audios, codec)

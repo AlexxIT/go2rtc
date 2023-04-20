@@ -6,6 +6,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
+	"github.com/AlexxIT/go2rtc/pkg/pcm"
 	"github.com/pion/rtp"
 	"sync"
 )
@@ -54,7 +55,8 @@ func (c *Consumer) GetMedias() []*core.Media {
 func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver) error {
 	trackID := byte(len(c.senders))
 
-	handler := core.NewSender(media, track.Codec)
+	codec := track.Codec.Clone()
+	handler := core.NewSender(media, codec)
 
 	switch track.Codec.Name {
 	case core.CodecH264:
@@ -112,38 +114,33 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 			handler.Handler = h265.RTPDepay(track.Codec, handler.Handler)
 		}
 
-	case core.CodecAAC:
-		handler.Handler = func(packet *rtp.Packet) {
-			if c.wait != waitNone {
-				return
-			}
-
-			c.mu.Lock()
-			buf := c.muxer.Marshal(trackID, packet)
-			c.Fire(buf)
-			c.send += len(buf)
-			c.mu.Unlock()
-		}
-
-		if track.Codec.IsRTP() {
-			handler.Handler = aac.RTPDepay(handler.Handler)
-		}
-
-	case core.CodecOpus, core.CodecMP3, core.CodecPCMU, core.CodecPCMA:
-		handler.Handler = func(packet *rtp.Packet) {
-			if c.wait != waitNone {
-				return
-			}
-
-			c.mu.Lock()
-			buf := c.muxer.Marshal(trackID, packet)
-			c.Fire(buf)
-			c.send += len(buf)
-			c.mu.Unlock()
-		}
-
 	default:
-		panic("unsupported codec")
+		handler.Handler = func(packet *rtp.Packet) {
+			if c.wait != waitNone {
+				return
+			}
+
+			c.mu.Lock()
+			buf := c.muxer.Marshal(trackID, packet)
+			c.Fire(buf)
+			c.send += len(buf)
+			c.mu.Unlock()
+		}
+
+		switch track.Codec.Name {
+		case core.CodecAAC:
+			if track.Codec.IsRTP() {
+				handler.Handler = aac.RTPDepay(handler.Handler)
+			}
+		case core.CodecOpus, core.CodecMP3: // no changes
+		case core.CodecPCMA, core.CodecPCMU, core.CodecPCM:
+			handler.Handler = pcm.FLACEncoder(track.Codec, handler.Handler)
+			codec.Name = core.CodecFLAC
+
+		default:
+			println("ERROR: MP4 unsupported codec: " + track.Codec.Name)
+			return nil
+		}
 	}
 
 	handler.HandleRTP(track)

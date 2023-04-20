@@ -32,6 +32,16 @@ const (
 	Mdat                        = "mdat"
 )
 
+const (
+	sampleIsNonSync  = 0x10000
+	sampleDependsOn1 = 0x1000000
+	sampleDependsOn2 = 0x2000000
+
+	SampleVideoIFrame    = sampleDependsOn2
+	SampleVideoNonIFrame = sampleDependsOn1 | sampleIsNonSync
+	SampleAudio          = sampleIsNonSync
+)
+
 func (m *Movie) WriteFileType() {
 	m.StartAtom(Ftyp)
 	m.WriteString("iso5")
@@ -250,7 +260,7 @@ func (m *Movie) WriteAudioTrack(id uint32, codec string, timescale uint32, chann
 	m.EndAtom() // TRAK
 }
 
-func (m *Movie) WriteMovieFragment(seq, tid, duration, size uint32, time uint64) {
+func (m *Movie) WriteMovieFragment(seq, tid, duration, size, flags uint32, time uint64) {
 	m.StartAtom(Moof)
 
 	m.StartAtom(MoofMfhd)
@@ -276,10 +286,10 @@ func (m *Movie) WriteMovieFragment(seq, tid, duration, size uint32, time uint64)
 			TfhdDefaultSampleFlags |
 			TfhdDefaultBaseIsMoof,
 	)
-	m.WriteUint32(tid)       // track id
-	m.WriteUint32(duration)  // default sample duration
-	m.WriteUint32(size)      // default sample size
-	m.WriteUint32(0x2000000) // default sample flags
+	m.WriteUint32(tid)      // track id
+	m.WriteUint32(duration) // default sample duration
+	m.WriteUint32(size)     // default sample size
+	m.WriteUint32(flags)    // default sample flags
 	m.EndAtom()
 
 	m.StartAtom(MoofTrafTfdt)
@@ -314,5 +324,4 @@ func (m *Movie) WriteData(b []byte) {
 	m.StartAtom(Mdat)
 	m.Write(b)
 	m.EndAtom()
-
 }
