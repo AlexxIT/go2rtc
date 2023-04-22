@@ -58,10 +58,18 @@ func FLACEncoder(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 		sr = 0b0100
 	case 16000:
 		sr = 0b0101
+	case 22050:
+		sr = 0b0110
 	case 24000:
 		sr = 0b0111
+	case 32000:
+		sr = 0b1000
+	case 44100:
+		sr = 0b1001
 	case 48000:
 		sr = 0b1010
+	case 96000:
+		sr = 0b1011
 	default:
 		return nil
 	}
