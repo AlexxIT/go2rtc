@@ -60,7 +60,8 @@ var defaults = map[string]string{
 	"h265":  "-c:v libx265 -g 50 -profile:v high -level:v 5.1 -preset:v superfast -tune:v zerolatency",
 	"mjpeg": "-c:v mjpeg -force_duplicated_matrix:v 1 -huffman:v 0 -pix_fmt:v yuvj420p",
 
-	"opus":       "-c:a libopus -ar:a 48000 -ac:a 2",
+	// https://ffmpeg.org/ffmpeg-codecs.html#libopus-1
+	"opus":       "-c:a libopus -ar:a 48000 -ac:a 2 -application:a voip -compression_level:a 0",
 	"pcmu":       "-c:a pcm_mulaw -ar:a 8000 -ac:a 1",
 	"pcmu/16000": "-c:a pcm_mulaw -ar:a 16000 -ac:a 1",
 	"pcmu/48000": "-c:a pcm_mulaw -ar:a 48000 -ac:a 1",
