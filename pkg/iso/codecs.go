@@ -118,6 +118,7 @@ func (m *Movie) WriteEsdsAAC(conf []byte) {
 	m.Skip(2) // es id
 	m.Skip(1) // es flags
 
+	// https://learn.microsoft.com/en-us/windows/win32/medfound/mpeg-4-file-sink#aac-audio
 	m.WriteBytes(4, 0x80, 0x80, 0x80, size4+header+size5)
 	m.WriteBytes(0x40) // object id
 	m.WriteBytes(0x15) // stream type
@@ -151,6 +152,7 @@ func (m *Movie) WriteEsdsMP3() {
 	m.Skip(2) // es id
 	m.Skip(1) // es flags
 
+	// https://learn.microsoft.com/en-us/windows/win32/medfound/mpeg-4-file-sink#mp3-audio
 	m.WriteBytes(4, 0x80, 0x80, 0x80, size4)
 	m.WriteBytes(0x6B) // object id
 	m.WriteBytes(0x15) // stream type
