@@ -138,9 +138,13 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 			codec.Name = core.CodecFLAC
 
 		default:
-			println("ERROR: MP4 unsupported codec: " + track.Codec.Name)
-			return nil
+			handler.Handler = nil
 		}
+	}
+
+	if handler.Handler == nil {
+		println("ERROR: MP4 unsupported codec: " + track.Codec.String())
+		return nil
 	}
 
 	handler.HandleRTP(track)
