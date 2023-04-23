@@ -803,8 +803,8 @@ Provides several features:
 
 API examples:
 
-- MP4 stream: `http://192.168.1.123:1984/api/stream.mp4?src=camera1`
-- MP4 snapshot: `http://192.168.1.123:1984/api/frame.mp4?src=camera1`
+- MP4 snapshot: `http://192.168.1.123:1984/api/frame.mp4?src=camera1` (H264, H265)
+- MP4 stream: `http://192.168.1.123:1984/api/stream.mp4?src=camera1` (H264, H265, AAC)
 
 Read more about [codecs filters](#codecs-filters).
 
@@ -895,7 +895,7 @@ But it cannot be done for [RTSP](#module-rtsp), [HTTP progressive streaming](#mo
 
 Without filters:
 
-- RTSP will provide only the first video and only the first audio
+- RTSP will provide only the first video and only the first audio (any codec)
 - MP4 will include only compatible codecs (H264, H265, AAC)
 - HLS will output in the legacy TS format (H264 without audio)
 
@@ -906,23 +906,25 @@ Some examples:
 - `rtsp://192.168.1.123:8554/camera1?video=h264&audio=aac&audio=opus` - H264 video codec and two separate audio tracks
 - `rtsp://192.168.1.123:8554/camera1?video&audio=all` - any video codec and all audio codecs as separate tracks
 - `http://192.168.1.123:1984/api/stream.m3u8?src=camera1&mp4` - HLS stream with MP4 compatible codecs (HLS/fMP4)
-- `http://192.168.1.123:1984/api/stream.mp4?src=camera1&video=h264,h265&audio=aac,opus,mp3,pcma,pcmu` - MP4 file with non standard audio codecs, does not work in some players
+- `http://192.168.1.123:1984/api/stream.m3u8?src=camera1&mp4=flac` - HLS stream with PCMA/PCMU/PCM audio support (HLS/fMP4), won't work on old devices
+- `http://192.168.1.123:1984/api/stream.mp4?src=camera1&mp4=flac` - MP4 file with PCMA/PCMU/PCM audio support, won't work on old devices (ex. iOS 12)
+- `http://192.168.1.123:1984/api/stream.mp4?src=camera1&mp4=all` - MP4 file with non standard audio codecs, won't work on some players
 
 ## Codecs madness
 
 `AVC/H.264` video can be played almost anywhere. But `HEVC/H.265` has a lot of limitations in supporting with different devices and browsers. It's all about patents and money, you can't do anything about it.
 
-| Device              | WebRTC                        | MSE                    | HTTP Progressive Streaming              |
-|---------------------|-------------------------------|------------------------|-----------------------------------------|
-| *latency*           | best                          | medium                 | bad                                     |
-| Desktop Chrome 107+ | H264, OPUS, PCMU, PCMA        | H264, H265*, AAC, OPUS | H264, H265*, AAC, OPUS, PCMU, PCMA, MP3 |
-| Desktop Edge        | H264, OPUS, PCMU, PCMA        | H264, H265*, AAC, OPUS | H264, H265*, AAC, OPUS, PCMU, PCMA, MP3 |
-| Desktop Safari      | H264, H265*, OPUS, PCMU, PCMA | H264, H265, AAC        | **no!**                                 |
-| Desktop Firefox     | H264, OPUS, PCMU, PCMA        | H264, AAC, OPUS        | H264, AAC, OPUS                         |
-| Android Chrome 107+ | H264, OPUS, PCMU, PCMA        | H264, H265*, AAC, OPUS | H264, ?, AAC, OPUS, PCMU, PCMA, MP3     |
-| iPad Safari 13+     | H264, H265*, OPUS, PCMU, PCMA | H264, H265, AAC        | **no!**                                 |
-| iPhone Safari 13+   | H264, H265*, OPUS, PCMU, PCMA | **no!**                | **no!**                                 |
-| masOS Hass App      | no                            | no                     | no                                      |
+| Device              | WebRTC                        | MSE                           | HTTP Progressive Streaming         |
+|---------------------|-------------------------------|-------------------------------|------------------------------------|
+| *latency*           | best                          | medium                        | bad                                |
+| Desktop Chrome 107+ | H264, OPUS, PCMU, PCMA        | H264, H265*, AAC, FLAC*, OPUS | H264, H265*, AAC, FLAC*, OPUS, MP3 |
+| Desktop Edge        | H264, OPUS, PCMU, PCMA        | H264, H265*, AAC, FLAC*, OPUS | H264, H265*, AAC, FLAC*, OPUS, MP3 |
+| Android Chrome 107+ | H264, OPUS, PCMU, PCMA        | H264, H265*, AAC, FLAC*, OPUS | H264, H265*, AAC, FLAC*, OPUS, MP3 |
+| Desktop Firefox     | H264, OPUS, PCMU, PCMA        | H264, AAC, FLAC*, OPUS        | H264, AAC, FLAC*, OPUS             |
+| Desktop Safari      | H264, H265*, OPUS, PCMU, PCMA | H264, H265, AAC, FLAC*        | **no!**                            |
+| iPad Safari 13+     | H264, H265*, OPUS, PCMU, PCMA | H264, H265, AAC, FLAC*        | **no!**                            |
+| iPhone Safari 13+   | H264, H265*, OPUS, PCMU, PCMA | **no!**                       | **no!**                            |
+| masOS Hass App      | no                            | no                            | no                                 |
 
 - Chrome H265: [read this](https://chromestatus.com/feature/5186511939567616) and [read this](https://github.com/StaZhu/enable-chromium-hevc-hardware-decoding)
 - Edge H265: [read this](https://www.reddit.com/r/MicrosoftEdge/comments/v9iw8k/enable_hevc_support_in_edge/)
@@ -931,15 +933,54 @@ Some examples:
 
 **Audio**
 
+- Go2rtc support [automatic repack](#built-in-transcoding) `PCMA/PCMU/PCM` codecs to `FLAC` for MSE/MP4/HLS so they will work almost anywhere
 - **WebRTC** audio codecs: `PCMU/8000`, `PCMA/8000`, `OPUS/48000/2`
 - `OPUS` and `MP3` inside **MP4** is part of the standard, but some players do not support them anyway (especially Apple)
-- `PCMU` and `PCMA` inside **MP4** isn't a standard, but some players support them, for example Chromium browsers
 
 **Apple devices**
 
 - all Apple devices don't support HTTP progressive streaming
 - iPhones don't support MSE technology because it competes with the HTTP Live Streaming (HLS) technology, invented by Apple
 - HLS is the worst technology for **live** streaming, it still exists only because of iPhones
+
+**Codec names**
+
+- H264 = H.264 = AVC (Advanced Video Coding)
+- H265 = H.265 = HEVC (High Efficiency Video Coding)
+- PCMU = G.711 PCM (A-law) = PCM A-law (`alaw`)
+- PCMA = G.711 PCM (µ-law) = PCM mu-law (`mulaw`)
+- PCM = L16 = PCM signed 16-bit big-endian (`s16be`)
+- AAC = MPEG4-GENERIC
+- MP3 = MPEG-1 Audio Layer III or MPEG-2 Audio Layer III
+
+## Built-in transcoding
+
+There are no plans to embed complex transcoding algorithms inside go2rtc. [FFmpeg source](#source-ffmpeg) does a great job with this. Including [hardware acceleration](https://github.com/AlexxIT/go2rtc/wiki/Hardware-acceleration) support.
+
+But go2rtc has some simple algorithms. They are turned on automatically, you do not need to set them up additionally.
+
+**PCM for MSE/MP4/HLS**
+
+Go2rtc can pack `PCMA`, `PCMU` and `PCM` codecs into an MP4 container so that they work in all browsers and all built-in players on modern devices. Including Apple QuickTime:
+
+```
+PCMA/PCMU => PCM => FLAC => MSE/MP4/HLS
+```
+
+**Resample PCMA/PCMU for WebRTC**
+
+By default WebRTC support only `PCMA/8000` and `PCMU/8000`. But go2rtc can automatically resample PCMA and PCMU codec with with a different sample rate. Also go2rtc can transcode `PCM` codec to `PCMA/8000`, so WebRTC can play it:
+
+```
+PCM/xxx => PCMA/8000 => WebRTC
+PCMA/xxx => PCMA/8000 => WebRTC
+PCMU/xxx => PCMU/8000 => WebRTC
+```
+
+**Important**
+
+- FLAC codec not supported in a RTSP stream. If you using Frigate or Hass for recording MP4 files with PCMA/PCMU/PCM audio - you should setup transcoding to AAC codec.
+- PCMA and PCMU are VERY low quality codecs. Them support only 256! different sounds. Use them only when you have no other options.
 
 ## Codecs negotiation
 
