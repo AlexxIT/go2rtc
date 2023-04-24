@@ -22,6 +22,7 @@ func Init() {
 			Username     string `yaml:"username" json:"-"`
 			Password     string `yaml:"password" json:"-"`
 			DefaultQuery string `yaml:"default_query" json:"default_query"`
+			PacketSize   uint16 `yaml:"pkt_size"`
 		} `yaml:"rtsp"`
 	}
 
@@ -67,6 +68,7 @@ func Init() {
 			}
 
 			c := rtsp.NewServer(conn)
+			c.PacketSize = conf.Mod.PacketSize
 			// skip check auth for localhost
 			if conf.Mod.Username != "" && !conn.RemoteAddr().(*net.TCPAddr).IP.IsLoopback() {
 				c.Auth(conf.Mod.Username, conf.Mod.Password)
@@ -174,11 +176,16 @@ func tcpHandler(conn *rtsp.Conn) {
 
 			conn.SessionName = app.UserAgent
 
-			conn.Medias = mp4.ParseQuery(conn.URL.Query())
+			query := conn.URL.Query()
+			conn.Medias = mp4.ParseQuery(query)
 			if conn.Medias == nil {
 				for _, media := range defaultMedias {
 					conn.Medias = append(conn.Medias, media.Clone())
 				}
+			}
+
+			if s := query.Get("pkt_size"); s != "" {
+				conn.PacketSize = uint16(core.Atoi(s))
 			}
 
 			if err := stream.AddConsumer(conn); err != nil {

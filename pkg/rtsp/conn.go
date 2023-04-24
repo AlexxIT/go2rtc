@@ -22,6 +22,7 @@ type Conn struct {
 	// public
 
 	Backchannel bool
+	PacketSize  uint16
 	SessionName string
 
 	Medias    []*core.Media
