@@ -157,7 +157,7 @@ func parseArgs(s string) *Args {
 			args.input = "-i " + s
 		}
 	} else if streams.Get(s) != nil {
-		s = "rtsp://localhost:" + rtsp.Port + "/" + s
+		s = "rtsp://127.0.0.1:" + rtsp.Port + "/" + s
 		switch {
 		case args.video > 0 && args.audio == 0:
 			s += "?video"
