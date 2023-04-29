@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sync"
 
 	"github.com/AlexxIT/go2rtc/cmd/app/store"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
@@ -23,6 +24,9 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+var activeConnections int
+var activeConnectionsMutex sync.Mutex
+
 func apiHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
@@ -33,9 +37,27 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 			_, err = w.Write([]byte(err.Error()))
 			return
 		}
-		defer conn.Close()
+		activeConnectionsMutex.Lock()
+		activeConnections++
+		activeConnectionsMutex.Unlock()
 
-		hkDiscoverDevices(conn)
+		done := make(chan struct{})
+		go hkDiscoverDevices(conn, done)
+
+		for {
+			_, _, err := conn.ReadMessage()
+			if err != nil {
+				log.Debug().Err(err).Caller().Send()
+				_, err = w.Write([]byte(err.Error()))
+				break
+			}
+		}
+
+		close(done)
+		activeConnectionsMutex.Lock()
+		activeConnections--
+		activeConnectionsMutex.Unlock()
+		conn.Close()
 
 	case "POST":
 		// TODO: post params...
@@ -57,60 +79,73 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func hkDiscoverDevices(conn *websocket.Conn) {
+func hkDiscoverDevices(conn *websocket.Conn, done chan struct{}) {
 	for {
-		entries := mdns.GetAll()
+		select {
+		case <-done:
+			return
+		default:
+			log.Trace().Int("active connections: ", activeConnections).Msg("[homekit] ")
+			activeConnectionsMutex.Lock()
+			if activeConnections <= 0 {
+				activeConnectionsMutex.Unlock()
+				return
+			}
+			activeConnectionsMutex.Unlock()
 
-		for name, src := range store.GetDict("streams") {
-			if src := src.(string); strings.HasPrefix(src, "homekit") {
-				u, err := url.Parse(src)
-				if err != nil {
+			entries := mdns.GetAll()
+
+			for name, src := range store.GetDict("streams") {
+				if src := src.(string); strings.HasPrefix(src, "homekit") {
+					u, err := url.Parse(src)
+					if err != nil {
+						continue
+					}
+					device := Device{
+						Name:   name,
+						Addr:   u.Host,
+						Paired: true,
+					}
+					err = conn.WriteJSON(device)
+					if err != nil {
+						log.Error().Err(err).Caller().Send()
+
+						return
+					}
+				}
+			}
+
+			for entry := range entries {
+				if !strings.HasSuffix(entry.Name, mdns.Suffix) {
 					continue
 				}
+
+				name := entry.Name[:len(entry.Name)-len(mdns.Suffix)]
 				device := Device{
-					Name:   name,
-					Addr:   u.Host,
-					Paired: true,
+					Name: strings.ReplaceAll(name, "\\", ""),
+					Addr: fmt.Sprintf("%s:%d", entry.AddrV4, entry.Port),
 				}
-				err = conn.WriteJSON(device)
+				for _, field := range entry.InfoFields {
+					switch field[:2] {
+					case "id":
+						device.ID = field[3:]
+					case "md":
+						device.Model = field[3:]
+					case "sf":
+						device.Paired = field[3] == '0'
+					}
+				}
+
+				err := conn.WriteJSON(device)
 				if err != nil {
-					log.Error().Err(err).Caller().Send()
+					log.Debug().Err(err).Caller().Send()
 
 					return
 				}
 			}
+
+			time.Sleep(1 * time.Second)
 		}
-
-		for entry := range entries {
-			if !strings.HasSuffix(entry.Name, mdns.Suffix) {
-				continue
-			}
-
-			name := entry.Name[:len(entry.Name)-len(mdns.Suffix)]
-			device := Device{
-				Name: strings.ReplaceAll(name, "\\", ""),
-				Addr: fmt.Sprintf("%s:%d", entry.AddrV4, entry.Port),
-			}
-			for _, field := range entry.InfoFields {
-				switch field[:2] {
-				case "id":
-					device.ID = field[3:]
-				case "md":
-					device.Model = field[3:]
-				case "sf":
-					device.Paired = field[3] == '0'
-				}
-			}
-
-			err := conn.WriteJSON(device)
-			if err != nil {
-				log.Error().Err(err).Caller().Send()
-
-				return
-			}
-		}
-
-		time.Sleep(1 * time.Second)
 	}
 }
 
