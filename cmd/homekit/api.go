@@ -2,12 +2,14 @@ package homekit
 
 import (
 	"fmt"
+	"net/http"
+	"net/url"
+
 	"github.com/AlexxIT/go2rtc/cmd/app/store"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
 	"github.com/AlexxIT/go2rtc/pkg/hap"
 	"github.com/AlexxIT/go2rtc/pkg/hap/mdns"
 	"github.com/gorilla/websocket"
-	"net/http"
 
 	"strings"
 	"time"
@@ -58,6 +60,26 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 func hkDiscoverDevices(conn *websocket.Conn) {
 	for {
 		entries := mdns.GetAll()
+
+		for name, src := range store.GetDict("streams") {
+			if src := src.(string); strings.HasPrefix(src, "homekit") {
+				u, err := url.Parse(src)
+				if err != nil {
+					continue
+				}
+				device := Device{
+					Name:   name,
+					Addr:   u.Host,
+					Paired: true,
+				}
+				err = conn.WriteJSON(device)
+				if err != nil {
+					log.Error().Err(err).Caller().Send()
+
+					return
+				}
+			}
+		}
 
 		for entry := range entries {
 			if !strings.HasSuffix(entry.Name, mdns.Suffix) {
