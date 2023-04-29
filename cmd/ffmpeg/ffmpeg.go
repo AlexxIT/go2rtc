@@ -51,7 +51,7 @@ var defaults = map[string]string{
 	"rtsp/udp": "-fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -i {input}",
 
 	// output
-	"output": "-user_agent ffmpeg/go2rtc -rtsp_transport tcp -bufsize 8192k -f rtsp {output}",
+	"output": "-user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}",
 
 	// `-preset superfast` - we can't use ultrafast because it doesn't support `-profile main -level 4.1`
 	// `-tune zerolatency` - for minimal latency
