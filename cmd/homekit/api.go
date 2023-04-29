@@ -80,6 +80,7 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func hkDiscoverDevices(conn *websocket.Conn, done chan struct{}) {
+	queryCounter := 0
 	for {
 		select {
 		case <-done:
@@ -93,7 +94,13 @@ func hkDiscoverDevices(conn *websocket.Conn, done chan struct{}) {
 			}
 			activeConnectionsMutex.Unlock()
 
-			entries := mdns.GetAll()
+			queryCounter++
+			timeout := time.Second
+			if queryCounter%10 == 0 {
+				timeout = 5 * time.Second
+			}
+
+			entries := mdns.GetAll(timeout)
 
 			for name, src := range store.GetDict("streams") {
 				if src := src.(string); strings.HasPrefix(src, "homekit") {
@@ -144,7 +151,7 @@ func hkDiscoverDevices(conn *websocket.Conn, done chan struct{}) {
 				}
 			}
 
-			time.Sleep(1 * time.Second)
+			time.Sleep(timeout)
 		}
 	}
 }
