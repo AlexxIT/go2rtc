@@ -30,20 +30,22 @@ func DiscoveryStreamingHosts() ([]string, error) {
 		return nil, err
 	}
 
-	msg := `<?xml version="1.0" ?>
-<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope">
-	<s:Header xmlns:a="http://schemas.xmlsoap.org/ws/2004/08/addressing">
-		<a:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</a:Action>
-		<a:MessageID>uuid:` + UUID() + `</a:MessageID>
-		<a:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</a:To>
-	</s:Header>
-	<s:Body>
-		<d:Probe xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery">
-            <d:Types>tds:Device</d:Types>
-			<d:Scopes>onvif://www.onvif.org/Profile/Streaming</d:Scopes>
-		</d:Probe>
-	</s:Body>
-</s:Envelope>`
+	msg := `<Envelope xmlns="http://www.w3.org/2003/05/soap-envelope"
+	xmlns:dn="http://www.onvif.org/ver10/network/wsdl">
+	<Header>
+		<wsa:MessageID xmlns:wsa="http://schemas.xmlsoap.org/ws/2004/08/addressing">urn:uuid:` + UUID() + `</wsa:MessageID>
+		<wsa:To xmlns:wsa="http://schemas.xmlsoap.org/ws/2004/08/addressing">urn:schemas-xmlsoap-org:ws:2005:04:discovery</wsa:To>
+		<wsa:Action xmlns:wsa="http://schemas.xmlsoap.org/ws/2004/08/addressing">http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</wsa:Action>
+	</Header>
+	<Body>
+		<Probe xmlns="http://schemas.xmlsoap.org/ws/2005/04/discovery"
+			xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+			xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+			<Types>dn:NetworkVideoTransmitter</Types>
+			<Scopes />
+		</Probe>
+	</Body>
+</Envelope>`
 
 	addr := &net.UDPAddr{
 		IP:   net.IP{239, 255, 255, 250},
