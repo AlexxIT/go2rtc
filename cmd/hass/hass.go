@@ -131,6 +131,25 @@ func importEntries(config string) map[string]string {
 		case "roborock":
 			_ = json.Unmarshal(entrie.Data, &roborock.Auth)
 
+		case "onvif":
+			var data struct {
+				Host     string `json:"host" json:"host"`
+				Port     uint16 `json:"port" json:"port"`
+				Username string `json:"username" json:"username"`
+				Password string `json:"password" json:"password"`
+			}
+			if err = json.Unmarshal(entrie.Data, &data); err != nil {
+				continue
+			}
+
+			if data.Username != "" && data.Password != "" {
+				urls[entrie.Title] = fmt.Sprintf(
+					"onvif://%s:%s@%s:%d", data.Username, data.Password, data.Host, data.Port,
+				)
+			} else {
+				urls[entrie.Title] = fmt.Sprintf("onvif://%s:%d", data.Host, data.Port)
+			}
+
 		default:
 			continue
 		}

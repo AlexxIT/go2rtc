@@ -68,6 +68,13 @@ func GetOrNew(src string) *Stream {
 	return New(src, src)
 }
 
+func GetAll() (names []string) {
+	for name := range streams {
+		names = append(names, name)
+	}
+	return
+}
+
 func streamsHandler(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	src := query.Get("src")

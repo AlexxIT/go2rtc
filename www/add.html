@@ -182,6 +182,31 @@
 </script>
 
 
+<button id="onvif">ONVIF</button>
+<div class="module">
+    <form id="onvif-form" style="padding: 10px">
+        <input type="text" name="src" placeholder="onvif://user:pass@192.168.1.123:80" size="50">
+        <input type="submit" value="test">
+    </form>
+    <table id="onvif-table"></table>
+</div>
+<script>
+    document.getElementById('onvif').addEventListener('click', async ev => {
+        ev.target.nextElementSibling.style.display = 'block'
+        await getStreams('api/onvif', 'onvif-table')
+    })
+
+    document.getElementById('onvif-form').addEventListener('submit', async ev => {
+        ev.preventDefault()
+
+        const url = new URL('api/onvif', location.href)
+        url.searchParams.set('src', ev.target.elements['src'].value)
+
+        await getStreams(url.toString(), 'onvif-table')
+    })
+</script>
+
+
 <button id="roborock">Roborock</button>
 <div class="module">
     <form id="roborock-form" style="margin-bottom: 10px">
