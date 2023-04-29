@@ -204,6 +204,15 @@
 
         await getStreams(url.toString(), 'onvif-table')
     })
+    
+    // Add event listener to the table src cell
+    document.getElementById('onvif-table').addEventListener('click', ev => {
+        const target = ev.target;
+        if (target.tagName === 'TD' && target.cellIndex === 1) { // Check if the clicked cell is in the "Source" column
+            const inputBox = document.querySelector('#onvif-form input[name="src"]');
+            inputBox.value = target.textContent;
+        }
+    });
 </script>
 
 
