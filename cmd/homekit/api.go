@@ -1,60 +1,39 @@
 package homekit
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/AlexxIT/go2rtc/cmd/app/store"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
 	"github.com/AlexxIT/go2rtc/pkg/hap"
 	"github.com/AlexxIT/go2rtc/pkg/hap/mdns"
+	"github.com/gorilla/websocket"
 	"net/http"
-	"net/url"
+
 	"strings"
+	"time"
 )
+
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
+}
 
 func apiHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
-		items := make([]any, 0)
 
-		for name, src := range store.GetDict("streams") {
-			if src := src.(string); strings.HasPrefix(src, "homekit") {
-				u, err := url.Parse(src)
-				if err != nil {
-					continue
-				}
-				device := Device{
-					Name:   name,
-					Addr:   u.Host,
-					Paired: true,
-				}
-				items = append(items, device)
-			}
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			log.Error().Err(err).Caller().Send()
+			_, err = w.Write([]byte(err.Error()))
+			return
 		}
+		defer conn.Close()
 
-		for info := range mdns.GetAll() {
-			if !strings.HasSuffix(info.Name, mdns.Suffix) {
-				continue
-			}
-			name := info.Name[:len(info.Name)-len(mdns.Suffix)]
-			device := Device{
-				Name: strings.ReplaceAll(name, "\\", ""),
-				Addr: fmt.Sprintf("%s:%d", info.AddrV4, info.Port),
-			}
-			for _, field := range info.InfoFields {
-				switch field[:2] {
-				case "id":
-					device.ID = field[3:]
-				case "md":
-					device.Model = field[3:]
-				case "sf":
-					device.Paired = field[3] == '0'
-				}
-			}
-			items = append(items, device)
-		}
-
-		_ = json.NewEncoder(w).Encode(items)
+		hkDiscoverDevices(conn)
 
 	case "POST":
 		// TODO: post params...
@@ -73,6 +52,43 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 			log.Error().Err(err).Caller().Send()
 			_, err = w.Write([]byte(err.Error()))
 		}
+	}
+}
+
+func hkDiscoverDevices(conn *websocket.Conn) {
+	for {
+		entries := mdns.GetAll()
+
+		for entry := range entries {
+			if !strings.HasSuffix(entry.Name, mdns.Suffix) {
+				continue
+			}
+
+			name := entry.Name[:len(entry.Name)-len(mdns.Suffix)]
+			device := Device{
+				Name: strings.ReplaceAll(name, "\\", ""),
+				Addr: fmt.Sprintf("%s:%d", entry.AddrV4, entry.Port),
+			}
+			for _, field := range entry.InfoFields {
+				switch field[:2] {
+				case "id":
+					device.ID = field[3:]
+				case "md":
+					device.Model = field[3:]
+				case "sf":
+					device.Paired = field[3] == '0'
+				}
+			}
+
+			err := conn.WriteJSON(device)
+			if err != nil {
+				log.Error().Err(err).Caller().Send()
+
+				return
+			}
+		}
+
+		time.Sleep(1 * time.Second)
 	}
 }
 
