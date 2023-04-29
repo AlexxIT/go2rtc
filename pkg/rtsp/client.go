@@ -244,13 +244,16 @@ func (c *Conn) SetupMedia(media *core.Media) (byte, error) {
 	}
 
 	if c.session == "" {
+		// Session: 7116520596809429228
 		// Session: 216525287999;timeout=60
 		if s := res.Header.Get("Session"); s != "" {
 			if i := strings.IndexByte(s, ';'); i > 0 {
 				c.session = s[:i]
-			}
-			if i := strings.Index(s, "timeout="); i > 0 {
-				c.keepalive, _ = strconv.Atoi(s[i+8:])
+				if i = strings.Index(s, "timeout="); i > 0 {
+					c.keepalive, _ = strconv.Atoi(s[i+8:])
+				}
+			} else {
+				c.session = s
 			}
 		}
 	}
