@@ -9,7 +9,6 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/mp4"
 	"github.com/AlexxIT/go2rtc/pkg/rtsp"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/rs/zerolog"
@@ -57,7 +56,7 @@ func Init() {
 	log.Info().Str("addr", address).Msg("[rtsp] listen")
 
 	if query, err := url.ParseQuery(conf.Mod.DefaultQuery); err == nil {
-		defaultMedias = mp4.ParseQuery(query)
+		defaultMedias = ParseQuery(query)
 	}
 
 	go func() {
@@ -177,7 +176,7 @@ func tcpHandler(conn *rtsp.Conn) {
 			conn.SessionName = app.UserAgent
 
 			query := conn.URL.Query()
-			conn.Medias = mp4.ParseQuery(query)
+			conn.Medias = ParseQuery(query)
 			if conn.Medias == nil {
 				for _, media := range defaultMedias {
 					conn.Medias = append(conn.Medias, media.Clone())
@@ -248,4 +247,28 @@ func tcpHandler(conn *rtsp.Conn) {
 	}
 
 	_ = conn.Close()
+}
+
+func ParseQuery(query map[string][]string) []*core.Media {
+	if v := query["mp4"]; v != nil {
+		return []*core.Media{
+			{
+				Kind:      core.KindVideo,
+				Direction: core.DirectionSendonly,
+				Codecs: []*core.Codec{
+					{Name: core.CodecH264},
+					{Name: core.CodecH265},
+				},
+			},
+			{
+				Kind:      core.KindAudio,
+				Direction: core.DirectionSendonly,
+				Codecs: []*core.Codec{
+					{Name: core.CodecAAC},
+				},
+			},
+		}
+	}
+
+	return core.ParseQuery(query)
 }
