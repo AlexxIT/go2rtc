@@ -3,6 +3,7 @@ module github.com/AlexxIT/go2rtc
 go 1.20
 
 require (
+	github.com/antchfx/xmlquery v1.3.15
 	github.com/brutella/hap v0.0.17
 	github.com/deepch/vdk v0.0.19
 	github.com/gorilla/websocket v1.5.0
@@ -24,9 +25,11 @@ require (
 )
 
 require (
+	github.com/antchfx/xpath v1.2.4 // indirect
 	github.com/brutella/dnssd v1.2.5 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/go-chi/chi v1.5.4 // indirect
+	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/kr/pretty v0.2.1 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
@@ -45,9 +48,9 @@ require (
 	github.com/xiam/to v0.0.0-20200126224905-d60d31e03561 // indirect
 	golang.org/x/crypto v0.7.0 // indirect
 	golang.org/x/mod v0.9.0 // indirect
-	golang.org/x/net v0.8.0 // indirect
-	golang.org/x/sys v0.6.0 // indirect
-	golang.org/x/text v0.8.0 // indirect
+	golang.org/x/net v0.9.0 // indirect
+	golang.org/x/sys v0.7.0 // indirect
+	golang.org/x/text v0.9.0 // indirect
 	golang.org/x/tools v0.7.0 // indirect
 )
 

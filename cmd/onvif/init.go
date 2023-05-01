@@ -1,6 +1,13 @@
 package onvif
 
 import (
+	"io"
+	"net"
+	"net/http"
+	"os"
+	"strconv"
+	"time"
+
 	"github.com/AlexxIT/go2rtc/cmd/api"
 	"github.com/AlexxIT/go2rtc/cmd/app"
 	"github.com/AlexxIT/go2rtc/cmd/rtsp"
@@ -8,12 +15,6 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/onvif"
 	"github.com/rs/zerolog"
-	"io"
-	"net"
-	"net/http"
-	"os"
-	"strconv"
-	"time"
 )
 
 func Init() {
@@ -132,7 +133,7 @@ func apiOnvif(w http.ResponseWriter, r *http.Request) {
 		for _, host := range hosts {
 			items = append(items, api.Stream{
 				Name: host,
-				URL:  "onvif://user:pass@" + host,
+				URL:  "onvif://" + host,
 			})
 		}
 	} else {
@@ -155,18 +156,25 @@ func apiOnvif(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for i, token := range tokens {
+
+			streamuri, err := client.GetStreamUri(token)
+			if err != nil || streamuri == "" {
+				continue
+			}
 			items = append(items, api.Stream{
 				Name: name + " stream" + strconv.Itoa(i),
 				URL:  src + "?subtype=" + token,
 			})
-		}
-
-		if len(tokens) > 0 && client.HasSnapshots() {
+			snapshoturi, err := client.GetSnapshotUri(token)
+			if err != nil || snapshoturi == "" {
+				continue
+			}
 			items = append(items, api.Stream{
-				Name: name + " snapshot",
+				Name: name + " snapshot" + strconv.Itoa(i),
 				URL:  src + "?subtype=" + tokens[0] + "&snapshot",
 			})
 		}
+
 	}
 
 	api.ResponseStreams(w, items)

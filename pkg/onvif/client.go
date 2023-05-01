@@ -5,18 +5,22 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"github.com/AlexxIT/go2rtc/pkg/core"
-	"html"
+	"github.com/antchfx/xmlquery"
+
 	"io"
 	"net/http"
 	"net/url"
 	"regexp"
-	"strings"
 	"time"
 )
 
 type Client struct {
-	url *url.URL
+	url            *url.URL
+	media_service  string
+	image_service  string
+	device_service string
 }
 
 func NewClient(rawURL string) (*Client, error) {
@@ -24,7 +28,8 @@ func NewClient(rawURL string) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Client{url: u}, nil
+	client := Client{url: u, device_service: "onvif/device_service"}
+	return &client, nil
 }
 
 func (c *Client) GetURI() (string, error) {
@@ -49,13 +54,10 @@ func (c *Client) GetURI() (string, error) {
 		getUri = c.GetSnapshotUri
 	}
 
-	b, err := getUri(token)
+	uri, err := getUri(token)
 	if err != nil {
 		return "", err
 	}
-
-	uri := FindTagValue(b, "Uri")
-	uri = html.UnescapeString(uri)
 
 	u, err := url.Parse(uri)
 	if err != nil {
@@ -94,81 +96,113 @@ func (c *Client) GetProfilesTokens() ([]string, error) {
 	return tokens, nil
 }
 
-func (c *Client) HasSnapshots() bool {
-	b, err := c.GetServiceCapabilities()
-	if err != nil {
-		return false
-	}
-	return strings.Contains(string(b), `SnapshotUri="true"`)
-}
-
 func (c *Client) GetCapabilities() ([]byte, error) {
-	return c.Request(
-		`<tds:GetCapabilities xmlns:tds="http://www.onvif.org/ver10/device/wsdl">
-	<tds:Category>All</tds:Category>
-</tds:GetCapabilities>`,
+	response, err := c.Request(
+		`<GetCapabilities xmlns:tds="http://www.onvif.org/ver10/device/wsdl">
+	<Category>All</Category>
+</GetCapabilities>`, c.device_service,
 	)
+	doc, err := xmlquery.Parse(bytes.NewReader(response))
+	if err != nil {
+		return nil, err
+	}
+
+	c.media_service = xmlquery.FindOne(doc, "//tt:Media/tt:XAddr").InnerText()
+	c.image_service = xmlquery.FindOne(doc, "//tt:Imaging/tt:XAddr").InnerText()
+	return response, err
 }
 
 func (c *Client) GetNetworkInterfaces() ([]byte, error) {
-	return c.Request(`<tds:GetNetworkInterfaces xmlns:tds="http://www.onvif.org/ver10/device/wsdl"/>`)
+	return c.Request(`<tds:GetNetworkInterfaces xmlns:tds="http://www.onvif.org/ver10/device/wsdl"/>`, c.device_service)
 }
 
 func (c *Client) GetDeviceInformation() ([]byte, error) {
-	return c.Request(`<tds:GetDeviceInformation xmlns:tds="http://www.onvif.org/ver10/device/wsdl"/>`)
+	return c.Request(`<tds:GetDeviceInformation xmlns:tds="http://www.onvif.org/ver10/device/wsdl"/>`, c.device_service)
 }
 
 func (c *Client) GetProfiles() ([]byte, error) {
-	return c.Request(`<trt:GetProfiles xmlns:trt="http://www.onvif.org/ver10/media/wsdl"/>`)
+	return c.Request(`<GetProfiles xmlns:trt="http://www.onvif.org/ver10/media/wsdl"/>`, c.media_service)
 }
 
-func (c *Client) GetStreamUri(token string) ([]byte, error) {
-	return c.Request(
+func (c *Client) GetStreamUri(token string) (string, error) {
+	fmt.Println("Query Stream URI with token " + token)
+	response, err := c.Request(
 		`<trt:GetStreamUri xmlns:trt="http://www.onvif.org/ver10/media/wsdl" xmlns:tt="http://www.onvif.org/ver10/schema">
 	<trt:StreamSetup>
 		<tt:Stream>RTP-Unicast</tt:Stream>
 		<tt:Transport><tt:Protocol>RTSP</tt:Protocol></tt:Transport>
 	</trt:StreamSetup>
-	<trt:ProfileToken>` + token + `</trt:ProfileToken>
-</trt:GetStreamUri>`)
+	<trt:ProfileToken>`+token+`</trt:ProfileToken>
+</trt:GetStreamUri>`, c.media_service)
+	if err != nil {
+		return "", err
+	}
+	doc, err := xmlquery.Parse(bytes.NewReader(response))
+	if err != nil {
+		return "", err
+	}
+
+	stream_url, err := xmlquery.Query(doc, "//trt:MediaUri/tt:Uri")
+	if err != nil {
+		fmt.Printf("Error: %v", err)
+		return "", err
+	}
+	fmt.Println("Stream URI: " + stream_url.InnerText())
+	return stream_url.InnerText(), err
 }
 
-func (c *Client) GetSnapshotUri(token string) ([]byte, error) {
-	return c.Request(
-		`<trt:GetSnapshotUri  xmlns:trt="http://www.onvif.org/ver10/media/wsdl">
-	<trt:ProfileToken>` + token + `</trt:ProfileToken>
-</trt:GetSnapshotUri>`)
+func (c *Client) GetSnapshotUri(token string) (string, error) {
+	fmt.Println("Query Snaphot URI with token " + token)
+	response, err := c.Request(
+		`<GetSnapshotUri xmlns:trt="http://www.onvif.org/ver10/media/wsdl">
+	<ProfileToken>`+token+`</ProfileToken>
+</GetSnapshotUri>`, c.media_service)
+	if err != nil {
+		return "", err
+	}
+	doc, err := xmlquery.Parse(bytes.NewReader(response))
+	if err != nil {
+		return "", err
+	}
+
+	stream_url, err := xmlquery.Query(doc, "//trt:MediaUri/tt:Uri")
+	if err != nil {
+		fmt.Printf("Error: %v", err)
+		return "", err
+	}
+	fmt.Println("Snaphot URI: " + stream_url.InnerText())
+	return stream_url.InnerText(), err
 }
 
 func (c *Client) GetSystemDateAndTime() ([]byte, error) {
 	return c.Request(
-		`<ns0:GetSystemDateAndTime xmlns:ns0="http://www.onvif.org/ver10/device/wsdl"/>`,
+		`<ns0:GetSystemDateAndTime xmlns:ns0="http://www.onvif.org/ver10/device/wsdl"/>`, c.device_service,
 	)
 }
 
 func (c *Client) GetServiceCapabilities() ([]byte, error) {
 	return c.Request(
-		`<ns0:GetServiceCapabilities xmlns:ns0="http://www.onvif.org/ver10/media/wsdl"/>`,
+		`<ns0:GetServiceCapabilities xmlns:ns0="http://www.onvif.org/ver10/media/wsdl"/>`, c.device_service,
 	)
 }
 
 func (c *Client) SystemReboot() ([]byte, error) {
 	return c.Request(
-		`<tds:SystemReboot xmlns:tds="http://www.onvif.org/ver10/device/wsdl"/>`,
+		`<tds:SystemReboot xmlns:tds="http://www.onvif.org/ver10/device/wsdl"/>`, c.device_service,
 	)
 }
 
 func (c *Client) GetServices() ([]byte, error) {
 	return c.Request(`<tds:GetServices xmlns:tds="http://www.onvif.org/ver10/device/wsdl">
 	<tds:IncludeCapability>true</tds:IncludeCapability>
-</tds:GetServices>`)
+</tds:GetServices>`, c.device_service)
 }
 
 func (c *Client) GetScopes() ([]byte, error) {
-	return c.Request(`<tds:GetScopes xmlns:tds="http://www.onvif.org/ver10/device/wsdl" />`)
+	return c.Request(`<tds:GetScopes xmlns:tds="http://www.onvif.org/ver10/device/wsdl" />`, c.device_service)
 }
 
-func (c *Client) Request(body string) ([]byte, error) {
+func (c *Client) Request(body string, path string) ([]byte, error) {
 	buf := bytes.NewBuffer(nil)
 	buf.WriteString(
 		`<?xml version="1.0" encoding="UTF-8"?><s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope">`,
@@ -198,7 +232,7 @@ func (c *Client) Request(body string) ([]byte, error) {
 
 	client := &http.Client{Timeout: time.Second * 5000}
 	res, err := client.Post(
-		"http://"+c.url.Host+"/onvif/",
+		"http://"+c.url.Host+"/"+path,
 		`application/soap+xml;charset=utf-8`,
 		buf,
 	)
