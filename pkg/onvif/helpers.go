@@ -41,7 +41,7 @@ func DiscoveryStreamingHosts() ([]string, error) {
 		<Probe xmlns="http://schemas.xmlsoap.org/ws/2005/04/discovery"
 			xmlns:xsd="http://www.w3.org/2001/XMLSchema"
 			xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-			<Types>dn:NetworkVideoTransmitter</Types>
+			<Types />
 			<Scopes />
 		</Probe>
 	</Body>
