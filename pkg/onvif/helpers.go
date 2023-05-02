@@ -31,7 +31,7 @@ func UUID() string {
 }
 
 func DiscoveryStreamingHosts() ([]string, error) {
-	conn, err := net.ListenPacket("udp4", ":0")
+	conn, err := net.ListenUDP("udp4", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +70,7 @@ func DiscoveryStreamingHosts() ([]string, error) {
 
 	b := make([]byte, 8192)
 	for {
-		n, _, err := conn.ReadFrom(b)
+		n, addr, err := conn.ReadFromUDP(b)
 		if err != nil {
 			break
 		}
@@ -94,6 +94,12 @@ func DiscoveryStreamingHosts() ([]string, error) {
 
 		if u.Scheme != "http" {
 			continue
+		}
+
+		// fix some buggy cameras
+		// <wsdd:XAddrs>http://0.0.0.0:8080/onvif/device_service</wsdd:XAddrs>
+		if strings.HasPrefix(u.Host, "0.0.0.0") {
+			u.Host = addr.IP.String() + u.Host[7:]
 		}
 
 		hosts = append(hosts, u.Host)
