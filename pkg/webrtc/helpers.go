@@ -52,6 +52,53 @@ func UnmarshalMedias(descriptions []*sdp.MediaDescription) (medias []*core.Media
 	return
 }
 
+func WithResampling(medias []*core.Media) []*core.Media {
+	for _, media := range medias {
+		if media.Kind != core.KindAudio || media.Direction != core.DirectionSendonly {
+			continue
+		}
+
+		var pcma, pcmu, pcm *core.Codec
+
+		for _, codec := range media.Codecs {
+			switch codec.Name {
+			case core.CodecPCMA:
+				if codec.ClockRate != 0 {
+					pcma = codec
+				} else {
+					pcma = nil
+				}
+			case core.CodecPCMU:
+				if codec.ClockRate != 0 {
+					pcmu = codec
+				} else {
+					pcmu = nil
+				}
+			case core.CodecPCM:
+				pcm = codec
+			}
+		}
+
+		if pcma != nil {
+			pcma = pcma.Clone()
+			pcma.ClockRate = 0 // reset clock rate so will match any
+			media.Codecs = append(media.Codecs, pcma)
+		}
+		if pcmu != nil {
+			pcmu = pcmu.Clone()
+			pcmu.ClockRate = 0
+			media.Codecs = append(media.Codecs, pcmu)
+		}
+		if pcma != nil && pcm == nil {
+			pcm = pcma.Clone()
+			pcm.Name = core.CodecPCM
+			media.Codecs = append(media.Codecs, pcm)
+		}
+	}
+
+	return medias
+}
+
 func NewCandidate(network, address string) (string, error) {
 	i := strings.LastIndexByte(address, ':')
 	if i < 0 {

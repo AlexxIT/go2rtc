@@ -53,7 +53,7 @@ func Handle(url string) (core.Producer, error) {
 	path := "/" + hex.EncodeToString(sum[:])
 
 	url = strings.Replace(
-		url, "{output}", "rtsp://localhost:"+rtsp.Port+path, 1,
+		url, "{output}", "rtsp://127.0.0.1:"+rtsp.Port+path, 1,
 	)
 
 	// remove `exec:`

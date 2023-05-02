@@ -5,6 +5,7 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/api"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
 	"github.com/AlexxIT/go2rtc/pkg/mjpeg"
+	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/rs/zerolog/log"
 	"io"
 	"net/http"
@@ -29,7 +30,7 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 	exit := make(chan []byte)
 
 	cons := &mjpeg.Consumer{
-		RemoteAddr: r.RemoteAddr,
+		RemoteAddr: tcp.RemoteAddr(r),
 		UserAgent:  r.UserAgent(),
 	}
 	cons.Listen(func(msg any) {
@@ -81,7 +82,7 @@ func outputMjpeg(w http.ResponseWriter, r *http.Request) {
 	flusher := w.(http.Flusher)
 
 	cons := &mjpeg.Consumer{
-		RemoteAddr: r.RemoteAddr,
+		RemoteAddr: tcp.RemoteAddr(r),
 		UserAgent:  r.UserAgent(),
 	}
 	cons.Listen(func(msg any) {
@@ -146,7 +147,7 @@ func handlerWS(tr *api.Transport, _ *api.Message) error {
 	}
 
 	cons := &mjpeg.Consumer{
-		RemoteAddr: tr.Request.RemoteAddr,
+		RemoteAddr: tcp.RemoteAddr(tr.Request),
 		UserAgent:  tr.Request.UserAgent(),
 	}
 	cons.Listen(func(msg any) {

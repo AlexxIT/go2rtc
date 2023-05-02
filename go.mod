@@ -16,6 +16,8 @@ require (
 	github.com/pion/stun v0.4.0
 	github.com/pion/webrtc/v3 v3.1.58
 	github.com/rs/zerolog v1.29.0
+	github.com/sigurn/crc16 v0.0.0-20211026045750-20ab5afb07e3
+	github.com/sigurn/crc8 v0.0.0-20220107193325-2243fe600f9f
 	github.com/stretchr/testify v1.8.2
 	github.com/tadglines/go-pkgs v0.0.0-20210623144937-b983b20f54f9
 	gopkg.in/yaml.v3 v3.0.1

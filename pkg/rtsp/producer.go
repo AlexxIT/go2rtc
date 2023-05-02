@@ -2,7 +2,7 @@ package rtsp
 
 import (
 	"encoding/json"
-	"fmt"
+	"errors"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
@@ -15,51 +15,86 @@ func (c *Conn) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, e
 		}
 	}
 
-	switch c.state {
-	case StateConn, StateSetup:
-	default:
-		return nil, fmt.Errorf("RTSP GetTrack from wrong state: %s", c.state)
+	c.stateMu.Lock()
+	defer c.stateMu.Unlock()
+
+	if c.state == StatePlay {
+		if err := c.Reconnect(); err != nil {
+			return nil, err
+		}
 	}
 
-	channel, err := c.SetupMedia(media, true)
+	channel, err := c.SetupMedia(media)
 	if err != nil {
 		return nil, err
 	}
 
+	c.state = StateSetup
+
 	track := core.NewReceiver(media, codec)
-	track.ID = byte(channel)
+	track.ID = channel
 	c.receivers = append(c.receivers, track)
 
 	return track, nil
 }
 
-func (c *Conn) Start() error {
-	switch c.mode {
-	case core.ModeActiveProducer:
-		if err := c.Play(); err != nil {
-			return err
+func (c *Conn) Start() (err error) {
+	core.Assert(c.mode == core.ModeActiveProducer || c.mode == core.ModePassiveProducer)
+
+	for {
+		ok := false
+
+		c.stateMu.Lock()
+		switch c.state {
+		case StateNone:
+			err = nil
+		case StateConn:
+			err = errors.New("start from CONN state")
+		case StateSetup:
+			switch c.mode {
+			case core.ModeActiveProducer:
+				err = c.Play()
+			case core.ModePassiveProducer:
+				err = nil
+			default:
+				err = errors.New("start from wrong mode: " + c.mode.String())
+			}
+
+			if err == nil {
+				c.state = StatePlay
+				ok = true
+			}
 		}
-	case core.ModePassiveProducer:
-	default:
-		return fmt.Errorf("start wrong mode: %d", c.mode)
-	}
+		c.stateMu.Unlock()
 
-	if err := c.Handle(); c.state != StateNone {
-		_ = c.conn.Close()
-		return err
-	}
+		if !ok {
+			return
+		}
 
-	return nil
+		// Handler can return different states:
+		// 1. None after PLAY should exit without error
+		// 2. Play after PLAY should exit from Start with error
+		// 3. Setup after PLAY should Play once again
+		err = c.Handle()
+	}
 }
 
-func (c *Conn) Stop() error {
+func (c *Conn) Stop() (err error) {
 	for _, receiver := range c.receivers {
 		receiver.Close()
 	}
 	for _, sender := range c.senders {
 		sender.Close()
 	}
-	return c.Close()
+
+	c.stateMu.Lock()
+	if c.state != StateNone {
+		c.state = StateNone
+		err = c.Close()
+	}
+	c.stateMu.Unlock()
+
+	return
 }
 
 func (c *Conn) MarshalJSON() ([]byte, error) {
@@ -81,4 +116,33 @@ func (c *Conn) MarshalJSON() ([]byte, error) {
 	}
 
 	return json.Marshal(info)
+}
+
+func (c *Conn) Reconnect() error {
+	c.Fire("RTSP reconnect")
+
+	// close current session
+	_ = c.Close()
+
+	// start new session
+	if err := c.Dial(); err != nil {
+		return err
+	}
+	if err := c.Describe(); err != nil {
+		return err
+	}
+
+	// restore previous medias
+	for _, receiver := range c.receivers {
+		if _, err := c.SetupMedia(receiver.Media); err != nil {
+			return err
+		}
+	}
+	for _, sender := range c.senders {
+		if _, err := c.SetupMedia(sender.Media); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

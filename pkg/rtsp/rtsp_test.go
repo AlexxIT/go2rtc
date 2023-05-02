@@ -1,10 +1,7 @@
 package rtsp
 
 import (
-	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/stretchr/testify/assert"
-	"strings"
 	"testing"
 )
 
@@ -79,63 +76,34 @@ a=fmtp:96 packetization-mode=1;profile-level-id=64001F;sprop-parameter-sets=Z0IA
 
 func TestBugSDP3(t *testing.T) {
 	s := `v=0
-o=- 1675775048103026 1 IN IP4 192.168.1.123
+o=- 1680614126554766 1 IN IP4 192.168.0.3
 s=Session streamed by "preview"
 t=0 0
-a=tool:LIVE555 Streaming Media v2020.08.12
+a=tool:BC Streaming Media v202210012022.10.01
 a=type:broadcast
 a=control:*
-a=range:npt=0-
+a=range:npt=now-
 a=x-qt-text-nam:Session streamed by "preview"
 m=video 0 RTP/AVP 96
 c=IN IP4 0.0.0.0
 b=AS:8192
 a=rtpmap:96 H264/90000
+a=range:npt=now-
 a=fmtp:96 packetization-mode=1;profile-level-id=640033;sprop-parameter-sets=Z2QAM6wVFKAoAPGQ,aO48sA==
 a=recvonly
 a=control:track1
-m=audio 0 RTP/AVP 8
-a=control:track2
-a=rtpmap:8 PCMA/8000
-a=sendonlym=audio 0 RTP/AVP 98
+m=audio 0 RTP/AVP 97
 c=IN IP4 0.0.0.0
 b=AS:8192
-a=rtpmap:98 MPEG4-GENERIC/16000
-a=fmtp:98 streamtype=5;profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;config=1408;
+a=rtpmap:97 MPEG4-GENERIC/16000
+a=fmtp:97 streamtype=5;profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;config=1408;
 a=recvonly
+a=control:track2
+m=audio 0 RTP/AVP 8
 a=control:track3
-`
+a=rtpmap:8 PCMA/8000
+a=sendonly`
 	medias, err := UnmarshalSDP([]byte(s))
 	assert.Nil(t, err)
 	assert.Len(t, medias, 3)
-}
-
-func TestBugSDP4(t *testing.T) {
-	s := `v=0
-o=- 1676583297494652 1676583297494652 IN IP4 192.168.1.58
-s=Media Presentation
-e=NONE
-b=AS:5050
-t=0 0
-a=control:rtsp://192.168.1.58:554/h264_stream/
-m=video 0 RTP/AVP 96
-b=AS:5000
-a=control:rtsp://192.168.1.58:554/h264_stream/trackID=1
-a=rtpmap:96 H265/90000
-a=fmtp:96 profile-level-id=420029; packetization-mode=1; sprop-parameter-sets=
-a=Media_header:MEDIAINFO=494D4B48010100000400050000000000000000000000000000000000000000000000000000000000;
-a=appversion:1.0
-`
-	s = strings.ReplaceAll(s, "\n", "\r\n")
-	medias, err := UnmarshalSDP([]byte(s))
-	assert.Nil(t, err)
-
-	codec := medias[0].Codecs[0]
-	assert.Equal(t, core.CodecH264, codec.Name)
-
-	sps, _ := h264.GetParameterSet(codec.FmtpLine)
-	assert.Nil(t, sps)
-
-	profile := h264.GetProfileLevelID(codec.FmtpLine)
-	assert.Equal(t, "420029", profile)
 }

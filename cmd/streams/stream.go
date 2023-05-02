@@ -3,7 +3,6 @@ package streams
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"strings"
 	"sync"
@@ -31,8 +30,6 @@ func NewStream(source any) *Stream {
 			s.producers = append(s.producers, prod)
 		}
 		return s
-	case *Stream:
-		return source
 	case map[string]any:
 		return NewStream(source["url"])
 	case nil:
@@ -50,24 +47,28 @@ func (s *Stream) SetSource(source string) {
 
 func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
 	// support for multiple simultaneous requests from different consumers
-	atomic.AddInt32(&s.requests, 1)
+	consN := atomic.AddInt32(&s.requests, 1) - 1
 
-	var producers []*Producer // matched producers for consumer
-
-	var codecs string
+	var statErrors []error
+	var statMedias []*core.Media
+	var statProds []*Producer // matched producers for consumer
 
 	// Step 1. Get consumer medias
 	for _, consMedia := range cons.GetMedias() {
+		log.Trace().Msgf("[streams] check cons=%d media=%s", consN, consMedia)
 
 	producers:
-		for _, prod := range s.producers {
+		for prodN, prod := range s.producers {
 			if err = prod.Dial(); err != nil {
+				log.Trace().Err(err).Msgf("[streams] skip prod=%s", prod.url)
+				statErrors = append(statErrors, err)
 				continue
 			}
 
 			// Step 2. Get producer medias (not tracks yet)
 			for _, prodMedia := range prod.GetMedias() {
-				collectCodecs(prodMedia, &codecs)
+				log.Trace().Msgf("[streams] check prod=%d media=%s", prodN, prodMedia)
+				statMedias = append(statMedias, prodMedia)
 
 				// Step 3. Match consumer/producer codecs list
 				prodCodec, consCodec := prodMedia.MatchMedia(consMedia)
@@ -79,6 +80,8 @@ func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
 
 				switch prodMedia.Direction {
 				case core.DirectionRecvonly:
+					log.Trace().Msgf("[streams] match prod=%d => cons=%d", prodN, consN)
+
 					// Step 4. Get recvonly track from producer
 					if track, err = prod.GetTrack(prodMedia, prodCodec); err != nil {
 						log.Info().Err(err).Msg("[streams] can't get track")
@@ -91,6 +94,8 @@ func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
 					}
 
 				case core.DirectionSendonly:
+					log.Trace().Msgf("[streams] match cons=%d => prod=%d", consN, prodN)
+
 					// Step 4. Get recvonly track from consumer (backchannel)
 					if track, err = cons.(core.Producer).GetTrack(consMedia, consCodec); err != nil {
 						log.Info().Err(err).Msg("[streams] can't get track")
@@ -103,7 +108,7 @@ func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
 					}
 				}
 
-				producers = append(producers, prod)
+				statProds = append(statProds, prod)
 
 				if !consMedia.MatchAll() {
 					break producers
@@ -117,18 +122,8 @@ func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
 		s.stopProducers()
 	}
 
-	if len(producers) == 0 {
-		if len(codecs) > 0 {
-			return errors.New("codecs not match: " + codecs)
-		}
-
-		for i, producer := range s.producers {
-			if producer.lastErr != nil {
-				return fmt.Errorf("source %d error: %w", i, producer.lastErr)
-			}
-		}
-
-		return fmt.Errorf("sources unavailable: %d", len(s.producers))
+	if len(statProds) == 0 {
+		return formatError(statMedias, statErrors)
 	}
 
 	s.mu.Lock()
@@ -136,7 +131,7 @@ func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
 	s.mu.Unlock()
 
 	// there may be duplicates, but that's not a problem
-	for _, prod := range producers {
+	for _, prod := range statProds {
 		prod.start()
 	}
 
@@ -185,6 +180,11 @@ producers:
 				continue producers
 			}
 		}
+		for _, track := range producer.senders {
+			if len(track.Senders()) > 0 {
+				continue producers
+			}
+		}
 		producer.stop()
 	}
 	s.mu.Unlock()
@@ -208,22 +208,47 @@ func (s *Stream) MarshalJSON() ([]byte, error) {
 	return json.Marshal(info)
 }
 
-func collectCodecs(media *core.Media, codecs *string) {
-	if media.Direction == core.DirectionRecvonly {
-		return
-	}
+func formatError(statMedias []*core.Media, statErrors []error) error {
+	var text string
 
-	for _, codec := range media.Codecs {
-		name := codec.Name
-		if name == core.CodecAAC {
-			name = "AAC"
-		}
-		if strings.Contains(*codecs, name) {
+	for _, media := range statMedias {
+		if media.Direction == core.DirectionRecvonly {
 			continue
 		}
-		if len(*codecs) > 0 {
-			*codecs += ","
+
+		for _, codec := range media.Codecs {
+			name := codec.Name
+			if name == core.CodecAAC {
+				name = "AAC"
+			}
+			if strings.Contains(text, name) {
+				continue
+			}
+			if len(text) > 0 {
+				text += ","
+			}
+			text += name
 		}
-		*codecs += name
 	}
+
+	if text != "" {
+		return errors.New(text)
+	}
+
+	for _, err := range statErrors {
+		s := err.Error()
+		if strings.Contains(text, s) {
+			continue
+		}
+		if len(text) > 0 {
+			text += ","
+		}
+		text += s
+	}
+
+	if text != "" {
+		return errors.New(text)
+	}
+
+	return errors.New("unknown error")
 }

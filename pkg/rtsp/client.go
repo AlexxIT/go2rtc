@@ -5,15 +5,18 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"net"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/tcp"
 )
+
+var Timeout = time.Second * 5
 
 func NewClient(uri string) *Conn {
 	return &Conn{uri: uri}
@@ -27,10 +30,6 @@ func (c *Conn) Dial() (err error) {
 	if strings.IndexByte(c.URL.Host, ':') < 0 {
 		c.URL.Host += ":554"
 	}
-
-	// remove UserInfo from URL
-	c.auth = tcp.NewAuth(c.URL.User)
-	c.URL.User = nil
 
 	c.conn, err = net.DialTimeout("tcp", c.URL.Host, time.Second*5)
 	if err != nil {
@@ -53,50 +52,24 @@ func (c *Conn) Dial() (err error) {
 		c.conn = tlsConn
 	}
 
+	// remove UserInfo from URL
+	c.auth = tcp.NewAuth(c.URL.User)
+	c.URL.User = nil
+
 	c.reader = bufio.NewReader(c.conn)
+	c.session = ""
 	c.state = StateConn
 
 	return nil
 }
 
-// Request sends only Request
-func (c *Conn) Request(req *tcp.Request) error {
-	if req.Proto == "" {
-		req.Proto = ProtoRTSP
-	}
-
-	if req.Header == nil {
-		req.Header = make(map[string][]string)
-	}
-
-	c.sequence++
-	// important to send case sensitive CSeq
-	// https://github.com/AlexxIT/go2rtc/issues/7
-	req.Header["CSeq"] = []string{strconv.Itoa(c.sequence)}
-
-	c.auth.Write(req)
-
-	if c.Session != "" {
-		req.Header.Set("Session", c.Session)
-	}
-
-	if req.Body != nil {
-		val := strconv.Itoa(len(req.Body))
-		req.Header.Set("Content-Length", val)
-	}
-
-	c.Fire(req)
-
-	return req.Write(c.conn)
-}
-
-// Do send Request and receive and process Response
+// Do send WriteRequest and receive and process WriteResponse
 func (c *Conn) Do(req *tcp.Request) (*tcp.Response, error) {
-	if err := c.Request(req); err != nil {
+	if err := c.WriteRequest(req); err != nil {
 		return nil, err
 	}
 
-	res, err := tcp.ReadResponse(c.reader)
+	res, err := c.ReadResponse()
 	if err != nil {
 		return nil, err
 	}
@@ -124,40 +97,6 @@ func (c *Conn) Do(req *tcp.Request) (*tcp.Response, error) {
 	}
 
 	return res, nil
-}
-
-func (c *Conn) Response(res *tcp.Response) error {
-	if res.Proto == "" {
-		res.Proto = ProtoRTSP
-	}
-
-	if res.Status == "" {
-		res.Status = "200 OK"
-	}
-
-	if res.Header == nil {
-		res.Header = make(map[string][]string)
-	}
-
-	if res.Request != nil && res.Request.Header != nil {
-		seq := res.Request.Header.Get("CSeq")
-		if seq != "" {
-			res.Header.Set("CSeq", seq)
-		}
-	}
-
-	if c.Session != "" {
-		res.Header.Set("Session", c.Session)
-	}
-
-	if res.Body != nil {
-		val := strconv.Itoa(len(res.Body))
-		res.Header.Set("Content-Length", val)
-	}
-
-	c.Fire(res)
-
-	return res.Write(c.conn)
 }
 
 func (c *Conn) Options() error {
@@ -211,9 +150,16 @@ func (c *Conn) Describe() error {
 		}
 	}
 
-	c.Medias, err = UnmarshalSDP(res.Body)
+	medias, err := UnmarshalSDP(res.Body)
 	if err != nil {
 		return err
+	}
+
+	// TODO: rewrite more smart
+	if c.Medias == nil {
+		c.Medias = medias
+	} else if len(c.Medias) > len(medias) {
+		c.Medias = c.Medias[:len(medias)]
 	}
 
 	c.mode = core.ModeActiveProducer
@@ -242,33 +188,12 @@ func (c *Conn) Announce() (err error) {
 	return
 }
 
-func (c *Conn) Setup() error {
-	for _, media := range c.Medias {
-		_, err := c.SetupMedia(media, true)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (c *Conn) SetupMedia(media *core.Media, first bool) (byte, error) {
-	// TODO: rewrite recoonection and first flag
-	if first {
-		c.stateMu.Lock()
-		defer c.stateMu.Unlock()
-	}
-
-	if c.state != StateConn && c.state != StateSetup {
-		return 0, fmt.Errorf("RTSP SETUP from wrong state: %s", c.state)
-	}
-
+func (c *Conn) SetupMedia(media *core.Media) (byte, error) {
 	var transport string
 
 	// try to use media position as channel number
 	for i, m := range c.Medias {
-		if m.ID == media.ID {
+		if m.Equal(media) {
 			transport = fmt.Sprintf(
 				// i   - RTP (data channel)
 				// i+1 - RTCP (control channel)
@@ -303,37 +228,33 @@ func (c *Conn) SetupMedia(media *core.Media, first bool) (byte, error) {
 		},
 	}
 
-	var res *tcp.Response
-	res, err = c.Do(req)
+	res, err := c.Do(req)
 	if err != nil {
 		// some Dahua/Amcrest cameras fail here because two simultaneous
 		// backchannel connections
 		if c.Backchannel {
 			c.Backchannel = false
-			if err := c.Dial(); err != nil {
+			if err = c.Reconnect(); err != nil {
 				return 0, err
 			}
-			if err := c.Describe(); err != nil {
-				return 0, err
-			}
-
-			for _, newMedia := range c.Medias {
-				if newMedia.ID == media.ID {
-					return c.SetupMedia(newMedia, false)
-				}
-			}
+			return c.SetupMedia(media)
 		}
 
 		return 0, err
 	}
 
-	if c.Session == "" {
+	if c.session == "" {
+		// Session: 7116520596809429228
 		// Session: 216525287999;timeout=60
 		if s := res.Header.Get("Session"); s != "" {
-			if j := strings.IndexByte(s, ';'); j > 0 {
-				s = s[:j]
+			if i := strings.IndexByte(s, ';'); i > 0 {
+				c.session = s[:i]
+				if i = strings.Index(s, "timeout="); i > 0 {
+					c.keepalive, _ = strconv.Atoi(s[i+8:])
+				}
+			} else {
+				c.session = s
 			}
-			c.Session = s
 		}
 	}
 
@@ -351,8 +272,6 @@ func (c *Conn) SetupMedia(media *core.Media, first bool) (byte, error) {
 		}
 	}
 
-	c.state = StateSetup
-
 	channel := core.Between(transport, "interleaved=", "-")
 	i, err := strconv.Atoi(channel)
 	if err != nil {
@@ -363,36 +282,19 @@ func (c *Conn) SetupMedia(media *core.Media, first bool) (byte, error) {
 }
 
 func (c *Conn) Play() (err error) {
-	c.stateMu.Lock()
-	defer c.stateMu.Unlock()
-
-	if c.state != StateSetup {
-		return fmt.Errorf("RTSP PLAY from wrong state: %s", c.state)
-	}
-
 	req := &tcp.Request{Method: MethodPlay, URL: c.URL}
-	if err = c.Request(req); err == nil {
-		c.state = StatePlay
-	}
-
-	return
+	return c.WriteRequest(req)
 }
 
 func (c *Conn) Teardown() (err error) {
 	// allow TEARDOWN from any state (ex. ANNOUNCE > SETUP)
 	req := &tcp.Request{Method: MethodTeardown, URL: c.URL}
-	return c.Request(req)
+	return c.WriteRequest(req)
 }
 
 func (c *Conn) Close() error {
-	c.stateMu.Lock()
-	defer c.stateMu.Unlock()
-
-	if c.state == StateNone {
-		return nil
+	if c.mode == core.ModeActiveProducer {
+		_ = c.Teardown()
 	}
-
-	_ = c.Teardown()
-	c.state = StateNone
 	return c.conn.Close()
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"net"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -25,7 +26,7 @@ func (c *Conn) Auth(username, password string) {
 
 func (c *Conn) Accept() error {
 	for {
-		req, err := tcp.ReadRequest(c.reader)
+		req, err := c.ReadRequest()
 		if err != nil {
 			return err
 		}
@@ -39,10 +40,11 @@ func (c *Conn) Accept() error {
 
 		if !c.auth.Validate(req) {
 			res := &tcp.Response{
-				Status: "401 Unauthorized",
-				Header: map[string][]string{"Www-Authenticate": {`Basic realm="go2rtc"`}},
+				Status:  "401 Unauthorized",
+				Header:  map[string][]string{"Www-Authenticate": {`Basic realm="go2rtc"`}},
+				Request: req,
 			}
-			if err = c.Response(res); err != nil {
+			if err = c.WriteResponse(res); err != nil {
 				return err
 			}
 			continue
@@ -58,7 +60,7 @@ func (c *Conn) Accept() error {
 				},
 				Request: req,
 			}
-			if err = c.Response(res); err != nil {
+			if err = c.WriteResponse(res); err != nil {
 				return err
 			}
 
@@ -83,7 +85,7 @@ func (c *Conn) Accept() error {
 			c.Fire(MethodAnnounce)
 
 			res := &tcp.Response{Request: req}
-			if err = c.Response(res); err != nil {
+			if err = c.WriteResponse(res); err != nil {
 				return err
 			}
 
@@ -96,7 +98,7 @@ func (c *Conn) Accept() error {
 					Status:  "404 Not Found",
 					Request: req,
 				}
-				return c.Response(res)
+				return c.WriteResponse(res)
 			}
 
 			res := &tcp.Response{
@@ -108,11 +110,12 @@ func (c *Conn) Accept() error {
 
 			// convert tracks to real output medias medias
 			var medias []*core.Media
-			for _, track := range c.senders {
+			for i, track := range c.senders {
 				media := &core.Media{
 					Kind:      core.GetKind(track.Codec.Name),
 					Direction: core.DirectionRecvonly,
 					Codecs:    []*core.Codec{track.Codec},
+					ID:        "trackID=" + strconv.Itoa(i),
 				}
 				medias = append(medias, media)
 			}
@@ -122,7 +125,7 @@ func (c *Conn) Accept() error {
 				return err
 			}
 
-			if err = c.Response(res); err != nil {
+			if err = c.WriteResponse(res); err != nil {
 				return err
 			}
 
@@ -136,27 +139,24 @@ func (c *Conn) Accept() error {
 
 			const transport = "RTP/AVP/TCP;unicast;interleaved="
 			if strings.HasPrefix(tr, transport) {
-				c.Session = "1" // TODO: fixme
+				c.session = core.RandString(8, 10)
 				c.state = StateSetup
 				res.Header.Set("Transport", tr[:len(transport)+3])
 			} else {
 				res.Status = "461 Unsupported transport"
 			}
 
-			if err = c.Response(res); err != nil {
+			if err = c.WriteResponse(res); err != nil {
 				return err
 			}
 
 		case MethodRecord, MethodPlay:
 			res := &tcp.Response{Request: req}
-			if err = c.Response(res); err == nil {
-				c.state = StatePlay
-			}
-			return err
+			return c.WriteResponse(res)
 
 		case MethodTeardown:
 			res := &tcp.Response{Request: req}
-			_ = c.Response(res)
+			_ = c.WriteResponse(res)
 			c.state = StateNone
 			return c.conn.Close()
 

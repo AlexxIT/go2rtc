@@ -41,6 +41,11 @@ func Between(s, sub1, sub2 string) string {
 	return s
 }
 
+func Atoi(s string) (i int) {
+	i, _ = strconv.Atoi(s)
+	return
+}
+
 func Assert(ok bool) {
 	if !ok {
 		_, file, line, _ := runtime.Caller(1)

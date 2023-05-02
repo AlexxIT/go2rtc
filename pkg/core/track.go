@@ -18,7 +18,7 @@ type Receiver struct {
 	ID byte // Channel for RTSP, PayloadType for MPEG-TS
 
 	senders map[*Sender]chan *rtp.Packet
-	mu      sync.Mutex
+	mu      sync.RWMutex
 	bytes   int
 }
 
@@ -32,9 +32,9 @@ func (t *Receiver) WriteRTP(packet *rtp.Packet) {
 	t.mu.Lock()
 	t.bytes += len(packet.Payload)
 	for sender, buffer := range t.senders {
-		if len(buffer) < cap(buffer) {
-			buffer <- packet
-		} else {
+		select {
+		case buffer <- packet:
+		default:
 			sender.overflow++
 		}
 	}
@@ -42,11 +42,11 @@ func (t *Receiver) WriteRTP(packet *rtp.Packet) {
 }
 
 func (t *Receiver) Senders() (senders []*Sender) {
-	t.mu.Lock()
+	t.mu.RLock()
 	for sender := range t.senders {
 		senders = append(senders, sender)
 	}
-	t.mu.Unlock()
+	t.mu.RUnlock()
 	return
 }
 
@@ -73,12 +73,9 @@ func (t *Receiver) Replace(target *Receiver) {
 
 func (t *Receiver) String() string {
 	s := t.Codec.String() + ", bytes=" + strconv.Itoa(t.bytes)
-	if t.mu.TryLock() {
-		s += fmt.Sprintf(", senders=%d", len(t.senders))
-		t.mu.Unlock()
-	} else {
-		s += fmt.Sprintf(", senders=?")
-	}
+	t.mu.RLock()
+	s += fmt.Sprintf(", senders=%d", len(t.senders))
+	t.mu.RUnlock()
 	return s
 }
 
@@ -93,7 +90,7 @@ type Sender struct {
 	Handler HandlerFunc
 
 	receivers []*Receiver
-	mu        sync.Mutex
+	mu        sync.RWMutex
 	bytes     int
 
 	overflow int
@@ -127,7 +124,6 @@ func (s *Sender) HandleRTP(track *Receiver) {
 	}
 	track.senders[s] = buffer
 	track.mu.Unlock()
-
 	s.mu.Lock()
 	s.receivers = append(s.receivers, track)
 	s.mu.Unlock()
@@ -135,7 +131,9 @@ func (s *Sender) HandleRTP(track *Receiver) {
 	go func() {
 		// read packets from buffer channel until it will be closed
 		for packet := range buffer {
+			s.mu.Lock()
 			s.bytes += len(packet.Payload)
+			s.mu.Unlock()
 			s.Handler(packet)
 		}
 
@@ -171,12 +169,9 @@ func (s *Sender) Close() {
 
 func (s *Sender) String() string {
 	info := s.Codec.String() + ", bytes=" + strconv.Itoa(s.bytes)
-	if s.mu.TryLock() {
-		info += ", receivers=" + strconv.Itoa(len(s.receivers))
-		s.mu.Unlock()
-	} else {
-		info += ", receivers=?"
-	}
+	s.mu.RLock()
+	info += ", receivers=" + strconv.Itoa(len(s.receivers))
+	s.mu.RUnlock()
 	if s.overflow > 0 {
 		info += ", overflow=" + strconv.Itoa(s.overflow)
 	}

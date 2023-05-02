@@ -16,6 +16,7 @@ import (
 func Init() {
 	streams.HandleFunc("http", handle)
 	streams.HandleFunc("https", handle)
+	streams.HandleFunc("httpx", handle)
 }
 
 func handle(url string) (core.Producer, error) {

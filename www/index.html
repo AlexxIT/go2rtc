@@ -119,7 +119,8 @@
         ev.preventDefault();
 
         const url = new URL("api/streams", location.href);
-        url.searchParams.set("src", ev.target.dataset.name);
+        const src = decodeURIComponent(ev.target.dataset.name);
+        url.searchParams.set("src", src);
         fetch(url, {method: "DELETE"}).then(reload);
     });
 

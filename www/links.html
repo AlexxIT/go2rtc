@@ -67,12 +67,14 @@
 
             <h2>H264/H265 source</h2>
             <li><a href="stream.html?src=${src}&mode=webrtc">stream.html</a> WebRTC stream / browsers: all / codecs: H264, PCMU, PCMA, OPUS / +H265 in Safari</li>
-            <li><a href="stream.html?src=${src}&mode=mse">stream.html</a> MSE stream / browsers: Chrome, Firefox, Safari Mac/iPad / codecs: H264, H265*, AAC / +OPUS in Chrome and Firefox</li>
-            <li><a href="api/stream.mp4?src=${src}">stream.mp4</a> MP4 stream with AAC audio / browsers: Chrome, Firefox / codecs: H264, H265*, AAC</li>
-            <li><a href="api/stream.mp4?src=${src}&video=h264,h265&audio=aac,opus,mp3,pcma,pcmu">stream.mp4</a> MP4 stream with any audio / browsers: Chrome / codecs: H264, H265*, AAC, OPUS, MP3, PCMU, PCMA</li>
+            <li><a href="stream.html?src=${src}&mode=mse">stream.html</a> MSE stream / browsers: Chrome, Firefox, Safari Mac/iPad / codecs: H264, H265*, AAC, PCMA*, PCMU*, PCM* / +OPUS in Chrome and Firefox</li>
+            <li><a href="api/stream.mp4?src=${src}">stream.mp4</a> legacy MP4 stream with AAC audio / browsers: Chrome, Firefox / codecs: H264, H265*, AAC</li>
+            <li><a href="api/stream.mp4?src=${src}&mp4=flac">stream.mp4</a> modern MP4 stream with common audio / browsers: Chrome, Firefox / codecs: H264, H265*, AAC, FLAC (PCMA, PCMU, PCM)</li>
+            <li><a href="api/stream.mp4?src=${src}&mp4=all">stream.mp4</a> MP4 stream with any audio / browsers: Chrome / codecs: H264, H265*, AAC, OPUS, MP3, FLAC (PCMA, PCMU, PCM)</li>
             <li><a href="api/frame.mp4?src=${src}">frame.mp4</a> snapshot in MP4-format / browsers: all / codecs: H264, H265*</li>
-            <li><a href="api/stream.m3u8?src=${src}">stream.m3u8</a> HLS/TS / browsers: Safari all, Chrome Android / codecs: H264</li>
-            <li><a href="api/stream.m3u8?src=${src}&mp4">stream.m3u8</a> HLS/fMP4 / browsers: Safari all, Chrome Android / codecs: H264, H265*, AAC</li>
+            <li><a href="api/stream.m3u8?src=${src}">stream.m3u8</a> legacy HLS/TS / browsers: Safari all, Chrome Android / codecs: H264</li>
+            <li><a href="api/stream.m3u8?src=${src}&mp4">stream.m3u8</a> legacy HLS/fMP4 / browsers: Safari all, Chrome Android / codecs: H264, H265*, AAC</li>
+            <li><a href="api/stream.m3u8?src=${src}&mp4=flac">stream.m3u8</a> modern HLS/fMP4 / browsers: Safari all, Chrome Android / codecs: H264, H265*, AAC, FLAC (PCMA, PCMU, PCM)</li>
 
             <h2>MJPEG source</h2>
             <li><a href="stream.html?src=${src}&mode=mjpeg">stream.html</a> with MJPEG mode / browsers: all / codecs: MJPEG, JPEG</li>

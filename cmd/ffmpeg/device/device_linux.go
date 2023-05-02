@@ -12,8 +12,10 @@ import (
 const deviceInputPrefix = "-f v4l2"
 
 func deviceInputSuffix(videoIdx, audioIdx int) string {
-	video := findMedia(core.KindVideo, videoIdx)
-	return video.ID
+	if video := findMedia(core.KindVideo, videoIdx); video != nil {
+		return video.ID
+	}
+	return ""
 }
 
 func loadMedias() {
