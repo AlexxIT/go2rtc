@@ -10,6 +10,11 @@ import (
 	"time"
 )
 
+const (
+	PathDevice = "/onvif/device_service"
+	PathMedia  = "/onvif/media_service"
+)
+
 func FindTagValue(b []byte, tag string) string {
 	re := regexp.MustCompile(tag + `[^>]*>([^<]+)`)
 	m := re.FindSubmatch(b)

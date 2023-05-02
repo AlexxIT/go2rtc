@@ -104,6 +104,7 @@ func (c *Client) HasSnapshots() bool {
 
 func (c *Client) GetCapabilities() ([]byte, error) {
 	return c.Request(
+		PathDevice,
 		`<tds:GetCapabilities xmlns:tds="http://www.onvif.org/ver10/device/wsdl">
 	<tds:Category>All</tds:Category>
 </tds:GetCapabilities>`,
@@ -111,64 +112,79 @@ func (c *Client) GetCapabilities() ([]byte, error) {
 }
 
 func (c *Client) GetNetworkInterfaces() ([]byte, error) {
-	return c.Request(`<tds:GetNetworkInterfaces xmlns:tds="http://www.onvif.org/ver10/device/wsdl"/>`)
+	return c.Request(
+		PathDevice, `<tds:GetNetworkInterfaces xmlns:tds="http://www.onvif.org/ver10/device/wsdl"/>`,
+	)
 }
 
 func (c *Client) GetDeviceInformation() ([]byte, error) {
-	return c.Request(`<tds:GetDeviceInformation xmlns:tds="http://www.onvif.org/ver10/device/wsdl"/>`)
+	return c.Request(
+		PathDevice, `<tds:GetDeviceInformation xmlns:tds="http://www.onvif.org/ver10/device/wsdl"/>`,
+	)
 }
 
 func (c *Client) GetProfiles() ([]byte, error) {
-	return c.Request(`<trt:GetProfiles xmlns:trt="http://www.onvif.org/ver10/media/wsdl"/>`)
+	return c.Request(
+		PathMedia, `<trt:GetProfiles xmlns:trt="http://www.onvif.org/ver10/media/wsdl"/>`,
+	)
 }
 
 func (c *Client) GetStreamUri(token string) ([]byte, error) {
 	return c.Request(
+		PathMedia,
 		`<trt:GetStreamUri xmlns:trt="http://www.onvif.org/ver10/media/wsdl" xmlns:tt="http://www.onvif.org/ver10/schema">
 	<trt:StreamSetup>
 		<tt:Stream>RTP-Unicast</tt:Stream>
 		<tt:Transport><tt:Protocol>RTSP</tt:Protocol></tt:Transport>
 	</trt:StreamSetup>
-	<trt:ProfileToken>` + token + `</trt:ProfileToken>
-</trt:GetStreamUri>`)
+	<trt:ProfileToken>`+token+`</trt:ProfileToken>
+</trt:GetStreamUri>`,
+	)
 }
 
 func (c *Client) GetSnapshotUri(token string) ([]byte, error) {
 	return c.Request(
+		PathMedia,
 		`<trt:GetSnapshotUri  xmlns:trt="http://www.onvif.org/ver10/media/wsdl">
-	<trt:ProfileToken>` + token + `</trt:ProfileToken>
-</trt:GetSnapshotUri>`)
+	<trt:ProfileToken>`+token+`</trt:ProfileToken>
+</trt:GetSnapshotUri>`,
+	)
 }
 
 func (c *Client) GetSystemDateAndTime() ([]byte, error) {
 	return c.Request(
-		`<ns0:GetSystemDateAndTime xmlns:ns0="http://www.onvif.org/ver10/device/wsdl"/>`,
+		PathDevice, `<tds:GetSystemDateAndTime xmlns:tds="http://www.onvif.org/ver10/device/wsdl"/>`,
 	)
 }
 
 func (c *Client) GetServiceCapabilities() ([]byte, error) {
+	// some cameras answer GetServiceCapabilities for media only for path = "/onvif/media"
 	return c.Request(
-		`<ns0:GetServiceCapabilities xmlns:ns0="http://www.onvif.org/ver10/media/wsdl"/>`,
+		PathMedia, `<trt:GetServiceCapabilities xmlns:trt="http://www.onvif.org/ver10/media/wsdl"/>`,
 	)
 }
 
 func (c *Client) SystemReboot() ([]byte, error) {
 	return c.Request(
-		`<tds:SystemReboot xmlns:tds="http://www.onvif.org/ver10/device/wsdl"/>`,
+		PathDevice, `<tds:SystemReboot xmlns:tds="http://www.onvif.org/ver10/device/wsdl"/>`,
 	)
 }
 
 func (c *Client) GetServices() ([]byte, error) {
-	return c.Request(`<tds:GetServices xmlns:tds="http://www.onvif.org/ver10/device/wsdl">
+	return c.Request(
+		PathDevice, `<tds:GetServices xmlns:tds="http://www.onvif.org/ver10/device/wsdl">
 	<tds:IncludeCapability>true</tds:IncludeCapability>
-</tds:GetServices>`)
+</tds:GetServices>`,
+	)
 }
 
 func (c *Client) GetScopes() ([]byte, error) {
-	return c.Request(`<tds:GetScopes xmlns:tds="http://www.onvif.org/ver10/device/wsdl" />`)
+	return c.Request(
+		PathDevice, `<tds:GetScopes xmlns:tds="http://www.onvif.org/ver10/device/wsdl" />`,
+	)
 }
 
-func (c *Client) Request(body string) ([]byte, error) {
+func (c *Client) Request(path, body string) ([]byte, error) {
 	buf := bytes.NewBuffer(nil)
 	buf.WriteString(
 		`<?xml version="1.0" encoding="UTF-8"?><s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope">`,
@@ -198,7 +214,7 @@ func (c *Client) Request(body string) ([]byte, error) {
 
 	client := &http.Client{Timeout: time.Second * 5000}
 	res, err := client.Post(
-		"http://"+c.url.Host+"/onvif/",
+		"http://"+c.url.Host+path,
 		`application/soap+xml;charset=utf-8`,
 		buf,
 	)
