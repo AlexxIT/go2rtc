@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -30,17 +31,19 @@ func DiscoveryStreamingHosts() ([]string, error) {
 		return nil, err
 	}
 
+	// https://www.onvif.org/wp-content/uploads/2016/12/ONVIF_Feature_Discovery_Specification_16.07.pdf
+	// 5.3 Discovery Procedure:
 	msg := `<?xml version="1.0" ?>
 <s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope">
 	<s:Header xmlns:a="http://schemas.xmlsoap.org/ws/2004/08/addressing">
 		<a:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</a:Action>
-		<a:MessageID>uuid:` + UUID() + `</a:MessageID>
+		<a:MessageID>urn:uuid:` + UUID() + `</a:MessageID>
 		<a:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</a:To>
 	</s:Header>
 	<s:Body>
 		<d:Probe xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery">
-            <d:Types>tds:Device</d:Types>
-			<d:Scopes>onvif://www.onvif.org/Profile/Streaming</d:Scopes>
+            <d:Types />
+			<d:Scopes />
 		</d:Probe>
 	</s:Body>
 </s:Envelope>`
@@ -66,6 +69,13 @@ func DiscoveryStreamingHosts() ([]string, error) {
 		if err != nil {
 			break
 		}
+
+		// ignore printers, etc
+		if !strings.Contains(string(b[:n]), "onvif") {
+			continue
+		}
+
+		//log.Printf("[onvif] discovery response:\n%s", b[:n])
 
 		rawURL := FindTagValue(b[:n], "XAddrs")
 		if rawURL == "" {
