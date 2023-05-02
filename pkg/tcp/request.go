@@ -12,7 +12,7 @@ import (
 
 // Do - http.Client with support Digest Authorization
 func Do(req *http.Request) (*http.Response, error) {
-	if client == nil {
+	if secureClient == nil {
 		transport := http.DefaultTransport.(*http.Transport).Clone()
 
 		dial := transport.DialContext
@@ -24,10 +24,30 @@ func Do(req *http.Request) (*http.Response, error) {
 			return conn, err
 		}
 
-		client = &http.Client{
+		secureClient = &http.Client{
 			Timeout:   time.Second * 5000,
 			Transport: transport,
 		}
+	}
+
+	var client *http.Client
+
+	if req.URL.Scheme == "httpx" {
+		req.URL.Scheme = "https"
+
+		if insecureClient == nil {
+			transport := secureClient.Transport.(*http.Transport).Clone()
+			transport.TLSClientConfig.InsecureSkipVerify = true
+
+			insecureClient = &http.Client{
+				Timeout:   secureClient.Timeout,
+				Transport: transport,
+			}
+		}
+
+		client = insecureClient
+	} else {
+		client = secureClient
 	}
 
 	user := req.URL.User
@@ -92,7 +112,7 @@ func Do(req *http.Request) (*http.Response, error) {
 	return res, nil
 }
 
-var client *http.Client
+var secureClient, insecureClient *http.Client
 var connKey struct{}
 
 func WithConn() (context.Context, *net.Conn) {

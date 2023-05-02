@@ -1,16 +1,17 @@
 package mp4
 
 import (
-	"github.com/AlexxIT/go2rtc/cmd/api"
-	"github.com/AlexxIT/go2rtc/cmd/app"
-	"github.com/AlexxIT/go2rtc/cmd/streams"
-	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/mp4"
-	"github.com/rs/zerolog"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/AlexxIT/go2rtc/cmd/api"
+	"github.com/AlexxIT/go2rtc/cmd/app"
+	"github.com/AlexxIT/go2rtc/cmd/streams"
+	"github.com/AlexxIT/go2rtc/pkg/mp4"
+	"github.com/AlexxIT/go2rtc/pkg/tcp"
+	"github.com/rs/zerolog"
 )
 
 func Init() {
@@ -43,18 +44,22 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	exit := make(chan []byte)
+	exit := make(chan []byte, 1)
 
 	cons := &mp4.Segment{OnlyKeyframe: true}
 	cons.Listen(func(msg any) {
 		if data, ok := msg.([]byte); ok && exit != nil {
-			exit <- data
+			select {
+			case exit <- data:
+			default:
+			}
 			exit = nil
 		}
 	})
 
 	if err := stream.AddConsumer(cons); err != nil {
 		log.Error().Err(err).Caller().Send()
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -74,18 +79,13 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 func handlerMP4(w http.ResponseWriter, r *http.Request) {
 	log.Trace().Msgf("[mp4] %s %+v", r.Method, r.Header)
 
-	// Chrome has Safari in UA, so check first Chrome and later Safari
+	query := r.URL.Query()
+
 	ua := r.UserAgent()
-	if strings.Contains(ua, " Chrome/") {
-		if r.Header.Values("Range") == nil {
-			w.Header().Set("Content-Type", "video/mp4")
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-	} else if strings.Contains(ua, " Safari/") {
+	if strings.Contains(ua, " Safari/") && !strings.Contains(ua, " Chrome/") && !query.Has("duration") {
 		// auto redirect to HLS/fMP4 format, because Safari not support MP4 stream
 		url := "stream.m3u8?" + r.URL.RawQuery
-		if !r.URL.Query().Has("mp4") {
+		if !query.Has("mp4") {
 			url += "&mp4"
 		}
 
@@ -93,25 +93,31 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	src := r.URL.Query().Get("src")
+	src := query.Get("src")
 	stream := streams.GetOrNew(src)
 	if stream == nil {
 		http.Error(w, api.StreamNotFound, http.StatusNotFound)
 		return
 	}
 
-	exit := make(chan error)
+	exit := make(chan error, 1) // Add buffer to prevent blocking
 
 	cons := &mp4.Consumer{
-		RemoteAddr: r.RemoteAddr,
+		RemoteAddr: tcp.RemoteAddr(r),
 		UserAgent:  r.UserAgent(),
-		Medias:     core.ParseQuery(r.URL.Query()),
+		Medias:     mp4.ParseQuery(r.URL.Query()),
 	}
 
 	cons.Listen(func(msg any) {
+		if exit == nil {
+			return
+		}
 		if data, ok := msg.([]byte); ok {
-			if _, err := w.Write(data); err != nil && exit != nil {
-				exit <- err
+			if _, err := w.Write(data); err != nil {
+				select {
+				case exit <- err:
+				default:
+				}
 				exit = nil
 			}
 		}
@@ -119,6 +125,7 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 
 	if err := stream.AddConsumer(cons); err != nil {
 		log.Error().Err(err).Caller().Send()
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -129,22 +136,27 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 	data, err := cons.Init()
 	if err != nil {
 		log.Error().Err(err).Caller().Send()
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	if _, err = w.Write(data); err != nil {
 		log.Error().Err(err).Caller().Send()
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	cons.Start()
 
 	var duration *time.Timer
-	if s := r.URL.Query().Get("duration"); s != "" {
+	if s := query.Get("duration"); s != "" {
 		if i, _ := strconv.Atoi(s); i > 0 {
 			duration = time.AfterFunc(time.Second*time.Duration(i), func() {
 				if exit != nil {
-					exit <- nil
+					select {
+					case exit <- nil:
+					default:
+					}
 					exit = nil
 				}
 			})
@@ -152,6 +164,7 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 	}
 
 	err = <-exit
+	exit = nil
 
 	log.Trace().Err(err).Caller().Send()
 

@@ -7,9 +7,10 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/mp4"
 	"github.com/AlexxIT/go2rtc/pkg/mpegts"
+	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/rs/zerolog/log"
 	"net/http"
-	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -28,6 +29,7 @@ func Init() {
 
 type Consumer interface {
 	core.Consumer
+	Listen(f core.EventFunc)
 	Init() ([]byte, error)
 	MimeCodecs() string
 	Start()
@@ -46,6 +48,9 @@ type Session struct {
 const keepalive = 5 * time.Second
 
 var sessions = map[string]*Session{}
+
+// once I saw 404 on MP4 segment, so better to use mutex
+var sessionsMu sync.RWMutex
 
 func handlerStream(w http.ResponseWriter, r *http.Request) {
 	// CORS important for Chromecast
@@ -70,20 +75,20 @@ func handlerStream(w http.ResponseWriter, r *http.Request) {
 	medias := mp4.ParseQuery(r.URL.Query())
 	if medias != nil {
 		cons = &mp4.Consumer{
-			RemoteAddr: r.RemoteAddr,
+			RemoteAddr: tcp.RemoteAddr(r),
 			UserAgent:  r.UserAgent(),
 			Medias:     medias,
 		}
 	} else {
 		cons = &mpegts.Consumer{
-			RemoteAddr: r.RemoteAddr,
+			RemoteAddr: tcp.RemoteAddr(r),
 			UserAgent:  r.UserAgent(),
 		}
 	}
 
 	session := &Session{cons: cons}
 
-	cons.(any).(*core.Listener).Listen(func(msg any) {
+	cons.Listen(func(msg any) {
 		if data, ok := msg.([]byte); ok {
 			session.mu.Lock()
 			session.segment = append(session.segment, data...)
@@ -103,7 +108,7 @@ func handlerStream(w http.ResponseWriter, r *http.Request) {
 
 	cons.Start()
 
-	sid := strconv.FormatInt(time.Now().UnixNano(), 10)
+	sid := core.RandString(8, 62)
 
 	// two segments important for Chromecast
 	if medias != nil {
@@ -127,11 +132,16 @@ segment.ts?id=` + sid + `&n=%d
 segment.ts?id=` + sid + `&n=%d`
 	}
 
+	sessionsMu.Lock()
 	sessions[sid] = session
+	sessionsMu.Unlock()
+
+	// Apple Safari can play FLAC codec, but fail it it in m3u8 playlist
+	codecs := strings.Replace(cons.MimeCodecs(), mp4.MimeFlac, mp4.MimeAAC, 1)
 
 	// bandwidth important for Safari, codecs useful for smooth playback
 	data := []byte(`#EXTM3U
-#EXT-X-STREAM-INF:BANDWIDTH=1000000,CODECS="` + cons.MimeCodecs() + `"
+#EXT-X-STREAM-INF:BANDWIDTH=1000000,CODECS="` + codecs + `"
 hls/playlist.m3u8?id=` + sid)
 
 	if _, err := w.Write(data); err != nil {
@@ -149,7 +159,9 @@ func handlerPlaylist(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sid := r.URL.Query().Get("id")
+	sessionsMu.RLock()
 	session := sessions[sid]
+	sessionsMu.RUnlock()
 	if session == nil {
 		http.NotFound(w, r)
 		return
@@ -172,7 +184,9 @@ func handlerSegmentTS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sid := r.URL.Query().Get("id")
+	sessionsMu.RLock()
 	session := sessions[sid]
+	sessionsMu.RUnlock()
 	if session == nil {
 		http.NotFound(w, r)
 		return
@@ -211,7 +225,9 @@ func handlerInit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sid := r.URL.Query().Get("id")
+	sessionsMu.RLock()
 	session := sessions[sid]
+	sessionsMu.RUnlock()
 	if session == nil {
 		http.NotFound(w, r)
 		return
@@ -232,7 +248,9 @@ func handlerSegmentMP4(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sid := r.URL.Query().Get("id")
+	sessionsMu.RLock()
 	session := sessions[sid]
+	sessionsMu.RUnlock()
 	if session == nil {
 		http.NotFound(w, r)
 		return

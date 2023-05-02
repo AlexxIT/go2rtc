@@ -1,6 +1,11 @@
 package rtsp
 
 import (
+	"io"
+	"net"
+	"net/url"
+	"strings"
+
 	"github.com/AlexxIT/go2rtc/cmd/app"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -8,9 +13,6 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/rtsp"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/rs/zerolog"
-	"net"
-	"net/url"
-	"strings"
 )
 
 func Init() {
@@ -20,6 +22,7 @@ func Init() {
 			Username     string `yaml:"username" json:"-"`
 			Password     string `yaml:"password" json:"-"`
 			DefaultQuery string `yaml:"default_query" json:"default_query"`
+			PacketSize   uint16 `yaml:"pkt_size"`
 		} `yaml:"rtsp"`
 	}
 
@@ -65,6 +68,7 @@ func Init() {
 			}
 
 			c := rtsp.NewServer(conn)
+			c.PacketSize = conf.Mod.PacketSize
 			// skip check auth for localhost
 			if conf.Mod.Username != "" && !conn.RemoteAddr().(*net.TCPAddr).IP.IsLoopback() {
 				c.Auth(conf.Mod.Username, conf.Mod.Password)
@@ -123,6 +127,7 @@ func rtspHandler(url string) (core.Producer, error) {
 		if !backchannel {
 			return nil, err
 		}
+		log.Trace().Msgf("[rtsp] describe (backchannel=%t) err: %v", backchannel, err)
 
 		// second try without backchannel, we need to reconnect
 		conn.Backchannel = false
@@ -171,11 +176,16 @@ func tcpHandler(conn *rtsp.Conn) {
 
 			conn.SessionName = app.UserAgent
 
-			conn.Medias = mp4.ParseQuery(conn.URL.Query())
+			query := conn.URL.Query()
+			conn.Medias = mp4.ParseQuery(query)
 			if conn.Medias == nil {
 				for _, media := range defaultMedias {
 					conn.Medias = append(conn.Medias, media.Clone())
 				}
+			}
+
+			if s := query.Get("pkt_size"); s != "" {
+				conn.PacketSize = uint16(core.Atoi(s))
 			}
 
 			if err := stream.AddConsumer(conn); err != nil {
@@ -211,7 +221,9 @@ func tcpHandler(conn *rtsp.Conn) {
 	})
 
 	if err := conn.Accept(); err != nil {
-		log.Warn().Err(err).Caller().Send()
+		if err != io.EOF {
+			log.Warn().Err(err).Caller().Send()
+		}
 		if closer != nil {
 			closer()
 		}

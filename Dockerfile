@@ -2,7 +2,7 @@
 
 # 0. Prepare images
 ARG PYTHON_VERSION="3.11"
-ARG GO_VERSION="1.19"
+ARG GO_VERSION="1.20"
 ARG NGROK_VERSION="3"
 
 FROM python:${PYTHON_VERSION}-alpine AS base

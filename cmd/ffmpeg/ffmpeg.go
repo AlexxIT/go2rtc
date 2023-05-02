@@ -60,7 +60,8 @@ var defaults = map[string]string{
 	"h265":  "-c:v libx265 -g 50 -profile:v high -level:v 5.1 -preset:v superfast -tune:v zerolatency",
 	"mjpeg": "-c:v mjpeg -force_duplicated_matrix:v 1 -huffman:v 0 -pix_fmt:v yuvj420p",
 
-	"opus":       "-c:a libopus -ar:a 48000 -ac:a 2",
+	// https://ffmpeg.org/ffmpeg-codecs.html#libopus-1
+	"opus":       "-c:a libopus -ar:a 48000 -ac:a 2 -application:a voip -compression_level:a 0",
 	"pcmu":       "-c:a pcm_mulaw -ar:a 8000 -ac:a 1",
 	"pcmu/16000": "-c:a pcm_mulaw -ar:a 16000 -ac:a 1",
 	"pcmu/48000": "-c:a pcm_mulaw -ar:a 48000 -ac:a 1",
@@ -70,8 +71,7 @@ var defaults = map[string]string{
 	"aac":        "-c:a aac", // keep sample rate and channels
 	"aac/16000":  "-c:a aac -ar:a 16000 -ac:a 1",
 	"mp3":        "-c:a libmp3lame -q:a 8",
-	"pcm":        "-c:a pcm_s16be",
-	"pcm/8000":   "-c:a pcm_s16be -ar:a 8000 -ac:a 1",
+	"pcm":        "-c:a pcm_s16be -ar:a 8000 -ac:a 1",
 	"pcm/16000":  "-c:a pcm_s16be -ar:a 16000 -ac:a 1",
 	"pcm/48000":  "-c:a pcm_s16be -ar:a 48000 -ac:a 1",
 
@@ -157,7 +157,7 @@ func parseArgs(s string) *Args {
 			args.input = "-i " + s
 		}
 	} else if streams.Get(s) != nil {
-		s = "rtsp://localhost:" + rtsp.Port + "/" + s
+		s = "rtsp://127.0.0.1:" + rtsp.Port + "/" + s
 		switch {
 		case args.video > 0 && args.audio == 0:
 			s += "?video"

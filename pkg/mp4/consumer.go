@@ -6,7 +6,9 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
+	"github.com/AlexxIT/go2rtc/pkg/pcm"
 	"github.com/pion/rtp"
+	"sync"
 )
 
 type Consumer struct {
@@ -19,6 +21,7 @@ type Consumer struct {
 	senders []*core.Sender
 
 	muxer *Muxer
+	mu    sync.Mutex
 	wait  byte
 
 	send int
@@ -52,7 +55,8 @@ func (c *Consumer) GetMedias() []*core.Media {
 func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver) error {
 	trackID := byte(len(c.senders))
 
-	handler := core.NewSender(media, track.Codec)
+	codec := track.Codec.Clone()
+	handler := core.NewSender(media, codec)
 
 	switch track.Codec.Name {
 	case core.CodecH264:
@@ -70,10 +74,12 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 				c.wait = waitNone
 			}
 
+			// important to use Mutex because right fragment order
+			c.mu.Lock()
 			buf := c.muxer.Marshal(trackID, packet)
 			c.Fire(buf)
-
 			c.send += len(buf)
+			c.mu.Unlock()
 		}
 
 		if track.Codec.IsRTP() {
@@ -97,46 +103,48 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 				c.wait = waitNone
 			}
 
+			c.mu.Lock()
 			buf := c.muxer.Marshal(trackID, packet)
 			c.Fire(buf)
-
 			c.send += len(buf)
+			c.mu.Unlock()
 		}
 
 		if track.Codec.IsRTP() {
 			handler.Handler = h265.RTPDepay(track.Codec, handler.Handler)
 		}
 
-	case core.CodecAAC:
-		handler.Handler = func(packet *rtp.Packet) {
-			if c.wait != waitNone {
-				return
-			}
-
-			buf := c.muxer.Marshal(trackID, packet)
-			c.Fire(buf)
-
-			c.send += len(buf)
-		}
-
-		if track.Codec.IsRTP() {
-			handler.Handler = aac.RTPDepay(handler.Handler)
-		}
-
-	case core.CodecOpus, core.CodecMP3, core.CodecPCMU, core.CodecPCMA:
-		handler.Handler = func(packet *rtp.Packet) {
-			if c.wait != waitNone {
-				return
-			}
-
-			buf := c.muxer.Marshal(trackID, packet)
-			c.Fire(buf)
-
-			c.send += len(buf)
-		}
-
 	default:
-		panic("unsupported codec")
+		handler.Handler = func(packet *rtp.Packet) {
+			if c.wait != waitNone {
+				return
+			}
+
+			c.mu.Lock()
+			buf := c.muxer.Marshal(trackID, packet)
+			c.Fire(buf)
+			c.send += len(buf)
+			c.mu.Unlock()
+		}
+
+		switch track.Codec.Name {
+		case core.CodecAAC:
+			if track.Codec.IsRTP() {
+				handler.Handler = aac.RTPDepay(handler.Handler)
+			}
+		case core.CodecOpus, core.CodecMP3: // no changes
+		case core.CodecPCMA, core.CodecPCMU, core.CodecPCM:
+			handler.Handler = pcm.FLACEncoder(track.Codec, handler.Handler)
+			codec.Name = core.CodecFLAC
+
+		default:
+			handler.Handler = nil
+		}
+	}
+
+	if handler.Handler == nil {
+		println("ERROR: MP4 unsupported codec: " + track.Codec.String())
+		return nil
 	}
 
 	handler.HandleRTP(track)

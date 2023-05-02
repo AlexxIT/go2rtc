@@ -9,6 +9,7 @@ import (
 )
 
 // ReceiveMTU = Ethernet MTU (1500) - IP Header (20) - UDP Header (8)
+// https://ffmpeg.org/ffmpeg-all.html#Muxer
 const ReceiveMTU = 1472
 
 func NewAPI(address string) (*webrtc.API, error) {

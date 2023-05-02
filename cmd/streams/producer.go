@@ -30,8 +30,6 @@ type Producer struct {
 	receivers []*core.Receiver
 	senders   []*core.Receiver
 
-	lastErr error
-
 	state    state
 	mu       sync.Mutex
 	workerID int
@@ -157,10 +155,10 @@ func (p *Producer) worker(conn core.Producer, workerID int) {
 		log.Warn().Err(err).Str("url", p.url).Caller().Send()
 	}
 
-	p.reconnect(workerID)
+	p.reconnect(workerID, 0)
 }
 
-func (p *Producer) reconnect(workerID int) {
+func (p *Producer) reconnect(workerID, retry int) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -169,18 +167,28 @@ func (p *Producer) reconnect(workerID int) {
 		return
 	}
 
-	log.Debug().Msgf("[streams] reconnect to url=%s", p.url)
+	log.Debug().Msgf("[streams] retry=%d to url=%s", retry, p.url)
 
-	if err := p.Dial(); err != nil {
+	conn, err := GetProducer(p.url)
+	if err != nil {
 		log.Debug().Msgf("[streams] producer=%s", err)
-		// TODO: dynamic timeout
-		time.AfterFunc(30*time.Second, func() {
-			p.reconnect(workerID)
+
+		timeout := time.Minute
+		if retry < 5 {
+			timeout = time.Second
+		} else if retry < 10 {
+			timeout = time.Second * 5
+		} else if retry < 20 {
+			timeout = time.Second * 10
+		}
+
+		time.AfterFunc(timeout, func() {
+			p.reconnect(workerID, retry+1)
 		})
 		return
 	}
 
-	for _, media := range p.conn.GetMedias() {
+	for _, media := range conn.GetMedias() {
 		switch media.Direction {
 		case core.DirectionRecvonly:
 			for _, receiver := range p.receivers {
@@ -189,7 +197,7 @@ func (p *Producer) reconnect(workerID int) {
 					continue
 				}
 
-				track, err := p.conn.GetTrack(media, codec)
+				track, err := conn.GetTrack(media, codec)
 				if err != nil {
 					continue
 				}
@@ -205,12 +213,14 @@ func (p *Producer) reconnect(workerID int) {
 					continue
 				}
 
-				_ = p.conn.(core.Consumer).AddTrack(media, codec, sender)
+				_ = conn.(core.Consumer).AddTrack(media, codec, sender)
 			}
 		}
 	}
 
-	go p.worker(p.conn, workerID)
+	p.conn = conn
+
+	go p.worker(conn, workerID)
 }
 
 func (p *Producer) stop() {

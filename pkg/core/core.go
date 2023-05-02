@@ -27,7 +27,8 @@ const (
 	CodecMP3  = "MPA" // payload: 14, aka MPEG-1 Layer III
 	CodecPCM  = "L16" // Linear PCM
 
-	CodecELD = "ELD" // AAC-ELD
+	CodecELD  = "ELD" // AAC-ELD
+	CodecFLAC = "FLAC"
 
 	CodecAll = "ALL"
 	CodecAny = "ANY"

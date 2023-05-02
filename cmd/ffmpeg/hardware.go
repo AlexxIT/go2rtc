@@ -1,9 +1,10 @@
 package ffmpeg
 
 import (
-	"github.com/rs/zerolog/log"
 	"os/exec"
 	"strings"
+
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -53,6 +54,13 @@ func MakeHardware(args *Args, engine string) {
 			for i, filter := range args.filters {
 				if strings.HasPrefix(filter, "scale=") {
 					args.filters[i] = "scale_vaapi=" + filter[6:]
+				}
+				if strings.HasPrefix(filter, "transpose=") {
+					if filter == "transpose=1,transpose=1" { // 180 degrees half-turn
+						args.filters[i] = "transpose_vaapi=4" // reversal
+					} else {
+						args.filters[i] = "transpose_vaapi=" + filter[10:]
+					}
 				}
 			}
 

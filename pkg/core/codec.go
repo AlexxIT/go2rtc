@@ -68,7 +68,7 @@ func (c *Codec) Match(remote *Codec) bool {
 }
 
 func UnmarshalCodec(md *sdp.MediaDescription, payloadType string) *Codec {
-	c := &Codec{PayloadType: byte(atoi(payloadType))}
+	c := &Codec{PayloadType: byte(Atoi(payloadType))}
 
 	for _, attr := range md.Attributes {
 		switch {
@@ -78,7 +78,7 @@ func UnmarshalCodec(md *sdp.MediaDescription, payloadType string) *Codec {
 
 			c.Name = strings.ToUpper(ss[0])
 			// fix tailing space: `a=rtpmap:96 H264/90000 `
-			c.ClockRate = uint32(atoi(strings.TrimRightFunc(ss[1], unicode.IsSpace)))
+			c.ClockRate = uint32(Atoi(strings.TrimRightFunc(ss[1], unicode.IsSpace)))
 
 			if len(ss) == 3 && ss[2] == "2" {
 				c.Channels = 2
@@ -99,9 +99,16 @@ func UnmarshalCodec(md *sdp.MediaDescription, payloadType string) *Codec {
 		case "8":
 			c.Name = CodecPCMA
 			c.ClockRate = 8000
+		case "10":
+			c.Name = CodecPCM
+			c.ClockRate = 44100
+			c.Channels = 2
+		case "11":
+			c.Name = CodecPCM
+			c.ClockRate = 44100
 		case "14":
 			c.Name = CodecMP3
-			c.ClockRate = 44100
+			c.ClockRate = 90000 // it's not real sample rate
 		case "26":
 			c.Name = CodecJPEG
 			c.ClockRate = 90000
@@ -111,11 +118,6 @@ func UnmarshalCodec(md *sdp.MediaDescription, payloadType string) *Codec {
 	}
 
 	return c
-}
-
-func atoi(s string) (i int) {
-	i, _ = strconv.Atoi(s)
-	return
 }
 
 func DecodeH264(fmtp string) string {

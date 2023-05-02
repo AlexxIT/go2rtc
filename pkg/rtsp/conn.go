@@ -22,23 +22,26 @@ type Conn struct {
 	// public
 
 	Backchannel bool
+	PacketSize  uint16
 	SessionName string
 
 	Medias    []*core.Media
-	Session   string
 	UserAgent string
 	URL       *url.URL
 
 	// internal
 
-	auth     *tcp.Auth
-	conn     net.Conn
-	mode     core.Mode
-	state    State
-	stateMu  sync.Mutex
-	reader   *bufio.Reader
-	sequence int
-	uri      string
+	auth      *tcp.Auth
+	conn      net.Conn
+	keepalive int
+	mode      core.Mode
+	reader    *bufio.Reader
+	sequence  int
+	session   string
+	uri       string
+
+	state   State
+	stateMu sync.Mutex
 
 	receivers []*core.Receiver
 	senders   []*core.Sender
@@ -68,13 +71,12 @@ func (s State) String() string {
 	case StateNone:
 		return "NONE"
 	case StateConn:
+
 		return "CONN"
 	case StateSetup:
-		return "SETUP"
+		return MethodSetup
 	case StatePlay:
-		return "PLAY"
-	case StateHandle:
-		return "HANDLE"
+		return MethodPlay
 	}
 	return strconv.Itoa(int(s))
 }
@@ -84,38 +86,24 @@ const (
 	StateConn
 	StateSetup
 	StatePlay
-	StateHandle
 )
 
 func (c *Conn) Handle() (err error) {
-	c.stateMu.Lock()
-
-	switch c.state {
-	case StateNone: // Close after PLAY and before Handle is OK (because SETUP after PLAY)
-	case StatePlay:
-		c.state = StateHandle
-	default:
-		err = fmt.Errorf("RTSP HANDLE from wrong state: %s", c.state)
-
-		c.state = StateNone
-		_ = c.conn.Close()
-	}
-
-	ok := c.state == StateHandle
-
-	c.stateMu.Unlock()
-
-	if !ok {
-		return
-	}
-
 	var timeout time.Duration
+
+	var keepaliveDT time.Duration
+	var keepaliveTS time.Time
 
 	switch c.mode {
 	case core.ModeActiveProducer:
-		// polling frames from remote RTSP Server (ex Camera)
-		go c.keepalive()
+		if c.keepalive > 5 {
+			keepaliveDT = time.Duration(c.keepalive-5) * time.Second
+		} else {
+			keepaliveDT = 25 * time.Second
+		}
+		keepaliveTS = time.Now().Add(keepaliveDT)
 
+		// polling frames from remote RTSP Server (ex Camera)
 		if len(c.receivers) > 0 {
 			// if we receiving video/audio from camera
 			timeout = time.Second * 5
@@ -137,7 +125,9 @@ func (c *Conn) Handle() (err error) {
 	}
 
 	for c.state != StateNone {
-		if err = c.conn.SetReadDeadline(time.Now().Add(timeout)); err != nil {
+		ts := time.Now()
+
+		if err = c.conn.SetReadDeadline(ts.Add(timeout)); err != nil {
 			return
 		}
 
@@ -158,7 +148,7 @@ func (c *Conn) Handle() (err error) {
 			switch string(buf4) {
 			case "RTSP":
 				var res *tcp.Response
-				if res, err = tcp.ReadResponse(c.reader); err != nil {
+				if res, err = c.ReadResponse(); err != nil {
 					return
 				}
 				c.Fire(res)
@@ -166,13 +156,15 @@ func (c *Conn) Handle() (err error) {
 
 			case "OPTI", "TEAR", "DESC", "SETU", "PLAY", "PAUS", "RECO", "ANNO", "GET_", "SET_":
 				var req *tcp.Request
-				if req, err = tcp.ReadRequest(c.reader); err != nil {
+				if req, err = c.ReadRequest(); err != nil {
 					return
 				}
 				c.Fire(req)
 				continue
 
 			default:
+				c.Fire("RTSP wrong input")
+
 				for i := 0; ; i++ {
 					// search next start symbol
 					if _, err = c.reader.ReadBytes('$'); err != nil {
@@ -204,8 +196,6 @@ func (c *Conn) Handle() (err error) {
 						return fmt.Errorf("RTSP wrong input")
 					}
 				}
-
-				c.Fire("RTSP wrong input")
 			}
 		} else {
 			// hope that the odd channels are always RTCP
@@ -254,21 +244,106 @@ func (c *Conn) Handle() (err error) {
 
 			c.Fire(msg)
 		}
+
+		if keepaliveDT != 0 && ts.After(keepaliveTS) {
+			req := &tcp.Request{Method: MethodOptions, URL: c.URL}
+			if err = c.WriteRequest(req); err != nil {
+				return
+			}
+
+			keepaliveTS = ts.Add(keepaliveDT)
+		}
 	}
 
 	return
 }
 
-func (c *Conn) keepalive() {
-	// TODO: rewrite to RTCP
-	req := &tcp.Request{Method: MethodOptions, URL: c.URL}
-	for {
-		time.Sleep(time.Second * 25)
-		if c.state == StateNone {
-			return
-		}
-		if err := c.Request(req); err != nil {
-			return
+func (c *Conn) WriteRequest(req *tcp.Request) error {
+	if req.Proto == "" {
+		req.Proto = ProtoRTSP
+	}
+
+	if req.Header == nil {
+		req.Header = make(map[string][]string)
+	}
+
+	c.sequence++
+	// important to send case sensitive CSeq
+	// https://github.com/AlexxIT/go2rtc/issues/7
+	req.Header["CSeq"] = []string{strconv.Itoa(c.sequence)}
+
+	c.auth.Write(req)
+
+	if c.session != "" {
+		req.Header.Set("Session", c.session)
+	}
+
+	if req.Body != nil {
+		val := strconv.Itoa(len(req.Body))
+		req.Header.Set("Content-Length", val)
+	}
+
+	c.Fire(req)
+
+	if err := c.conn.SetWriteDeadline(time.Now().Add(Timeout)); err != nil {
+		return err
+	}
+
+	return req.Write(c.conn)
+}
+
+func (c *Conn) ReadRequest() (*tcp.Request, error) {
+	if err := c.conn.SetReadDeadline(time.Now().Add(Timeout)); err != nil {
+		return nil, err
+	}
+	return tcp.ReadRequest(c.reader)
+}
+
+func (c *Conn) WriteResponse(res *tcp.Response) error {
+	if res.Proto == "" {
+		res.Proto = ProtoRTSP
+	}
+
+	if res.Status == "" {
+		res.Status = "200 OK"
+	}
+
+	if res.Header == nil {
+		res.Header = make(map[string][]string)
+	}
+
+	if res.Request != nil && res.Request.Header != nil {
+		seq := res.Request.Header.Get("CSeq")
+		if seq != "" {
+			res.Header.Set("CSeq", seq)
 		}
 	}
+
+	if c.session != "" {
+		if res.Request != nil && res.Request.Method == MethodSetup {
+			res.Header.Set("Session", c.session+";timeout=60")
+		} else {
+			res.Header.Set("Session", c.session)
+		}
+	}
+
+	if res.Body != nil {
+		val := strconv.Itoa(len(res.Body))
+		res.Header.Set("Content-Length", val)
+	}
+
+	c.Fire(res)
+
+	if err := c.conn.SetWriteDeadline(time.Now().Add(Timeout)); err != nil {
+		return err
+	}
+
+	return res.Write(c.conn)
+}
+
+func (c *Conn) ReadResponse() (*tcp.Response, error) {
+	if err := c.conn.SetReadDeadline(time.Now().Add(Timeout)); err != nil {
+		return nil, err
+	}
+	return tcp.ReadResponse(c.reader)
 }

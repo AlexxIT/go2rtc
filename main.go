@@ -18,12 +18,14 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/mp4"
 	"github.com/AlexxIT/go2rtc/cmd/mpegts"
 	"github.com/AlexxIT/go2rtc/cmd/ngrok"
+	"github.com/AlexxIT/go2rtc/cmd/onvif"
 	"github.com/AlexxIT/go2rtc/cmd/roborock"
 	"github.com/AlexxIT/go2rtc/cmd/rtmp"
 	"github.com/AlexxIT/go2rtc/cmd/rtsp"
 	"github.com/AlexxIT/go2rtc/cmd/srtp"
 	"github.com/AlexxIT/go2rtc/cmd/streams"
 	"github.com/AlexxIT/go2rtc/cmd/tapo"
+	"github.com/AlexxIT/go2rtc/cmd/tcp"
 	"github.com/AlexxIT/go2rtc/cmd/webrtc"
 	"github.com/AlexxIT/go2rtc/cmd/webtorrent"
 	"os"
@@ -35,6 +37,7 @@ func main() {
 	app.Init()     // init config and logs
 	api.Init()     // init HTTP API server
 	streams.Init() // load streams list
+	onvif.Init()
 
 	rtsp.Init()   // add support RTSP client and RTSP server
 	rtmp.Init()   // add support RTMP client
@@ -49,6 +52,7 @@ func main() {
 	isapi.Init()
 	mpegts.Init()
 	roborock.Init()
+	tcp.Init()
 
 	srtp.Init()
 	homekit.Init()

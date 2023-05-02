@@ -6,6 +6,7 @@ import (
 	"github.com/AlexxIT/go2rtc/cmd/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/mp4"
+	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"strings"
 )
 
@@ -17,7 +18,7 @@ func handlerWSMSE(tr *api.Transport, msg *api.Message) error {
 	}
 
 	cons := &mp4.Consumer{
-		RemoteAddr: tr.Request.RemoteAddr,
+		RemoteAddr: tcp.RemoteAddr(tr.Request),
 		UserAgent:  tr.Request.UserAgent(),
 	}
 
@@ -64,7 +65,7 @@ func handlerWSMP4(tr *api.Transport, msg *api.Message) error {
 	}
 
 	cons := &mp4.Segment{
-		RemoteAddr:   tr.Request.RemoteAddr,
+		RemoteAddr:   tcp.RemoteAddr(tr.Request),
 		UserAgent:    tr.Request.UserAgent(),
 		OnlyKeyframe: true,
 	}
@@ -109,6 +110,12 @@ func parseMedias(codecs string, parseAudio bool) (medias []*core.Media) {
 		case mp4.MimeAAC:
 			codec := &core.Codec{Name: core.CodecAAC}
 			audios = append(audios, codec)
+		case mp4.MimeFlac:
+			audios = append(audios,
+				&core.Codec{Name: core.CodecPCMA},
+				&core.Codec{Name: core.CodecPCMU},
+				&core.Codec{Name: core.CodecPCM},
+			)
 		case mp4.MimeOpus:
 			codec := &core.Codec{Name: core.CodecOpus}
 			audios = append(audios, codec)
