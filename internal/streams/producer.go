@@ -56,6 +56,10 @@ func (p *Producer) GetMedias() []*core.Media {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	if p.conn == nil {
+		return nil
+	}
+
 	return p.conn.GetMedias()
 }
 
