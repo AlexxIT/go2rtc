@@ -3,7 +3,6 @@ package onvif
 import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"net"
-	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -12,11 +11,10 @@ import (
 
 const (
 	PathDevice = "/onvif/device_service"
-	PathMedia  = "/onvif/media_service"
 )
 
 func FindTagValue(b []byte, tag string) string {
-	re := regexp.MustCompile(tag + `[^>]*>([^<]+)`)
+	re := regexp.MustCompile(`<[^/>]*` + tag + `[^>]*>([^<]+)`)
 	m := re.FindSubmatch(b)
 	if len(m) != 2 {
 		return ""
@@ -30,7 +28,7 @@ func UUID() string {
 	return s[:8] + "-" + s[8:12] + "-" + s[12:16] + "-" + s[16:20] + "-" + s[20:]
 }
 
-func DiscoveryStreamingHosts() ([]string, error) {
+func DiscoveryStreamingURLs() ([]string, error) {
 	conn, err := net.ListenUDP("udp4", nil)
 	if err != nil {
 		return nil, err
@@ -66,7 +64,7 @@ func DiscoveryStreamingHosts() ([]string, error) {
 		return nil, err
 	}
 
-	var hosts []string
+	var urls []string
 
 	b := make([]byte, 8192)
 	for {
@@ -75,37 +73,28 @@ func DiscoveryStreamingHosts() ([]string, error) {
 			break
 		}
 
+		//log.Printf("[onvif] discovery response addr=%s:\n%s", addr, b[:n])
+
 		// ignore printers, etc
 		if !strings.Contains(string(b[:n]), "onvif") {
 			continue
 		}
 
-		//log.Printf("[onvif] discovery response:\n%s", b[:n])
-
-		rawURL := FindTagValue(b[:n], "XAddrs")
-		if rawURL == "" {
-			continue
-		}
-
-		u, err := url.Parse(rawURL)
-		if err != nil {
-			continue
-		}
-
-		if u.Scheme != "http" {
+		url := FindTagValue(b[:n], "XAddrs")
+		if url == "" {
 			continue
 		}
 
 		// fix some buggy cameras
 		// <wsdd:XAddrs>http://0.0.0.0:8080/onvif/device_service</wsdd:XAddrs>
-		if strings.HasPrefix(u.Host, "0.0.0.0") {
-			u.Host = addr.IP.String() + u.Host[7:]
+		if strings.HasPrefix(url, "http://0.0.0.0") {
+			url = "http://" + addr.IP.String() + url[14:]
 		}
 
-		hosts = append(hosts, u.Host)
+		urls = append(urls, url)
 	}
 
-	return hosts, nil
+	return urls, nil
 }
 
 func atoi(s string) int {

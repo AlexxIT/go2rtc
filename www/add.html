@@ -60,6 +60,7 @@
 <script>
     async function getStreams(url, tableID) {
         const table = document.getElementById(tableID)
+        table.innerText = 'loading...'
 
         const r = typeof url === 'string' ? await fetch(url, {cache: 'no-cache'}) : url
         if (!r.ok) {

@@ -11,6 +11,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"time"
@@ -123,17 +124,32 @@ func apiOnvif(w http.ResponseWriter, r *http.Request) {
 	var items []api.Stream
 
 	if src == "" {
-		hosts, err := onvif.DiscoveryStreamingHosts()
+		urls, err := onvif.DiscoveryStreamingURLs()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		for _, host := range hosts {
-			items = append(items, api.Stream{
-				Name: host,
-				URL:  "onvif://user:pass@" + host,
-			})
+		for _, rawURL := range urls {
+			u, err := url.Parse(rawURL)
+			if err != nil {
+				log.Warn().Str("url", rawURL).Msg("[onvif] broken")
+				continue
+			}
+
+			if u.Scheme != "http" {
+				log.Warn().Str("url", rawURL).Msg("[onvif] unsupported")
+				continue
+			}
+
+			u.Scheme = "onvif"
+			u.User = url.UserPassword("user", "pass")
+
+			if u.Path == onvif.PathDevice {
+				u.Path = ""
+			}
+
+			items = append(items, api.Stream{Name: u.Host, URL: u.String()})
 		}
 	} else {
 		client, err := onvif.NewClient(src)
