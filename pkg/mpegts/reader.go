@@ -129,6 +129,14 @@ func (r *Reader) GetPacket() *rtp.Packet {
 	return nil
 }
 
+func (r *Reader) GetStreamTypes() []byte {
+	types := make([]byte, 0, len(r.pes))
+	for _, pes := range r.pes {
+		types = append(types, pes.StreamType)
+	}
+	return types
+}
+
 // Sync - search sync byte
 func (r *Reader) Sync() bool {
 	// drop previous readed packet

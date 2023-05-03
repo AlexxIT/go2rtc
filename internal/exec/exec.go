@@ -9,22 +9,17 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/rtsp"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/pipe"
 	pkg "github.com/AlexxIT/go2rtc/pkg/rtsp"
 	"github.com/AlexxIT/go2rtc/pkg/shell"
 	"github.com/rs/zerolog"
 	"os"
 	"os/exec"
-	"strings"
 	"sync"
 	"time"
 )
 
 func Init() {
-	// depends on RTSP server
-	if rtsp.Port == "" {
-		return
-	}
-
 	rtsp.HandleFunc(func(conn *pkg.Conn) bool {
 		waitersMu.Lock()
 		waiter := waiters[conn.URL.Path]
@@ -49,22 +44,33 @@ func Init() {
 }
 
 func Handle(url string) (core.Producer, error) {
-	sum := md5.Sum([]byte(url))
-	path := "/" + hex.EncodeToString(sum[:])
+	var path string
 
-	url = strings.Replace(
-		url, "{output}", "rtsp://127.0.0.1:"+rtsp.Port+path, 1,
-	)
+	args := shell.QuoteSplit(url[5:]) // remove `exec:`
+	for i, arg := range args {
+		if arg == "{output}" {
+			if rtsp.Port == "" {
+				return nil, errors.New("rtsp module disabled")
+			}
 
-	// remove `exec:`
-	args := shell.QuoteSplit(url[5:])
+			sum := md5.Sum([]byte(url))
+			path = "/" + hex.EncodeToString(sum[:])
+			args[i] = "rtsp://127.0.0.1:" + rtsp.Port + path
+			break
+		}
+	}
+
 	cmd := exec.Command(args[0], args[1:]...)
+	if log.Debug().Enabled() {
+		cmd.Stderr = os.Stderr
+	}
+
+	if path == "" {
+		return pipe.NewClient(cmd)
+	}
 
 	if log.Trace().Enabled() {
 		cmd.Stdout = os.Stdout
-	}
-	if log.Debug().Enabled() {
-		cmd.Stderr = os.Stderr
 	}
 
 	ch := make(chan core.Producer)

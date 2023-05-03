@@ -137,7 +137,7 @@ func (p *PES) GetPacket() (pkt *rtp.Packet) {
 		pkt = &rtp.Packet{
 			Header: rtp.Header{
 				PayloadType: p.StreamType,
-				Timestamp:   uint32(time.Duration(time.Now().UnixNano()) * 90000 / time.Second),
+				Timestamp:   core.Now90000(),
 			},
 			Payload: payload,
 		}
