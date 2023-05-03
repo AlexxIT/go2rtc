@@ -1,57 +1,50 @@
 package device
 
 import (
-	"bytes"
+	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"os/exec"
-	"strings"
+	"regexp"
 )
 
 // https://trac.ffmpeg.org/wiki/DirectShow
 const deviceInputPrefix = "-f dshow"
 
-func deviceInputSuffix(videoIdx, audioIdx int) string {
-	video := findMedia(core.KindVideo, videoIdx)
-	audio := findMedia(core.KindAudio, audioIdx)
+func deviceInputSuffix(video, audio string) string {
 	switch {
-	case video != nil && audio != nil:
-		return `video="` + video.ID + `":audio=` + audio.ID + `"`
-	case video != nil:
-		return `video="` + video.ID + `"`
-	case audio != nil:
-		return `audio="` + audio.ID + `"`
+	case video != "" && audio != "":
+		return `video="` + video + `":audio=` + audio + `"`
+	case video != "":
+		return `video="` + video + `"`
+	case audio != "":
+		return `audio="` + audio + `"`
 	}
 	return ""
 }
 
-func loadMedias() {
+func initDevices() {
 	cmd := exec.Command(
 		Bin, "-hide_banner", "-list_devices", "true", "-f", "dshow", "-i", "",
 	)
+	b, _ := cmd.CombinedOutput()
 
-	var buf bytes.Buffer
-	cmd.Stderr = &buf
-	_ = cmd.Run()
+	re := regexp.MustCompile(`"([^"]+)" \((video|audio)\)`)
+	for _, m := range re.FindAllStringSubmatch(string(b), -1) {
+		name := m[1]
+		kind := m[2]
 
-	lines := strings.Split(buf.String(), "\r\n")
-	for _, line := range lines {
-		var kind string
-		if strings.HasSuffix(line, "(video)") {
-			kind = core.KindVideo
-		} else if strings.HasSuffix(line, "(audio)") {
-			kind = core.KindAudio
-		} else {
-			continue
+		stream := api.Stream{
+			Name: name, URL: "ffmpeg:device?" + kind + "=" + name,
 		}
 
-		// hope we have constant prefix and suffix sizes
-		// [dshow @ 00000181e8d028c0] "VMware Virtual USB Video Device" (video)
-		name := line[28 : len(line)-9]
-		media := loadMedia(kind, name)
-		medias = append(medias, media)
-	}
-}
+		switch kind {
+		case core.KindVideo:
+			videos = append(videos, name)
+			stream.URL += "#video=h264#hardware"
+		case core.KindAudio:
+			audios = append(audios, name)
+		}
 
-func loadMedia(kind, name string) *core.Media {
-	return &core.Media{Kind: kind, ID: name}
+		streams = append(streams, stream)
+	}
 }

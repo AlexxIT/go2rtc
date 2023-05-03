@@ -171,6 +171,19 @@
 </script>
 
 
+<button id="devices">FFmpeg Devices (USB)</button>
+<div class="module">
+    <table id="devices-table">
+    </table>
+</div>
+<script>
+    document.getElementById('devices').addEventListener('click', async ev => {
+        ev.target.nextElementSibling.style.display = 'block'
+        await getStreams('api/ffmpeg/devices', 'devices-table')
+    })
+</script>
+
+
 <button id="hass">Home Assistant</button>
 <div class="module">
     <table id="hass-table"></table>
@@ -228,19 +241,6 @@
         ev.preventDefault()
         const r = await fetch('api/roborock', {method: 'POST', body: new FormData(ev.target)})
         await getStreams(r, 'roborock-table')
-    })
-</script>
-
-
-<button id="devices">USB Devices</button>
-<div class="module">
-    <table id="devices-table">
-    </table>
-</div>
-<script>
-    document.getElementById('devices').addEventListener('click', async ev => {
-        ev.target.nextElementSibling.style.display = 'block'
-        await getStreams('api/devices', 'devices-table')
     })
 </script>
 

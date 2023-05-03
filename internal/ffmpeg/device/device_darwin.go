@@ -1,43 +1,43 @@
 package device
 
 import (
-	"bytes"
+	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"os/exec"
+	"regexp"
 	"strings"
 )
 
 // https://trac.ffmpeg.org/wiki/Capture/Webcam
 const deviceInputPrefix = "-f avfoundation"
 
-func deviceInputSuffix(videoIdx, audioIdx int) string {
-	video := findMedia(core.KindVideo, videoIdx)
-	audio := findMedia(core.KindAudio, audioIdx)
+func deviceInputSuffix(video, audio string) string {
 	switch {
-	case video != nil && audio != nil:
-		return `"` + video.ID + `:` + audio.ID + `"`
-	case video != nil:
-		return `"` + video.ID + `"`
-	case audio != nil:
-		return `"` + audio.ID + `"`
+	case video != "" && audio != "":
+		return `"` + video + `:` + audio + `"`
+	case video != "":
+		return `"` + video + `"`
+	case audio != "":
+		return `":` + audio + `"`
 	}
 	return ""
 }
 
-func loadMedias() {
+func initDevices() {
+	// [AVFoundation indev @ 0x147f04510] AVFoundation video devices:
+	// [AVFoundation indev @ 0x147f04510] [0] FaceTime HD Camera
+	// [AVFoundation indev @ 0x147f04510] [1] Capture screen 0
+	// [AVFoundation indev @ 0x147f04510] AVFoundation audio devices:
+	// [AVFoundation indev @ 0x147f04510] [0] MacBook Pro Microphone
 	cmd := exec.Command(
-		Bin, "-hide_banner", "-list_devices", "true", "-f", "avfoundation", "-i", "dummy",
+		Bin, "-hide_banner", "-list_devices", "true", "-f", "avfoundation", "-i", "",
 	)
+	b, _ := cmd.CombinedOutput()
 
-	var buf bytes.Buffer
-	cmd.Stderr = &buf
-	_ = cmd.Run()
+	re := regexp.MustCompile(`\[\d+] (.+)`)
 
 	var kind string
-
-	lines := strings.Split(buf.String(), "\n")
-process:
-	for _, line := range lines {
+	for _, line := range strings.Split(string(b), "\n") {
 		switch {
 		case strings.HasSuffix(line, "video devices:"):
 			kind = core.KindVideo
@@ -45,17 +45,24 @@ process:
 		case strings.HasSuffix(line, "audio devices:"):
 			kind = core.KindAudio
 			continue
-		case strings.HasPrefix(line, "dummy"):
-			break process
 		}
 
-		// [AVFoundation indev @ 0x7fad54604380] [0] FaceTime HD Camera
-		name := line[42:]
-		media := loadMedia(kind, name)
-		medias = append(medias, media)
-	}
-}
+		m := re.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
 
-func loadMedia(kind, name string) *core.Media {
-	return &core.Media{Kind: kind, ID: name}
+		name := m[1]
+
+		switch kind {
+		case core.KindVideo:
+			videos = append(videos, name)
+		case core.KindAudio:
+			audios = append(audios, name)
+		}
+
+		streams = append(streams, api.Stream{
+			Name: name, URL: "ffmpeg:device?" + kind + "=" + name,
+		})
+	}
 }

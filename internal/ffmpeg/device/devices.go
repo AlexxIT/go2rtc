@@ -2,29 +2,24 @@ package device
 
 import (
 	"github.com/AlexxIT/go2rtc/internal/api"
-	"github.com/AlexxIT/go2rtc/internal/app"
-	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/rs/zerolog"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 func Init() {
-	log = app.GetLogger("exec")
-
-	api.HandleFunc("api/devices", handle)
+	api.HandleFunc("api/ffmpeg/devices", apiDevices)
 }
 
 func GetInput(src string) (string, error) {
-	if medias == nil {
-		loadMedias()
-	}
+	runonce.Do(initDevices)
 
 	input := deviceInputPrefix
 
-	var videoIdx, audioIdx int
+	var video, audio string
+
 	if i := strings.IndexByte(src, '?'); i > 0 {
 		query, err := url.ParseQuery(src[i+1:])
 		if err != nil {
@@ -33,9 +28,9 @@ func GetInput(src string) (string, error) {
 		for key, value := range query {
 			switch key {
 			case "video":
-				videoIdx, _ = strconv.Atoi(value[0])
+				video = value[0]
 			case "audio":
-				audioIdx, _ = strconv.Atoi(value[0])
+				audio = value[0]
 			case "framerate":
 				input += " -framerate " + value[0]
 			case "resolution":
@@ -44,48 +39,30 @@ func GetInput(src string) (string, error) {
 		}
 	}
 
-	input += " -i " + deviceInputSuffix(videoIdx, audioIdx)
+	if video != "" {
+		if i, err := strconv.Atoi(video); err == nil && i < len(videos) {
+			video = videos[i]
+		}
+	}
+	if audio != "" {
+		if i, err := strconv.Atoi(audio); err == nil && i < len(audios) {
+			audio = audios[i]
+		}
+	}
+
+	input += " -i " + deviceInputSuffix(video, audio)
 
 	return input, nil
 }
 
 var Bin string
-var log zerolog.Logger
-var medias []*core.Media
 
-func findMedia(kind string, index int) *core.Media {
-	for _, media := range medias {
-		if media.Kind != kind {
-			continue
-		}
-		if index == 0 {
-			return media
-		}
-		index--
-	}
-	return nil
-}
+var videos, audios []string
+var streams []api.Stream
+var runonce sync.Once
 
-func handle(w http.ResponseWriter, r *http.Request) {
-	if medias == nil {
-		loadMedias()
-	}
+func apiDevices(w http.ResponseWriter, r *http.Request) {
+	runonce.Do(initDevices)
 
-	var items []api.Stream
-	var iv, ia int
-
-	for _, media := range medias {
-		var source string
-		switch media.Kind {
-		case core.KindVideo:
-			source = "ffmpeg:device?video=" + strconv.Itoa(iv)
-			iv++
-		case core.KindAudio:
-			source = "ffmpeg:device?audio=" + strconv.Itoa(ia)
-			ia++
-		}
-		items = append(items, api.Stream{Name: media.ID, URL: source})
-	}
-
-	api.ResponseStreams(w, items)
+	api.ResponseStreams(w, streams)
 }
