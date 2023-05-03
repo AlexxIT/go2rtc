@@ -3,13 +3,17 @@ package mjpeg
 import (
 	"errors"
 	"github.com/AlexxIT/go2rtc/internal/api"
+	"github.com/AlexxIT/go2rtc/internal/ffmpeg"
 	"github.com/AlexxIT/go2rtc/internal/streams"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/mjpeg"
+	"github.com/AlexxIT/go2rtc/pkg/pipe"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/rs/zerolog/log"
 	"io"
 	"net/http"
 	"strconv"
+	"time"
 )
 
 func Init() {
@@ -29,14 +33,16 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 
 	exit := make(chan []byte)
 
-	cons := &mjpeg.Consumer{
+	cons := &pipe.Keyframe{
 		RemoteAddr: tcp.RemoteAddr(r),
 		UserAgent:  r.UserAgent(),
 	}
 	cons.Listen(func(msg any) {
-		switch msg := msg.(type) {
-		case []byte:
-			exit <- msg
+		if b, ok := msg.([]byte); ok {
+			select {
+			case exit <- b:
+			default:
+			}
 		}
 	})
 
@@ -48,6 +54,17 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 	data := <-exit
 
 	stream.RemoveConsumer(cons)
+
+	switch cons.CodecName() {
+	case core.CodecH264, core.CodecH265:
+		ts := time.Now()
+		var err error
+		if data, err = ffmpeg.TranscodeToJPEG(data); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		log.Debug().Msgf("[mjpeg] transcoding time=%s", time.Since(ts))
+	}
 
 	h := w.Header()
 	h.Set("Content-Type", "image/jpeg")
