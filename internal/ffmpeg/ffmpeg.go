@@ -1,16 +1,16 @@
 package ffmpeg
 
 import (
-	"bytes"
 	"errors"
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/exec"
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg/device"
+	"github.com/AlexxIT/go2rtc/internal/ffmpeg/hardware"
 	"github.com/AlexxIT/go2rtc/internal/rtsp"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/ffmpeg"
 	"net/url"
-	"strconv"
 	"strings"
 )
 
@@ -35,8 +35,8 @@ func Init() {
 		return exec.Handle("exec:" + args.String())
 	})
 
-	device.Bin = defaults["bin"]
-	device.Init()
+	device.Init(defaults["bin"])
+	hardware.Init(defaults["bin"])
 }
 
 var defaults = map[string]string{
@@ -116,19 +116,19 @@ func inputTemplate(name, s string, query url.Values) string {
 	return strings.Replace(template, "{input}", s, 1)
 }
 
-func parseArgs(s string) *Args {
+func parseArgs(s string) *ffmpeg.Args {
 	// init FFmpeg arguments
-	args := &Args{
-		bin:    defaults["bin"],
-		global: defaults["global"],
-		output: defaults["output"],
+	args := &ffmpeg.Args{
+		Bin:    defaults["bin"],
+		Global: defaults["global"],
+		Output: defaults["output"],
 	}
 
 	var query url.Values
 	if i := strings.IndexByte(s, '#'); i > 0 {
 		query = parseQuery(s[i+1:])
-		args.video = len(query["video"])
-		args.audio = len(query["audio"])
+		args.Video = len(query["video"])
+		args.Audio = len(query["audio"])
 		s = s[:i]
 	}
 
@@ -139,46 +139,46 @@ func parseArgs(s string) *Args {
 	if i := strings.Index(s, "://"); i > 0 {
 		switch s[:i] {
 		case "http", "https", "rtmp":
-			args.input = inputTemplate("http", s, query)
+			args.Input = inputTemplate("http", s, query)
 		case "rtsp", "rtsps":
 			// https://ffmpeg.org/ffmpeg-protocols.html#rtsp
 			// skip unnecessary input tracks
 			switch {
-			case (args.video > 0 && args.audio > 0) || (args.video == 0 && args.audio == 0):
-				args.input = "-allowed_media_types video+audio "
-			case args.video > 0:
-				args.input = "-allowed_media_types video "
-			case args.audio > 0:
-				args.input = "-allowed_media_types audio "
+			case (args.Video > 0 && args.Audio > 0) || (args.Video == 0 && args.Audio == 0):
+				args.Input = "-allowed_media_types video+audio "
+			case args.Video > 0:
+				args.Input = "-allowed_media_types video "
+			case args.Audio > 0:
+				args.Input = "-allowed_media_types audio "
 			}
 
-			args.input += inputTemplate("rtsp", s, query)
+			args.Input += inputTemplate("rtsp", s, query)
 		default:
-			args.input = "-i " + s
+			args.Input = "-i " + s
 		}
 	} else if streams.Get(s) != nil {
 		s = "rtsp://127.0.0.1:" + rtsp.Port + "/" + s
 		switch {
-		case args.video > 0 && args.audio == 0:
+		case args.Video > 0 && args.Audio == 0:
 			s += "?video"
-		case args.audio > 0 && args.video == 0:
+		case args.Audio > 0 && args.Video == 0:
 			s += "?audio"
 		default:
 			s += "?video&audio"
 		}
-		args.input = inputTemplate("rtsp", s, query)
+		args.Input = inputTemplate("rtsp", s, query)
 	} else if strings.HasPrefix(s, "device?") {
 		var err error
-		args.input, err = device.GetInput(s)
+		args.Input, err = device.GetInput(s)
 		if err != nil {
 			return nil
 		}
 	} else {
-		args.input = inputTemplate("file", s, query)
+		args.Input = inputTemplate("file", s, query)
 	}
 
 	if query["async"] != nil {
-		args.input = "-use_wallclock_as_timestamps 1 -async 1 " + args.input
+		args.Input = "-use_wallclock_as_timestamps 1 -async 1 " + args.Input
 	}
 
 	// Parse query params:
@@ -226,7 +226,7 @@ func parseArgs(s string) *Args {
 		}
 
 		// 3. Process video codecs
-		if args.video > 0 {
+		if args.Video > 0 {
 			for _, video := range query["video"] {
 				if video != "copy" {
 					if codec := defaults[video]; codec != "" {
@@ -243,7 +243,7 @@ func parseArgs(s string) *Args {
 		}
 
 		// 4. Process audio codecs
-		if args.audio > 0 {
+		if args.Audio > 0 {
 			for _, audio := range query["audio"] {
 				if audio != "copy" {
 					if codec := defaults[audio]; codec != "" {
@@ -260,11 +260,11 @@ func parseArgs(s string) *Args {
 		}
 
 		if query["hardware"] != nil {
-			MakeHardware(args, query["hardware"][0])
+			hardware.MakeHardware(args, query["hardware"][0], defaults)
 		}
 	}
 
-	if args.codecs == nil {
+	if args.Codecs == nil {
 		args.AddCodec("-c copy")
 	}
 
@@ -282,77 +282,4 @@ func parseQuery(s string) map[string][]string {
 		query[key] = append(query[key], value)
 	}
 	return query
-}
-
-type Args struct {
-	bin     string   // ffmpeg
-	global  string   // -hide_banner -v error
-	input   string   // -re -stream_loop -1 -i /media/bunny.mp4
-	codecs  []string // -c:v libx264 -g:v 30 -preset:v ultrafast -tune:v zerolatency
-	filters []string // scale=1920:1080
-	output  string   // -f rtsp {output}
-
-	video, audio int // count of video and audio params
-}
-
-func (a *Args) AddCodec(codec string) {
-	a.codecs = append(a.codecs, codec)
-}
-
-func (a *Args) AddFilter(filter string) {
-	a.filters = append(a.filters, filter)
-}
-
-func (a *Args) InsertFilter(filter string) {
-	a.filters = append([]string{filter}, a.filters...)
-}
-
-func (a *Args) String() string {
-	b := bytes.NewBuffer(make([]byte, 0, 512))
-
-	b.WriteString(a.bin)
-
-	if a.global != "" {
-		b.WriteByte(' ')
-		b.WriteString(a.global)
-	}
-
-	b.WriteByte(' ')
-	b.WriteString(a.input)
-
-	multimode := a.video > 1 || a.audio > 1
-	var iv, ia int
-
-	for _, codec := range a.codecs {
-		// support multiple video and/or audio codecs
-		if multimode && len(codec) >= 5 {
-			switch codec[:5] {
-			case "-c:v ":
-				codec = "-map 0:v:0? " + strings.ReplaceAll(codec, ":v ", ":v:"+strconv.Itoa(iv)+" ")
-				iv++
-			case "-c:a ":
-				codec = "-map 0:a:0? " + strings.ReplaceAll(codec, ":a ", ":a:"+strconv.Itoa(ia)+" ")
-				ia++
-			}
-		}
-
-		b.WriteByte(' ')
-		b.WriteString(codec)
-	}
-
-	if a.filters != nil {
-		for i, filter := range a.filters {
-			if i == 0 {
-				b.WriteString(" -vf ")
-			} else {
-				b.WriteByte(',')
-			}
-			b.WriteString(filter)
-		}
-	}
-
-	b.WriteByte(' ')
-	b.WriteString(a.output)
-
-	return b.String()
 }

@@ -9,7 +9,9 @@ import (
 	"sync"
 )
 
-func Init() {
+func Init(bin string) {
+	Bin = bin
+
 	api.HandleFunc("api/ffmpeg/devices", apiDevices)
 }
 

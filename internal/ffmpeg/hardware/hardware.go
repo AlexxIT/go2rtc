@@ -1,6 +1,9 @@
-package ffmpeg
+package hardware
 
 import (
+	"github.com/AlexxIT/go2rtc/internal/api"
+	"github.com/AlexxIT/go2rtc/pkg/ffmpeg"
+	"net/http"
 	"os/exec"
 	"strings"
 
@@ -16,12 +19,16 @@ const (
 	EngineVideoToolbox = "videotoolbox" // macOS
 )
 
-var cache = map[string]string{}
+func Init(bin string) {
+	api.HandleFunc("api/ffmpeg/hardware", func(w http.ResponseWriter, r *http.Request) {
+		api.ResponseStreams(w, ProbeAll(bin))
+	})
+}
 
 // MakeHardware converts software FFmpeg args to hardware args
 // empty engine for autoselect
-func MakeHardware(args *Args, engine string) {
-	for i, codec := range args.codecs {
+func MakeHardware(args *ffmpeg.Args, engine string, defaults map[string]string) {
+	for i, codec := range args.Codecs {
 		if len(codec) < 12 {
 			continue // skip short line (-c:v libx264...)
 		}
@@ -41,25 +48,25 @@ func MakeHardware(args *Args, engine string) {
 		// temporary disable probe for H265 and MJPEG
 		if engine == "" && name == "h264" {
 			if engine = cache[name]; engine == "" {
-				engine = ProbeHardware(name)
+				engine = ProbeHardware(args.Bin, name)
 				cache[name] = engine
 			}
 		}
 
 		switch engine {
 		case EngineVAAPI:
-			args.input = "-hwaccel vaapi -hwaccel_output_format vaapi " + args.input
-			args.codecs[i] = defaults[name+"/"+engine]
+			args.Input = "-hwaccel vaapi -hwaccel_output_format vaapi " + args.Input
+			args.Codecs[i] = defaults[name+"/"+engine]
 
-			for i, filter := range args.filters {
+			for i, filter := range args.Filters {
 				if strings.HasPrefix(filter, "scale=") {
-					args.filters[i] = "scale_vaapi=" + filter[6:]
+					args.Filters[i] = "scale_vaapi=" + filter[6:]
 				}
 				if strings.HasPrefix(filter, "transpose=") {
 					if filter == "transpose=1,transpose=1" { // 180 degrees half-turn
-						args.filters[i] = "transpose_vaapi=4" // reversal
+						args.Filters[i] = "transpose_vaapi=4" // reversal
 					} else {
-						args.filters[i] = "transpose_vaapi=" + filter[10:]
+						args.Filters[i] = "transpose_vaapi=" + filter[10:]
 					}
 				}
 			}
@@ -68,41 +75,51 @@ func MakeHardware(args *Args, engine string) {
 			args.InsertFilter("format=vaapi|nv12,hwupload")
 
 		case EngineCUDA:
-			args.input = "-hwaccel cuda -hwaccel_output_format cuda -extra_hw_frames 2 " + args.input
-			args.codecs[i] = defaults[name+"/"+engine]
+			args.Input = "-hwaccel cuda -hwaccel_output_format cuda -extra_hw_frames 2 " + args.Input
+			args.Codecs[i] = defaults[name+"/"+engine]
 
-			for i, filter := range args.filters {
+			for i, filter := range args.Filters {
 				if strings.HasPrefix(filter, "scale=") {
-					args.filters[i] = "scale_cuda=" + filter[6:]
+					args.Filters[i] = "scale_cuda=" + filter[6:]
 				}
 			}
 
 		case EngineDXVA2:
-			args.input = "-hwaccel dxva2 -hwaccel_output_format dxva2_vld " + args.input
-			args.codecs[i] = defaults[name+"/"+engine]
+			args.Input = "-hwaccel dxva2 -hwaccel_output_format dxva2_vld " + args.Input
+			args.Codecs[i] = defaults[name+"/"+engine]
 
-			for i, filter := range args.filters {
+			for i, filter := range args.Filters {
 				if strings.HasPrefix(filter, "scale=") {
-					args.filters[i] = "scale_qsv=" + filter[6:]
+					args.Filters[i] = "scale_qsv=" + filter[6:]
 				}
 			}
 
 			args.InsertFilter("hwmap=derive_device=qsv,format=qsv")
 
 		case EngineVideoToolbox:
-			args.input = "-hwaccel videotoolbox -hwaccel_output_format videotoolbox_vld " + args.input
-			args.codecs[i] = defaults[name+"/"+engine]
+			args.Input = "-hwaccel videotoolbox -hwaccel_output_format videotoolbox_vld " + args.Input
+			args.Codecs[i] = defaults[name+"/"+engine]
 
 		case EngineV4L2M2M:
-			args.codecs[i] = defaults[name+"/"+engine]
+			args.Codecs[i] = defaults[name+"/"+engine]
 		}
 	}
 }
 
-func run(arg ...string) bool {
-	err := exec.Command(defaults["bin"], arg...).Run()
-	log.Printf("%v %v", arg, err)
+var cache = map[string]string{}
+
+func run(bin string, args string) bool {
+	err := exec.Command(bin, strings.Split(args, " ")...).Run()
+	log.Printf("%v %v", args, err)
 	return err == nil
+}
+
+func runToString(bin string, args string) string {
+	if run(bin, args) {
+		return "OK"
+	} else {
+		return "ERROR"
+	}
 }
 
 func cut(s string, sep byte, pos int) string {
