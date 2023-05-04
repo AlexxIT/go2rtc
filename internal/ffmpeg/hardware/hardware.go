@@ -29,8 +29,8 @@ func Init(bin string) {
 // empty engine for autoselect
 func MakeHardware(args *ffmpeg.Args, engine string, defaults map[string]string) {
 	for i, codec := range args.Codecs {
-		if len(codec) < 12 {
-			continue // skip short line (-c:v libx264...)
+		if len(codec) < 10 {
+			continue // skip short line (-c:v mjpeg...)
 		}
 
 		// get current codec name
@@ -45,8 +45,8 @@ func MakeHardware(args *ffmpeg.Args, engine string, defaults map[string]string) 
 			continue // skip unsupported codec
 		}
 
-		// temporary disable probe for H265 and MJPEG
-		if engine == "" && name == "h264" {
+		// temporary disable probe for H265
+		if engine == "" && name != "h265" {
 			if engine = cache[name]; engine == "" {
 				engine = ProbeHardware(args.Bin, name)
 				cache[name] = engine
