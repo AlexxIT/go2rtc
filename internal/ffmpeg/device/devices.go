@@ -33,10 +33,10 @@ func GetInput(src string) (string, error) {
 				video = value[0]
 			case "audio":
 				audio = value[0]
-			case "framerate":
-				input += " -framerate " + value[0]
 			case "resolution":
 				input += " -video_size " + value[0]
+			default: // "input_format", "framerate", "video_size"
+				input += " -" + key + " " + value[0]
 			}
 		}
 	}

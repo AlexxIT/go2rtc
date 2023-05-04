@@ -51,14 +51,16 @@ var defaults = map[string]string{
 	"rtsp/udp": "-fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -i {input}",
 
 	// output
-	"output": "-user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}",
+	"output":       "-user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}",
+	"output/mjpeg": "-f mjpeg -",
 
 	// `-preset superfast` - we can't use ultrafast because it doesn't support `-profile main -level 4.1`
 	// `-tune zerolatency` - for minimal latency
 	// `-profile high -level 4.1` - most used streaming profile
 	"h264":  "-c:v libx264 -g 50 -profile:v high -level:v 4.1 -preset:v superfast -tune:v zerolatency -pix_fmt:v yuvj420p",
 	"h265":  "-c:v libx265 -g 50 -profile:v high -level:v 5.1 -preset:v superfast -tune:v zerolatency",
-	"mjpeg": "-c:v mjpeg -force_duplicated_matrix:v 1 -huffman:v 0 -pix_fmt:v yuvj420p",
+	"mjpeg": "-c:v mjpeg",
+	//"mjpeg": "-c:v mjpeg -force_duplicated_matrix:v 1 -huffman:v 0 -pix_fmt:v yuvj420p",
 
 	// https://ffmpeg.org/ffmpeg-codecs.html#libopus-1
 	"opus":       "-c:a libopus -ar:a 48000 -ac:a 2 -application:a voip -compression_level:a 0",
@@ -266,6 +268,13 @@ func parseArgs(s string) *ffmpeg.Args {
 
 	if args.Codecs == nil {
 		args.AddCodec("-c copy")
+	}
+
+	// transcoding to only mjpeg
+	if (args.Video == 1 && args.Audio == 0 && query.Get("video") == "mjpeg") ||
+		// no transcoding from mjpeg input
+		(args.Video == 0 && args.Audio == 0 && strings.Contains(args.Input, " mjpeg ")) {
+		args.Output = defaults["output/mjpeg"]
 	}
 
 	return args
