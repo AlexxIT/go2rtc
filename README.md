@@ -98,10 +98,12 @@ Download binary for your OS from [latest release](https://github.com/AlexxIT/go2
 
 - `go2rtc_win64.zip` - Windows 64-bit
 - `go2rtc_win32.zip` - Windows 32-bit
+- `go2rtc_win_arm64.zip` - Windows ARM 64-bit
 - `go2rtc_linux_amd64` - Linux 64-bit
 - `go2rtc_linux_i386` - Linux 32-bit
 - `go2rtc_linux_arm64` - Linux ARM 64-bit (ex. Raspberry 64-bit OS)
 - `go2rtc_linux_arm` - Linux ARM 32-bit (ex. Raspberry 32-bit OS)
+- `go2rtc_linux_armv6` - Linux ARMv6 (for old Raspberry 1 and Zero)
 - `go2rtc_linux_mipsel` - Linux MIPS (ex. [Xiaomi Gateway 3](https://github.com/AlexxIT/XiaomiGateway3))
 - `go2rtc_mac_amd64.zip` - Mac Intel 64-bit
 - `go2rtc_mac_arm64.zip` - Mac ARM 64-bit
