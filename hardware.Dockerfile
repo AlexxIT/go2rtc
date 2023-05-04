@@ -38,9 +38,13 @@ RUN rm -f /etc/apt/apt.conf.d/docker-clean \
 # Install ffmpeg, bash (for run.sh), tini (for signal handling),
 # and other common tools for the echo source.
 # non-free for Intel QSV support (not used by go2rtc, just for tests)
+# libasound2-plugins for ALSA support
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked --mount=type=cache,target=/var/lib/apt,sharing=locked \
     echo 'deb http://deb.debian.org/debian bookworm non-free' > /etc/apt/sources.list.d/debian-non-free.list && \
-    apt-get -y update && apt-get -y install tini ffmpeg python3 curl jq intel-media-va-driver-non-free
+    apt-get -y update && apt-get -y install tini ffmpeg \
+        python3 curl jq \
+        intel-media-va-driver-non-free \
+        libasound2-plugins
 
 COPY --link --from=rootfs / /
 
