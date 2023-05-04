@@ -1,4 +1,4 @@
-package pipe
+package magic
 
 import (
 	"github.com/AlexxIT/go2rtc/pkg/core"

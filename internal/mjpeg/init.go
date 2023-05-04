@@ -6,8 +6,8 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/magic"
 	"github.com/AlexxIT/go2rtc/pkg/mjpeg"
-	"github.com/AlexxIT/go2rtc/pkg/pipe"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/rs/zerolog/log"
 	"io"
@@ -33,7 +33,7 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 
 	exit := make(chan []byte)
 
-	cons := &pipe.Keyframe{
+	cons := &magic.Keyframe{
 		RemoteAddr: tcp.RemoteAddr(r),
 		UserAgent:  r.UserAgent(),
 	}

@@ -1,4 +1,4 @@
-package pipe
+package magic
 
 import (
 	"bytes"
@@ -6,17 +6,21 @@ import (
 	"errors"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
+	"github.com/AlexxIT/go2rtc/pkg/h265"
 	"github.com/AlexxIT/go2rtc/pkg/mpegts"
 	"github.com/pion/rtp"
 	"io"
-	"os/exec"
 )
 
+// Client - can read unknown bytestream and autodetect format
 type Client struct {
-	cmd    *exec.Cmd
-	stdout io.ReadCloser
-	sniff  []byte
-	handle func() error
+	Desc string
+	URL  string
+
+	Handle func() error
+
+	r     io.ReadCloser
+	sniff []byte
 
 	medias   []*core.Media
 	receiver *core.Receiver
@@ -24,47 +28,50 @@ type Client struct {
 	recv int
 }
 
-func NewClient(cmd *exec.Cmd) (prod *Client, err error) {
-	prod = &Client{cmd: cmd}
+func NewClient(r io.ReadCloser) *Client {
+	return &Client{r: r}
+}
 
-	prod.stdout, err = cmd.StdoutPipe()
+func (c *Client) Probe() (err error) {
+	c.sniff = make([]byte, mpegts.PacketSize*3) // MPEG-TS: SDT+PAT+PMT
+	c.recv, err = io.ReadFull(c.r, c.sniff)
 	if err != nil {
-		return nil, err
-	}
-
-	if err = cmd.Start(); err != nil {
-		return nil, err
-	}
-
-	prod.sniff = make([]byte, mpegts.PacketSize*3) // MPEG-TS: SDT+PAT+PMT
-	prod.recv, err = io.ReadFull(prod.stdout, prod.sniff)
-	if err != nil {
-		_ = prod.Stop()
-		return nil, err
+		_ = c.Close()
+		return
 	}
 
 	var codec *core.Codec
 
-	if bytes.HasPrefix(prod.sniff, []byte{0, 0, 0, 1}) {
+	if bytes.HasPrefix(c.sniff, []byte{0, 0, 0, 1}) {
 		switch {
-		case h264.NALUType(prod.sniff) == h264.NALUTypeSPS:
+		case h264.NALUType(c.sniff) == h264.NALUTypeSPS:
 			codec = &core.Codec{
 				Name:        core.CodecH264,
 				ClockRate:   90000,
 				PayloadType: core.PayloadTypeRAW,
 			}
-			prod.handle = prod.ReadBitstreams
+			c.Handle = c.ReadBitstreams
+
+		case h265.NALUType(c.sniff) == h265.NALUTypeVPS:
+			codec = &core.Codec{
+				Name:        core.CodecH265,
+				ClockRate:   90000,
+				PayloadType: core.PayloadTypeRAW,
+			}
+			c.Handle = c.ReadBitstreams
 		}
-	} else if bytes.HasPrefix(prod.sniff, []byte{0xFF, 0xD8}) {
+
+	} else if bytes.HasPrefix(c.sniff, []byte{0xFF, 0xD8}) {
 		codec = &core.Codec{
 			Name:        core.CodecJPEG,
 			ClockRate:   90000,
 			PayloadType: core.PayloadTypeRAW,
 		}
-		prod.handle = prod.ReadMJPEG
-	} else if prod.sniff[0] == mpegts.SyncByte {
+		c.Handle = c.ReadMJPEG
+
+	} else if c.sniff[0] == mpegts.SyncByte {
 		ts := mpegts.NewReader()
-		ts.AppendBuffer(prod.sniff)
+		ts.AppendBuffer(c.sniff)
 		_ = ts.GetPacket()
 		for _, streamType := range ts.GetStreamTypes() {
 			switch streamType {
@@ -74,17 +81,17 @@ func NewClient(cmd *exec.Cmd) (prod *Client, err error) {
 					ClockRate:   90000,
 					PayloadType: core.PayloadTypeRAW,
 				}
-				prod.handle = prod.ReadMPEGTS
+				c.Handle = c.ReadMPEGTS
 			}
 		}
 	}
 
 	if codec == nil {
-		_ = prod.Stop()
-		return nil, errors.New("unknown format: " + hex.EncodeToString(prod.sniff))
+		_ = c.Close()
+		return errors.New("unknown format: " + hex.EncodeToString(c.sniff[:8]))
 	}
 
-	prod.medias = append(prod.medias, &core.Media{
+	c.medias = append(c.medias, &core.Media{
 		Kind:      core.KindVideo,
 		Direction: core.DirectionRecvonly,
 		Codecs:    []*core.Codec{codec},
@@ -97,10 +104,18 @@ func (c *Client) ReadBitstreams() error {
 	buf := c.sniff               // total bufer
 	b := make([]byte, 1024*1024) // reading buffer
 
+	var decodeStream func([]byte) ([]byte, int)
+	switch c.receiver.Codec.Name {
+	case core.CodecH264:
+		decodeStream = h264.DecodeStream
+	case core.CodecH265:
+		decodeStream = h265.DecodeStream
+	}
+
 	for {
-		payload, n := h264.DecodeStream(buf)
+		payload, n := decodeStream(buf)
 		if payload == nil {
-			n, err := c.stdout.Read(b)
+			n, err := c.r.Read(b)
 			if err != nil {
 				return err
 			}
@@ -130,7 +145,7 @@ func (c *Client) ReadMJPEG() error {
 		// one JPEG end and next start
 		i := bytes.Index(buf, []byte{0xFF, 0xD9, 0xFF, 0xD8})
 		if i < 0 {
-			n, err := c.stdout.Read(b)
+			n, err := c.r.Read(b)
 			if err != nil {
 				return err
 			}
@@ -167,7 +182,7 @@ func (c *Client) ReadMPEGTS() error {
 	for {
 		packet := ts.GetPacket()
 		if packet == nil {
-			n, err := c.stdout.Read(b)
+			n, err := c.r.Read(b)
 			if err != nil {
 				return err
 			}
@@ -185,4 +200,8 @@ func (c *Client) ReadMPEGTS() error {
 
 		c.receiver.WriteRTP(packet)
 	}
+}
+
+func (c *Client) Close() error {
+	return c.r.Close()
 }

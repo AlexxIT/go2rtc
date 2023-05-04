@@ -9,7 +9,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/rtsp"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/pipe"
+	"github.com/AlexxIT/go2rtc/pkg/magic"
 	pkg "github.com/AlexxIT/go2rtc/pkg/rtsp"
 	"github.com/AlexxIT/go2rtc/pkg/shell"
 	"github.com/rs/zerolog"
@@ -38,12 +38,12 @@ func Init() {
 		}
 	})
 
-	streams.HandleFunc("exec", Handle)
+	streams.HandleFunc("exec", execHandle)
 
 	log = app.GetLogger("exec")
 }
 
-func Handle(url string) (core.Producer, error) {
+func execHandle(url string) (core.Producer, error) {
 	var path string
 
 	args := shell.QuoteSplit(url[5:]) // remove `exec:`
@@ -66,9 +66,34 @@ func Handle(url string) (core.Producer, error) {
 	}
 
 	if path == "" {
-		return pipe.NewClient(cmd)
+		return handlePipe(url, cmd)
 	}
 
+	return handleRTSP(url, path, cmd)
+}
+
+func handlePipe(url string, cmd *exec.Cmd) (core.Producer, error) {
+	r, err := PipeCloser(cmd)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = cmd.Start(); err != nil {
+		return nil, err
+	}
+
+	client := magic.NewClient(r)
+	if err = client.Probe(); err != nil {
+		return nil, err
+	}
+
+	client.Desc = "exec active producer"
+	client.URL = url
+
+	return client, nil
+}
+
+func handleRTSP(url, path string, cmd *exec.Cmd) (core.Producer, error) {
 	if log.Trace().Enabled() {
 		cmd.Stdout = os.Stdout
 	}

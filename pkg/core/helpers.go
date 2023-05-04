@@ -29,6 +29,15 @@ func RandString(size, base byte) string {
 	return string(b)
 }
 
+func Any(errs ...error) error {
+	for _, err := range errs {
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func Between(s, sub1, sub2 string) string {
 	i := strings.Index(s, sub1)
 	if i < 0 {

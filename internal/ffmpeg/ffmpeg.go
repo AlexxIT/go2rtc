@@ -3,7 +3,6 @@ package ffmpeg
 import (
 	"errors"
 	"github.com/AlexxIT/go2rtc/internal/app"
-	"github.com/AlexxIT/go2rtc/internal/exec"
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg/device"
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg/hardware"
 	"github.com/AlexxIT/go2rtc/internal/rtsp"
@@ -32,7 +31,7 @@ func Init() {
 		if args == nil {
 			return nil, errors.New("can't generate ffmpeg command")
 		}
-		return exec.Handle("exec:" + args.String())
+		return streams.GetProducer("exec:" + args.String())
 	})
 
 	device.Init(defaults["bin"])
