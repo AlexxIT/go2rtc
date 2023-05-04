@@ -57,7 +57,7 @@ var defaults = map[string]string{
 	// `-tune zerolatency` - for minimal latency
 	// `-profile high -level 4.1` - most used streaming profile
 	"h264":  "-c:v libx264 -g 50 -profile:v high -level:v 4.1 -preset:v superfast -tune:v zerolatency -pix_fmt:v yuvj420p",
-	"h265":  "-c:v libx265 -g 50 -profile:v high -level:v 5.1 -preset:v superfast -tune:v zerolatency",
+	"h265":  "-c:v libx265 -g 50 -profile:v main -level:v 5.1 -preset:v superfast -tune:v zerolatency",
 	"mjpeg": "-c:v mjpeg",
 	//"mjpeg": "-c:v mjpeg -force_duplicated_matrix:v 1 -huffman:v 0 -pix_fmt:v yuvj420p",
 
