@@ -82,6 +82,14 @@ func (c *Client) Probe() (err error) {
 					PayloadType: core.PayloadTypeRAW,
 				}
 				c.Handle = c.ReadMPEGTS
+
+			case mpegts.StreamTypeH265:
+				codec = &core.Codec{
+					Name:        core.CodecH265,
+					ClockRate:   90000,
+					PayloadType: core.PayloadTypeRAW,
+				}
+				c.Handle = c.ReadMPEGTS
 			}
 		}
 	}
@@ -194,11 +202,10 @@ func (c *Client) ReadMPEGTS() error {
 
 		//log.Printf("[AVC] %v, len: %d, ts: %10d", h264.Types(packet.Payload), len(packet.Payload), packet.Timestamp)
 
-		if packet.PayloadType != mpegts.StreamTypeH264 {
-			continue
+		switch packet.PayloadType {
+		case mpegts.StreamTypeH264, mpegts.StreamTypeH265:
+			c.receiver.WriteRTP(packet)
 		}
-
-		c.receiver.WriteRTP(packet)
 	}
 }
 
