@@ -42,6 +42,7 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
     * [Source: RTSP](#source-rtsp)
     * [Source: RTMP](#source-rtmp)
     * [Source: HTTP](#source-http)
+    * [Source: ONVIF](#source-onvif)
     * [Source: FFmpeg](#source-ffmpeg)
     * [Source: FFmpeg Device](#source-ffmpeg-device)
     * [Source: Exec](#source-exec)
@@ -156,10 +157,11 @@ Available source types:
 
 - [rtsp](#source-rtsp) - `RTSP` and `RTSPS` cameras with [two way audio](#two-way-audio) support
 - [rtmp](#source-rtmp) - `RTMP` streams
-- [http](#source-http) - `HTTP-FLV`, `MPEG-TS`, `JPEG` (snapshots), `MJPEG` streams 
+- [http](#source-http) - `HTTP-FLV`, `MPEG-TS`, `JPEG` (snapshots), `MJPEG` streams
+- [onvif](#source-onvif) - get camera `RTSP` link and snapshot link using `ONVIF` protocol
 - [ffmpeg](#source-ffmpeg) - FFmpeg integration (`HLS`, `files` and many others)
 - [ffmpeg:device](#source-ffmpeg-device) - local USB Camera or Webcam
-- [exec](#source-exec) - advanced FFmpeg and GStreamer integration
+- [exec](#source-exec) - get media from external app output
 - [echo](#source-echo) - get stream link from bash or python
 - [homekit](#source-homekit) - streaming from HomeKit Camera
 - [dvrip](#source-dvrip) - streaming from DVR-IP NVR
@@ -229,6 +231,8 @@ Support Content-Type:
 - **HTTP-MJPEG** (`multipart/x`) - simple MJPEG stream over HTTP
 - **MPEG-TS** (`video/mpeg`) - legacy [streaming format](https://en.wikipedia.org/wiki/MPEG_transport_stream)
 
+Source also support HTTP and TCP streams with autodetection for different formats: **MJPEG**, **H.264/H.265 bitstream**, **MPEG-TS**.
+
 ```yaml
 streams:
   # [HTTP-FLV] stream in video/x-flv format
@@ -239,9 +243,25 @@ streams:
 
   # [MJPEG] stream will be proxied without modification
   http_mjpeg: https://mjpeg.sanford.io/count.mjpeg
+
+  # [MJPEG or H.264/H.265 bitstream or MPEG-TS]
+  tcp_magic: tcp://192.168.1.123:12345
 ```
 
 **PS.** Dahua camera has bug: if you select MJPEG codec for RTSP second stream - snapshot won't work.
+
+#### Source: ONVIF
+
+The source is not very useful if you already know RTSP and snapshot links for your camera. But it can be useful if you don't.
+
+**WebUI > Add** webpage support ONVIF autodiscovery. Your server must be on the same subnet as the camera. If you use docker, you must use "network host".
+
+```yaml
+streams:
+  dahua1: onvif://admin:password@192.168.1.123
+  reolink1: onvif://admin:password@192.168.1.123:8000
+  tapo1: onvif://admin:password@192.168.1.123:2020
+```
 
 #### Source: FFmpeg
 
@@ -301,25 +321,40 @@ Read more about encoding [hardware acceleration](https://github.com/AlexxIT/go2r
 You can get video from any USB-camera or Webcam as RTSP or WebRTC stream. This is part of FFmpeg integration.
 
 - check available devices in Web interface
-- `resolution` and `framerate` must be supported by your camera!
+- `video_size` and `framerate` must be supported by your camera!
 - for Linux supported only video for now
 - for macOS you can stream Facetime camera or whole Desktop!
 - for macOS important to set right framerate
 
+Format: `ffmpeg:device?{input-params}#{param1}#{param2}#{param3}`
+
 ```yaml
 streams:
-  linux_usbcam:   ffmpeg:device?video=0&resolution=1280x720#video=h264
+  linux_usbcam:   ffmpeg:device?video=0&video_size=1280x720#video=h264
   windows_webcam: ffmpeg:device?video=0#video=h264
-  macos_facetime: ffmpeg:device?video=0&audio=1&resolution=1280x720&framerate=30#video=h264#audio=pcma
+  macos_facetime: ffmpeg:device?video=0&audio=1&video_size=1280x720&framerate=30#video=h264#audio=pcma
 ```
 
 #### Source: Exec
 
-FFmpeg source just a shortcut to exec source. You can get any stream or file or device via FFmpeg or GStreamer and push it to go2rtc via RTSP protocol: 
+Exec source can run any external application and expect data from it. Two transports are supported - **pipe** and **RTSP**.
+
+If you want to use **RTSP** transport - the command must contain the `{output}` argument in any place. On launch, it will be replaced by the local address of the RTSP server.
+
+**pipe** reads data from app stdout in different formats: **MJPEG**, **H.264/H.265 bitstream**, **MPEG-TS**.
+
+The source can be used with:
+
+- [FFmpeg](https://ffmpeg.org/) - go2rtc ffmpeg source just a shortcut to exec source
+- [GStreamer](https://gstreamer.freedesktop.org/)
+- [Raspberry Pi Cameras](https://www.raspberrypi.com/documentation/computers/camera_software.html)
+- any your own software
 
 ```yaml
 streams:
-  stream1: exec:ffmpeg -hide_banner -re -stream_loop -1 -i /media/BigBuckBunny.mp4 -c copy -rtsp_transport tcp -f rtsp {output}
+  stream: exec:ffmpeg -re -i /media/BigBuckBunny.mp4 -c copy -rtsp_transport tcp -f rtsp {output}
+  picam_h264: exec:libcamera-vid -t 0 --inline -o -
+  picam_mjpeg: exec:libcamera-vid -t 0 --codec mjpeg -o -
 ```
 
 #### Source: Echo
