@@ -86,6 +86,11 @@ func HandleFunc(pattern string, handler http.HandlerFunc) {
 	if len(pattern) == 0 || pattern[0] != '/' {
 		pattern = basePath + "/" + pattern
 	}
+
+	if len(pattern) > 1 && pattern[len(pattern)-1] == '/' {
+		pattern = pattern[:len(pattern)-1]
+	}
+
 	log.Trace().Str("path", pattern).Msg("[api] register path")
 	http.HandleFunc(pattern, handler)
 }
