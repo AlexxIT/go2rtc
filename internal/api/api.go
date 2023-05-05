@@ -54,19 +54,21 @@ func Init() {
 
 	log.Info().Str("addr", cfg.Mod.Listen).Msg("[api] listen")
 
-	Handler = http.DefaultServeMux // 4th
+	Handler = http.DefaultServeMux // 5th
 
 	if cfg.Mod.Origin == "*" {
-		Handler = middlewareCORS(Handler) // 3rd
+		Handler = middlewareCORS(Handler) // 4th
 	}
 
 	if cfg.Mod.Username != "" {
-		Handler = middlewareAuth(cfg.Mod.Username, cfg.Mod.Password, Handler) // 2nd
+		Handler = middlewareAuth(cfg.Mod.Username, cfg.Mod.Password, Handler) // 3rd
 	}
 
 	if log.Trace().Enabled() {
-		Handler = middlewareLog(Handler) // 1st
+		Handler = middlewareLog(Handler) // 2nd
 	}
+
+	Handler = middlewareTrailingSlash(Handler) // 1st
 
 	go func() {
 		s := http.Server{}
@@ -99,6 +101,13 @@ const StreamNotFound = "stream not found"
 
 var basePath string
 var log zerolog.Logger
+
+func middlewareTrailingSlash(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.URL.Path = strings.TrimSuffix(r.URL.Path, "/")
+		next.ServeHTTP(w, r)
+	})
+}
 
 func middlewareLog(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
