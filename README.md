@@ -453,8 +453,10 @@ streams:
 
 Support import camera links from [Home Assistant](https://www.home-assistant.io/) config files:
 
-- support [Generic Camera](https://www.home-assistant.io/integrations/generic/), setup via GUI
-- support [HomeKit Camera](https://www.home-assistant.io/integrations/homekit_controller/)
+- [Generic Camera](https://www.home-assistant.io/integrations/generic/), setup via GUI
+- [HomeKit Camera](https://www.home-assistant.io/integrations/homekit_controller/)
+- [ONVIF](https://www.home-assistant.io/integrations/onvif/)
+- [Roborock](https://github.com/humbertogontijo/homeassistant-roborock) vacuums with camera
 
 ```yaml
 hass:
@@ -465,7 +467,7 @@ streams:
   aqara_g3: hass:Camera-Hub-G3-AB12
 ```
 
-More cameras, like [Tuya](https://www.home-assistant.io/integrations/tuya/), [ONVIF](https://www.home-assistant.io/integrations/onvif/), and possibly others can also be imported by using [this method](https://github.com/felipecrs/hass-expose-camera-stream-source#importing-home-assistant-cameras-to-go2rtc-andor-frigate).
+More cameras, like [Tuya](https://www.home-assistant.io/integrations/tuya/), and possibly others can also be imported by using [this method](https://github.com/felipecrs/hass-expose-camera-stream-source#importing-home-assistant-cameras-to-go2rtc-andor-frigate).
 
 #### Source: ISAPI
 
@@ -811,6 +813,7 @@ You have several options on how to add a camera to Home Assistant:
 2. Camera [any source](#module-streams) => [go2rtc config](#configuration) => [Generic Camera](https://www.home-assistant.io/integrations/generic/)
    - Install any [go2rtc](#fast-start)
    - Add your stream to [go2rtc config](#configuration)
+   - Hass > Settings > Integrations > Add Integration > [ONVIF](https://my.home-assistant.io/redirect/config_flow_start/?domain=onvif) > Host: `127.0.0.1`, Port: `1984`
    - Hass > Settings > Integrations > Add Integration > [Generic Camera](https://my.home-assistant.io/redirect/config_flow_start/?domain=generic) > `rtsp://127.0.0.1:8554/camera1` (change to your stream name)
 
 You have several options on how to watch the stream from the cameras in Home Assistant:
