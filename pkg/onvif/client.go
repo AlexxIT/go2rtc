@@ -15,6 +15,8 @@ import (
 	"time"
 )
 
+const PathDevice = "/onvif/device_service"
+
 type Client struct {
 	url *url.URL
 

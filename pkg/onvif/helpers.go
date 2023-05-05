@@ -9,10 +9,6 @@ import (
 	"time"
 )
 
-const (
-	PathDevice = "/onvif/device_service"
-)
-
 func FindTagValue(b []byte, tag string) string {
 	re := regexp.MustCompile(`<[^/>]*` + tag + `[^>]*>([^<]+)`)
 	m := re.FindSubmatch(b)
@@ -45,7 +41,7 @@ func DiscoveryStreamingURLs() ([]string, error) {
 	</s:Header>
 	<s:Body>
 		<d:Probe xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery">
-            <d:Types />
+			<d:Types />
 			<d:Scopes />
 		</d:Probe>
 	</s:Body>

@@ -45,12 +45,12 @@ func GetRequestAction(b []byte) string {
 func GetCapabilitiesResponse(host string) string {
 	return `<?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope">
-    <s:Body>
-        <tds:GetCapabilitiesResponse xmlns:tds="http://www.onvif.org/ver10/device/wsdl">
-            <tds:Capabilities xmlns:tt="http://www.onvif.org/ver10/schema">
-                <tt:Device>
-                    <tt:XAddr>http://` + host + `/onvif/device_service</tt:XAddr>
-                </tt:Device>
+	<s:Body>
+		<tds:GetCapabilitiesResponse xmlns:tds="http://www.onvif.org/ver10/device/wsdl">
+			<tds:Capabilities xmlns:tt="http://www.onvif.org/ver10/schema">
+				<tt:Device>
+					<tt:XAddr>http://` + host + `/onvif/device_service</tt:XAddr>
+				</tt:Device>
 				<tt:Media>
 					<tt:XAddr>http://` + host + `/onvif/media_service</tt:XAddr>
 					<tt:StreamingCapabilities>
@@ -59,9 +59,9 @@ func GetCapabilitiesResponse(host string) string {
 						<tt:RTP_RTSP_TCP>true</tt:RTP_RTSP_TCP>
 					</tt:StreamingCapabilities>
 				</tt:Media>
-            </tds:Capabilities>
-        </tds:GetCapabilitiesResponse>
-    </s:Body>
+			</tds:Capabilities>
+		</tds:GetCapabilitiesResponse>
+	</s:Body>
 </s:Envelope>`
 }
 
