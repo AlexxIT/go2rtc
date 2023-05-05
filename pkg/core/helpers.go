@@ -10,9 +10,8 @@ import (
 )
 
 // Now90000 - timestamp for Video (clock rate = 90000 samples per second)
-// same as: uint32(time.Duration(time.Now().UnixNano()) * 90000 / time.Second)
 func Now90000() uint32 {
-	return uint32(time.Duration(time.Now().UnixMilli()) * 90)
+	return uint32(time.Duration(time.Now().UnixNano()) * 90000 / time.Second)
 }
 
 const symbols = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_"
