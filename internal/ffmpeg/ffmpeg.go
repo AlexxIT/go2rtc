@@ -127,7 +127,7 @@ func parseArgs(s string) *ffmpeg.Args {
 
 	var query url.Values
 	if i := strings.IndexByte(s, '#'); i > 0 {
-		query = parseQuery(s[i+1:])
+		query = streams.ParseQuery(s[i+1:])
 		args.Video = len(query["video"])
 		args.Audio = len(query["audio"])
 		s = s[:i]
@@ -277,17 +277,4 @@ func parseArgs(s string) *ffmpeg.Args {
 	}
 
 	return args
-}
-
-func parseQuery(s string) map[string][]string {
-	query := map[string][]string{}
-	for _, key := range strings.Split(s, "#") {
-		var value string
-		i := strings.IndexByte(key, '=')
-		if i > 0 {
-			key, value = key[:i], key[i+1:]
-		}
-		query[key] = append(query[key], value)
-	}
-	return query
 }
