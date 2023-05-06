@@ -91,18 +91,18 @@ var log zerolog.Logger
 var handlers []Handler
 var defaultMedias []*core.Media
 
-func rtspHandler(url string) (core.Producer, error) {
-	backchannel := true
+func rtspHandler(rawURL string) (core.Producer, error) {
+	rawURL, rawQuery, _ := strings.Cut(rawURL, "#")
 
-	if i := strings.IndexByte(url, '#'); i > 0 {
-		if url[i+1:] == "backchannel=0" {
-			backchannel = false
-		}
-		url = url[:i]
-	}
-
-	conn := rtsp.NewClient(url)
+	conn := rtsp.NewClient(rawURL)
+	conn.Backchannel = true
 	conn.UserAgent = app.UserAgent
+
+	if rawQuery != "" {
+		query := streams.ParseQuery(rawQuery)
+		conn.Backchannel = query.Get("backchannel") == "1"
+		conn.Transport = query.Get("transport")
+	}
 
 	if log.Trace().Enabled() {
 		conn.Listen(func(msg any) {
@@ -121,12 +121,11 @@ func rtspHandler(url string) (core.Producer, error) {
 		return nil, err
 	}
 
-	conn.Backchannel = backchannel
 	if err := conn.Describe(); err != nil {
-		if !backchannel {
+		if !conn.Backchannel {
 			return nil, err
 		}
-		log.Trace().Msgf("[rtsp] describe (backchannel=%t) err: %v", backchannel, err)
+		log.Trace().Msgf("[rtsp] describe (backchannel=%t) err: %v", conn.Backchannel, err)
 
 		// second try without backchannel, we need to reconnect
 		conn.Backchannel = false
