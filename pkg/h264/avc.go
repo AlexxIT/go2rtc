@@ -27,7 +27,7 @@ func AnnexB2AVC(b []byte) []byte {
 }
 
 func AVCtoAnnexB(b []byte) []byte {
-	b = bytes.Clone(b)
+	b = append([]byte{}, b...)
 	for i := 0; i < len(b); {
 		size := int(binary.BigEndian.Uint32(b[i:]))
 		b[i] = 0
