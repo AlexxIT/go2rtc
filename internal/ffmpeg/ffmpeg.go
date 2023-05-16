@@ -45,7 +45,7 @@ var defaults = map[string]string{
 	// inputs
 	"file": "-re -i {input}",
 	"http": "-fflags nobuffer -flags low_delay -i {input}",
-	"rtsp": "-fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_transport tcp -i {input}",
+	"rtsp": "-fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i {input}",
 
 	"rtsp/udp": "-fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -i {input}",
 
