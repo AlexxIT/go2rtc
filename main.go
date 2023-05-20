@@ -28,9 +28,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/tapo"
 	"github.com/AlexxIT/go2rtc/internal/webrtc"
 	"github.com/AlexxIT/go2rtc/internal/webtorrent"
-	"os"
-	"os/signal"
-	"syscall"
+	"github.com/AlexxIT/go2rtc/pkg/shell"
 )
 
 func main() {
@@ -66,9 +64,5 @@ func main() {
 	ngrok.Init()
 	debug.Init()
 
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-	<-sigs
-
-	println("exit OK")
+	shell.RunUntilSignal()
 }
