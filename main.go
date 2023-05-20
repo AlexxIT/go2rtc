@@ -17,6 +17,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/mjpeg"
 	"github.com/AlexxIT/go2rtc/internal/mp4"
 	"github.com/AlexxIT/go2rtc/internal/mpegts"
+	"github.com/AlexxIT/go2rtc/internal/nest"
 	"github.com/AlexxIT/go2rtc/internal/ngrok"
 	"github.com/AlexxIT/go2rtc/internal/onvif"
 	"github.com/AlexxIT/go2rtc/internal/roborock"
@@ -51,6 +52,7 @@ func main() {
 	isapi.Init()
 	mpegts.Init()
 	roborock.Init()
+	nest.Init()
 
 	srtp.Init()
 	homekit.Init()

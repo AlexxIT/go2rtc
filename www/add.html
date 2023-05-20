@@ -197,6 +197,35 @@
 </script>
 
 
+<button id="nest">Google Nest</button>
+<div class="module">
+    <form id="nest-form" style="margin-bottom: 10px">
+        <input type="text" name="client_id" placeholder="client_id">
+        <input type="text" name="client_secret" placeholder="client_secret">
+        <input type="text" name="refresh_token" placeholder="refresh_token">
+        <input type="text" name="project_id" placeholder="project_id">
+        <input type="submit" value="Login">
+    </form>
+    <table id="nest-table">
+    </table>
+</div>
+<script>
+    document.getElementById('nest').addEventListener('click', async ev => {
+        ev.target.nextElementSibling.style.display = 'block'
+    })
+
+    document.getElementById('nest-form').addEventListener('submit', async ev => {
+        ev.preventDefault()
+
+        const query = new URLSearchParams(new FormData(ev.target))
+        const url = new URL('api/nest?' + query.toString(), location.href)
+
+        const r = await fetch(url, {cache: 'no-cache'})
+        await getStreams(r, 'nest-table')
+    })
+</script>
+
+
 <button id="hass">Home Assistant</button>
 <div class="module">
     <table id="hass-table"></table>
