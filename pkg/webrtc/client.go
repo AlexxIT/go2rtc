@@ -24,6 +24,9 @@ func (c *Conn) CreateOffer(medias []*core.Media) (string, error) {
 		case core.DirectionSendRecv:
 			// default transceiver is sendrecv
 			_, err = c.pc.AddTransceiverFromTrack(NewTrack(media.Kind))
+		default:
+			// Nest cameras require data channel
+			_, err = c.pc.CreateDataChannel(media.Kind, nil)
 		}
 
 		if err != nil {

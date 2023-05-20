@@ -9,10 +9,12 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/roborock"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/hass"
 	"github.com/rs/zerolog"
 	"net/http"
 	"os"
 	"path"
+	"sync"
 )
 
 func Init() {
@@ -29,10 +31,15 @@ func Init() {
 
 	log = app.GetLogger("hass")
 
-	initAPI()
+	// support API for https://www.home-assistant.io/integrations/rtsp_to_webrtc/
+	api.HandleFunc("/static", apiOK)
+	api.HandleFunc("/streams", apiOK)
+	api.HandleFunc("/stream/", apiStream)
 
-	entries := importEntries(conf.Mod.Config)
-	if entries == nil {
+	// load static entries from Hass config
+	if err := importConfig(conf.Mod.Config); err != nil {
+		log.Debug().Msgf("[hass] can't import config: %s", err)
+
 		api.HandleFunc("api/hass", func(w http.ResponseWriter, _ *http.Request) {
 			http.Error(w, "no hass config", http.StatusNotFound)
 		})
@@ -40,18 +47,35 @@ func Init() {
 	}
 
 	api.HandleFunc("api/hass", func(w http.ResponseWriter, _ *http.Request) {
+		once.Do(func() {
+			// load WebRTC entities from Hass API, works only for add-on version
+			if token := hass.SupervisorToken(); token != "" {
+				if err := importWebRTC(token); err != nil {
+					log.Warn().Err(err).Caller().Send()
+				}
+			}
+		})
+
 		var items []api.Stream
-		for name, url := range entries {
+		for name, url := range entities {
 			items = append(items, api.Stream{Name: name, URL: url})
 		}
 		api.ResponseStreams(w, items)
 	})
 
 	streams.HandleFunc("hass", func(url string) (core.Producer, error) {
-		if hurl := entries[url[5:]]; hurl != "" {
-			return streams.GetProducer(hurl)
+		// check entity by name
+		if url2 := entities[url[5:]]; url2 != "" {
+			return streams.GetProducer(url2)
 		}
-		return nil, fmt.Errorf("can't get url: %s", url)
+
+		// support hass://supervisor?entity_id=camera.driveway_doorbell
+		client, err := hass.NewClient(url)
+		if err != nil {
+			return nil, err
+		}
+
+		return client, nil
 	})
 
 	// for Addon listen on hassio interface, so WebUI feature will work
@@ -68,12 +92,12 @@ func Init() {
 	}
 }
 
-func importEntries(config string) map[string]string {
+func importConfig(config string) error {
 	// support load cameras from Hass config file
 	filename := path.Join(config, ".storage/core.config_entries")
 	b, err := os.ReadFile(filename)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	var storage struct {
@@ -88,10 +112,8 @@ func importEntries(config string) map[string]string {
 	}
 
 	if err = json.Unmarshal(b, &storage); err != nil {
-		return nil
+		return err
 	}
-
-	urls := map[string]string{}
 
 	for _, entrie := range storage.Data.Entries {
 		switch entrie.Domain {
@@ -102,7 +124,7 @@ func importEntries(config string) map[string]string {
 			if err = json.Unmarshal(entrie.Options, &options); err != nil {
 				continue
 			}
-			urls[entrie.Title] = options.StreamSource
+			entities[entrie.Title] = options.StreamSource
 
 		case "homekit_controller":
 			if !bytes.Contains(entrie.Data, []byte("iOSPairingId")) {
@@ -121,7 +143,7 @@ func importEntries(config string) map[string]string {
 			if err = json.Unmarshal(entrie.Data, &data); err != nil {
 				continue
 			}
-			urls[entrie.Title] = fmt.Sprintf(
+			entities[entrie.Title] = fmt.Sprintf(
 				"homekit://%s:%d?client_id=%s&client_private=%s%s&device_id=%s&device_public=%s",
 				data.DeviceHost, data.DevicePort,
 				data.ClientID, data.ClientPrivate, data.ClientPublic,
@@ -143,22 +165,48 @@ func importEntries(config string) map[string]string {
 			}
 
 			if data.Username != "" && data.Password != "" {
-				urls[entrie.Title] = fmt.Sprintf(
+				entities[entrie.Title] = fmt.Sprintf(
 					"onvif://%s:%s@%s:%d", data.Username, data.Password, data.Host, data.Port,
 				)
 			} else {
-				urls[entrie.Title] = fmt.Sprintf("onvif://%s:%d", data.Host, data.Port)
+				entities[entrie.Title] = fmt.Sprintf("onvif://%s:%d", data.Host, data.Port)
 			}
 
 		default:
 			continue
 		}
 
-		log.Info().Str("url", "hass:"+entrie.Title).Msg("[hass] load stream")
+		log.Debug().Str("url", "hass:"+entrie.Title).Msg("[hass] load config")
 		//streams.Get("hass:" + entrie.Title)
 	}
 
-	return urls
+	return nil
 }
 
+func importWebRTC(token string) error {
+	hassAPI, err := hass.NewAPI("ws://supervisor/core/websocket", token)
+	if err != nil {
+		return err
+	}
+
+	webrtcEntities, err := hassAPI.GetWebRTCEntities()
+	if err != nil {
+		return err
+	}
+
+	if len(webrtcEntities) == 0 {
+		log.Debug().Msg("[hass] webrtc cameras not found")
+	}
+
+	for name, entityID := range webrtcEntities {
+		entities[name] = "hass://supervisor?entity_id=" + entityID
+
+		log.Debug().Msgf("[hass] load webrtc name=%s entity_id=%d", name, entityID)
+	}
+
+	return nil
+}
+
+var entities = map[string]string{}
 var log zerolog.Logger
+var once sync.Once
