@@ -45,10 +45,10 @@ var (
 )
 
 func main() {
-	app.Init() // init config and logs
 	shell.Init()
+	app.Init() // init config and logs
 	api.Init() // init HTTP API server
-	//pidfile := app.GetPidFilePath()
+
 	if shell.Daemonize {
 		cntxt := &daemon.Context{
 			PidFileName: shell.PidFilePath,
@@ -56,14 +56,11 @@ func main() {
 			LogFileName: app.GetLogFilepath(),
 			LogFilePerm: 0644,
 		}
-		if len(daemon.ActiveFlags()) > 0 {
-			d, err := cntxt.Search()
-			if err != nil {
-				log.Fatal().Err(err).Msgf("Unable send signal to the daemon: %s", err.Error())
-			}
-			daemon.SendCommands(d)
-			return
-		}
+
+		daemon.SetSigHandler(termHandler, syscall.SIGQUIT)
+		daemon.SetSigHandler(termHandler, syscall.SIGTERM)
+		daemon.SetSigHandler(termHandler, syscall.SIGSEGV)
+		daemon.SetSigHandler(reloadHandler, syscall.SIGHUP)
 
 		d, err := cntxt.Reborn()
 		if err != nil {
@@ -104,8 +101,8 @@ LOOP:
 }
 
 func mainLoop() {
-	if runtime.GOOS != "windows" {
-		if os.Getuid() == 0 && (os.Getuid() != int(shell.GetForkUserId())) {
+	if runtime.GOOS != "windows" && (os.Getuid() != int(shell.GetForkUserId())) { // user sets by CLI
+		if os.Getuid() == 0 {
 			// Drop privileges
 			err := syscall.Setgid(int(shell.GetForkGroupId()))
 			if err != nil {
