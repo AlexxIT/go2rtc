@@ -23,6 +23,7 @@ var ConfigPath string
 var Info = map[string]any{
 	"version": Version,
 }
+var daemonize bool
 
 func Init() {
 	var confs Config
@@ -30,6 +31,7 @@ func Init() {
 
 	flag.Var(&confs, "config", "go2rtc config (path to file or raw text), support multiple")
 	flag.BoolVar(&version, "version", false, "Print the version of the application and exit")
+	flag.BoolVar(&daemonize, "d", false, `Run in background`)
 	flag.Parse()
 
 	if version {
@@ -81,6 +83,10 @@ func Init() {
 	modules = cfg.Mod
 
 	log.Info().Msgf("go2rtc version %s %s/%s", Version, runtime.GOOS, runtime.GOARCH)
+}
+
+func IsDaemonize() bool {
+	return daemonize
 }
 
 func NewLogger(format string, level string) zerolog.Logger {

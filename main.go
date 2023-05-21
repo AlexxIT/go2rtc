@@ -1,6 +1,10 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
+	"syscall"
+
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/debug"
@@ -29,10 +33,77 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/webrtc"
 	"github.com/AlexxIT/go2rtc/internal/webtorrent"
 	"github.com/AlexxIT/go2rtc/pkg/shell"
+
+	"github.com/rs/zerolog/log"
+	daemon "github.com/sevlyar/go-daemon"
+)
+
+var (
+	stop = make(chan struct{})
+	done = make(chan struct{})
 )
 
 func main() {
-	app.Init()     // init config and logs
+	app.Init() // init config and logs
+	if app.IsDaemonize() {
+
+		cntxt := &daemon.Context{
+			PidFileName: filepath.Join(".", "go2rtc.pid"),
+			PidFilePerm: 0644,
+			LogFileName: filepath.Join(".", "go2rtc.log"),
+			LogFilePerm: 0640,
+			WorkDir:     "./",
+			Umask:       027,
+			//Args:        []string{"[go-daemon sample]"},
+		}
+		if len(daemon.ActiveFlags()) > 0 {
+			d, err := cntxt.Search()
+			if err != nil {
+				log.Fatal().Err(err).Msgf("Unable send signal to the daemon: %s", err.Error())
+			}
+			daemon.SendCommands(d)
+			return
+		}
+
+		d, err := cntxt.Reborn()
+		if err != nil {
+			log.Fatal().Err(err)
+		}
+		if d != nil {
+			return
+		}
+		defer cntxt.Release()
+
+		//log.Debug().Msg("- - - - - - - - - - - - - - -")
+		log.Info().Msg("daemon started")
+
+		go looper()
+
+		err = daemon.ServeSignals()
+		if err != nil {
+			log.Printf("Error: %s", err.Error())
+		}
+
+		log.Info().Msg("daemon terminated")
+	} else {
+		mainLoop()
+	}
+}
+
+func looper() {
+LOOP:
+	for {
+		mainLoop()
+		select {
+		case <-stop:
+			break LOOP
+		default:
+		}
+	}
+	done <- struct{}{}
+}
+
+func mainLoop() {
 	api.Init()     // init HTTP API server
 	streams.Init() // load streams list
 	onvif.Init()
@@ -65,4 +136,17 @@ func main() {
 	debug.Init()
 
 	shell.RunUntilSignal()
+}
+func termHandler(sig os.Signal) error {
+	log.Debug().Msg("terminating...")
+	stop <- struct{}{}
+	if sig == syscall.SIGQUIT {
+		<-done
+	}
+	return daemon.ErrStop
+}
+
+func reloadHandler(sig os.Signal) error {
+	log.Info().Msg("Not implemented yet :)")
+	return nil
 }
