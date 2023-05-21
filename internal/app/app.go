@@ -61,6 +61,8 @@ func Init() {
 		}
 		Info["config_path"] = ConfigPath
 	}
+	Info["pid"] = os.Getpid()
+	Info["uid"] = os.Getuid()
 
 	var cfg struct {
 		Mod map[string]string `yaml:"log"`
