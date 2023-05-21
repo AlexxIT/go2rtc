@@ -3,6 +3,7 @@ package mpegts
 import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
+	"github.com/AlexxIT/go2rtc/pkg/h265"
 	"github.com/pion/rtp"
 	"time"
 )
@@ -16,6 +17,7 @@ const (
 	StreamTypePrivate  = 0x06 // PCMU or PCMA or FLAC from FFmpeg
 	StreamTypeAAC      = 0x0F
 	StreamTypeH264     = 0x1B
+	StreamTypeH265     = 0x24
 	StreamTypePCMATapo = 0x90
 )
 
@@ -36,6 +38,8 @@ type PES struct {
 
 	Sequence  uint16
 	Timestamp uint32
+
+	decodeStream func([]byte) ([]byte, int)
 }
 
 const (
@@ -52,9 +56,14 @@ func (p *PES) SetBuffer(size uint16, b []byte) {
 		optSize := b[2] // optional fields
 		b = b[minHeaderSize+optSize:]
 
-		if p.StreamType == StreamTypeH264 {
+		switch p.StreamType {
+		case StreamTypeH264:
 			p.Mode = ModeStream
-		} else {
+			p.decodeStream = h264.DecodeStream
+		case StreamTypeH265:
+			p.Mode = ModeStream
+			p.decodeStream = h265.DecodeStream
+		default:
 			println("WARNING: mpegts: unknown zero-size stream")
 		}
 	} else {
@@ -91,7 +100,7 @@ func (p *PES) GetPacket() (pkt *rtp.Packet) {
 		payload := p.Payload[minHeaderSize+optSize:]
 
 		switch p.StreamType {
-		case StreamTypeH264:
+		case StreamTypeH264, StreamTypeH265:
 			var ts uint32
 
 			const hasPTS = 0b1000_0000
@@ -125,7 +134,7 @@ func (p *PES) GetPacket() (pkt *rtp.Packet) {
 		p.Payload = nil
 
 	case ModeStream:
-		payload, i := h264.DecodeStream(p.Payload)
+		payload, i := p.decodeStream(p.Payload)
 		if payload == nil {
 			return
 		}
@@ -137,7 +146,7 @@ func (p *PES) GetPacket() (pkt *rtp.Packet) {
 		pkt = &rtp.Packet{
 			Header: rtp.Header{
 				PayloadType: p.StreamType,
-				Timestamp:   uint32(time.Duration(time.Now().UnixNano()) * 90000 / time.Second),
+				Timestamp:   core.Now90000(),
 			},
 			Payload: payload,
 		}

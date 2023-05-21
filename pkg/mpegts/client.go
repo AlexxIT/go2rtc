@@ -23,7 +23,7 @@ func NewClient(res *http.Response) *Client {
 func (c *Client) Handle() error {
 	reader := NewReader()
 
-	b := make([]byte, 1024*1024*256) // 256K
+	b := make([]byte, 1024*256) // 256K
 
 	probe := core.NewProbe(c.medias == nil)
 	for probe == nil || probe.Active() {

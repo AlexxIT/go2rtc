@@ -2,6 +2,7 @@ package webrtc
 
 import (
 	"encoding/json"
+	"errors"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
@@ -31,7 +32,11 @@ func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiv
 		panic(core.Caller())
 	}
 
-	localTrack := c.getTranseiver(media.ID).Sender().Track().(*Track)
+	localTrack := c.getSenderTrack(media.ID)
+	if localTrack == nil {
+		return errors.New("webrtc: can't get track")
+	}
+
 	payloadType := codec.PayloadType
 
 	sender := core.NewSender(media, codec)

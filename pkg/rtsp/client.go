@@ -2,10 +2,9 @@ package rtsp
 
 import (
 	"bufio"
-	"crypto/tls"
 	"errors"
 	"fmt"
-	"net"
+	"github.com/AlexxIT/go2rtc/pkg/tcp/websocket"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -23,33 +22,18 @@ func NewClient(uri string) *Conn {
 }
 
 func (c *Conn) Dial() (err error) {
-	if c.URL, err = url.Parse(c.uri); err != nil {
-		return
+	if c.Transport == "" {
+		c.conn, err = Dial(c.uri)
+	} else {
+		c.conn, err = websocket.Dial(c.Transport)
 	}
 
-	if strings.IndexByte(c.URL.Host, ':') < 0 {
-		c.URL.Host += ":554"
-	}
-
-	c.conn, err = net.DialTimeout("tcp", c.URL.Host, time.Second*5)
 	if err != nil {
 		return
 	}
 
-	var tlsConf *tls.Config
-	switch c.URL.Scheme {
-	case "rtsps":
-		tlsConf = &tls.Config{ServerName: c.URL.Hostname()}
-	case "rtspx":
-		c.URL.Scheme = "rtsps"
-		tlsConf = &tls.Config{InsecureSkipVerify: true}
-	}
-	if tlsConf != nil {
-		tlsConn := tls.Client(c.conn, tlsConf)
-		if err = tlsConn.Handshake(); err != nil {
-			return err
-		}
-		c.conn = tlsConn
+	if c.URL, err = url.Parse(c.uri); err != nil {
+		return
 	}
 
 	// remove UserInfo from URL

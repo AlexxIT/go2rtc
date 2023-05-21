@@ -6,6 +6,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
 	"github.com/AlexxIT/go2rtc/pkg/mjpeg"
+	"github.com/AlexxIT/go2rtc/pkg/pcm"
 	"github.com/pion/rtp"
 	"time"
 )
@@ -60,6 +61,12 @@ func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiv
 	sender := core.NewSender(media, codec)
 	// important to send original codec for valid IsRTP check
 	sender.Handler = c.packetWriter(track.Codec, channel, codec.PayloadType)
+
+	// https://github.com/AlexxIT/go2rtc/issues/331
+	if c.mode == core.ModeActiveProducer && track.Codec.Name == core.CodecPCMA {
+		sender.Handler = pcm.RepackBackchannel(sender.Handler)
+	}
+
 	sender.HandleRTP(track)
 
 	c.senders = append(c.senders, sender)

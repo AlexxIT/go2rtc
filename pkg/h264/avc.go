@@ -26,6 +26,19 @@ func AnnexB2AVC(b []byte) []byte {
 	return b
 }
 
+func AVCtoAnnexB(b []byte) []byte {
+	b = bytes.Clone(b)
+	for i := 0; i < len(b); {
+		size := int(binary.BigEndian.Uint32(b[i:]))
+		b[i] = 0
+		b[i+1] = 0
+		b[i+2] = 0
+		b[i+3] = 1
+		i += 4 + size
+	}
+	return b
+}
+
 const forbiddenZeroBit = 0x80
 const nalUnitType = 0x1F
 
