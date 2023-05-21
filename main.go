@@ -102,20 +102,7 @@ LOOP:
 
 func mainLoop() {
 	if runtime.GOOS != "windows" && (os.Getuid() != int(shell.GetForkUserId())) { // user sets by CLI
-		if os.Getuid() == 0 {
-			// Drop privileges
-			err := syscall.Setgid(int(shell.GetForkGroupId()))
-			if err != nil {
-				log.Fatal().Err(err).Msgf("Failed to setgid: %v", err)
-			}
-			err = syscall.Setuid(int(shell.GetForkUserId()))
-			if err != nil {
-				log.Fatal().Err(err).Msgf("Failed to setuid: %v", err)
-			}
-		} else {
-			log.Fatal().Msgf("You must run go2rtc as root in order to use the 'user' flag")
-			os.Exit(1)
-		}
+		shell.CheckRootAndDropPrivileges()
 	}
 
 	streams.Init() // load streams list
