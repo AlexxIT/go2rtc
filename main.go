@@ -44,8 +44,9 @@ var (
 )
 
 func main() {
-	shell.Init()
 	app.Init() // init config and logs
+	shell.Init()
+	api.Init() // init HTTP API server
 	//pidfile := app.GetPidFilePath()
 	if shell.Daemonize {
 		cntxt := &daemon.Context{
@@ -53,15 +54,6 @@ func main() {
 			PidFilePerm: 0644,
 			LogFileName: app.GetLogFilepath(),
 			LogFilePerm: 0644,
-			//WorkDir: "./",
-			//Umask:   027,
-			//Args:        []string{"[go-daemon sample]"},
-			Credential: &daemon.Credential{
-				Uid:         shell.GetForkUserId(),
-				Gid:         shell.GetForkGroupId(),
-				Groups:      nil,
-				NoSetGroups: true,
-			},
 		}
 		if len(daemon.ActiveFlags()) > 0 {
 			d, err := cntxt.Search()
@@ -111,7 +103,18 @@ LOOP:
 }
 
 func mainLoop() {
-	api.Init()     // init HTTP API server
+	if shell.Daemonize && (os.Getuid() != int(shell.GetForkUserId())) {
+		// Drop privileges
+		err := syscall.Setgid(int(shell.GetForkGroupId()))
+		if err != nil {
+			log.Fatal().Err(err).Msgf("Failed to setgid: %v", err)
+		}
+		err = syscall.Setuid(int(shell.GetForkUserId()))
+		if err != nil {
+			log.Fatal().Err(err).Msgf("Failed to setuid: %v", err)
+		}
+	}
+
 	streams.Init() // load streams list
 	onvif.Init()
 

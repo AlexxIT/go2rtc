@@ -23,14 +23,14 @@ var ForkUser user.User
 
 func Init() {
 	currentOS := runtime.GOOS
-	username := ""
+	var username string
 
 	flag.Var(&Confs, "config", "go2rtc config (path to file or raw text), support multiple")
 	flag.BoolVar(&Version, "version", false, "Print the version of the application and exit")
 	if currentOS != "windows" {
 		flag.BoolVar(&Daemonize, "d", false, `Run in background`)
 		flag.StringVar(&PidFilePath, "pid", filepath.Join(".", "go2rtc.pid"), "PID file path")
-		username = *flag.String("user", "", "Username to run")
+		flag.StringVar(&username, "user", "", "Username to run")
 	} else {
 		Daemonize = false
 	}
