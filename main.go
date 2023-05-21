@@ -2,7 +2,7 @@ package main
 
 import (
 	"os"
-	"path/filepath"
+
 	"syscall"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
@@ -45,16 +45,23 @@ var (
 
 func main() {
 	app.Init() // init config and logs
+	//pidfile := app.GetPidFilePath()
 	if app.IsDaemonize() {
 
 		cntxt := &daemon.Context{
-			PidFileName: filepath.Join(".", "go2rtc.pid"),
+			PidFileName: app.GetPidFilePath(),
 			PidFilePerm: 0644,
-			LogFileName: filepath.Join(".", "go2rtc.log"),
-			LogFilePerm: 0640,
-			WorkDir:     "./",
-			Umask:       027,
+			LogFileName: app.GetLogFilepath(),
+			LogFilePerm: 0644,
+			//WorkDir: "./",
+			//Umask:   027,
 			//Args:        []string{"[go-daemon sample]"},
+			Credential: &syscall.Credential{
+				Uid:         app.GetForkUserId(),
+				Gid:         app.GetForkGroupId(),
+				Groups:      nil,
+				NoSetGroups: true,
+			},
 		}
 		if len(daemon.ActiveFlags()) > 0 {
 			d, err := cntxt.Search()
@@ -70,12 +77,12 @@ func main() {
 			log.Fatal().Err(err)
 		}
 		if d != nil {
+			log.Info().Msgf("daemon started with pid %d", d.Pid)
 			return
 		}
 		defer cntxt.Release()
 
 		//log.Debug().Msg("- - - - - - - - - - - - - - -")
-		log.Info().Msg("daemon started")
 
 		go looper()
 
