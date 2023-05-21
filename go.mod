@@ -48,7 +48,7 @@ require (
 	golang.org/x/crypto v0.7.0 // indirect
 	golang.org/x/mod v0.9.0 // indirect
 	golang.org/x/net v0.8.0 // indirect
-	golang.org/x/sys v0.6.0 // indirect
+	golang.org/x/sys v0.8.0 // indirect
 	golang.org/x/text v0.8.0 // indirect
 	golang.org/x/tools v0.7.0 // indirect
 )
@@ -60,4 +60,7 @@ replace (
 	github.com/brutella/hap v0.0.17 => github.com/AlexxIT/hap v0.0.15-0.20221108133010-d8a45b7a7045
 	// fix reading AAC config bytes
 	github.com/deepch/vdk v0.0.19 => github.com/AlexxIT/vdk v0.0.18-0.20221108193131-6168555b4f92
+
+	// cross-building support: https://github.com/sevlyar/go-daemon/pull/92
+	github.com/sevlyar/go-daemon v0.1.6 => github.com/skrashevich/go-daemon v0.0.0-20230521122644-3d1a76e24787
 )
