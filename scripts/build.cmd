@@ -37,6 +37,12 @@ go build -ldflags "-s -w" -trimpath -o %FILENAME% && upx %FILENAME%
 go build -ldflags "-s -w" -trimpath -o %FILENAME% && upx %FILENAME%
 
 @SET GOOS=linux
+@SET GOARCH=arm
+@SET GOARM=6
+@SET FILENAME=go2rtc_linux_armv6
+go build -ldflags "-s -w" -trimpath -o %FILENAME% && upx %FILENAME%
+
+@SET GOOS=linux
 @SET GOARCH=mipsle
 @SET FILENAME=go2rtc_linux_mipsel
 go build -ldflags "-s -w" -trimpath -o %FILENAME% && upx %FILENAME%
