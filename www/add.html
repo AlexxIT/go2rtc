@@ -60,6 +60,7 @@
 <script>
     async function getStreams(url, tableID) {
         const table = document.getElementById(tableID)
+        table.innerText = 'loading...'
 
         const r = typeof url === 'string' ? await fetch(url, {cache: 'no-cache'}) : url
         if (!r.ok) {
@@ -170,6 +171,61 @@
 </script>
 
 
+<button id="devices">FFmpeg Devices (USB)</button>
+<div class="module">
+    <table id="devices-table">
+    </table>
+</div>
+<script>
+    document.getElementById('devices').addEventListener('click', async ev => {
+        ev.target.nextElementSibling.style.display = 'block'
+        await getStreams('api/ffmpeg/devices', 'devices-table')
+    })
+</script>
+
+
+<button id="hardware">FFmpeg Hardware</button>
+<div class="module">
+    <table id="hardware-table">
+    </table>
+</div>
+<script>
+    document.getElementById('hardware').addEventListener('click', async ev => {
+        ev.target.nextElementSibling.style.display = 'block'
+        await getStreams('api/ffmpeg/hardware', 'hardware-table')
+    })
+</script>
+
+
+<button id="nest">Google Nest</button>
+<div class="module">
+    <form id="nest-form" style="margin-bottom: 10px">
+        <input type="text" name="client_id" placeholder="client_id">
+        <input type="text" name="client_secret" placeholder="client_secret">
+        <input type="text" name="refresh_token" placeholder="refresh_token">
+        <input type="text" name="project_id" placeholder="project_id">
+        <input type="submit" value="Login">
+    </form>
+    <table id="nest-table">
+    </table>
+</div>
+<script>
+    document.getElementById('nest').addEventListener('click', async ev => {
+        ev.target.nextElementSibling.style.display = 'block'
+    })
+
+    document.getElementById('nest-form').addEventListener('submit', async ev => {
+        ev.preventDefault()
+
+        const query = new URLSearchParams(new FormData(ev.target))
+        const url = new URL('api/nest?' + query.toString(), location.href)
+
+        const r = await fetch(url, {cache: 'no-cache'})
+        await getStreams(r, 'nest-table')
+    })
+</script>
+
+
 <button id="hass">Home Assistant</button>
 <div class="module">
     <table id="hass-table"></table>
@@ -178,6 +234,31 @@
     document.getElementById('hass').addEventListener('click', async ev => {
         ev.target.nextElementSibling.style.display = 'block'
         await getStreams('api/hass', 'hass-table')
+    })
+</script>
+
+
+<button id="onvif">ONVIF</button>
+<div class="module">
+    <form id="onvif-form" style="padding: 10px">
+        <input type="text" name="src" placeholder="onvif://user:pass@192.168.1.123:80" size="50">
+        <input type="submit" value="test">
+    </form>
+    <table id="onvif-table"></table>
+</div>
+<script>
+    document.getElementById('onvif').addEventListener('click', async ev => {
+        ev.target.nextElementSibling.style.display = 'block'
+        await getStreams('api/onvif', 'onvif-table')
+    })
+
+    document.getElementById('onvif-form').addEventListener('submit', async ev => {
+        ev.preventDefault()
+
+        const url = new URL('api/onvif', location.href)
+        url.searchParams.set('src', ev.target.elements['src'].value)
+
+        await getStreams(url.toString(), 'onvif-table')
     })
 </script>
 
@@ -202,19 +283,6 @@
         ev.preventDefault()
         const r = await fetch('api/roborock', {method: 'POST', body: new FormData(ev.target)})
         await getStreams(r, 'roborock-table')
-    })
-</script>
-
-
-<button id="devices">USB Devices</button>
-<div class="module">
-    <table id="devices-table">
-    </table>
-</div>
-<script>
-    document.getElementById('devices').addEventListener('click', async ev => {
-        ev.target.nextElementSibling.style.display = 'block'
-        await getStreams('api/devices', 'devices-table')
     })
 </script>
 

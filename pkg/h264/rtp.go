@@ -94,6 +94,10 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 }
 
 func RTPPay(mtu uint16, handler core.HandlerFunc) core.HandlerFunc {
+	if mtu == 0 {
+		mtu = 1472
+	}
+
 	payloader := &Payloader{IsAVC: true}
 	sequencer := rtp.NewRandomSequencer()
 	mtu -= 12 // rtp.Header size

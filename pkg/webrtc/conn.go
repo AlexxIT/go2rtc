@@ -148,6 +148,17 @@ func (c *Conn) getTranseiver(mid string) *webrtc.RTPTransceiver {
 	return nil
 }
 
+func (c *Conn) getSenderTrack(mid string) *Track {
+	if tr := c.getTranseiver(mid); tr != nil {
+		if s := tr.Sender(); s != nil {
+			if t := s.Track().(*Track); t != nil {
+				return t
+			}
+		}
+	}
+	return nil
+}
+
 func (c *Conn) getMediaCodec(remote *webrtc.TrackRemote) (*core.Media, *core.Codec) {
 	for _, tr := range c.pc.GetTransceivers() {
 		// search Transeiver for this TrackRemote

@@ -2,6 +2,7 @@ package iso
 
 import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/pcm"
 )
 
 func (m *Movie) WriteVideo(codec string, width, height uint16, conf []byte) {
@@ -46,9 +47,11 @@ func (m *Movie) WriteVideo(codec string, width, height uint16, conf []byte) {
 func (m *Movie) WriteAudio(codec string, channels uint16, sampleRate uint32, conf []byte) {
 	switch codec {
 	case core.CodecAAC, core.CodecMP3:
-		m.StartAtom("mp4a")
+		m.StartAtom("mp4a") // supported in all players and browsers
+	case core.CodecFLAC:
+		m.StartAtom("fLaC") // supported in all players and browsers
 	case core.CodecOpus:
-		m.StartAtom("Opus")
+		m.StartAtom("Opus") // supported in Chrome and Firefox
 	case core.CodecPCMU:
 		m.StartAtom("ulaw")
 	case core.CodecPCMA:
@@ -56,6 +59,11 @@ func (m *Movie) WriteAudio(codec string, channels uint16, sampleRate uint32, con
 	default:
 		panic("unsupported iso audio: " + codec)
 	}
+
+	if channels == 0 {
+		channels = 1
+	}
+
 	m.Skip(6)
 	m.WriteUint16(1)                    // data_reference_index
 	m.Skip(2)                           // version
@@ -72,6 +80,10 @@ func (m *Movie) WriteAudio(codec string, channels uint16, sampleRate uint32, con
 		m.WriteEsdsAAC(conf)
 	case core.CodecMP3:
 		m.WriteEsdsMP3()
+	case core.CodecFLAC:
+		m.StartAtom("dfLa")
+		m.Write(pcm.FLACHeader(false, sampleRate))
+		m.EndAtom()
 	case core.CodecOpus:
 		// don't know what means this magic
 		m.StartAtom("dOps")
@@ -106,6 +118,7 @@ func (m *Movie) WriteEsdsAAC(conf []byte) {
 	m.Skip(2) // es id
 	m.Skip(1) // es flags
 
+	// https://learn.microsoft.com/en-us/windows/win32/medfound/mpeg-4-file-sink#aac-audio
 	m.WriteBytes(4, 0x80, 0x80, 0x80, size4+header+size5)
 	m.WriteBytes(0x40) // object id
 	m.WriteBytes(0x15) // stream type
@@ -139,6 +152,7 @@ func (m *Movie) WriteEsdsMP3() {
 	m.Skip(2) // es id
 	m.Skip(1) // es flags
 
+	// https://learn.microsoft.com/en-us/windows/win32/medfound/mpeg-4-file-sink#mp3-audio
 	m.WriteBytes(4, 0x80, 0x80, 0x80, size4)
 	m.WriteBytes(0x6B) // object id
 	m.WriteBytes(0x15) // stream type

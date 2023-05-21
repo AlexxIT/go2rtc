@@ -1,5 +1,9 @@
 # go2rtc
 
+[![](https://img.shields.io/github/stars/AlexxIT/go2rtc?style=flat-square&logo=github)](https://github.com/AlexxIT/go2rtc/stargazers) 
+[![](https://img.shields.io/docker/pulls/alexxit/go2rtc?style=flat-square&logo=docker&logoColor=white&label=pulls)](https://hub.docker.com/r/alexxit/go2rtc) 
+[![](https://img.shields.io/github/downloads/AlexxIT/go2rtc/total?color=blue&style=flat-square&logo=github)](https://github.com/AlexxIT/go2rtc/releases)
+
 Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg, RTMP, etc.
 
 ![](assets/go2rtc.png)
@@ -42,6 +46,7 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
     * [Source: RTSP](#source-rtsp)
     * [Source: RTMP](#source-rtmp)
     * [Source: HTTP](#source-http)
+    * [Source: ONVIF](#source-onvif)
     * [Source: FFmpeg](#source-ffmpeg)
     * [Source: FFmpeg Device](#source-ffmpeg-device)
     * [Source: Exec](#source-exec)
@@ -97,10 +102,12 @@ Download binary for your OS from [latest release](https://github.com/AlexxIT/go2
 
 - `go2rtc_win64.zip` - Windows 64-bit
 - `go2rtc_win32.zip` - Windows 32-bit
+- `go2rtc_win_arm64.zip` - Windows ARM 64-bit
 - `go2rtc_linux_amd64` - Linux 64-bit
 - `go2rtc_linux_i386` - Linux 32-bit
 - `go2rtc_linux_arm64` - Linux ARM 64-bit (ex. Raspberry 64-bit OS)
 - `go2rtc_linux_arm` - Linux ARM 32-bit (ex. Raspberry 32-bit OS)
+- `go2rtc_linux_armv6` - Linux ARMv6 (for old Raspberry 1 and Zero)
 - `go2rtc_linux_mipsel` - Linux MIPS (ex. [Xiaomi Gateway 3](https://github.com/AlexxIT/XiaomiGateway3))
 - `go2rtc_mac_amd64.zip` - Mac Intel 64-bit
 - `go2rtc_mac_arm64.zip` - Mac ARM 64-bit
@@ -156,10 +163,11 @@ Available source types:
 
 - [rtsp](#source-rtsp) - `RTSP` and `RTSPS` cameras with [two way audio](#two-way-audio) support
 - [rtmp](#source-rtmp) - `RTMP` streams
-- [http](#source-http) - `HTTP-FLV`, `MPEG-TS`, `JPEG` (snapshots), `MJPEG` streams 
+- [http](#source-http) - `HTTP-FLV`, `MPEG-TS`, `JPEG` (snapshots), `MJPEG` streams
+- [onvif](#source-onvif) - get camera `RTSP` link and snapshot link using `ONVIF` protocol
 - [ffmpeg](#source-ffmpeg) - FFmpeg integration (`HLS`, `files` and many others)
 - [ffmpeg:device](#source-ffmpeg-device) - local USB Camera or Webcam
-- [exec](#source-exec) - advanced FFmpeg and GStreamer integration
+- [exec](#source-exec) - get media from external app output
 - [echo](#source-echo) - get stream link from bash or python
 - [homekit](#source-homekit) - streaming from HomeKit Camera
 - [dvrip](#source-dvrip) - streaming from DVR-IP NVR
@@ -229,6 +237,8 @@ Support Content-Type:
 - **HTTP-MJPEG** (`multipart/x`) - simple MJPEG stream over HTTP
 - **MPEG-TS** (`video/mpeg`) - legacy [streaming format](https://en.wikipedia.org/wiki/MPEG_transport_stream)
 
+Source also support HTTP and TCP streams with autodetection for different formats: **MJPEG**, **H.264/H.265 bitstream**, **MPEG-TS**.
+
 ```yaml
 streams:
   # [HTTP-FLV] stream in video/x-flv format
@@ -239,9 +249,25 @@ streams:
 
   # [MJPEG] stream will be proxied without modification
   http_mjpeg: https://mjpeg.sanford.io/count.mjpeg
+
+  # [MJPEG or H.264/H.265 bitstream or MPEG-TS]
+  tcp_magic: tcp://192.168.1.123:12345
 ```
 
 **PS.** Dahua camera has bug: if you select MJPEG codec for RTSP second stream - snapshot won't work.
+
+#### Source: ONVIF
+
+The source is not very useful if you already know RTSP and snapshot links for your camera. But it can be useful if you don't.
+
+**WebUI > Add** webpage support ONVIF autodiscovery. Your server must be on the same subnet as the camera. If you use docker, you must use "network host".
+
+```yaml
+streams:
+  dahua1: onvif://admin:password@192.168.1.123
+  reolink1: onvif://admin:password@192.168.1.123:8000
+  tapo1: onvif://admin:password@192.168.1.123:2020
+```
 
 #### Source: FFmpeg
 
@@ -273,7 +299,7 @@ streams:
   rotate: ffmpeg:rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0#video=h264#rotate=90
 ```
 
-All trascoding formats has [built-in templates](https://github.com/AlexxIT/go2rtc/blob/master/cmd/ffmpeg/ffmpeg.go): `h264`, `h265`, `opus`, `pcmu`, `pcmu/16000`, `pcmu/48000`, `pcma`, `pcma/16000`, `pcma/48000`, `aac`, `aac/16000`.
+All trascoding formats has [built-in templates](https://github.com/AlexxIT/go2rtc/blob/master/internal/ffmpeg/ffmpeg.go): `h264`, `h265`, `opus`, `pcmu`, `pcmu/16000`, `pcmu/48000`, `pcma`, `pcma/16000`, `pcma/48000`, `aac`, `aac/16000`.
 
 But you can override them via YAML config. You can also add your own formats to config and use them with source params.
 
@@ -301,25 +327,40 @@ Read more about encoding [hardware acceleration](https://github.com/AlexxIT/go2r
 You can get video from any USB-camera or Webcam as RTSP or WebRTC stream. This is part of FFmpeg integration.
 
 - check available devices in Web interface
-- `resolution` and `framerate` must be supported by your camera!
+- `video_size` and `framerate` must be supported by your camera!
 - for Linux supported only video for now
 - for macOS you can stream Facetime camera or whole Desktop!
 - for macOS important to set right framerate
 
+Format: `ffmpeg:device?{input-params}#{param1}#{param2}#{param3}`
+
 ```yaml
 streams:
-  linux_usbcam:   ffmpeg:device?video=0&resolution=1280x720#video=h264
+  linux_usbcam:   ffmpeg:device?video=0&video_size=1280x720#video=h264
   windows_webcam: ffmpeg:device?video=0#video=h264
-  macos_facetime: ffmpeg:device?video=0&audio=1&resolution=1280x720&framerate=30#video=h264#audio=pcma
+  macos_facetime: ffmpeg:device?video=0&audio=1&video_size=1280x720&framerate=30#video=h264#audio=pcma
 ```
 
 #### Source: Exec
 
-FFmpeg source just a shortcut to exec source. You can get any stream or file or device via FFmpeg or GStreamer and push it to go2rtc via RTSP protocol: 
+Exec source can run any external application and expect data from it. Two transports are supported - **pipe** and **RTSP**.
+
+If you want to use **RTSP** transport - the command must contain the `{output}` argument in any place. On launch, it will be replaced by the local address of the RTSP server.
+
+**pipe** reads data from app stdout in different formats: **MJPEG**, **H.264/H.265 bitstream**, **MPEG-TS**.
+
+The source can be used with:
+
+- [FFmpeg](https://ffmpeg.org/) - go2rtc ffmpeg source just a shortcut to exec source
+- [GStreamer](https://gstreamer.freedesktop.org/)
+- [Raspberry Pi Cameras](https://www.raspberrypi.com/documentation/computers/camera_software.html)
+- any your own software
 
 ```yaml
 streams:
-  stream1: exec:ffmpeg -hide_banner -re -stream_loop -1 -i /media/BigBuckBunny.mp4 -c copy -rtsp_transport tcp -f rtsp {output}
+  stream: exec:ffmpeg -re -i /media/BigBuckBunny.mp4 -c copy -rtsp_transport tcp -f rtsp {output}
+  picam_h264: exec:libcamera-vid -t 0 --inline -o -
+  picam_mjpeg: exec:libcamera-vid -t 0 --codec mjpeg -o -
 ```
 
 #### Source: Echo
@@ -412,8 +453,10 @@ streams:
 
 Support import camera links from [Home Assistant](https://www.home-assistant.io/) config files:
 
-- support [Generic Camera](https://www.home-assistant.io/integrations/generic/), setup via GUI
-- support [HomeKit Camera](https://www.home-assistant.io/integrations/homekit_controller/)
+- [Generic Camera](https://www.home-assistant.io/integrations/generic/), setup via GUI
+- [HomeKit Camera](https://www.home-assistant.io/integrations/homekit_controller/)
+- [ONVIF](https://www.home-assistant.io/integrations/onvif/)
+- [Roborock](https://github.com/humbertogontijo/homeassistant-roborock) vacuums with camera
 
 ```yaml
 hass:
@@ -424,7 +467,7 @@ streams:
   aqara_g3: hass:Camera-Hub-G3-AB12
 ```
 
-More cameras, like [Tuya](https://www.home-assistant.io/integrations/tuya/), [ONVIF](https://www.home-assistant.io/integrations/onvif/), and possibly others can also be imported by using [this method](https://github.com/felipecrs/hass-expose-camera-stream-source#importing-home-assistant-cameras-to-go2rtc-andor-frigate).
+More cameras, like [Tuya](https://www.home-assistant.io/integrations/tuya/), and possibly others can also be imported by using [this method](https://github.com/felipecrs/hass-expose-camera-stream-source#importing-home-assistant-cameras-to-go2rtc-andor-frigate).
 
 #### Source: ISAPI
 
@@ -778,6 +821,7 @@ You have several options on how to add a camera to Home Assistant:
 2. Camera [any source](#module-streams) => [go2rtc config](#configuration) => [Generic Camera](https://www.home-assistant.io/integrations/generic/)
    - Install any [go2rtc](#fast-start)
    - Add your stream to [go2rtc config](#configuration)
+   - Hass > Settings > Integrations > Add Integration > [ONVIF](https://my.home-assistant.io/redirect/config_flow_start/?domain=onvif) > Host: `127.0.0.1`, Port: `1984`
    - Hass > Settings > Integrations > Add Integration > [Generic Camera](https://my.home-assistant.io/redirect/config_flow_start/?domain=generic) > `rtsp://127.0.0.1:8554/camera1` (change to your stream name)
 
 You have several options on how to watch the stream from the cameras in Home Assistant:
@@ -811,8 +855,8 @@ Provides several features:
 
 API examples:
 
-- MP4 stream: `http://192.168.1.123:1984/api/stream.mp4?src=camera1`
-- MP4 snapshot: `http://192.168.1.123:1984/api/frame.mp4?src=camera1`
+- MP4 snapshot: `http://192.168.1.123:1984/api/frame.mp4?src=camera1` (H264, H265)
+- MP4 stream: `http://192.168.1.123:1984/api/stream.mp4?src=camera1` (H264, H265, AAC)
 
 Read more about [codecs filters](#codecs-filters).
 
@@ -903,7 +947,7 @@ But it cannot be done for [RTSP](#module-rtsp), [HTTP progressive streaming](#mo
 
 Without filters:
 
-- RTSP will provide only the first video and only the first audio
+- RTSP will provide only the first video and only the first audio (any codec)
 - MP4 will include only compatible codecs (H264, H265, AAC)
 - HLS will output in the legacy TS format (H264 without audio)
 
@@ -914,23 +958,25 @@ Some examples:
 - `rtsp://192.168.1.123:8554/camera1?video=h264&audio=aac&audio=opus` - H264 video codec and two separate audio tracks
 - `rtsp://192.168.1.123:8554/camera1?video&audio=all` - any video codec and all audio codecs as separate tracks
 - `http://192.168.1.123:1984/api/stream.m3u8?src=camera1&mp4` - HLS stream with MP4 compatible codecs (HLS/fMP4)
-- `http://192.168.1.123:1984/api/stream.mp4?src=camera1&video=h264,h265&audio=aac,opus,mp3,pcma,pcmu` - MP4 file with non standard audio codecs, does not work in some players
+- `http://192.168.1.123:1984/api/stream.m3u8?src=camera1&mp4=flac` - HLS stream with PCMA/PCMU/PCM audio support (HLS/fMP4), won't work on old devices
+- `http://192.168.1.123:1984/api/stream.mp4?src=camera1&mp4=flac` - MP4 file with PCMA/PCMU/PCM audio support, won't work on old devices (ex. iOS 12)
+- `http://192.168.1.123:1984/api/stream.mp4?src=camera1&mp4=all` - MP4 file with non standard audio codecs, won't work on some players
 
 ## Codecs madness
 
 `AVC/H.264` video can be played almost anywhere. But `HEVC/H.265` has a lot of limitations in supporting with different devices and browsers. It's all about patents and money, you can't do anything about it.
 
-| Device              | WebRTC                        | MSE                    | HTTP Progressive Streaming              |
-|---------------------|-------------------------------|------------------------|-----------------------------------------|
-| *latency*           | best                          | medium                 | bad                                     |
-| Desktop Chrome 107+ | H264, OPUS, PCMU, PCMA        | H264, H265*, AAC, OPUS | H264, H265*, AAC, OPUS, PCMU, PCMA, MP3 |
-| Desktop Edge        | H264, OPUS, PCMU, PCMA        | H264, H265*, AAC, OPUS | H264, H265*, AAC, OPUS, PCMU, PCMA, MP3 |
-| Desktop Safari      | H264, H265*, OPUS, PCMU, PCMA | H264, H265, AAC        | **no!**                                 |
-| Desktop Firefox     | H264, OPUS, PCMU, PCMA        | H264, AAC, OPUS        | H264, AAC, OPUS                         |
-| Android Chrome 107+ | H264, OPUS, PCMU, PCMA        | H264, H265*, AAC, OPUS | H264, ?, AAC, OPUS, PCMU, PCMA, MP3     |
-| iPad Safari 13+     | H264, H265*, OPUS, PCMU, PCMA | H264, H265, AAC        | **no!**                                 |
-| iPhone Safari 13+   | H264, H265*, OPUS, PCMU, PCMA | **no!**                | **no!**                                 |
-| masOS Hass App      | no                            | no                     | no                                      |
+| Device              | WebRTC                        | MSE                           | HTTP Progressive Streaming         |
+|---------------------|-------------------------------|-------------------------------|------------------------------------|
+| *latency*           | best                          | medium                        | bad                                |
+| Desktop Chrome 107+ | H264, OPUS, PCMU, PCMA        | H264, H265*, AAC, FLAC*, OPUS | H264, H265*, AAC, FLAC*, OPUS, MP3 |
+| Desktop Edge        | H264, OPUS, PCMU, PCMA        | H264, H265*, AAC, FLAC*, OPUS | H264, H265*, AAC, FLAC*, OPUS, MP3 |
+| Android Chrome 107+ | H264, OPUS, PCMU, PCMA        | H264, H265*, AAC, FLAC*, OPUS | H264, H265*, AAC, FLAC*, OPUS, MP3 |
+| Desktop Firefox     | H264, OPUS, PCMU, PCMA        | H264, AAC, FLAC*, OPUS        | H264, AAC, FLAC*, OPUS             |
+| Desktop Safari      | H264, H265*, OPUS, PCMU, PCMA | H264, H265, AAC, FLAC*        | **no!**                            |
+| iPad Safari 13+     | H264, H265*, OPUS, PCMU, PCMA | H264, H265, AAC, FLAC*        | **no!**                            |
+| iPhone Safari 13+   | H264, H265*, OPUS, PCMU, PCMA | **no!**                       | **no!**                            |
+| masOS Hass App      | no                            | no                            | no                                 |
 
 - Chrome H265: [read this](https://chromestatus.com/feature/5186511939567616) and [read this](https://github.com/StaZhu/enable-chromium-hevc-hardware-decoding)
 - Edge H265: [read this](https://www.reddit.com/r/MicrosoftEdge/comments/v9iw8k/enable_hevc_support_in_edge/)
@@ -939,15 +985,54 @@ Some examples:
 
 **Audio**
 
+- Go2rtc support [automatic repack](#built-in-transcoding) `PCMA/PCMU/PCM` codecs to `FLAC` for MSE/MP4/HLS so they will work almost anywhere
 - **WebRTC** audio codecs: `PCMU/8000`, `PCMA/8000`, `OPUS/48000/2`
 - `OPUS` and `MP3` inside **MP4** is part of the standard, but some players do not support them anyway (especially Apple)
-- `PCMU` and `PCMA` inside **MP4** isn't a standard, but some players support them, for example Chromium browsers
 
 **Apple devices**
 
 - all Apple devices don't support HTTP progressive streaming
 - iPhones don't support MSE technology because it competes with the HTTP Live Streaming (HLS) technology, invented by Apple
 - HLS is the worst technology for **live** streaming, it still exists only because of iPhones
+
+**Codec names**
+
+- H264 = H.264 = AVC (Advanced Video Coding)
+- H265 = H.265 = HEVC (High Efficiency Video Coding)
+- PCMU = G.711 PCM (A-law) = PCM A-law (`alaw`)
+- PCMA = G.711 PCM (µ-law) = PCM mu-law (`mulaw`)
+- PCM = L16 = PCM signed 16-bit big-endian (`s16be`)
+- AAC = MPEG4-GENERIC
+- MP3 = MPEG-1 Audio Layer III or MPEG-2 Audio Layer III
+
+## Built-in transcoding
+
+There are no plans to embed complex transcoding algorithms inside go2rtc. [FFmpeg source](#source-ffmpeg) does a great job with this. Including [hardware acceleration](https://github.com/AlexxIT/go2rtc/wiki/Hardware-acceleration) support.
+
+But go2rtc has some simple algorithms. They are turned on automatically, you do not need to set them up additionally.
+
+**PCM for MSE/MP4/HLS**
+
+Go2rtc can pack `PCMA`, `PCMU` and `PCM` codecs into an MP4 container so that they work in all browsers and all built-in players on modern devices. Including Apple QuickTime:
+
+```
+PCMA/PCMU => PCM => FLAC => MSE/MP4/HLS
+```
+
+**Resample PCMA/PCMU for WebRTC**
+
+By default WebRTC support only `PCMA/8000` and `PCMU/8000`. But go2rtc can automatically resample PCMA and PCMU codec with with a different sample rate. Also go2rtc can transcode `PCM` codec to `PCMA/8000`, so WebRTC can play it:
+
+```
+PCM/xxx => PCMA/8000 => WebRTC
+PCMA/xxx => PCMA/8000 => WebRTC
+PCMU/xxx => PCMU/8000 => WebRTC
+```
+
+**Important**
+
+- FLAC codec not supported in a RTSP stream. If you using Frigate or Hass for recording MP4 files with PCMA/PCMU/PCM audio - you should setup transcoding to AAC codec.
+- PCMA and PCMU are VERY low quality codecs. Them support only 256! different sounds. Use them only when you have no other options.
 
 ## Codecs negotiation
 

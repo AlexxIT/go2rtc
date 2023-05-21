@@ -6,7 +6,9 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
 	"github.com/AlexxIT/go2rtc/pkg/mjpeg"
+	"github.com/AlexxIT/go2rtc/pkg/pcm"
 	"github.com/pion/rtp"
+	"time"
 )
 
 func (c *Conn) GetMedias() []*core.Media {
@@ -28,9 +30,20 @@ func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiv
 
 	switch c.mode {
 	case core.ModeActiveProducer: // backchannel
-		if channel, err = c.SetupMedia(media, true); err != nil {
+		c.stateMu.Lock()
+		defer c.stateMu.Unlock()
+
+		if c.state == StatePlay {
+			if err = c.Reconnect(); err != nil {
+				return
+			}
+		}
+
+		if channel, err = c.SetupMedia(media); err != nil {
 			return
 		}
+
+		c.state = StateSetup
 
 	case core.ModePassiveConsumer:
 		channel = byte(len(c.senders)) * 2
@@ -46,21 +59,28 @@ func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiv
 
 	// save original codec to sender (can have Codec.Name = ANY)
 	sender := core.NewSender(media, codec)
-	sender.Handler = c.packetWriter(codec, channel)
+	// important to send original codec for valid IsRTP check
+	sender.Handler = c.packetWriter(track.Codec, channel, codec.PayloadType)
+
+	// https://github.com/AlexxIT/go2rtc/issues/331
+	if c.mode == core.ModeActiveProducer && track.Codec.Name == core.CodecPCMA {
+		sender.Handler = pcm.RepackBackchannel(sender.Handler)
+	}
+
 	sender.HandleRTP(track)
 
 	c.senders = append(c.senders, sender)
 	return nil
 }
 
-func (c *Conn) packetWriter(codec *core.Codec, channel uint8) core.HandlerFunc {
+func (c *Conn) packetWriter(codec *core.Codec, channel, payloadType uint8) core.HandlerFunc {
 	handlerFunc := func(packet *rtp.Packet) {
 		if c.state == StateNone {
 			return
 		}
 
 		clone := *packet
-		clone.Header.PayloadType = codec.PayloadType
+		clone.Header.PayloadType = payloadType
 
 		size := clone.MarshalSize()
 
@@ -76,6 +96,10 @@ func (c *Conn) packetWriter(codec *core.Codec, channel uint8) core.HandlerFunc {
 			return
 		}
 
+		if err := c.conn.SetWriteDeadline(time.Now().Add(Timeout)); err != nil {
+			return
+		}
+
 		n, err := c.conn.Write(data)
 		if err != nil {
 			return
@@ -87,13 +111,22 @@ func (c *Conn) packetWriter(codec *core.Codec, channel uint8) core.HandlerFunc {
 	if !codec.IsRTP() {
 		switch codec.Name {
 		case core.CodecH264:
-			handlerFunc = h264.RTPPay(1500, handlerFunc)
+			handlerFunc = h264.RTPPay(c.PacketSize, handlerFunc)
 		case core.CodecH265:
-			handlerFunc = h265.RTPPay(1500, handlerFunc)
+			handlerFunc = h265.RTPPay(c.PacketSize, handlerFunc)
 		case core.CodecAAC:
 			handlerFunc = aac.RTPPay(handlerFunc)
 		case core.CodecJPEG:
 			handlerFunc = mjpeg.RTPPay(handlerFunc)
+		}
+	} else if c.PacketSize != 0 {
+		switch codec.Name {
+		case core.CodecH264:
+			handlerFunc = h264.RTPPay(c.PacketSize, handlerFunc)
+			handlerFunc = h264.RTPDepay(codec, handlerFunc)
+		case core.CodecH265:
+			handlerFunc = h265.RTPPay(c.PacketSize, handlerFunc)
+			handlerFunc = h265.RTPDepay(codec, handlerFunc)
 		}
 	}
 
