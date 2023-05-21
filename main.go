@@ -44,11 +44,12 @@ var (
 )
 
 func main() {
+	shell.Init()
 	app.Init() // init config and logs
 	//pidfile := app.GetPidFilePath()
-	if app.IsDaemonize() {
+	if shell.Daemonize {
 		cntxt := &daemon.Context{
-			PidFileName: app.GetPidFilePath(),
+			PidFileName: shell.PidFilePath,
 			PidFilePerm: 0644,
 			LogFileName: app.GetLogFilepath(),
 			LogFilePerm: 0644,
@@ -56,8 +57,8 @@ func main() {
 			//Umask:   027,
 			//Args:        []string{"[go-daemon sample]"},
 			Credential: &daemon.Credential{
-				Uid:         app.GetForkUserId(),
-				Gid:         app.GetForkGroupId(),
+				Uid:         shell.GetForkUserId(),
+				Gid:         shell.GetForkGroupId(),
 				Groups:      nil,
 				NoSetGroups: true,
 			},

@@ -1,15 +1,11 @@
 package app
 
 import (
-	"flag"
 	"fmt"
 	"io"
 	"os"
-	"os/user"
 	"path/filepath"
 	"runtime"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/shell"
@@ -25,54 +21,19 @@ var ConfigPath string
 var Info = map[string]any{
 	"version": Version,
 }
-var daemonize bool
-var pidFilePath string
-var forkUser user.User
 
 func Init() {
-	var confs Config
-	var version bool
 
-	currentOS := runtime.GOOS
-	username := ""
-
-	flag.Var(&confs, "config", "go2rtc config (path to file or raw text), support multiple")
-	flag.BoolVar(&version, "version", false, "Print the version of the application and exit")
-	if currentOS != "windows" {
-		flag.BoolVar(&daemonize, "d", false, `Run in background`)
-		flag.StringVar(&pidFilePath, "pid", filepath.Join(".", "go2rtc.pid"), "PID file path")
-		username = *flag.String("user", "", "Username to run")
-	} else {
-		daemonize = false
-	}
-	flag.Parse()
-
-	if version {
+	if shell.Version {
 		fmt.Println("Current version: ", Version)
 		os.Exit(0)
 	}
 
-	if username != "" {
-		tmpuser, err := user.Lookup(username)
-		if err != nil {
-			log.Fatal().Err(err).Msgf("Cannot lookup user %s", username)
-			os.Exit(1)
-		}
-		forkUser = *tmpuser
-	} else {
-		tmpuser, err := user.Current()
-		if err != nil {
-			log.Fatal().Err(err)
-			os.Exit(1)
-		}
-		forkUser = *tmpuser
+	if shell.Confs == nil {
+		shell.Confs = []string{"go2rtc.yaml"}
 	}
 
-	if confs == nil {
-		confs = []string{"go2rtc.yaml"}
-	}
-
-	for _, conf := range confs {
+	for _, conf := range shell.Confs {
 		if conf[0] != '{' {
 			// config as file
 			if ConfigPath == "" {
@@ -111,31 +72,9 @@ func Init() {
 
 	modules = cfg.Mod
 
-	log.Info().Msgf("go2rtc version %s %s/%s", Version, currentOS, runtime.GOARCH)
+	log.Info().Msgf("go2rtc version %s %s/%s", Version, runtime.GOOS, runtime.GOARCH)
 }
 
-func IsDaemonize() bool {
-	return daemonize
-}
-func GetPidFilePath() string {
-	return pidFilePath
-}
-func GetForkUserId() uint32 {
-	uid, err := strconv.Atoi(forkUser.Uid)
-	if err != nil {
-		log.Fatal().Err(err)
-		os.Exit(1)
-	}
-	return uint32(uid)
-}
-func GetForkGroupId() uint32 {
-	gid, err := strconv.Atoi(forkUser.Gid)
-	if err != nil {
-		log.Fatal().Err(err)
-		os.Exit(1)
-	}
-	return uint32(gid)
-}
 func GetLogFilepath() string {
 	var cfg struct {
 		Mod map[string]string `yaml:"log"`
@@ -186,19 +125,7 @@ func GetLogger(module string) zerolog.Logger {
 	return log.Logger
 }
 
-// internal
-
-type Config []string
-
-func (c *Config) String() string {
-	return strings.Join(*c, " ")
-}
-
-func (c *Config) Set(value string) error {
-	*c = append(*c, value)
-	return nil
-}
-
+// internals
 var configs [][]byte
 
 // modules log levels
