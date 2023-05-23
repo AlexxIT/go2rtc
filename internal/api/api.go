@@ -38,12 +38,10 @@ func Init() {
 	log = app.GetLogger("api")
 
 	initStatic(cfg.Mod.StaticDir)
-	initWS(cfg.Mod.Origin)
 
 	HandleFunc("api", apiHandler)
 	HandleFunc("api/config", configHandler)
 	HandleFunc("api/exit", exitHandler)
-	HandleFunc("api/ws", apiWS)
 
 	// ensure we can listen without errors
 	listener, err := net.Listen("tcp", cfg.Mod.Listen)

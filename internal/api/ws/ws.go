@@ -1,13 +1,27 @@
-package api
+package ws
 
 import (
+	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/gorilla/websocket"
+	"github.com/rs/zerolog/log"
 	"net/http"
 	"net/url"
 	"strings"
 	"sync"
 	"time"
 )
+
+func Init() {
+	var cfg struct {
+		Mod struct {
+			Origin string `yaml:"origin"`
+		} `yaml:"api"`
+	}
+
+	initWS(cfg.Mod.Origin)
+
+	api.HandleFunc("api/ws", apiWS)
+}
 
 // Message - struct for data exchange in Web API
 type Message struct {
@@ -33,7 +47,7 @@ func (m *Message) GetString(key string) string {
 
 type WSHandler func(tr *Transport, msg *Message) error
 
-func HandleWS(msgType string, handler WSHandler) {
+func HandleFunc(msgType string, handler WSHandler) {
 	wsHandlers[msgType] = handler
 }
 

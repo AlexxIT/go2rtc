@@ -2,7 +2,7 @@ package webrtc
 
 import (
 	"errors"
-	"github.com/AlexxIT/go2rtc/internal/api"
+	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	"github.com/gorilla/websocket"
@@ -30,13 +30,13 @@ func streamsHandler(url string) (core.Producer, error) {
 // ex: ws://localhost:1984/api/ws?src=camera1
 func asyncClient(url string) (core.Producer, error) {
 	// 1. Connect to signalign server
-	ws, _, err := websocket.DefaultDialer.Dial(url, nil)
+	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
 		return nil, err
 	}
 	defer func() {
 		if err != nil {
-			_ = ws.Close()
+			_ = conn.Close()
 		}
 	}()
 
@@ -55,14 +55,14 @@ func asyncClient(url string) (core.Producer, error) {
 	prod.Listen(func(msg any) {
 		switch msg := msg.(type) {
 		case pion.PeerConnectionState:
-			_ = ws.Close()
+			_ = conn.Close()
 
 		case *pion.ICECandidate:
 			sendOffer.Wait()
 
 			s := msg.ToJSON().Candidate
 			log.Trace().Str("candidate", s).Msg("[webrtc] local")
-			_ = ws.WriteJSON(&api.Message{Type: "webrtc/candidate", Value: s})
+			_ = conn.WriteJSON(&ws.Message{Type: "webrtc/candidate", Value: s})
 		}
 	})
 
@@ -79,15 +79,15 @@ func asyncClient(url string) (core.Producer, error) {
 	}
 
 	// 4. Send offer
-	msg := &api.Message{Type: "webrtc/offer", Value: offer}
-	if err = ws.WriteJSON(msg); err != nil {
+	msg := &ws.Message{Type: "webrtc/offer", Value: offer}
+	if err = conn.WriteJSON(msg); err != nil {
 		return nil, err
 	}
 
 	sendOffer.Done()
 
 	// 5. Get answer
-	if err = ws.ReadJSON(msg); err != nil {
+	if err = conn.ReadJSON(msg); err != nil {
 		return nil, err
 	}
 
@@ -104,8 +104,8 @@ func asyncClient(url string) (core.Producer, error) {
 	go func() {
 		for {
 			// receive data from remote
-			msg := new(api.Message)
-			if err = ws.ReadJSON(msg); err != nil {
+			msg := new(ws.Message)
+			if err = conn.ReadJSON(msg); err != nil {
 				if cerr, ok := err.(*websocket.CloseError); ok {
 					log.Trace().Err(err).Caller().Msgf("[webrtc] ws code=%d", cerr)
 				}
@@ -120,7 +120,7 @@ func asyncClient(url string) (core.Producer, error) {
 			}
 		}
 
-		_ = ws.Close()
+		_ = conn.Close()
 	}()
 
 	return prod, nil

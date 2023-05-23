@@ -3,6 +3,7 @@ package webrtc
 import (
 	"errors"
 	"github.com/AlexxIT/go2rtc/internal/api"
+	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -68,9 +69,9 @@ func Init() {
 	}
 
 	// async WebRTC server (two API versions)
-	api.HandleWS("webrtc", asyncHandler)
-	api.HandleWS("webrtc/offer", asyncHandler)
-	api.HandleWS("webrtc/candidate", candidateHandler)
+	ws.HandleFunc("webrtc", asyncHandler)
+	ws.HandleFunc("webrtc/offer", asyncHandler)
+	ws.HandleFunc("webrtc/candidate", candidateHandler)
 
 	// sync WebRTC server (two API versions)
 	api.HandleFunc("api/webrtc", syncHandler)
@@ -84,7 +85,7 @@ var log zerolog.Logger
 
 var PeerConnection func(active bool) (*pion.PeerConnection, error)
 
-func asyncHandler(tr *api.Transport, msg *api.Message) error {
+func asyncHandler(tr *ws.Transport, msg *ws.Message) error {
 	var stream *streams.Stream
 	var mode core.Mode
 
@@ -134,7 +135,7 @@ func asyncHandler(tr *api.Transport, msg *api.Message) error {
 
 			s := msg.ToJSON().Candidate
 			log.Trace().Str("candidate", s).Msg("[webrtc] local")
-			tr.Write(&api.Message{Type: "webrtc/candidate", Value: s})
+			tr.Write(&ws.Message{Type: "webrtc/candidate", Value: s})
 		}
 	})
 
@@ -179,9 +180,9 @@ func asyncHandler(tr *api.Transport, msg *api.Message) error {
 
 	if apiV2 {
 		desc := pion.SessionDescription{Type: pion.SDPTypeAnswer, SDP: answer}
-		tr.Write(&api.Message{Type: "webrtc", Value: desc})
+		tr.Write(&ws.Message{Type: "webrtc", Value: desc})
 	} else {
-		tr.Write(&api.Message{Type: "webrtc/answer", Value: answer})
+		tr.Write(&ws.Message{Type: "webrtc/answer", Value: answer})
 	}
 
 	sendAnswer.Done()

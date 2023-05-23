@@ -3,6 +3,7 @@ package mp4
 import (
 	"errors"
 	"github.com/AlexxIT/go2rtc/internal/api"
+	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/mp4"
@@ -10,7 +11,7 @@ import (
 	"strings"
 )
 
-func handlerWSMSE(tr *api.Transport, msg *api.Message) error {
+func handlerWSMSE(tr *ws.Transport, msg *ws.Message) error {
 	src := tr.Request.URL.Query().Get("src")
 	stream := streams.GetOrNew(src)
 	if stream == nil {
@@ -42,7 +43,7 @@ func handlerWSMSE(tr *api.Transport, msg *api.Message) error {
 		stream.RemoveConsumer(cons)
 	})
 
-	tr.Write(&api.Message{Type: "mse", Value: cons.MimeType()})
+	tr.Write(&ws.Message{Type: "mse", Value: cons.MimeType()})
 
 	data, err := cons.Init()
 	if err != nil {
@@ -57,7 +58,7 @@ func handlerWSMSE(tr *api.Transport, msg *api.Message) error {
 	return nil
 }
 
-func handlerWSMP4(tr *api.Transport, msg *api.Message) error {
+func handlerWSMP4(tr *ws.Transport, msg *ws.Message) error {
 	src := tr.Request.URL.Query().Get("src")
 	stream := streams.GetOrNew(src)
 	if stream == nil {
@@ -86,7 +87,7 @@ func handlerWSMP4(tr *api.Transport, msg *api.Message) error {
 		return err
 	}
 
-	tr.Write(&api.Message{Type: "mp4", Value: cons.MimeType})
+	tr.Write(&ws.Message{Type: "mp4", Value: cons.MimeType})
 
 	tr.OnClose(func() {
 		stream.RemoveConsumer(cons)

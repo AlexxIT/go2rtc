@@ -1,7 +1,7 @@
 package webrtc
 
 import (
-	"github.com/AlexxIT/go2rtc/internal/api"
+	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	"github.com/pion/sdp/v3"
 	"strconv"
@@ -56,7 +56,7 @@ func GetCandidates() (candidates []string) {
 	return
 }
 
-func asyncCandidates(tr *api.Transport, cons *webrtc.Conn) {
+func asyncCandidates(tr *ws.Transport, cons *webrtc.Conn) {
 	tr.WithContext(func(ctx map[any]any) {
 		if candidates, ok := ctx["candidate"].([]string); ok {
 			// process candidates that receive before this moment
@@ -74,7 +74,7 @@ func asyncCandidates(tr *api.Transport, cons *webrtc.Conn) {
 
 	for _, candidate := range GetCandidates() {
 		log.Trace().Str("candidate", candidate).Msg("[webrtc] config")
-		tr.Write(&api.Message{Type: "webrtc/candidate", Value: candidate})
+		tr.Write(&ws.Message{Type: "webrtc/candidate", Value: candidate})
 	}
 }
 
@@ -102,7 +102,7 @@ func syncCanditates(answer string) (string, error) {
 	return string(data), nil
 }
 
-func candidateHandler(tr *api.Transport, msg *api.Message) error {
+func candidateHandler(tr *ws.Transport, msg *ws.Message) error {
 	// process incoming candidate in sync function
 	tr.WithContext(func(ctx map[any]any) {
 		candidate := msg.String()

@@ -1,6 +1,7 @@
 package mp4
 
 import (
+	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"net/http"
 	"strconv"
 	"strings"
@@ -17,8 +18,8 @@ import (
 func Init() {
 	log = app.GetLogger("mp4")
 
-	api.HandleWS("mse", handlerWSMSE)
-	api.HandleWS("mp4", handlerWSMP4)
+	ws.HandleFunc("mse", handlerWSMSE)
+	ws.HandleFunc("mp4", handlerWSMP4)
 
 	api.HandleFunc("api/frame.mp4", handlerKeyframe)
 	api.HandleFunc("api/stream.mp4", handlerMP4)

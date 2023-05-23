@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/AlexxIT/go2rtc/internal/api"
+	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/debug"
 	"github.com/AlexxIT/go2rtc/internal/dvrip"
@@ -32,37 +33,55 @@ import (
 )
 
 func main() {
-	app.Init()     // init config and logs
-	api.Init()     // init HTTP API server
-	streams.Init() // load streams list
-	onvif.Init()
+	// 1. Core modules: app, api/ws, streams
 
-	rtsp.Init()   // add support RTSP client and RTSP server
-	rtmp.Init()   // add support RTMP client
-	exec.Init()   // add support exec scheme (depends on RTSP server)
-	ffmpeg.Init() // add support ffmpeg scheme (depends on exec scheme)
-	hass.Init()   // add support hass scheme
-	echo.Init()
-	ivideon.Init()
-	http.Init()
-	dvrip.Init()
-	tapo.Init()
-	isapi.Init()
-	mpegts.Init()
-	roborock.Init()
-	nest.Init()
+	app.Init() // init config and logs
 
-	srtp.Init()
-	homekit.Init()
+	api.Init() // init API before all others
+	ws.Init()  // init WS API endpoint
 
-	webrtc.Init()
-	mp4.Init()
-	hls.Init()
-	mjpeg.Init()
+	streams.Init() // streams module
 
-	webtorrent.Init()
-	ngrok.Init()
-	debug.Init()
+	// 2. Main sources and servers
+
+	rtsp.Init()   // rtsp source, RTSP server
+	webrtc.Init() // webrtc source, WebRTC server
+
+	// 3. Main API
+
+	mp4.Init()   // MP4 API
+	hls.Init()   // HLS API
+	mjpeg.Init() // MJPEG API
+
+	// 4. Other sources and servers
+
+	hass.Init()       // hass source, Hass API server
+	onvif.Init()      // onvif source, ONVIF API server
+	webtorrent.Init() // webtorrent source, WebTorrent module
+
+	// 5. Other sources
+
+	rtmp.Init()     // rtmp source
+	exec.Init()     // exec source
+	ffmpeg.Init()   // ffmpeg source
+	echo.Init()     // echo source
+	ivideon.Init()  // ivideon source
+	http.Init()     // http/tcp source
+	dvrip.Init()    // dvrip source
+	tapo.Init()     // tapo source
+	isapi.Init()    // isapi source
+	mpegts.Init()   // mpegts passive source
+	roborock.Init() // roborock source
+	homekit.Init()  // homekit source
+	nest.Init()     // nest source
+
+	// 6. Helper modules
+
+	ngrok.Init() // Ngrok module
+	srtp.Init()  // SRTP server
+	debug.Init() // debug API
+
+	// 7. Go
 
 	shell.RunUntilSignal()
 }
