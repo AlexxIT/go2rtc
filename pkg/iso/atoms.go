@@ -40,6 +40,7 @@ const (
 	SampleVideoIFrame    = sampleDependsOn2
 	SampleVideoNonIFrame = sampleDependsOn1 | sampleIsNonSync
 	SampleAudio          = sampleIsNonSync
+	SampleAudioAAC       = sampleDependsOn2
 )
 
 func (m *Movie) WriteFileType() {

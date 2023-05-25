@@ -3,6 +3,7 @@ package mjpeg
 import (
 	"errors"
 	"github.com/AlexxIT/go2rtc/internal/api"
+	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -20,7 +21,7 @@ func Init() {
 	api.HandleFunc("api/frame.jpeg", handlerKeyframe)
 	api.HandleFunc("api/stream.mjpeg", handlerStream)
 
-	api.HandleWS("mjpeg", handlerWS)
+	ws.HandleFunc("mjpeg", handlerWS)
 }
 
 func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
@@ -156,7 +157,7 @@ func inputMjpeg(w http.ResponseWriter, r *http.Request) {
 	stream.RemoveProducer(client)
 }
 
-func handlerWS(tr *api.Transport, _ *api.Message) error {
+func handlerWS(tr *ws.Transport, _ *ws.Message) error {
 	src := tr.Request.URL.Query().Get("src")
 	stream := streams.GetOrNew(src)
 	if stream == nil {
@@ -178,7 +179,7 @@ func handlerWS(tr *api.Transport, _ *api.Message) error {
 		return err
 	}
 
-	tr.Write(&api.Message{Type: "mjpeg"})
+	tr.Write(&ws.Message{Type: "mjpeg"})
 
 	tr.OnClose(func() {
 		stream.RemoveConsumer(cons)

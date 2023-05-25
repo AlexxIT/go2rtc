@@ -1,6 +1,7 @@
 package mp4
 
 import (
+	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"net/http"
 	"strconv"
 	"strings"
@@ -17,8 +18,8 @@ import (
 func Init() {
 	log = app.GetLogger("mp4")
 
-	api.HandleWS("mse", handlerWSMSE)
-	api.HandleWS("mp4", handlerWSMP4)
+	ws.HandleFunc("mse", handlerWSMSE)
+	ws.HandleFunc("mp4", handlerWSMP4)
 
 	api.HandleFunc("api/frame.mp4", handlerKeyframe)
 	api.HandleFunc("api/stream.mp4", handlerMP4)
@@ -37,7 +38,8 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	src := r.URL.Query().Get("src")
+	query := r.URL.Query()
+	src := query.Get("src")
 	stream := streams.GetOrNew(src)
 	if stream == nil {
 		http.Error(w, api.StreamNotFound, http.StatusNotFound)
@@ -68,8 +70,13 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 	stream.RemoveConsumer(cons)
 
 	// Apple Safari won't show frame without length
-	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
-	w.Header().Set("Content-Type", cons.MimeType)
+	header := w.Header()
+	header.Set("Content-Length", strconv.Itoa(len(data)))
+	header.Set("Content-Type", cons.MimeType)
+
+	if filename := query.Get("filename"); filename != "" {
+		header.Set("Content-Disposition", `attachment; filename="`+filename+`"`)
+	}
 
 	if _, err := w.Write(data); err != nil {
 		log.Error().Err(err).Caller().Send()
@@ -131,13 +138,18 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 
 	defer stream.RemoveConsumer(cons)
 
-	w.Header().Set("Content-Type", cons.MimeType())
-
 	data, err := cons.Init()
 	if err != nil {
 		log.Error().Err(err).Caller().Send()
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	header := w.Header()
+	header.Set("Content-Type", cons.MimeType())
+
+	if filename := query.Get("filename"); filename != "" {
+		header.Set("Content-Disposition", `attachment; filename="`+filename+`"`)
 	}
 
 	if _, err = w.Write(data); err != nil {
