@@ -98,6 +98,12 @@
                 pc.setRemoteDescription({type: 'answer', sdp: msg.value})
             }
         })
+        
+        ws.addEventListener('close', ev => {
+          setTimeout(function() {
+            connect(media);
+          }, 1000)
+        })
     }
 
     const media = new URLSearchParams(location.search).get('media')
