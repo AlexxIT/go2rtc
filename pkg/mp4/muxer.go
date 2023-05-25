@@ -151,19 +151,14 @@ func (m *Muxer) Reset() {
 func (m *Muxer) Marshal(trackID byte, packet *rtp.Packet) []byte {
 	codec := m.codecs[trackID]
 
+	m.fragIndex++
+
 	duration := packet.Timestamp - m.pts[trackID]
 	m.pts[trackID] = packet.Timestamp
 
-	// minumum duration important for MSE in Apple Safari
-	if duration == 0 || duration > codec.ClockRate {
-		duration = codec.ClockRate/1000 + 1
-		m.pts[trackID] += duration
-	}
-
-	size := len(packet.Payload)
-
 	// flags important for Apple Finder video preview
 	var flags uint32
+
 	switch codec.Name {
 	case core.CodecH264:
 		if h264.IsKeyframe(packet.Payload) {
@@ -177,11 +172,20 @@ func (m *Muxer) Marshal(trackID byte, packet *rtp.Packet) []byte {
 		} else {
 			flags = iso.SampleVideoNonIFrame
 		}
+	case core.CodecAAC:
+		duration = 1024            // important for Apple Finder and QuickTime
+		flags = iso.SampleAudioAAC // not important
 	default:
 		flags = iso.SampleAudio // not important
 	}
 
-	m.fragIndex++
+	// minumum duration important for MSE in Apple Safari
+	if duration == 0 || duration > codec.ClockRate {
+		duration = codec.ClockRate/1000 + 1
+		m.pts[trackID] += duration
+	}
+
+	size := len(packet.Payload)
 
 	mv := iso.NewMovie(1024 + size)
 	mv.WriteMovieFragment(

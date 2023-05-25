@@ -9,6 +9,8 @@ import (
 const RTPPacketVersionAAC = 0
 
 func RTPDepay(handler core.HandlerFunc) core.HandlerFunc {
+	var timestamp uint32
+
 	return func(packet *rtp.Packet) {
 		// support ONLY 2 bytes header size!
 		// streamtype=5;profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;config=1408
@@ -16,15 +18,29 @@ func RTPDepay(handler core.HandlerFunc) core.HandlerFunc {
 
 		//log.Printf("[RTP/AAC] units: %d, size: %4d, ts: %10d, %t", headersSize/2, len(packet.Payload), packet.Timestamp, packet.Marker)
 
-		data := packet.Payload[2+headersSize:]
-		if IsADTS(data) {
-			data = data[7:]
-		}
+		headers := packet.Payload[2 : 2+headersSize]
+		units := packet.Payload[2+headersSize:]
 
-		clone := *packet
-		clone.Version = RTPPacketVersionAAC
-		clone.Payload = data
-		handler(&clone)
+		for len(headers) > 0 {
+			unitSize := binary.BigEndian.Uint16(headers) >> 3
+
+			unit := units[:unitSize]
+
+			headers = headers[2:]
+			units = units[unitSize:]
+
+			timestamp += 1024
+
+			clone := *packet
+			clone.Version = RTPPacketVersionAAC
+			clone.Timestamp = timestamp
+			if IsADTS(unit) {
+				clone.Payload = unit[7:]
+			} else {
+				clone.Payload = unit
+			}
+			handler(&clone)
+		}
 	}
 }
 
