@@ -125,28 +125,44 @@
 <script>
     document.getElementById('homekit').addEventListener('click', async ev => {
         ev.target.nextElementSibling.style.display = 'block'
-        const r = await fetch('api/homekit', {cache: 'no-cache'})
+        const homekitTable = document.getElementById("homekit-body");
 
-        /** @type {Array<{id:string,name:string,addr:string,model:string,paired:boolean}>} */
-        const data = await r.json()
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const socket = new WebSocket(`${protocol}//${window.location.host}/api/homekit`);
 
-        const tbody = document.getElementById('homekit-body')
-        tbody.innerHTML =
-            data.reduce((res, item) => {
-                let commands = ''
-                if (item.id === "") {
-                    commands = `<a href="#" onclick="unpair('${item.name}')">unpair</a>`
-                } else if (item.paired === false) {
-                    commands = `<a href="#" onclick="pair('${item.id}','${item.name}')">pair</a>`
-                }
-                return res + `<tr>
-                        <td>${item.name}</td>
-                        <td>${item.addr}</td>
-                        <td>${item.model}</td>
-                        <td>${commands}</td>
-                    </tr>`
-            }, '')
+        socket.onmessage = function (event) {
+            const device = JSON.parse(event.data);
+            console.log("Discovered device:", device);
+            addOrUpdateRow(device);
+        };
+
+        function addOrUpdateRow(device) {
+            const existingRow = document.getElementById(`device-${device.id}`);
+            if (existingRow) {
+                existingRow.innerHTML = createRow(device);
+            } else {
+                const newRow = document.createElement("tr");
+                newRow.id = `device-${device.id}`;
+                newRow.innerHTML = createRow(device);
+                homekitTable.appendChild(newRow);
+            }
+        }
+
+        function createRow(device) {
+            let commands = "";
+            if (device.id === "") {
+                commands = `<a href="#" onclick="unpair('${device.name}')">unpair</a>`;
+            } else if (device.paired === false) {
+                commands = `<a href="#" onclick="pair('${device.id}','${device.name}')">pair</a>`;
+            }
+            return `<td>${device.name}</td>
+                    <td>${device.addr}</td>
+                    <td>${device.model}</td>
+                    <td>${commands}</td>`;
+        }
     })
+
+    
 
     function pair(id, name) {
         const pin = document.querySelector('#pin').value
