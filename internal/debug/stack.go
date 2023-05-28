@@ -3,6 +3,7 @@ package debug
 import (
 	"bytes"
 	"fmt"
+	"github.com/AlexxIT/go2rtc/internal/api"
 	"net/http"
 	"runtime"
 )
@@ -51,7 +52,5 @@ func stackHandler(w http.ResponseWriter, r *http.Request) {
 		"Total: %d, Skipped: %d", runtime.NumGoroutine(), skipped),
 	)
 
-	if _, err := w.Write(buf[:i]); err != nil {
-		panic(err)
-	}
+	api.ResponseText(w, buf[:i])
 }

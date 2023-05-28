@@ -3,6 +3,7 @@ package hass
 import (
 	"encoding/base64"
 	"encoding/json"
+	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/internal/webrtc"
 	"net"
@@ -11,8 +12,7 @@ import (
 )
 
 func apiOK(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write([]byte(`{"status":1,"payload":{}}`))
+	api.ResponseRawJSON(w, `{"status":1,"payload":{}}`)
 }
 
 func apiStream(w http.ResponseWriter, r *http.Request) {
