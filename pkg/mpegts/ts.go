@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
+	"time"
+
 	"github.com/AlexxIT/go2rtc/pkg/aac"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
@@ -12,7 +14,6 @@ import (
 	"github.com/deepch/vdk/codec/h264parser"
 	"github.com/deepch/vdk/format/ts"
 	"github.com/pion/rtp"
-	"time"
 )
 
 type Consumer struct {
@@ -42,13 +43,13 @@ func (c *Consumer) GetMedias() []*core.Media {
 				{Name: core.CodecH264},
 			},
 		},
-		//{
-		//	Kind:      core.KindAudio,
-		//	Direction: core.DirectionSendonly,
-		//	Codecs: []*core.Codec{
-		//		{Name: core.CodecAAC},
-		//	},
-		//},
+		{
+			Kind:      core.KindAudio,
+			Direction: core.DirectionSendonly,
+			Codecs: []*core.Codec{
+				{Name: core.CodecAAC},
+			},
+		},
 	}
 }
 
