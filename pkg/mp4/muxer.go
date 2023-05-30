@@ -173,10 +173,10 @@ func (m *Muxer) Marshal(trackID byte, packet *rtp.Packet) []byte {
 			flags = iso.SampleVideoNonIFrame
 		}
 	case core.CodecAAC:
-		duration = 1024            // important for Apple Finder and QuickTime
-		flags = iso.SampleAudioAAC // not important
+		duration = 1024         // important for Apple Finder and QuickTime
+		flags = iso.SampleAudio // not important?
 	default:
-		flags = iso.SampleAudio // not important
+		flags = iso.SampleAudio // important for FLAC on Android Telegram
 	}
 
 	// minumum duration important for MSE in Apple Safari
