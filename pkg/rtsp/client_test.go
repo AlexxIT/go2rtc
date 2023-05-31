@@ -88,7 +88,7 @@ Session: 1
 	require.Nil(t, err)
 	require.Len(t, client.Medias, 3)
 
-	ch, err := client.SetupMedia(client.Medias[2], true)
+	ch, err := client.SetupMedia(client.Medias[2])
 	require.Nil(t, err)
 	require.Equal(t, ch, byte(4))
 }

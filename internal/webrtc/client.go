@@ -107,7 +107,7 @@ func asyncClient(url string) (core.Producer, error) {
 			msg := new(ws.Message)
 			if err = conn.ReadJSON(msg); err != nil {
 				if cerr, ok := err.(*websocket.CloseError); ok {
-					log.Trace().Err(err).Caller().Msgf("[webrtc] ws code=%d", cerr)
+					log.Trace().Err(err).Caller().Msgf("[webrtc] ws code=%d", cerr.Code)
 				}
 				break
 			}

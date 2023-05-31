@@ -201,7 +201,7 @@ func importWebRTC(token string) error {
 	for name, entityID := range webrtcEntities {
 		entities[name] = "hass://supervisor?entity_id=" + entityID
 
-		log.Debug().Msgf("[hass] load webrtc name=%s entity_id=%d", name, entityID)
+		log.Debug().Msgf("[hass] load webrtc name=%s entity_id=%s", name, entityID)
 	}
 
 	return nil
