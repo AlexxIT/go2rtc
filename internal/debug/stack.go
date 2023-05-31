@@ -52,5 +52,5 @@ func stackHandler(w http.ResponseWriter, r *http.Request) {
 		"Total: %d, Skipped: %d", runtime.NumGoroutine(), skipped),
 	)
 
-	api.ResponseText(w, buf[:i])
+	api.Response(w, buf[:i], api.MimeText)
 }

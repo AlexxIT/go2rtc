@@ -141,7 +141,7 @@ func apiHandle(w http.ResponseWriter, r *http.Request) {
 
 		w.WriteHeader(http.StatusCreated)
 		data := fmt.Sprintf(`{"share":%q,"pwd":%q}`, share, pwd)
-		api.ResponseRawJSON(w, data)
+		api.Response(w, data, api.MimeJSON)
 
 	case "DELETE":
 		if ok {

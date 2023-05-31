@@ -21,7 +21,8 @@ func configHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "", http.StatusNotFound)
 			return
 		}
-		ResponseText(w, data)
+		// https://www.ietf.org/archive/id/draft-ietf-httpapi-yaml-mediatypes-00.html
+		Response(w, data, "application/yaml")
 
 	case "POST", "PATCH":
 		data, err := io.ReadAll(r.Body)

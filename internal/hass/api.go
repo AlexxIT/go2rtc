@@ -12,7 +12,7 @@ import (
 )
 
 func apiOK(w http.ResponseWriter, r *http.Request) {
-	api.ResponseRawJSON(w, `{"status":1,"payload":{}}`)
+	api.Response(w, `{"status":1,"payload":{}}`, api.MimeJSON)
 }
 
 func apiStream(w http.ResponseWriter, r *http.Request) {
