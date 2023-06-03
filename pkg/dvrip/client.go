@@ -337,7 +337,7 @@ func (c *Client) ResponseJSON() (res Response, err error) {
 func (c *Client) AddVideoTrack(mediaCode byte, payload []byte) {
 	var codec *core.Codec
 	switch mediaCode {
-	case 2:
+	case 0x02, 0x12:
 		codec = &core.Codec{
 			Name:        core.CodecH264,
 			ClockRate:   90000,
