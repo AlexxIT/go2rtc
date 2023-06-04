@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"sync"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
@@ -85,12 +84,8 @@ func discover() ([]api.Stream, error) {
 
 	responseChan := make(chan []byte)
 
-	// Wait group to synchronize goroutines
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go receiveResponses(connection, responseChan, &wg)
-	wg.Add(1)
-	go sendBroadcasts(connection, &wg)
+	go receiveResponses(connection, responseChan)
+	go sendBroadcasts(connection)
 	var items []api.Stream
 
 	// Process received responses
@@ -114,7 +109,11 @@ func discover() ([]api.Stream, error) {
 		}
 
 		if msg.NetCommon.HostIP != "" && msg.NetCommon.HostName != "" {
-			hostIP := hexToDecimalBytes(msg.NetCommon.HostIP)
+			hostIP, err := hexToDecimalBytes(msg.NetCommon.HostIP)
+			if err != nil {
+				log.Err(err).Msgf("[dvrip] Error parsing IP: %s", err)
+				continue
+			}
 
 			u := &url.URL{
 				Scheme: "dvrip",
@@ -127,27 +126,26 @@ func discover() ([]api.Stream, error) {
 			queryParams.Add("subtype", "0")
 			u.RawQuery = queryParams.Encode()
 
-			// Check if the URL already exists in the array
+			uri := u.String()
+
 			exists := false
 			for _, otherUrl := range items {
-				if otherUrl.URL == u.String() {
+				if otherUrl.URL == uri {
 					exists = true
 					break
 				}
 			}
+
 			if !exists {
-				items = append(items, api.Stream{Name: msg.NetCommon.HostName, URL: u.String()})
+				items = append(items, api.Stream{Name: msg.NetCommon.HostName, URL: uri})
 			}
 		}
 	}
 
-	wg.Wait()
 	return items, nil
 }
 
-func receiveResponses(conn *net.UDPConn, responseChan chan<- []byte, wg *sync.WaitGroup) {
-	defer wg.Done()
-
+func receiveResponses(conn *net.UDPConn, responseChan chan<- []byte) {
 	buffer := make([]byte, 1024)
 
 	for {
@@ -171,9 +169,7 @@ func receiveResponses(conn *net.UDPConn, responseChan chan<- []byte, wg *sync.Wa
 	}
 }
 
-func sendBroadcasts(conn *net.UDPConn, wg *sync.WaitGroup) {
-	defer wg.Done()
-
+func sendBroadcasts(conn *net.UDPConn) {
 	// broadcasting the same multiple times because the devies some times don't answer
 	hexStreams := []string{
 		"ff00000000000000000000000000fa0500000000",
@@ -200,23 +196,15 @@ func sendBroadcasts(conn *net.UDPConn, wg *sync.WaitGroup) {
 	}
 }
 
-func reverseArray(arr []byte) {
-	for i, j := 0, len(arr)-1; i < j; i, j = i+1, j-1 {
-		arr[i], arr[j] = arr[j], arr[i]
-	}
-}
-
-func hexToDecimalBytes(hexIP string) string {
-	// Remove the '0x' prefix if present
+func hexToDecimalBytes(hexIP string) (string, error) {
+	// Remove the '0x' prefix
 	hexIP = hexIP[2:]
 
-	// Decode the hexadecimal string to a byte slice
 	decimalBytes, err := hex.DecodeString(hexIP)
 	if err != nil {
-		return "0.0.0.0"
+		return "", err
 	}
-	reverseArray(decimalBytes)
-	return fmt.Sprintf("%d.%d.%d.%d", decimalBytes[0], decimalBytes[1], decimalBytes[2], decimalBytes[3])
+	return fmt.Sprintf("%d.%d.%d.%d", decimalBytes[3], decimalBytes[2], decimalBytes[1], decimalBytes[0]), nil
 }
 
 func apiDvrip(w http.ResponseWriter, r *http.Request) {
