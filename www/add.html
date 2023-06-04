@@ -263,6 +263,18 @@
 </script>
 
 
+<button id="dvrip">DVRIP</button>
+<div class="module">
+    <table id="dvrip-table"></table>
+</div>
+<script>
+    document.getElementById('dvrip').addEventListener('click', async ev => {
+        ev.target.nextElementSibling.style.display = 'block'
+        await getStreams('api/dvrip', 'dvrip-table')
+    })
+</script>
+
+
 <button id="roborock">Roborock</button>
 <div class="module">
     <form id="roborock-form" style="margin-bottom: 10px">
