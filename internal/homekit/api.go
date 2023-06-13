@@ -1,8 +1,8 @@
 package homekit
 
 import (
-	"encoding/json"
 	"fmt"
+	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/app/store"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/hap"
@@ -54,7 +54,7 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 			items = append(items, device)
 		}
 
-		_ = json.NewEncoder(w).Encode(items)
+		api.ResponseJSON(w, items)
 
 	case "POST":
 		// TODO: post params...
@@ -64,14 +64,14 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 		name := r.URL.Query().Get("name")
 		if err := hkPair(id, pin, name); err != nil {
 			log.Error().Err(err).Caller().Send()
-			_, err = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 
 	case "DELETE":
 		src := r.URL.Query().Get("src")
 		if err := hkDelete(src); err != nil {
 			log.Error().Err(err).Caller().Send()
-			_, err = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	}
 }

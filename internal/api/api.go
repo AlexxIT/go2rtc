@@ -88,6 +88,30 @@ func HandleFunc(pattern string, handler http.HandlerFunc) {
 	http.HandleFunc(pattern, handler)
 }
 
+// ResponseJSON important always add Content-Type
+// so go won't need to call http.DetectContentType
+func ResponseJSON(w http.ResponseWriter, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+func ResponsePrettyJSON(w http.ResponseWriter, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	_ = enc.Encode(v)
+}
+
+func ResponseRawJSON(w http.ResponseWriter, s string) {
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write([]byte(s))
+}
+
+func ResponseText(w http.ResponseWriter, b []byte) {
+	w.Header().Set("Content-Type", "text/plain")
+	_, _ = w.Write(b)
+}
+
 const StreamNotFound = "stream not found"
 
 var basePath string
@@ -131,9 +155,7 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 	app.Info["host"] = r.Host
 	mu.Unlock()
 
-	if err := json.NewEncoder(w).Encode(app.Info); err != nil {
-		log.Warn().Err(err).Caller().Send()
-	}
+	ResponseJSON(w, app.Info)
 }
 
 func exitHandler(w http.ResponseWriter, r *http.Request) {
@@ -158,11 +180,10 @@ func ResponseStreams(w http.ResponseWriter, streams []Stream) {
 		return
 	}
 
-	var response struct {
+	var response = struct {
 		Streams []Stream `json:"streams"`
+	}{
+		Streams: streams,
 	}
-	response.Streams = streams
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
+	ResponseJSON(w, response)
 }

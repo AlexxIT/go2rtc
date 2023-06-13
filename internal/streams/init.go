@@ -1,7 +1,6 @@
 package streams
 
 import (
-	"encoding/json"
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/app/store"
@@ -81,16 +80,14 @@ func streamsHandler(w http.ResponseWriter, r *http.Request) {
 
 	// without source - return all streams list
 	if src == "" && r.Method != "POST" {
-		_ = json.NewEncoder(w).Encode(streams)
+		api.ResponseJSON(w, streams)
 		return
 	}
 
 	// Not sure about all this API. Should be rewrited...
 	switch r.Method {
 	case "GET":
-		e := json.NewEncoder(w)
-		e.SetIndent("", "  ")
-		_ = e.Encode(streams[src])
+		api.ResponsePrettyJSON(w, streams[src])
 
 	case "PUT":
 		name := query.Get("name")
@@ -121,7 +118,7 @@ func streamsHandler(w http.ResponseWriter, r *http.Request) {
 				if err := stream.Play(src); err != nil {
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 				} else {
-					_ = json.NewEncoder(w).Encode(stream)
+					api.ResponseJSON(w, stream)
 				}
 			} else {
 				http.Error(w, "", http.StatusNotFound)

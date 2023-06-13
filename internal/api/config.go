@@ -21,9 +21,7 @@ func configHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "", http.StatusNotFound)
 			return
 		}
-		if _, err = w.Write(data); err != nil {
-			log.Warn().Err(err).Caller().Send()
-		}
+		ResponseText(w, data)
 
 	case "POST", "PATCH":
 		data, err := io.ReadAll(r.Body)
