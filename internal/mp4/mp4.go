@@ -1,11 +1,13 @@
 package mp4
 
 import (
-	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/AlexxIT/go2rtc/internal/api/ws"
+	"github.com/AlexxIT/go2rtc/internal/ffmpeg"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/app"
@@ -22,11 +24,59 @@ func Init() {
 	ws.HandleFunc("mp4", handlerWSMP4)
 
 	api.HandleFunc("api/frame.mp4", handlerKeyframe)
+	api.HandleFunc("api/frame.jpg", handlerJPGKeyframe)
 	api.HandleFunc("api/stream.mp4", handlerMP4)
 }
 
 var log zerolog.Logger
 
+func handlerJPGKeyframe(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	src := query.Get("src")
+	stream := streams.GetOrNew(src)
+	if stream == nil {
+		http.Error(w, api.StreamNotFound, http.StatusNotFound)
+		return
+	}
+
+	exit := make(chan []byte, 1)
+
+	cons := &mp4.Segment{OnlyKeyframe: true}
+	cons.Listen(func(msg any) {
+		if data, ok := msg.([]byte); ok && exit != nil {
+			select {
+			case exit <- data:
+			default:
+			}
+			exit = nil
+		}
+	})
+
+	if err := stream.AddConsumer(cons); err != nil {
+		log.Error().Err(err).Caller().Send()
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	data := <-exit
+	image, err := ffmpeg.TranscodeToJPG(data)
+	if err != nil {
+		log.Error().Err(err).Caller().Send()
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	stream.RemoveConsumer(cons)
+
+	// Apple Safari won't show frame without length
+	header := w.Header()
+	header.Set("Content-Length", strconv.Itoa(len(image)))
+	header.Set("Content-Type", "image/jpg")
+
+	if _, err := w.Write(image); err != nil {
+		log.Error().Err(err).Caller().Send()
+	}
+}
 func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 	// Chrome 105 does two requests: without Range and with `Range: bytes=0-`
 	ua := r.UserAgent()
