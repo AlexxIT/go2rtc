@@ -46,10 +46,6 @@
             align-items: center;
         }
 
-        .header {
-            padding: 5px 5px;
-        }
-
         .controls {
             display: flex;
             padding: 5px;
@@ -73,7 +69,7 @@
 <table>
     <thead>
     <tr>
-        <th><input id="selectall" type="checkbox">Name</th>
+        <th><label><input id="selectall" type="checkbox">Name</label></th>
         <th>Online</th>
         <th>Commands</th>
     </tr>
@@ -105,7 +101,7 @@
             window.location.href = `${url}&mode=${mode}`;
         });
 
-    const tbody = document.querySelector("#streams > tbody");
+    const tbody = document.getElementById("streams");
     tbody.addEventListener("click", ev => {
         if (ev.target.innerText !== "delete") return;
 
