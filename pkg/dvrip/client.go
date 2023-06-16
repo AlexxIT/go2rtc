@@ -345,7 +345,7 @@ func (c *Client) AddVideoTrack(mediaCode byte, payload []byte) {
 			FmtpLine:    h264.GetFmtpLine(payload),
 		}
 
-	case 0x03, 0x13:
+	case 0x03, 0x13, 0x43:
 		codec = &core.Codec{
 			Name:        core.CodecH265,
 			ClockRate:   90000,
