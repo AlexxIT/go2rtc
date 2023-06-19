@@ -338,7 +338,7 @@ Format: `ffmpeg:device?{input-params}#{param1}#{param2}#{param3}`
 streams:
   linux_usbcam:   ffmpeg:device?video=0&video_size=1280x720#video=h264
   windows_webcam: ffmpeg:device?video=0#video=h264
-  macos_facetime: ffmpeg:device?video=0&audio=1&video_size=1280x720&framerate=30#video=h264#audio=pcma
+  macos_facetime: ffmpeg:device?video=0&audio=1&video_size=1280x720&framerate=30&pix_fmt=uyvy422#video=h264#audio=pcma
 ```
 
 #### Source: Exec
