@@ -2,12 +2,15 @@ package device
 
 import (
 	"github.com/AlexxIT/go2rtc/internal/api"
+	"github.com/AlexxIT/go2rtc/internal/app"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"sync"
 )
+
+var log = app.GetLogger("devices")
 
 func Init(bin string) {
 	Bin = bin
