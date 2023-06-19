@@ -3,11 +3,13 @@ package device
 import (
 	"bytes"
 	"errors"
-	"github.com/AlexxIT/go2rtc/internal/api"
-	"github.com/AlexxIT/go2rtc/pkg/core"
 	"os/exec"
 	"regexp"
 	"strings"
+	"syscall"
+
+	"github.com/AlexxIT/go2rtc/internal/api"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
 // https://trac.ffmpeg.org/wiki/Capture/Webcam
@@ -77,10 +79,20 @@ func initDevices() {
 func detectInputFormats(video string) ([]string, error) {
 
 	cmd := exec.Command("ffprobe", "-hide_banner", "-v", "error", "-print_format", "json", "-f", "avfoundation", "-video_size", "640x480", "-framerate", "24", "-i", video)
+	log.Debug().Msgf("[device_darwin] %s", cmd.String())
 	var out bytes.Buffer
 	cmd.Stderr = &out
 	err := cmd.Run()
 	if err != nil {
+		// If it's an exit error, get the exit code
+		if exitError, ok := err.(*exec.ExitError); ok {
+			ws := exitError.Sys().(syscall.WaitStatus)
+			log.Warn().Msgf("Exit code: %d\n", ws.ExitStatus())
+		} else {
+			// Not an ExitError, just print the error
+			log.Warn().Msgf("Command finished with error: %v\n", err)
+		}
+
 		return nil, err
 	}
 
