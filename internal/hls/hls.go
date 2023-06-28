@@ -1,8 +1,8 @@
 package hls
 
 import (
-	"fmt"
 	"github.com/AlexxIT/go2rtc/internal/api"
+	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/mp4"
@@ -25,6 +25,8 @@ func Init() {
 	// HLS (fMP4)
 	api.HandleFunc("api/hls/init.mp4", handlerInit)
 	api.HandleFunc("api/hls/segment.m4s", handlerSegmentMP4)
+
+	ws.HandleFunc("hls", handlerWSHLS)
 }
 
 type Consumer interface {
@@ -33,16 +35,6 @@ type Consumer interface {
 	Init() ([]byte, error)
 	MimeCodecs() string
 	Start()
-}
-
-type Session struct {
-	cons     Consumer
-	playlist string
-	init     []byte
-	segment  []byte
-	seq      int
-	alive    *time.Timer
-	mu       sync.Mutex
 }
 
 const keepalive = 5 * time.Second
@@ -86,20 +78,20 @@ func handlerStream(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if err := stream.AddConsumer(cons); err != nil {
+		log.Error().Err(err).Caller().Send()
+		return
+	}
+
 	session := &Session{cons: cons}
 
 	cons.Listen(func(msg any) {
 		if data, ok := msg.([]byte); ok {
 			session.mu.Lock()
-			session.segment = append(session.segment, data...)
+			session.buffer = append(session.buffer, data...)
 			session.mu.Unlock()
 		}
 	})
-
-	if err := stream.AddConsumer(cons); err != nil {
-		log.Error().Err(err).Caller().Send()
-		return
-	}
 
 	session.alive = time.AfterFunc(keepalive, func() {
 		stream.RemoveConsumer(cons)
@@ -112,7 +104,7 @@ func handlerStream(w http.ResponseWriter, r *http.Request) {
 
 	// two segments important for Chromecast
 	if medias != nil {
-		session.playlist = `#EXTM3U
+		session.template = `#EXTM3U
 #EXT-X-VERSION:6
 #EXT-X-TARGETDURATION:1
 #EXT-X-MEDIA-SEQUENCE:%d
@@ -122,7 +114,7 @@ segment.m4s?id=` + sid + `&n=%d
 #EXTINF:0.500,
 segment.m4s?id=` + sid + `&n=%d`
 	} else {
-		session.playlist = `#EXTM3U
+		session.template = `#EXTM3U
 #EXT-X-VERSION:3
 #EXT-X-TARGETDURATION:1
 #EXT-X-MEDIA-SEQUENCE:%d
@@ -167,9 +159,7 @@ func handlerPlaylist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s := fmt.Sprintf(session.playlist, session.seq, session.seq, session.seq+1)
-
-	if _, err := w.Write([]byte(s)); err != nil {
+	if _, err := w.Write([]byte(session.Playlist())); err != nil {
 		log.Error().Err(err).Caller().Send()
 	}
 }
@@ -194,21 +184,11 @@ func handlerSegmentTS(w http.ResponseWriter, r *http.Request) {
 
 	session.alive.Reset(keepalive)
 
-	var i byte
-	for len(session.segment) == 0 {
-		if i++; i > 10 {
-			http.NotFound(w, r)
-			return
-		}
-		time.Sleep(time.Millisecond * 100)
+	data := session.Segment()
+	if data == nil {
+		http.NotFound(w, r)
+		return
 	}
-
-	session.mu.Lock()
-	data := session.segment
-	// important to start new segment with init
-	session.segment = session.init
-	session.seq++
-	session.mu.Unlock()
 
 	if _, err := w.Write(data); err != nil {
 		log.Error().Err(err).Caller().Send()
@@ -233,7 +213,16 @@ func handlerInit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := w.Write(session.init); err != nil {
+	data := session.init
+	session.init = nil
+
+	session.segment0 = session.Segment()
+	if session.segment0 == nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	if _, err := w.Write(data); err != nil {
 		log.Error().Err(err).Caller().Send()
 	}
 }
@@ -243,11 +232,13 @@ func handlerSegmentMP4(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "video/iso.segment")
 
 	if r.Method == "OPTIONS" {
-		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET")
 		return
 	}
 
-	sid := r.URL.Query().Get("id")
+	query := r.URL.Query()
+
+	sid := query.Get("id")
 	sessionsMu.RLock()
 	session := sessions[sid]
 	sessionsMu.RUnlock()
@@ -258,20 +249,18 @@ func handlerSegmentMP4(w http.ResponseWriter, r *http.Request) {
 
 	session.alive.Reset(keepalive)
 
-	var i byte
-	for len(session.segment) == 0 {
-		if i++; i > 10 {
-			http.NotFound(w, r)
-			return
-		}
-		time.Sleep(time.Millisecond * 100)
+	var data []byte
+
+	if query.Get("n") != "0" {
+		data = session.Segment()
+	} else {
+		data = session.segment0
 	}
 
-	session.mu.Lock()
-	data := session.segment
-	session.segment = nil
-	session.seq++
-	session.mu.Unlock()
+	if data == nil {
+		http.NotFound(w, r)
+		return
+	}
 
 	if _, err := w.Write(data); err != nil {
 		log.Error().Err(err).Caller().Send()
