@@ -3,15 +3,22 @@ package pcm
 import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/pion/rtp"
+	"sync"
 )
 
 func RepackBackchannel(handler core.HandlerFunc) core.HandlerFunc {
 	var buf []byte
 	var seq uint16
 
+	// fix https://github.com/AlexxIT/go2rtc/issues/432
+	var mu sync.Mutex
+
 	return func(packet *rtp.Packet) {
+		mu.Lock()
+
 		buf = append(buf, packet.Payload...)
 		if len(buf) < 1024 {
+			mu.Unlock()
 			return
 		}
 
@@ -27,9 +34,11 @@ func RepackBackchannel(handler core.HandlerFunc) core.HandlerFunc {
 			Payload: buf[:1024],
 		}
 
-		handler(pkt)
-
 		buf = buf[1024:]
 		seq++
+
+		mu.Unlock()
+
+		handler(pkt)
 	}
 }
