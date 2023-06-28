@@ -42,7 +42,7 @@ func New(name string, source any) *Stream {
 func NewTemplate(name string, source any) *Stream {
 	// check if source links to some stream name from go2rtc
 	if rawURL, ok := source.(string); ok {
-		if u, err := url.Parse(rawURL); err == nil && u.Scheme == "rtsp" {
+		if u, err := url.Parse(rawURL); err == nil && u.Scheme == "rtsp" && len(u.Path) > 1 {
 			if stream, ok := streams[u.Path[1:]]; ok {
 				streams[name] = stream
 				return stream
