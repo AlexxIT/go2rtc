@@ -1,6 +1,9 @@
 package mp4
 
-import "github.com/AlexxIT/go2rtc/pkg/core"
+import (
+	"github.com/AlexxIT/go2rtc/pkg/core"
+	"strings"
+)
 
 // ParseQuery - like usual parse, but with mp4 param handler
 func ParseQuery(query map[string][]string) []*core.Media {
@@ -46,6 +49,54 @@ func ParseQuery(query map[string][]string) []*core.Media {
 	}
 
 	return core.ParseQuery(query)
+}
+
+func ParseCodecs(codecs string, parseAudio bool) (medias []*core.Media) {
+	var videos []*core.Codec
+	var audios []*core.Codec
+
+	for _, name := range strings.Split(codecs, ",") {
+		switch name {
+		case MimeH264:
+			codec := &core.Codec{Name: core.CodecH264}
+			videos = append(videos, codec)
+		case MimeH265:
+			codec := &core.Codec{Name: core.CodecH265}
+			videos = append(videos, codec)
+		case MimeAAC:
+			codec := &core.Codec{Name: core.CodecAAC}
+			audios = append(audios, codec)
+		case MimeFlac:
+			audios = append(audios,
+				&core.Codec{Name: core.CodecPCMA},
+				&core.Codec{Name: core.CodecPCMU},
+				&core.Codec{Name: core.CodecPCM},
+			)
+		case MimeOpus:
+			codec := &core.Codec{Name: core.CodecOpus}
+			audios = append(audios, codec)
+		}
+	}
+
+	if videos != nil {
+		media := &core.Media{
+			Kind:      core.KindVideo,
+			Direction: core.DirectionSendonly,
+			Codecs:    videos,
+		}
+		medias = append(medias, media)
+	}
+
+	if audios != nil && parseAudio {
+		media := &core.Media{
+			Kind:      core.KindAudio,
+			Direction: core.DirectionSendonly,
+			Codecs:    audios,
+		}
+		medias = append(medias, media)
+	}
+
+	return
 }
 
 const (
