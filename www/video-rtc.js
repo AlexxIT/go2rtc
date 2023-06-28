@@ -32,10 +32,10 @@ export class VideoRTC extends HTMLElement {
         ];
 
         /**
-         * [config] Supported modes (webrtc, mse, mp4, mjpeg).
+         * [config] Supported modes (webrtc, mse, hls, mp4, mjpeg).
          * @type {string}
          */
-        this.mode = "webrtc,mse,mp4,mjpeg";
+        this.mode = "webrtc,mse,hls,mjpeg";
 
         /**
          * [config] Run stream when not displayed on the screen. Default `false`.
@@ -324,6 +324,9 @@ export class VideoRTC extends HTMLElement {
         if (this.mode.indexOf("mse") >= 0 && "MediaSource" in window) { // iPhone
             modes.push("mse");
             this.onmse();
+        } else if (this.mode.indexOf("hls") >= 0 && this.video.canPlayType("application/vnd.apple.mpegurl")) {
+            modes.push("hls");
+            this.onhls();
         } else if (this.mode.indexOf("mp4") >= 0) {
             modes.push("mp4");
             this.onmp4();
@@ -552,6 +555,17 @@ export class VideoRTC extends HTMLElement {
         };
 
         this.send({type: "mjpeg"});
+    }
+
+    onhls() {
+        this.onmessage["hls"] = msg => {
+            const url = "http" + this.wsURL.substring(2, this.wsURL.indexOf("/ws")) + "/hls/";
+            const playlist = msg.value.replace("hls/", url);
+            this.video.src = "data:application/vnd.apple.mpegurl;base64," + btoa(playlist);
+            this.play();
+        }
+
+        this.send({type: "hls", value: this.codecs("hls")});
     }
 
     onmp4() {

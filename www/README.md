@@ -11,6 +11,8 @@
 <video id="video" autoplay controls playsinline muted></video>
 ```
 
+- https://developer.apple.com/documentation/webkit/delivering_video_content_for_safari/
+
 **2. [Safari] pc.createOffer**
 
 Don't work in Desktop Safari:
