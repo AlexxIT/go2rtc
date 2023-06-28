@@ -12,7 +12,7 @@ import (
 )
 
 func (c *Conn) GetMedias() []*core.Media {
-	core.Assert(c.Medias != nil)
+	//core.Assert(c.Medias != nil)
 	return c.Medias
 }
 
