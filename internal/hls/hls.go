@@ -63,7 +63,7 @@ func handlerStream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	src := r.URL.Query().Get("src")
-	stream := streams.GetOrNew(src)
+	stream := streams.Get(src)
 	if stream == nil {
 		http.Error(w, api.StreamNotFound, http.StatusNotFound)
 		return

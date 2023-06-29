@@ -26,7 +26,7 @@ func Init() {
 
 func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 	src := r.URL.Query().Get("src")
-	stream := streams.GetOrNew(src)
+	stream := streams.Get(src)
 	if stream == nil {
 		http.Error(w, api.StreamNotFound, http.StatusNotFound)
 		return
@@ -91,7 +91,7 @@ func handlerStream(w http.ResponseWriter, r *http.Request) {
 
 func outputMjpeg(w http.ResponseWriter, r *http.Request) {
 	src := r.URL.Query().Get("src")
-	stream := streams.GetOrNew(src)
+	stream := streams.Get(src)
 	if stream == nil {
 		http.Error(w, api.StreamNotFound, http.StatusNotFound)
 		return
@@ -159,7 +159,7 @@ func inputMjpeg(w http.ResponseWriter, r *http.Request) {
 
 func handlerWS(tr *ws.Transport, _ *ws.Message) error {
 	src := tr.Request.URL.Query().Get("src")
-	stream := streams.GetOrNew(src)
+	stream := streams.Get(src)
 	if stream == nil {
 		return errors.New(api.StreamNotFound)
 	}

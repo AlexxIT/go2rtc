@@ -91,7 +91,7 @@ func asyncHandler(tr *ws.Transport, msg *ws.Message) error {
 
 	query := tr.Request.URL.Query()
 	if name := query.Get("src"); name != "" {
-		stream = streams.GetOrNew(name)
+		stream = streams.Get(name)
 		mode = core.ModePassiveConsumer
 		log.Debug().Str("src", name).Msg("[webrtc] new consumer")
 	} else if name = query.Get("dst"); name != "" {

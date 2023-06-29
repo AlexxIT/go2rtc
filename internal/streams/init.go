@@ -53,20 +53,6 @@ func NewTemplate(name string, source any) *Stream {
 	return New(name, "{input}")
 }
 
-func GetOrNew(src string) *Stream {
-	if stream, ok := streams[src]; ok {
-		return stream
-	}
-
-	if !HasProducer(src) {
-		return nil
-	}
-
-	log.Info().Str("url", src).Msg("[streams] create new stream")
-
-	return New(src, src)
-}
-
 func GetAll() (names []string) {
 	for name := range streams {
 		names = append(names, name)

@@ -13,7 +13,7 @@ import (
 
 func handlerWSMSE(tr *ws.Transport, msg *ws.Message) error {
 	src := tr.Request.URL.Query().Get("src")
-	stream := streams.GetOrNew(src)
+	stream := streams.Get(src)
 	if stream == nil {
 		return errors.New(api.StreamNotFound)
 	}
@@ -60,7 +60,7 @@ func handlerWSMSE(tr *ws.Transport, msg *ws.Message) error {
 
 func handlerWSMP4(tr *ws.Transport, msg *ws.Message) error {
 	src := tr.Request.URL.Query().Get("src")
-	stream := streams.GetOrNew(src)
+	stream := streams.Get(src)
 	if stream == nil {
 		return errors.New(api.StreamNotFound)
 	}

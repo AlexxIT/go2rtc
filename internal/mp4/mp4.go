@@ -40,7 +40,7 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 
 	query := r.URL.Query()
 	src := query.Get("src")
-	stream := streams.GetOrNew(src)
+	stream := streams.Get(src)
 	if stream == nil {
 		http.Error(w, api.StreamNotFound, http.StatusNotFound)
 		return
@@ -101,7 +101,7 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 	}
 
 	src := query.Get("src")
-	stream := streams.GetOrNew(src)
+	stream := streams.Get(src)
 	if stream == nil {
 		http.Error(w, api.StreamNotFound, http.StatusNotFound)
 		return
