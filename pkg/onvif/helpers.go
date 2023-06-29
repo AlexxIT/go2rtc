@@ -30,6 +30,8 @@ func DiscoveryStreamingURLs() ([]string, error) {
 		return nil, err
 	}
 
+	defer conn.Close()
+
 	// https://www.onvif.org/wp-content/uploads/2016/12/ONVIF_Feature_Discovery_Specification_16.07.pdf
 	// 5.3 Discovery Procedure:
 	msg := `<?xml version="1.0" ?>
