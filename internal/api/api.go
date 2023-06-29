@@ -1,6 +1,7 @@
 package api
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"github.com/AlexxIT/go2rtc/internal/app"
@@ -22,6 +23,9 @@ func Init() {
 			BasePath  string `yaml:"base_path"`
 			StaticDir string `yaml:"static_dir"`
 			Origin    string `yaml:"origin"`
+			TLSListen     string `yaml:"tls_listen"`
+			TLSCert       string `yaml:"tls_cert"`
+			TLSPrivateKey string `yaml:"tls_private_key"`
 		} `yaml:"api"`
 	}
 
@@ -74,6 +78,37 @@ func Init() {
 			log.Fatal().Err(err).Msg("[api] serve")
 		}
 	}()
+
+	// Initialize the HTTPS server
+	if cfg.Mod.TLSListen != "" {
+		tlsConfig := &tls.Config{}
+		if cfg.Mod.TLSCert != "" && cfg.Mod.TLSPrivateKey != "" {
+			tlsListener, err := net.Listen("tcp", cfg.Mod.TLSListen)
+			if err != nil {
+				log.Fatal().Err(err).Msg("[api] tls listen")
+				return
+			}
+			log.Info().Str("addr", cfg.Mod.TLSListen).Msg("[api] tls listen")
+
+			cert, err := tls.X509KeyPair([]byte(cfg.Mod.TLSCert), []byte(cfg.Mod.TLSPrivateKey))
+			if err != nil {
+				print(cfg.Mod.TLSCert)
+				log.Fatal().Err(err).Msg("[api] tls load cert/key")
+				return
+			}
+			tlsConfig.Certificates = []tls.Certificate{cert}
+
+			tlsServer := &http.Server{
+				Handler:   Handler,
+				TLSConfig: tlsConfig,
+			}
+			go func() {
+				if err := tlsServer.ServeTLS(tlsListener, "", ""); err != nil {
+					log.Fatal().Err(err).Msg("[api] tls serve")
+				}
+			}()
+		}
+	}
 }
 
 const (
