@@ -42,7 +42,7 @@
         }).then(r => {
             if (r.ok) {
                 alert('OK');
-                fetch('api/exit?code=1', {method: 'POST'});
+                fetch('api/exit?code=100', {method: 'POST'});
             } else {
                 r.text().then(alert);
             }
