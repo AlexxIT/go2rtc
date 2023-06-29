@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"net/url"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
@@ -18,6 +17,7 @@ import (
 
 func Init() {
 	streams.HandleFunc("dvrip", handle)
+
 	// DVRIP client autodiscovery
 	api.HandleFunc("api/dvrip", apiDvrip)
 }
@@ -34,6 +34,75 @@ func handle(url string) (core.Producer, error) {
 		return nil, err
 	}
 	return conn, nil
+}
+
+const Port = 34569 // UDP port number for dvrip discovery
+
+func apiDvrip(w http.ResponseWriter, r *http.Request) {
+	items, err := discover()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	api.ResponseStreams(w, items)
+}
+
+func discover() ([]api.Stream, error) {
+	addr := &net.UDPAddr{
+		Port: Port,
+		IP:   net.IP{239, 255, 255, 250},
+	}
+
+	conn, err := net.ListenUDP("udp4", addr)
+	if err != nil {
+		return nil, err
+	}
+
+	defer conn.Close()
+
+	go sendBroadcasts(conn)
+
+	var items []api.Stream
+
+	for _, info := range getResponses(conn) {
+		if info.HostIP == "" || info.HostName == "" {
+			continue
+		}
+
+		host, err := hexToDecimalBytes(info.HostIP)
+		if err != nil {
+			continue
+		}
+
+		items = append(items, api.Stream{
+			Name: info.HostName,
+			URL:  "dvrip://user:pass@" + host + "?channel=0&subtype=0",
+		})
+	}
+
+	return items, nil
+}
+
+func sendBroadcasts(conn *net.UDPConn) {
+	// broadcasting the same multiple times because the devies some times don't answer
+	data, err := hex.DecodeString("ff00000000000000000000000000fa0500000000")
+	if err != nil {
+		return
+	}
+
+	addr := &net.UDPAddr{
+		Port: Port,
+		IP:   net.IP{255, 255, 255, 255},
+	}
+
+	for i := 0; i < 3; i++ {
+		time.Sleep(100 * time.Millisecond)
+
+		if _, err = conn.WriteToUDP(data, addr); err != nil {
+			log.Err(err).Caller().Send()
+		}
+	}
 }
 
 type Message struct {
@@ -64,153 +133,48 @@ type NetCommon struct {
 	Version         string `json:"Version"`
 }
 
-const (
-	Port    = 34569           // UDP port number for dvrip discovery
-	Timeout = 1 * time.Second // Timeout for receiving responses
-)
-
-func discover() ([]api.Stream, error) {
-	log.Info().Msgf("[dvrip] discovering.")
-	address := net.UDPAddr{
-		Port: Port,
-		IP:   net.IP{239, 255, 255, 250},
+func getResponses(conn *net.UDPConn) (infos []*NetCommon) {
+	if err := conn.SetReadDeadline(time.Now().Add(time.Second * 2)); err != nil {
+		return
 	}
 
-	connection, err := net.ListenUDP("udp", &address)
-	if err != nil {
-		return nil, err
-	}
-	defer connection.Close()
+	var ips []net.IP // processed IPs
 
-	responseChan := make(chan []byte)
-
-	go receiveResponses(connection, responseChan)
-	go sendBroadcasts(connection)
-	var items []api.Stream
-
-	// Process received responses
-	for response := range responseChan {
-		n := len(response)
-		if n < 20+1 {
-			log.Debug().Msg("[dvrip] No valid JSON data found in the message")
-			continue
-		}
-
-		jsonData := response[20 : n-1]
-		if len(jsonData) == 0 {
-			log.Err(err).Msgf("[dvrip] No valid JSON data found in the message")
-			continue
-		}
-		var msg Message
-		err = json.Unmarshal(jsonData, &msg)
-		if err != nil {
-			log.Err(err).Msgf("[dvrip] Error parsing JSON: %s", err)
-			continue
-		}
-
-		if msg.NetCommon.HostIP != "" && msg.NetCommon.HostName != "" {
-			hostIP, err := hexToDecimalBytes(msg.NetCommon.HostIP)
-			if err != nil {
-				log.Err(err).Msgf("[dvrip] Error parsing IP: %s", err)
-				continue
-			}
-
-			u := &url.URL{
-				Scheme: "dvrip",
-				Host:   hostIP,
-				Path:   "",
-				User:   url.UserPassword("admin", "pass"),
-			}
-			queryParams := url.Values{}
-			queryParams.Add("channel", "0")
-			queryParams.Add("subtype", "0")
-			u.RawQuery = queryParams.Encode()
-
-			uri := u.String()
-
-			exists := false
-			for _, otherUrl := range items {
-				if otherUrl.URL == uri {
-					exists = true
-					break
-				}
-			}
-
-			if !exists {
-				items = append(items, api.Stream{Name: msg.NetCommon.HostName, URL: uri})
-			}
-		}
-	}
-
-	return items, nil
-}
-
-func receiveResponses(conn *net.UDPConn, responseChan chan<- []byte) {
-	buffer := make([]byte, 1024)
-
+	b := make([]byte, 4096)
+loop:
 	for {
-		conn.SetReadDeadline(time.Now().Add(Timeout))
-		n, _, err := conn.ReadFromUDP(buffer)
+		n, addr, err := conn.ReadFromUDP(b)
 		if err != nil {
-			if netErr, ok := err.(*net.OpError); ok && netErr.Timeout() {
-				close(responseChan)
-				return
+			break
+		}
+
+		for _, ip := range ips {
+			if ip.Equal(addr.IP) {
+				continue loop
 			}
+		}
 
-			log.Info().Msgf("Error while receiving response:", err)
+		if n <= 20+1 {
 			continue
 		}
 
-		// Copy received response to a new slice to avoid data race
-		responseCopy := make([]byte, n)
-		copy(responseCopy, buffer[:n])
+		var msg Message
 
-		responseChan <- responseCopy
-	}
-}
-
-func sendBroadcasts(conn *net.UDPConn) {
-	// broadcasting the same multiple times because the devies some times don't answer
-	hexStreams := []string{
-		"ff00000000000000000000000000fa0500000000",
-		"ff00000000000000000000000000fa0500000000",
-		"ff00000000000000000000000000fa0500000000",
-	}
-
-	for _, hexStream := range hexStreams {
-		data, err := hex.DecodeString(hexStream)
-		if err != nil {
-			log.Err(err).Msgf("[dvrip] Failed to decode hex stream:", err)
+		if err = json.Unmarshal(b[20:n-1], &msg); err != nil {
 			continue
 		}
-		address := net.UDPAddr{
-			Port: Port,
-			IP:   net.IP{255, 255, 255, 255},
-		}
 
-		_, err = conn.WriteToUDP(data, &address)
-		if err != nil {
-			log.Err(err).Msgf("[dvrip] Error while sending broadcast:", err)
-		}
-		time.Sleep(100 * time.Millisecond)
+		infos = append(infos, &msg.NetCommon)
+		ips = append(ips, addr.IP)
 	}
+
+	return
 }
 
 func hexToDecimalBytes(hexIP string) (string, error) {
-	// Remove the '0x' prefix
-	hexIP = hexIP[2:]
-
-	decimalBytes, err := hex.DecodeString(hexIP)
+	b, err := hex.DecodeString(hexIP[2:]) // remove the '0x' prefix
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("%d.%d.%d.%d", decimalBytes[3], decimalBytes[2], decimalBytes[1], decimalBytes[0]), nil
-}
-
-func apiDvrip(w http.ResponseWriter, r *http.Request) {
-	items, err := discover()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-	api.ResponseStreams(w, items)
+	return fmt.Sprintf("%d.%d.%d.%d", b[3], b[2], b[1], b[0]), nil
 }

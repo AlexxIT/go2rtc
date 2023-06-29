@@ -171,6 +171,18 @@
 </script>
 
 
+<button id="dvrip">DVRIP</button>
+<div class="module">
+    <table id="dvrip-table"></table>
+</div>
+<script>
+    document.getElementById('dvrip').addEventListener('click', async ev => {
+        ev.target.nextElementSibling.style.display = 'block'
+        await getStreams('api/dvrip', 'dvrip-table')
+    })
+</script>
+
+
 <button id="devices">FFmpeg Devices (USB)</button>
 <div class="module">
     <table id="devices-table">
@@ -259,18 +271,6 @@
         url.searchParams.set('src', ev.target.elements['src'].value)
 
         await getStreams(url.toString(), 'onvif-table')
-    })
-</script>
-
-
-<button id="dvrip">DVRIP</button>
-<div class="module">
-    <table id="dvrip-table"></table>
-</div>
-<script>
-    document.getElementById('dvrip').addEventListener('click', async ev => {
-        ev.target.nextElementSibling.style.display = 'block'
-        await getStreams('api/dvrip', 'dvrip-table')
     })
 </script>
 
