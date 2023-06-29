@@ -93,12 +93,9 @@ func (s *Session) HandleRTCP(data []byte) (err error) {
 		return
 	}
 
-	var packets []rtcp.Packet
-	if packets, err = rtcp.Unmarshal(data); err != nil {
+	if _, err = rtcp.Unmarshal(data); err != nil {
 		return
 	}
-
-	_ = packets
 
 	if header.Type == rtcp.TypeSenderReport {
 		err = s.KeepAlive()
