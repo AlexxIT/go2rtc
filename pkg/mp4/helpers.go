@@ -49,7 +49,7 @@ func ParseQuery(query map[string][]string) []*core.Media {
 }
 
 const (
-	waitNone byte = iota
-	waitKeyframe
-	waitInit
+	stateNone byte = iota
+	stateInit
+	stateStart
 )

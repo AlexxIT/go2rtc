@@ -22,7 +22,7 @@ type Consumer struct {
 
 	muxer *Muxer
 	mu    sync.Mutex
-	wait  byte
+	state byte
 
 	send int
 }
@@ -60,18 +60,16 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 
 	switch track.Codec.Name {
 	case core.CodecH264:
-		c.wait = waitInit
-
 		handler.Handler = func(packet *rtp.Packet) {
 			if packet.Version != h264.RTPPacketVersionAVC {
 				return
 			}
 
-			if c.wait != waitNone {
-				if c.wait == waitInit || !h264.IsKeyframe(packet.Payload) {
+			if c.state != stateStart {
+				if c.state != stateInit || !h264.IsKeyframe(packet.Payload) {
 					return
 				}
-				c.wait = waitNone
+				c.state = stateStart
 			}
 
 			// important to use Mutex because right fragment order
@@ -89,18 +87,16 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 		}
 
 	case core.CodecH265:
-		c.wait = waitInit
-
 		handler.Handler = func(packet *rtp.Packet) {
 			if packet.Version != h264.RTPPacketVersionAVC {
 				return
 			}
 
-			if c.wait != waitNone {
-				if c.wait == waitInit || !h265.IsKeyframe(packet.Payload) {
+			if c.state != stateStart {
+				if c.state != stateInit || !h265.IsKeyframe(packet.Payload) {
 					return
 				}
-				c.wait = waitNone
+				c.state = stateStart
 			}
 
 			c.mu.Lock()
@@ -116,7 +112,7 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 
 	default:
 		handler.Handler = func(packet *rtp.Packet) {
-			if c.wait != waitNone {
+			if c.state != stateStart {
 				return
 			}
 
@@ -182,9 +178,15 @@ func (c *Consumer) Init() ([]byte, error) {
 }
 
 func (c *Consumer) Start() {
-	if c.wait == waitInit {
-		c.wait = waitKeyframe
+	for _, sender := range c.senders {
+		switch sender.Codec.Name {
+		case core.CodecH264, core.CodecH265:
+			c.state = stateInit
+			return
+		}
 	}
+
+	c.state = stateStart
 }
 
 func (c *Consumer) MarshalJSON() ([]byte, error) {
