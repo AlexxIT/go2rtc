@@ -46,21 +46,13 @@ func (s *Server) Serve(conn net.PacketConn) error {
 		// Multiplexing RTP Data and Control Packets on a Single Port
 		// https://datatracker.ietf.org/doc/html/rfc5761
 
+		var handle func([]byte) error
+
 		// this is default position for SSRC in RTP packet
 		ssrc := binary.BigEndian.Uint32(buf[8:])
 		session, ok := s.sessions[ssrc]
 		if ok {
-			if session.Write == nil {
-				session.Write = func(b []byte) (int, error) {
-					return conn.WriteTo(b, addr)
-				}
-			}
-
-			atomic.AddUint32(&session.Recv, uint32(n))
-
-			if err = session.HandleRTP(buf[:n]); err != nil {
-				return err
-			}
+			handle = session.HandleRTP
 		} else {
 			// this is default position for SSRC in RTCP packet
 			ssrc = binary.BigEndian.Uint32(buf[4:])
@@ -68,9 +60,19 @@ func (s *Server) Serve(conn net.PacketConn) error {
 				continue // skip unknown ssrc
 			}
 
-			if err = session.HandleRTCP(buf[:n]); err != nil {
-				return err
+			handle = session.HandleRTCP
+		}
+
+		if session.Write == nil {
+			session.Write = func(b []byte) (int, error) {
+				return conn.WriteTo(b, addr)
 			}
+		}
+
+		atomic.AddUint32(&session.Recv, uint32(n))
+
+		if err = handle(buf[:n]); err != nil {
+			return err
 		}
 	}
 }
