@@ -623,15 +623,6 @@ api:
   base_path: "/rtc"  # default "", API prefix for serve on suburl (/api => /rtc/api)
   static_dir: "www"  # default "", folder for static files (custom web interface)
   origin: "*"        # default "", allow CORS requests (only * supported)
-  tls_listen: ":1985" # default "", HTTPS port
-  tls_cert: |         # default "". PEM-encoded fullchain certificate for https
-    -----BEGIN CERTIFICATE-----
-    .....
-    -----END CERTIFICATE-----
-  tls_private_key: |  # default "". PEM-encoded private key for https
-    -----BEGIN PRIVATE KEY-----
-    .....
-    -----END PRIVATE KEY-----
 ```
 
 **PS:**
