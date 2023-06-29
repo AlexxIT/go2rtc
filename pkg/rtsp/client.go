@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/AlexxIT/go2rtc/pkg/tcp/websocket"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -22,10 +23,12 @@ func NewClient(uri string) *Conn {
 }
 
 func (c *Conn) Dial() (err error) {
+	var conn net.Conn
+
 	if c.Transport == "" {
-		c.conn, err = Dial(c.uri)
+		conn, err = Dial(c.uri)
 	} else {
-		c.conn, err = websocket.Dial(c.Transport)
+		conn, err = websocket.Dial(c.Transport)
 	}
 
 	if err != nil {
@@ -40,8 +43,10 @@ func (c *Conn) Dial() (err error) {
 	c.auth = tcp.NewAuth(c.URL.User)
 	c.URL.User = nil
 
-	c.reader = bufio.NewReader(c.conn)
+	c.conn = conn
+	c.reader = bufio.NewReader(conn)
 	c.session = ""
+	c.sequence = 0
 	c.state = StateConn
 
 	return nil
