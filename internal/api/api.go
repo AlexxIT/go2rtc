@@ -110,7 +110,15 @@ func ResponsePrettyJSON(w http.ResponseWriter, v any) {
 
 func Response(w http.ResponseWriter, body any, contentType string) {
 	w.Header().Set("Content-Type", contentType)
-	_, _ = fmt.Fprint(w, body)
+
+	switch v := body.(type) {
+	case []byte:
+		_, _ = w.Write(v)
+	case string:
+		_, _ = w.Write([]byte(v))
+	default:
+		_, _ = fmt.Fprint(w, body)
+	}
 }
 
 const StreamNotFound = "stream not found"
