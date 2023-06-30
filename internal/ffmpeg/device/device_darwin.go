@@ -1,15 +1,19 @@
 package device
 
 import (
-	"github.com/AlexxIT/go2rtc/internal/api"
-	"github.com/AlexxIT/go2rtc/pkg/core"
+	"bytes"
+	"errors"
 	"os/exec"
 	"regexp"
 	"strings"
+	"syscall"
+
+	"github.com/AlexxIT/go2rtc/internal/api"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
 // https://trac.ffmpeg.org/wiki/Capture/Webcam
-const deviceInputPrefix = "-f avfoundation"
+var deviceInputPrefix = "-f avfoundation"
 
 func deviceInputSuffix(video, audio string) string {
 	switch {
@@ -65,4 +69,47 @@ func initDevices() {
 			Name: name, URL: "ffmpeg:device?" + kind + "=" + name,
 		})
 	}
+
+	inputFormats, err := detectInputFormats("0")
+	if err == nil {
+		deviceInputPrefix += " -pix_fmt:v " + inputFormats[0]
+	}
+}
+
+func detectInputFormats(video string) ([]string, error) {
+
+	cmd := exec.Command("ffprobe", "-hide_banner", "-v", "error", "-print_format", "json", "-f", "avfoundation", "-video_size", "640x480", "-framerate", "24", "-i", video)
+	log.Debug().Msgf("[device_darwin] %s", cmd.String())
+	var out bytes.Buffer
+	cmd.Stderr = &out
+	err := cmd.Run()
+	if err != nil {
+		// If it's an exit error, get the exit code
+		if exitError, ok := err.(*exec.ExitError); ok {
+			ws := exitError.Sys().(syscall.WaitStatus)
+			log.Warn().Msgf("Exit code: %d\n", ws.ExitStatus())
+		} else {
+			// Not an ExitError, just print the error
+			log.Warn().Msgf("Command finished with error: %v\n", err)
+		}
+
+		return nil, err
+	}
+
+	lines := strings.Split(out.String(), "\n")
+
+	var results []string
+	for _, value := range lines {
+		parts := strings.Fields(value)
+		if len(parts) != 4 {
+			continue
+		} else {
+			results = append(results, parts[3])
+		}
+	}
+
+	if len(results) == 0 {
+		return nil, errors.New("empty formats")
+	}
+	return results, nil
 }

@@ -2,12 +2,15 @@ package device
 
 import (
 	"github.com/AlexxIT/go2rtc/internal/api"
+	"github.com/AlexxIT/go2rtc/internal/app"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"sync"
 )
+
+var log = app.GetLogger("devices")
 
 func Init(bin string) {
 	Bin = bin
@@ -35,6 +38,8 @@ func GetInput(src string) (string, error) {
 				audio = value[0]
 			case "resolution":
 				input += " -video_size " + value[0]
+			case "pix_fmt":
+				input += " -pix_fmt:v " + value[0]
 			default: // "input_format", "framerate", "video_size"
 				input += " -" + key + " " + value[0]
 			}
@@ -42,12 +47,12 @@ func GetInput(src string) (string, error) {
 	}
 
 	if video != "" {
-		if i, err := strconv.Atoi(video); err == nil && i < len(videos) {
+		if i, err := strconv.Atoi(video); err != nil && i < len(videos) {
 			video = videos[i]
 		}
 	}
 	if audio != "" {
-		if i, err := strconv.Atoi(audio); err == nil && i < len(audios) {
+		if i, err := strconv.Atoi(audio); err != nil && i < len(audios) {
 			audio = audios[i]
 		}
 	}
