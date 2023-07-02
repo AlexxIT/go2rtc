@@ -102,15 +102,21 @@ var defaults = map[string]string{
 	"h265/videotoolbox": "-c:v hevc_videotoolbox -g 50 -bf 0 -profile:v high -level:v 5.1",
 }
 
+// configTemplate - return template from config (defaults) if exist or return raw template
+func configTemplate(template string) string {
+	if s := defaults[template]; s != "" {
+		return s
+	}
+	return template
+}
+
 // inputTemplate - select input template from YAML config by template name
-// if query has input param - select another tempalte by this name
+// if query has input param - select another template by this name
 // if there is no another template - use input param as template
 func inputTemplate(name, s string, query url.Values) string {
 	var template string
 	if input := query.Get("input"); input != "" {
-		if template = defaults[input]; template == "" {
-			template = input
-		}
+		template = configTemplate(input)
 	} else {
 		template = defaults[name]
 	}
@@ -191,6 +197,8 @@ func parseArgs(s string) *ffmpeg.Args {
 	if query != nil {
 		// 1. Process raw params for FFmpeg
 		for _, raw := range query["raw"] {
+			// support templates https://github.com/AlexxIT/go2rtc/issues/487
+			raw = configTemplate(raw)
 			args.AddCodec(raw)
 		}
 
