@@ -125,6 +125,8 @@ func outputWebRTC(w http.ResponseWriter, r *http.Request) {
 		_, err = w.Write([]byte(answer))
 
 	default:
+		w.Header().Set("Content-Type", mediaType)
+
 		_, err = w.Write([]byte(answer))
 	}
 
