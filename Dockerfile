@@ -41,7 +41,8 @@ FROM base
 # Install ffmpeg, tini (for signal handling),
 # and other common tools for the echo source.
 # alsa-plugins-pulse for ALSA support (+0MB)
-RUN apk add --no-cache tini ffmpeg bash curl jq alsa-plugins-pulse
+# font-droid for FFmpeg drawtext filter (+2MB)
+RUN apk add --no-cache tini ffmpeg bash curl jq alsa-plugins-pulse font-droid
 
 # Hardware Acceleration for Intel CPU (+50MB)
 ARG TARGETARCH

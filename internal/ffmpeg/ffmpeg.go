@@ -89,8 +89,8 @@ var defaults = map[string]string{
 
 	// hardware NVidia on Linux and Windows
 	// preset=p2 - faster, tune=ll - low latency
-	"h264/cuda": "-c:v h264_nvenc -g 50 -profile:v high -level:v auto -preset:v p2 -tune:v ll",
-	"h265/cuda": "-c:v hevc_nvenc -g 50 -profile:v high -level:v auto",
+	"h264/cuda": "-c:v h264_nvenc -g 50 -bf 0 -profile:v high -level:v auto -preset:v p2 -tune:v ll",
+	"h265/cuda": "-c:v hevc_nvenc -g 50 -bf 0 -profile:v high -level:v auto",
 
 	// hardware Intel on Windows
 	"h264/dxva2":  "-c:v h264_qsv -g 50 -bf 0 -profile:v high -level:v 4.1 -async_depth:v 1",
@@ -232,6 +232,18 @@ func parseArgs(s string) *ffmpeg.Args {
 			if filter != "" {
 				args.AddFilter(filter)
 			}
+		}
+
+		for _, drawtext := range query["drawtext"] {
+			// support templates https://github.com/AlexxIT/go2rtc/issues/487
+			drawtext = configTemplate(drawtext)
+
+			// support default timestamp format
+			if !strings.Contains(drawtext, "text=") {
+				drawtext += `:text='%{localtime\:%Y-%m-%d %X}'`
+			}
+
+			args.AddFilter("drawtext=" + drawtext)
 		}
 
 		// 3. Process video codecs
