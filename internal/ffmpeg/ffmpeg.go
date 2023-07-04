@@ -62,7 +62,9 @@ var defaults = map[string]string{
 	//"mjpeg": "-c:v mjpeg -force_duplicated_matrix:v 1 -huffman:v 0 -pix_fmt:v yuvj420p",
 
 	// https://ffmpeg.org/ffmpeg-codecs.html#libopus-1
-	"opus":       "-c:a libopus -ar:a 48000 -ac:a 2 -application:a voip -compression_level:a 0",
+	// https://github.com/pion/webrtc/issues/1514
+	// `-af adelay=0|0` - force frame_size=960, important for WebRTC audio quality
+	"opus":       "-c:a libopus -ar:a 48000 -ac:a 2 -application:a voip -af adelay=0|0",
 	"pcmu":       "-c:a pcm_mulaw -ar:a 8000 -ac:a 1",
 	"pcmu/16000": "-c:a pcm_mulaw -ar:a 16000 -ac:a 1",
 	"pcmu/48000": "-c:a pcm_mulaw -ar:a 48000 -ac:a 1",
