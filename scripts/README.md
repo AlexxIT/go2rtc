@@ -7,6 +7,15 @@
 - `aarch64` = `arm64`
 - `armv7` = `arm`
 
+## Go
+
+```
+go get -u
+go mod tidy
+go mod why github.com/pion/rtcp
+go list -deps .\cmd\go2rtc_rtsp\
+```
+
 ## Virus
 
 - https://go.dev/doc/faq#virus
@@ -14,6 +23,8 @@
 
 ## Useful links
 
+- https://github.com/golang-standards/project-layout
+- https://github.com/micro/micro
 - https://github.com/golang/go/wiki/GoArm
 - https://gist.github.com/asukakenji/f15ba7e588ac42795f421b48b8aede63
 - https://en.wikipedia.org/wiki/AArch64
