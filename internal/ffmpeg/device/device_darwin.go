@@ -3,24 +3,41 @@ package device
 import (
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"net/url"
 	"os/exec"
 	"regexp"
 	"strings"
 )
 
-// https://trac.ffmpeg.org/wiki/Capture/Webcam
-const deviceInputPrefix = "-f avfoundation"
+func queryToInput(query url.Values) string {
+	video := query.Get("video")
+	audio := query.Get("audio")
 
-func deviceInputSuffix(video, audio string) string {
-	switch {
-	case video != "" && audio != "":
-		return `"` + video + `:` + audio + `"`
-	case video != "":
-		return `"` + video + `"`
-	case audio != "":
-		return `":` + audio + `"`
+	if video == "" && audio == "" {
+		return ""
 	}
-	return ""
+
+	// https://ffmpeg.org/ffmpeg-devices.html#avfoundation
+	input := "-f avfoundation"
+
+	if video != "" {
+		video = indexToItem(videos, video)
+
+		for key, value := range query {
+			switch key {
+			case "resolution":
+				input += " -video_size " + value[0]
+			case "pixel_format", "framerate", "video_size", "capture_cursor", "capture_mouse_clicks", "capture_raw_data":
+				input += " -" + key + " " + value[0]
+			}
+		}
+	}
+
+	if audio != "" {
+		audio = indexToItem(audios, audio)
+	}
+
+	return input + ` -i "` + video + `:` + audio + `"`
 }
 
 func initDevices() {

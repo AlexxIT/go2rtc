@@ -1,6 +1,7 @@
 package device
 
 import (
+	"errors"
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"net/http"
 	"net/url"
@@ -16,45 +17,23 @@ func Init(bin string) {
 }
 
 func GetInput(src string) (string, error) {
+	i := strings.IndexByte(src, '?')
+	if i < 0 {
+		return "", errors.New("empty query: " + src)
+	}
+
+	query, err := url.ParseQuery(src[i+1:])
+	if err != nil {
+		return "", err
+	}
+
 	runonce.Do(initDevices)
 
-	input := deviceInputPrefix
-
-	var video, audio string
-
-	if i := strings.IndexByte(src, '?'); i > 0 {
-		query, err := url.ParseQuery(src[i+1:])
-		if err != nil {
-			return "", err
-		}
-		for key, value := range query {
-			switch key {
-			case "video":
-				video = value[0]
-			case "audio":
-				audio = value[0]
-			case "resolution":
-				input += " -video_size " + value[0]
-			default: // "input_format", "framerate", "video_size"
-				input += " -" + key + " " + value[0]
-			}
-		}
+	if input := queryToInput(query); input != "" {
+		return input, nil
 	}
 
-	if video != "" {
-		if i, err := strconv.Atoi(video); err == nil && i < len(videos) {
-			video = videos[i]
-		}
-	}
-	if audio != "" {
-		if i, err := strconv.Atoi(audio); err == nil && i < len(audios) {
-			audio = audios[i]
-		}
-	}
-
-	input += " -i " + deviceInputSuffix(video, audio)
-
-	return input, nil
+	return "", errors.New("wrong query: " + src)
 }
 
 var Bin string
@@ -67,4 +46,11 @@ func apiDevices(w http.ResponseWriter, r *http.Request) {
 	runonce.Do(initDevices)
 
 	api.ResponseStreams(w, streams)
+}
+
+func indexToItem(items []string, index string) string {
+	if i, err := strconv.Atoi(index); err == nil && i < len(items) {
+		return items[i]
+	}
+	return index
 }

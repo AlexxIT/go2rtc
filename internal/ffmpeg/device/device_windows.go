@@ -3,12 +3,58 @@ package device
 import (
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"net/url"
 	"os/exec"
 	"regexp"
 )
 
-// https://trac.ffmpeg.org/wiki/DirectShow
-const deviceInputPrefix = "-f dshow"
+func queryToInput(query url.Values) string {
+	video := query.Get("video")
+	audio := query.Get("audio")
+
+	if video == "" && audio == "" {
+		return ""
+	}
+
+	// https://ffmpeg.org/ffmpeg-devices.html#dshow
+	input := "-f dshow"
+
+	if video != "" {
+		video = indexToItem(videos, video)
+
+		for key, value := range query {
+			switch key {
+			case "resolution":
+				input += " -video_size " + value[0]
+			case "video_size", "framerate", "pixel_format":
+				input += " -" + key + " " + value[0]
+			}
+		}
+	}
+
+	if audio != "" {
+		audio = indexToItem(audios, audio)
+
+		for key, value := range query {
+			switch key {
+			case "sample_rate", "sample_size", "channels", "audio_buffer_size":
+				input += " -" + key + " " + value[0]
+			}
+		}
+	}
+
+	if video != "" {
+		input += ` -i video="` + video + `"`
+
+		if audio != "" {
+			input += `:audio="` + audio + `"`
+		}
+	} else {
+		input += ` -i audio="` + audio + `"`
+	}
+
+	return input
+}
 
 func deviceInputSuffix(video, audio string) string {
 	switch {

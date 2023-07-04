@@ -3,19 +3,36 @@ package device
 import (
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"net/url"
 	"os"
 	"os/exec"
 	"regexp"
 	"strings"
 )
 
-// https://trac.ffmpeg.org/wiki/Capture/Webcam
-const deviceInputPrefix = "-f v4l2"
+func queryToInput(query url.Values) string {
+	if video := query.Get("video"); video != "" {
+		// https://ffmpeg.org/ffmpeg-devices.html#video4linux2_002c-v4l2
+		input := "-f v4l2"
 
-func deviceInputSuffix(video, audio string) string {
-	if video != "" {
-		return video
+		for key, value := range query {
+			switch key {
+			case "resolution":
+				input += " -video_size " + value[0]
+			case "video_size", "pixel_format", "input_format", "framerate", "use_libv4l2":
+				input += " -" + key + " " + value[0]
+			}
+		}
+
+		return input + " -i " + indexToItem(videos, video)
 	}
+
+	if audio := query.Get("audio"); audio != "" {
+		input := "-f alsa"
+
+		return input + " -i " + indexToItem(audios, audio)
+	}
+
 	return ""
 }
 
@@ -56,5 +73,16 @@ func initDevices() {
 			videos = append(videos, name)
 			streams = append(streams, stream)
 		}
+	}
+
+	err = exec.Command(Bin, "-f", "alsa", "-i", "default", "-t", "1", "-f", "null", "-").Run()
+	if err == nil {
+		stream := api.Stream{
+			Name: "ALSA default",
+			URL:  "ffmpeg:device?audio=default#audio=opus",
+		}
+
+		audios = append(audios, "default")
+		streams = append(streams, stream)
 	}
 }
