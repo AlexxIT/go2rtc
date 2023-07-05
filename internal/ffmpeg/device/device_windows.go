@@ -25,9 +25,9 @@ func queryToInput(query url.Values) string {
 		for key, value := range query {
 			switch key {
 			case "resolution":
-				input += " -video_size " + value[0]
+				input += " -video_size " + shellEscape(value[0])
 			case "video_size", "framerate", "pixel_format":
-				input += " -" + key + " " + value[0]
+				input += " -" + key + " " + shellEscape(value[0])
 			}
 		}
 	}
@@ -38,7 +38,7 @@ func queryToInput(query url.Values) string {
 		for key, value := range query {
 			switch key {
 			case "sample_rate", "sample_size", "channels", "audio_buffer_size":
-				input += " -" + key + " " + value[0]
+				input += " -" + key + " " + shellEscape(value[0])
 			}
 		}
 	}

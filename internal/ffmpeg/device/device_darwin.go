@@ -1,12 +1,13 @@
 package device
 
 import (
-	"github.com/AlexxIT/go2rtc/internal/api"
-	"github.com/AlexxIT/go2rtc/pkg/core"
 	"net/url"
 	"os/exec"
 	"regexp"
 	"strings"
+
+	"github.com/AlexxIT/go2rtc/internal/api"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
 func queryToInput(query url.Values) string {
@@ -26,9 +27,9 @@ func queryToInput(query url.Values) string {
 		for key, value := range query {
 			switch key {
 			case "resolution":
-				input += " -video_size " + value[0]
+				input += " -video_size " + shellEscape(value[0])
 			case "pixel_format", "framerate", "video_size", "capture_cursor", "capture_mouse_clicks", "capture_raw_data":
-				input += " -" + key + " " + value[0]
+				input += " -" + key + " " + shellEscape(value[0])
 			}
 		}
 	}

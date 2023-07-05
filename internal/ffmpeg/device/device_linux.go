@@ -18,9 +18,9 @@ func queryToInput(query url.Values) string {
 		for key, value := range query {
 			switch key {
 			case "resolution":
-				input += " -video_size " + value[0]
+				input += " -video_size " + shellEscape(value[0])
 			case "video_size", "pixel_format", "input_format", "framerate", "use_libv4l2":
-				input += " -" + key + " " + value[0]
+				input += " -" + key + " " + shellEscape(value[0])
 			}
 		}
 
