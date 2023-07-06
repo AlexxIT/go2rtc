@@ -232,7 +232,7 @@ paths:
   /api/webrtc?src={src}:
     post:
       summary: Get stream in WebRTC format (WHEP)
-      description: "[Source: WebRTC](https://github.com/AlexxIT/go2rtc#source-webrtc)"
+      description: "[Module: WebRTC](https://github.com/AlexxIT/go2rtc#module-webrtc)"
       tags: [ Consume stream ]
       parameters:
         - $ref: "#/components/parameters/stream_src_path"
