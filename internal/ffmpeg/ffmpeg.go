@@ -2,6 +2,9 @@ package ffmpeg
 
 import (
 	"errors"
+	"net/url"
+	"strings"
+
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg/device"
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg/hardware"
@@ -9,8 +12,6 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/ffmpeg"
-	"net/url"
-	"strings"
 )
 
 func Init() {
@@ -103,8 +104,9 @@ var defaults = map[string]string{
 }
 
 // inputTemplate - select input template from YAML config by template name
-// if query has input param - select another tempalte by this name
+// if query has input param - select another template by this name
 // if there is no another template - use input param as template
+// After input param processed - remove it to allow a correct parseArgs Codec selection
 func inputTemplate(name, s string, query url.Values) string {
 	var template string
 	if input := query.Get("input"); input != "" {
@@ -114,6 +116,7 @@ func inputTemplate(name, s string, query url.Values) string {
 	} else {
 		template = defaults[name]
 	}
+	query.Del("input")
 	return strings.Replace(template, "{input}", s, 1)
 }
 
@@ -188,7 +191,7 @@ func parseArgs(s string) *ffmpeg.Args {
 	//   3. `video` params (support multiple)
 	//   4. `audio` params (support multiple)
 	//   5. `hardware` param
-	if query != nil {
+	if len(query) != 0 {
 		// 1. Process raw params for FFmpeg
 		for _, raw := range query["raw"] {
 			args.AddCodec(raw)
