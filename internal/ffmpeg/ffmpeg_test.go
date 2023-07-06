@@ -1,8 +1,9 @@
 package ffmpeg
 
 import (
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestParseArgs(t *testing.T) {
@@ -20,4 +21,16 @@ func TestParseArgs(t *testing.T) {
 
 	args = parseArgs("device?video=0&input_format=mjpeg&video_size=1920x1080")
 	require.Equal(t, `ffmpeg -hide_banner -f dshow -input_format mjpeg -video_size 1920x1080 -i video="0" -c copy -f mjpeg -`, args.String())
+
+	args = parseArgs("http://example.com")
+	require.Equal(t, "ffmpeg -hide_banner -fflags nobuffer -flags low_delay -i http://example.com -c copy -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}", args.String())
+
+	args = parseArgs("http://example.com#video=h264")
+	require.Equal(t, "ffmpeg -hide_banner -fflags nobuffer -flags low_delay -i http://example.com -c:v libx264 -g 50 -profile:v high -level:v 4.1 -preset:v superfast -tune:v zerolatency -pix_fmt:v yuvj420p -an -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}", args.String())
+
+	args = parseArgs("http://example.com#framerate=20")
+	require.Equal(t, "ffmpeg -hide_banner -framerate 20 -fflags nobuffer -flags low_delay -i http://example.com -c copy -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}", args.String())
+
+	args = parseArgs("http://example.com#framerate=20#video=h264")
+	require.Equal(t, "ffmpeg -hide_banner -framerate 20 -fflags nobuffer -flags low_delay -i http://example.com -c:v libx264 -g 50 -profile:v high -level:v 4.1 -preset:v superfast -tune:v zerolatency -pix_fmt:v yuvj420p -an -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}", args.String())
 }
