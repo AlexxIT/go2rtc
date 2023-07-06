@@ -32,7 +32,7 @@ export class VideoRTC extends HTMLElement {
         ];
 
         /**
-         * [config] Supported modes (webrtc, mse, hls, mp4, mjpeg).
+         * [config] Supported modes (webrtc, webrtc/tcp, mse, hls, mp4, mjpeg).
          * @type {string}
          */
         this.mode = "webrtc,mse,hls,mjpeg";
@@ -443,6 +443,8 @@ export class VideoRTC extends HTMLElement {
         video2.addEventListener("loadeddata", ev => this.onpcvideo(ev), {once: true});
 
         pc.addEventListener("icecandidate", ev => {
+            if (ev.candidate && this.mode.indexOf("webrtc/tcp") >= 0 && ev.candidate.protocol === "udp") return;
+
             const candidate = ev.candidate ? ev.candidate.toJSON().candidate : "";
             this.send({type: "webrtc/candidate", value: candidate});
         });
@@ -474,16 +476,12 @@ export class VideoRTC extends HTMLElement {
         this.onmessage["webrtc"] = msg => {
             switch (msg.type) {
                 case "webrtc/candidate":
-                    pc.addIceCandidate({
-                        candidate: msg.value,
-                        sdpMid: "0"
-                    }).catch(() => console.debug);
+                    if (this.mode.indexOf("webrtc/tcp") >= 0 && msg.value.indexOf(" udp ") > 0) return;
+
+                    pc.addIceCandidate({candidate: msg.value, sdpMid: "0"}).catch(() => console.debug);
                     break;
                 case "webrtc/answer":
-                    pc.setRemoteDescription({
-                        type: "answer",
-                        sdp: msg.value
-                    }).catch(() => console.debug);
+                    pc.setRemoteDescription({type: "answer", sdp: msg.value}).catch(() => console.debug);
                     break;
                 case "error":
                     if (msg.value.indexOf("webrtc/offer") < 0) return;
