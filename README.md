@@ -582,7 +582,7 @@ POST http://localhost:1984/api/streams?dst=camera1&src=ffmpeg:http://example.com
 
 The HTTP API is the main part for interacting with the application. Default address: `http://localhost:1984/`.
 
-Interactive [OpenAPI](https://redocly.github.io/redoc/?url=https://raw.githubusercontent.com/AlexxIT/go2rtc/master/api/openapi.yaml&nocors).
+Interactive [OpenAPI](https://alexxit.github.io/go2rtc/api/).
 
 go2rtc has its own JS video player (`video-rtc.js`) with:
 
