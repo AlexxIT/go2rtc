@@ -1074,6 +1074,7 @@ streams:
 ## Cameras experience
 
 - [Dahua](https://www.dahuasecurity.com/) - reference implementation streaming protocols, a lot of settings, high stream quality, multiple streaming clients
+- [EZVIZ](https://www.ezviz.com/) - awful RTSP protocol realisation, many bugs in SDP
 - [Hikvision](https://www.hikvision.com/) - a lot of proprietary streaming technologies
 - [Reolink](https://reolink.com/) - some models has awful unusable RTSP realisation and not best HTTP-FLV alternative (I recommend that you contact Reolink support for new firmware), few settings
 - [Sonoff](https://sonoff.tech/) - very low stream quality, no settings, not best protocol implementation
