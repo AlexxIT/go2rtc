@@ -41,6 +41,11 @@ func (m *Movie) WriteVideo(codec string, width, height uint16, conf []byte) {
 	m.Write(conf)
 	m.EndAtom() // AVCC
 
+	m.StartAtom("pasp") // Pixel Aspect Ratio
+	m.WriteUint32(1)    // hSpacing
+	m.WriteUint32(1)    // vSpacing
+	m.EndAtom()
+
 	m.EndAtom() // AVC1
 }
 

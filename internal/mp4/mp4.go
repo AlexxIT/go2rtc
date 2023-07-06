@@ -1,15 +1,16 @@
 package mp4
 
 import (
-	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
+	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/streams"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/mp4"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/rs/zerolog"
@@ -151,6 +152,16 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 
 	if filename := query.Get("filename"); filename != "" {
 		header.Set("Content-Disposition", `attachment; filename="`+filename+`"`)
+	}
+
+	if rotate := query.Get("rotate"); rotate != "" {
+		mp4.PatchVideoRotate(data, core.Atoi(rotate))
+	}
+
+	if scale := query.Get("scale"); scale != "" {
+		if sx, sy, ok := strings.Cut(scale, ":"); ok {
+			mp4.PatchVideoScale(data, core.Atoi(sx), core.Atoi(sy))
+		}
 	}
 
 	if _, err = w.Write(data); err != nil {
