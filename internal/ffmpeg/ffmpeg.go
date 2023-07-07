@@ -63,7 +63,9 @@ var defaults = map[string]string{
 	//"mjpeg": "-c:v mjpeg -force_duplicated_matrix:v 1 -huffman:v 0 -pix_fmt:v yuvj420p",
 
 	// https://ffmpeg.org/ffmpeg-codecs.html#libopus-1
-	"opus":       "-c:a libopus -ar:a 48000 -ac:a 2 -application:a voip -compression_level:a 0",
+	// https://github.com/pion/webrtc/issues/1514
+	// `-af adelay=0|0` - force frame_size=960, important for WebRTC audio quality
+	"opus":       "-c:a libopus -ar:a 48000 -ac:a 2 -application:a voip -af adelay=0|0",
 	"pcmu":       "-c:a pcm_mulaw -ar:a 8000 -ac:a 1",
 	"pcmu/16000": "-c:a pcm_mulaw -ar:a 16000 -ac:a 1",
 	"pcmu/48000": "-c:a pcm_mulaw -ar:a 48000 -ac:a 1",
@@ -90,8 +92,8 @@ var defaults = map[string]string{
 
 	// hardware NVidia on Linux and Windows
 	// preset=p2 - faster, tune=ll - low latency
-	"h264/cuda": "-c:v h264_nvenc -g 50 -profile:v high -level:v auto -preset:v p2 -tune:v ll",
-	"h265/cuda": "-c:v hevc_nvenc -g 50 -profile:v high -level:v auto",
+	"h264/cuda": "-c:v h264_nvenc -g 50 -bf 0 -profile:v high -level:v auto -preset:v p2 -tune:v ll",
+	"h265/cuda": "-c:v hevc_nvenc -g 50 -bf 0 -profile:v high -level:v auto",
 
 	// hardware Intel on Windows
 	"h264/dxva2":  "-c:v h264_qsv -g 50 -bf 0 -profile:v high -level:v 4.1 -async_depth:v 1",
@@ -103,6 +105,14 @@ var defaults = map[string]string{
 	"h265/videotoolbox": "-c:v hevc_videotoolbox -g 50 -bf 0 -profile:v high -level:v 5.1",
 }
 
+// configTemplate - return template from config (defaults) if exist or return raw template
+func configTemplate(template string) string {
+	if s := defaults[template]; s != "" {
+		return s
+	}
+	return template
+}
+
 // inputTemplate - select input template from YAML config by template name
 // if query has input param - select another template by this name
 // if there is no another template - use input param as template
@@ -110,9 +120,7 @@ var defaults = map[string]string{
 func inputTemplate(name, s string, query url.Values) string {
 	var template string
 	if input := query.Get("input"); input != "" {
-		if template = defaults[input]; template == "" {
-			template = input
-		}
+		template = configTemplate(input)
 	} else {
 		template = defaults[name]
 	}
@@ -199,6 +207,8 @@ func parseArgs(s string) *ffmpeg.Args {
 	if len(query) != 0 {
 		// 1. Process raw params for FFmpeg
 		for _, raw := range query["raw"] {
+			// support templates https://github.com/AlexxIT/go2rtc/issues/487
+			raw = configTemplate(raw)
 			args.AddCodec(raw)
 		}
 
@@ -232,6 +242,18 @@ func parseArgs(s string) *ffmpeg.Args {
 			if filter != "" {
 				args.AddFilter(filter)
 			}
+		}
+
+		for _, drawtext := range query["drawtext"] {
+			// support templates https://github.com/AlexxIT/go2rtc/issues/487
+			drawtext = configTemplate(drawtext)
+
+			// support default timestamp format
+			if !strings.Contains(drawtext, "text=") {
+				drawtext += `:text='%{localtime\:%Y-%m-%d %X}'`
+			}
+
+			args.AddFilter("drawtext=" + drawtext)
 		}
 
 		// 3. Process video codecs

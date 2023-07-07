@@ -582,7 +582,7 @@ POST http://localhost:1984/api/streams?dst=camera1&src=ffmpeg:http://example.com
 
 The HTTP API is the main part for interacting with the application. Default address: `http://localhost:1984/`.
 
-Interactive [OpenAPI](https://redocly.github.io/redoc/?url=https://raw.githubusercontent.com/AlexxIT/go2rtc/master/api/openapi.yaml&nocors).
+Interactive [OpenAPI](https://alexxit.github.io/go2rtc/api/).
 
 go2rtc has its own JS video player (`video-rtc.js`) with:
 
@@ -1074,6 +1074,7 @@ streams:
 ## Cameras experience
 
 - [Dahua](https://www.dahuasecurity.com/) - reference implementation streaming protocols, a lot of settings, high stream quality, multiple streaming clients
+- [EZVIZ](https://www.ezviz.com/) - awful RTSP protocol realisation, many bugs in SDP
 - [Hikvision](https://www.hikvision.com/) - a lot of proprietary streaming technologies
 - [Reolink](https://reolink.com/) - some models has awful unusable RTSP realisation and not best HTTP-FLV alternative (I recommend that you contact Reolink support for new firmware), few settings
 - [Sonoff](https://sonoff.tech/) - very low stream quality, no settings, not best protocol implementation

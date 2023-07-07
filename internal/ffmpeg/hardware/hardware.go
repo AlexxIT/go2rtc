@@ -55,33 +55,51 @@ func MakeHardware(args *ffmpeg.Args, engine string, defaults map[string]string) 
 
 		switch engine {
 		case EngineVAAPI:
-			args.Input = "-hwaccel vaapi -hwaccel_output_format vaapi " + args.Input
 			args.Codecs[i] = defaults[name+"/"+engine]
 
-			for i, filter := range args.Filters {
-				if strings.HasPrefix(filter, "scale=") {
-					args.Filters[i] = "scale_vaapi=" + filter[6:]
-				}
-				if strings.HasPrefix(filter, "transpose=") {
-					if filter == "transpose=1,transpose=1" { // 180 degrees half-turn
-						args.Filters[i] = "transpose_vaapi=4" // reversal
-					} else {
-						args.Filters[i] = "transpose_vaapi=" + filter[10:]
+			if !args.HasFilters("drawtext=") {
+				args.Input = "-hwaccel vaapi -hwaccel_output_format vaapi " + args.Input
+
+				for i, filter := range args.Filters {
+					if strings.HasPrefix(filter, "scale=") {
+						args.Filters[i] = "scale_vaapi=" + filter[6:]
+					}
+					if strings.HasPrefix(filter, "transpose=") {
+						if filter == "transpose=1,transpose=1" { // 180 degrees half-turn
+							args.Filters[i] = "transpose_vaapi=4" // reversal
+						} else {
+							args.Filters[i] = "transpose_vaapi=" + filter[10:]
+						}
 					}
 				}
+
+				// fix if input doesn't support hwaccel, do nothing when support
+				// insert as first filter before hardware scale and transpose
+				args.InsertFilter("format=vaapi|nv12,hwupload")
+			} else {
+				// enable software pixel for drawtext, scale and transpose
+				args.Input = "-hwaccel vaapi -hwaccel_output_format nv12 " + args.Input
+
+				args.AddFilter("hwupload")
 			}
 
-			// fix if input doesn't support hwaccel, do nothing when support
-			args.InsertFilter("format=vaapi|nv12,hwupload")
-
 		case EngineCUDA:
-			args.Input = "-hwaccel cuda -hwaccel_output_format cuda -extra_hw_frames 2 " + args.Input
 			args.Codecs[i] = defaults[name+"/"+engine]
 
-			for i, filter := range args.Filters {
-				if strings.HasPrefix(filter, "scale=") {
-					args.Filters[i] = "scale_cuda=" + filter[6:]
+			// CUDA doesn't support hardware transpose
+			// https://github.com/AlexxIT/go2rtc/issues/389
+			if !args.HasFilters("drawtext=", "transpose=") {
+				args.Input = "-hwaccel cuda -hwaccel_output_format cuda " + args.Input
+
+				for i, filter := range args.Filters {
+					if strings.HasPrefix(filter, "scale=") {
+						args.Filters[i] = "scale_cuda=" + filter[6:]
+					}
 				}
+			} else {
+				args.Input = "-hwaccel cuda -hwaccel_output_format nv12 " + args.Input
+
+				args.AddFilter("hwupload")
 			}
 
 		case EngineDXVA2:

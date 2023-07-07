@@ -62,9 +62,9 @@ func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiv
 	// important to send original codec for valid IsRTP check
 	sender.Handler = c.packetWriter(track.Codec, channel, codec.PayloadType)
 
-	// https://github.com/AlexxIT/go2rtc/issues/331
 	if c.mode == core.ModeActiveProducer && track.Codec.Name == core.CodecPCMA {
-		sender.Handler = pcm.RepackBackchannel(sender.Handler)
+		// Fix Reolink Doorbell https://github.com/AlexxIT/go2rtc/issues/331
+		sender.Handler = pcm.RepackG711(true, sender.Handler)
 	}
 
 	sender.HandleRTP(track)

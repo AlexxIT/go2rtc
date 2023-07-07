@@ -12,7 +12,13 @@ FROM ngrok/ngrok:${NGROK_VERSION} AS ngrok
 
 
 # 1. Build go2rtc binary
-FROM go AS build
+FROM --platform=$BUILDPLATFORM go AS build
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+ENV GOOS=${TARGETOS}
+ENV GOARCH=${TARGETARCH}
 
 WORKDIR /build
 

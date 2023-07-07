@@ -5,10 +5,8 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"github.com/AlexxIT/go2rtc/internal/streams"
-	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/mp4"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
-	"strings"
 )
 
 func handlerWSMSE(tr *ws.Transport, msg *ws.Message) error {
@@ -25,7 +23,7 @@ func handlerWSMSE(tr *ws.Transport, msg *ws.Message) error {
 
 	if codecs := msg.String(); codecs != "" {
 		log.Trace().Str("codecs", codecs).Msgf("[mp4] new WS/MSE consumer")
-		cons.Medias = parseMedias(codecs, true)
+		cons.Medias = mp4.ParseCodecs(codecs, true)
 	}
 
 	cons.Listen(func(msg any) {
@@ -73,7 +71,7 @@ func handlerWSMP4(tr *ws.Transport, msg *ws.Message) error {
 
 	if codecs := msg.String(); codecs != "" {
 		log.Trace().Str("codecs", codecs).Msgf("[mp4] new WS/MP4 consumer")
-		cons.Medias = parseMedias(codecs, false)
+		cons.Medias = mp4.ParseCodecs(codecs, false)
 	}
 
 	cons.Listen(func(msg any) {
@@ -94,52 +92,4 @@ func handlerWSMP4(tr *ws.Transport, msg *ws.Message) error {
 	})
 
 	return nil
-}
-
-func parseMedias(codecs string, parseAudio bool) (medias []*core.Media) {
-	var videos []*core.Codec
-	var audios []*core.Codec
-
-	for _, name := range strings.Split(codecs, ",") {
-		switch name {
-		case mp4.MimeH264:
-			codec := &core.Codec{Name: core.CodecH264}
-			videos = append(videos, codec)
-		case mp4.MimeH265:
-			codec := &core.Codec{Name: core.CodecH265}
-			videos = append(videos, codec)
-		case mp4.MimeAAC:
-			codec := &core.Codec{Name: core.CodecAAC}
-			audios = append(audios, codec)
-		case mp4.MimeFlac:
-			audios = append(audios,
-				&core.Codec{Name: core.CodecPCMA},
-				&core.Codec{Name: core.CodecPCMU},
-				&core.Codec{Name: core.CodecPCM},
-			)
-		case mp4.MimeOpus:
-			codec := &core.Codec{Name: core.CodecOpus}
-			audios = append(audios, codec)
-		}
-	}
-
-	if videos != nil {
-		media := &core.Media{
-			Kind:      core.KindVideo,
-			Direction: core.DirectionSendonly,
-			Codecs:    videos,
-		}
-		medias = append(medias, media)
-	}
-
-	if audios != nil && parseAudio {
-		media := &core.Media{
-			Kind:      core.KindAudio,
-			Direction: core.DirectionSendonly,
-			Codecs:    audios,
-		}
-		medias = append(medias, media)
-	}
-
-	return
 }

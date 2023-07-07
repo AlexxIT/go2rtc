@@ -32,10 +32,10 @@ export class VideoRTC extends HTMLElement {
         ];
 
         /**
-         * [config] Supported modes (webrtc, mse, mp4, mjpeg).
+         * [config] Supported modes (webrtc, webrtc/tcp, mse, hls, mp4, mjpeg).
          * @type {string}
          */
-        this.mode = "webrtc,mse,mp4,mjpeg";
+        this.mode = "webrtc,mse,hls,mjpeg";
 
         /**
          * [config] Run stream when not displayed on the screen. Default `false`.
@@ -324,6 +324,9 @@ export class VideoRTC extends HTMLElement {
         if (this.mode.indexOf("mse") >= 0 && "MediaSource" in window) { // iPhone
             modes.push("mse");
             this.onmse();
+        } else if (this.mode.indexOf("hls") >= 0 && this.video.canPlayType("application/vnd.apple.mpegurl")) {
+            modes.push("hls");
+            this.onhls();
         } else if (this.mode.indexOf("mp4") >= 0) {
             modes.push("mp4");
             this.onmp4();
@@ -440,6 +443,8 @@ export class VideoRTC extends HTMLElement {
         video2.addEventListener("loadeddata", ev => this.onpcvideo(ev), {once: true});
 
         pc.addEventListener("icecandidate", ev => {
+            if (ev.candidate && this.mode.indexOf("webrtc/tcp") >= 0 && ev.candidate.protocol === "udp") return;
+
             const candidate = ev.candidate ? ev.candidate.toJSON().candidate : "";
             this.send({type: "webrtc/candidate", value: candidate});
         });
@@ -471,16 +476,12 @@ export class VideoRTC extends HTMLElement {
         this.onmessage["webrtc"] = msg => {
             switch (msg.type) {
                 case "webrtc/candidate":
-                    pc.addIceCandidate({
-                        candidate: msg.value,
-                        sdpMid: "0"
-                    }).catch(() => console.debug);
+                    if (this.mode.indexOf("webrtc/tcp") >= 0 && msg.value.indexOf(" udp ") > 0) return;
+
+                    pc.addIceCandidate({candidate: msg.value, sdpMid: "0"}).catch(() => console.debug);
                     break;
                 case "webrtc/answer":
-                    pc.setRemoteDescription({
-                        type: "answer",
-                        sdp: msg.value
-                    }).catch(() => console.debug);
+                    pc.setRemoteDescription({type: "answer", sdp: msg.value}).catch(() => console.debug);
                     break;
                 case "error":
                     if (msg.value.indexOf("webrtc/offer") < 0) return;
@@ -552,6 +553,17 @@ export class VideoRTC extends HTMLElement {
         };
 
         this.send({type: "mjpeg"});
+    }
+
+    onhls() {
+        this.onmessage["hls"] = msg => {
+            const url = "http" + this.wsURL.substring(2, this.wsURL.indexOf("/ws")) + "/hls/";
+            const playlist = msg.value.replace("hls/", url);
+            this.video.src = "data:application/vnd.apple.mpegurl;base64," + btoa(playlist);
+            this.play();
+        }
+
+        this.send({type: "hls", value: this.codecs("hls")});
     }
 
     onmp4() {

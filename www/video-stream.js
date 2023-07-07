@@ -70,6 +70,7 @@ class VideoStream extends VideoRTC {
                     this.divError = msg.value;
                     break;
                 case "mse":
+                case "hls":
                 case "mp4":
                 case "mjpeg":
                     this.divMode = msg.type.toUpperCase();
