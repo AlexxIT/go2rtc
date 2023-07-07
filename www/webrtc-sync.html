@@ -22,45 +22,45 @@
     async function PeerConnection(media) {
         const pc = new RTCPeerConnection({
             iceServers: [{urls: 'stun:stun.l.google.com:19302'}]
-        })
+        });
 
         document.getElementById('video').srcObject = new MediaStream([
             pc.addTransceiver('audio', {direction: 'sendrecv'}).receiver.track,
             pc.addTransceiver('video', {direction: 'sendrecv'}).receiver.track,
-        ])
+        ]);
 
         const tracks = await navigator.mediaDevices.getUserMedia({
             video: media.indexOf('camera') >= 0,
             audio: media.indexOf('microphone') >= 0,
-        })
+        });
         tracks.getTracks().forEach(track => {
-            pc.addTrack(track)
-        })
+            pc.addTrack(track);
+        });
 
-        return pc
+        return pc;
     }
 
     function getCompleteOffer(pc, timeout) {
         return new Promise((resolve, reject) => {
             pc.addEventListener('icegatheringstatechange', () => {
-                if (pc.iceGatheringState === 'complete') resolve(pc.localDescription.sdp)
-            })
+                if (pc.iceGatheringState === 'complete') resolve(pc.localDescription.sdp);
+            });
 
-            pc.createOffer().then(offer => pc.setLocalDescription(offer))
+            pc.createOffer().then(offer => pc.setLocalDescription(offer));
 
-            setTimeout(() => resolve(pc.localDescription.sdp), timeout || 3000)
-        })
+            setTimeout(() => resolve(pc.localDescription.sdp), timeout || 3000);
+        });
     }
 
     async function connect() {
-        const media = new URLSearchParams(location.search).get('media')
-        const pc = await PeerConnection(media)
-        const url = new URL('api/webrtc' + location.search, location.href)
-        const r = await fetch(url, {method: 'POST', body: await getCompleteOffer(pc)})
-        await pc.setRemoteDescription({type: 'answer', sdp: await r.text()})
+        const media = new URLSearchParams(location.search).get('media');
+        const pc = await PeerConnection(media);
+        const url = new URL('api/webrtc' + location.search, location.href);
+        const r = await fetch(url, {method: 'POST', body: await getCompleteOffer(pc)});
+        await pc.setRemoteDescription({type: 'answer', sdp: await r.text()});
     }
 
-    connect()
+    connect();
 </script>
 </body>
 </html>

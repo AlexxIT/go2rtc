@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <title>File Editor</title>
     <meta name="viewport" content="width=device-width, user-scalable=yes, initial-scale=1, maximum-scale=1">
@@ -32,8 +32,8 @@
 <div id="config"></div>
 <script>
     ace.config.set('basePath', 'https://cdnjs.cloudflare.com/ajax/libs/ace/1.14.0/');
-    const editor = ace.edit("config", {
-        mode: "ace/mode/yaml",
+    const editor = ace.edit('config', {
+        mode: 'ace/mode/yaml',
     });
 
     document.getElementById('save').addEventListener('click', () => {
@@ -63,7 +63,7 @@
                 alert(`Unknown error: ${r.statusText} (${r.status})`);
             }
         });
-    })
+    });
 </script>
 </body>
 </html>

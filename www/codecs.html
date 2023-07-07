@@ -18,21 +18,21 @@
 <body>
 <div id="out"></div>
 <script>
-    const out = document.getElementById("out");
+    const out = document.getElementById('out');
 
     const print = (name, caps) => {
-        out.innerText += name + "\n";
+        out.innerText += name + '\n';
         caps.codecs.forEach((codec) => {
-            out.innerText += [codec.mimeType, codec.channels, codec.clockRate, codec.sdpFmtpLine] + "\n";
+            out.innerText += [codec.mimeType, codec.channels, codec.clockRate, codec.sdpFmtpLine] + '\n';
         });
-        out.innerText += "\n";
-    }
+        out.innerText += '\n';
+    };
 
     if (RTCRtpReceiver.getCapabilities) {
-        print("receiver video", RTCRtpReceiver.getCapabilities("video"));
-        print("receiver audio", RTCRtpReceiver.getCapabilities("audio"));
-        print("sender video", RTCRtpSender.getCapabilities("video"));
-        print("sender audio", RTCRtpSender.getCapabilities("audio"));
+        print('receiver video', RTCRtpReceiver.getCapabilities('video'));
+        print('receiver audio', RTCRtpReceiver.getCapabilities('audio'));
+        print('sender video', RTCRtpSender.getCapabilities('video'));
+        print('sender audio', RTCRtpSender.getCapabilities('audio'));
     }
 
     const types = [
@@ -48,14 +48,18 @@
         'video/mp4; codecs="hvc1.1.6.L93.B0"',
         'video/mp4; codecs="hev1.1.6.L93.B0"',
         'video/mp4; codecs="hev1.2.4.L120.B0"',
+        'video/mp4; codecs="flac"',
+        'video/mp4; codecs="opus"',
+        'video/mp4; codecs="mp3"',
+        'video/mp4; codecs="null"',
+        'application/vnd.apple.mpegurl',
     ];
 
-    const video = document.createElement("video");
-    out.innerText += "video.canPlayType\n";
+    const video = document.createElement('video');
+    out.innerText += 'video.canPlayType\n';
     types.forEach(type => {
-        out.innerText += `${type} = ${MediaSource.isTypeSupported(type)} / ${video.canPlayType(type)}\n`;
-    })
-
+        out.innerText += `${type} = ${'MediaSource' in window && MediaSource.isTypeSupported(type)} / ${video.canPlayType(type)}\n`;
+    });
 </script>
 </body>
 </html>

@@ -1,0 +1,40 @@
+{
+  "devDependencies": {
+    "eslint": "^8.44.0",
+    "eslint-plugin-html": "^7.1.0"
+  },
+  "eslintConfig": {
+    "env": {
+      "browser": true,
+      "es6": true
+    },
+    "parserOptions": {
+      "ecmaVersion": 2017,
+      "sourceType": "module"
+    },
+    "rules": {
+      "no-var": "error",
+      "no-undef": "error",
+      "no-unused-vars": "warn",
+      "prefer-const": "error",
+      "quotes": [
+        "error",
+        "single"
+      ],
+      "semi": "error"
+    },
+    "plugins": [
+      "html"
+    ],
+    "overrides": [
+      {
+        "files": [
+          "*.html"
+        ],
+        "parserOptions": {
+          "sourceType": "script"
+        }
+      }
+    ]
+  }
+}

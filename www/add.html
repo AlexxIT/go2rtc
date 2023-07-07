@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <title>Add Stream</title>
     <meta name="viewport" content="width=device-width, user-scalable=yes, initial-scale=1, maximum-scale=1">
@@ -59,20 +59,20 @@
 <script src="main.js"></script>
 <script>
     async function getStreams(url, tableID) {
-        const table = document.getElementById(tableID)
-        table.innerText = 'loading...'
+        const table = document.getElementById(tableID);
+        table.innerText = 'loading...';
 
-        const r = typeof url === 'string' ? await fetch(url, {cache: 'no-cache'}) : url
+        const r = typeof url === 'string' ? await fetch(url, {cache: 'no-cache'}) : url;
         if (!r.ok) {
-            table.innerText = await r.text()
-            return
+            table.innerText = await r.text();
+            return;
         }
 
         /** @type {{streams:Array<{name:string,url:string}>}} */
-        const data = await r.json()
+        const data = await r.json();
         table.innerHTML = data.streams.reduce((html, item) => {
-            return html + `<tr><td>${item.name}</td><td>${item.url}</td></tr>`
-        }, '<thead><tr><th>Name</th><th>Source</th></tr></thead><tbody>') + '</tbody>'
+            return html + `<tr><td>${item.name}</td><td>${item.url}</td></tr>`;
+        }, '<thead><tr><th>Name</th><th>Source</th></tr></thead><tbody>') + '</tbody>';
     }
 </script>
 
@@ -87,19 +87,19 @@
 </div>
 <script>
     document.getElementById('stream').addEventListener('click', async ev => {
-        ev.target.nextElementSibling.style.display = 'block'
-    })
+        ev.target.nextElementSibling.style.display = 'block';
+    });
 
     document.getElementById('stream-form').addEventListener('submit', async ev => {
-        ev.preventDefault()
+        ev.preventDefault();
 
-        const url = new URL('api/streams', location.href)
-        url.searchParams.set('name', ev.target.elements['name'].value)
-        url.searchParams.set('src', ev.target.elements['src'].value)
+        const url = new URL('api/streams', location.href);
+        url.searchParams.set('name', ev.target.elements['name'].value);
+        url.searchParams.set('src', ev.target.elements['src'].value);
 
-        const r = await fetch(url, {method: 'PUT'})
-        alert(r.ok ? 'OK' : 'ERROR')
-    })
+        const r = await fetch(url, {method: 'PUT'});
+        alert(r.ok ? 'OK' : 'ERROR');
+    });
 </script>
 
 
@@ -124,49 +124,49 @@
 </div>
 <script>
     document.getElementById('homekit').addEventListener('click', async ev => {
-        ev.target.nextElementSibling.style.display = 'block'
-        const r = await fetch('api/homekit', {cache: 'no-cache'})
+        ev.target.nextElementSibling.style.display = 'block';
+        const r = await fetch('api/homekit', {cache: 'no-cache'});
 
         /** @type {Array<{id:string,name:string,addr:string,model:string,paired:boolean}>} */
-        const data = await r.json()
+        const data = await r.json();
 
-        const tbody = document.getElementById('homekit-body')
+        const tbody = document.getElementById('homekit-body');
         tbody.innerHTML =
             data.reduce((res, item) => {
-                let commands = ''
-                if (item.id === "") {
-                    commands = `<a href="#" onclick="unpair('${item.name}')">unpair</a>`
+                let commands = '';
+                if (item.id === '') {
+                    commands = `<a href="#" onclick="unpair('${item.name}')">unpair</a>`;
                 } else if (item.paired === false) {
-                    commands = `<a href="#" onclick="pair('${item.id}','${item.name}')">pair</a>`
+                    commands = `<a href="#" onclick="pair('${item.id}','${item.name}')">pair</a>`;
                 }
                 return res + `<tr>
                         <td>${item.name}</td>
                         <td>${item.addr}</td>
                         <td>${item.model}</td>
                         <td>${commands}</td>
-                    </tr>`
-            }, '')
-    })
+                    </tr>`;
+            }, '');
+    });
 
     function pair(id, name) {
-        const pin = document.querySelector('#pin').value
+        const pin = document.querySelector('#pin').value;
         fetch(`api/homekit?id=${id}&name=${name}&pin=${pin}`, {method: 'POST'})
             .then(r => r.text())
             .then(data => {
-                if (data.length > 0) alert(data)
-                else window.location.reload()
+                if (data.length > 0) alert(data);
+                else window.location.reload();
             })
-            .catch(console.error)
+            .catch(console.error);
     }
 
     function unpair(src) {
         fetch(`api/homekit?src=${src}`, {method: 'DELETE'})
             .then(r => r.text())
             .then(data => {
-                if (data.length > 0) alert(data)
-                else window.location.reload()
+                if (data.length > 0) alert(data);
+                else window.location.reload();
             })
-            .catch(console.error)
+            .catch(console.error);
     }
 </script>
 
@@ -177,9 +177,9 @@
 </div>
 <script>
     document.getElementById('dvrip').addEventListener('click', async ev => {
-        ev.target.nextElementSibling.style.display = 'block'
-        await getStreams('api/dvrip', 'dvrip-table')
-    })
+        ev.target.nextElementSibling.style.display = 'block';
+        await getStreams('api/dvrip', 'dvrip-table');
+    });
 </script>
 
 
@@ -190,9 +190,9 @@
 </div>
 <script>
     document.getElementById('devices').addEventListener('click', async ev => {
-        ev.target.nextElementSibling.style.display = 'block'
-        await getStreams('api/ffmpeg/devices', 'devices-table')
-    })
+        ev.target.nextElementSibling.style.display = 'block';
+        await getStreams('api/ffmpeg/devices', 'devices-table');
+    });
 </script>
 
 
@@ -203,9 +203,9 @@
 </div>
 <script>
     document.getElementById('hardware').addEventListener('click', async ev => {
-        ev.target.nextElementSibling.style.display = 'block'
-        await getStreams('api/ffmpeg/hardware', 'hardware-table')
-    })
+        ev.target.nextElementSibling.style.display = 'block';
+        await getStreams('api/ffmpeg/hardware', 'hardware-table');
+    });
 </script>
 
 
@@ -223,18 +223,18 @@
 </div>
 <script>
     document.getElementById('nest').addEventListener('click', async ev => {
-        ev.target.nextElementSibling.style.display = 'block'
-    })
+        ev.target.nextElementSibling.style.display = 'block';
+    });
 
     document.getElementById('nest-form').addEventListener('submit', async ev => {
-        ev.preventDefault()
+        ev.preventDefault();
 
-        const query = new URLSearchParams(new FormData(ev.target))
-        const url = new URL('api/nest?' + query.toString(), location.href)
+        const query = new URLSearchParams(new FormData(ev.target));
+        const url = new URL('api/nest?' + query.toString(), location.href);
 
-        const r = await fetch(url, {cache: 'no-cache'})
-        await getStreams(r, 'nest-table')
-    })
+        const r = await fetch(url, {cache: 'no-cache'});
+        await getStreams(r, 'nest-table');
+    });
 </script>
 
 
@@ -244,9 +244,9 @@
 </div>
 <script>
     document.getElementById('hass').addEventListener('click', async ev => {
-        ev.target.nextElementSibling.style.display = 'block'
-        await getStreams('api/hass', 'hass-table')
-    })
+        ev.target.nextElementSibling.style.display = 'block';
+        await getStreams('api/hass', 'hass-table');
+    });
 </script>
 
 
@@ -260,18 +260,18 @@
 </div>
 <script>
     document.getElementById('onvif').addEventListener('click', async ev => {
-        ev.target.nextElementSibling.style.display = 'block'
-        await getStreams('api/onvif', 'onvif-table')
-    })
+        ev.target.nextElementSibling.style.display = 'block';
+        await getStreams('api/onvif', 'onvif-table');
+    });
 
     document.getElementById('onvif-form').addEventListener('submit', async ev => {
-        ev.preventDefault()
+        ev.preventDefault();
 
-        const url = new URL('api/onvif', location.href)
-        url.searchParams.set('src', ev.target.elements['src'].value)
+        const url = new URL('api/onvif', location.href);
+        url.searchParams.set('src', ev.target.elements['src'].value);
 
-        await getStreams(url.toString(), 'onvif-table')
-    })
+        await getStreams(url.toString(), 'onvif-table');
+    });
 </script>
 
 
@@ -287,15 +287,15 @@
 </div>
 <script>
     document.getElementById('roborock').addEventListener('click', async ev => {
-        ev.target.nextElementSibling.style.display = 'block'
-        await getStreams('api/roborock', 'roborock-table')
-    })
+        ev.target.nextElementSibling.style.display = 'block';
+        await getStreams('api/roborock', 'roborock-table');
+    });
 
     document.getElementById('roborock-form').addEventListener('submit', async ev => {
-        ev.preventDefault()
-        const r = await fetch('api/roborock', {method: 'POST', body: new FormData(ev.target)})
-        await getStreams(r, 'roborock-table')
-    })
+        ev.preventDefault();
+        const r = await fetch('api/roborock', {method: 'POST', body: new FormData(ev.target)});
+        await getStreams(r, 'roborock-table');
+    });
 </script>
 
 
@@ -305,9 +305,9 @@
 </div>
 <script>
     document.getElementById('webtorrent').addEventListener('click', async ev => {
-        ev.target.nextElementSibling.style.display = 'block'
-        await getStreams('api/webtorrent', 'webtorrent-table')
-    })
+        ev.target.nextElementSibling.style.display = 'block';
+        await getStreams('api/webtorrent', 'webtorrent-table');
+    });
 </script>
 
 
