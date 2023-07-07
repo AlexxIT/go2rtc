@@ -152,11 +152,6 @@ func parseArgs(s string) *ffmpeg.Args {
 		switch s[:i] {
 		case "http", "https", "rtmp":
 			args.Input = inputTemplate("http", s, query)
-			// Some HTTP-JPEG, HTTP-MJPEG needs the input framerate explicitly
-			if query["framerate"] != nil {
-				args.Input = "-framerate " + query["framerate"][0] + " " + args.Input
-				query.Del("framerate")
-			}
 		case "rtsp", "rtsps":
 			// https://ffmpeg.org/ffmpeg-protocols.html#rtsp
 			// skip unnecessary input tracks
