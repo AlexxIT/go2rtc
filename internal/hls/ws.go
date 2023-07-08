@@ -8,7 +8,6 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/mp4"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
-	"github.com/rs/zerolog/log"
 	"strings"
 	"time"
 )
@@ -21,6 +20,8 @@ func handlerWSHLS(tr *ws.Transport, msg *ws.Message) error {
 	}
 
 	codecs := msg.String()
+
+	log.Trace().Msgf("[hls] new ws consumer codecs=%s", codecs)
 
 	cons := &mp4.Consumer{
 		Desc:       "HLS/WebSocket",

@@ -3,12 +3,13 @@ package hls
 import (
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
+	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/mp4"
 	"github.com/AlexxIT/go2rtc/pkg/mpegts"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
 	"net/http"
 	"strings"
 	"sync"
@@ -16,6 +17,8 @@ import (
 )
 
 func Init() {
+	log = app.GetLogger("hls")
+
 	api.HandleFunc("api/stream.m3u8", handlerStream)
 	api.HandleFunc("api/hls/playlist.m3u8", handlerPlaylist)
 
@@ -36,6 +39,8 @@ type Consumer interface {
 	MimeCodecs() string
 	Start()
 }
+
+var log zerolog.Logger
 
 const keepalive = 5 * time.Second
 
@@ -94,14 +99,18 @@ func handlerStream(w http.ResponseWriter, r *http.Request) {
 		}
 	})
 
+	sid := core.RandString(8, 62)
+
 	session.alive = time.AfterFunc(keepalive, func() {
+		sessionsMu.Lock()
+		delete(sessions, sid)
+		sessionsMu.Unlock()
+
 		stream.RemoveConsumer(cons)
 	})
 	session.init, _ = cons.Init()
 
 	cons.Start()
-
-	sid := core.RandString(8, 62)
 
 	// two segments important for Chromecast
 	if medias != nil {
@@ -187,6 +196,7 @@ func handlerSegmentTS(w http.ResponseWriter, r *http.Request) {
 
 	data := session.Segment()
 	if data == nil {
+		log.Warn().Msgf("[hls] can't get segment %s", r.URL.RawQuery)
 		http.NotFound(w, r)
 		return
 	}
@@ -219,6 +229,7 @@ func handlerInit(w http.ResponseWriter, r *http.Request) {
 
 	session.segment0 = session.Segment()
 	if session.segment0 == nil {
+		log.Warn().Msgf("[hls] can't get init %s", r.URL.RawQuery)
 		http.NotFound(w, r)
 		return
 	}
@@ -259,6 +270,7 @@ func handlerSegmentMP4(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if data == nil {
+		log.Warn().Msgf("[hls] can't get segment %s", r.URL.RawQuery)
 		http.NotFound(w, r)
 		return
 	}

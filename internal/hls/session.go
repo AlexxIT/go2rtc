@@ -22,7 +22,7 @@ func (s *Session) Playlist() string {
 }
 
 func (s *Session) Segment() (segment []byte) {
-	for i := 0; i < 20 && segment == nil; i++ {
+	for i := 0; i < 60 && segment == nil; i++ {
 		if i > 0 {
 			time.Sleep(50 * time.Millisecond)
 		}
