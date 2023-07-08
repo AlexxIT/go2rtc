@@ -299,6 +299,9 @@ export class VideoRTC extends HTMLElement {
             this.pc.close();
             this.pc = null;
         }
+
+        this.video.src = '';
+        this.video.srcObject = null;
     }
 
     /**
