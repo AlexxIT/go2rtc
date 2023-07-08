@@ -55,6 +55,7 @@ func ParseCodecs(codecs string, parseAudio bool) (medias []*core.Media) {
 	var videos []*core.Codec
 	var audios []*core.Codec
 
+loop:
 	for _, name := range strings.Split(codecs, ",") {
 		switch name {
 		case MimeH264:
@@ -66,6 +67,10 @@ func ParseCodecs(codecs string, parseAudio bool) (medias []*core.Media) {
 		case MimeAAC:
 			codec := &core.Codec{Name: core.CodecAAC}
 			audios = append(audios, codec)
+		case "null":
+			// this means that the browser is lying about the codecs it can play
+			// and we are not supposed to believe that it can flac or opus
+			break loop
 		case MimeFlac:
 			audios = append(audios,
 				&core.Codec{Name: core.CodecPCMA},
