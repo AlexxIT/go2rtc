@@ -23,6 +23,7 @@ func handlerWSHLS(tr *ws.Transport, msg *ws.Message) error {
 	codecs := msg.String()
 
 	cons := &mp4.Consumer{
+		Desc:       "HLS/WebSocket",
 		RemoteAddr: tcp.RemoteAddr(tr.Request),
 		UserAgent:  tr.Request.UserAgent(),
 		Medias:     mp4.ParseCodecs(codecs, true),

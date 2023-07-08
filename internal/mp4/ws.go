@@ -17,6 +17,7 @@ func handlerWSMSE(tr *ws.Transport, msg *ws.Message) error {
 	}
 
 	cons := &mp4.Consumer{
+		Desc:       "MSE/WebSocket",
 		RemoteAddr: tcp.RemoteAddr(tr.Request),
 		UserAgent:  tr.Request.UserAgent(),
 	}

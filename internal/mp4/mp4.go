@@ -110,6 +110,7 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 	exit := make(chan error, 1) // Add buffer to prevent blocking
 
 	cons := &mp4.Consumer{
+		Desc:       "MP4/HTTP",
 		RemoteAddr: tcp.RemoteAddr(r),
 		UserAgent:  r.UserAgent(),
 		Medias:     mp4.ParseQuery(r.URL.Query()),

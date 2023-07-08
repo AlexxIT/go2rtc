@@ -67,6 +67,7 @@ func handlerStream(w http.ResponseWriter, r *http.Request) {
 	medias := mp4.ParseQuery(r.URL.Query())
 	if medias != nil {
 		cons = &mp4.Consumer{
+			Desc:       "HLS/HTTP",
 			RemoteAddr: tcp.RemoteAddr(r),
 			UserAgent:  r.UserAgent(),
 			Medias:     medias,

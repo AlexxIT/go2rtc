@@ -14,7 +14,9 @@ import (
 type Consumer struct {
 	core.Listener
 
-	Medias     []*core.Media
+	Medias []*core.Media
+
+	Desc       string
 	UserAgent  string
 	RemoteAddr string
 
@@ -191,7 +193,7 @@ func (c *Consumer) Start() {
 
 func (c *Consumer) MarshalJSON() ([]byte, error) {
 	info := &core.Info{
-		Type:       "MP4 passive consumer",
+		Type:       c.Desc + " passive consumer",
 		RemoteAddr: c.RemoteAddr,
 		UserAgent:  c.UserAgent,
 		Medias:     c.Medias,
