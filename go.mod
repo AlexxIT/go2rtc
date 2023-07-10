@@ -6,7 +6,7 @@ require (
 	github.com/brutella/hap v0.0.17
 	github.com/deepch/vdk v0.0.19
 	github.com/gorilla/websocket v1.5.0
-	github.com/hashicorp/mdns v1.0.5
+	github.com/miekg/dns v1.1.52
 	github.com/pion/ice/v2 v2.3.1
 	github.com/pion/interceptor v0.1.12
 	github.com/pion/rtcp v1.2.10
@@ -31,7 +31,6 @@ require (
 	github.com/kr/pretty v0.2.1 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.17 // indirect
-	github.com/miekg/dns v1.1.52 // indirect
 	github.com/pion/datachannel v1.5.5 // indirect
 	github.com/pion/dtls/v2 v2.2.6 // indirect
 	github.com/pion/logging v0.2.2 // indirect
@@ -52,8 +51,6 @@ require (
 )
 
 replace (
-	// windows support: https://github.com/brutella/dnssd/pull/35
-	github.com/brutella/dnssd v1.2.2 => github.com/rblenkinsopp/dnssd v1.2.3-0.20220516082132-0923f3c787a1
 	// RTP tlv8 fix
 	github.com/brutella/hap v0.0.17 => github.com/AlexxIT/hap v0.0.15-0.20221108133010-d8a45b7a7045
 	// fix reading AAC config bytes

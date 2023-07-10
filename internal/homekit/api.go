@@ -1,12 +1,11 @@
 package homekit
 
 import (
-	"fmt"
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/app/store"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/hap"
-	"github.com/AlexxIT/go2rtc/pkg/hap/mdns"
+	"github.com/AlexxIT/go2rtc/pkg/mdns"
 	"net/http"
 	"net/url"
 	"strings"
@@ -32,26 +31,23 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		for info := range mdns.GetAll() {
-			if !strings.HasSuffix(info.Name, mdns.Suffix) {
-				continue
-			}
-			name := info.Name[:len(info.Name)-len(mdns.Suffix)]
-			device := Device{
-				Name: strings.ReplaceAll(name, "\\", ""),
-				Addr: fmt.Sprintf("%s:%d", info.AddrV4, info.Port),
-			}
-			for _, field := range info.InfoFields {
-				switch field[:2] {
-				case "id":
-					device.ID = field[3:]
-				case "md":
-					device.Model = field[3:]
-				case "sf":
-					device.Paired = field[3] == '0'
+		err := mdns.Discovery(mdns.ServiceHAP, func(entry *mdns.ServiceEntry) bool {
+			if entry.Complete() {
+				device := Device{
+					Name:   entry.Name,
+					Addr:   entry.Addr(),
+					ID:     entry.Info["id"],
+					Model:  entry.Info["md"],
+					Paired: entry.Info["sf"] == "0",
 				}
+				items = append(items, device)
 			}
-			items = append(items, device)
+			return false
+		})
+
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
 
 		api.ResponseJSON(w, items)

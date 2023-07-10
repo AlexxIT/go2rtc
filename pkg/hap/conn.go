@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/hap/mdns"
+	"github.com/AlexxIT/go2rtc/pkg/mdns"
 	"github.com/brutella/hap"
 	"github.com/brutella/hap/chacha20poly1305"
 	"github.com/brutella/hap/curve25519"
@@ -61,26 +61,27 @@ func NewConn(rawURL string) (*Conn, error) {
 }
 
 func Pair(deviceID, pin string) (*Conn, error) {
-	entry := mdns.GetEntry(deviceID)
-	if entry == nil {
+	var addr string
+	var mfi bool
+
+	_ = mdns.Discovery(mdns.ServiceHAP, func(entry *mdns.ServiceEntry) bool {
+		if entry.Complete() && entry.Info["id"] == deviceID {
+			addr = entry.Addr()
+			mfi = entry.Info["ff"] == "1"
+			return true
+		}
+		return false
+	})
+
+	if addr == "" {
 		return nil, errors.New("can't find device via mDNS")
 	}
 
 	c := &Conn{
-		DeviceAddress: fmt.Sprintf("%s:%d", entry.AddrV4.String(), entry.Port),
+		DeviceAddress: addr,
 		DeviceID:      deviceID,
 		ClientID:      GenerateUUID(),
 		ClientPrivate: GenerateKey(),
-	}
-
-	var mfi bool
-	for _, field := range entry.InfoFields {
-		if field[:2] == "ff" {
-			if field[3] == '1' {
-				mfi = true
-			}
-			break
-		}
 	}
 
 	return c, c.Pair(mfi, pin)
@@ -106,9 +107,13 @@ func (c *Conn) DialAndServe() error {
 
 func (c *Conn) Dial() error {
 	// update device host before dial
-	if host := mdns.GetAddress(c.DeviceID); host != "" {
-		c.DeviceAddress = host
-	}
+	_ = mdns.Discovery(mdns.ServiceHAP, func(entry *mdns.ServiceEntry) bool {
+		if entry.Complete() && entry.Info["id"] == c.DeviceID {
+			c.DeviceAddress = entry.Addr()
+			return true
+		}
+		return false
+	})
 
 	var err error
 	c.conn, err = net.DialTimeout("tcp", c.DeviceAddress, time.Second*5)
