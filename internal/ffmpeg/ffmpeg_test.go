@@ -26,6 +26,10 @@ func TestParseArgsFile(t *testing.T) {
 	// [FILE] video will be output for MJPEG to pipe, audio will be skipped
 	args = parseArgs("/media/bbb.mp4#video=mjpeg")
 	require.Equal(t, `ffmpeg -hide_banner -re -i /media/bbb.mp4 -c:v mjpeg -an -f mjpeg -`, args.String())
+
+	// https://github.com/AlexxIT/go2rtc/issues/509
+	args = parseArgs("ffmpeg:test.mp4#raw=-ss 00:00:20")
+	require.Equal(t, `ffmpeg -hide_banner -re -i ffmpeg:test.mp4 -ss 00:00:20 -c copy -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
 }
 
 func TestParseArgsDevice(t *testing.T) {
@@ -71,39 +75,39 @@ func TestParseArgsIpCam(t *testing.T) {
 func TestParseArgsAudio(t *testing.T) {
 	// [AUDIO] audio will be transcoded to AAC, video will be skipped
 	args := parseArgs("rtsp:///example.com#audio=aac")
-	require.Equal(t, `ffmpeg -hide_banner -allowed_media_types audio -fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i rtsp:///example.com -vn -c:a aac -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
+	require.Equal(t, `ffmpeg -hide_banner -allowed_media_types audio -fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i rtsp:///example.com -c:a aac -vn -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
 
 	// [AUDIO] audio will be transcoded to AAC/16000, video will be skipped
 	args = parseArgs("rtsp:///example.com#audio=aac/16000")
-	require.Equal(t, `ffmpeg -hide_banner -allowed_media_types audio -fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i rtsp:///example.com -vn -c:a aac -ar:a 16000 -ac:a 1 -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
+	require.Equal(t, `ffmpeg -hide_banner -allowed_media_types audio -fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i rtsp:///example.com -c:a aac -ar:a 16000 -ac:a 1 -vn -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
 
 	// [AUDIO] audio will be transcoded to OPUS, video will be skipped
 	args = parseArgs("rtsp:///example.com#audio=opus")
-	require.Equal(t, `ffmpeg -hide_banner -allowed_media_types audio -fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i rtsp:///example.com -vn -c:a libopus -ar:a 48000 -ac:a 2 -application:a voip -af adelay=0|0 -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
+	require.Equal(t, `ffmpeg -hide_banner -allowed_media_types audio -fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i rtsp:///example.com -c:a libopus -ar:a 48000 -ac:a 2 -application:a voip -af adelay=0|0 -vn -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
 
 	// [AUDIO] audio will be transcoded to PCMU, video will be skipped
 	args = parseArgs("rtsp:///example.com#audio=pcmu")
-	require.Equal(t, `ffmpeg -hide_banner -allowed_media_types audio -fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i rtsp:///example.com -vn -c:a pcm_mulaw -ar:a 8000 -ac:a 1 -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
+	require.Equal(t, `ffmpeg -hide_banner -allowed_media_types audio -fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i rtsp:///example.com -c:a pcm_mulaw -ar:a 8000 -ac:a 1 -vn -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
 
 	// [AUDIO] audio will be transcoded to PCMU/16000, video will be skipped
 	args = parseArgs("rtsp:///example.com#audio=pcmu/16000")
-	require.Equal(t, `ffmpeg -hide_banner -allowed_media_types audio -fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i rtsp:///example.com -vn -c:a pcm_mulaw -ar:a 16000 -ac:a 1 -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
+	require.Equal(t, `ffmpeg -hide_banner -allowed_media_types audio -fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i rtsp:///example.com -c:a pcm_mulaw -ar:a 16000 -ac:a 1 -vn -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
 
 	// [AUDIO] audio will be transcoded to PCMU/48000, video will be skipped
 	args = parseArgs("rtsp:///example.com#audio=pcmu/48000")
-	require.Equal(t, `ffmpeg -hide_banner -allowed_media_types audio -fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i rtsp:///example.com -vn -c:a pcm_mulaw -ar:a 48000 -ac:a 1 -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
+	require.Equal(t, `ffmpeg -hide_banner -allowed_media_types audio -fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i rtsp:///example.com -c:a pcm_mulaw -ar:a 48000 -ac:a 1 -vn -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
 
 	// [AUDIO] audio will be transcoded to PCMA, video will be skipped
 	args = parseArgs("rtsp:///example.com#audio=pcma")
-	require.Equal(t, `ffmpeg -hide_banner -allowed_media_types audio -fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i rtsp:///example.com -vn -c:a pcm_alaw -ar:a 8000 -ac:a 1 -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
+	require.Equal(t, `ffmpeg -hide_banner -allowed_media_types audio -fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i rtsp:///example.com -c:a pcm_alaw -ar:a 8000 -ac:a 1 -vn -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
 
 	// [AUDIO] audio will be transcoded to PCMA/16000, video will be skipped
 	args = parseArgs("rtsp:///example.com#audio=pcma/16000")
-	require.Equal(t, `ffmpeg -hide_banner -allowed_media_types audio -fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i rtsp:///example.com -vn -c:a pcm_alaw -ar:a 16000 -ac:a 1 -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
+	require.Equal(t, `ffmpeg -hide_banner -allowed_media_types audio -fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i rtsp:///example.com -c:a pcm_alaw -ar:a 16000 -ac:a 1 -vn -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
 
 	// [AUDIO] audio will be transcoded to PCMA/48000, video will be skipped
 	args = parseArgs("rtsp:///example.com#audio=pcma/48000")
-	require.Equal(t, `ffmpeg -hide_banner -allowed_media_types audio -fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i rtsp:///example.com -vn -c:a pcm_alaw -ar:a 48000 -ac:a 1 -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
+	require.Equal(t, `ffmpeg -hide_banner -allowed_media_types audio -fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i rtsp:///example.com -c:a pcm_alaw -ar:a 48000 -ac:a 1 -vn -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
 }
 
 func TestParseArgsHwVaapi(t *testing.T) {

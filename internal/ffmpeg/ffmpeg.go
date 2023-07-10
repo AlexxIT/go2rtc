@@ -116,7 +116,6 @@ func configTemplate(template string) string {
 // inputTemplate - select input template from YAML config by template name
 // if query has input param - select another template by this name
 // if there is no another template - use input param as template
-// After input param processed - remove it to allow a correct parseArgs Codec selection
 func inputTemplate(name, s string, query url.Values) string {
 	var template string
 	if input := query.Get("input"); input != "" {
@@ -124,7 +123,6 @@ func inputTemplate(name, s string, query url.Values) string {
 	} else {
 		template = defaults[name]
 	}
-	query.Del("input")
 	return strings.Replace(template, "{input}", s, 1)
 }
 
@@ -199,7 +197,7 @@ func parseArgs(s string) *ffmpeg.Args {
 	//   3. `video` params (support multiple)
 	//   4. `audio` params (support multiple)
 	//   5. `hardware` param
-	if len(query) != 0 {
+	if query != nil {
 		// 1. Process raw params for FFmpeg
 		for _, raw := range query["raw"] {
 			// support templates https://github.com/AlexxIT/go2rtc/issues/487
@@ -264,8 +262,6 @@ func parseArgs(s string) *ffmpeg.Args {
 					args.AddCodec("-c:v copy")
 				}
 			}
-		} else {
-			args.AddCodec("-vn")
 		}
 
 		// 4. Process audio codecs
@@ -281,8 +277,6 @@ func parseArgs(s string) *ffmpeg.Args {
 					args.AddCodec("-c:a copy")
 				}
 			}
-		} else {
-			args.AddCodec("-an")
 		}
 
 		if query["hardware"] != nil {
@@ -290,8 +284,13 @@ func parseArgs(s string) *ffmpeg.Args {
 		}
 	}
 
-	if args.Codecs == nil {
+	switch {
+	case args.Video == 0 && args.Audio == 0:
 		args.AddCodec("-c copy")
+	case args.Video == 0:
+		args.AddCodec("-vn")
+	case args.Audio == 0:
+		args.AddCodec("-an")
 	}
 
 	// transcoding to only mjpeg
