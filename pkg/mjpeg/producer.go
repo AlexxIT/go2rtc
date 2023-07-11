@@ -32,7 +32,8 @@ func (c *Client) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver,
 func (c *Client) Start() error {
 	ct := c.res.Header.Get("Content-Type")
 
-	if ct == "image/jpeg" {
+	// https://github.com/AlexxIT/go2rtc/issues/278
+	if strings.HasPrefix(ct, "image/jpeg") {
 		return c.startJPEG()
 	}
 
