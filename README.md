@@ -57,6 +57,7 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
     * [Source: Ivideon](#source-ivideon)
     * [Source: Hass](#source-hass)
     * [Source: ISAPI](#source-isapi)
+    * [Source: Nest](#source-nest)
     * [Source: Roborock](#source-roborock)
     * [Source: WebRTC](#source-webrtc)
     * [Source: WebTorrent](#source-webtorrent)
@@ -219,6 +220,16 @@ streams:
 - If the stream from your camera is glitchy, try using [ffmpeg source](#source-ffmpeg). It will not add CPU load if you won't use transcoding
 - If the stream from your camera is very glitchy, try to use transcoding with [ffmpeg source](#source-ffmpeg)
 
+**RTSP over WebSocket**
+
+```yaml
+streams:
+  # WebSocket with authorization, RTSP - without
+  axis-rtsp-ws:  rtsp://192.168.1.123:4567/axis-media/media.amp?overview=0&camera=1&resolution=1280x720&videoframeskipmode=empty&Axis-Orig-Sw=true#transport=ws://user:pass@192.168.1.123:4567/rtsp-over-websocket
+  # WebSocket without authorization, RTSP - with
+  dahua-rtsp-ws: rtsp://user:pass@192.168.1.123/cam/realmonitor?channel=1&subtype=1&proto=Private3#transport=ws://192.168.1.123/rtspoverwebsocket
+```
+
 #### Source: RTMP
 
 You can get stream from RTMP server, for example [Frigate](https://docs.frigate.video/configuration/rtmp).
@@ -307,20 +318,25 @@ But you can override them via YAML config. You can also add your own formats to 
 ffmpeg:
   bin: ffmpeg  # path to ffmpeg binary
   h264: "-codec:v libx264 -g:v 30 -preset:v superfast -tune:v zerolatency -profile:v main -level:v 4.1"
-  mycodec: "-any args that support ffmpeg..."
+  mycodec: "-any args that supported by ffmpeg..."
   myinput: "-fflags nobuffer -flags low_delay -timeout 5000000 -i {input}"
+  myraw: "-ss 00:00:20"
 ```
 
-- You can use `video` and `audio` params multiple times (ex. `#video=copy#audio=copy#audio=pcmu`)
 - You can use go2rtc stream name as ffmpeg input (ex. `ffmpeg:camera1#video=h264`)
+- You can use `video` and `audio` params multiple times (ex. `#video=copy#audio=copy#audio=pcmu`)
 - You can use `rotate` params with `90`, `180`, `270` or `-90` values, important with transcoding (ex. `#video=h264#rotate=90`)
 - You can use `width` and/or `height` params, important with transcoding (ex. `#video=h264#width=1280`)
+- You can use `drawtext` to add a timestamp (ex. `drawtext=x=2:y=2:fontsize=12:fontcolor=white:box=1:boxcolor=black`)
+  - This will greatly increase the CPU of the server, even with hardware acceleration
 - You can use `raw` param for any additional FFmpeg arguments (ex. `#raw=-vf transpose=1`)
 - You can use `input` param to override default input template (ex. `#input=rtsp/udp` will change RTSP transport from TCP to UDP+TCP)
   - You can use raw input value (ex. `#input=-timeout 5000000 -i {input}`)
   - You can add your own input templates
 
-Read more about encoding [hardware acceleration](https://github.com/AlexxIT/go2rtc/wiki/Hardware-acceleration).
+Read more about [hardware acceleration](https://github.com/AlexxIT/go2rtc/wiki/Hardware-acceleration).
+
+**PS.** It is recommended to check the available hardware in the WebUI add page.
 
 #### Source: FFmpeg Device
 
@@ -340,6 +356,8 @@ streams:
   windows_webcam: ffmpeg:device?video=0#video=h264
   macos_facetime: ffmpeg:device?video=0&audio=1&video_size=1280x720&framerate=30#video=h264#audio=pcma
 ```
+
+**PS.** It is recommended to check the available devices in the WebUI add page.
 
 #### Source: Exec
 
@@ -467,7 +485,23 @@ streams:
   aqara_g3: hass:Camera-Hub-G3-AB12
 ```
 
-More cameras, like [Tuya](https://www.home-assistant.io/integrations/tuya/), and possibly others can also be imported by using [this method](https://github.com/felipecrs/hass-expose-camera-stream-source#importing-home-assistant-cameras-to-go2rtc-andor-frigate).
+**WebRTC Cameras**
+
+Any cameras in WebRTC format are supported. But at the moment Home Assistant only supports some [Nest](https://www.home-assistant.io/integrations/nest/) cameras in this fomat.
+
+The Nest API only allows you to get a link to a stream for 5 minutes. So every 5 minutes the stream will be reconnected.
+
+```yaml
+streams:
+  # link to Home Assistant Supervised
+  hass-webrtc1: hass://supervisor?entity_id=camera.nest_doorbell
+  # link to external Hass with Long-Lived Access Tokens
+  hass-webrtc2: hass://192.168.1.123:8123?entity_id=camera.nest_doorbell&token=eyXYZ...
+```
+
+**RTSP Cameras**
+
+By default, the Home Assistant API does not allow you to get dynamic RTSP link to a camera stream. So more cameras, like [Tuya](https://www.home-assistant.io/integrations/tuya/), and possibly others can also be imported by using [this method](https://github.com/felipecrs/hass-expose-camera-stream-source#importing-home-assistant-cameras-to-go2rtc-andor-frigate).
 
 #### Source: ISAPI
 
@@ -478,6 +512,17 @@ streams:
   hikvision1:
     - rtsp://admin:password@192.168.1.123:554/Streaming/Channels/101
     - isapi://admin:password@192.168.1.123:80/
+```
+
+#### Source: Nest
+
+Currently only WebRTC cameras are supported. Stream reconnects every 5 minutes.
+
+For simplicity, it is recommended to connect the Nest/WebRTC camera to the [Home Assistant](#source-hass). But if you can somehow get the below parameters - Nest/WebRTC source will work without Hass.
+
+```yaml
+streams:
+  nest-doorbell: nest:?client_id=***&client_secret=***&refresh_token=***&project_id=***&device_id=***
 ```
 
 #### Source: Roborock
@@ -606,7 +651,7 @@ Technology selection based on priorities:
 go2rtc has simple HTML page (`stream.html`) with support params in URL:
 
 - multiple streams on page `src=camera1&src=camera2...`
-- stream technology autoselection `mode=webrtc,mse,mp4,mjpeg`
+- stream technology autoselection `mode=webrtc,webrtc/tcp,mse,hls,mp4,mjpeg`
 - stream technology comparison `src=camera1&mode=webrtc&mode=mse&mode=mp4`
 - player width setting in pixels `width=320px` or percents `width=50%`
 
@@ -625,6 +670,15 @@ api:
   base_path: "/rtc"  # default "", API prefix for serve on suburl (/api => /rtc/api)
   static_dir: "www"  # default "", folder for static files (custom web interface)
   origin: "*"        # default "", allow CORS requests (only * supported)
+  tls_listen: ":443" # default "", enable HTTPS server
+  tls_cert: |        # default "", PEM-encoded fullchain certificate for HTTPS
+    -----BEGIN CERTIFICATE-----
+    ...
+    -----END CERTIFICATE-----
+  tls_key: |         # default "", PEM-encoded private key for HTTPS
+    -----BEGIN PRIVATE KEY-----
+    ...
+    -----END PRIVATE KEY-----
 ```
 
 **PS:**
@@ -852,6 +906,7 @@ API examples:
 
 - MP4 snapshot: `http://192.168.1.123:1984/api/frame.mp4?src=camera1` (H264, H265)
 - MP4 stream: `http://192.168.1.123:1984/api/stream.mp4?src=camera1` (H264, H265, AAC)
+- MP4 file: `http://192.168.1.123:1984/api/stream.mp4?src=camera1&mp4=all&duration=15&filename=record.mp4` (H264, H265*, AAC, OPUS, MP3, PCMA, PCMU, PCM)
 
 Read more about [codecs filters](#codecs-filters).
 
@@ -961,17 +1016,21 @@ Some examples:
 
 `AVC/H.264` video can be played almost anywhere. But `HEVC/H.265` has a lot of limitations in supporting with different devices and browsers. It's all about patents and money, you can't do anything about it.
 
-| Device              | WebRTC                        | MSE                           | HTTP Progressive Streaming         |
-|---------------------|-------------------------------|-------------------------------|------------------------------------|
-| *latency*           | best                          | medium                        | bad                                |
-| Desktop Chrome 107+ | H264, OPUS, PCMU, PCMA        | H264, H265*, AAC, FLAC*, OPUS | H264, H265*, AAC, FLAC*, OPUS, MP3 |
-| Desktop Edge        | H264, OPUS, PCMU, PCMA        | H264, H265*, AAC, FLAC*, OPUS | H264, H265*, AAC, FLAC*, OPUS, MP3 |
-| Android Chrome 107+ | H264, OPUS, PCMU, PCMA        | H264, H265*, AAC, FLAC*, OPUS | H264, H265*, AAC, FLAC*, OPUS, MP3 |
-| Desktop Firefox     | H264, OPUS, PCMU, PCMA        | H264, AAC, FLAC*, OPUS        | H264, AAC, FLAC*, OPUS             |
-| Desktop Safari      | H264, H265*, OPUS, PCMU, PCMA | H264, H265, AAC, FLAC*        | **no!**                            |
-| iPad Safari 13+     | H264, H265*, OPUS, PCMU, PCMA | H264, H265, AAC, FLAC*        | **no!**                            |
-| iPhone Safari 13+   | H264, H265*, OPUS, PCMU, PCMA | **no!**                       | **no!**                            |
-| masOS Hass App      | no                            | no                            | no                                 |
+| Device              | WebRTC                        | MSE                           | HTTP                               | HLS                    |
+|---------------------|-------------------------------|-------------------------------|------------------------------------|------------------------|
+| *latency*           | best                          | medium                        | bad                                | bad                    |
+| Desktop Chrome 107+ | H264, OPUS, PCMU, PCMA        | H264, H265*, AAC, FLAC*, OPUS | H264, H265*, AAC, FLAC*, OPUS, MP3 | no                     |
+| Desktop Edge        | H264, OPUS, PCMU, PCMA        | H264, H265*, AAC, FLAC*, OPUS | H264, H265*, AAC, FLAC*, OPUS, MP3 | no                     |
+| Android Chrome 107+ | H264, OPUS, PCMU, PCMA        | H264, H265*, AAC, FLAC*, OPUS | H264, H265*, AAC, FLAC*, OPUS, MP3 | no                     |
+| Desktop Firefox     | H264, OPUS, PCMU, PCMA        | H264, AAC, FLAC*, OPUS        | H264, AAC, FLAC*, OPUS             | no                     |
+| Desktop Safari      | H264, H265*, OPUS, PCMU, PCMA | H264, H265, AAC, FLAC*        | **no!**                            | H264, H265, AAC, FLAC* |
+| iPad Safari 13+     | H264, H265*, OPUS, PCMU, PCMA | H264, H265, AAC, FLAC*        | **no!**                            | H264, H265, AAC, FLAC* |
+| iPhone Safari 13+   | H264, H265*, OPUS, PCMU, PCMA | **no!**                       | **no!**                            | H264, H265, AAC, FLAC* |
+| macOS [Hass App][1] | no                            | no                            | no                                 | H264, H265, AAC, FLAC* |
+
+[1]: https://apps.apple.com/app/home-assistant/id1099568401
+
+`HTTP*` - HTTP Progressive Streaming, not related with [Progressive download](https://en.wikipedia.org/wiki/Progressive_download), because the file has no size and no end 
 
 - Chrome H265: [read this](https://chromestatus.com/feature/5186511939567616) and [read this](https://github.com/StaZhu/enable-chromium-hevc-hardware-decoding)
 - Edge H265: [read this](https://www.reddit.com/r/MicrosoftEdge/comments/v9iw8k/enable_hevc_support_in_edge/)
