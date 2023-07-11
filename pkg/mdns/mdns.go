@@ -65,48 +65,50 @@ func Discovery(service string, onentry func(*ServiceEntry) bool) error {
 		}
 	}()
 
-	var skipIPs []net.IP
+	var skipPTR []string
 
 	b2 := make([]byte, 1500)
 loop:
 	for {
-		n, addr, err := conn.ReadFromUDP(b2)
+		// in the Hass docker network can receive same msg from different address
+		n, _, err := conn.ReadFromUDP(b2)
 		if err != nil {
 			break
-		}
-
-		for _, ip := range skipIPs {
-			if ip.Equal(addr.IP) {
-				continue loop
-			}
 		}
 
 		if err = msg.Unpack(b2[:n]); err != nil {
 			continue
 		}
 
-		if !EqualService(msg, service) {
+		ptr := GetPTR(msg)
+
+		if !strings.HasSuffix(ptr, service) {
 			continue
+		}
+
+		for _, s := range skipPTR {
+			if s == ptr {
+				continue loop
+			}
 		}
 
 		if entry := NewServiceEntry(msg); onentry(entry) {
 			break
 		}
 
-		skipIPs = append(skipIPs, addr.IP)
+		skipPTR = append(skipPTR, ptr)
 	}
 
 	return nil
 }
 
-func EqualService(msg *dns.Msg, service string) bool {
+func GetPTR(msg *dns.Msg) string {
 	for _, rr := range msg.Answer {
 		if rr, ok := rr.(*dns.PTR); ok {
-			return strings.HasSuffix(rr.Ptr, service)
+			return rr.Ptr
 		}
 	}
-
-	return false
+	return ""
 }
 
 func NewServiceEntry(msg *dns.Msg) *ServiceEntry {
