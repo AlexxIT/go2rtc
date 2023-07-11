@@ -1,17 +1,17 @@
 /**
- * Video player for go2rtc streaming application.
+ * VideoRTC v1.6.0 - Video player for go2rtc streaming application.
  *
  * All modern web technologies are supported in almost any browser except Apple Safari.
  *
  * Support:
+ * - ECMAScript 2017 (ES8) = ES6 + async
  * - RTCPeerConnection for Safari iOS 11.0+
  * - IntersectionObserver for Safari iOS 12.2+
  *
  * Doesn't support:
- * - MediaSource for Safari iOS all
- * - Customized built-in elements (extends HTMLVideoElement) because all Safari
- * - Public class fields because old Safari (before 14.0)
- * - Autoplay for Safari
+ * - MediaSource for Safari iOS
+ * - Customized built-in elements (extends HTMLVideoElement) because Safari
+ * - Autoplay for WebRTC in Safari
  */
 export class VideoRTC extends HTMLElement {
     constructor() {
@@ -27,7 +27,7 @@ export class VideoRTC extends HTMLElement {
             'hvc1.1.6.L153.B0', // H.265 main 5.1 (Chromecast Ultra)
             'mp4a.40.2',        // AAC LC
             'mp4a.40.5',        // AAC HE
-            'null',             // for detecting liars (old iOS 12)
+            'null',             // for detecting liars (Safari iOS 12)
             'flac',             // FLAC (PCM compatible)
             'opus',             // OPUS Chrome, Firefox
         ];
