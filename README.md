@@ -1098,6 +1098,7 @@ streams:
 - [ring-mqtt](https://github.com/tsightler/ring-mqtt) - Ring devices to MQTT Bridge
 - [EufyP2PStream](https://github.com/oischinger/eufyp2pstream) - A small project that provides a Video/Audio Stream from Eufy cameras that don't directly support RTSP
 - [ioBroker.euSec](https://github.com/bropat/ioBroker.eusec) - [ioBroker](https://www.iobroker.net/) adapter for control Eufy security devices
+- [wz_mini_hacks](https://github.com/gtxaspec/wz_mini_hacks) - Custom firmware for Wyze cameras
 - [MMM-go2rtc](https://github.com/Anonym-tsk/MMM-go2rtc) - MagicMirror² Module
 - [Alpine Linux](https://pkgs.alpinelinux.org/packages?name=go2rtc)
 - [NixOS](https://search.nixos.org/packages?query=go2rtc)
