@@ -3,12 +3,13 @@ package hass
 import (
 	"encoding/base64"
 	"encoding/json"
-	"github.com/AlexxIT/go2rtc/internal/api"
-	"github.com/AlexxIT/go2rtc/internal/streams"
-	"github.com/AlexxIT/go2rtc/internal/webrtc"
 	"net"
 	"net/http"
 	"strings"
+
+	"github.com/AlexxIT/go2rtc/internal/api"
+	"github.com/AlexxIT/go2rtc/internal/streams"
+	"github.com/AlexxIT/go2rtc/internal/webrtc"
 )
 
 func apiOK(w http.ResponseWriter, r *http.Request) {
@@ -21,6 +22,7 @@ func apiStream(w http.ResponseWriter, r *http.Request) {
 	case strings.HasSuffix(r.RequestURI, "/add"):
 		var v addJSON
 		if err := json.NewDecoder(r.Body).Decode(&v); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
@@ -41,32 +43,32 @@ func apiStream(w http.ResponseWriter, r *http.Request) {
 	default:
 		i := strings.IndexByte(r.RequestURI[8:], '/')
 		if i <= 0 {
-			log.Warn().Msgf("wrong request: %s", r.RequestURI)
+			http.Error(w, "", http.StatusBadRequest)
 			return
 		}
-		name := r.RequestURI[8 : 8+i]
 
+		name := r.RequestURI[8 : 8+i]
 		stream := streams.Get(name)
 		if stream == nil {
-			w.WriteHeader(http.StatusNotFound)
+			http.Error(w, api.StreamNotFound, http.StatusNotFound)
 			return
 		}
 
 		if err := r.ParseForm(); err != nil {
-			log.Error().Err(err).Msg("[api.hass] parse form")
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
 		s := r.FormValue("data")
 		offer, err := base64.StdEncoding.DecodeString(s)
 		if err != nil {
-			log.Error().Err(err).Msg("[api.hass] sdp64 decode")
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
 		s, err = webrtc.ExchangeSDP(stream, string(offer), "WebRTC/Hass sync", r.UserAgent())
 		if err != nil {
-			log.Error().Err(err).Msg("[api.hass] exchange SDP")
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
