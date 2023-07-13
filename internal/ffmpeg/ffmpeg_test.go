@@ -83,7 +83,7 @@ func TestParseArgsAudio(t *testing.T) {
 
 	// [AUDIO] audio will be transcoded to OPUS, video will be skipped
 	args = parseArgs("rtsp:///example.com#audio=opus")
-	require.Equal(t, `ffmpeg -hide_banner -allowed_media_types audio -fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i rtsp:///example.com -c:a libopus -ar:a 48000 -ac:a 2 -application:a voip -af adelay=0|0 -vn -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
+	require.Equal(t, `ffmpeg -hide_banner -allowed_media_types audio -fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i rtsp:///example.com -c:a libopus -ar:a 48000 -ac:a 2 -application:a voip -min_comp 0 -vn -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
 
 	// [AUDIO] audio will be transcoded to PCMU, video will be skipped
 	args = parseArgs("rtsp:///example.com#audio=pcmu")
