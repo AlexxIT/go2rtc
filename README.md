@@ -627,33 +627,7 @@ POST http://localhost:1984/api/streams?dst=camera1&src=ffmpeg:http://example.com
 
 The HTTP API is the main part for interacting with the application. Default address: `http://localhost:1984/`.
 
-Interactive [OpenAPI](https://alexxit.github.io/go2rtc/api/).
-
-go2rtc has its own JS video player (`video-rtc.js`) with:
-
-- support technologies:
-   - WebRTC over UDP or TCP
-   - MSE or MP4 or MJPEG over WebSocket 
-- automatic selection best technology according on:
-   - codecs inside your stream
-   - current browser capabilities
-   - current network configuration
-- automatic stop stream while browser or page not active
-- automatic stop stream while player not inside page viewport
-- automatic reconnection
-
-Technology selection based on priorities:
-
-1. Video and Audio better than just Video
-2. H265 better than H264
-3. WebRTC better than MSE, than MP4, than MJPEG
-
-go2rtc has simple HTML page (`stream.html`) with support params in URL:
-
-- multiple streams on page `src=camera1&src=camera2...`
-- stream technology autoselection `mode=webrtc,webrtc/tcp,mse,hls,mp4,mjpeg`
-- stream technology comparison `src=camera1&mode=webrtc&mode=mse&mode=mp4`
-- player width setting in pixels `width=320px` or percents `width=50%`
+[API description](https://github.com/AlexxIT/go2rtc/tree/master/api).
 
 **Module config**
 
