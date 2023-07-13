@@ -2,6 +2,11 @@ package mjpeg
 
 import (
 	"errors"
+	"io"
+	"net/http"
+	"strconv"
+	"time"
+
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg"
@@ -11,10 +16,6 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/mjpeg"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/rs/zerolog/log"
-	"io"
-	"net/http"
-	"strconv"
-	"time"
 )
 
 func Init() {
@@ -158,8 +159,7 @@ func inputMjpeg(w http.ResponseWriter, r *http.Request) {
 }
 
 func handlerWS(tr *ws.Transport, _ *ws.Message) error {
-	src := tr.Request.URL.Query().Get("src")
-	stream := streams.Get(src)
+	stream := streams.GetOrPatch(tr.Request.URL.Query())
 	if stream == nil {
 		return errors.New(api.StreamNotFound)
 	}

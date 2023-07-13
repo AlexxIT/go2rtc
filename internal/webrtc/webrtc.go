@@ -2,6 +2,8 @@ package webrtc
 
 import (
 	"errors"
+	"net"
+
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"github.com/AlexxIT/go2rtc/internal/app"
@@ -10,7 +12,6 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	pion "github.com/pion/webrtc/v3"
 	"github.com/rs/zerolog"
-	"net"
 )
 
 func Init() {
@@ -91,7 +92,7 @@ func asyncHandler(tr *ws.Transport, msg *ws.Message) error {
 
 	query := tr.Request.URL.Query()
 	if name := query.Get("src"); name != "" {
-		stream = streams.Get(name)
+		stream = streams.GetOrPatch(query)
 		mode = core.ModePassiveConsumer
 		log.Debug().Str("src", name).Msg("[webrtc] new consumer")
 	} else if name = query.Get("dst"); name != "" {

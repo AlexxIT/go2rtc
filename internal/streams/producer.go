@@ -3,10 +3,11 @@ package streams
 import (
 	"encoding/json"
 	"errors"
-	"github.com/AlexxIT/go2rtc/pkg/core"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
 type state byte
@@ -33,6 +34,24 @@ type Producer struct {
 	state    state
 	mu       sync.Mutex
 	workerID int
+}
+
+const SourceTemplate = "{input}"
+
+func NewProducer(source string) *Producer {
+	if strings.Contains(source, SourceTemplate) {
+		return &Producer{template: source}
+	}
+
+	return &Producer{url: source}
+}
+
+func (p *Producer) SetSource(s string) {
+	if p.template == "" {
+		p.url = s
+	} else {
+		p.url = strings.Replace(p.template, SourceTemplate, s, 1)
+	}
 }
 
 func (p *Producer) Dial() error {
@@ -110,13 +129,6 @@ func (p *Producer) AddTrack(media *core.Media, codec *core.Codec, track *core.Re
 	}
 
 	return nil
-}
-
-func (p *Producer) SetSource(s string) {
-	if p.template == "" {
-		p.template = p.url
-	}
-	p.url = strings.Replace(p.template, "{input}", s, 1)
 }
 
 func (p *Producer) MarshalJSON() ([]byte, error) {

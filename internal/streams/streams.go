@@ -1,12 +1,14 @@
 package streams
 
 import (
+	"net/http"
+	"net/url"
+	"sync"
+
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/app/store"
 	"github.com/rs/zerolog"
-	"net/http"
-	"net/url"
 )
 
 func Init() {
@@ -39,18 +41,56 @@ func New(name string, source any) *Stream {
 	return stream
 }
 
-func NewTemplate(name string, source any) *Stream {
+func Patch(name string, source string) *Stream {
+	streamsMu.Lock()
+	defer streamsMu.Unlock()
+
 	// check if source links to some stream name from go2rtc
-	if rawURL, ok := source.(string); ok {
-		if u, err := url.Parse(rawURL); err == nil && u.Scheme == "rtsp" && len(u.Path) > 1 {
-			if stream, ok := streams[u.Path[1:]]; ok {
-				streams[name] = stream
-				return stream
-			}
+	if u, err := url.Parse(source); err == nil && u.Scheme == "rtsp" && len(u.Path) > 1 {
+		rtspName := u.Path[1:]
+		if stream, ok := streams[rtspName]; ok {
+			// link (alias) stream[name] to stream[rtspName]
+			streams[name] = stream
+			return stream
 		}
 	}
 
-	return New(name, "{input}")
+	// check if src has supported scheme
+	if !HasProducer(source) {
+		return nil
+	}
+
+	// check an existing stream with this name
+	if stream, ok := streams[name]; ok {
+		stream.SetSource(source)
+		return stream
+	}
+
+	// create new stream with this name
+	return New(name, source)
+}
+
+func GetOrPatch(query url.Values) *Stream {
+	// check if src param exists
+	source := query.Get("src")
+	if source == "" {
+		return nil
+	}
+
+	// check if src is stream name
+	if stream, ok := streams[source]; ok {
+		return stream
+	}
+
+	// check if name param provided
+	if name := query.Get("name"); name == "" {
+		log.Info().Msgf("[streams] create new stream url=%s", source)
+
+		return Patch(name, source)
+	}
+
+	// return new stream with src as name
+	return Patch(source, source)
 }
 
 func GetAll() (names []string) {
@@ -91,11 +131,7 @@ func streamsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// support {input} templates: https://github.com/AlexxIT/go2rtc#module-hass
-		stream := Get(name)
-		if stream == nil {
-			stream = NewTemplate(name, src)
-		}
-		stream.SetSource(src)
+		Patch(name, src)
 
 	case "POST":
 		// with dst - redirect source to dst
@@ -120,3 +156,4 @@ func streamsHandler(w http.ResponseWriter, r *http.Request) {
 
 var log zerolog.Logger
 var streams = map[string]*Stream{}
+var streamsMu sync.Mutex

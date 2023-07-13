@@ -2,6 +2,7 @@ package mp4
 
 import (
 	"errors"
+
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"github.com/AlexxIT/go2rtc/internal/streams"
@@ -10,8 +11,7 @@ import (
 )
 
 func handlerWSMSE(tr *ws.Transport, msg *ws.Message) error {
-	src := tr.Request.URL.Query().Get("src")
-	stream := streams.Get(src)
+	stream := streams.GetOrPatch(tr.Request.URL.Query())
 	if stream == nil {
 		return errors.New(api.StreamNotFound)
 	}
@@ -58,8 +58,7 @@ func handlerWSMSE(tr *ws.Transport, msg *ws.Message) error {
 }
 
 func handlerWSMP4(tr *ws.Transport, msg *ws.Message) error {
-	src := tr.Request.URL.Query().Get("src")
-	stream := streams.Get(src)
+	stream := streams.GetOrPatch(tr.Request.URL.Query())
 	if stream == nil {
 		return errors.New(api.StreamNotFound)
 	}

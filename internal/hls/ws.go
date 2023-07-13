@@ -2,18 +2,18 @@ package hls
 
 import (
 	"errors"
+	"time"
+
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/mp4"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
-	"time"
 )
 
 func handlerWSHLS(tr *ws.Transport, msg *ws.Message) error {
-	src := tr.Request.URL.Query().Get("src")
-	stream := streams.Get(src)
+	stream := streams.GetOrPatch(tr.Request.URL.Query())
 	if stream == nil {
 		return errors.New(api.StreamNotFound)
 	}

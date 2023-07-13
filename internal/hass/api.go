@@ -30,14 +30,11 @@ func apiStream(w http.ResponseWriter, r *http.Request) {
 		// 1. link to go2rtc stream: rtsp://...:8554/{stream_name}
 		// 2. static link to Hass camera
 		// 3. dynamic link to Hass camera
-		stream := streams.Get(v.Name)
-		if stream == nil {
-			stream = streams.NewTemplate(v.Name, v.Channels.First.Url)
+		if streams.Patch(v.Name, v.Channels.First.Url) != nil {
+			apiOK(w, r)
+		} else {
+			http.Error(w, "", http.StatusBadRequest)
 		}
-
-		stream.SetSource(v.Channels.First.Url)
-
-		apiOK(w, r)
 
 	// /stream/{id}/channel/0/webrtc
 	default:

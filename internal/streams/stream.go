@@ -3,10 +3,11 @@ package streams
 import (
 	"encoding/json"
 	"errors"
-	"github.com/AlexxIT/go2rtc/pkg/core"
 	"strings"
 	"sync"
 	"sync/atomic"
+
+	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
 type Stream struct {
@@ -19,15 +20,13 @@ type Stream struct {
 func NewStream(source any) *Stream {
 	switch source := source.(type) {
 	case string:
-		s := new(Stream)
-		prod := &Producer{url: source}
-		s.producers = append(s.producers, prod)
-		return s
+		return &Stream{
+			producers: []*Producer{NewProducer(source)},
+		}
 	case []any:
 		s := new(Stream)
 		for _, source := range source {
-			prod := &Producer{url: source.(string)}
-			s.producers = append(s.producers, prod)
+			s.producers = append(s.producers, NewProducer(source.(string)))
 		}
 		return s
 	case map[string]any:
