@@ -27,7 +27,6 @@ export class VideoRTC extends HTMLElement {
             'hvc1.1.6.L153.B0', // H.265 main 5.1 (Chromecast Ultra)
             'mp4a.40.2',        // AAC LC
             'mp4a.40.5',        // AAC HE
-            'null',             // for detecting liars (Safari iOS 12)
             'flac',             // FLAC (PCM compatible)
             'opus',             // OPUS Chrome, Firefox
         ];
@@ -240,6 +239,14 @@ export class VideoRTC extends HTMLElement {
         this.video.style.height = '100%';
 
         this.appendChild(this.video);
+
+        // all Safari lies about supported audio codecs
+        const m = window.navigator.userAgent.match(/Version\/(\d+).+Safari/);
+        if (m) {
+            // AAC from v13, FLAC from v14, OPUS - unsupported
+            const skip = m[1] < '13' ? 'mp4a.40.2' : m[1] < '14' ? 'flac' : 'opus';
+            this.CODECS.splice(this.CODECS.indexOf(skip));
+        }
 
         if (this.background) return;
 

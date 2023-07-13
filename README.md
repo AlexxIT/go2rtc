@@ -997,9 +997,9 @@ Some examples:
 | Desktop Edge        | H264, OPUS, PCMU, PCMA        | H264, H265*, AAC, FLAC*, OPUS | H264, H265*, AAC, FLAC*, OPUS, MP3 | no                     |
 | Android Chrome 107+ | H264, OPUS, PCMU, PCMA        | H264, H265*, AAC, FLAC*, OPUS | H264, H265*, AAC, FLAC*, OPUS, MP3 | no                     |
 | Desktop Firefox     | H264, OPUS, PCMU, PCMA        | H264, AAC, FLAC*, OPUS        | H264, AAC, FLAC*, OPUS             | no                     |
-| Desktop Safari      | H264, H265*, OPUS, PCMU, PCMA | H264, H265, AAC, FLAC*        | **no!**                            | H264, H265, AAC, FLAC* |
-| iPad Safari 13+     | H264, H265*, OPUS, PCMU, PCMA | H264, H265, AAC, FLAC*        | **no!**                            | H264, H265, AAC, FLAC* |
-| iPhone Safari 13+   | H264, H265*, OPUS, PCMU, PCMA | **no!**                       | **no!**                            | H264, H265, AAC, FLAC* |
+| Desktop Safari 14+  | H264, H265*, OPUS, PCMU, PCMA | H264, H265, AAC, FLAC*        | **no!**                            | H264, H265, AAC, FLAC* |
+| iPad Safari 14+     | H264, H265*, OPUS, PCMU, PCMA | H264, H265, AAC, FLAC*        | **no!**                            | H264, H265, AAC, FLAC* |
+| iPhone Safari 14+   | H264, H265*, OPUS, PCMU, PCMA | **no!**                       | **no!**                            | H264, H265, AAC, FLAC* |
 | macOS [Hass App][1] | no                            | no                            | no                                 | H264, H265, AAC, FLAC* |
 
 [1]: https://apps.apple.com/app/home-assistant/id1099568401
