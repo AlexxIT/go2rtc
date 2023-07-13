@@ -8,7 +8,6 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/mp4"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
-	"strings"
 	"time"
 )
 
@@ -69,12 +68,9 @@ segment.m4s?id=` + sid + `&n=%d`
 	sessions[sid] = session
 	sessionsMu.Unlock()
 
-	// Apple Safari can play FLAC codec, but fail it it in m3u8 playlist
-	codecs = strings.Replace(cons.MimeCodecs(), mp4.MimeFlac, mp4.MimeAAC, 1)
-
 	// bandwidth important for Safari, codecs useful for smooth playback
 	data := `#EXTM3U
-#EXT-X-STREAM-INF:BANDWIDTH=1000000,CODECS="` + codecs + `"
+#EXT-X-STREAM-INF:BANDWIDTH=192000,CODECS="` + cons.MimeCodecs() + `"
 hls/playlist.m3u8?id=` + sid
 
 	tr.Write(&ws.Message{Type: "hls", Value: data})

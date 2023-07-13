@@ -22,7 +22,7 @@ const (
 	MimeH264 = "avc1.640029"
 	MimeH265 = "hvc1.1.6.L153.B0"
 	MimeAAC  = "mp4a.40.2"
-	MimeFlac = "flac"
+	MimeFlac = "fLaC" // case is important for Apple HLS
 	MimeOpus = "opus"
 )
 
