@@ -1,13 +1,14 @@
 package device
 
 import (
-	"github.com/AlexxIT/go2rtc/internal/api"
-	"github.com/AlexxIT/go2rtc/pkg/core"
 	"net/url"
 	"os"
 	"os/exec"
 	"regexp"
 	"strings"
+
+	"github.com/AlexxIT/go2rtc/internal/api"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
 func queryToInput(query url.Values) string {
@@ -28,7 +29,15 @@ func queryToInput(query url.Values) string {
 	}
 
 	if audio := query.Get("audio"); audio != "" {
+		// https://trac.ffmpeg.org/wiki/Capture/ALSA
 		input := "-f alsa"
+
+		for key, value := range query {
+			switch key {
+			case "channels", "sample_rate":
+				input += " -" + key + " " + value[0]
+			}
+		}
 
 		return input + " -i " + indexToItem(audios, audio)
 	}
