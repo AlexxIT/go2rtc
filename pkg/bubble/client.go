@@ -61,17 +61,24 @@ func (c *Client) Dial() (err error) {
 		return
 	}
 
-	c.conn, err = net.DialTimeout("tcp4", u.Host, Timeout)
+	if c.conn, err = net.DialTimeout("tcp4", u.Host, Timeout); err != nil {
+		return
+	}
 
 	if err = c.conn.SetDeadline(time.Now().Add(Timeout)); err != nil {
-		return err
+		return
 	}
 
 	req := &tcp.Request{Method: "GET", URL: &url.URL{Path: u.Path, RawQuery: u.RawQuery}, Proto: "HTTP/1.1"}
-	err = req.Write(c.conn)
+	if err = req.Write(c.conn); err != nil {
+		return
+	}
 
 	c.r = bufio.NewReader(c.conn)
 	res, err := tcp.ReadResponse(c.r)
+	if err != nil {
+		return
+	}
 
 	if res.StatusCode != http.StatusOK {
 		return errors.New("wrong response: " + res.Status)
@@ -120,7 +127,7 @@ func (c *Client) Dial() (err error) {
 	}
 
 	// 3. Read response
-	cmd, b, err := c.Read() // don't know how to parse
+	cmd, b, err := c.Read()
 	if err != nil {
 		return
 	}
@@ -137,7 +144,7 @@ func (c *Client) Write(command byte, timestamp uint32, payload []byte) error {
 		return err
 	}
 
-	// 0xAA + size uint32 + cmd byte + ts uint32 + size2 uint32 + payload
+	// 0xAA + size uint32 + cmd byte + ts uint32 + payload
 	b := make([]byte, 14+len(payload))
 	b[0] = SyncByte
 	binary.BigEndian.PutUint32(b[1:], uint32(5+len(payload)))
@@ -154,7 +161,7 @@ func (c *Client) Read() (byte, []byte, error) {
 		return 0, nil, err
 	}
 
-	// 0xAA + size uint32 + cmd byte + ts uint32 + size2 uint32
+	// 0xAA + size uint32 + cmd byte + ts uint32 + payload
 	b := make([]byte, 10)
 	if _, err := io.ReadFull(c.r, b); err != nil {
 		return 0, nil, err
@@ -232,7 +239,7 @@ func (c *Client) Handle() error {
 					Version:   2,
 					Timestamp: audioTS,
 				},
-				Payload: b[6+36:], // don't know what is in first 36 bytes
+				Payload: b[6+36:],
 			}
 			audioTS += uint32(len(pkt.Payload))
 			c.audioTrack.WriteRTP(pkt)
