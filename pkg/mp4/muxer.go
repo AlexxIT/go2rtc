@@ -2,6 +2,7 @@ package mp4
 
 import (
 	"encoding/hex"
+
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
@@ -22,7 +23,7 @@ const (
 	MimeH264 = "avc1.640029"
 	MimeH265 = "hvc1.1.6.L153.B0"
 	MimeAAC  = "mp4a.40.2"
-	MimeFlac = "fLaC" // case is important for Apple HLS
+	MimeFlac = "flac"
 	MimeOpus = "opus"
 )
 
@@ -64,7 +65,7 @@ func (m *Muxer) GetInit(codecs []*core.Codec) ([]byte, error) {
 		switch codec.Name {
 		case core.CodecH264:
 			sps, pps := h264.GetParameterSet(codec.FmtpLine)
-			// some dummy SPS and PPS not a problem
+			// some dummy SPS and PPS not a problem for MP4, but problem for HLS :(
 			if len(sps) == 0 {
 				sps = []byte{0x67, 0x42, 0x00, 0x0a, 0xf8, 0x41, 0xa2}
 			}

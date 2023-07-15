@@ -1,6 +1,11 @@
 package hls
 
 import (
+	"net/http"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"github.com/AlexxIT/go2rtc/internal/app"
@@ -10,9 +15,6 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/mpegts"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/rs/zerolog"
-	"net/http"
-	"sync"
-	"time"
 )
 
 func Init() {
@@ -137,9 +139,11 @@ segment.ts?id=` + sid + `&n=%d`
 	sessions[sid] = session
 	sessionsMu.Unlock()
 
+	codecs := strings.Replace(cons.MimeCodecs(), mp4.MimeFlac, "fLaC", 1)
+
 	// bandwidth important for Safari, codecs useful for smooth playback
 	data := []byte(`#EXTM3U
-#EXT-X-STREAM-INF:BANDWIDTH=192000,CODECS="` + cons.MimeCodecs() + `"
+#EXT-X-STREAM-INF:BANDWIDTH=192000,CODECS="` + codecs + `"
 hls/playlist.m3u8?id=` + sid)
 
 	if _, err := w.Write(data); err != nil {

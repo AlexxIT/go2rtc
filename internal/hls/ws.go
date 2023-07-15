@@ -2,6 +2,7 @@ package hls
 
 import (
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
@@ -68,9 +69,11 @@ segment.m4s?id=` + sid + `&n=%d`
 	sessions[sid] = session
 	sessionsMu.Unlock()
 
+	codecs = strings.Replace(cons.MimeCodecs(), mp4.MimeFlac, "fLaC", 1)
+
 	// bandwidth important for Safari, codecs useful for smooth playback
 	data := `#EXTM3U
-#EXT-X-STREAM-INF:BANDWIDTH=192000,CODECS="` + cons.MimeCodecs() + `"
+#EXT-X-STREAM-INF:BANDWIDTH=192000,CODECS="` + codecs + `"
 hls/playlist.m3u8?id=` + sid
 
 	tr.Write(&ws.Message{Type: "hls", Value: data})
