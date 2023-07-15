@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
+	"time"
+
 	"github.com/AlexxIT/go2rtc/pkg/aac"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
@@ -12,7 +14,6 @@ import (
 	"github.com/deepch/vdk/codec/h264parser"
 	"github.com/deepch/vdk/format/ts"
 	"github.com/pion/rtp"
-	"time"
 )
 
 type Consumer struct {
@@ -60,6 +61,14 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 	switch track.Codec.Name {
 	case core.CodecH264:
 		sps, pps := h264.GetParameterSet(track.Codec.FmtpLine)
+		// some dummy SPS and PPS not a problem
+		if len(sps) == 0 {
+			sps = []byte{0x67, 0x42, 0x00, 0x0a, 0xf8, 0x41, 0xa2}
+		}
+		if len(pps) == 0 {
+			pps = []byte{0x68, 0xce, 0x38, 0x80}
+		}
+
 		stream, err := h264parser.NewCodecDataFromSPSAndPPS(sps, pps)
 		if err != nil {
 			return nil
