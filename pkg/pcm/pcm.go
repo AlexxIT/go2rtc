@@ -1,29 +1,39 @@
 package pcm
 
 import (
+	"sync"
+
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/pion/rtp"
-	"sync"
 )
 
-func Resample(codec *core.Codec, sampleRate uint32, handler core.HandlerFunc) core.HandlerFunc {
+// ResampleToPCMA - convert PCMA/PCMU/PCM/PCML to PCMA with decreasing sample rate
+func ResampleToPCMA(codec *core.Codec, sampleRate uint32, handler core.HandlerFunc) core.HandlerFunc {
 	n := float32(codec.ClockRate) / float32(sampleRate)
 
 	switch codec.Name {
 	case core.CodecPCMA:
 		return DownsampleByte(PCMAtoPCM, PCMtoPCMA, n, handler)
 	case core.CodecPCMU:
-		return DownsampleByte(PCMUtoPCM, PCMtoPCMU, n, handler)
-	case core.CodecPCM:
+		return DownsampleByte(PCMUtoPCM, PCMtoPCMA, n, handler)
+	case core.CodecPCM, core.CodecPCML:
 		if n == 1 {
-			return ResamplePCM(PCMtoPCMA, handler)
+			handler = ResamplePCM(PCMtoPCMA, handler)
+		} else {
+			handler = DownsamplePCM(PCMtoPCMA, n, handler)
 		}
-		return DownsamplePCM(PCMtoPCMA, n, handler)
+
+		if codec.Name == core.CodecPCML {
+			return LittleToBig(handler)
+		}
+
+		return handler
 	}
 
 	panic(core.Caller())
 }
 
+// DownsampleByte - convert PCMA/PCMU to PCMA/PCMU with decreasing sample rate (N times)
 func DownsampleByte(
 	toPCM func(byte) int16, fromPCM func(int16) byte, n float32, handler core.HandlerFunc,
 ) core.HandlerFunc {
@@ -58,6 +68,23 @@ func DownsampleByte(
 	}
 }
 
+// LittleToBig - conver PCM little endian to PCM big endian
+func LittleToBig(handler core.HandlerFunc) core.HandlerFunc {
+	return func(packet *rtp.Packet) {
+		size := len(packet.Payload)
+		b := make([]byte, size)
+		for i := 0; i < size; i += 2 {
+			b[i] = packet.Payload[i+1]
+			b[i+1] = packet.Payload[i]
+		}
+
+		clone := *packet
+		clone.Payload = b
+		handler(&clone)
+	}
+}
+
+// ResamplePCM - convert PCM to PCMA/PCMU with same sample rate
 func ResamplePCM(fromPCM func(int16) byte, handler core.HandlerFunc) core.HandlerFunc {
 	var ts uint32
 
@@ -84,6 +111,7 @@ func ResamplePCM(fromPCM func(int16) byte, handler core.HandlerFunc) core.Handle
 	}
 }
 
+// DownsamplePCM - convert PCM to PCMA/PCMU with decreasing sample rate (N times)
 func DownsamplePCM(fromPCM func(int16) byte, n float32, handler core.HandlerFunc) core.HandlerFunc {
 	var sampleN, sampleSum float32
 	var ts uint32

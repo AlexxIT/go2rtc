@@ -3,16 +3,17 @@ package webrtc
 import (
 	"errors"
 	"fmt"
-	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/pion/ice/v2"
-	"github.com/pion/sdp/v3"
-	"github.com/pion/stun"
-	"github.com/pion/webrtc/v3"
 	"hash/crc32"
 	"net"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/pion/ice/v2"
+	"github.com/pion/sdp/v3"
+	"github.com/pion/stun"
+	"github.com/pion/webrtc/v3"
 )
 
 func UnmarshalMedias(descriptions []*sdp.MediaDescription) (medias []*core.Media) {
@@ -52,13 +53,15 @@ func UnmarshalMedias(descriptions []*sdp.MediaDescription) (medias []*core.Media
 	return
 }
 
+// WithResampling - will add for consumer: PCMA/0, PCMU/0, PCM/0, PCML/0
+// so it can add resampling for PCMA/PCMU and repack for PCM/PCML
 func WithResampling(medias []*core.Media) []*core.Media {
 	for _, media := range medias {
 		if media.Kind != core.KindAudio || media.Direction != core.DirectionSendonly {
 			continue
 		}
 
-		var pcma, pcmu, pcm *core.Codec
+		var pcma, pcmu, pcm, pcml *core.Codec
 
 		for _, codec := range media.Codecs {
 			switch codec.Name {
@@ -76,6 +79,8 @@ func WithResampling(medias []*core.Media) []*core.Media {
 				}
 			case core.CodecPCM:
 				pcm = codec
+			case core.CodecPCML:
+				pcml = codec
 			}
 		}
 
@@ -93,6 +98,11 @@ func WithResampling(medias []*core.Media) []*core.Media {
 			pcm = pcma.Clone()
 			pcm.Name = core.CodecPCM
 			media.Codecs = append(media.Codecs, pcm)
+		}
+		if pcma != nil && pcml == nil {
+			pcml = pcma.Clone()
+			pcml.Name = core.CodecPCML
+			media.Codecs = append(media.Codecs, pcml)
 		}
 	}
 

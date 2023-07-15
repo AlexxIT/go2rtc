@@ -3,8 +3,9 @@ package core
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/pion/sdp/v3"
 	"strings"
+
+	"github.com/pion/sdp/v3"
 )
 
 // Media take best from:
@@ -93,7 +94,7 @@ func GetKind(name string) string {
 	switch name {
 	case CodecH264, CodecH265, CodecVP8, CodecVP9, CodecAV1, CodecJPEG:
 		return KindVideo
-	case CodecPCMU, CodecPCMA, CodecAAC, CodecOpus, CodecG722, CodecMP3, CodecPCM, CodecELD, CodecFLAC:
+	case CodecPCMU, CodecPCMA, CodecAAC, CodecOpus, CodecG722, CodecMP3, CodecPCM, CodecPCML, CodecELD, CodecFLAC:
 		return KindAudio
 	}
 	return ""

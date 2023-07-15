@@ -3,10 +3,11 @@ package core
 import (
 	"encoding/base64"
 	"fmt"
-	"github.com/pion/sdp/v3"
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/pion/sdp/v3"
 )
 
 type Codec struct {
@@ -112,6 +113,42 @@ func UnmarshalCodec(md *sdp.MediaDescription, payloadType string) *Codec {
 		case "26":
 			c.Name = CodecJPEG
 			c.ClockRate = 90000
+		case "96", "97", "98":
+			if len(md.Bandwidth) == 0 {
+				c.Name = payloadType
+				break
+			}
+
+			// FFmpeg + RTSP + pcm_s16le = doesn't pass info about codec name and params
+			// so try to guess the codec based on bitrate
+			// https://github.com/AlexxIT/go2rtc/issues/523
+			switch md.Bandwidth[0].Bandwidth {
+			case 128:
+				c.ClockRate = 8000
+			case 256:
+				c.ClockRate = 16000
+			case 384:
+				c.ClockRate = 24000
+			case 512:
+				c.ClockRate = 32000
+			case 705:
+				c.ClockRate = 44100
+			case 768:
+				c.ClockRate = 48000
+			case 1411:
+				// default Windows DShow
+				c.ClockRate = 44100
+				c.Channels = 2
+			case 1536:
+				// default Linux ALSA
+				c.ClockRate = 48000
+				c.Channels = 2
+			default:
+				c.Name = payloadType
+				break
+			}
+
+			c.Name = CodecPCML
 		default:
 			c.Name = payloadType
 		}

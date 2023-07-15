@@ -25,7 +25,9 @@ const (
 	CodecOpus = "OPUS" // payloadType: 111
 	CodecG722 = "G722"
 	CodecMP3  = "MPA" // payload: 14, aka MPEG-1 Layer III
-	CodecPCM  = "L16" // Linear PCM
+	CodecPCM  = "L16" // Linear PCM (big endian)
+
+	CodecPCML = "PCML" // Linear PCM (little endian)
 
 	CodecELD  = "ELD" // AAC-ELD
 	CodecFLAC = "FLAC"

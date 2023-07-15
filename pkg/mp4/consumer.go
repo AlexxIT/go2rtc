@@ -2,13 +2,14 @@ package mp4
 
 import (
 	"encoding/json"
+	"sync"
+
 	"github.com/AlexxIT/go2rtc/pkg/aac"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
 	"github.com/AlexxIT/go2rtc/pkg/pcm"
 	"github.com/pion/rtp"
-	"sync"
 )
 
 type Consumer struct {
@@ -131,7 +132,7 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 				handler.Handler = aac.RTPDepay(handler.Handler)
 			}
 		case core.CodecOpus, core.CodecMP3: // no changes
-		case core.CodecPCMA, core.CodecPCMU, core.CodecPCM:
+		case core.CodecPCMA, core.CodecPCMU, core.CodecPCM, core.CodecPCML:
 			handler.Handler = pcm.FLACEncoder(track.Codec, handler.Handler)
 			codec.Name = core.CodecFLAC
 

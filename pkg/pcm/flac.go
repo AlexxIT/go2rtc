@@ -6,11 +6,12 @@ package pcm
 
 import (
 	"encoding/binary"
+	"unicode/utf8"
+
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/pion/rtp"
 	"github.com/sigurn/crc16"
 	"github.com/sigurn/crc8"
-	"unicode/utf8"
 )
 
 func FLACHeader(magic bool, sampleRate uint32) []byte {
@@ -86,7 +87,7 @@ func FLACEncoder(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 	return func(packet *rtp.Packet) {
 		samples := uint16(len(packet.Payload))
 
-		if codec.Name == core.CodecPCM {
+		if codec.Name == core.CodecPCM || codec.Name == core.CodecPCML {
 			samples /= 2
 		}
 
@@ -131,6 +132,14 @@ func FLACEncoder(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 			}
 		case core.CodecPCM:
 			n += copy(buf[n:], packet.Payload)
+		case core.CodecPCML:
+			// reverse endian from little to big
+			size := len(packet.Payload)
+			for i := 0; i < size; i += 2 {
+				buf[n] = packet.Payload[i+1]
+				buf[n+1] = packet.Payload[i]
+				n += 2
+			}
 		}
 
 		// 4. Frame footer

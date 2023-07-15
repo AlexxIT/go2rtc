@@ -79,6 +79,8 @@ var defaults = map[string]string{
 	"pcm":        "-c:a pcm_s16be -ar:a 8000 -ac:a 1",
 	"pcm/16000":  "-c:a pcm_s16be -ar:a 16000 -ac:a 1",
 	"pcm/48000":  "-c:a pcm_s16be -ar:a 48000 -ac:a 1",
+	"pcml":       "-c:a pcm_s16le -ar:a 8000 -ac:a 1",
+	"pcml/44100": "-c:a pcm_s16le -ar:a 44100 -ac:a 1",
 
 	// hardware Intel and AMD on Linux
 	// better not to set `-async_depth:v 1` like for QSV, because framedrops

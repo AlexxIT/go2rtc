@@ -37,6 +37,7 @@ func ParseQuery(query map[string][]string) []*core.Media {
 			&core.Codec{Name: core.CodecPCMA},
 			&core.Codec{Name: core.CodecPCMU},
 			&core.Codec{Name: core.CodecPCM},
+			&core.Codec{Name: core.CodecPCML},
 		)
 
 		if v[0] == "flac" {
@@ -74,6 +75,7 @@ func ParseCodecs(codecs string, parseAudio bool) (medias []*core.Media) {
 				&core.Codec{Name: core.CodecPCMA},
 				&core.Codec{Name: core.CodecPCMU},
 				&core.Codec{Name: core.CodecPCM},
+				&core.Codec{Name: core.CodecPCML},
 			)
 		case MimeOpus:
 			codec := &core.Codec{Name: core.CodecOpus}
