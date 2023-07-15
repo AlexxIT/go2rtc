@@ -4,6 +4,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"github.com/AlexxIT/go2rtc/internal/app"
+	"github.com/AlexxIT/go2rtc/internal/bubble"
 	"github.com/AlexxIT/go2rtc/internal/debug"
 	"github.com/AlexxIT/go2rtc/internal/dvrip"
 	"github.com/AlexxIT/go2rtc/internal/echo"
@@ -74,6 +75,7 @@ func main() {
 	roborock.Init() // roborock source
 	homekit.Init()  // homekit source
 	nest.Init()     // nest source
+	bubble.Init()   // bubble source
 
 	// 6. Helper modules
 
