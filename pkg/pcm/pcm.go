@@ -7,15 +7,15 @@ import (
 	"github.com/pion/rtp"
 )
 
-// ResampleToPCMA - convert PCMA/PCMU/PCM/PCML to PCMA with decreasing sample rate
-func ResampleToPCMA(codec *core.Codec, sampleRate uint32, handler core.HandlerFunc) core.HandlerFunc {
+// ResampleToG711 - convert PCMA/PCM/PCML to PCMA and PCMU to PCMU with decreasing sample rate
+func ResampleToG711(codec *core.Codec, sampleRate uint32, handler core.HandlerFunc) core.HandlerFunc {
 	n := float32(codec.ClockRate) / float32(sampleRate)
 
 	switch codec.Name {
 	case core.CodecPCMA:
 		return DownsampleByte(PCMAtoPCM, PCMtoPCMA, n, handler)
 	case core.CodecPCMU:
-		return DownsampleByte(PCMUtoPCM, PCMtoPCMA, n, handler)
+		return DownsampleByte(PCMUtoPCM, PCMtoPCMU, n, handler)
 	case core.CodecPCM, core.CodecPCML:
 		if n == 1 {
 			handler = ResamplePCM(PCMtoPCMA, handler)

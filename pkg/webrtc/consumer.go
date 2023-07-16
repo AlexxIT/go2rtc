@@ -70,7 +70,7 @@ func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiv
 				codec.Name = core.CodecPCMA
 			}
 			codec.ClockRate = 8000
-			sender.Handler = pcm.ResampleToPCMA(track.Codec, 8000, sender.Handler)
+			sender.Handler = pcm.ResampleToG711(track.Codec, 8000, sender.Handler)
 		}
 
 		// Fix audio quality https://github.com/AlexxIT/WebRTC/issues/500
