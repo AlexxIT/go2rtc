@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -12,12 +13,16 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"golang.ngrok.com/ngrok"
+	"golang.ngrok.com/ngrok/config"
 )
 
 func Init() {
 	var cfg struct {
 		Mod struct {
 			Listen    string `yaml:"listen"`
+			Ngrok     bool   `yaml:"ngrok"`
 			Username  string `yaml:"username"`
 			Password  string `yaml:"password"`
 			BasePath  string `yaml:"base_path"`
@@ -27,6 +32,10 @@ func Init() {
 			TLSCert   string `yaml:"tls_cert"`
 			TLSKey    string `yaml:"tls_key"`
 		} `yaml:"api"`
+		Ngrok struct {
+			Cmd   string `yaml:"command"`
+			Token string `yaml:"authtoken"`
+		} `yaml:"ngrok"`
 	}
 
 	// default config
@@ -71,13 +80,30 @@ func Init() {
 		Handler = middlewareLog(Handler) // 1st
 	}
 
+	var s http.Server
 	go func() {
-		s := http.Server{}
+		s = http.Server{}
 		s.Handler = Handler
 		if err = s.Serve(listener); err != nil {
 			log.Fatal().Err(err).Msg("[api] serve")
 		}
 	}()
+
+	if cfg.Mod.Ngrok {
+		tun, err := ngrok.Listen(context.Background(),
+			config.HTTPEndpoint(
+				config.WithHTTPServer(&s),
+			),
+			ngrok.WithAuthtokenFromEnv(),
+			ngrok.WithAuthtoken(cfg.Ngrok.Token),
+		)
+		if err != nil {
+			log.Fatal().Err(err).Msg("[api] ngrok")
+			return
+		}
+
+		log.Info().Str("tun", tun.URL()).Msg("[ngrok] tunnel created:")
+	}
 
 	// Initialize the HTTPS server
 	if cfg.Mod.TLSListen != "" && cfg.Mod.TLSCert != "" && cfg.Mod.TLSKey != "" {

@@ -639,6 +639,7 @@ The HTTP API is the main part for interacting with the application. Default addr
 ```yaml
 api:
   listen: ":1984"    # default ":1984", HTTP API port ("" - disabled)
+  ngrok: true        # default: false, expose API via ngrok
   username: "admin"  # default "", Basic auth for WebUI
   password: "pass"   # default "", Basic auth for WebUI
   base_path: "/rtc"  # default "", API prefix for serve on suburl (/api => /rtc/api)
@@ -813,6 +814,16 @@ You need to create `ngrok.yaml` config file and add it to go2rtc config:
 ngrok:
   command: ngrok start --all --config ngrok.yaml
 ```
+
+**Tunnel for Web interface**
+
+You need to add your [Ngrok token](https://dashboard.ngrok.com/get-started/your-authtoken) to YAML:
+
+```yaml
+ngrok:
+  authtoken: eW91IHNoYWxsIG5vdCBwYXNzCnlvdSBzaGFsbCBub3QgcGFzcw
+```
+You can use `NGROK_AUTHTOKEN` environment variable instead of `authtoken` option
 
 Ngrok config example:
 

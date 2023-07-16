@@ -10,12 +10,14 @@ import (
 	"strings"
 )
 
+var cfg struct {
+	Mod struct {
+		Cmd   string `yaml:"command"`
+		Token string `yaml:"authtoken"`
+	} `yaml:"ngrok"`
+}
+
 func Init() {
-	var cfg struct {
-		Mod struct {
-			Cmd string `yaml:"command"`
-		} `yaml:"ngrok"`
-	}
 
 	app.LoadConfig(&cfg)
 
@@ -80,4 +82,8 @@ func ConvertHostToIP(address string) (string, error) {
 	}
 
 	return ip[0].String() + ":" + port, nil
+}
+
+func GetAuthToken() string {
+	return cfg.Mod.Token
 }

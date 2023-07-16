@@ -24,6 +24,17 @@ require (
 )
 
 require (
+	github.com/go-stack/stack v1.8.1 // indirect
+	github.com/inconshreveable/log15 v3.0.0-testing.3+incompatible // indirect
+	github.com/inconshreveable/log15/v3 v3.0.0-testing.5 // indirect
+	github.com/jpillora/backoff v1.0.0 // indirect
+	go.uber.org/multierr v1.10.0 // indirect
+	golang.ngrok.com/muxado/v2 v2.0.0 // indirect
+	golang.org/x/term v0.10.0 // indirect
+	google.golang.org/protobuf v1.28.1 // indirect
+)
+
+require (
 	github.com/brutella/dnssd v1.2.9 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/go-chi/chi v1.5.4 // indirect
@@ -41,6 +52,7 @@ require (
 	github.com/pion/turn/v2 v2.1.2 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/xiam/to v0.0.0-20200126224905-d60d31e03561 // indirect
+	golang.ngrok.com/ngrok v1.3.1
 	golang.org/x/crypto v0.11.0 // indirect
 	golang.org/x/mod v0.12.0 // indirect
 	golang.org/x/net v0.12.0 // indirect
