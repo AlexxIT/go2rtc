@@ -88,7 +88,7 @@ func initDevices() {
 	if err == nil {
 		stream := api.Stream{
 			Name: "ALSA default",
-			URL:  "ffmpeg:device?audio=default#audio=opus",
+			URL:  "ffmpeg:device?audio=default&channels=1&sample_rate=16000&#audio=opus",
 		}
 
 		audios = append(audios, "default")
