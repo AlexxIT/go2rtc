@@ -921,7 +921,6 @@ API examples:
 
 - MJPEG stream: `http://192.168.1.123:1984/api/stream.mjpeg?src=camera1`
 - JPEG snapshots: `http://192.168.1.123:1984/api/frame.jpeg?src=camera1`
-- JPEG snapshot resized to 100px: `http://192.168.1.123:1984/api/frame.jpeg?src=camera1&h=100`
 
 ### Module: Log
 

@@ -61,22 +61,9 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 	case core.CodecH264, core.CodecH265:
 		ts := time.Now()
 		var err error
-		// Resize image if "h" parameter exists
-		if hParam := r.URL.Query().Get("h"); hParam != "" {
-			h, err := strconv.Atoi(hParam)
-			if err != nil {
-				http.Error(w, "Invalid height parameter", http.StatusBadRequest)
-				return
-			}
-			if data, err = ffmpeg.TranscodeToJPEG(data, h); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-		} else {
-			if data, err = ffmpeg.TranscodeToJPEG(data); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
+		if data, err = ffmpeg.TranscodeToJPEG(data, r.URL.Query()); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
 		log.Debug().Msgf("[mjpeg] transcoding time=%s", time.Since(ts))
 	}
