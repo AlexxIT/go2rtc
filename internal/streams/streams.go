@@ -3,6 +3,7 @@ package streams
 import (
 	"net/http"
 	"net/url"
+	"regexp"
 	"sync"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
@@ -35,7 +36,14 @@ func Get(name string) *Stream {
 	return streams[name]
 }
 
-func New(name string, source any) *Stream {
+var sanitize = regexp.MustCompile(`\s`)
+
+func New(name string, source string) *Stream {
+	// not allow creating dynamic streams with spaces in the source
+	if sanitize.MatchString(source) {
+		return nil
+	}
+
 	stream := NewStream(source)
 	streams[name] = stream
 	return stream
@@ -121,7 +129,9 @@ func streamsHandler(w http.ResponseWriter, r *http.Request) {
 			name = src
 		}
 
-		New(name, src)
+		if New(name, src) == nil {
+			http.Error(w, "", http.StatusBadRequest)
+		}
 
 	case "PATCH":
 		name := query.Get("name")
@@ -131,7 +141,9 @@ func streamsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// support {input} templates: https://github.com/AlexxIT/go2rtc#module-hass
-		Patch(name, src)
+		if Patch(name, src) == nil {
+			http.Error(w, "", http.StatusBadRequest)
+		}
 
 	case "POST":
 		// with dst - redirect source to dst
