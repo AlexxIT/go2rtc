@@ -29,6 +29,7 @@ type Client struct {
 	conn net.Conn
 
 	videoCodec string
+	channel    int
 	stream     int
 
 	r *bufio.Reader
@@ -84,30 +85,10 @@ func (c *Client) Dial() (err error) {
 		return errors.New("wrong response: " + res.Status)
 	}
 
-	// 1. Read 1024 bytes with XML
+	// 1. Read 1024 bytes with XML, some cameras returns exact 1024, but some - 923
 	xml := make([]byte, 1024)
-	if _, err = io.ReadFull(c.r, xml); err != nil {
+	if _, err = c.r.Read(xml); err != nil {
 		return
-	}
-
-	// <bubble version="1.0" vin="1"><vin0 stream="2">
-	// <stream0 name="720p.264" size="2304x1296" x1="yes" x2="yes" x4="yes" />
-	// <stream1 name="360p.265" size="640x360" x1="yes" x2="yes" x4="yes" />
-	// <vin0>
-	// </bubble>
-	stream := u.Query().Get("stream")
-	if stream != "" {
-		c.stream = core.Atoi(stream)
-	} else {
-		stream = "0"
-	}
-
-	re := regexp.MustCompile("<stream" + stream + `[^>]+`)
-	stream = re.FindString(string(xml))
-	if strings.Contains(stream, ".265") {
-		c.videoCodec = core.CodecH265
-	} else {
-		c.videoCodec = core.CodecH264
 	}
 
 	// 2. Write size uint32 + unknown 4b + user 20b + pass 20b
@@ -134,6 +115,33 @@ func (c *Client) Dial() (err error) {
 
 	if cmd != PacketAuth || len(b) != 44 || b[4] != 3 || b[8] != 1 {
 		return errors.New("wrong auth response")
+	}
+
+	// 4. Parse XML (from 1)
+	query := u.Query()
+
+	stream := query.Get("stream")
+	if stream != "" {
+		c.stream = core.Atoi(stream)
+	} else {
+		stream = "0"
+	}
+
+	// <bubble version="1.0" vin="1"><vin0 stream="2">
+	// <stream0 name="720p.264" size="2304x1296" x1="yes" x2="yes" x4="yes" />
+	// <stream1 name="360p.265" size="640x360" x1="yes" x2="yes" x4="yes" />
+	// <vin0>
+	// </bubble>
+	re := regexp.MustCompile("<stream " + stream + `[^>]+`)
+	stream = re.FindString(string(xml))
+	if strings.Contains(stream, ".265") {
+		c.videoCodec = core.CodecH265
+	} else {
+		c.videoCodec = core.CodecH264
+	}
+
+	if ch := query.Get("ch"); ch != "" {
+		c.channel = core.Atoi(ch)
 	}
 
 	return
@@ -185,7 +193,7 @@ func (c *Client) Read() (byte, []byte, error) {
 func (c *Client) Play() error {
 	// yeah, there's no mistake about the little endian
 	b := make([]byte, 16)
-	//binary.LittleEndian.PutUint32(b, 0) // channel
+	binary.LittleEndian.PutUint32(b, uint32(c.channel))
 	binary.LittleEndian.PutUint32(b[4:], uint32(c.stream))
 	binary.LittleEndian.PutUint32(b[8:], 1) // opened
 	return c.Write(PacketStart, 0x0E16C2DF, b)
