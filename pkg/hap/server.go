@@ -44,7 +44,7 @@ func NewServer(name string) *Server {
 
 func (s *Server) Serve(address string) (err error) {
 	var ln net.Listener
-	if ln, err = net.Listen("tcp", address); err != nil {
+	if ln, err = net.Listen("tcp4", address); err != nil {
 		return
 	}
 

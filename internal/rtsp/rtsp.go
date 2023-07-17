@@ -45,7 +45,7 @@ func Init() {
 		return
 	}
 
-	ln, err := net.Listen("tcp", address)
+	ln, err := net.Listen("tcp4", address)
 	if err != nil {
 		log.Error().Err(err).Msg("[rtsp] listen")
 		return
