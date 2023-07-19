@@ -1,6 +1,7 @@
 package webrtc
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"hash/crc32"
@@ -292,4 +293,36 @@ func CandidateManualHostTCPPassive(address string, port int) string {
 		"candidate:%d 1 tcp %d %s %d typ host tcptype passive",
 		foundation, priority, address, port,
 	)
+}
+
+func UnmarshalICEServers(b []byte) ([]webrtc.ICEServer, error) {
+	type ICEServer struct {
+		URLs       any    `json:"urls"`
+		Username   string `json:"username,omitempty"`
+		Credential string `json:"credential,omitempty"`
+	}
+
+	var src []ICEServer
+	if err := json.Unmarshal(b, &src); err != nil {
+		return nil, err
+	}
+
+	var dst []webrtc.ICEServer
+	for i := range src {
+		srv := webrtc.ICEServer{
+			Username:   src[i].Username,
+			Credential: src[i].Credential,
+		}
+
+		switch v := src[i].URLs.(type) {
+		case []string:
+			srv.URLs = v
+		case string:
+			srv.URLs = []string{v}
+		}
+
+		dst = append(dst, srv)
+	}
+
+	return dst, nil
 }
