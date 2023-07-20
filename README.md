@@ -880,9 +880,16 @@ API examples:
 
 - MP4 snapshot: `http://192.168.1.123:1984/api/frame.mp4?src=camera1` (H264, H265)
 - MP4 stream: `http://192.168.1.123:1984/api/stream.mp4?src=camera1` (H264, H265, AAC)
-- MP4 file: `http://192.168.1.123:1984/api/stream.mp4?src=camera1&mp4=all&duration=15&filename=record.mp4` (H264, H265*, AAC, OPUS, MP3, PCMA, PCMU, PCM)
+- MP4 file: `http://192.168.1.123:1984/api/stream.mp4?src=camera1` (H264, H265*, AAC, OPUS, MP3, PCMA, PCMU, PCM)
+  - You can use `mp4`, `mp4=flac` and `mp4=all` param for codec filters
+  - You can use `duration` param in seconds (ex. `duration=15`)
+  - You can use `filename` param (ex. `filename=record.mp4`)
+  - You can use `rotate` param with `90`, `180` or `270` values
+  - You can use `scale` param with positive integer values (ex. `scale=4:3`)
 
 Read more about [codecs filters](#codecs-filters).
+
+**PS.** Rotate and scale params don't use transcoding and change video using metadata. 
 
 ### Module: HLS
 
