@@ -145,7 +145,7 @@ func (b *Browser) ListenMulticastUDP() error {
 		Control: func(network, address string, c syscall.RawConn) error {
 			return c.Control(func(fd uintptr) {
 				// 1. Allow multicast UDP to listen concurrently across multiple listeners
-				_ = syscall.SetsockoptInt(syscall.Handle(fd), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
+				_ = SetsockoptInt(fd, syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
 			})
 		},
 	}
@@ -167,21 +167,21 @@ func (b *Browser) ListenMulticastUDP() error {
 		Control: func(network, address string, c syscall.RawConn) error {
 			return c.Control(func(fd uintptr) {
 				// 1. Allow multicast UDP to listen concurrently across multiple listeners
-				_ = syscall.SetsockoptInt(syscall.Handle(fd), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
+				_ = SetsockoptInt(fd, syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
 
 				// 2. Disable loop responses
-				_ = syscall.SetsockoptInt(syscall.Handle(fd), syscall.IPPROTO_IP, syscall.IP_MULTICAST_LOOP, 0)
+				_ = SetsockoptInt(fd, syscall.IPPROTO_IP, syscall.IP_MULTICAST_LOOP, 0)
 
 				// 3. Allow receive multicast responses on all this addresses
 				mreq := &syscall.IPMreq{
 					Multiaddr: [4]byte{224, 0, 0, 251},
 				}
-				_ = syscall.SetsockoptIPMreq(syscall.Handle(fd), syscall.IPPROTO_IP, syscall.IP_ADD_MEMBERSHIP, mreq)
+				_ = SetsockoptIPMreq(fd, syscall.IPPROTO_IP, syscall.IP_ADD_MEMBERSHIP, mreq)
 
 				for _, send := range b.Sends {
 					addr := send.LocalAddr().(*net.UDPAddr)
 					mreq.Interface = [4]byte(addr.IP.To4())
-					_ = syscall.SetsockoptIPMreq(syscall.Handle(fd), syscall.IPPROTO_IP, syscall.IP_ADD_MEMBERSHIP, mreq)
+					_ = SetsockoptIPMreq(fd, syscall.IPPROTO_IP, syscall.IP_ADD_MEMBERSHIP, mreq)
 				}
 			})
 		},
