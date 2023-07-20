@@ -57,10 +57,20 @@ func Patch(name string, source string) *Stream {
 	if u, err := url.Parse(source); err == nil && u.Scheme == "rtsp" && len(u.Path) > 1 {
 		rtspName := u.Path[1:]
 		if stream, ok := streams[rtspName]; ok {
-			// link (alias) stream[name] to stream[rtspName]
-			streams[name] = stream
+			if streams[name] != stream {
+				// link (alias) streams[name] to streams[rtspName]
+				streams[name] = stream
+			}
 			return stream
 		}
+	}
+
+	if stream, ok := streams[source]; ok {
+		if name != source {
+			// link (alias) streams[name] to streams[source]
+			streams[name] = stream
+		}
+		return stream
 	}
 
 	// check if src has supported scheme
