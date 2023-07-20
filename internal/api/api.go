@@ -4,14 +4,15 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"github.com/AlexxIT/go2rtc/internal/app"
-	"github.com/rs/zerolog"
 	"net"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/AlexxIT/go2rtc/internal/app"
+	"github.com/rs/zerolog"
 )
 
 func Init() {
@@ -30,7 +31,7 @@ func Init() {
 	}
 
 	// default config
-	cfg.Mod.Listen = ":1984"
+	cfg.Mod.Listen = "0.0.0.0:1984"
 
 	// load config from YAML
 	app.LoadConfig(&cfg)
@@ -49,7 +50,7 @@ func Init() {
 	HandleFunc("api/exit", exitHandler)
 
 	// ensure we can listen without errors
-	listener, err := net.Listen("tcp4", cfg.Mod.Listen)
+	listener, err := net.Listen("tcp", cfg.Mod.Listen)
 	if err != nil {
 		log.Fatal().Err(err).Msg("[api] listen")
 		return
@@ -87,7 +88,7 @@ func Init() {
 			return
 		}
 
-		tlsListener, err := net.Listen("tcp4", cfg.Mod.TLSListen)
+		tlsListener, err := net.Listen("tcp", cfg.Mod.TLSListen)
 		if err != nil {
 			log.Fatal().Err(err).Caller().Send()
 			return
@@ -169,7 +170,7 @@ func middlewareLog(next http.Handler) http.Handler {
 
 func middlewareAuth(username, password string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasPrefix(r.RemoteAddr, "127.") {
+		if !strings.HasPrefix(r.RemoteAddr, "127.") && !strings.HasPrefix(r.RemoteAddr, "[::1]") {
 			user, pass, ok := r.BasicAuth()
 			if !ok || user != username || pass != password {
 				w.Header().Set("Www-Authenticate", `Basic realm="go2rtc"`)

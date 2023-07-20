@@ -1,17 +1,18 @@
 package rtsp
 
 import (
-	"github.com/stretchr/testify/require"
 	"net"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestTimeout(t *testing.T) {
 	Timeout = time.Millisecond
 
-	ln, err := net.Listen("tcp4", "localhost:0")
+	ln, err := net.Listen("tcp", "localhost:0")
 	require.Nil(t, err)
 
 	client := NewClient("rtsp://" + ln.Addr().String() + "/stream")
@@ -27,7 +28,7 @@ func TestTimeout(t *testing.T) {
 func TestMissedControl(t *testing.T) {
 	Timeout = time.Millisecond
 
-	ln, err := net.Listen("tcp4", "localhost:0")
+	ln, err := net.Listen("tcp", "localhost:0")
 	require.Nil(t, err)
 
 	go func() {

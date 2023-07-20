@@ -26,7 +26,7 @@ func Init() {
 	}
 
 	// default config
-	conf.Mod.Listen = ":8554"
+	conf.Mod.Listen = "0.0.0.0:8554"
 	conf.Mod.DefaultQuery = "video&audio"
 
 	app.LoadConfig(&conf)
@@ -45,7 +45,7 @@ func Init() {
 		return
 	}
 
-	ln, err := net.Listen("tcp4", address)
+	ln, err := net.Listen("tcp", address)
 	if err != nil {
 		log.Error().Err(err).Msg("[rtsp] listen")
 		return

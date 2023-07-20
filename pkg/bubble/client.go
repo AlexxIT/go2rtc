@@ -62,7 +62,7 @@ func (c *Client) Dial() (err error) {
 		return
 	}
 
-	if c.conn, err = net.DialTimeout("tcp4", u.Host, Timeout); err != nil {
+	if c.conn, err = net.DialTimeout("tcp", u.Host, Timeout); err != nil {
 		return
 	}
 
