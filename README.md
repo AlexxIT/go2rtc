@@ -325,7 +325,7 @@ ffmpeg:
 
 - You can use go2rtc stream name as ffmpeg input (ex. `ffmpeg:camera1#video=h264`)
 - You can use `video` and `audio` params multiple times (ex. `#video=copy#audio=copy#audio=pcmu`)
-- You can use `rotate` params with `90`, `180`, `270` or `-90` values, important with transcoding (ex. `#video=h264#rotate=90`)
+- You can use `rotate` param with `90`, `180`, `270` or `-90` values, important with transcoding (ex. `#video=h264#rotate=90`)
 - You can use `width` and/or `height` params, important with transcoding (ex. `#video=h264#width=1280`)
 - You can use `drawtext` to add a timestamp (ex. `drawtext=x=2:y=2:fontsize=12:fontcolor=white:box=1:boxcolor=black`)
   - This will greatly increase the CPU of the server, even with hardware acceleration
@@ -928,6 +928,9 @@ API examples:
 
 - MJPEG stream: `http://192.168.1.123:1984/api/stream.mjpeg?src=camera1`
 - JPEG snapshots: `http://192.168.1.123:1984/api/frame.jpeg?src=camera1`
+  - You can use `width`/`w` and/or `height`/`h` params 
+  - You can use `rotate` param with `90`, `180`, `270` or `-90` values
+  - You can use `hardware`/`hw` param [read more](https://github.com/AlexxIT/go2rtc/wiki/Hardware-acceleration)
 
 ### Module: Log
 
