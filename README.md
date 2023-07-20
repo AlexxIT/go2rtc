@@ -552,16 +552,33 @@ If you have graphic pin for your vacuum - add it as numeric pin (lines: 123, 456
 
 #### Source: WebRTC
 
-This source type support two connection formats:
+This source type support four connection formats.
 
-- [WebRTC/WHEP](https://www.ietf.org/id/draft-murillo-whep-01.html) - is an unapproved standard for WebRTC video/audio viewers. But it may already be supported in some third-party software. It is supported in go2rtc.
-- `go2rtc/WebSocket` - This format is only supported in go2rtc. Unlike WHEP it supports asynchronous WebRTC connection and two way audio.
+**whep**
+
+[WebRTC/WHEP](https://www.ietf.org/id/draft-murillo-whep-01.html) - is an unapproved standard for WebRTC video/audio viewers. But it may already be supported in some third-party software. It is supported in go2rtc.
+
+**go2rtc**
+
+This format is only supported in go2rtc. Unlike WHEP it supports asynchronous WebRTC connection and two way audio.
+
+**wyze**
+
+Supports connection to [Wyze](https://www.wyze.com/) cameras, using WebRTC protocol. You can use [docker-wyze-bridge](https://github.com/mrlt8/docker-wyze-bridge) project to get connection credentials.
+
+**kinesis**
+
+Supports [Amazon Kinesis Video Streams](https://aws.amazon.com/kinesis/video-streams/), using WebRTC protocol. You need to specify signalling WebSocket URL with all credentials in query params, `client_id` and `ice_servers` list in [JSON format](https://developer.mozilla.org/en-US/docs/Web/API/RTCIceServer).
 
 ```yaml
 streams:
-  webrtc1: webrtc:http://192.168.1.123:1984/api/webrtc?src=dahua1
-  webrtc2: webrtc:ws://192.168.1.123:1984/api/ws?src=dahua1
+  webrtc-whep:    webrtc:http://192.168.1.123:1984/api/webrtc?src=camera1
+  webrtc-go2rtc:  webrtc:ws://192.168.1.123:1984/api/ws?src=camera1
+  webrtc-wyze:    webrtc:http://192.168.1.123:5000/signaling/camera1?kvs#format=wyze
+  webrtc-kinesis: webrtc:wss://...amazonaws.com/?...#format=kinesis#client_id=...#ice_servers=[{...},{...}]
 ```
+
+**PS.** For `wyze` and `kinesis` sources you can use [echo](#source-echo) to get connection params using `bash`/`python` or any other script language.
 
 #### Source: WebTorrent
 
