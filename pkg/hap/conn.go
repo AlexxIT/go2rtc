@@ -7,6 +7,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/mdns"
 	"github.com/brutella/hap"
@@ -16,12 +23,6 @@ import (
 	"github.com/brutella/hap/hkdf"
 	"github.com/brutella/hap/tlv8"
 	"github.com/tadglines/go-pkgs/crypto/srp"
-	"io"
-	"net"
-	"net/http"
-	"net/url"
-	"strings"
-	"time"
 )
 
 // Conn for HomeKit. DevicePublic can be null.
@@ -105,9 +106,16 @@ func (c *Conn) DialAndServe() error {
 	return c.Handle()
 }
 
+func (c *Conn) DeviceHost() string {
+	if i := strings.IndexByte(c.DeviceAddress, ':'); i > 0 {
+		return c.DeviceAddress[:i]
+	}
+	return c.DeviceAddress
+}
+
 func (c *Conn) Dial() error {
-	// update device host before dial
-	_ = mdns.Discovery(mdns.ServiceHAP, func(entry *mdns.ServiceEntry) bool {
+	// update device address (host and/or port) before dial
+	_ = mdns.QueryOrDiscovery(c.DeviceHost(), mdns.ServiceHAP, func(entry *mdns.ServiceEntry) bool {
 		if entry.Complete() && entry.Info["id"] == c.DeviceID {
 			c.DeviceAddress = entry.Addr()
 			return true

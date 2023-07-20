@@ -106,6 +106,8 @@ func Query(host, service string) (entry *ServiceEntry, err error) {
 	return
 }
 
+// QueryOrDiscovery - useful if we know previous device host and want
+// to update port or any other information. Will work even over VPN.
 func QueryOrDiscovery(host, service string, onentry func(*ServiceEntry) bool) error {
 	entry, _ := Query(host, service)
 	if entry != nil && onentry(entry) {
