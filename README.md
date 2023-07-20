@@ -52,6 +52,7 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
     * [Source: Exec](#source-exec)
     * [Source: Echo](#source-echo)
     * [Source: HomeKit](#source-homekit)
+    * [Source: Bubble](#source-bubble)
     * [Source: DVRIP](#source-dvrip)
     * [Source: Tapo](#source-tapo)
     * [Source: Ivideon](#source-ivideon)
@@ -171,6 +172,7 @@ Available source types:
 - [exec](#source-exec) - get media from external app output
 - [echo](#source-echo) - get stream link from bash or python
 - [homekit](#source-homekit) - streaming from HomeKit Camera
+- [bubble](#source-bubble) - streaming from ESeeCloud/dvr163 NVR
 - [dvrip](#source-dvrip) - streaming from DVR-IP NVR
 - [tapo](#source-tapo) - TP-Link Tapo cameras with [two way audio](#two-way-audio) support
 - [ivideon](#source-ivideon) - public cameras from [Ivideon](https://tv.ivideon.com/) service
@@ -427,6 +429,18 @@ streams:
 RTSP link with "normal" audio for any player: `rtsp://192.168.1.123:8554/aqara_g3?video&audio=aac`
 
 **This source is in active development!** Tested only with [Aqara Camera Hub G3](https://www.aqara.com/eu/product/camera-hub-g3) (both EU and CN versions).
+
+#### Source: Bubble
+
+Other names: [ESeeCloud](http://www.eseecloud.com/), [dvr163](http://help.dvr163.com/).
+
+- you can skip `username`, `password`, `port`, `ch` and `stream` if they are default
+- setup separate streams for different channels and streams
+
+```yaml
+streams:
+  camera1: bubble://username:password@192.168.1.123:34567/bubble/live?ch=0&stream=0
+```
 
 #### Source: DVRIP
 
