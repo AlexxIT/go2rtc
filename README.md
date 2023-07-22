@@ -14,7 +14,7 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
 - streaming from any sources, supported by [FFmpeg](#source-ffmpeg)
 - streaming to [RTSP](#module-rtsp), [WebRTC](#module-webrtc), [MSE/MP4](#module-mp4), [HLS](#module-hls) or [MJPEG](#module-mjpeg)
 - first project in the World with support streaming from [HomeKit Cameras](#source-homekit)
-- first project in the World with support H265 for WebRTC in browser (Safari only, [read more](https://github.com/AlexxIT/Blog/issues/5))
+- support H265 for WebRTC in browser (Safari only, [read more](https://github.com/AlexxIT/Blog/issues/5))
 - on the fly transcoding for unsupported codecs via [FFmpeg](#source-ffmpeg)
 - play audio files and live streams on some cameras with [speaker](#stream-to-camera)
 - multi-source 2-way [codecs negotiation](#codecs-negotiation)
@@ -52,6 +52,7 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
     * [Source: Exec](#source-exec)
     * [Source: Echo](#source-echo)
     * [Source: HomeKit](#source-homekit)
+    * [Source: Bubble](#source-bubble)
     * [Source: DVRIP](#source-dvrip)
     * [Source: Tapo](#source-tapo)
     * [Source: Ivideon](#source-ivideon)
@@ -171,6 +172,7 @@ Available source types:
 - [exec](#source-exec) - get media from external app output
 - [echo](#source-echo) - get stream link from bash or python
 - [homekit](#source-homekit) - streaming from HomeKit Camera
+- [bubble](#source-bubble) - streaming from ESeeCloud/dvr163 NVR
 - [dvrip](#source-dvrip) - streaming from DVR-IP NVR
 - [tapo](#source-tapo) - TP-Link Tapo cameras with [two way audio](#two-way-audio) support
 - [ivideon](#source-ivideon) - public cameras from [Ivideon](https://tv.ivideon.com/) service
@@ -325,7 +327,7 @@ ffmpeg:
 
 - You can use go2rtc stream name as ffmpeg input (ex. `ffmpeg:camera1#video=h264`)
 - You can use `video` and `audio` params multiple times (ex. `#video=copy#audio=copy#audio=pcmu`)
-- You can use `rotate` params with `90`, `180`, `270` or `-90` values, important with transcoding (ex. `#video=h264#rotate=90`)
+- You can use `rotate` param with `90`, `180`, `270` or `-90` values, important with transcoding (ex. `#video=h264#rotate=90`)
 - You can use `width` and/or `height` params, important with transcoding (ex. `#video=h264#width=1280`)
 - You can use `drawtext` to add a timestamp (ex. `drawtext=x=2:y=2:fontsize=12:fontcolor=white:box=1:boxcolor=black`)
   - This will greatly increase the CPU of the server, even with hardware acceleration
@@ -427,6 +429,18 @@ streams:
 RTSP link with "normal" audio for any player: `rtsp://192.168.1.123:8554/aqara_g3?video&audio=aac`
 
 **This source is in active development!** Tested only with [Aqara Camera Hub G3](https://www.aqara.com/eu/product/camera-hub-g3) (both EU and CN versions).
+
+#### Source: Bubble
+
+Other names: [ESeeCloud](http://www.eseecloud.com/), [dvr163](http://help.dvr163.com/).
+
+- you can skip `username`, `password`, `port`, `ch` and `stream` if they are default
+- setup separate streams for different channels and streams
+
+```yaml
+streams:
+  camera1: bubble://username:password@192.168.1.123:34567/bubble/live?ch=0&stream=0
+```
 
 #### Source: DVRIP
 
@@ -538,16 +552,33 @@ If you have graphic pin for your vacuum - add it as numeric pin (lines: 123, 456
 
 #### Source: WebRTC
 
-This source type support two connection formats:
+This source type support four connection formats.
 
-- [WebRTC/WHEP](https://www.ietf.org/id/draft-murillo-whep-01.html) - is an unapproved standard for WebRTC video/audio viewers. But it may already be supported in some third-party software. It is supported in go2rtc.
-- `go2rtc/WebSocket` - This format is only supported in go2rtc. Unlike WHEP it supports asynchronous WebRTC connection and two way audio.
+**whep**
+
+[WebRTC/WHEP](https://www.ietf.org/id/draft-murillo-whep-01.html) - is an unapproved standard for WebRTC video/audio viewers. But it may already be supported in some third-party software. It is supported in go2rtc.
+
+**go2rtc**
+
+This format is only supported in go2rtc. Unlike WHEP it supports asynchronous WebRTC connection and two way audio.
+
+**wyze**
+
+Supports connection to [Wyze](https://www.wyze.com/) cameras, using WebRTC protocol. You can use [docker-wyze-bridge](https://github.com/mrlt8/docker-wyze-bridge) project to get connection credentials.
+
+**kinesis**
+
+Supports [Amazon Kinesis Video Streams](https://aws.amazon.com/kinesis/video-streams/), using WebRTC protocol. You need to specify signalling WebSocket URL with all credentials in query params, `client_id` and `ice_servers` list in [JSON format](https://developer.mozilla.org/en-US/docs/Web/API/RTCIceServer).
 
 ```yaml
 streams:
-  webrtc1: webrtc:http://192.168.1.123:1984/api/webrtc?src=dahua1
-  webrtc2: webrtc:ws://192.168.1.123:1984/api/ws?src=dahua1
+  webrtc-whep:    webrtc:http://192.168.1.123:1984/api/webrtc?src=camera1
+  webrtc-go2rtc:  webrtc:ws://192.168.1.123:1984/api/ws?src=camera1
+  webrtc-wyze:    webrtc:http://192.168.1.123:5000/signaling/camera1?kvs#format=wyze
+  webrtc-kinesis: webrtc:wss://...amazonaws.com/?...#format=kinesis#client_id=...#ice_servers=[{...},{...}]
 ```
+
+**PS.** For `wyze` and `kinesis` sources you can use [echo](#source-echo) to get connection params using `bash`/`python` or any other script language.
 
 #### Source: WebTorrent
 
@@ -891,9 +922,16 @@ API examples:
 
 - MP4 snapshot: `http://192.168.1.123:1984/api/frame.mp4?src=camera1` (H264, H265)
 - MP4 stream: `http://192.168.1.123:1984/api/stream.mp4?src=camera1` (H264, H265, AAC)
-- MP4 file: `http://192.168.1.123:1984/api/stream.mp4?src=camera1&mp4=all&duration=15&filename=record.mp4` (H264, H265*, AAC, OPUS, MP3, PCMA, PCMU, PCM)
+- MP4 file: `http://192.168.1.123:1984/api/stream.mp4?src=camera1` (H264, H265*, AAC, OPUS, MP3, PCMA, PCMU, PCM)
+  - You can use `mp4`, `mp4=flac` and `mp4=all` param for codec filters
+  - You can use `duration` param in seconds (ex. `duration=15`)
+  - You can use `filename` param (ex. `filename=record.mp4`)
+  - You can use `rotate` param with `90`, `180` or `270` values
+  - You can use `scale` param with positive integer values (ex. `scale=4:3`)
 
 Read more about [codecs filters](#codecs-filters).
+
+**PS.** Rotate and scale params don't use transcoding and change video using metadata. 
 
 ### Module: HLS
 
@@ -932,6 +970,9 @@ API examples:
 
 - MJPEG stream: `http://192.168.1.123:1984/api/stream.mjpeg?src=camera1`
 - JPEG snapshots: `http://192.168.1.123:1984/api/frame.jpeg?src=camera1`
+  - You can use `width`/`w` and/or `height`/`h` params 
+  - You can use `rotate` param with `90`, `180`, `270` or `-90` values
+  - You can use `hardware`/`hw` param [read more](https://github.com/AlexxIT/go2rtc/wiki/Hardware-acceleration)
 
 ### Module: Log
 

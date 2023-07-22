@@ -89,6 +89,7 @@ func initDevices() {
 			stream.URL += "#video=h264#hardware"
 		case core.KindAudio:
 			audios = append(audios, name)
+			stream.URL += "&channels=1&sample_rate=16000&audio_buffer_size=10"
 		}
 
 		streams = append(streams, stream)

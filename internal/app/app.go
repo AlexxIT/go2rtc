@@ -16,7 +16,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var Version = "1.6.0"
+var Version = "1.6.2"
 var UserAgent = "go2rtc/" + Version
 
 var ConfigPath string

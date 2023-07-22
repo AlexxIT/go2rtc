@@ -50,13 +50,13 @@ func NewAPI(address string) (*webrtc.API, error) {
 	if address != "" {
 		address, network, _ := strings.Cut(address, "/")
 		if network == "" || network == "udp" {
-			if ln, err := net.ListenPacket("udp", address); err == nil {
+			if ln, err := net.ListenPacket("udp4", address); err == nil {
 				udpMux := webrtc.NewICEUDPMux(nil, ln)
 				s.SetICEUDPMux(udpMux)
 			}
 		}
 		if network == "" || network == "tcp" {
-			if ln, err := net.Listen("tcp", address); err == nil {
+			if ln, err := net.Listen("tcp4", address); err == nil {
 				tcpMux := webrtc.NewICETCPMux(nil, ln, 8)
 				s.SetICETCPMux(tcpMux)
 			}

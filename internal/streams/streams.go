@@ -3,6 +3,7 @@ package streams
 import (
 	"net/http"
 	"net/url"
+	"regexp"
 	"sync"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
@@ -35,7 +36,14 @@ func Get(name string) *Stream {
 	return streams[name]
 }
 
-func New(name string, source any) *Stream {
+var sanitize = regexp.MustCompile(`\s`)
+
+func New(name string, source string) *Stream {
+	// not allow creating dynamic streams with spaces in the source
+	if sanitize.MatchString(source) {
+		return nil
+	}
+
 	stream := NewStream(source)
 	streams[name] = stream
 	return stream
@@ -49,10 +57,20 @@ func Patch(name string, source string) *Stream {
 	if u, err := url.Parse(source); err == nil && u.Scheme == "rtsp" && len(u.Path) > 1 {
 		rtspName := u.Path[1:]
 		if stream, ok := streams[rtspName]; ok {
-			// link (alias) stream[name] to stream[rtspName]
-			streams[name] = stream
+			if streams[name] != stream {
+				// link (alias) streams[name] to streams[rtspName]
+				streams[name] = stream
+			}
 			return stream
 		}
+	}
+
+	if stream, ok := streams[source]; ok {
+		if name != source {
+			// link (alias) streams[name] to streams[source]
+			streams[name] = stream
+		}
+		return stream
 	}
 
 	// check if src has supported scheme
@@ -83,7 +101,7 @@ func GetOrPatch(query url.Values) *Stream {
 	}
 
 	// check if name param provided
-	if name := query.Get("name"); name == "" {
+	if name := query.Get("name"); name != "" {
 		log.Info().Msgf("[streams] create new stream url=%s", source)
 
 		return Patch(name, source)
@@ -121,7 +139,9 @@ func streamsHandler(w http.ResponseWriter, r *http.Request) {
 			name = src
 		}
 
-		New(name, src)
+		if New(name, src) == nil {
+			http.Error(w, "", http.StatusBadRequest)
+		}
 
 	case "PATCH":
 		name := query.Get("name")
@@ -131,7 +151,9 @@ func streamsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// support {input} templates: https://github.com/AlexxIT/go2rtc#module-hass
-		Patch(name, src)
+		if Patch(name, src) == nil {
+			http.Error(w, "", http.StatusBadRequest)
+		}
 
 	case "POST":
 		// with dst - redirect source to dst

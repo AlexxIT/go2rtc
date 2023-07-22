@@ -23,7 +23,7 @@ func Init() {
 		} `yaml:"webrtc"`
 	}
 
-	cfg.Mod.Listen = ":8555/tcp"
+	cfg.Mod.Listen = "0.0.0.0:8555/tcp"
 	cfg.Mod.IceServers = []pion.ICEServer{
 		{URLs: []string{"stun:stun.l.google.com:19302"}},
 	}
@@ -114,6 +114,9 @@ func asyncHandler(tr *ws.Transport, msg *ws.Message) error {
 
 	var sendAnswer core.Waiter
 
+	// protect from blocking on errors
+	defer sendAnswer.Done(nil)
+
 	conn := webrtc.NewConn(pc)
 	conn.Desc = "WebRTC/WebSocket async"
 	conn.Mode = mode
@@ -132,7 +135,7 @@ func asyncHandler(tr *ws.Transport, msg *ws.Message) error {
 			}
 
 		case *pion.ICECandidate:
-			sendAnswer.Wait()
+			_ = sendAnswer.Wait()
 
 			s := msg.ToJSON().Candidate
 			log.Trace().Str("candidate", s).Msg("[webrtc] local")
@@ -186,7 +189,7 @@ func asyncHandler(tr *ws.Transport, msg *ws.Message) error {
 		tr.Write(&ws.Message{Type: "webrtc/answer", Value: answer})
 	}
 
-	sendAnswer.Done()
+	sendAnswer.Done(nil)
 
 	asyncCandidates(tr, conn)
 

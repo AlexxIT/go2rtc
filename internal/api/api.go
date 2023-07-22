@@ -5,8 +5,6 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"github.com/AlexxIT/go2rtc/internal/app"
-	"github.com/rs/zerolog"
 	"net"
 	"net/http"
 	"os"
@@ -16,6 +14,10 @@ import (
 
 	"golang.ngrok.com/ngrok"
 	"golang.ngrok.com/ngrok/config"
+
+	"github.com/AlexxIT/go2rtc/internal/app"
+	"github.com/rs/zerolog"
+
 )
 
 func Init() {
@@ -39,7 +41,7 @@ func Init() {
 	}
 
 	// default config
-	cfg.Mod.Listen = ":1984"
+	cfg.Mod.Listen = "0.0.0.0:1984"
 
 	// load config from YAML
 	app.LoadConfig(&cfg)
@@ -113,7 +115,7 @@ func Init() {
 			return
 		}
 
-		tlsListener, err := net.Listen("tcp4", cfg.Mod.TLSListen)
+		tlsListener, err := net.Listen("tcp", cfg.Mod.TLSListen)
 		if err != nil {
 			log.Fatal().Err(err).Caller().Send()
 			return

@@ -1,11 +1,12 @@
 package webrtc
 
 import (
+	"time"
+
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
-	"time"
 )
 
 type Conn struct {
@@ -130,7 +131,7 @@ func NewConn(pc *webrtc.PeerConnection) *Conn {
 }
 
 func (c *Conn) Close() error {
-	c.closed.Done()
+	c.closed.Done(nil)
 	return c.pc.Close()
 }
 

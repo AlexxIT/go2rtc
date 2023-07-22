@@ -1,11 +1,12 @@
 package rtsp
 
 import (
-	"github.com/stretchr/testify/require"
 	"net"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestTimeout(t *testing.T) {
