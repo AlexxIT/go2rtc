@@ -43,6 +43,10 @@ func (s *Server) Serve(conn net.PacketConn) error {
 			return err
 		}
 
+		if s.sessions == nil {
+			continue
+		}
+
 		// Multiplexing RTP Data and Control Packets on a Single Port
 		// https://datatracker.ietf.org/doc/html/rfc5761
 
