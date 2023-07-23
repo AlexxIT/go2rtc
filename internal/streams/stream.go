@@ -210,6 +210,10 @@ func (s *Stream) MarshalJSON() ([]byte, error) {
 func formatError(statMedias []*core.Media, statErrors []error) error {
 	var text string
 
+	if statMedias == nil {
+		return errors.New("can't get medias for stream")
+	}
+
 	for _, media := range statMedias {
 		if media.Direction == core.DirectionRecvonly {
 			continue
