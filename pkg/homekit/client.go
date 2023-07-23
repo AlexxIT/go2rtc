@@ -14,6 +14,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/hap"
 	"github.com/AlexxIT/go2rtc/pkg/hap/camera"
 	"github.com/AlexxIT/go2rtc/pkg/srtp"
+	"github.com/pion/rtp"
 )
 
 type Client struct {
@@ -180,6 +181,19 @@ func (c *Client) GetMedias() []*core.Media {
 		}
 	}
 
+	media := &core.Media{
+		Kind:      core.KindVideo,
+		Direction: core.DirectionRecvonly,
+		Codecs: []*core.Codec{
+			{
+				Name:        core.CodecJPEG,
+				ClockRate:   90000,
+				PayloadType: core.PayloadTypeRAW,
+			},
+		},
+	}
+	c.medias = append(c.medias, media)
+
 	return c.medias
 }
 
@@ -198,6 +212,10 @@ func (c *Client) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver,
 func (c *Client) Start() error {
 	if c.receivers == nil {
 		return errors.New("producer without tracks")
+	}
+
+	if c.receivers[0].Codec.Name == core.CodecJPEG {
+		return c.startMJPEG()
 	}
 
 	// get our server local IP-address
@@ -368,4 +386,21 @@ func (c *Client) trackByKind(kind string) *core.Receiver {
 		}
 	}
 	return nil
+}
+
+func (c *Client) startMJPEG() error {
+	receiver := c.receivers[0]
+
+	for {
+		b, err := c.conn.GetImage(1920, 1080)
+		if err != nil {
+			return err
+		}
+
+		packet := &rtp.Packet{
+			Header:  rtp.Header{Timestamp: core.Now90000()},
+			Payload: b,
+		}
+		receiver.WriteRTP(packet)
+	}
 }
