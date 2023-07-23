@@ -90,6 +90,7 @@ type Info struct {
 	URL        string      `json:"url,omitempty"`
 	RemoteAddr string      `json:"remote_addr,omitempty"`
 	UserAgent  string      `json:"user_agent,omitempty"`
+	SDP        string      `json:"sdp,omitempty"`
 	Medias     []*Media    `json:"medias,omitempty"`
 	Receivers  []*Receiver `json:"receivers,omitempty"`
 	Senders    []*Sender   `json:"senders,omitempty"`

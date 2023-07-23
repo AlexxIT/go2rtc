@@ -3,6 +3,7 @@ package rtsp
 import (
 	"encoding/json"
 	"errors"
+
 	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
@@ -100,6 +101,7 @@ func (c *Conn) Stop() (err error) {
 func (c *Conn) MarshalJSON() ([]byte, error) {
 	info := &core.Info{
 		Type:      "RTSP " + c.mode.String(),
+		SDP:       c.sdp,
 		UserAgent: c.UserAgent,
 		Medias:    c.Medias,
 		Receivers: c.receivers,

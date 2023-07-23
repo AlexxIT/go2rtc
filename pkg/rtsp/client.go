@@ -4,13 +4,14 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"github.com/AlexxIT/go2rtc/pkg/tcp/websocket"
 	"net"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/AlexxIT/go2rtc/pkg/tcp/websocket"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
@@ -138,6 +139,8 @@ func (c *Conn) Describe() error {
 			return err
 		}
 	}
+
+	c.sdp = string(res.Body) // for info
 
 	medias, err := UnmarshalSDP(res.Body)
 	if err != nil {

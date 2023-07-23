@@ -4,16 +4,17 @@ import (
 	"bufio"
 	"encoding/binary"
 	"fmt"
-	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/tcp"
-	"github.com/pion/rtcp"
-	"github.com/pion/rtp"
 	"io"
 	"net"
 	"net/url"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/tcp"
+	"github.com/pion/rtcp"
+	"github.com/pion/rtp"
 )
 
 type Conn struct {
@@ -39,6 +40,7 @@ type Conn struct {
 	reader    *bufio.Reader
 	sequence  int
 	session   string
+	sdp       string
 	uri       string
 
 	state   State

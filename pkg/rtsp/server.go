@@ -4,12 +4,13 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"net"
 	"net/url"
 	"strconv"
 	"strings"
+
+	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/tcp"
 )
 
 func NewServer(conn net.Conn) *Conn {
@@ -69,6 +70,8 @@ func (c *Conn) Accept() error {
 				return errors.New("wrong content type")
 			}
 
+			c.sdp = string(req.Body) // for info
+
 			c.Medias, err = UnmarshalSDP(req.Body)
 			if err != nil {
 				return err
@@ -124,6 +127,8 @@ func (c *Conn) Accept() error {
 			if err != nil {
 				return err
 			}
+
+			c.sdp = string(res.Body) // for info
 
 			if err = c.WriteResponse(res); err != nil {
 				return err
