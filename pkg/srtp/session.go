@@ -1,11 +1,12 @@
 package srtp
 
 import (
+	"time"
+
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/pion/srtp/v2"
-	"time"
 )
 
 type Session struct {
@@ -19,6 +20,8 @@ type Session struct {
 	Track *core.Receiver
 	Recv  uint32
 
+	Deadline *time.Timer
+
 	lastSequence  uint32
 	lastTimestamp uint32
 	//lastPacket    *rtp.Packet
@@ -28,17 +31,16 @@ type Session struct {
 	totalLost uint32
 }
 
-func (s *Session) SetKeys(
-	localKey, localSalt, remoteKey, remoteSalt []byte,
-) (err error) {
-	if s.localCtx, err = srtp.CreateContext(
-		localKey, localSalt, GuessProfile(localKey),
-	); err != nil {
+func (s *Session) LastTime() time.Time {
+	return s.lastTime
+}
+
+func (s *Session) SetKeys(localKey, localSalt, remoteKey, remoteSalt []byte) (err error) {
+	s.localCtx, err = srtp.CreateContext(localKey, localSalt, GuessProfile(localKey))
+	if err != nil {
 		return
 	}
-	s.remoteCtx, err = srtp.CreateContext(
-		remoteKey, remoteSalt, GuessProfile(remoteKey),
-	)
+	s.remoteCtx, err = srtp.CreateContext(remoteKey, remoteSalt, GuessProfile(remoteKey))
 	return
 }
 
@@ -54,6 +56,10 @@ func (s *Session) HandleRTP(data []byte) (err error) {
 	packet := &rtp.Packet{}
 	if err = packet.Unmarshal(data); err != nil {
 		return
+	}
+
+	if s.Deadline != nil {
+		s.Deadline.Reset(core.ConnDeadline)
 	}
 
 	now := time.Now()
