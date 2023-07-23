@@ -2,12 +2,11 @@ package hap
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
-	"github.com/brutella/hap/characteristic"
-	"github.com/brutella/hap/tlv8"
 	"io"
 	"net/http"
+
+	"github.com/AlexxIT/go2rtc/pkg/hap/tlv8"
 )
 
 type Character struct {
@@ -50,7 +49,7 @@ func (c *Character) NotifyListeners(ignore io.Writer) error {
 		return err
 	}
 
-	for w, _ := range c.listeners {
+	for w := range c.listeners {
 		if w == ignore {
 			continue
 		}
@@ -101,19 +100,15 @@ func (c *Character) Set(v any) (err error) {
 // Write new value with right format
 func (c *Character) Write(v any) (err error) {
 	switch c.Format {
-	case characteristic.FormatTLV8:
-		var data []byte
-		if data, err = tlv8.Marshal(v); err != nil {
-			return
-		}
-		c.Value = base64.StdEncoding.EncodeToString(data)
+	case "tlv8":
+		c.Value, err = tlv8.MarshalBase64(v)
 
-	case characteristic.FormatBool:
-		switch v.(type) {
+	case "bool":
+		switch v := v.(type) {
 		case bool:
-			c.Value = v.(bool)
+			c.Value = v
 		case float64:
-			c.Value = v.(float64) != 0
+			c.Value = v != 0
 		}
 	}
 	return
@@ -121,13 +116,17 @@ func (c *Character) Write(v any) (err error) {
 
 // ReadTLV8 value to right struct
 func (c *Character) ReadTLV8(v any) (err error) {
-	var data []byte
-	if data, err = base64.StdEncoding.DecodeString(c.Value.(string)); err != nil {
-		return
-	}
-	return tlv8.Unmarshal(data, v)
+	return tlv8.UnmarshalBase64(c.Value.(string), v)
 }
 
 func (c *Character) ReadBool() bool {
 	return c.Value.(bool)
+}
+
+func (c *Character) String() string {
+	data, err := json.Marshal(c)
+	if err != nil {
+		return "ERROR"
+	}
+	return string(data)
 }

@@ -3,7 +3,6 @@ module github.com/AlexxIT/go2rtc
 go 1.20
 
 require (
-	github.com/brutella/hap v0.0.17
 	github.com/deepch/vdk v0.0.19
 	github.com/gorilla/websocket v1.5.0
 	github.com/miekg/dns v1.1.55
@@ -20,13 +19,12 @@ require (
 	github.com/sigurn/crc8 v0.0.0-20220107193325-2243fe600f9f
 	github.com/stretchr/testify v1.8.4
 	github.com/tadglines/go-pkgs v0.0.0-20210623144937-b983b20f54f9
+	golang.org/x/crypto v0.11.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
-	github.com/brutella/dnssd v1.2.9 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/go-chi/chi v1.5.4 // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/kr/pretty v0.2.1 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
@@ -40,18 +38,11 @@ require (
 	github.com/pion/transport/v2 v2.2.1 // indirect
 	github.com/pion/turn/v2 v2.1.2 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/xiam/to v0.0.0-20200126224905-d60d31e03561 // indirect
-	golang.org/x/crypto v0.11.0 // indirect
 	golang.org/x/mod v0.12.0 // indirect
 	golang.org/x/net v0.12.0 // indirect
 	golang.org/x/sys v0.10.0 // indirect
-	golang.org/x/text v0.11.0 // indirect
 	golang.org/x/tools v0.11.0 // indirect
 )
 
-replace (
-	// RTP tlv8 fix
-	github.com/brutella/hap v0.0.17 => github.com/AlexxIT/hap v0.0.15-0.20221108133010-d8a45b7a7045
-	// fix reading AAC config bytes
-	github.com/deepch/vdk v0.0.19 => github.com/AlexxIT/vdk v0.0.18-0.20221108193131-6168555b4f92
-)
+// fix reading AAC config bytes
+replace github.com/deepch/vdk v0.0.19 => github.com/AlexxIT/vdk v0.0.18-0.20221108193131-6168555b4f92

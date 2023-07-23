@@ -2,23 +2,22 @@ package camera
 
 import (
 	"errors"
+
 	"github.com/AlexxIT/go2rtc/pkg/hap"
-	"github.com/brutella/hap/characteristic"
-	"github.com/brutella/hap/rtp"
 )
 
 type Client struct {
-	client *hap.Conn
+	client *hap.Client
 }
 
-func NewClient(client *hap.Conn) *Client {
+func NewClient(client *hap.Client) *Client {
 	return &Client{client: client}
 }
 
-func (c *Client) StartStream(ses *Session) (err error) {
+func (c *Client) StartStream(ses *Session) error {
 	// Step 1. Check if camera ready (free) to stream
-	var srv *hap.Service
-	if srv, err = c.GetFreeStream(); err != nil {
+	srv, err := c.GetFreeStream()
+	if err != nil {
 		return err
 	}
 	if srv == nil {
@@ -26,7 +25,7 @@ func (c *Client) StartStream(ses *Session) (err error) {
 	}
 
 	if ses.Answer, err = c.SetupEndpoins(srv, ses.Offer); err != nil {
-		return
+		return err
 	}
 
 	return c.SetConfig(srv, ses.Config)
@@ -36,20 +35,20 @@ func (c *Client) StartStream(ses *Session) (err error) {
 // Usual every HomeKit camera can stream only to two clients simultaniosly.
 // So it has two similar services for streaming.
 func (c *Client) GetFreeStream() (srv *hap.Service, err error) {
-	var accs []*hap.Accessory
-	if accs, err = c.client.GetAccessories(); err != nil {
+	accs, err := c.client.GetAccessories()
+	if err != nil {
 		return
 	}
 
 	for _, srv = range accs[0].Services {
 		for _, char := range srv.Characters {
-			if char.Type == characteristic.TypeStreamingStatus {
-				status := rtp.StreamingStatus{}
+			if char.Type == TypeStreamingStatus {
+				var status StreamingStatus
 				if err = char.ReadTLV8(&status); err != nil {
 					return
 				}
 
-				if status.Status == rtp.SessionStatusSuccess {
+				if status.Status == StreamingStatusAvailable {
 					return
 				}
 			}
@@ -59,11 +58,9 @@ func (c *Client) GetFreeStream() (srv *hap.Service, err error) {
 	return nil, nil
 }
 
-func (c *Client) SetupEndpoins(
-	srv *hap.Service, req *rtp.SetupEndpoints,
-) (res *rtp.SetupEndpointsResponse, err error) {
+func (c *Client) SetupEndpoins(srv *hap.Service, req *SetupEndpoints) (res *SetupEndpointsResponse, err error) {
 	// get setup endpoint character ID
-	char := srv.GetCharacter(characteristic.TypeSetupEndpoints)
+	char := srv.GetCharacter(TypeSetupEndpoints)
 	char.Event = nil
 	// encode new character value
 	if err = char.Write(req); err != nil {
@@ -79,7 +76,7 @@ func (c *Client) SetupEndpoins(
 		return
 	}
 	// decode new endpoint value
-	res = &rtp.SetupEndpointsResponse{}
+	res = &SetupEndpointsResponse{}
 	if err = char.ReadTLV8(res); err != nil {
 		return
 	}
@@ -87,13 +84,13 @@ func (c *Client) SetupEndpoins(
 	return
 }
 
-func (c *Client) SetConfig(srv *hap.Service, config *rtp.StreamConfiguration) (err error) {
+func (c *Client) SetConfig(srv *hap.Service, config *SelectedStreamConfig) error {
 	// get setup endpoint character ID
-	char := srv.GetCharacter(characteristic.TypeSelectedStreamConfiguration)
+	char := srv.GetCharacter(TypeSelectedStreamConfiguration)
 	char.Event = nil
 	// encode new character value
-	if err = char.Write(config); err != nil {
-		panic(err)
+	if err := char.Write(config); err != nil {
+		return err
 	}
 	// write (put) new character value to device
 	return c.client.PutCharacters(char)

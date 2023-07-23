@@ -16,6 +16,32 @@ go mod why github.com/pion/rtcp
 go list -deps .\cmd\go2rtc_rtsp\
 ```
 
+## Dependencies
+
+```
+- gopkg.in/yaml.v3
+  - github.com/kr/pretty
+- github.com/AlexxIT/go2rtc/pkg/mdns
+  - github.com/miekg/dns
+- github.com/AlexxIT/go2rtc/pkg/pcm
+  - github.com/sigurn/crc16
+  - github.com/sigurn/crc8
+- github.com/pion/ice/v2
+  - github.com/google/uuid
+- github.com/rs/zerolog
+  - github.com/mattn/go-colorable
+  - github.com/mattn/go-isatty
+- ???
+  - github.com/tadglines/go-pkgs
+  - github.com/davecgh/go-spew
+  - github.com/pmezard/go-difflib
+  - golang.org/x/crypto
+  - golang.org/x/mod
+  - golang.org/x/net
+  - golang.org/x/sys
+  - golang.org/x/tools
+```
+
 ## Virus
 
 - https://go.dev/doc/faq#virus

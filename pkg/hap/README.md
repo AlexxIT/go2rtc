@@ -27,7 +27,19 @@
 - ServerID - same as DeviceID (using for Client auth)
 - ServerPublic/ServerPrivate - static random 32 byte keypair
 
+## AAC ELD 
+
+Requires ffmpeg built with `--enable-libfdk-aac`
+
+```
+-acodec libfdk_aac -aprofile aac_eld 
+```
+
 ## Useful links
 
+- https://github.com/apple/HomeKitADK/blob/master/Documentation/crypto.md
+- https://github.com/apple/HomeKitADK/blob/master/HAP/HAPPairingPairSetup.c
 - [Extracting HomeKit Pairing Keys](https://pvieito.com/2019/12/extract-homekit-pairing-keys)
 - [HAP in AirPlay2 receiver](https://github.com/openairplay/airplay2-receiver/blob/master/ap2/pairing/hap.py)
+- [HomeKit Secure Video Unofficial Specification](https://github.com/Supereg/secure-video-specification)
+- [Homebridge Camera FFmpeg](https://sunoo.github.io/homebridge-camera-ffmpeg/configs/)

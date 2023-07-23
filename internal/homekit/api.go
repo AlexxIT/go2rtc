@@ -1,14 +1,15 @@
 package homekit
 
 import (
+	"net/http"
+	"net/url"
+	"strings"
+
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/app/store"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/hap"
 	"github.com/AlexxIT/go2rtc/pkg/mdns"
-	"net/http"
-	"net/url"
-	"strings"
 )
 
 func apiHandler(w http.ResponseWriter, r *http.Request) {
@@ -32,13 +33,15 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		err := mdns.Discovery(mdns.ServiceHAP, func(entry *mdns.ServiceEntry) bool {
+			log.Trace().Msgf("[homekit] mdns=%s", entry)
+
 			if entry.Complete() {
 				device := Device{
 					Name:   entry.Name,
 					Addr:   entry.Addr(),
-					ID:     entry.Info["id"],
-					Model:  entry.Info["md"],
-					Paired: entry.Info["sf"] == "0",
+					ID:     entry.Info[hap.TXTDeviceID],
+					Model:  entry.Info[hap.TXTModel],
+					Paired: entry.Info[hap.TXTStatusFlags] == "0",
 				}
 				items = append(items, device)
 			}
@@ -73,7 +76,7 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func hkPair(deviceID, pin, name string) (err error) {
-	var conn *hap.Conn
+	var conn *hap.Client
 
 	if conn, err = hap.Pair(deviceID, pin); err != nil {
 		return
@@ -94,21 +97,15 @@ func hkDelete(name string) (err error) {
 			continue
 		}
 
-		var conn *hap.Conn
+		var conn *hap.Client
 
-		if conn, err = hap.NewConn(rawURL.(string)); err != nil {
+		if conn, err = hap.NewClient(rawURL.(string)); err != nil {
 			return
 		}
 
 		if err = conn.Dial(); err != nil {
 			return
 		}
-
-		go func() {
-			if err = conn.Handle(); err != nil {
-				log.Warn().Err(err).Caller().Send()
-			}
-		}()
 
 		if err = conn.ListPairings(); err != nil {
 			return

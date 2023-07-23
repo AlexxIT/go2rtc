@@ -1,75 +1,73 @@
 package camera
 
 import (
-	cryptorand "crypto/rand"
+	"crypto/rand"
 	"encoding/binary"
-	"github.com/brutella/hap/rtp"
 )
 
 type Session struct {
-	Offer  *rtp.SetupEndpoints
-	Answer *rtp.SetupEndpointsResponse
-	Config *rtp.StreamConfiguration
+	Offer  *SetupEndpoints
+	Answer *SetupEndpointsResponse
+	Config *SelectedStreamConfig
 }
 
-func NewSession(vp *rtp.VideoParameters, ap *rtp.AudioParameters) *Session {
-	vp.RTP = rtp.RTPParams{
-		PayloadType: 99,
-		Ssrc:        RandomUint32(),
-		Bitrate:     2048,
-		Interval:    10,
-		MTU:         1200, // like WebRTC
+func NewSession(vp *SelectedVideoParams, ap *SelectedAudioParams) *Session {
+	vp.RTPParams = VideoRTPParams{
+		PayloadType:     99,
+		SSRC:            RandomUint32(),
+		MaxBitrate:      2048,
+		MinRTCPInterval: 10,
+		MaxMTU:          1200, // like WebRTC
 	}
-	ap.RTP = rtp.RTPParams{
+	ap.RTPParams = AudioRTPParams{
 		PayloadType:             110,
-		Ssrc:                    RandomUint32(),
-		Bitrate:                 32,
-		Interval:                10,
+		SSRC:                    RandomUint32(),
+		MaxBitrate:              32,
+		MinRTCPInterval:         10,
 		ComfortNoisePayloadType: 98,
-		MTU:                     0,
 	}
 
 	sessionID := RandomBytes(16)
 	s := &Session{
-		Offer: &rtp.SetupEndpoints{
-			SessionId: sessionID,
-			Video: rtp.CryptoSuite{
+		Offer: &SetupEndpoints{
+			SessionID: sessionID,
+			VideoCrypto: CryptoSuite{
 				MasterKey:  RandomBytes(16),
 				MasterSalt: RandomBytes(14),
 			},
-			Audio: rtp.CryptoSuite{
+			AudioCrypto: CryptoSuite{
 				MasterKey:  RandomBytes(16),
 				MasterSalt: RandomBytes(14),
 			},
 		},
-		Config: &rtp.StreamConfiguration{
-			Command: rtp.SessionControlCommand{
-				Identifier: sessionID,
-				Type:       rtp.SessionControlCommandTypeStart,
+		Config: &SelectedStreamConfig{
+			Control: SessionControl{
+				Session: string(sessionID),
+				Command: SessionCommandStart,
 			},
-			Video: *vp,
-			Audio: *ap,
+			VideoParams: *vp,
+			AudioParams: *ap,
 		},
 	}
 	return s
 }
 
 func (s *Session) SetLocalEndpoint(host string, port uint16) {
-	s.Offer.ControllerAddr = rtp.Addr{
+	s.Offer.ControllerAddr = Addr{
 		IPAddr:       host,
-		VideoRtpPort: port,
-		AudioRtpPort: port,
+		VideoRTPPort: port,
+		AudioRTPPort: port,
 	}
 }
 
 func RandomBytes(size int) []byte {
 	data := make([]byte, size)
-	_, _ = cryptorand.Read(data)
+	_, _ = rand.Read(data)
 	return data
 }
 
 func RandomUint32() uint32 {
 	data := make([]byte, 4)
-	_, _ = cryptorand.Read(data)
+	_, _ = rand.Read(data)
 	return binary.BigEndian.Uint32(data)
 }
