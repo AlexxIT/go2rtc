@@ -3,8 +3,9 @@ package mjpeg
 import (
 	"encoding/json"
 	"errors"
-	"github.com/AlexxIT/go2rtc/pkg/core"
 	"strings"
+
+	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
 func (c *Client) GetMedias() []*core.Media {
@@ -14,7 +15,9 @@ func (c *Client) GetMedias() []*core.Media {
 			Direction: core.DirectionRecvonly,
 			Codecs: []*core.Codec{
 				{
-					Name: core.CodecJPEG, ClockRate: 90000, PayloadType: core.PayloadTypeRAW,
+					Name:        core.CodecJPEG,
+					ClockRate:   90000,
+					PayloadType: core.PayloadTypeRAW,
 				},
 			},
 		}}
