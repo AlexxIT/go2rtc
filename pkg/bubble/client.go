@@ -132,7 +132,7 @@ func (c *Client) Dial() (err error) {
 	// <stream1 name="360p.265" size="640x360" x1="yes" x2="yes" x4="yes" />
 	// <vin0>
 	// </bubble>
-	re := regexp.MustCompile("<stream " + stream + `[^>]+`)
+	re := regexp.MustCompile("<stream" + stream + " [^>]+")
 	stream = re.FindString(string(xml))
 	if strings.Contains(stream, ".265") {
 		c.videoCodec = core.CodecH265
