@@ -88,6 +88,13 @@ func (c *Client) startMJPEG(boundary string) error {
 		if err != nil {
 			return err
 		}
+
+		// fix leading empty line from esp32-cam-webserver
+		// https://github.com/AlexxIT/go2rtc/issues/545
+		if s == "" {
+			continue
+		}
+
 		if !strings.HasPrefix(s, boundary) {
 			return errors.New("wrong boundary: " + s)
 		}
