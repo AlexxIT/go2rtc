@@ -2,17 +2,19 @@ package http
 
 import (
 	"errors"
-	"github.com/AlexxIT/go2rtc/internal/streams"
-	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/magic"
-	"github.com/AlexxIT/go2rtc/pkg/mjpeg"
-	"github.com/AlexxIT/go2rtc/pkg/rtmp"
-	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"net"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/AlexxIT/go2rtc/internal/streams"
+	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/magic"
+	"github.com/AlexxIT/go2rtc/pkg/mjpeg"
+	"github.com/AlexxIT/go2rtc/pkg/multipart"
+	"github.com/AlexxIT/go2rtc/pkg/rtmp"
+	"github.com/AlexxIT/go2rtc/pkg/tcp"
 )
 
 func Init() {
@@ -45,8 +47,11 @@ func handleHTTP(url string) (core.Producer, error) {
 	}
 
 	switch ct {
-	case "image/jpeg", "multipart/x-mixed-replace":
+	case "image/jpeg":
 		return mjpeg.NewClient(res), nil
+
+	case "multipart/x-mixed-replace":
+		return multipart.NewClient(res)
 
 	case "video/x-flv":
 		var conn *rtmp.Client
