@@ -1,4 +1,4 @@
-package mjpeg
+package multipart
 
 import (
 	"encoding/json"
@@ -7,55 +7,42 @@ import (
 )
 
 func (c *Client) GetMedias() []*core.Media {
-	if c.medias == nil {
-		c.medias = []*core.Media{{
-			Kind:      core.KindVideo,
-			Direction: core.DirectionRecvonly,
-			Codecs: []*core.Codec{
-				{
-					Name:        core.CodecJPEG,
-					ClockRate:   90000,
-					PayloadType: core.PayloadTypeRAW,
-				},
-			},
-		}}
-	}
 	return c.medias
 }
 
 func (c *Client) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
-	if c.receiver == nil {
-		c.receiver = core.NewReceiver(media, codec)
+	for _, track := range c.receivers {
+		if track.Codec == codec {
+			return track, nil
+		}
 	}
-	return c.receiver, nil
+	track := core.NewReceiver(media, codec)
+	c.receivers = append(c.receivers, track)
+	return track, nil
 }
 
 func (c *Client) Start() error {
-	// https://github.com/AlexxIT/go2rtc/issues/278
 	return c.Handle()
 }
 
 func (c *Client) Stop() error {
-	if c.receiver != nil {
-		c.receiver.Close()
+	for _, receiver := range c.receivers {
+		receiver.Close()
 	}
 	// important for close reader/writer gorutines
 	_ = c.res.Body.Close()
-	c.closed = true
 	return nil
 }
 
 func (c *Client) MarshalJSON() ([]byte, error) {
 	info := &core.Info{
-		Type:       "JPEG active producer",
+		Type:       "HTTP/mixed active producer",
 		URL:        c.res.Request.URL.String(),
 		RemoteAddr: c.RemoteAddr,
 		UserAgent:  c.UserAgent,
 		Medias:     c.medias,
+		Receivers:  c.receivers,
 		Recv:       c.recv,
-	}
-	if c.receiver != nil {
-		info.Receivers = []*core.Receiver{c.receiver}
 	}
 	return json.Marshal(info)
 }
