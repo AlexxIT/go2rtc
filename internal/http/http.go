@@ -10,6 +10,7 @@ import (
 
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/hls"
 	"github.com/AlexxIT/go2rtc/pkg/magic"
 	"github.com/AlexxIT/go2rtc/pkg/mjpeg"
 	"github.com/AlexxIT/go2rtc/pkg/multipart"
@@ -41,6 +42,7 @@ func handleHTTP(url string) (core.Producer, error) {
 		return nil, errors.New(res.Status)
 	}
 
+	// 1. Guess format from content type
 	ct := res.Header.Get("Content-Type")
 	if i := strings.IndexByte(ct, ';'); i > 0 {
 		ct = ct[:i]
@@ -53,6 +55,9 @@ func handleHTTP(url string) (core.Producer, error) {
 	case "multipart/x-mixed-replace":
 		return multipart.NewClient(res)
 
+	case "application/vnd.apple.mpegurl":
+		return hls.NewClient(res)
+
 	case "video/x-flv":
 		var conn *rtmp.Client
 		if conn, err = rtmp.Accept(res); err != nil {
@@ -64,6 +69,14 @@ func handleHTTP(url string) (core.Producer, error) {
 		return conn, nil
 
 	default: // "video/mpeg":
+	}
+
+	// 2. Guess format from extension
+	if i := strings.LastIndexByte(req.URL.Path, '.'); i > 0 {
+		switch req.URL.Path[i+1:] {
+		case "m3u8":
+			return hls.NewClient(res)
+		}
 	}
 
 	client := magic.NewClient(res.Body)
