@@ -13,6 +13,7 @@ import (
 const (
 	ConnDialTimeout = time.Second * 3
 	ConnDeadline    = time.Second * 3
+	ProbeTimeout    = time.Second * 3
 )
 
 // Now90000 - timestamp for Video (clock rate = 90000 samples per second)

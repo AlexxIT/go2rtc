@@ -10,10 +10,10 @@ import (
 
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/flv"
 	"github.com/AlexxIT/go2rtc/pkg/magic"
 	"github.com/AlexxIT/go2rtc/pkg/mjpeg"
 	"github.com/AlexxIT/go2rtc/pkg/multipart"
-	"github.com/AlexxIT/go2rtc/pkg/rtmp"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 )
 
@@ -54,14 +54,12 @@ func handleHTTP(url string) (core.Producer, error) {
 		return multipart.NewClient(res)
 
 	case "video/x-flv":
-		var conn *rtmp.Client
-		if conn, err = rtmp.Accept(res); err != nil {
+		client := flv.NewClient(res.Body)
+		if err = client.Describe(); err != nil {
 			return nil, err
 		}
-		if err = conn.Describe(); err != nil {
-			return nil, err
-		}
-		return conn, nil
+		client.URL = url
+		return client, nil
 
 	default: // "video/mpeg":
 	}
