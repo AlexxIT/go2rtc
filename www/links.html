@@ -66,6 +66,8 @@
             <li><a href="rtsp://${rtsp}/${src}?mp4">rtsp</a> for MP4 recording (Hass or Frigate) / codecs: H264, H265, AAC</li>
             <li><a href="rtsp://${rtsp}/${src}?video=all&audio=all">rtsp</a> with all tracks / codecs: any</li>
 
+            <pre>ffplay -fflags nobuffer -flags low_delay -rtsp_transport tcp "rtsp://${rtsp}/${src}"</pre>
+
             <h2>H264/H265 source</h2>
             <li><a href="stream.html?src=${src}&mode=webrtc">stream.html</a> WebRTC stream / browsers: all / codecs: H264, PCMU, PCMA, OPUS / +H265 in Safari</li>
             <li><a href="stream.html?src=${src}&mode=mse">stream.html</a> MSE stream / browsers: Chrome, Firefox, Safari Mac/iPad / codecs: H264, H265*, AAC, PCMA*, PCMU*, PCM* / +OPUS in Chrome and Firefox</li>
