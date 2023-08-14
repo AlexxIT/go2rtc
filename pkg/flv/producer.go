@@ -18,6 +18,11 @@ func (c *Client) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver,
 		}
 	}
 	track := core.NewReceiver(media, codec)
+	if media.Kind == core.KindVideo {
+		c.video = track
+	} else {
+		c.audio = track
+	}
 	c.receivers = append(c.receivers, track)
 	return track, nil
 }

@@ -19,6 +19,8 @@ type Client struct {
 	medias    []*core.Media
 	receivers []*core.Receiver
 
+	video, audio *core.Receiver
+
 	recv int
 }
 
@@ -120,8 +122,6 @@ func (c *Client) Describe() error {
 }
 
 func (c *Client) Play() error {
-	video, audio := core.VA(c.receivers)
-
 	for {
 		tagType, timeMS, b, err := c.Transport.ReadTag()
 		if err != nil {
@@ -132,31 +132,31 @@ func (c *Client) Play() error {
 
 		switch tagType {
 		case TagAudio:
-			if audio == nil || b[1] == 0 {
+			if c.audio == nil || b[1] == 0 {
 				continue
 			}
 
 			pkt := &rtp.Packet{
 				Header: rtp.Header{
-					Timestamp: TimeToRTP(timeMS, audio.Codec.ClockRate),
+					Timestamp: TimeToRTP(timeMS, c.audio.Codec.ClockRate),
 				},
 				Payload: b[2:],
 			}
-			audio.WriteRTP(pkt)
+			c.audio.WriteRTP(pkt)
 
 		case TagVideo:
 			// frame type 4b, codecID 4b, avc packet type 8b, composition time 24b
-			if video == nil || b[1] == 0 {
+			if c.video == nil || b[1] == 0 {
 				continue
 			}
 
 			pkt := &rtp.Packet{
 				Header: rtp.Header{
-					Timestamp: TimeToRTP(timeMS, video.Codec.ClockRate),
+					Timestamp: TimeToRTP(timeMS, c.video.Codec.ClockRate),
 				},
 				Payload: b[5:],
 			}
-			video.WriteRTP(pkt)
+			c.video.WriteRTP(pkt)
 		}
 	}
 }
