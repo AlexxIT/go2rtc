@@ -15,18 +15,39 @@ func NewReader(b []byte) *Reader {
 
 //goland:noinspection GoStandardMethods
 func (r *Reader) ReadByte() byte {
-	if r.bits == 0 {
-		if r.pos >= len(r.buf) {
-			r.EOF = true
-			return 0
-		}
-
-		b := r.buf[r.pos]
-		r.pos++
-		return b
+	if r.bits != 0 {
+		return r.ReadBits8(8)
 	}
 
-	return r.ReadBits8(8)
+	if r.pos >= len(r.buf) {
+		r.EOF = true
+		return 0
+	}
+
+	b := r.buf[r.pos]
+	r.pos++
+	return b
+}
+
+func (r *Reader) ReadUint16() uint16 {
+	if r.bits != 0 {
+		return r.ReadBits16(16)
+	}
+	return uint16(r.ReadByte())<<8 | uint16(r.ReadByte())
+}
+
+func (r *Reader) ReadUint24() uint32 {
+	if r.bits != 0 {
+		return r.ReadBits(24)
+	}
+	return uint32(r.ReadByte())<<16 | uint32(r.ReadByte())<<8 | uint32(r.ReadByte())
+}
+
+func (r *Reader) ReadUint32() uint32 {
+	if r.bits != 0 {
+		return r.ReadBits(32)
+	}
+	return uint32(r.ReadByte())<<24 | uint32(r.ReadByte())<<16 | uint32(r.ReadByte())<<8 | uint32(r.ReadByte())
 }
 
 func (r *Reader) ReadBit() byte {
@@ -61,6 +82,7 @@ func (r *Reader) ReadBits16(n byte) (res uint16) {
 	return
 }
 
+// ReadUEGolomb - ReadExponentialGolomb (unsigned)
 func (r *Reader) ReadUEGolomb() uint32 {
 	var size byte
 	for size = 0; size < 32; size++ {
@@ -71,6 +93,7 @@ func (r *Reader) ReadUEGolomb() uint32 {
 	return r.ReadBits(size) + (1 << size) - 1
 }
 
+// ReadSEGolomb - ReadSignedExponentialGolomb
 func (r *Reader) ReadSEGolomb() int32 {
 	if b := r.ReadUEGolomb(); b%2 == 0 {
 		return -int32(b >> 1)
