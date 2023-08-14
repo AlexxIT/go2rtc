@@ -54,7 +54,10 @@ func handleHTTP(url string) (core.Producer, error) {
 		return multipart.NewClient(res)
 
 	case "video/x-flv":
-		client := flv.NewClient(res.Body)
+		var client *flv.Client
+		if client, err = flv.NewClient(res.Body); err != nil {
+			return nil, err
+		}
 		if err = client.Describe(); err != nil {
 			return nil, err
 		}

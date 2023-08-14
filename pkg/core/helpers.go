@@ -11,6 +11,7 @@ import (
 )
 
 const (
+	BufferSize      = 64 * 1024 // 64K
 	ConnDialTimeout = time.Second * 3
 	ConnDeadline    = time.Second * 3
 	ProbeTimeout    = time.Second * 3

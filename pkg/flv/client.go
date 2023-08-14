@@ -12,9 +12,9 @@ import (
 )
 
 type Client struct {
-	URL string
+	Transport
 
-	rd io.Reader
+	URL string
 
 	medias    []*core.Media
 	receivers []*core.Receiver
@@ -22,15 +22,15 @@ type Client struct {
 	recv int
 }
 
-func NewClient(rd io.Reader) *Client {
-	return &Client{rd: rd}
+func NewClient(rd io.Reader) (*Client, error) {
+	tr, err := NewTransport(rd)
+	if err != nil {
+		return nil, err
+	}
+	return &Client{Transport: tr}, nil
 }
 
 func (c *Client) Describe() error {
-	if err := c.ReadHeader(); err != nil {
-		return err
-	}
-
 	// Normal software sends:
 	// 1. Video/audio flag in header
 	// 2. MetaData as first tag (with video/audio codec info)
@@ -45,7 +45,7 @@ func (c *Client) Describe() error {
 	timeout := time.Now().Add(core.ProbeTimeout)
 
 	for (waitVideo || waitAudio) && time.Now().Before(timeout) {
-		tagType, _, b, err := c.ReadTag()
+		tagType, _, b, err := c.Transport.ReadTag()
 		if err != nil {
 			return err
 		}
@@ -123,7 +123,7 @@ func (c *Client) Play() error {
 	video, audio := core.VA(c.receivers)
 
 	for {
-		tagType, timeMS, b, err := c.ReadTag()
+		tagType, timeMS, b, err := c.Transport.ReadTag()
 		if err != nil {
 			return err
 		}

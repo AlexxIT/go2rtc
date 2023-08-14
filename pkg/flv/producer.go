@@ -27,7 +27,7 @@ func (c *Client) Start() error {
 }
 
 func (c *Client) Stop() error {
-	if closer, ok := c.rd.(io.Closer); ok {
+	if closer, ok := c.Transport.(io.Closer); ok {
 		return closer.Close()
 	}
 	return nil
