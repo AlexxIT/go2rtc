@@ -2,20 +2,20 @@ package ivideon
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/deepch/vdk/codec/h264parser"
-	"github.com/deepch/vdk/format/fmp4/fmp4io"
-	"github.com/gorilla/websocket"
-	"github.com/pion/rtp"
 	"io"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/h264/avc"
+	"github.com/deepch/vdk/format/fmp4/fmp4io"
+	"github.com/gorilla/websocket"
+	"github.com/pion/rtp"
 )
 
 type State byte
@@ -197,29 +197,15 @@ func (c *Client) getTracks() error {
 					continue
 				}
 
-				codec := &core.Codec{
-					Name:        core.CodecH264,
-					ClockRate:   90000,
-					FmtpLine:    "profile-level-id=" + msg.CodecString[i+1:],
-					PayloadType: core.PayloadTypeRAW,
-				}
-
 				i = bytes.Index(msg.Data, []byte("avcC")) - 4
 				if i < 0 {
-					return fmt.Errorf("wrong AVC: %s", msg.Data)
+					return fmt.Errorf("ivideon: wrong AVC: %s", msg.Data)
 				}
 
 				avccLen := binary.BigEndian.Uint32(msg.Data[i:])
 				data = msg.Data[i+8 : i+int(avccLen)]
 
-				record := h264parser.AVCDecoderConfRecord{}
-				if _, err = record.Unmarshal(data); err != nil {
-					return err
-				}
-
-				codec.FmtpLine += ";sprop-parameter-sets=" +
-					base64.StdEncoding.EncodeToString(record.SPS[0]) + "," +
-					base64.StdEncoding.EncodeToString(record.PPS[0])
+				codec := avc.ConfigToCodec(data)
 
 				media := &core.Media{
 					Kind:      core.KindVideo,

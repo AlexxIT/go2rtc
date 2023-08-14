@@ -51,6 +51,30 @@ func DecodeConfig(conf []byte) (profile []byte, sps []byte, pps []byte) {
 	return
 }
 
+func EncodeConfig(sps, pps []byte) []byte {
+	spsSize := uint16(len(sps))
+	ppsSize := uint16(len(pps))
+
+	buf := make([]byte, 5+3+spsSize+3+ppsSize)
+	buf[0] = 1
+	copy(buf[1:], sps[1:4]) // profile
+	buf[4] = 3 | 0xFC       // ? LengthSizeMinusOne
+
+	b := buf[5:]
+	_ = b[3]
+	b[0] = 1 | 0xE0 // ? sps count
+	binary.BigEndian.PutUint16(b[1:], spsSize)
+	copy(b[3:], sps)
+
+	b = buf[5+3+spsSize:]
+	_ = b[3]
+	b[0] = 1 // pps count
+	binary.BigEndian.PutUint16(b[1:], ppsSize)
+	copy(b[3:], pps)
+
+	return buf
+}
+
 func ConfigToCodec(conf []byte) *core.Codec {
 	buf := bytes.NewBufferString("packetization-mode=1")
 
