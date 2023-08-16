@@ -9,7 +9,6 @@ import (
 
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/flv"
 	"github.com/AlexxIT/go2rtc/pkg/magic"
 	"github.com/AlexxIT/go2rtc/pkg/mjpeg"
 	"github.com/AlexxIT/go2rtc/pkg/multipart"
@@ -51,14 +50,6 @@ func handleHTTP(url string) (core.Producer, error) {
 
 	case "multipart/x-mixed-replace":
 		return multipart.NewClient(res)
-
-	case "video/x-flv":
-		client, err := flv.Open(res.Body)
-		if err != nil {
-			return nil, err
-		}
-		client.URL = url
-		return client, nil
 
 	default: // "video/mpeg":
 	}

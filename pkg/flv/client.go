@@ -13,6 +13,8 @@ import (
 	"github.com/pion/rtp"
 )
 
+const Signature = "FLV"
+
 type Client struct {
 	URL string
 
@@ -178,7 +180,7 @@ func (c *Client) readHeader() error {
 		return err
 	}
 
-	if string(b[:3]) != "FLV" {
+	if string(b[:3]) != Signature {
 		return errors.New("flv: wrong header")
 	}
 
