@@ -2,40 +2,26 @@ package magic
 
 import (
 	"encoding/json"
+
 	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
 func (c *Client) GetMedias() []*core.Media {
-	return c.medias
+	return c.prod.GetMedias()
 }
 
 func (c *Client) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
-	if c.receiver == nil {
-		c.receiver = core.NewReceiver(media, codec)
-	}
-	return c.receiver, nil
+	return c.prod.GetTrack(media, codec)
 }
 
 func (c *Client) Start() error {
-	return c.Handle()
+	return c.prod.Start()
 }
 
 func (c *Client) Stop() (err error) {
-	if c.receiver != nil {
-		c.receiver.Close()
-	}
-	return c.Close()
+	return c.prod.Stop()
 }
 
 func (c *Client) MarshalJSON() ([]byte, error) {
-	info := &core.Info{
-		Type:   c.Desc,
-		URL:    c.URL,
-		Medias: c.medias,
-		Recv:   c.recv,
-	}
-	if c.receiver != nil {
-		info.Receivers = append(info.Receivers, c.receiver)
-	}
-	return json.Marshal(info)
+	return json.Marshal(c.prod)
 }

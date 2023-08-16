@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -67,13 +66,10 @@ func handleHTTP(url string) (core.Producer, error) {
 	default: // "video/mpeg":
 	}
 
-	client := magic.NewClient(res.Body)
-	if err = client.Probe(); err != nil {
+	client, err := magic.Open(res.Body)
+	if err != nil {
 		return nil, err
 	}
-
-	client.Desc = "HTTP active producer"
-	client.URL = url
 
 	return client, nil
 }
@@ -84,18 +80,10 @@ func handleTCP(rawURL string) (core.Producer, error) {
 		return nil, err
 	}
 
-	conn, err := net.DialTimeout("tcp", u.Host, time.Second*3)
+	conn, err := net.DialTimeout("tcp", u.Host, core.ConnDialTimeout)
 	if err != nil {
 		return nil, err
 	}
 
-	client := magic.NewClient(conn)
-	if err = client.Probe(); err != nil {
-		return nil, err
-	}
-
-	client.Desc = "TCP active producer"
-	client.URL = rawURL
-
-	return client, nil
+	return magic.Open(conn)
 }
