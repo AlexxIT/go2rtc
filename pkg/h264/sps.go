@@ -1,4 +1,4 @@
-package avc
+package h264
 
 import "github.com/AlexxIT/go2rtc/pkg/bits"
 
@@ -49,11 +49,26 @@ type SPS struct {
 	sar_height                     uint32
 }
 
+func (s *SPS) Width() uint16 {
+	width := 16 * (s.pic_width_in_mbs_minus_1 + 1)
+	crop := 2 * (s.frame_crop_left_offset + s.frame_crop_right_offset)
+	return uint16(width - crop)
+}
+
+func (s *SPS) Height() uint16 {
+	height := 16 * (s.pic_height_in_map_units_minus_1 + 1)
+	crop := 2 * (s.frame_crop_top_offset + s.frame_crop_bottom_offset)
+	if s.frame_mbs_only_flag == 0 {
+		height *= 2
+	}
+	return uint16(height - crop)
+}
+
 func DecodeSPS(sps []byte) *SPS {
 	r := bits.NewReader(sps)
 
 	hdr := r.ReadByte()
-	if hdr&0x1F != 7 {
+	if hdr&0x1F != NALUTypeSPS {
 		return nil
 	}
 
@@ -146,19 +161,4 @@ func DecodeSPS(sps []byte) *SPS {
 	}
 
 	return s
-}
-
-func (s *SPS) Width() uint16 {
-	width := 16 * (s.pic_width_in_mbs_minus_1 + 1)
-	crop := 2 * (s.frame_crop_left_offset + s.frame_crop_right_offset)
-	return uint16(width - crop)
-}
-
-func (s *SPS) Heigth() uint16 {
-	height := 16 * (s.pic_height_in_map_units_minus_1 + 1)
-	crop := 2 * (s.frame_crop_top_offset + s.frame_crop_bottom_offset)
-	if s.frame_mbs_only_flag == 0 {
-		height *= 2
-	}
-	return uint16(height - crop)
 }

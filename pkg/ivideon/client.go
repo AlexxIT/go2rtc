@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/h264/avc"
+	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/iso"
 	"github.com/gorilla/websocket"
 	"github.com/pion/rtp"
@@ -205,7 +205,7 @@ func (c *Client) getTracks() error {
 				avccLen := binary.BigEndian.Uint32(msg.Data[i:])
 				data = msg.Data[i+8 : i+int(avccLen)]
 
-				codec := avc.ConfigToCodec(data)
+				codec := h264.ConfigToCodec(data)
 
 				media := &core.Media{
 					Kind:      core.KindVideo,

@@ -3,6 +3,7 @@ package magic
 import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
+	"github.com/AlexxIT/go2rtc/pkg/h264/annexb"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
 	"github.com/AlexxIT/go2rtc/pkg/mjpeg"
 	"github.com/pion/rtp"
@@ -42,7 +43,7 @@ func (k *Keyframe) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 			if !h264.IsKeyframe(packet.Payload) {
 				return
 			}
-			b := h264.AVCtoAnnexB(packet.Payload)
+			b := annexb.DecodeAVCC(packet.Payload)
 			k.Fire(b)
 		}
 

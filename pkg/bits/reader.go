@@ -82,6 +82,13 @@ func (r *Reader) ReadBits16(n byte) (res uint16) {
 	return
 }
 
+func (r *Reader) ReadBits64(n byte) (res uint64) {
+	for i := n - 1; i != 255; i-- {
+		res |= uint64(r.ReadBit()) << i
+	}
+	return
+}
+
 // ReadUEGolomb - ReadExponentialGolomb (unsigned)
 func (r *Reader) ReadUEGolomb() uint32 {
 	var size byte

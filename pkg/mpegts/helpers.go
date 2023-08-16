@@ -1,11 +1,13 @@
 package mpegts
 
 import (
+	"time"
+
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
+	"github.com/AlexxIT/go2rtc/pkg/h264/annexb"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
 	"github.com/pion/rtp"
-	"time"
 )
 
 const (
@@ -113,7 +115,7 @@ func (p *PES) GetPacket() (pkt *rtp.Packet) {
 					PayloadType: p.StreamType,
 					Timestamp:   ts,
 				},
-				Payload: h264.AnnexB2AVC(payload),
+				Payload: annexb.EncodeToAVCC(payload, false),
 			}
 
 		case StreamTypePCMATapo:

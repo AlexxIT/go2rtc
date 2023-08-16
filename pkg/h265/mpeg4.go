@@ -1,4 +1,5 @@
-package hvc
+// Package h265 - MPEG4 format related functions
+package h265
 
 import "encoding/binary"
 

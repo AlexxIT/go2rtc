@@ -6,9 +6,7 @@ import (
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
-	"github.com/AlexxIT/go2rtc/pkg/h264/avc"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
-	"github.com/AlexxIT/go2rtc/pkg/h265/hvc"
 	"github.com/AlexxIT/go2rtc/pkg/iso"
 	"github.com/pion/rtp"
 )
@@ -74,13 +72,13 @@ func (m *Muxer) GetInit(codecs []*core.Codec) ([]byte, error) {
 				pps = []byte{0x68, 0xce, 0x38, 0x80}
 			}
 
-			s := avc.DecodeSPS(sps)
+			s := h264.DecodeSPS(sps)
 			if s == nil {
 				return nil, errors.New("mp4: can't parse SPS")
 			}
 
 			mv.WriteVideoTrack(
-				uint32(i+1), codec.Name, codec.ClockRate, s.Width(), s.Heigth(), avc.EncodeConfig(sps, pps),
+				uint32(i+1), codec.Name, codec.ClockRate, s.Width(), s.Height(), h264.EncodeConfig(sps, pps),
 			)
 
 		case core.CodecH265:
@@ -96,13 +94,13 @@ func (m *Muxer) GetInit(codecs []*core.Codec) ([]byte, error) {
 				pps = []byte{0x44, 0x01, 0xc0, 0x73, 0xc0, 0x4c, 0x90}
 			}
 
-			s := avc.DecodeSPS(sps)
+			s := h265.DecodeSPS(sps)
 			if s == nil {
 				return nil, errors.New("mp4: can't parse SPS")
 			}
 
 			mv.WriteVideoTrack(
-				uint32(i+1), codec.Name, codec.ClockRate, s.Width(), s.Heigth(), hvc.EncodeConfig(vps, sps, pps),
+				uint32(i+1), codec.Name, codec.ClockRate, s.Width(), s.Height(), h265.EncodeConfig(vps, sps, pps),
 			)
 
 		case core.CodecAAC:

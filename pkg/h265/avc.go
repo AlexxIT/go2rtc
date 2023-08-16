@@ -5,7 +5,7 @@ import "github.com/AlexxIT/go2rtc/pkg/h264"
 const forbiddenZeroBit = 0x80
 const nalUnitType = 0x3F
 
-// DecodeStream - find and return first AU in AVC format
+// Deprecated: DecodeStream - find and return first AU in AVC format
 // useful for processing live streams with unknown separator size
 func DecodeStream(annexb []byte) ([]byte, int) {
 	startPos := -1

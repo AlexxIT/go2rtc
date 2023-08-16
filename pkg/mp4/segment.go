@@ -2,6 +2,7 @@ package mp4
 
 import (
 	"encoding/json"
+
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
@@ -101,7 +102,7 @@ func (c *Segment) AddTrack(media *core.Media, _ *core.Codec, track *core.Receive
 		if track.Codec.IsRTP() {
 			handler.Handler = h264.RTPDepay(track.Codec, handler.Handler)
 		} else {
-			handler.Handler = h264.RepairAVC(track.Codec, handler.Handler)
+			handler.Handler = h264.RepairAVCC(track.Codec, handler.Handler)
 		}
 
 	case core.CodecH265:

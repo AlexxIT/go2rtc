@@ -2,7 +2,9 @@ package h264
 
 import (
 	"encoding/binary"
+
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/h264/annexb"
 	"github.com/pion/rtp"
 	"github.com/pion/rtp/codecs"
 )
@@ -15,7 +17,7 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 	depack := &codecs.H264Packet{IsAVC: true}
 
 	sps, pps := GetParameterSet(codec.FmtpLine)
-	ps := EncodeAVC(sps, pps)
+	ps := JoinNALU(sps, pps)
 
 	buf := make([]byte, 0, 512*1024) // 512K
 
@@ -81,7 +83,7 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 			// some Chinese buggy cameras has single packet with SPS+PPS+IFrame separated by 00 00 00 01
 			// https://github.com/AlexxIT/WebRTC/issues/391
 			// https://github.com/AlexxIT/WebRTC/issues/392
-			AnnexB2AVC(payload)
+			payload = annexb.EncodeToAVCC(payload, false)
 		}
 
 		//log.Printf("[AVC] %v, len: %d, ts: %10d, seq: %d", Types(payload), len(payload), packet.Timestamp, packet.SequenceNumber)

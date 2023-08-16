@@ -7,7 +7,7 @@ import (
 
 	"github.com/AlexxIT/go2rtc/pkg/aac"
 	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/h264/avc"
+	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/pion/rtp"
 )
 
@@ -101,7 +101,7 @@ func (c *Client) Describe() error {
 				continue
 			}
 
-			codec := avc.ConfigToCodec(b[5:])
+			codec := h264.ConfigToCodec(b[5:])
 			media := &core.Media{
 				Kind:      core.KindVideo,
 				Direction: core.DirectionRecvonly,

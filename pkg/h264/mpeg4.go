@@ -1,4 +1,5 @@
-package avc
+// Package h264 - MPEG4 format related functions
+package h264
 
 import (
 	"bytes"
@@ -9,6 +10,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
+// DecodeConfig - extract profile, SPS and PPS from MPEG4 config
 func DecodeConfig(conf []byte) (profile []byte, sps []byte, pps []byte) {
 	if len(conf) < 6 || conf[0] != 1 {
 		return

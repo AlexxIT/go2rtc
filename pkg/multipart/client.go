@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/h264"
+	"github.com/AlexxIT/go2rtc/pkg/h264/annexb"
 	"github.com/pion/rtp"
 )
 
@@ -103,7 +103,7 @@ func (c *Client) Handle() error {
 					Header: rtp.Header{
 						Timestamp: uint32(ts * 90000),
 					},
-					Payload: h264.AnnexB2AVC(body),
+					Payload: annexb.EncodeToAVCC(body, false),
 				}
 				video.WriteRTP(pkt)
 			}

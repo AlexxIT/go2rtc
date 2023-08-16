@@ -86,7 +86,7 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 		if track.Codec.IsRTP() {
 			handler.Handler = h264.RTPDepay(track.Codec, handler.Handler)
 		} else {
-			handler.Handler = h264.RepairAVC(track.Codec, handler.Handler)
+			handler.Handler = h264.RepairAVCC(track.Codec, handler.Handler)
 		}
 
 	case core.CodecH265:
