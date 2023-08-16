@@ -28,11 +28,11 @@ func (c *Client) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver,
 }
 
 func (c *Client) Start() error {
-	return c.Play()
+	return c.play()
 }
 
 func (c *Client) Stop() error {
-	if closer, ok := c.Transport.(io.Closer); ok {
+	if closer, ok := c.rd.Reader.(io.Closer); ok {
 		return closer.Close()
 	}
 	return nil

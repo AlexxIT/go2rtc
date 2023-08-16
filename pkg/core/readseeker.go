@@ -5,7 +5,7 @@ import (
 	"io"
 )
 
-const ProbeSize = 5 * 1024 * 1024 // 5MB
+const ProbeSize = 1024 * 1024 // 1MB
 
 const (
 	BufferDisable       = 0
@@ -95,7 +95,11 @@ func (r *ReadSeeker) Peek(n int) ([]byte, error) {
 	if _, err := io.ReadAtLeast(r, b, n); err != nil {
 		return nil, err
 	}
+	r.Rewind()
+	return b, nil
+}
+
+func (r *ReadSeeker) Rewind() {
 	r.BufferSize = BufferDrainAndClear
 	r.pos = 0
-	return b, nil
 }

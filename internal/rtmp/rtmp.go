@@ -23,9 +23,6 @@ func streamsHandle(url string) (core.Producer, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err = client.Describe(); err != nil {
-		return nil, err
-	}
 	return client, nil
 }
 
@@ -42,13 +39,8 @@ func apiHandle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client, err := flv.NewClient(r.Body)
+	client, err := flv.Open(r.Body)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	if err = client.Describe(); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

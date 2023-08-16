@@ -26,25 +26,42 @@ func Dial(rawURL string) (*flv.Client, error) {
 		return nil, err
 	}
 
-	tr := &rtmp{
-		url:  rawURL,
-		conn: conn,
-		rd:   bufio.NewReaderSize(conn, core.BufferSize),
+	rd := &rtmp{
+		url:     rawURL,
+		headers: map[uint32]*header{},
+		conn:    conn,
+		rd:      bufio.NewReaderSize(conn, core.BufferSize),
 	}
 
 	if args := strings.Split(u.Path, "/"); len(args) >= 2 {
-		tr.app = args[1]
+		rd.app = args[1]
 		if len(args) >= 3 {
-			tr.stream = args[2]
+			rd.stream = args[2]
 			if u.RawQuery != "" {
-				tr.stream += "?" + u.RawQuery
+				rd.stream += "?" + u.RawQuery
 			}
 		}
 	}
 
-	if err = tr.init(); err != nil {
+	if err = rd.handshake(); err != nil {
+		return nil, err
+	}
+	if err = rd.sendConfig(); err != nil {
+		return nil, err
+	}
+	if err = rd.sendConnect(); err != nil {
+		return nil, err
+	}
+	if err = rd.sendPlay(); err != nil {
 		return nil, err
 	}
 
-	return &flv.Client{Transport: tr, URL: rawURL}, nil
+	rd.buf = []byte{
+		'F', 'L', 'V', // signature
+		1,          // version
+		0,          // flags (has video/audio)
+		0, 0, 0, 9, // header size
+	}
+
+	return flv.Open(rd)
 }

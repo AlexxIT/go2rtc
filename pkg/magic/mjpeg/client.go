@@ -79,6 +79,8 @@ func (c *Client) Start() error {
 		}
 		c.receiver.WriteRTP(pkt)
 
+		//log.Printf("[mjpeg] ts=%d size=%d", pkt.Header.Timestamp, len(pkt.Payload))
+
 		buf = buf[i:]
 	}
 }
