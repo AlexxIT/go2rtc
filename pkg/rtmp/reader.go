@@ -1,11 +1,15 @@
 package rtmp
 
 import (
+	"bufio"
 	"encoding/binary"
 	"errors"
 	"io"
 	"net"
+	"net/url"
+	"strings"
 
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/flv/amf"
 )
 
@@ -38,6 +42,47 @@ type Reader struct {
 	rd   io.Reader
 
 	buf []byte
+}
+
+func NewReader(u *url.URL, conn net.Conn) (*Reader, error) {
+	rd := &Reader{
+		url:     u.String(),
+		headers: map[uint32]*header{},
+		conn:    conn,
+		rd:      bufio.NewReaderSize(conn, core.BufferSize),
+	}
+
+	if args := strings.Split(u.Path, "/"); len(args) >= 2 {
+		rd.app = args[1]
+		if len(args) >= 3 {
+			rd.stream = args[2]
+			if u.RawQuery != "" {
+				rd.stream += "?" + u.RawQuery
+			}
+		}
+	}
+
+	if err := rd.handshake(); err != nil {
+		return nil, err
+	}
+	if err := rd.sendConfig(); err != nil {
+		return nil, err
+	}
+	if err := rd.sendConnect(); err != nil {
+		return nil, err
+	}
+	if err := rd.sendPlay(); err != nil {
+		return nil, err
+	}
+
+	rd.buf = []byte{
+		'F', 'L', 'V', // signature
+		1,          // version
+		0,          // flags (has video/audio)
+		0, 0, 0, 9, // header size
+	}
+
+	return rd, nil
 }
 
 func (c *Reader) Read(p []byte) (n int, err error) {

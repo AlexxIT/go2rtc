@@ -14,6 +14,8 @@ import (
 
 func Init() {
 	streams.HandleFunc("rtmp", streamsHandle)
+	streams.HandleFunc("rtmps", streamsHandle)
+	streams.HandleFunc("rtmpx", streamsHandle)
 
 	api.HandleFunc("api/stream.flv", apiHandle)
 }
