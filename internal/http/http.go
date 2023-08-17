@@ -9,6 +9,7 @@ import (
 
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/hls"
 	"github.com/AlexxIT/go2rtc/pkg/magic"
 	"github.com/AlexxIT/go2rtc/pkg/mjpeg"
 	"github.com/AlexxIT/go2rtc/pkg/multipart"
@@ -39,27 +40,29 @@ func handleHTTP(url string) (core.Producer, error) {
 		return nil, errors.New(res.Status)
 	}
 
+	// 1. Guess format from content type
 	ct := res.Header.Get("Content-Type")
 	if i := strings.IndexByte(ct, ';'); i > 0 {
 		ct = ct[:i]
 	}
 
-	switch ct {
-	case "image/jpeg":
+	var ext string
+	if i := strings.LastIndexByte(req.URL.Path, '.'); i > 0 {
+		ext = req.URL.Path[i+1:]
+	}
+
+	switch {
+	case ct == "image/jpeg":
 		return mjpeg.NewClient(res), nil
 
-	case "multipart/x-mixed-replace":
+	case ct == "multipart/x-mixed-replace":
 		return multipart.NewClient(res)
 
-	default: // "video/mpeg":
+	case ct == "application/vnd.apple.mpegurl" || ext == "m3u8":
+		return hls.OpenURL(req.URL, res.Body)
 	}
 
-	client, err := magic.Open(res.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	return client, nil
+	return magic.Open(res.Body)
 }
 
 func handleTCP(rawURL string) (core.Producer, error) {
