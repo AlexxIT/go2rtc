@@ -1,10 +1,11 @@
 package mpegts
 
 import (
+	"net/http"
+
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/mpegts"
-	"net/http"
 )
 
 func Init() {
@@ -25,16 +26,15 @@ func apiHandle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res := &http.Response{Body: r.Body, Request: r}
-	client := mpegts.NewClient(res)
-
-	if err := client.Handle(); err != nil {
+	client, err := mpegts.Open(res.Body)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	stream.AddProducer(client)
 
-	if err := client.Handle(); err != nil {
+	if err = client.Start(); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

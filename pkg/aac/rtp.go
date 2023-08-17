@@ -2,11 +2,13 @@ package aac
 
 import (
 	"encoding/binary"
+
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/pion/rtp"
 )
 
 const RTPPacketVersionAAC = 0
+const ADTSHeaderSize = 7
 
 func RTPDepay(handler core.HandlerFunc) core.HandlerFunc {
 	var timestamp uint32
@@ -14,6 +16,7 @@ func RTPDepay(handler core.HandlerFunc) core.HandlerFunc {
 	return func(packet *rtp.Packet) {
 		// support ONLY 2 bytes header size!
 		// streamtype=5;profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;config=1408
+		// https://datatracker.ietf.org/doc/html/rfc3640
 		headersSize := binary.BigEndian.Uint16(packet.Payload) >> 3
 
 		//log.Printf("[RTP/AAC] units: %d, size: %4d, ts: %10d, %t", headersSize/2, len(packet.Payload), packet.Timestamp, packet.Marker)
@@ -35,7 +38,7 @@ func RTPDepay(handler core.HandlerFunc) core.HandlerFunc {
 			clone.Version = RTPPacketVersionAAC
 			clone.Timestamp = timestamp
 			if IsADTS(unit) {
-				clone.Payload = unit[7:]
+				clone.Payload = unit[ADTSHeaderSize:]
 			} else {
 				clone.Payload = unit
 			}
@@ -54,11 +57,11 @@ func RTPPay(handler core.HandlerFunc) core.HandlerFunc {
 		}
 
 		// support ONLY one unit in payload
-		size := uint16(len(packet.Payload))
+		auSize := uint16(len(packet.Payload))
 		// 2 bytes header size + 2 bytes first payload size
-		payload := make([]byte, 2+2+size)
+		payload := make([]byte, 2+2+auSize)
 		payload[1] = 16 // header size in bits
-		binary.BigEndian.PutUint16(payload[2:], size<<3)
+		binary.BigEndian.PutUint16(payload[2:], auSize<<3)
 		copy(payload[4:], packet.Payload)
 
 		clone := rtp.Packet{
@@ -74,6 +77,19 @@ func RTPPay(handler core.HandlerFunc) core.HandlerFunc {
 	}
 }
 
-func IsADTS(b []byte) bool {
-	return len(b) > 7 && b[0] == 0xFF && b[1]&0xF0 == 0xF0
+func ADTStoRTP(b []byte) []byte {
+	header := make([]byte, 2)
+	for i := 0; i < len(b); {
+		auSize := ReadADTSSize(b[i:])
+		header = append(header, byte(auSize>>5), byte(auSize<<3)) // size in bits
+		i += int(auSize)
+	}
+	hdrSize := uint16(len(header) - 2)
+	binary.BigEndian.PutUint16(header, hdrSize<<3) // size in bits
+	return append(header, b...)
+}
+
+func RTPToCodec(b []byte) *core.Codec {
+	hdrSize := binary.BigEndian.Uint16(b) / 8
+	return ADTSToCodec(b[2+hdrSize:])
 }

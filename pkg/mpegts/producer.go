@@ -2,6 +2,7 @@ package mpegts
 
 import (
 	"encoding/json"
+
 	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
@@ -15,11 +16,14 @@ func (c *Client) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver,
 			return track, nil
 		}
 	}
-	return nil, core.ErrCantGetTrack
+	track := core.NewReceiver(media, codec)
+	track.ID = StreamType(codec)
+	c.receivers = append(c.receivers, track)
+	return track, nil
 }
 
 func (c *Client) Start() error {
-	return c.Handle()
+	return c.play()
 }
 
 func (c *Client) Stop() error {
@@ -32,7 +36,7 @@ func (c *Client) Stop() error {
 func (c *Client) MarshalJSON() ([]byte, error) {
 	info := &core.Info{
 		Type:      "MPEG-TS active producer",
-		URL:       c.res.Request.URL.String(),
+		URL:       c.URL,
 		Medias:    c.medias,
 		Receivers: c.receivers,
 		Recv:      c.recv,

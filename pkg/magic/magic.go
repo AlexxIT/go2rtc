@@ -33,7 +33,7 @@ func Open(r io.Reader) (core.Producer, error) {
 		return flv.Open(rd)
 
 	case b[0] == mpegts.SyncByte:
-		break // TODO
+		return mpegts.Open(rd)
 	}
 
 	return nil, errors.New("magic: unsupported header: " + hex.EncodeToString(b))
