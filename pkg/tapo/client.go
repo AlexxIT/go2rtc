@@ -8,14 +8,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/mpegts"
-	"github.com/AlexxIT/go2rtc/pkg/tcp"
+	"io"
 	"mime/multipart"
 	"net"
 	"net/http"
 	"net/url"
 	"strconv"
+
+	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/mpegts"
+	"github.com/AlexxIT/go2rtc/pkg/tcp"
 )
 
 type Client struct {
@@ -143,11 +145,11 @@ func (c *Client) SetupStream() (err error) {
 
 // Handle - first run will be in probe state
 func (c *Client) Handle() error {
-	mpReader := multipart.NewReader(c.conn1, "--device-stream-boundary--")
-	tsReader := mpegts.NewReader()
+	multipartRd := multipart.NewReader(c.conn1, "--device-stream-boundary--")
+	mpegtsRd := mpegts.NewReader()
 
 	for {
-		p, err := mpReader.NextRawPart()
+		p, err := multipartRd.NextRawPart()
 		if err != nil {
 			return err
 		}
@@ -176,12 +178,15 @@ func (c *Client) Handle() error {
 		}
 
 		body = c.decrypt(body)
-		tsReader.SetBuffer(body)
+		bytesRd := bytes.NewReader(body)
 
 		for {
-			pkt := tsReader.GetPacket()
-			if pkt == nil {
+			pkt, err2 := mpegtsRd.ReadPacket(bytesRd)
+			if pkt == nil || err2 == io.EOF {
 				break
+			}
+			if err2 != nil {
+				return err2
 			}
 
 			for _, receiver := range c.receivers {

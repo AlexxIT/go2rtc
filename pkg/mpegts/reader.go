@@ -295,18 +295,3 @@ func (r *Reader) left() byte {
 func (r *Reader) setSize(size byte) {
 	r.end = r.pos + size
 }
-
-// Deprecated:
-func (r *Reader) SetBuffer(b []byte) {
-
-}
-
-// Deprecated:
-func (r *Reader) GetPacket() *rtp.Packet {
-	panic("")
-}
-
-// Deprecated:
-func (r *Reader) AppendBuffer(sniff []byte) {
-
-}
