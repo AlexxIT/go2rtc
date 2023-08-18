@@ -1,5 +1,7 @@
 package mpegts
 
+// have to create this table manually because it is in another endian
+// https://github.com/arturvt/TSreader/blob/master/src/br/ufpe/cin/tool/mpegts/CRC32.java
 var table = [256]uint32{
 	0x00000000, 0xB71DC104, 0x6E3B8209, 0xD926430D, 0xDC760413, 0x6B6BC517,
 	0xB24D861A, 0x0550471E, 0xB8ED0826, 0x0FF0C922, 0xD6D68A2F, 0x61CB4B2B,
@@ -46,7 +48,8 @@ var table = [256]uint32{
 	0x6D66B4BC, 0xDA7B75B8, 0x035D36B5, 0xB440F7B1,
 }
 
-func calcCRC32(crc uint32, data []byte) uint32 {
+func checksum(data []byte) uint32 {
+	crc := uint32(0xFFFFFFFF)
 	for _, b := range data {
 		crc = table[b^byte(crc)] ^ (crc >> 8)
 	}

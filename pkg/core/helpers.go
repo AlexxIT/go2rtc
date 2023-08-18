@@ -6,8 +6,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -77,7 +75,6 @@ func Assert(ok bool) {
 }
 
 func Caller() string {
-	log.Error().Caller(0).Send()
 	_, file, line, _ := runtime.Caller(1)
 	return file + ":" + strconv.Itoa(line)
 }

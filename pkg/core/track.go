@@ -10,6 +10,13 @@ import (
 	"github.com/pion/rtp"
 )
 
+type Packet struct {
+	PayloadType uint8
+	Sequence    uint16
+	Timestamp   uint32
+	Payload     []byte
+}
+
 var ErrCantGetTrack = errors.New("can't get track")
 
 type Receiver struct {

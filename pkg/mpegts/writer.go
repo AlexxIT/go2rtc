@@ -44,7 +44,7 @@ func (w *Writer) MarkChecksum() {
 }
 
 func (w *Writer) WriteChecksum() {
-	crc := calcCRC32(0xFFFFFFFF, w.b[w.m:])
+	crc := checksum(w.b[w.m:])
 	w.b = append(w.b, byte(crc), byte(crc>>8), byte(crc>>16), byte(crc>>24))
 }
 
