@@ -50,6 +50,7 @@ func NewClient(res *http.Response) (*Client, error) {
 	c := &Client{
 		boundary: boundary,
 		reader:   bufio.NewReader(res.Body),
+		res:      res,
 	}
 
 	if err := c.probe(); err != nil {
