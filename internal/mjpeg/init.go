@@ -80,8 +80,6 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-const header = "--frame\r\nContent-Type: image/jpeg\r\nContent-Length: "
-
 func handlerStream(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		outputMjpeg(w, r)
@@ -98,26 +96,10 @@ func outputMjpeg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	flusher := w.(http.Flusher)
-
 	cons := &mjpeg.Consumer{
 		RemoteAddr: tcp.RemoteAddr(r),
 		UserAgent:  r.UserAgent(),
 	}
-	cons.Listen(func(msg any) {
-		switch msg := msg.(type) {
-		case []byte:
-			data := []byte(header + strconv.Itoa(len(msg)))
-			data = append(data, '\r', '\n', '\r', '\n')
-			data = append(data, msg...)
-			data = append(data, '\r', '\n')
-
-			// Chrome bug: mjpeg image always shows the second to last image
-			// https://bugs.chromium.org/p/chromium/issues/detail?id=527446
-			_, _ = w.Write(data)
-			flusher.Flush()
-		}
-	})
 
 	if err := stream.AddConsumer(cons); err != nil {
 		log.Error().Err(err).Msg("[api.mjpeg] add consumer")
@@ -130,11 +112,33 @@ func outputMjpeg(w http.ResponseWriter, r *http.Request) {
 	h.Set("Connection", "close")
 	h.Set("Pragma", "no-cache")
 
-	<-r.Context().Done()
+	wr := &writer{wr: w, buf: []byte(header)}
+	_, _ = cons.WriteTo(wr)
 
 	stream.RemoveConsumer(cons)
+}
 
-	//log.Trace().Msg("[api.mjpeg] close")
+const header = "--frame\r\nContent-Type: image/jpeg\r\nContent-Length: "
+
+type writer struct {
+	wr  io.Writer
+	buf []byte
+}
+
+func (w *writer) Write(p []byte) (n int, err error) {
+	w.buf = w.buf[:len(header)]
+	w.buf = append(w.buf, strconv.Itoa(len(p))...)
+	w.buf = append(w.buf, "\r\n\r\n"...)
+	w.buf = append(w.buf, p...)
+	w.buf = append(w.buf, "\r\n"...)
+
+	// Chrome bug: mjpeg image always shows the second to last image
+	// https://bugs.chromium.org/p/chromium/issues/detail?id=527446
+	if n, err = w.wr.Write(w.buf); err == nil {
+		w.wr.(http.Flusher).Flush()
+	}
+
+	return
 }
 
 func inputMjpeg(w http.ResponseWriter, r *http.Request) {
@@ -168,11 +172,6 @@ func handlerWS(tr *ws.Transport, _ *ws.Message) error {
 		RemoteAddr: tcp.RemoteAddr(tr.Request),
 		UserAgent:  tr.Request.UserAgent(),
 	}
-	cons.Listen(func(msg any) {
-		if data, ok := msg.([]byte); ok {
-			tr.Write(data)
-		}
-	})
 
 	if err := stream.AddConsumer(cons); err != nil {
 		log.Error().Err(err).Caller().Send()
@@ -181,9 +180,21 @@ func handlerWS(tr *ws.Transport, _ *ws.Message) error {
 
 	tr.Write(&ws.Message{Type: "mjpeg"})
 
+	wr := &writer2{tr: tr} // TODO: fixme
+	go cons.WriteTo(wr)
+
 	tr.OnClose(func() {
 		stream.RemoveConsumer(cons)
 	})
 
 	return nil
+}
+
+type writer2 struct {
+	tr *ws.Transport
+}
+
+func (w *writer2) Write(p []byte) (n int, err error) {
+	w.tr.Write(p)
+	return len(p), nil
 }

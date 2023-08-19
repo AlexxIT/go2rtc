@@ -2,18 +2,20 @@ package mjpeg
 
 import (
 	"encoding/json"
+	"io"
+
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/pion/rtp"
 )
 
 type Consumer struct {
-	core.Listener
-
 	UserAgent  string
 	RemoteAddr string
 
 	medias []*core.Media
 	sender *core.Sender
+
+	wr *core.WriteBuffer
 
 	send int
 }
@@ -34,11 +36,16 @@ func (c *Consumer) GetMedias() []*core.Media {
 }
 
 func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver) error {
+	if c.wr == nil {
+		c.wr = core.NewWriteBuffer(nil)
+	}
+
 	if c.sender == nil {
 		c.sender = core.NewSender(media, track.Codec)
 		c.sender.Handler = func(packet *rtp.Packet) {
-			c.Fire(packet.Payload)
-			c.send += len(packet.Payload)
+			if n, err := c.wr.Write(packet.Payload); err == nil {
+				c.send += n
+			}
 		}
 
 		if track.Codec.IsRTP() {
@@ -50,9 +57,16 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 	return nil
 }
 
+func (c *Consumer) WriteTo(wr io.Writer) (int64, error) {
+	return c.wr.WriteTo(wr)
+}
+
 func (c *Consumer) Stop() error {
 	if c.sender != nil {
 		c.sender.Close()
+	}
+	if c.wr != nil {
+		_ = c.wr.Close()
 	}
 	return nil
 }
