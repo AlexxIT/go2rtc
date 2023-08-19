@@ -12,7 +12,7 @@ func TestReadSeeker(t *testing.T) {
 	b := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 	buf := bytes.NewReader(b)
 
-	rd := NewReadSeeker(buf)
+	rd := NewReadBuffer(buf)
 	rd.BufferSize = ProbeSize
 
 	// 1. Read to buffer

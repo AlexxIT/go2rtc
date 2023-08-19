@@ -12,13 +12,13 @@ const (
 	BufferDrainAndClear = -1
 )
 
-// ReadSeeker support buffering and Seek over buffer
+// ReadBuffer support buffering and Seek over buffer
 // positive BufferSize will enable buffering mode
 // Seek to negative offset will clear buffer
 // Seek with a positive BufferSize will continue buffering after the last read from the buffer
 // Seek with a negative BufferSize will clear buffer after the last read from the buffer
 // Read more than BufferSize will raise error
-type ReadSeeker struct {
+type ReadBuffer struct {
 	io.Reader
 
 	BufferSize int
@@ -27,14 +27,14 @@ type ReadSeeker struct {
 	pos int
 }
 
-func NewReadSeeker(rd io.Reader) *ReadSeeker {
-	if rs, ok := rd.(*ReadSeeker); ok {
+func NewReadBuffer(rd io.Reader) *ReadBuffer {
+	if rs, ok := rd.(*ReadBuffer); ok {
 		return rs
 	}
-	return &ReadSeeker{Reader: rd}
+	return &ReadBuffer{Reader: rd}
 }
 
-func (r *ReadSeeker) Read(p []byte) (n int, err error) {
+func (r *ReadBuffer) Read(p []byte) (n int, err error) {
 	// with zero buffer - read as usual
 	if r.BufferSize == BufferDisable {
 		return r.Reader.Read(p)
@@ -65,7 +65,14 @@ func (r *ReadSeeker) Read(p []byte) (n int, err error) {
 	return
 }
 
-func (r *ReadSeeker) Seek(offset int64, whence int) (int64, error) {
+func (r *ReadBuffer) Close() error {
+	if closer, ok := r.Reader.(io.Closer); ok {
+		return closer.Close()
+	}
+	return nil
+}
+
+func (r *ReadBuffer) Seek(offset int64, whence int) (int64, error) {
 	var pos int
 	switch whence {
 	case io.SeekStart:
@@ -89,17 +96,17 @@ func (r *ReadSeeker) Seek(offset int64, whence int) (int64, error) {
 	return int64(r.pos), nil
 }
 
-func (r *ReadSeeker) Peek(n int) ([]byte, error) {
+func (r *ReadBuffer) Peek(n int) ([]byte, error) {
 	r.BufferSize = n
 	b := make([]byte, n)
 	if _, err := io.ReadAtLeast(r, b, n); err != nil {
 		return nil, err
 	}
-	r.Rewind()
+	r.Reset()
 	return b, nil
 }
 
-func (r *ReadSeeker) Rewind() {
+func (r *ReadBuffer) Reset() {
 	r.BufferSize = BufferDrainAndClear
 	r.pos = 0
 }

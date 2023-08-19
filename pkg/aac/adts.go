@@ -40,7 +40,7 @@ func ADTSToCodec(b []byte) *core.Codec {
 	//_ = rd.ReadBits(16) // CRC check
 
 	// 3. Encode RTP config
-	wr := bits.NewWriter()
+	wr := bits.NewWriter(nil)
 	wr.WriteBits8(objType, 5)
 	wr.WriteBits8(sampleRateIdx, 4)
 	wr.WriteBits16(channels, 4)

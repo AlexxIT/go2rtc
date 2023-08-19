@@ -18,7 +18,7 @@ const Signature = "FLV"
 type Client struct {
 	URL string
 
-	rd *core.ReadSeeker
+	rd *core.ReadBuffer
 
 	medias    []*core.Media
 	receivers []*core.Receiver
@@ -30,7 +30,7 @@ type Client struct {
 
 func Open(rd io.Reader) (*Client, error) {
 	client := &Client{
-		rd: core.NewReadSeeker(rd),
+		rd: core.NewReadBuffer(rd),
 	}
 	if err := client.describe(); err != nil {
 		return nil, err
@@ -53,7 +53,7 @@ func (c *Client) describe() error {
 	}
 
 	c.rd.BufferSize = core.ProbeSize
-	defer c.rd.Rewind()
+	defer c.rd.Reset()
 
 	// Normal software sends:
 	// 1. Video/audio flag in header

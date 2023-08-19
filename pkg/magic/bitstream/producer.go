@@ -2,7 +2,6 @@ package bitstream
 
 import (
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"io"
 
@@ -13,17 +12,13 @@ import (
 	"github.com/pion/rtp"
 )
 
-type Client struct {
-	rd *core.ReadSeeker
-
-	media    *core.Media
-	receiver *core.Receiver
-
-	recv int
+type Producer struct {
+	core.SuperProducer
+	rd *core.ReadBuffer
 }
 
-func Open(r io.Reader) (*Client, error) {
-	rd := core.NewReadSeeker(r)
+func Open(r io.Reader) (*Producer, error) {
+	rd := core.NewReadBuffer(r)
 
 	buf, err := rd.Peek(256)
 	if err != nil {
@@ -43,30 +38,19 @@ func Open(r io.Reader) (*Client, error) {
 		return nil, errors.New("bitstream: unsupported header: " + hex.EncodeToString(buf[:8]))
 	}
 
-	client := &Client{
-		rd: rd,
-		media: &core.Media{
+	prod := &Producer{rd: rd}
+	prod.Type = "Bitstream producer"
+	prod.Medias = []*core.Media{
+		{
 			Kind:      core.KindVideo,
 			Direction: core.DirectionRecvonly,
 			Codecs:    []*core.Codec{codec},
 		},
 	}
-
-	return client, nil
+	return prod, nil
 }
 
-func (c *Client) GetMedias() []*core.Media {
-	return []*core.Media{c.media}
-}
-
-func (c *Client) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
-	if c.receiver == nil {
-		c.receiver = core.NewReceiver(media, codec)
-	}
-	return c.receiver, nil
-}
-
-func (c *Client) Start() error {
+func (c *Producer) Start() error {
 	var buf []byte
 
 	b := make([]byte, core.BufferSize)
@@ -76,7 +60,7 @@ func (c *Client) Start() error {
 			return err
 		}
 
-		c.recv += n
+		c.Recv += n
 
 		buf = append(buf, b[:n]...)
 
@@ -89,7 +73,7 @@ func (c *Client) Start() error {
 			Header:  rtp.Header{Timestamp: core.Now90000()},
 			Payload: annexb.EncodeToAVCC(buf[:i], true),
 		}
-		c.receiver.WriteRTP(pkt)
+		c.Receivers[0].WriteRTP(pkt)
 
 		//log.Printf("[AVC] %v, len: %d", h264.Types(pkt.Payload), len(pkt.Payload))
 
@@ -97,22 +81,7 @@ func (c *Client) Start() error {
 	}
 }
 
-func (c *Client) Stop() error {
-	if c.receiver != nil {
-		c.receiver.Close()
-	}
-	if closer, ok := c.rd.Reader.(io.Closer); ok {
-		return closer.Close()
-	}
-	return nil
-}
-
-func (c *Client) MarshalJSON() ([]byte, error) {
-	info := &core.Info{
-		Type:      "Bitstream active producer",
-		Medias:    []*core.Media{c.media},
-		Receivers: []*core.Receiver{c.receiver},
-		Recv:      c.recv,
-	}
-	return json.Marshal(info)
+func (c *Producer) Stop() error {
+	_ = c.SuperProducer.Close()
+	return c.rd.Close()
 }

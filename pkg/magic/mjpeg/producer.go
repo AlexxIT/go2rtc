@@ -2,26 +2,22 @@ package mjpeg
 
 import (
 	"bytes"
-	"encoding/json"
 	"io"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/pion/rtp"
 )
 
-type Client struct {
-	rd *core.ReadSeeker
-
-	media    *core.Media
-	receiver *core.Receiver
-
-	recv int
+type Producer struct {
+	core.SuperProducer
+	rd *core.ReadBuffer
 }
 
-func NewClient(rd io.Reader) *Client {
-	return &Client{
-		rd: core.NewReadSeeker(rd),
-		media: &core.Media{
+func Open(rd io.Reader) (*Producer, error) {
+	prod := &Producer{rd: core.NewReadBuffer(rd)}
+	prod.Type = "MJPEG producer"
+	prod.Medias = []*core.Media{
+		{
 			Kind:      core.KindVideo,
 			Direction: core.DirectionRecvonly,
 			Codecs: []*core.Codec{
@@ -33,20 +29,10 @@ func NewClient(rd io.Reader) *Client {
 			},
 		},
 	}
+	return prod, nil
 }
 
-func (c *Client) GetMedias() []*core.Media {
-	return []*core.Media{c.media}
-}
-
-func (c *Client) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
-	if c.receiver == nil {
-		c.receiver = core.NewReceiver(media, codec)
-	}
-	return c.receiver, nil
-}
-
-func (c *Client) Start() error {
+func (c *Producer) Start() error {
 	var buf []byte                     // total bufer
 	b := make([]byte, core.BufferSize) // reading buffer
 
@@ -59,7 +45,7 @@ func (c *Client) Start() error {
 				return err
 			}
 
-			c.recv += n
+			c.Recv += n
 
 			buf = append(buf, b[:n]...)
 
@@ -77,7 +63,7 @@ func (c *Client) Start() error {
 			Header:  rtp.Header{Timestamp: core.Now90000()},
 			Payload: buf[:i],
 		}
-		c.receiver.WriteRTP(pkt)
+		c.Receivers[0].WriteRTP(pkt)
 
 		//log.Printf("[mjpeg] ts=%d size=%d", pkt.Header.Timestamp, len(pkt.Payload))
 
@@ -85,22 +71,7 @@ func (c *Client) Start() error {
 	}
 }
 
-func (c *Client) Stop() error {
-	if c.receiver != nil {
-		c.receiver.Close()
-	}
-	if closer, ok := c.rd.Reader.(io.Closer); ok {
-		return closer.Close()
-	}
-	return nil
-}
-
-func (c *Client) MarshalJSON() ([]byte, error) {
-	info := &core.Info{
-		Type:      "MJPEG active producer",
-		Medias:    []*core.Media{c.media},
-		Receivers: []*core.Receiver{c.receiver},
-		Recv:      c.recv,
-	}
-	return json.Marshal(info)
+func (c *Producer) Stop() error {
+	_ = c.SuperProducer.Close()
+	return c.rd.Close()
 }

@@ -43,7 +43,7 @@ func (k *Keyframe) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 			if !h264.IsKeyframe(packet.Payload) {
 				return
 			}
-			b := annexb.DecodeAVCC(packet.Payload)
+			b := annexb.DecodeAVCC(packet.Payload, true)
 			k.Fire(b)
 		}
 

@@ -47,7 +47,10 @@ type Producer interface {
 	// GetTrack - return Receiver, that can only produce rtp.Packet(s)
 	GetTrack(media *Media, codec *Codec) (*Receiver, error)
 
+	// Deprecated: rename to Run()
 	Start() error
+
+	// Deprecated: rename to Close()
 	Stop() error
 }
 
@@ -59,6 +62,7 @@ type Consumer interface {
 
 	AddTrack(media *Media, codec *Codec, track *Receiver) error
 
+	// Deprecated: rename to Close()
 	Stop() error
 }
 
@@ -102,3 +106,60 @@ const (
 	UnsupportedCodec    = "unsupported codec"
 	WrongMediaDirection = "wrong media direction"
 )
+
+type SuperProducer struct {
+	Type      string      `json:"type,omitempty"`
+	URL       string      `json:"url,omitempty"`
+	Medias    []*Media    `json:"medias,omitempty"`
+	Receivers []*Receiver `json:"receivers,omitempty"`
+	Recv      int         `json:"recv,omitempty"`
+}
+
+func (s *SuperProducer) GetMedias() []*Media {
+	return s.Medias
+}
+
+func (s *SuperProducer) GetTrack(media *Media, codec *Codec) (*Receiver, error) {
+	for _, receiver := range s.Receivers {
+		if receiver.Codec == codec {
+			return receiver, nil
+		}
+	}
+	receiver := NewReceiver(media, codec)
+	s.Receivers = append(s.Receivers, receiver)
+	return receiver, nil
+}
+
+func (s *SuperProducer) Close() error {
+	for _, receiver := range s.Receivers {
+		receiver.Close()
+	}
+	return nil
+}
+
+type SuperConsumer struct {
+	Type    string    `json:"type,omitempty"`
+	URL     string    `json:"url,omitempty"`
+	Medias  []*Media  `json:"medias,omitempty"`
+	Senders []*Sender `json:"receivers,omitempty"`
+	Send    int       `json:"recv,omitempty"`
+}
+
+func (s *SuperConsumer) GetMedias() []*Media {
+	return s.Medias
+}
+
+func (s *SuperConsumer) AddTrack(media *Media, codec *Codec, track *Receiver) error {
+	return nil
+}
+
+//func (b *SuperConsumer) WriteTo(w io.Writer) (n int64, err error) {
+//	return 0, nil
+//}
+
+func (s *SuperConsumer) Close() error {
+	for _, sender := range s.Senders {
+		sender.Close()
+	}
+	return nil
+}

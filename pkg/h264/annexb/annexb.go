@@ -70,8 +70,10 @@ func EncodeToAVCC(b []byte, safeAppend bool) []byte {
 	return b
 }
 
-func DecodeAVCC(b []byte) []byte {
-	b = bytes.Clone(b)
+func DecodeAVCC(b []byte, safeClone bool) []byte {
+	if safeClone {
+		b = bytes.Clone(b)
+	}
 	for i := 0; i < len(b); {
 		size := int(binary.BigEndian.Uint32(b[i:]))
 		b[i] = 0

@@ -15,7 +15,7 @@ import (
 )
 
 func Open(r io.Reader) (core.Producer, error) {
-	rd := core.NewReadSeeker(r)
+	rd := core.NewReadBuffer(r)
 
 	b, err := rd.Peek(4)
 	if err != nil {
@@ -27,7 +27,7 @@ func Open(r io.Reader) (core.Producer, error) {
 		return bitstream.Open(rd)
 
 	case bytes.HasPrefix(b, []byte{0xFF, 0xD8}):
-		return mjpeg.NewClient(rd), nil
+		return mjpeg.Open(rd)
 
 	case bytes.HasPrefix(b, []byte(flv.Signature)):
 		return flv.Open(rd)
