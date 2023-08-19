@@ -53,3 +53,20 @@ func ConfigToCodec(conf []byte) *core.Codec {
 
 	return codec
 }
+
+func DecodeConfig(b []byte) (objType, sampleFreqIdx, channels byte, sampleRate uint32) {
+	rd := bits.NewReader(b)
+
+	objType = rd.ReadBits8(5)
+	if objType == 0b11111 {
+		objType = 32 + rd.ReadBits8(6)
+	}
+
+	sampleFreqIdx = rd.ReadBits8(4)
+	if sampleFreqIdx == 0b1111 {
+		sampleRate = rd.ReadBits(24)
+	}
+
+	channels = rd.ReadBits8(4)
+	return
+}

@@ -1,0 +1,113 @@
+package mpegts
+
+import (
+	"io"
+
+	"github.com/AlexxIT/go2rtc/pkg/aac"
+	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/h264"
+	"github.com/AlexxIT/go2rtc/pkg/h265"
+	"github.com/pion/rtp"
+)
+
+type Consumer struct {
+	core.SuperConsumer
+	muxer *Muxer
+	wr    *core.WriteBuffer
+}
+
+func NewConsumer() *Consumer {
+	c := &Consumer{
+		muxer: NewMuxer(),
+		wr:    core.NewWriteBuffer(nil),
+	}
+	c.Medias = []*core.Media{
+		{
+			Kind:      core.KindVideo,
+			Direction: core.DirectionSendonly,
+			Codecs: []*core.Codec{
+				{Name: core.CodecH264},
+				{Name: core.CodecH265},
+			},
+		},
+		{
+			Kind:      core.KindAudio,
+			Direction: core.DirectionSendonly,
+			Codecs: []*core.Codec{
+				{Name: core.CodecAAC},
+			},
+		},
+	}
+	return c
+}
+
+func (c *Consumer) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
+	sender := core.NewSender(media, track.Codec)
+
+	switch track.Codec.Name {
+	case core.CodecH264:
+		pid := c.muxer.AddTrack(StreamTypeH264)
+
+		sender.Handler = func(pkt *rtp.Packet) {
+			b := c.muxer.GetPayload(pid, pkt.Timestamp, pkt.Payload)
+			if n, err := c.wr.Write(b); err == nil {
+				c.Send += n
+			}
+		}
+
+		if track.Codec.IsRTP() {
+			sender.Handler = h264.RTPDepay(track.Codec, sender.Handler)
+		} else {
+			sender.Handler = h264.RepairAVCC(track.Codec, sender.Handler)
+		}
+
+	case core.CodecH265:
+		pid := c.muxer.AddTrack(StreamTypeH265)
+
+		sender.Handler = func(pkt *rtp.Packet) {
+			b := c.muxer.GetPayload(pid, pkt.Timestamp, pkt.Payload)
+			if n, err := c.wr.Write(b); err == nil {
+				c.Send += n
+			}
+		}
+
+		if track.Codec.IsRTP() {
+			sender.Handler = h265.RTPDepay(track.Codec, sender.Handler)
+		}
+
+	case core.CodecAAC:
+		pid := c.muxer.AddTrack(StreamTypeAAC)
+
+		sender.Handler = func(pkt *rtp.Packet) {
+			pts := pkt.Timestamp * 90000 / track.Codec.ClockRate
+			b := c.muxer.GetPayload(pid, pts, pkt.Payload)
+			if n, err := c.wr.Write(b); err == nil {
+				c.Send += n
+			}
+		}
+
+		if track.Codec.IsRTP() {
+			sender.Handler = aac.RTPToADTS(track.Codec, sender.Handler)
+		} else {
+			panic("todo")
+		}
+	}
+
+	sender.HandleRTP(track)
+	c.Senders = append(c.Senders, sender)
+	return nil
+}
+
+func (c *Consumer) WriteTo(wr io.Writer) (int64, error) {
+	b := c.muxer.GetHeader()
+	if _, err := wr.Write(b); err != nil {
+		return 0, err
+	}
+
+	return c.wr.WriteTo(wr)
+}
+
+func (c *Consumer) Close() error {
+	_ = c.SuperConsumer.Close()
+	return c.wr.Close()
+}

@@ -145,11 +145,11 @@ func (c *Client) SetupStream() (err error) {
 
 // Handle - first run will be in probe state
 func (c *Client) Handle() error {
-	multipartRd := multipart.NewReader(c.conn1, "--device-stream-boundary--")
-	mpegtsRd := mpegts.NewReader()
+	rd := multipart.NewReader(c.conn1, "--device-stream-boundary--")
+	demux := mpegts.NewDemuxer()
 
 	for {
-		p, err := multipartRd.NextRawPart()
+		p, err := rd.NextRawPart()
 		if err != nil {
 			return err
 		}
@@ -181,7 +181,7 @@ func (c *Client) Handle() error {
 		bytesRd := bytes.NewReader(body)
 
 		for {
-			pkt, err2 := mpegtsRd.ReadPacket(bytesRd)
+			pkt, err2 := demux.ReadPacket(bytesRd)
 			if pkt == nil || err2 == io.EOF {
 				break
 			}

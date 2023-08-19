@@ -12,7 +12,6 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/mp4"
-	"github.com/AlexxIT/go2rtc/pkg/mpegts"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/rs/zerolog"
 )
@@ -79,10 +78,10 @@ func handlerStream(w http.ResponseWriter, r *http.Request) {
 			Medias:     medias,
 		}
 	} else {
-		cons = &mpegts.Consumer{
-			RemoteAddr: tcp.RemoteAddr(r),
-			UserAgent:  r.UserAgent(),
-		}
+		//cons = &mpegts.Consumer{
+		//	RemoteAddr: tcp.RemoteAddr(r),
+		//	UserAgent:  r.UserAgent(),
+		//}
 	}
 
 	if err := stream.AddConsumer(cons); err != nil {

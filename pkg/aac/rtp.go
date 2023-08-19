@@ -77,16 +77,55 @@ func RTPPay(handler core.HandlerFunc) core.HandlerFunc {
 	}
 }
 
-func ADTStoRTP(b []byte) []byte {
-	header := make([]byte, 2)
-	for i := 0; i < len(b); {
-		auSize := ReadADTSSize(b[i:])
-		header = append(header, byte(auSize>>5), byte(auSize<<3)) // size in bits
+func ADTStoRTP(src []byte) (dst []byte) {
+	dst = make([]byte, 2) // header bytes
+	for i := 0; i < len(src); {
+		auSize := ReadADTSSize(src[i:])
+		dst = append(dst, byte(auSize>>5), byte(auSize<<3)) // size in bits
 		i += int(auSize)
 	}
-	hdrSize := uint16(len(header) - 2)
-	binary.BigEndian.PutUint16(header, hdrSize<<3) // size in bits
-	return append(header, b...)
+	hdrSize := uint16(len(dst) - 2)
+	binary.BigEndian.PutUint16(dst, hdrSize<<3) // size in bits
+	return append(dst, src...)
+}
+
+func RTPTimeSize(b []byte) uint32 {
+	// convert RTP header size to units count
+	units := binary.BigEndian.Uint16(b) >> 4
+	return 1024 * uint32(units)
+}
+
+func RTPToADTS(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
+	adts := CodecToADTS(codec)
+
+	return func(packet *rtp.Packet) {
+		src := packet.Payload
+		dst := make([]byte, 0, len(src))
+
+		headersSize := binary.BigEndian.Uint16(src) >> 3
+		headers := src[2 : 2+headersSize]
+		units := src[2+headersSize:]
+
+		for len(headers) > 0 {
+			unitSize := binary.BigEndian.Uint16(headers) >> 3
+			headers = headers[2:]
+			unit := units[:unitSize]
+			units = units[unitSize:]
+
+			if !IsADTS(unit) {
+				i := len(dst)
+				dst = append(dst, adts...)
+				WriteADTSSize(dst[i:], ADTSHeaderSize+uint16(len(unit)))
+			}
+
+			dst = append(dst, unit...)
+		}
+
+		clone := *packet
+		clone.Version = RTPPacketVersionAAC
+		clone.Payload = dst
+		handler(&clone)
+	}
 }
 
 func RTPToCodec(b []byte) *core.Codec {
