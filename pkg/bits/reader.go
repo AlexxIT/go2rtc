@@ -89,6 +89,25 @@ func (r *Reader) ReadBits64(n byte) (res uint64) {
 	return
 }
 
+func (r *Reader) ReadBytes(n int) (b []byte) {
+	if r.bits == 0 {
+		if r.pos+n > len(r.buf) {
+			r.EOF = true
+			return nil
+		}
+
+		b = r.buf[r.pos : r.pos+n]
+		r.pos += n
+	} else {
+		b = make([]byte, n)
+		for i := 0; i < n; i++ {
+			b[i] = r.ReadByte()
+		}
+	}
+
+	return
+}
+
 // ReadUEGolomb - ReadExponentialGolomb (unsigned)
 func (r *Reader) ReadUEGolomb() uint32 {
 	var size byte
