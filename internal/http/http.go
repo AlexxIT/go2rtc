@@ -56,7 +56,7 @@ func handleHTTP(url string) (core.Producer, error) {
 		return mjpeg.NewClient(res), nil
 
 	case ct == "multipart/x-mixed-replace":
-		return multipart.NewClient(res)
+		return multipart.Open(res.Body)
 
 	case ct == "application/vnd.apple.mpegurl" || ext == "m3u8":
 		return hls.OpenURL(req.URL, res.Body)
