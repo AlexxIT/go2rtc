@@ -12,6 +12,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/magic/bitstream"
 	"github.com/AlexxIT/go2rtc/pkg/magic/mjpeg"
 	"github.com/AlexxIT/go2rtc/pkg/mpegts"
+	"github.com/AlexxIT/go2rtc/pkg/multipart"
 )
 
 func Open(r io.Reader) (core.Producer, error) {
@@ -31,6 +32,9 @@ func Open(r io.Reader) (core.Producer, error) {
 
 	case bytes.HasPrefix(b, []byte(flv.Signature)):
 		return flv.Open(rd)
+
+	case bytes.HasPrefix(b, []byte("--")):
+		return multipart.Open(rd)
 
 	case b[0] == mpegts.SyncByte:
 		return mpegts.Open(rd)
