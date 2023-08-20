@@ -41,6 +41,7 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
   * [go2rtc: Docker](#go2rtc-docker)
   * [go2rtc: Home Assistant Add-on](#go2rtc-home-assistant-add-on)
   * [go2rtc: Home Assistant Integration](#go2rtc-home-assistant-integration)
+  * [go2rtc: Dev version](#go2rtc-dev-version)
 * [Configuration](#configuration)
   * [Module: Streams](#module-streams)
     * [Two way audio](#two-way-audio)
@@ -133,6 +134,14 @@ Container [alexxit/go2rtc](https://hub.docker.com/r/alexxit/go2rtc) with support
 ### go2rtc: Home Assistant Integration
 
 [WebRTC Camera](https://github.com/AlexxIT/WebRTC) custom component can be used on any [Home Assistant installation](https://www.home-assistant.io/installation/), including [HassWP](https://github.com/AlexxIT/HassWP) on Windows. It can automatically download and use the latest version of go2rtc. Or it can connect to an existing version of go2rtc. Addon installation in this case is optional.
+
+### go2rtc: Dev version
+
+Latest, but maybe unstable version:
+
+- Binary: GitHub > [Actions](https://github.com/AlexxIT/go2rtc/actions) > [Build and Push](https://github.com/AlexxIT/go2rtc/actions/workflows/build.yml) > latest run > Artifacts section
+- Docker: `alexxit/go2rtc:master` or `alexxit/go2rtc:master-hardware` versions
+- Hass Add-on: `go2rtc master` or `go2rtc master hardware` versions
 
 ## Configuration
 
