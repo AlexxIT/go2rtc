@@ -78,6 +78,15 @@ func (r *reader) Read(dst []byte) (n int, err error) {
 	return
 }
 
+func (r *reader) Close() error {
+	r.client.Transport = r // after close we fail on next request
+	return nil
+}
+
+func (r *reader) RoundTrip(_ *http.Request) (*http.Response, error) {
+	return nil, io.EOF
+}
+
 func (r *reader) getSegment() ([]byte, error) {
 	for i := 0; i < 5; i++ {
 		if r.playlist == nil {
