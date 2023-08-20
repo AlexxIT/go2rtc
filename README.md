@@ -217,6 +217,7 @@ streams:
 
 - **Amcrest Doorbell** users may want to disable two way audio, because with an active stream you won't have a call button working. You need to add `#backchannel=0` to the end of your RTSP link in YAML config file
 - **Dahua Doorbell** users may want to change backchannel [audio codec](https://github.com/AlexxIT/go2rtc/issues/52)
+- **Reolink** users may want NOT to use RTSP protocol at all, some camera models have a very awful unusable stream implementation
 - **Ubiquiti UniFi** users may want to disable HTTPS verification. Use `rtspx://` prefix instead of `rtsps://`. And don't use `?enableSrtp` [suffix](https://github.com/AlexxIT/go2rtc/issues/81)
 - **TP-Link Tapo** users may skip login and password, because go2rtc support login [without them](https://drmnsamoliu.github.io/video.html)
 - If your camera has two RTSP links - you can add both of them as sources. This is useful when streams has different codecs, as example AAC audio with main stream and PCMU/PCMA audio with second stream
@@ -1152,7 +1153,7 @@ streams:
 - [Dahua](https://www.dahuasecurity.com/) - reference implementation streaming protocols, a lot of settings, high stream quality, multiple streaming clients
 - [EZVIZ](https://www.ezviz.com/) - awful RTSP protocol realisation, many bugs in SDP
 - [Hikvision](https://www.hikvision.com/) - a lot of proprietary streaming technologies
-- [Reolink](https://reolink.com/) - some models has awful unusable RTSP realisation and not best HTTP-FLV alternative (I recommend that you contact Reolink support for new firmware), few settings
+- [Reolink](https://reolink.com/) - some models has awful unusable RTSP realisation and not best RTMP alternative (I recommend that you contact Reolink support for new firmware), few settings
 - [Sonoff](https://sonoff.tech/) - very low stream quality, no settings, not best protocol implementation
 - [TP-Link](https://www.tp-link.com/) - few streaming clients, packet loss?
 - Chinese cheap noname cameras, Wyze Cams, Xiaomi cameras with hacks (usual has `/live/ch00_1` in RTSP URL) - awful but usable RTSP protocol realisation, low stream quality, few settings, packet loss?
