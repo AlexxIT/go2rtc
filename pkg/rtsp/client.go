@@ -45,7 +45,7 @@ func (c *Conn) Dial() (err error) {
 	c.URL.User = nil
 
 	c.conn = conn
-	c.reader = bufio.NewReader(conn)
+	c.reader = bufio.NewReaderSize(conn, core.BufferSize)
 	c.session = ""
 	c.sequence = 0
 	c.state = StateConn
