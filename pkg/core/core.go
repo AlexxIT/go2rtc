@@ -138,11 +138,13 @@ func (s *SuperProducer) Close() error {
 }
 
 type SuperConsumer struct {
-	Type    string    `json:"type,omitempty"`
-	URL     string    `json:"url,omitempty"`
-	Medias  []*Media  `json:"medias,omitempty"`
-	Senders []*Sender `json:"receivers,omitempty"`
-	Send    int       `json:"recv,omitempty"`
+	Type       string    `json:"type,omitempty"`
+	URL        string    `json:"url,omitempty"`
+	RemoteAddr string    `json:"remote_addr,omitempty"`
+	UserAgent  string    `json:"user_agent,omitempty"`
+	Medias     []*Media  `json:"medias,omitempty"`
+	Senders    []*Sender `json:"receivers,omitempty"`
+	Send       int       `json:"recv,omitempty"`
 }
 
 func (s *SuperConsumer) GetMedias() []*Media {
@@ -162,4 +164,12 @@ func (s *SuperConsumer) Close() error {
 		sender.Close()
 	}
 	return nil
+}
+
+func (s *SuperConsumer) Codecs() []*Codec {
+	codecs := make([]*Codec, len(s.Senders))
+	for i, sender := range s.Senders {
+		codecs[i] = sender.Codec
+	}
+	return codecs
 }

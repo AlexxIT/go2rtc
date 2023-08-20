@@ -45,17 +45,26 @@ func (m *Muxer) GetHeader() []byte {
 func (m *Muxer) GetPayload(pid uint16, pts uint32, payload []byte) []byte {
 	pes := m.pes[pid]
 
+	size := 8 + len(payload)
+
 	b := make([]byte, 14+len(payload))
 	_ = b[14] // bounds
+
 	b[0] = 0
 	b[1] = 0
 	b[2] = 1
 	b[3] = pes.StreamID
-	binary.BigEndian.PutUint16(b[4:], 8+uint16(len(payload)))
 	b[6] = 0x80 // Marker bits (binary)
 	b[7] = 0x80 // PTS indicator
 	b[8] = 5    // PES header length
+
+	// zero size is OK for video stream
+	if size <= 0xFFFF {
+		binary.BigEndian.PutUint16(b[4:], uint16(size))
+	}
+
 	WriteTime(b[9:], pts)
+
 	copy(b[14:], payload)
 
 	switch pes.StreamType {

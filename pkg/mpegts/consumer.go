@@ -107,7 +107,7 @@ func (c *Consumer) WriteTo(wr io.Writer) (int64, error) {
 	return c.wr.WriteTo(wr)
 }
 
-func (c *Consumer) Close() error {
+func (c *Consumer) Stop() error {
 	_ = c.SuperConsumer.Close()
 	return c.wr.Close()
 }

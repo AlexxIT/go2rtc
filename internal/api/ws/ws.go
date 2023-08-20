@@ -1,15 +1,17 @@
 package ws
 
 import (
-	"github.com/AlexxIT/go2rtc/internal/api"
-	"github.com/AlexxIT/go2rtc/internal/app"
-	"github.com/gorilla/websocket"
-	"github.com/rs/zerolog/log"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/AlexxIT/go2rtc/internal/api"
+	"github.com/AlexxIT/go2rtc/internal/app"
+	"github.com/gorilla/websocket"
+	"github.com/rs/zerolog/log"
 )
 
 func Init() {
@@ -101,13 +103,13 @@ func apiWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tr := &Transport{Request: r}
-	tr.OnWrite(func(msg any) {
+	tr.OnWrite(func(msg any) error {
 		_ = ws.SetWriteDeadline(time.Now().Add(time.Second * 5))
 
 		if data, ok := msg.([]byte); ok {
-			_ = ws.WriteMessage(websocket.BinaryMessage, data)
+			return ws.WriteMessage(websocket.BinaryMessage, data)
 		} else {
-			_ = ws.WriteJSON(msg)
+			return ws.WriteJSON(msg)
 		}
 	})
 
@@ -147,11 +149,11 @@ type Transport struct {
 	wrmx   sync.Mutex
 
 	onChange func()
-	onWrite  func(msg any)
+	onWrite  func(msg any) error
 	onClose  []func()
 }
 
-func (t *Transport) OnWrite(f func(msg any)) {
+func (t *Transport) OnWrite(f func(msg any) error) {
 	t.mx.Lock()
 	if t.onChange != nil {
 		t.onChange()
@@ -162,7 +164,7 @@ func (t *Transport) OnWrite(f func(msg any)) {
 
 func (t *Transport) Write(msg any) {
 	t.wrmx.Lock()
-	t.onWrite(msg)
+	_ = t.onWrite(msg)
 	t.wrmx.Unlock()
 }
 
@@ -199,4 +201,21 @@ func (t *Transport) WithContext(f func(ctx map[any]any)) {
 	}
 	f(t.ctx)
 	t.mx.Unlock()
+}
+
+func (t *Transport) Writer() io.Writer {
+	return &writer{t: t}
+}
+
+type writer struct {
+	t *Transport
+}
+
+func (w *writer) Write(p []byte) (n int, err error) {
+	w.t.wrmx.Lock()
+	if err = w.t.onWrite(p); err == nil {
+		n = len(p)
+	}
+	w.t.wrmx.Unlock()
+	return
 }

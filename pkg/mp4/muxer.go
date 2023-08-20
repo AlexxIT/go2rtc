@@ -12,55 +12,26 @@ import (
 )
 
 type Muxer struct {
-	fragIndex uint32
-	dts       []uint64
-	pts       []uint32
-	codecs    []*core.Codec
+	index  uint32
+	dts    []uint64
+	pts    []uint32
+	codecs []*core.Codec
 }
 
-const (
-	MimeH264 = "avc1.640029"
-	MimeH265 = "hvc1.1.6.L153.B0"
-	MimeAAC  = "mp4a.40.2"
-	MimeFlac = "flac"
-	MimeOpus = "opus"
-)
-
-func (m *Muxer) MimeCodecs(codecs []*core.Codec) string {
-	var s string
-
-	for i, codec := range codecs {
-		if i > 0 {
-			s += ","
-		}
-
-		switch codec.Name {
-		case core.CodecH264:
-			s += "avc1." + h264.GetProfileLevelID(codec.FmtpLine)
-		case core.CodecH265:
-			// H.265 profile=main level=5.1
-			// hvc1 - supported in Safari, hev1 - doesn't, both supported in Chrome
-			s += MimeH265
-		case core.CodecAAC:
-			s += MimeAAC
-		case core.CodecOpus:
-			s += MimeOpus
-		case core.CodecFLAC:
-			s += MimeFlac
-		}
-	}
-
-	return s
+func (m *Muxer) AddTrack(codec *core.Codec) {
+	m.dts = append(m.dts, 0)
+	m.pts = append(m.pts, 0)
+	m.codecs = append(m.codecs, codec)
 }
 
-func (m *Muxer) GetInit(codecs []*core.Codec) ([]byte, error) {
+func (m *Muxer) GetInit() ([]byte, error) {
 	mv := iso.NewMovie(1024)
 	mv.WriteFileType()
 
 	mv.StartAtom(iso.Moov)
 	mv.WriteMovieHeader()
 
-	for i, codec := range codecs {
+	for i, codec := range m.codecs {
 		switch codec.Name {
 		case core.CodecH264:
 			sps, pps := h264.GetParameterSet(codec.FmtpLine)
@@ -119,14 +90,10 @@ func (m *Muxer) GetInit(codecs []*core.Codec) ([]byte, error) {
 				uint32(i+1), codec.Name, codec.ClockRate, codec.Channels, nil,
 			)
 		}
-
-		m.dts = append(m.dts, 0)
-		m.pts = append(m.pts, 0)
-		m.codecs = append(m.codecs, codec)
 	}
 
 	mv.StartAtom(iso.MoovMvex)
-	for i := range codecs {
+	for i := range m.codecs {
 		mv.WriteTrackExtend(uint32(i + 1))
 	}
 	mv.EndAtom() // MVEX
@@ -137,17 +104,17 @@ func (m *Muxer) GetInit(codecs []*core.Codec) ([]byte, error) {
 }
 
 func (m *Muxer) Reset() {
-	m.fragIndex = 0
+	m.index = 0
 	for i := range m.dts {
 		m.dts[i] = 0
 		m.pts[i] = 0
 	}
 }
 
-func (m *Muxer) Marshal(trackID byte, packet *rtp.Packet) []byte {
+func (m *Muxer) GetPayload(trackID byte, packet *rtp.Packet) []byte {
 	codec := m.codecs[trackID]
 
-	m.fragIndex++
+	m.index++
 
 	duration := packet.Timestamp - m.pts[trackID]
 	m.pts[trackID] = packet.Timestamp
@@ -185,11 +152,11 @@ func (m *Muxer) Marshal(trackID byte, packet *rtp.Packet) []byte {
 
 	mv := iso.NewMovie(1024 + size)
 	mv.WriteMovieFragment(
-		m.fragIndex, uint32(trackID+1), duration, uint32(size), flags, m.dts[trackID],
+		m.index, uint32(trackID+1), duration, uint32(size), flags, m.dts[trackID],
 	)
 	mv.WriteData(packet.Payload)
 
-	//log.Printf("[MP4] track=%d ts=%6d dur=%5d idx=%3d len=%d", trackID+1, m.dts[trackID], duration, m.fragIndex, len(packet.Payload))
+	//log.Printf("[MP4] track=%d ts=%6d dur=%5d idx=%3d len=%d", trackID+1, m.dts[trackID], duration, m.index, len(packet.Payload))
 
 	m.dts[trackID] += uint64(duration)
 

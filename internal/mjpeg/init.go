@@ -180,21 +180,11 @@ func handlerWS(tr *ws.Transport, _ *ws.Message) error {
 
 	tr.Write(&ws.Message{Type: "mjpeg"})
 
-	wr := &writer2{tr: tr} // TODO: fixme
-	go cons.WriteTo(wr)
+	go cons.WriteTo(tr.Writer())
 
 	tr.OnClose(func() {
 		stream.RemoveConsumer(cons)
 	})
 
 	return nil
-}
-
-type writer2 struct {
-	tr *ws.Transport
-}
-
-func (w *writer2) Write(p []byte) (n int, err error) {
-	w.tr.Write(p)
-	return len(p), nil
 }
