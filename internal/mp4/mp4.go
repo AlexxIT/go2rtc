@@ -120,15 +120,6 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	defer stream.RemoveConsumer(cons)
-
-	header := w.Header()
-	header.Set("Content-Type", mp4.ContentType(cons.Codecs()))
-
-	if filename := query.Get("filename"); filename != "" {
-		header.Set("Content-Disposition", `attachment; filename="`+filename+`"`)
-	}
-
 	if rotate := query.Get("rotate"); rotate != "" {
 		cons.Rotate = core.Atoi(rotate)
 	}
@@ -138,6 +129,13 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 			cons.ScaleX = core.Atoi(sx)
 			cons.ScaleY = core.Atoi(sy)
 		}
+	}
+
+	header := w.Header()
+	header.Set("Content-Type", mp4.ContentType(cons.Codecs()))
+
+	if filename := query.Get("filename"); filename != "" {
+		header.Set("Content-Disposition", `attachment; filename="`+filename+`"`)
 	}
 
 	var duration *time.Timer
@@ -150,6 +148,8 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_, _ = cons.WriteTo(w)
+
+	stream.RemoveConsumer(cons)
 
 	if duration != nil {
 		duration.Stop()
