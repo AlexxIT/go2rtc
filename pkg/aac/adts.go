@@ -70,6 +70,16 @@ func WriteADTSSize(b []byte, size uint16) {
 	return
 }
 
+func ADTSTimeSize(b []byte) uint32 {
+	var units uint32
+	for len(b) > ADTSHeaderSize {
+		auSize := ReadADTSSize(b)
+		b = b[auSize:]
+		units++
+	}
+	return units * AUTime
+}
+
 func CodecToADTS(codec *core.Codec) []byte {
 	s := core.Between(codec.FmtpLine, "config=", ";")
 	conf, err := hex.DecodeString(s)

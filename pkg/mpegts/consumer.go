@@ -1,6 +1,7 @@
 package mpegts
 
 import (
+	"errors"
 	"io"
 
 	"github.com/AlexxIT/go2rtc/pkg/aac"
@@ -78,8 +79,11 @@ func (c *Consumer) AddTrack(media *core.Media, codec *core.Codec, track *core.Re
 	case core.CodecAAC:
 		pid := c.muxer.AddTrack(StreamTypeAAC)
 
+		// convert timestamp to 90000Hz clock
+		dt := 90000 / float64(track.Codec.ClockRate)
+
 		sender.Handler = func(pkt *rtp.Packet) {
-			pts := pkt.Timestamp * 90000 / track.Codec.ClockRate
+			pts := uint32(float64(pkt.Timestamp) * dt)
 			b := c.muxer.GetPayload(pid, pts, pkt.Payload)
 			if n, err := c.wr.Write(b); err == nil {
 				c.Send += n
@@ -89,7 +93,7 @@ func (c *Consumer) AddTrack(media *core.Media, codec *core.Codec, track *core.Re
 		if track.Codec.IsRTP() {
 			sender.Handler = aac.RTPToADTS(track.Codec, sender.Handler)
 		} else {
-			panic("todo")
+			return errors.New("mpegts: aac not supported")
 		}
 	}
 

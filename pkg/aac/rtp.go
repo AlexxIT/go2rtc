@@ -32,7 +32,7 @@ func RTPDepay(handler core.HandlerFunc) core.HandlerFunc {
 			headers = headers[2:]
 			units = units[unitSize:]
 
-			timestamp += 1024
+			timestamp += AUTime
 
 			clone := *packet
 			clone.Version = RTPPacketVersionAAC
@@ -92,7 +92,7 @@ func ADTStoRTP(src []byte) (dst []byte) {
 func RTPTimeSize(b []byte) uint32 {
 	// convert RTP header size to units count
 	units := binary.BigEndian.Uint16(b) >> 4
-	return 1024 * uint32(units)
+	return uint32(units) * AUTime
 }
 
 func RTPToADTS(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {

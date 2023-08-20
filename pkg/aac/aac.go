@@ -12,6 +12,8 @@ const (
 	TypeAACMain = 1
 	TypeAACLC   = 2
 	TypeESCAPE  = 31
+
+	AUTime = 1024
 )
 
 // streamtype=5 - audio stream

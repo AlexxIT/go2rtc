@@ -7,7 +7,8 @@ import (
 )
 
 const StartCode = "\x00\x00\x00\x01"
-const startAUD = StartCode + "\x09\xF0" + StartCode
+const startAUD = StartCode + "\x09\xF0"
+const startAUDstart = startAUD + StartCode
 
 // EncodeToAVCC
 // will change original slice data!
@@ -19,12 +20,12 @@ func EncodeToAVCC(b []byte, safeAppend bool) []byte {
 	const minSize = len(StartCode) + 1
 
 	// 1. Check frist "start code"
-	if len(b) < len(startAUD) || string(b[:len(StartCode)]) != StartCode {
+	if len(b) < len(startAUDstart) || string(b[:len(StartCode)]) != StartCode {
 		return nil
 	}
 
 	// 2. Skip Access unit delimiter (AUD) from FFmpeg
-	if string(b[:len(startAUD)]) == startAUD {
+	if string(b[:len(startAUDstart)]) == startAUDstart {
 		b = b[6:]
 	}
 
@@ -85,6 +86,15 @@ func DecodeAVCC(b []byte, safeClone bool) []byte {
 	return b
 }
 
+// DecodeAVCCWithAUD - AUD doesn't important for FFmpeg, but important for Safari
+func DecodeAVCCWithAUD(src []byte) []byte {
+	dst := make([]byte, len(startAUD)+len(src))
+	copy(dst, startAUD)
+	copy(dst[len(startAUD):], src)
+	DecodeAVCC(dst[len(startAUD):], false)
+	return dst
+}
+
 const (
 	h264PFrame = 1
 	h264IFrame = 5
@@ -97,11 +107,11 @@ const (
 
 // IndexFrame - get new frame start position in the AnnexB stream
 func IndexFrame(b []byte) int {
-	if len(b) < len(startAUD) {
+	if len(b) < len(startAUDstart) {
 		return -1
 	}
 
-	for i := len(startAUD); ; {
+	for i := len(startAUDstart); ; {
 		if di := bytes.Index(b[i:], []byte(StartCode)); di < 0 {
 			break
 		} else {

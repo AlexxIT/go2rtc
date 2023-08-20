@@ -28,7 +28,7 @@ func (m *Muxer) AddTrack(streamType byte) (pid uint16) {
 		pes.StreamID = 0xC0
 	}
 
-	pid = startPID + 1 + uint16(len(m.pes))
+	pid = pes0PID + uint16(len(m.pes))
 	m.pes[pid] = pes
 
 	return
@@ -42,37 +42,41 @@ func (m *Muxer) GetHeader() []byte {
 }
 
 // GetPayload - safe to run concurently with different pid
-func (m *Muxer) GetPayload(pid uint16, pts uint32, payload []byte) []byte {
+func (m *Muxer) GetPayload(pid uint16, timestamp uint32, payload []byte) []byte {
 	pes := m.pes[pid]
 
-	size := 8 + len(payload)
+	switch pes.StreamType {
+	case StreamTypeH264, StreamTypeH265:
+		payload = annexb.DecodeAVCCWithAUD(payload)
+	}
 
-	b := make([]byte, 14+len(payload))
-	_ = b[14] // bounds
+	if pes.Timestamp != 0 {
+		pes.PTS += timestamp - pes.Timestamp
+	}
+	//log.Print(pid, pes.PTS, timestamp, pes.Timestamp)
+	pes.Timestamp = timestamp
 
-	b[0] = 0
-	b[1] = 0
-	b[2] = 1
-	b[3] = pes.StreamID
-	b[6] = 0x80 // Marker bits (binary)
-	b[7] = 0x80 // PTS indicator
-	b[8] = 5    // PES header length
+	// min header size (3 byte) + adv header size (PES)
+	size := 3 + 5 + len(payload)
 
-	// zero size is OK for video stream
+	b := make([]byte, 6+3+5)
+
+	b[0], b[1], b[2] = 0, 0, 1 // Packet start code prefix
+	b[3] = pes.StreamID        // Stream ID
+
+	// PES Packet length (zero value OK for video)
 	if size <= 0xFFFF {
 		binary.BigEndian.PutUint16(b[4:], uint16(size))
 	}
 
-	WriteTime(b[9:], pts)
+	// Optional PES header:
+	b[6] = 0x80 // Marker bits (binary)
+	b[7] = 0x80 // PTS indicator
+	b[8] = 5    // PES header length
 
-	copy(b[14:], payload)
+	WriteTime(b[9:], pes.PTS)
 
-	switch pes.StreamType {
-	case StreamTypeH264, StreamTypeH265:
-		annexb.DecodeAVCC(b[14:], false) // no need to safe clone after copy
-	}
-
-	pes.Payload = b
+	pes.Payload = append(b, payload...)
 	pes.Size = 1 // set PUSI in first PES
 
 	if pes.wr == nil {
@@ -91,16 +95,17 @@ func (m *Muxer) GetPayload(pid uint16, pts uint32, payload []byte) []byte {
 }
 
 const patPID = 0
-const startPID = 0x20
+const pmtPID = 0x1000
+const pes0PID = 0x100
 
 func (m *Muxer) writePAT(wr *bits.Writer) {
 	m.writeHeader(wr, patPID)
 	i := wr.Len() + 1 // start for CRC32
 	m.writePSIHeader(wr, 0, 4)
 
-	wr.WriteUint16(1)            // Program num
-	wr.WriteBits8(0b111, 3)      // Reserved bits (all to 1)
-	wr.WriteBits16(startPID, 13) // Program map PID
+	wr.WriteUint16(1)          // Program num
+	wr.WriteBits8(0b111, 3)    // Reserved bits (all to 1)
+	wr.WriteBits16(pmtPID, 13) // Program map PID
 
 	crc := checksum(wr.Bytes()[i:])
 	wr.WriteBytes(byte(crc), byte(crc>>8), byte(crc>>16), byte(crc>>24)) // CRC32 (little endian)
@@ -109,7 +114,7 @@ func (m *Muxer) writePAT(wr *bits.Writer) {
 }
 
 func (m *Muxer) writePMT(wr *bits.Writer) {
-	m.writeHeader(wr, startPID)
+	m.writeHeader(wr, pmtPID)
 	i := wr.Len() + 1                               // start for CRC32
 	m.writePSIHeader(wr, 2, 4+uint16(len(m.pes))*5) // 4 bytes below + 5 bytes each PES
 
@@ -120,7 +125,11 @@ func (m *Muxer) writePMT(wr *bits.Writer) {
 	wr.WriteBits8(0, 2)      // Program info length unused bits (all to 0)
 	wr.WriteBits16(0, 10)    // Program info length
 
-	for pid, pes := range m.pes {
+	for pid := uint16(pes0PID); ; pid++ {
+		pes, ok := m.pes[pid]
+		if !ok {
+			break
+		}
 		wr.WriteByte(pes.StreamType) // Stream type
 		wr.WriteBits8(0b111, 3)      // Reserved bits (all to 1)
 		wr.WriteBits16(pid, 13)      // Elementary PID
