@@ -75,8 +75,15 @@ func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiv
 }
 
 func (c *Conn) packetWriter(codec *core.Codec, channel, payloadType uint8) core.HandlerFunc {
+	var buf []byte
 	var n int
-	buf := make([]byte, 4096) // 4KB
+
+	video := codec.IsVideo()
+	if video {
+		buf = make([]byte, 32*1024) // 32KB
+	} else {
+		buf = make([]byte, 2*1024) // 2KB
+	}
 
 	handlerFunc := func(packet *rtp.Packet) {
 		if c.state == StateNone {
@@ -123,8 +130,8 @@ func (c *Conn) packetWriter(codec *core.Codec, channel, payloadType uint8) core.
 
 		n += 4 + size
 
-		if !packet.Marker {
-			return
+		if video && !packet.Marker {
+			return // collect continious video packets to buffer
 		}
 
 		if err := c.conn.SetWriteDeadline(time.Now().Add(Timeout)); err != nil {

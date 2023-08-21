@@ -245,6 +245,7 @@ func (c *Client) Handle() error {
 			pkt := &rtp.Packet{
 				Header: rtp.Header{
 					Version:   2,
+					Marker:    true,
 					Timestamp: audioTS,
 				},
 				Payload: b[6+36:],

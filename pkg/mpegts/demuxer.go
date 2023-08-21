@@ -359,6 +359,7 @@ func (p *PES) GetPacket() (pkt *rtp.Packet) {
 		pkt = &rtp.Packet{
 			Header: rtp.Header{
 				Version:        2,
+				Marker:         true,
 				PayloadType:    p.StreamType,
 				SequenceNumber: p.Sequence,
 				Timestamp:      p.PTSorDTS,
@@ -375,6 +376,7 @@ func (p *PES) GetPacket() (pkt *rtp.Packet) {
 		pkt = &rtp.Packet{
 			Header: rtp.Header{
 				Version:        2,
+				Marker:         true,
 				PayloadType:    p.StreamType,
 				SequenceNumber: p.Sequence,
 				Timestamp:      p.PTSorDTS,
