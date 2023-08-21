@@ -153,6 +153,10 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 }
 
 func (c *Consumer) WriteTo(wr io.Writer) (int64, error) {
+	if len(c.Senders) == 1 && c.Senders[0].Codec.IsAudio() {
+		c.start = true
+	}
+
 	init, err := c.muxer.GetInit()
 	if err != nil {
 		return 0, err

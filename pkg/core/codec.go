@@ -52,6 +52,18 @@ func (c *Codec) IsRTP() bool {
 	return c.PayloadType != PayloadTypeRAW
 }
 
+func (c *Codec) IsVideo() bool {
+	return c.Kind() == KindVideo
+}
+
+func (c *Codec) IsAudio() bool {
+	return c.Kind() == KindAudio
+}
+
+func (c *Codec) Kind() string {
+	return GetKind(c.Name)
+}
+
 func (c *Codec) Clone() *Codec {
 	clone := *c
 	return &clone
