@@ -24,11 +24,21 @@ func Init() {
 	streams.HandleFunc("tcp", handleTCP)
 }
 
-func handleHTTP(url string) (core.Producer, error) {
+func handleHTTP(rawURL string) (core.Producer, error) {
+	rawURL, rawQuery, _ := strings.Cut(rawURL, "#")
+
 	// first we get the Content-Type to define supported producer
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest("GET", rawURL, nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if rawQuery != "" {
+		query := streams.ParseQuery(rawQuery)
+		for _, header := range query["header"] {
+			key, value, _ := strings.Cut(header, ":")
+			req.Header.Add(key, value)
+		}
 	}
 
 	res, err := tcp.Do(req)
