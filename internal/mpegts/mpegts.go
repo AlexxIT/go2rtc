@@ -12,6 +12,7 @@ import (
 
 func Init() {
 	api.HandleFunc("api/stream.ts", apiHandle)
+	api.HandleFunc("api/stream.aac", apiStreamAAC)
 }
 
 func apiHandle(w http.ResponseWriter, r *http.Request) {
