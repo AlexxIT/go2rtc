@@ -101,6 +101,7 @@ func rtspHandler(rawURL string) (core.Producer, error) {
 	if rawQuery != "" {
 		query := streams.ParseQuery(rawQuery)
 		conn.Backchannel = query.Get("backchannel") == "1"
+		conn.Media = query.Get("media")
 		conn.Transport = query.Get("transport")
 	}
 

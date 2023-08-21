@@ -23,6 +23,7 @@ type Conn struct {
 	// public
 
 	Backchannel bool
+	Media       string
 	PacketSize  uint16
 	SessionName string
 	Transport   string // custom transport support, ex. RTSP over WebSocket

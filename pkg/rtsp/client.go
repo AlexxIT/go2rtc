@@ -147,6 +147,16 @@ func (c *Conn) Describe() error {
 		return err
 	}
 
+	if c.Media != "" {
+		clone := make([]*core.Media, 0, len(medias))
+		for _, media := range medias {
+			if strings.Contains(c.Media, media.Kind) {
+				clone = append(clone, media)
+			}
+		}
+		medias = clone
+	}
+
 	// TODO: rewrite more smart
 	if c.Medias == nil {
 		c.Medias = medias
