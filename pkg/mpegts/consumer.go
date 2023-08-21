@@ -114,3 +114,10 @@ func (c *Consumer) Stop() error {
 	_ = c.SuperConsumer.Close()
 	return c.wr.Close()
 }
+
+func TimestampFromRTP(rtp *rtp.Packet, codec *core.Codec) {
+	if codec.ClockRate == ClockRate {
+		return
+	}
+	rtp.Timestamp = uint32(float64(rtp.Timestamp) / float64(codec.ClockRate) * ClockRate)
+}

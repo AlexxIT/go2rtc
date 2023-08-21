@@ -51,9 +51,9 @@ func (m *Muxer) GetPayload(pid uint16, timestamp uint32, payload []byte) []byte 
 	}
 
 	if pes.Timestamp != 0 {
-		pes.PTS += timestamp - pes.Timestamp
+		pes.PTSorDTS += timestamp - pes.Timestamp
 	}
-	//log.Print(pid, pes.PTS, timestamp, pes.Timestamp)
+	//log.Print(pid, pes.PTSorDTS, timestamp, pes.Timestamp)
 	pes.Timestamp = timestamp
 
 	// min header size (3 byte) + adv header size (PES)
@@ -74,7 +74,7 @@ func (m *Muxer) GetPayload(pid uint16, timestamp uint32, payload []byte) []byte 
 	b[7] = 0x80 // PTS indicator
 	b[8] = 5    // PES header length
 
-	WriteTime(b[9:], pes.PTS)
+	WriteTime(b[9:], pes.PTSorDTS)
 
 	pes.Payload = append(b, payload...)
 	pes.Size = 1 // set PUSI in first PES

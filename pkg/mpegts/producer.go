@@ -9,6 +9,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
+	"github.com/pion/rtp"
 )
 
 type Producer struct {
@@ -43,6 +44,7 @@ func (c *Producer) Start() error {
 
 		for _, receiver := range c.Receivers {
 			if receiver.ID == pkt.PayloadType {
+				TimestampToRTP(pkt, receiver.Codec)
 				receiver.WriteRTP(pkt)
 				break
 			}
@@ -134,4 +136,11 @@ func StreamType(codec *core.Codec) uint8 {
 		return StreamTypePCMATapo
 	}
 	return 0
+}
+
+func TimestampToRTP(rtp *rtp.Packet, codec *core.Codec) {
+	if codec.ClockRate == ClockRate {
+		return
+	}
+	rtp.Timestamp = uint32(float64(rtp.Timestamp) * float64(codec.ClockRate) / ClockRate)
 }

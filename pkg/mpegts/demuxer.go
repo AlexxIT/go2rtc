@@ -197,7 +197,7 @@ func (d *Demuxer) readPES(pid uint16, start bool) *rtp.Packet {
 		_ = d.readBit()   // Original or Copy
 
 		pts := d.readBit() // PTS indicator
-		_ = d.readBit()    // DTS indicator
+		dts := d.readBit() // DTS indicator
 		_ = d.readBit()    // ESCR flag
 		_ = d.readBit()    // ES rate flag
 		_ = d.readBit()    // DSM trick mode flag
@@ -213,8 +213,12 @@ func (d *Demuxer) readPES(pid uint16, start bool) *rtp.Packet {
 			packetSize -= uint16(3 + headerSize)
 		}
 
-		if pts != 0 {
-			pes.PTS = d.readTime()
+		if dts != 0 {
+			d.skip(5) // skip PTSorDTS
+			pes.PTSorDTS = d.readTime()
+			headerSize -= 10
+		} else if pts != 0 {
+			pes.PTSorDTS = d.readTime()
 			headerSize -= 5
 		}
 
@@ -301,7 +305,8 @@ func (d *Demuxer) setSize(size byte) {
 
 const (
 	PacketSize = 188
-	SyncByte   = 0x47 // Uppercase G
+	SyncByte   = 0x47  // Uppercase G
+	ClockRate  = 90000 // fixed clock rate for PTS/DTS of any type
 )
 
 // https://en.wikipedia.org/wiki/Program-specific_information#Elementary_stream_types
@@ -320,9 +325,9 @@ type PES struct {
 	StreamType byte   // from PMT table
 	Sequence   uint16 // manual
 	Timestamp  uint32 // manual
-	PTS        uint32 // from PTS extra header, always 90000Hz
-	Payload    []byte // from PTS body
-	Size       int    // from PTS header, can be 0
+	PTSorDTS   uint32 // from extra header, always 90000Hz
+	Payload    []byte // from PES body
+	Size       int    // from PES header, can be 0
 
 	wr *bits.Writer
 }
@@ -343,7 +348,7 @@ func (p *PES) GetPacket() (pkt *rtp.Packet) {
 		pkt = &rtp.Packet{
 			Header: rtp.Header{
 				PayloadType: p.StreamType,
-				Timestamp:   p.PTS, // PTS is ok, because 90000Hz
+				Timestamp:   p.PTSorDTS,
 			},
 			Payload: annexb.EncodeToAVCC(p.Payload, false),
 		}
@@ -356,12 +361,13 @@ func (p *PES) GetPacket() (pkt *rtp.Packet) {
 				Version:        2,
 				PayloadType:    p.StreamType,
 				SequenceNumber: p.Sequence,
-				Timestamp:      p.Timestamp,
+				Timestamp:      p.PTSorDTS,
+				//Timestamp:      p.Timestamp,
 			},
 			Payload: aac.ADTStoRTP(p.Payload),
 		}
 
-		p.Timestamp += aac.RTPTimeSize(pkt.Payload) // update next timestamp!
+		//p.Timestamp += aac.RTPTimeSize(pkt.Payload) // update next timestamp!
 
 	case StreamTypePCMATapo:
 		p.Sequence++
@@ -371,12 +377,13 @@ func (p *PES) GetPacket() (pkt *rtp.Packet) {
 				Version:        2,
 				PayloadType:    p.StreamType,
 				SequenceNumber: p.Sequence,
-				Timestamp:      p.Timestamp,
+				Timestamp:      p.PTSorDTS,
+				//Timestamp:      p.Timestamp,
 			},
 			Payload: p.Payload,
 		}
 
-		p.Timestamp += uint32(len(p.Payload)) // update next timestamp!
+		//p.Timestamp += uint32(len(p.Payload)) // update next timestamp!
 	}
 
 	p.Payload = nil
