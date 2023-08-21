@@ -5,6 +5,7 @@ import (
 
 	"github.com/AlexxIT/go2rtc/pkg/bits"
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/pion/rtp"
 )
 
 func IsADTS(b []byte) bool {
@@ -108,4 +109,23 @@ func CodecToADTS(codec *core.Codec) []byte {
 	wr.WriteBits8(0, 2)             // Number of AAC frames (Raw Data Blocks) in ADTS frame minus 1
 
 	return wr.Bytes()
+}
+
+func EncodeToADTS(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
+	adts := CodecToADTS(codec)
+
+	return func(packet *rtp.Packet) {
+		if !IsADTS(packet.Payload) {
+			b := make([]byte, ADTSHeaderSize+len(packet.Payload))
+			copy(b, adts)
+			copy(b[ADTSHeaderSize:], packet.Payload)
+			WriteADTSSize(b, uint16(len(b)))
+
+			clone := *packet
+			clone.Payload = b
+			handler(&clone)
+		} else {
+			handler(packet)
+		}
+	}
 }

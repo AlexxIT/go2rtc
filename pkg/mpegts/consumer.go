@@ -1,7 +1,6 @@
 package mpegts
 
 import (
-	"errors"
 	"io"
 
 	"github.com/AlexxIT/go2rtc/pkg/aac"
@@ -93,7 +92,7 @@ func (c *Consumer) AddTrack(media *core.Media, codec *core.Codec, track *core.Re
 		if track.Codec.IsRTP() {
 			sender.Handler = aac.RTPToADTS(track.Codec, sender.Handler)
 		} else {
-			return errors.New("mpegts: aac not supported")
+			sender.Handler = aac.EncodeToADTS(track.Codec, sender.Handler)
 		}
 	}
 
