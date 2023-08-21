@@ -130,8 +130,13 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 			}
 		case core.CodecOpus, core.CodecMP3: // no changes
 		case core.CodecPCMA, core.CodecPCMU, core.CodecPCM, core.CodecPCML:
-			handler.Handler = pcm.FLACEncoder(track.Codec, handler.Handler)
 			codec.Name = core.CodecFLAC
+			if codec.Channels == 2 {
+				// hacky way for support two channels audio
+				codec.Channels = 1
+				codec.ClockRate *= 2
+			}
+			handler.Handler = pcm.FLACEncoder(track.Codec.Name, codec.ClockRate, handler.Handler)
 
 		default:
 			handler.Handler = nil
