@@ -383,11 +383,3 @@ func (p *PES) GetPacket() (pkt *rtp.Packet) {
 
 	return
 }
-
-// PTSToTimestamp - convert PTS from 90000 to custom clock rate
-//func PTSToTimestamp(pts, clockRate uint32) uint32 {
-//	if clockRate == 90000 {
-//		return pts
-//	}
-//	return uint32(uint64(pts) * uint64(clockRate) / 90000)
-//}
