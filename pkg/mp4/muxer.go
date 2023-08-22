@@ -152,11 +152,12 @@ func (m *Muxer) GetPayload(trackID byte, packet *rtp.Packet) []byte {
 
 	mv := iso.NewMovie(1024 + size)
 	mv.WriteMovieFragment(
-		m.index, uint32(trackID+1), duration, uint32(size), flags, m.dts[trackID],
+		// ExtensionProfile - wrong place for CTS (supported by mpegts.Demuxer)
+		m.index, uint32(trackID+1), duration, uint32(size), flags, m.dts[trackID], uint32(packet.ExtensionProfile),
 	)
 	mv.WriteData(packet.Payload)
 
-	//log.Printf("[MP4] track=%d ts=%6d dur=%5d idx=%3d len=%d", trackID+1, m.dts[trackID], duration, m.index, len(packet.Payload))
+	//log.Printf("[MP4] idx:%3d trk:%d dts:%6d cts:%4d dur:%5d time:%10d len:%5d", m.index, trackID+1, m.dts[trackID], packet.SSRC, duration, packet.Timestamp, len(packet.Payload))
 
 	m.dts[trackID] += uint64(duration)
 

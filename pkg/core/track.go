@@ -13,7 +13,8 @@ import (
 type Packet struct {
 	PayloadType uint8
 	Sequence    uint16
-	Timestamp   uint32
+	Timestamp   uint32 // PTS if DTS == 0 else DTS
+	Composition uint32 // CTS = PTS-DTS (for support B-frames)
 	Payload     []byte
 }
 

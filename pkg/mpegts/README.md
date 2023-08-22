@@ -1,3 +1,20 @@
+## PTS/DTS/CTS
+
+```
+if DTS == 0 {
+    // for I and P frames
+	packet.Timestamp = PTS (presentation time)
+} else {
+    // for B frames
+    packet.Timestamp = DTS (decode time)
+    CTS = PTS-DTS (composition time)
+}
+```
+
+- MPEG-TS container uses PTS and optional DTS.
+- MP4 container uses DTS and CTS
+- RTP container uses PTS
+
 ## MPEG-TS
 
 FFmpeg:

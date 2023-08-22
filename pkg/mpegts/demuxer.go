@@ -196,30 +196,33 @@ func (d *Demuxer) readPES(pid uint16, start bool) *rtp.Packet {
 		_ = d.readBit()   // Copyright
 		_ = d.readBit()   // Original or Copy
 
-		pts := d.readBit() // PTS indicator
-		dts := d.readBit() // DTS indicator
-		_ = d.readBit()    // ESCR flag
-		_ = d.readBit()    // ES rate flag
-		_ = d.readBit()    // DSM trick mode flag
-		_ = d.readBit()    // Additional copy info flag
-		_ = d.readBit()    // CRC flag
-		_ = d.readBit()    // extension flag
+		ptsi := d.readBit() // PTS indicator
+		dtsi := d.readBit() // DTS indicator
+		_ = d.readBit()     // ESCR flag
+		_ = d.readBit()     // ES rate flag
+		_ = d.readBit()     // DSM trick mode flag
+		_ = d.readBit()     // Additional copy info flag
+		_ = d.readBit()     // CRC flag
+		_ = d.readBit()     // extension flag
 
 		headerSize := d.readByte() // PES header length
-
-		//log.Printf("[mpegts] pes=%d size=%d header=%d", pes.StreamID, packetSize, headerSize)
 
 		if packetSize != 0 {
 			packetSize -= uint16(3 + headerSize)
 		}
 
-		if dts != 0 {
-			d.skip(5) // skip PTSorDTS
-			pes.PTSorDTS = d.readTime()
-			headerSize -= 10
-		} else if pts != 0 {
-			pes.PTSorDTS = d.readTime()
+		if ptsi != 0 {
+			pes.PTS = d.readTime()
 			headerSize -= 5
+		} else {
+			pes.PTS = 0
+		}
+
+		if dtsi != 0 {
+			pes.DTS = d.readTime()
+			headerSize -= 5
+		} else {
+			pes.DTS = 0
 		}
 
 		d.skip(headerSize)
@@ -325,7 +328,8 @@ type PES struct {
 	StreamType byte   // from PMT table
 	Sequence   uint16 // manual
 	Timestamp  uint32 // manual
-	PTSorDTS   uint32 // from extra header, always 90000Hz
+	PTS        uint32 // from extra header, always 90000Hz
+	DTS        uint32
 	Payload    []byte // from PES body
 	Size       int    // from PES header, can be 0
 
@@ -348,9 +352,16 @@ func (p *PES) GetPacket() (pkt *rtp.Packet) {
 		pkt = &rtp.Packet{
 			Header: rtp.Header{
 				PayloadType: p.StreamType,
-				Timestamp:   p.PTSorDTS,
 			},
 			Payload: annexb.EncodeToAVCC(p.Payload, false),
+		}
+
+		if p.DTS != 0 {
+			pkt.Timestamp = p.DTS
+			// wrong place for CTS, but we don't have another one
+			pkt.ExtensionProfile = uint16(p.PTS - p.DTS)
+		} else {
+			pkt.Timestamp = p.PTS
 		}
 
 	case StreamTypeAAC:
@@ -362,7 +373,7 @@ func (p *PES) GetPacket() (pkt *rtp.Packet) {
 				Marker:         true,
 				PayloadType:    p.StreamType,
 				SequenceNumber: p.Sequence,
-				Timestamp:      p.PTSorDTS,
+				Timestamp:      p.PTS,
 				//Timestamp:      p.Timestamp,
 			},
 			Payload: aac.ADTStoRTP(p.Payload),
@@ -379,7 +390,7 @@ func (p *PES) GetPacket() (pkt *rtp.Packet) {
 				Marker:         true,
 				PayloadType:    p.StreamType,
 				SequenceNumber: p.Sequence,
-				Timestamp:      p.PTSorDTS,
+				Timestamp:      p.PTS,
 				//Timestamp:      p.Timestamp,
 			},
 			Payload: p.Payload,
