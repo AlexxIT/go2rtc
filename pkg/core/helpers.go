@@ -63,7 +63,9 @@ func Between(s, sub1, sub2 string) string {
 }
 
 func Atoi(s string) (i int) {
-	i, _ = strconv.Atoi(s)
+	if s != "" {
+		i, _ = strconv.Atoi(s)
+	}
 	return
 }
 

@@ -102,6 +102,7 @@ func rtspHandler(rawURL string) (core.Producer, error) {
 		query := streams.ParseQuery(rawQuery)
 		conn.Backchannel = query.Get("backchannel") == "1"
 		conn.Media = query.Get("media")
+		conn.Timeout = core.Atoi(query.Get("timeout"))
 		conn.Transport = query.Get("transport")
 	}
 

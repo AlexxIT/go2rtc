@@ -31,7 +31,11 @@ func (c *Conn) Dial() (err error) {
 	var conn net.Conn
 
 	if c.Transport == "" {
-		conn, err = tcp.Dial(c.URL, "554")
+		timeout := core.ConnDialTimeout
+		if c.Timeout != 0 {
+			timeout = time.Second * time.Duration(c.Timeout)
+		}
+		conn, err = tcp.Dial(c.URL, "554", timeout)
 	} else {
 		conn, err = websocket.Dial(c.Transport)
 	}

@@ -6,12 +6,11 @@ import (
 	"net"
 	"net/url"
 	"strings"
-
-	"github.com/AlexxIT/go2rtc/pkg/core"
+	"time"
 )
 
 // Dial - for RTSP(S|X) and RTMP(S|X)
-func Dial(u *url.URL, port string) (net.Conn, error) {
+func Dial(u *url.URL, port string, timeout time.Duration) (net.Conn, error) {
 	var hostname string // without port
 	if i := strings.IndexByte(u.Host, ':'); i > 0 {
 		hostname = u.Host[:i]
@@ -34,7 +33,7 @@ func Dial(u *url.URL, port string) (net.Conn, error) {
 		return nil, errors.New("unsupported scheme: " + u.Scheme)
 	}
 
-	conn, err := net.DialTimeout("tcp", u.Host, core.ConnDialTimeout)
+	conn, err := net.DialTimeout("tcp", u.Host, timeout)
 	if err != nil {
 		return nil, err
 	}

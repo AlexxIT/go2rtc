@@ -26,6 +26,7 @@ type Conn struct {
 	Media       string
 	PacketSize  uint16
 	SessionName string
+	Timeout     int
 	Transport   string // custom transport support, ex. RTSP over WebSocket
 
 	Medias    []*core.Media
@@ -108,13 +109,17 @@ func (c *Conn) Handle() (err error) {
 		}
 		keepaliveTS = time.Now().Add(keepaliveDT)
 
-		// polling frames from remote RTSP Server (ex Camera)
-		if len(c.receivers) > 0 {
-			// if we receiving video/audio from camera
-			timeout = time.Second * 5
+		if c.Timeout == 0 {
+			// polling frames from remote RTSP Server (ex Camera)
+			if len(c.receivers) > 0 {
+				// if we receiving video/audio from camera
+				timeout = time.Second * 5
+			} else {
+				// if we only send audio to camera
+				timeout = time.Second * 30
+			}
 		} else {
-			// if we only send audio to camera
-			timeout = time.Second * 30
+			timeout = time.Second * time.Duration(c.Timeout)
 		}
 
 	case core.ModePassiveProducer:

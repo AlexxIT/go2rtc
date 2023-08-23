@@ -14,7 +14,7 @@ func Dial(rawURL string) (core.Producer, error) {
 		return nil, err
 	}
 
-	conn, err := tcp.Dial(u, "1935")
+	conn, err := tcp.Dial(u, "1935", core.ConnDialTimeout)
 	if err != nil {
 		return nil, err
 	}
