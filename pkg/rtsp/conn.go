@@ -167,6 +167,12 @@ func (c *Conn) Handle() (err error) {
 					return
 				}
 				c.Fire(req)
+				if req.Method == MethodOptions {
+					res := &tcp.Response{Request: req}
+					if err = c.WriteResponse(res); err != nil {
+						return
+					}
+				}
 				continue
 
 			default:
