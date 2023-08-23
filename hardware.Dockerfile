@@ -2,8 +2,8 @@
 
 # 0. Prepare images
 # only debian 12 (bookworm) has latest ffmpeg
-ARG DEBIAN_VERSION="bookworm-slim"
-ARG GO_VERSION="1.20-buster"
+ARG DEBIAN_VERSION="bullseye-slim"
+ARG GO_VERSION="1.21-bullseye"
 ARG NGROK_VERSION="3"
 
 FROM debian:${DEBIAN_VERSION} AS base
@@ -46,7 +46,7 @@ RUN rm -f /etc/apt/apt.conf.d/docker-clean \
 # non-free for Intel QSV support (not used by go2rtc, just for tests)
 # libasound2-plugins for ALSA support
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    echo 'deb http://deb.debian.org/debian bookworm non-free' > /etc/apt/sources.list.d/debian-non-free.list && \
+    echo 'deb http://deb.debian.org/debian bullseye non-free' > /etc/apt/sources.list.d/debian-non-free.list && \
     apt-get -y update && apt-get -y install tini ffmpeg \
         python3 curl jq \
         intel-media-va-driver-non-free \
