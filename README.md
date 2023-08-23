@@ -589,7 +589,7 @@ streams:
   webrtc-kinesis: webrtc:wss://...amazonaws.com/?...#format=kinesis#client_id=...#ice_servers=[{...},{...}]
 ```
 
-**PS.** For `wyze` and `kinesis` sources you can use [echo](#source-echo) to get connection params using `bash`/`python` or any other script language.
+**PS.** For `kinesis` sources you can use [echo](#source-echo) to get connection params using `bash`/`python` or any other script language.
 
 #### Source: WebTorrent
 
