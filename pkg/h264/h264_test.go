@@ -39,3 +39,15 @@ func TestDecodeSPS(t *testing.T) {
 	require.Equal(t, uint16(1920), sps.Width())
 	require.Equal(t, uint16(1080), sps.Height())
 }
+
+func TestGetProfileLevelID(t *testing.T) {
+	// OpenIPC https://github.com/OpenIPC
+	s := "profile-level-id=0033e7; packetization-mode=1; "
+	profile := GetProfileLevelID(s)
+	require.Equal(t, "640029", profile)
+
+	// Eufy T8400 https://github.com/AlexxIT/go2rtc/issues/155
+	s = "packetization-mode=1;profile-level-id=276400"
+	profile = GetProfileLevelID(s)
+	require.Equal(t, "640029", profile)
+}

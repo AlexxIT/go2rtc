@@ -5,8 +5,9 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"github.com/AlexxIT/go2rtc/pkg/core"
 	"strings"
+
+	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
 const (
@@ -49,14 +50,23 @@ func Join(ps, iframe []byte) []byte {
 	return b
 }
 
+// https://developers.google.com/cast/docs/media
+const (
+	ProfileBaseline    = 0x42
+	ProfileMain        = 0x4D
+	ProfileHigh        = 0x64
+	CapabilityBaseline = 0xE0
+	CapabilityMain     = 0x40
+)
+
 // GetProfileLevelID - get profile from fmtp line
 // Some devices won't play video with high level, so limit max profile and max level.
 // And return some profile even if fmtp line is empty.
 func GetProfileLevelID(fmtp string) string {
 	// avc1.640029 - H.264 high 4.1 (Chromecast 1st and 2nd Gen)
-	profile := byte(0x64)
+	profile := byte(ProfileHigh)
 	capab := byte(0)
-	level := byte(0x29)
+	level := byte(41)
 
 	if fmtp != "" {
 		var conf []byte
@@ -70,12 +80,18 @@ func GetProfileLevelID(fmtp string) string {
 			conf, _ = hex.DecodeString(s)
 		}
 
-		if conf != nil {
-			if conf[0] < profile {
+		if len(conf) == 3 {
+			// sanitize profile, capab and level to supported values
+			switch conf[0] {
+			case ProfileBaseline, ProfileMain:
 				profile = conf[0]
+			}
+			switch conf[1] {
+			case CapabilityBaseline, CapabilityMain:
 				capab = conf[1]
 			}
-			if conf[2] < level {
+			switch conf[2] {
+			case 30, 31, 40:
 				level = conf[2]
 			}
 		}
