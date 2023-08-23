@@ -86,7 +86,7 @@ func (c *Conn) packetWriter(codec *core.Codec, channel, payloadType uint8) core.
 	}
 
 	handlerFunc := func(packet *rtp.Packet) {
-		if c.state == StateNone {
+		if c.state == StateNone || !c.playOK {
 			return
 		}
 
@@ -100,6 +100,10 @@ func (c *Conn) packetWriter(codec *core.Codec, channel, payloadType uint8) core.
 				SSRC:           packet.SSRC,
 			},
 			Payload: packet.Payload,
+		}
+
+		if !video {
+			packet.Marker = true // better to have marker on all audio packets
 		}
 
 		size := 12 + len(packet.Payload)
@@ -130,7 +134,7 @@ func (c *Conn) packetWriter(codec *core.Codec, channel, payloadType uint8) core.
 
 		n += 4 + size
 
-		if video && !packet.Marker {
+		if !packet.Marker {
 			return // collect continious video packets to buffer
 		}
 
