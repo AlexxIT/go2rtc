@@ -24,19 +24,18 @@ func NewClient(uri string) *Conn {
 }
 
 func (c *Conn) Dial() (err error) {
-	var conn net.Conn
-
-	if c.Transport == "" {
-		conn, err = Dial(c.uri)
-	} else {
-		conn, err = websocket.Dial(c.Transport)
-	}
-
-	if err != nil {
+	if c.URL, err = url.Parse(c.uri); err != nil {
 		return
 	}
 
-	if c.URL, err = url.Parse(c.uri); err != nil {
+	var conn net.Conn
+
+	if c.Transport == "" {
+		conn, err = tcp.Dial(c.URL, "554")
+	} else {
+		conn, err = websocket.Dial(c.Transport)
+	}
+	if err != nil {
 		return
 	}
 
