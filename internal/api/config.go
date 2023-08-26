@@ -1,11 +1,12 @@
 package api
 
 import (
-	"github.com/AlexxIT/go2rtc/internal/app"
-	"gopkg.in/yaml.v3"
 	"io"
 	"net/http"
 	"os"
+
+	"github.com/AlexxIT/go2rtc/internal/app"
+	"gopkg.in/yaml.v3"
 )
 
 func configHandler(w http.ResponseWriter, r *http.Request) {
@@ -40,8 +41,7 @@ func configHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		} else {
 			// validate config
-			var tmp struct{}
-			if err = yaml.Unmarshal(data, &tmp); err != nil {
+			if err = yaml.Unmarshal(data, map[string]any{}); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
