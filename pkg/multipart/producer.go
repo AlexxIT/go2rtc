@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h264/annexb"
 	"github.com/pion/rtp"
 )
@@ -166,11 +167,11 @@ func (c *Producer) probe() error {
 		c.reader = bufio.NewReader(c.rd)
 	}()
 
-	waitVideo := true
-	waitAudio := true
+	waitVideo, waitAudio := true, true
+	timeout := time.Now().Add(core.ProbeTimeout)
 
-	for waitVideo || waitAudio {
-		header, _, err := c.next()
+	for (waitVideo || waitAudio) && time.Now().Before(timeout) {
+		header, body, err := c.next()
 		if err != nil {
 			return err
 		}
@@ -181,26 +182,23 @@ func (c *Producer) probe() error {
 		switch ct {
 		case MimeVideo:
 			if !waitVideo {
-				return nil
-			}
-
-			media = &core.Media{
-				Kind:      core.KindVideo,
-				Direction: core.DirectionRecvonly,
-				Codecs: []*core.Codec{
-					{
-						Name:        core.CodecH264,
-						ClockRate:   90000,
-						PayloadType: core.PayloadTypeRAW,
-					},
-				},
+				continue
 			}
 			waitVideo = false
 
+			body = annexb.EncodeToAVCC(body, false)
+			codec := h264.AVCCToCodec(body)
+			media = &core.Media{
+				Kind:      core.KindVideo,
+				Direction: core.DirectionRecvonly,
+				Codecs:    []*core.Codec{codec},
+			}
+
 		case MimeG711U:
 			if !waitAudio {
-				return nil
+				continue
 			}
+			waitAudio = false
 
 			media = &core.Media{
 				Kind:      core.KindAudio,
@@ -212,9 +210,11 @@ func (c *Producer) probe() error {
 					},
 				},
 			}
-			waitAudio = false
 
 		default:
+			waitVideo = false
+			waitAudio = false
+
 			media = &core.Media{
 				Kind:      core.KindVideo,
 				Direction: core.DirectionRecvonly,
@@ -226,8 +226,6 @@ func (c *Producer) probe() error {
 					},
 				},
 			}
-			waitVideo = false
-			waitAudio = false
 		}
 
 		c.Medias = append(c.Medias, media)
