@@ -1,4 +1,4 @@
-package tcp
+package multipart
 
 import (
 	"bufio"
@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-func NextMultipart(rd *bufio.Reader) (http.Header, []byte, error) {
+func Next(rd *bufio.Reader) (http.Header, []byte, error) {
 	for {
 		// search next boundary and skip empty lines
 		s, err := rd.ReadString('\n')

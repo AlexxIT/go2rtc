@@ -6,7 +6,6 @@ import (
 	"io"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/pion/rtp"
 )
 
@@ -46,7 +45,7 @@ func (c *Producer) Start() error {
 	mjpeg := c.Receivers[0]
 
 	for {
-		_, body, err := tcp.NextMultipart(c.reader)
+		_, body, err := Next(c.reader)
 		if err != nil {
 			return err
 		}

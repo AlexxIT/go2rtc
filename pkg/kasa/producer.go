@@ -12,6 +12,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h264/annexb"
+	"github.com/AlexxIT/go2rtc/pkg/multipart"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/pion/rtp"
 )
@@ -69,7 +70,7 @@ func (c *Producer) Start() error {
 	}
 
 	for {
-		header, body, err := tcp.NextMultipart(c.reader)
+		header, body, err := multipart.Next(c.reader)
 		if err != nil {
 			return err
 		}
@@ -130,7 +131,7 @@ func (c *Producer) probe() error {
 	timeout := time.Now().Add(core.ProbeTimeout)
 
 	for (waitVideo || waitAudio) && time.Now().Before(timeout) {
-		header, body, err := tcp.NextMultipart(c.reader)
+		header, body, err := multipart.Next(c.reader)
 		if err != nil {
 			return err
 		}
