@@ -47,13 +47,13 @@ type cbcMode interface {
 	SetIV([]byte)
 }
 
-func NewClient(url string) *Client {
-	return &Client{url: url}
-}
-
-func (c *Client) Dial() (err error) {
-	c.conn1, err = c.newConn()
-	return
+func Dial(url string) (*Client, error) {
+	var err error
+	c := &Client{url: url}
+	if c.conn1, err = c.newConn(); err != nil {
+		return nil, err
+	}
+	return c, nil
 }
 
 func (c *Client) newConn() (net.Conn, error) {

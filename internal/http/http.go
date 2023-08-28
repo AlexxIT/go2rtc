@@ -2,10 +2,8 @@ package http
 
 import (
 	"errors"
-	"io"
 	"net"
 	"net/http"
-	"net/http/httputil"
 	"net/url"
 	"strings"
 
@@ -35,8 +33,6 @@ func handleHTTP(rawURL string) (core.Producer, error) {
 		return nil, err
 	}
 
-	var chunked bool
-
 	if rawQuery != "" {
 		query := streams.ParseQuery(rawQuery)
 
@@ -44,8 +40,6 @@ func handleHTTP(rawURL string) (core.Producer, error) {
 			key, value, _ := strings.Cut(header, ":")
 			req.Header.Add(key, strings.TrimSpace(value))
 		}
-
-		chunked = query.Get("chunked") == "1"
 	}
 
 	res, err := tcp.Do(req)
@@ -68,33 +62,18 @@ func handleHTTP(rawURL string) (core.Producer, error) {
 		ext = req.URL.Path[i+1:]
 	}
 
-	var rd io.ReadCloser
-
-	// support buggy clients, like TP-Link cameras with HTTP/1.0 chunked encoding
-	if chunked {
-		rd = struct {
-			io.Reader
-			io.Closer
-		}{
-			httputil.NewChunkedReader(res.Body),
-			res.Body,
-		}
-	} else {
-		rd = res.Body
-	}
-
 	switch {
 	case ct == "image/jpeg":
 		return mjpeg.NewClient(res), nil
 
 	case ct == "multipart/x-mixed-replace":
-		return multipart.Open(rd)
+		return multipart.Open(res.Body)
 
 	case ct == "application/vnd.apple.mpegurl" || ext == "m3u8":
-		return hls.OpenURL(req.URL, rd)
+		return hls.OpenURL(req.URL, res.Body)
 	}
 
-	return magic.Open(rd)
+	return magic.Open(res.Body)
 }
 
 func handleTCP(rawURL string) (core.Producer, error) {
