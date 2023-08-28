@@ -24,7 +24,7 @@ func Dial(u *url.URL, port string, timeout time.Duration) (net.Conn, error) {
 	switch u.Scheme {
 	case "rtsp", "rtmp":
 	case "rtsps", "rtspx", "rtmps", "rtmpx":
-		if u.Scheme[4] == 'x' || net.ParseIP(hostname) != nil {
+		if u.Scheme[4] == 'x' || IsIP(hostname) {
 			secure = &tls.Config{InsecureSkipVerify: true}
 		} else {
 			secure = &tls.Config{ServerName: hostname}
