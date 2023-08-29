@@ -1,7 +1,6 @@
 package mp4
 
 import (
-	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -56,32 +55,23 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	wr := &once{} // init and first frame
-	_, _ = cons.WriteTo(wr)
+	once := &core.OnceBuffer{} // init and first frame
+	_, _ = cons.WriteTo(once)
 
 	stream.RemoveConsumer(cons)
 
 	// Apple Safari won't show frame without length
 	header := w.Header()
-	header.Set("Content-Length", strconv.Itoa(len(wr.buf)))
+	header.Set("Content-Length", strconv.Itoa(once.Len()))
 	header.Set("Content-Type", mp4.ContentType(cons.Codecs()))
 
 	if filename := query.Get("filename"); filename != "" {
 		header.Set("Content-Disposition", `attachment; filename="`+filename+`"`)
 	}
 
-	if _, err := w.Write(wr.buf); err != nil {
+	if _, err := once.WriteTo(w); err != nil {
 		log.Error().Err(err).Caller().Send()
 	}
-}
-
-type once struct {
-	buf []byte
-}
-
-func (o *once) Write(p []byte) (n int, err error) {
-	o.buf = p
-	return 0, io.EOF
 }
 
 func handlerMP4(w http.ResponseWriter, r *http.Request) {
