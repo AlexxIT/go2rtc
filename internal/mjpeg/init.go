@@ -96,10 +96,9 @@ func outputMjpeg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cons := &mjpeg.Consumer{
-		RemoteAddr: tcp.RemoteAddr(r),
-		UserAgent:  r.UserAgent(),
-	}
+	cons := mjpeg.NewConsumer()
+	cons.RemoteAddr = tcp.RemoteAddr(r)
+	cons.UserAgent = r.UserAgent()
 
 	if err := stream.AddConsumer(cons); err != nil {
 		log.Error().Err(err).Msg("[api.mjpeg] add consumer")
@@ -168,10 +167,9 @@ func handlerWS(tr *ws.Transport, _ *ws.Message) error {
 		return errors.New(api.StreamNotFound)
 	}
 
-	cons := &mjpeg.Consumer{
-		RemoteAddr: tcp.RemoteAddr(tr.Request),
-		UserAgent:  tr.Request.UserAgent(),
-	}
+	cons := mjpeg.NewConsumer()
+	cons.RemoteAddr = tcp.RemoteAddr(tr.Request)
+	cons.UserAgent = tr.Request.UserAgent()
 
 	if err := stream.AddConsumer(cons); err != nil {
 		log.Error().Err(err).Caller().Send()
