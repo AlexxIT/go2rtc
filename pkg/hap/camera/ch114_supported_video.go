@@ -3,15 +3,17 @@ package camera
 const TypeSupportedVideoStreamConfiguration = "114"
 
 type SupportedVideoStreamConfig struct {
-	Codecs []VideoCodecConfig `tlv8:"1"`
+	Codecs []VideoCodec `tlv8:"1"`
 }
 
-type VideoCodecConfig struct {
-	CodecType   byte               `tlv8:"1"`
-	CodecParams []VideoCodecParams `tlv8:"2"`
-	VideoAttrs  []VideoAttrs       `tlv8:"3"`
+type VideoCodec struct {
+	CodecType   byte          `tlv8:"1"`
+	CodecParams []VideoParams `tlv8:"2"`
+	VideoAttrs  []VideoAttrs  `tlv8:"3"`
+	RTPParams   []RTPParams   `tlv8:"4"`
 }
 
+//goland:noinspection ALL
 const (
 	VideoCodecTypeH264 = 0
 
@@ -29,12 +31,12 @@ const (
 	VideoCodecCvoSuppported    = 1
 )
 
-type VideoCodecParams struct {
-	ProfileID         byte `tlv8:"1"` // 0 - baseline, 1 - main, 2 - high
-	Level             byte `tlv8:"2"` // 0 - 3.1, 1 - 3.2, 2 - 4.0
-	PacketizationMode byte `tlv8:"3"` // only 0 - non interleaved
-	CVOEnabled        byte `tlv8:"4"` // 0 - not supported, 1 - supported
-	CVOID             byte `tlv8:"5"` // ???
+type VideoParams struct {
+	ProfileID         []byte `tlv8:"1"` // 0 - baseline, 1 - main, 2 - high
+	Level             []byte `tlv8:"2"` // 0 - 3.1, 1 - 3.2, 2 - 4.0
+	PacketizationMode byte   `tlv8:"3"` // only 0 - non interleaved
+	CVOEnabled        []byte `tlv8:"4"` // 0 - not supported, 1 - supported
+	CVOID             []byte `tlv8:"5"` // ???
 }
 
 type VideoAttrs struct {

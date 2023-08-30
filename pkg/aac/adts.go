@@ -51,7 +51,7 @@ func ADTSToCodec(b []byte) *core.Codec {
 		Name:      core.CodecAAC,
 		ClockRate: sampleRates[sampleRateIdx],
 		Channels:  channels,
-		FmtpLine:  fmtp + hex.EncodeToString(conf),
+		FmtpLine:  FMTP + hex.EncodeToString(conf),
 	}
 	return codec
 }

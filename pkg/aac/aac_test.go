@@ -4,8 +4,24 @@ import (
 	"encoding/hex"
 	"testing"
 
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/stretchr/testify/require"
 )
+
+func TestConfigToCodec(t *testing.T) {
+	s := "profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;config=F8EC3000"
+	s = core.Between(s, "config=", ";")
+	src, err := hex.DecodeString(s)
+	require.Nil(t, err)
+
+	codec := ConfigToCodec(src)
+	require.Equal(t, core.CodecAAC, codec.Name)
+	require.Equal(t, uint32(24000), codec.ClockRate)
+	require.Equal(t, uint16(1), codec.Channels)
+
+	dst := EncodeConfig(TypeAACELD, 24000, 1, true)
+	require.Equal(t, src, dst)
+}
 
 func TestADTS(t *testing.T) {
 	// FFmpeg MPEG-TS AAC (one packet)

@@ -85,10 +85,6 @@ func appendValue(b []byte, tag byte, value reflect.Value) ([]byte, error) {
 		v := value.Uint()
 		return append(b, tag, 1, byte(v)), nil
 
-	case reflect.Int8:
-		v := value.Int()
-		return append(b, tag, 1, byte(v)), nil
-
 	case reflect.Uint16:
 		v := value.Uint()
 		return append(b, tag, 2, byte(v), byte(v>>8)), nil
@@ -103,7 +99,13 @@ func appendValue(b []byte, tag byte, value reflect.Value) ([]byte, error) {
 
 	case reflect.String:
 		v := value.String()
-		b = append(b, tag, byte(len(v)))
+		l := len(v) // support "big" string
+		for ; l > 255; l -= 255 {
+			b = append(b, tag, 255)
+			b = append(b, v[:255]...)
+			v = v[255:]
+		}
+		b = append(b, tag, byte(l))
 		return append(b, v...), nil
 
 	case reflect.Array:
@@ -117,19 +119,6 @@ func appendValue(b []byte, tag byte, value reflect.Value) ([]byte, error) {
 		}
 
 	case reflect.Slice:
-		// byte array
-		if value.Type().Elem().Kind() == reflect.Uint8 {
-			v := value.Bytes()
-			l := len(v)
-			for ; l > 255; l -= 255 {
-				b = append(b, tag, 255)
-				b = append(b, v[:255]...)
-				v = v[255:]
-			}
-			b = append(b, tag, byte(l))
-			return append(b, v...), nil
-		}
-
 		for i := 0; i < value.Len(); i++ {
 			if i > 0 {
 				b = append(b, 0, 0)
@@ -175,24 +164,30 @@ func Unmarshal(data []byte, v any) error {
 	}
 
 	value := reflect.ValueOf(v)
-	kind := value.Type().Kind()
+	kind := value.Kind()
 
 	if kind != reflect.Pointer {
 		return errors.New("tlv8: value should be pointer: " + kind.String())
 	}
 
 	value = value.Elem()
-	kind = value.Type().Kind()
+	kind = value.Kind()
 
-	switch kind {
-	case reflect.Struct:
-		return unmarshalStruct(data, value)
+	if kind == reflect.Interface {
+		value = value.Elem()
+		kind = value.Kind()
 	}
 
-	return errors.New("tlv8: not implemented: " + kind.String())
+	if kind != reflect.Struct {
+		return errors.New("tlv8: not implemented: " + kind.String())
+	}
+
+	return unmarshalStruct(data, value)
 }
 
 func unmarshalStruct(b []byte, value reflect.Value) error {
+	var waitSlice bool
+
 	for len(b) >= 2 {
 		t := b[0]
 		l := int(b[1])
@@ -200,6 +195,7 @@ func unmarshalStruct(b []byte, value reflect.Value) error {
 		// array item divider
 		if t == 0 && l == 0 {
 			b = b[2:]
+			waitSlice = true
 			continue
 		}
 
@@ -228,6 +224,13 @@ func unmarshalStruct(b []byte, value reflect.Value) error {
 			return fmt.Errorf("tlv8: can't find T=%d,L=%d,V=%x for: %s", t, l, v, value.Type().Name())
 		}
 
+		if waitSlice {
+			if valueField.Kind() != reflect.Slice {
+				return fmt.Errorf("tlv8: should be slice T=%d,L=%d,V=%x for: %s", t, l, v, value.Type().Name())
+			}
+			waitSlice = false
+		}
+
 		if err := unmarshalValue(v, valueField); err != nil {
 			return err
 		}
@@ -243,12 +246,6 @@ func unmarshalValue(v []byte, value reflect.Value) error {
 			return errors.New("tlv8: wrong size: " + value.Type().Name())
 		}
 		value.SetUint(uint64(v[0]))
-
-	case reflect.Int8:
-		if len(v) != 1 {
-			return errors.New("tlv8: wrong size: " + value.Type().Name())
-		}
-		value.SetInt(int64(v[0]))
 
 	case reflect.Uint16:
 		if len(v) != 2 {
@@ -280,11 +277,6 @@ func unmarshalValue(v []byte, value reflect.Value) error {
 		return nil
 
 	case reflect.Slice:
-		if value.Type().Elem().Kind() == reflect.Uint8 {
-			value.SetBytes(v)
-			return nil
-		}
-
 		i := growSlice(value)
 		return unmarshalValue(v, value.Index(i))
 

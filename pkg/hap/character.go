@@ -9,16 +9,23 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/hap/tlv8"
 )
 
+// Character - Aqara props order
+// Value should be omit for PW
+// Value may be empty for PR
 type Character struct {
-	AID         int      `json:"aid,omitempty"`
-	IID         int      `json:"iid"`
-	Type        string   `json:"type,omitempty"`
-	Format      string   `json:"format,omitempty"`
-	Value       any      `json:"value,omitempty"`
-	Event       any      `json:"ev,omitempty"`
-	Perms       []string `json:"perms,omitempty"`
-	Description string   `json:"description,omitempty"`
-	//MaxDataLen int      `json:"maxDataLen"`
+	IID    uint64   `json:"iid"`
+	Type   string   `json:"type"`
+	Format string   `json:"format"`
+	Value  any      `json:"value,omitempty"`
+	Perms  []string `json:"perms"`
+
+	//Descr    string `json:"description,omitempty"`
+	//MaxLen   int    `json:"maxLen,omitempty"`
+	//Unit     string `json:"unit,omitempty"`
+	//MinValue any    `json:"minValue,omitempty"`
+	//MaxValue any    `json:"maxValue,omitempty"`
+	//MinStep  any    `json:"minStep,omitempty"`
+	//ValidVal []any  `json:"valid-values,omitempty"`
 
 	listeners map[io.Writer]bool
 }
@@ -64,10 +71,12 @@ func (c *Character) NotifyListeners(ignore io.Writer) error {
 
 // GenerateEvent with raw HTTP headers
 func (c *Character) GenerateEvent() (data []byte, err error) {
-	chars := Characters{
-		Characters: []*Character{{AID: DeviceAID, IID: c.IID, Value: c.Value}},
+	v := JSONCharacters{
+		Value: []JSONCharacter{
+			{AID: DeviceAID, IID: c.IID, Value: c.Value},
+		},
 	}
-	if data, err = json.Marshal(chars); err != nil {
+	if data, err = json.Marshal(v); err != nil {
 		return
 	}
 

@@ -35,6 +35,14 @@ Requires ffmpeg built with `--enable-libfdk-aac`
 -acodec libfdk_aac -aprofile aac_eld 
 ```
 
+| SampleRate | RTPTime | constantDuration   | objectType   |
+|------------|---------|--------------------|--------------|
+| 8000       | 60      | =8000/1000*60=480  | 39 (AAC ELD) |
+| 16000      | 30      | =16000/1000*30=480 | 39 (AAC ELD) |
+| 24000      | 20      | =24000/1000*20=480 | 39 (AAC ELD) |
+| 16000      | 60      | =16000/1000*60=960 | 23 (AAC LD)  |
+| 24000      | 40      | =24000/1000*40=960 | 23 (AAC LD)  |
+
 ## Useful links
 
 - https://github.com/apple/HomeKitADK/blob/master/Documentation/crypto.md

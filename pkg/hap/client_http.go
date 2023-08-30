@@ -4,7 +4,6 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"time"
 )
 
 const (
@@ -20,10 +19,7 @@ const (
 )
 
 func (c *Client) Do(req *http.Request) (*http.Response, error) {
-	if err := c.conn.SetWriteDeadline(time.Now().Add(ConnDeadline)); err != nil {
-		return nil, err
-	}
-	if err := req.Write(c.conn); err != nil {
+	if err := req.Write(c.Conn); err != nil {
 		return nil, err
 	}
 	return http.ReadResponse(c.reader, req)

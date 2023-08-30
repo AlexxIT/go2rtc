@@ -7,6 +7,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+func Unmarshal(in []byte, out interface{}) (err error) {
+	return yaml.Unmarshal(in, out)
+}
+
 func Encode(v any, indent int) ([]byte, error) {
 	b := bytes.NewBuffer(nil)
 	e := yaml.NewEncoder(b)

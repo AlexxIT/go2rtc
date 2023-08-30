@@ -21,12 +21,5 @@ func Init() {
 var log zerolog.Logger
 
 func streamHandler(url string) (core.Producer, error) {
-	conn, err := homekit.NewClient(url, srtp.Server)
-	if err != nil {
-		return nil, err
-	}
-	if err = conn.Dial(); err != nil {
-		return nil, err
-	}
-	return conn, nil
+	return homekit.Dial(url, srtp.Server)
 }

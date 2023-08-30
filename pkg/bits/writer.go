@@ -55,6 +55,14 @@ func (w *Writer) WriteAllBits(bit, n byte) {
 	}
 }
 
+func (w *Writer) WriteBool(b bool) {
+	if b {
+		w.WriteBit(1)
+	} else {
+		w.WriteBit(0)
+	}
+}
+
 func (w *Writer) WriteUint16(v uint16) {
 	if w.bits != 0 {
 		w.WriteBits16(v, 16)
