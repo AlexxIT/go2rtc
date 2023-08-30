@@ -33,27 +33,18 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	exit := make(chan []byte)
-
-	cons := &magic.Keyframe{
-		RemoteAddr: tcp.RemoteAddr(r),
-		UserAgent:  r.UserAgent(),
-	}
-	cons.Listen(func(msg any) {
-		if b, ok := msg.([]byte); ok {
-			select {
-			case exit <- b:
-			default:
-			}
-		}
-	})
+	cons := magic.NewKeyframe()
+	cons.RemoteAddr = tcp.RemoteAddr(r)
+	cons.UserAgent = r.UserAgent()
 
 	if err := stream.AddConsumer(cons); err != nil {
 		log.Error().Err(err).Caller().Send()
 		return
 	}
 
-	data := <-exit
+	once := &core.OnceBuffer{} // init and first frame
+	_, _ = cons.WriteTo(once)
+	b := once.Buffer()
 
 	stream.RemoveConsumer(cons)
 
@@ -61,7 +52,7 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 	case core.CodecH264, core.CodecH265:
 		ts := time.Now()
 		var err error
-		if data, err = ffmpeg.TranscodeToJPEG(data, r.URL.Query()); err != nil {
+		if b, err = ffmpeg.JPEGWithQuery(b, r.URL.Query()); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -70,12 +61,12 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 
 	h := w.Header()
 	h.Set("Content-Type", "image/jpeg")
-	h.Set("Content-Length", strconv.Itoa(len(data)))
+	h.Set("Content-Length", strconv.Itoa(once.Len()))
 	h.Set("Cache-Control", "no-cache")
 	h.Set("Connection", "close")
 	h.Set("Pragma", "no-cache")
 
-	if _, err := w.Write(data); err != nil {
+	if _, err := w.Write(b); err != nil {
 		log.Error().Err(err).Caller().Send()
 	}
 }
