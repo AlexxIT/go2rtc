@@ -1,41 +1,75 @@
 package streams
 
 import (
-	"fmt"
-	"github.com/AlexxIT/go2rtc/pkg/core"
+	"errors"
 	"strings"
-	"sync"
+
+	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
 type Handler func(url string) (core.Producer, error)
 
 var handlers = map[string]Handler{}
-var handlersMu sync.Mutex
 
 func HandleFunc(scheme string, handler Handler) {
-	handlersMu.Lock()
 	handlers[scheme] = handler
-	handlersMu.Unlock()
-}
-
-func getHandler(url string) Handler {
-	i := strings.IndexByte(url, ':')
-	if i <= 0 { // TODO: i < 4 ?
-		return nil
-	}
-	handlersMu.Lock()
-	defer handlersMu.Unlock()
-	return handlers[url[:i]]
 }
 
 func HasProducer(url string) bool {
-	return getHandler(url) != nil
+	if i := strings.IndexByte(url, ':'); i > 0 {
+		scheme := url[:i]
+
+		if _, ok := handlers[scheme]; ok {
+			return true
+		}
+
+		if _, ok := redirects[scheme]; ok {
+			return true
+		}
+	}
+
+	return false
 }
 
 func GetProducer(url string) (core.Producer, error) {
-	handler := getHandler(url)
-	if handler == nil {
-		return nil, fmt.Errorf("unsupported scheme: %s", url)
+	if i := strings.IndexByte(url, ':'); i > 0 {
+		scheme := url[:i]
+
+		if redirect, ok := redirects[scheme]; ok {
+			location, err := redirect(url)
+			if err != nil {
+				return nil, err
+			}
+			if location != "" {
+				return GetProducer(location)
+			}
+		}
+
+		if handler, ok := handlers[scheme]; ok {
+			return handler(url)
+		}
 	}
-	return handler(url)
+
+	return nil, errors.New("streams: unsupported scheme: " + url)
+}
+
+// Redirect can return: location URL or error or empty URL and error
+type Redirect func(url string) (string, error)
+
+var redirects = map[string]Redirect{}
+
+func RedirectFunc(scheme string, redirect Redirect) {
+	redirects[scheme] = redirect
+}
+
+func Location(url string) (string, error) {
+	if i := strings.IndexByte(url, ':'); i > 0 {
+		scheme := url[:i]
+
+		if redirect, ok := redirects[scheme]; ok {
+			return redirect(url)
+		}
+	}
+
+	return "", nil
 }

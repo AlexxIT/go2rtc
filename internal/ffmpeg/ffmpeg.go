@@ -1,7 +1,6 @@
 package ffmpeg
 
 import (
-	"errors"
 	"net/url"
 	"strings"
 
@@ -10,7 +9,6 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg/hardware"
 	"github.com/AlexxIT/go2rtc/internal/rtsp"
 	"github.com/AlexxIT/go2rtc/internal/streams"
-	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/ffmpeg"
 )
 
@@ -27,12 +25,9 @@ func Init() {
 		defaults["global"] += " -v error"
 	}
 
-	streams.HandleFunc("ffmpeg", func(url string) (core.Producer, error) {
-		args := parseArgs(url[7:]) // remove `ffmpeg:`
-		if args == nil {
-			return nil, errors.New("can't generate ffmpeg command")
-		}
-		return streams.GetProducer("exec:" + args.String())
+	streams.RedirectFunc("ffmpeg", func(url string) (string, error) {
+		args := parseArgs(url[7:])
+		return "exec:" + args.String(), nil
 	})
 
 	device.Init(defaults["bin"])

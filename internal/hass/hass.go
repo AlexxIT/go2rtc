@@ -37,12 +37,15 @@ func Init() {
 	api.HandleFunc("/streams", apiOK)
 	api.HandleFunc("/stream/", apiStream)
 
-	streams.HandleFunc("hass", func(url string) (core.Producer, error) {
-		// check entity by name
-		if url2 := entities[url[5:]]; url2 != "" {
-			return streams.GetProducer(url2)
+	streams.RedirectFunc("hass", func(url string) (string, error) {
+		if location := entities[url[5:]]; location != "" {
+			return location, nil
 		}
 
+		return "", nil
+	})
+
+	streams.HandleFunc("hass", func(url string) (core.Producer, error) {
 		// support hass://supervisor?entity_id=camera.driveway_doorbell
 		client, err := hass.NewClient(url)
 		if err != nil {
