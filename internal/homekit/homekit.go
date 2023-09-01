@@ -1,6 +1,8 @@
 package homekit
 
 import (
+	"strings"
+
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/srtp"
@@ -22,4 +24,25 @@ var log zerolog.Logger
 
 func streamHandler(url string) (core.Producer, error) {
 	return homekit.Dial(url, srtp.Server)
+}
+
+func findHomeKitURL(stream *streams.Stream) string {
+	sources := stream.Sources()
+	if len(sources) == 0 {
+		return ""
+	}
+
+	url := sources[0]
+	if strings.HasPrefix(url, "homekit") {
+		return url
+	}
+
+	if strings.HasPrefix(url, "hass") {
+		location, _ := streams.Location(url)
+		if strings.HasPrefix(location, "homekit") {
+			return url
+		}
+	}
+
+	return ""
 }

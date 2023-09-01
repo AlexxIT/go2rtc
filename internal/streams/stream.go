@@ -38,6 +38,13 @@ func NewStream(source any) *Stream {
 	}
 }
 
+func (s *Stream) Sources() (sources []string) {
+	for _, prod := range s.producers {
+		sources = append(sources, prod.url)
+	}
+	return
+}
+
 func (s *Stream) SetSource(source string) {
 	for _, prod := range s.producers {
 		prod.SetSource(source)

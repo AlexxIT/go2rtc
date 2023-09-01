@@ -5,43 +5,74 @@ import (
 	"crypto/sha512"
 	"errors"
 	"net"
+	"net/url"
 
 	"github.com/AlexxIT/go2rtc/pkg/hap/chacha20poly1305"
 	"github.com/AlexxIT/go2rtc/pkg/hap/ed25519"
 	"github.com/AlexxIT/go2rtc/pkg/hap/hkdf"
 	"github.com/AlexxIT/go2rtc/pkg/hap/tlv8"
-	"github.com/AlexxIT/go2rtc/pkg/mdns"
 	"github.com/tadglines/go-pkgs/crypto/srp"
 )
 
-func Pair(deviceID, pin string) (*Client, error) {
-	var addr string
-	var mfi bool
-
-	_ = mdns.Discovery(mdns.ServiceHAP, func(entry *mdns.ServiceEntry) bool {
-		if entry.Complete() && entry.Info[TXTDeviceID] == deviceID {
-			addr = entry.Addr()
-			mfi = entry.Info[TXTFeatureFlags] == "1"
-			return true
-		}
-		return false
-	})
-
-	if addr == "" {
-		return nil, errors.New("hap: mdns.Discovery")
+// Pair homekit
+func Pair(rawURL string) (*Client, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, err
 	}
+
+	query := u.Query()
 
 	c := &Client{
-		DeviceAddress: addr,
-		DeviceID:      deviceID,
-		ClientID:      GenerateUUID(),
-		ClientPrivate: GenerateKey(),
+		DeviceAddress: u.Host,
+		DeviceID:      query.Get("device_id"),
+		ClientID:      query.Get("client_id"),
+		ClientPrivate: DecodeKey(query.Get("client_private")),
 	}
 
-	return c, c.Pair(mfi, pin)
+	if c.ClientID == "" {
+		c.ClientID = GenerateUUID()
+	}
+	if c.ClientPrivate == nil {
+		c.ClientPrivate = GenerateKey()
+	}
+
+	if err = c.Pair(query.Get("feature"), query.Get("pin")); err != nil {
+		return nil, err
+	}
+
+	return c, nil
 }
 
-func (c *Client) Pair(mfi bool, pin string) (err error) {
+func Unpair(rawURL string) error {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return err
+	}
+
+	query := u.Query()
+	conn := &Client{
+		DeviceAddress: u.Host,
+		DeviceID:      query.Get("device_id"),
+		DevicePublic:  DecodeKey(query.Get("device_public")),
+		ClientID:      query.Get("client_id"),
+		ClientPrivate: DecodeKey(query.Get("client_private")),
+	}
+
+	if err = conn.Dial(); err != nil {
+		return err
+	}
+
+	defer conn.Close()
+
+	if err = conn.ListPairings(); err != nil {
+		return err
+	}
+
+	return conn.DeletePairing(conn.ClientID)
+}
+
+func (c *Client) Pair(feature, pin string) (err error) {
 	if pin, err = SanitizePin(pin); err != nil {
 		return err
 	}
@@ -61,7 +92,7 @@ func (c *Client) Pair(mfi bool, pin string) (err error) {
 		Method: MethodPair,
 		State:  StateM1,
 	}
-	if mfi {
+	if feature == "1" {
 		plainM1.Method = MethodPairMFi // ff=1 => method=1, ff=2 => method=0
 	}
 	res, err := c.Post(PathPairSetup, MimeTLV8, tlv8.MarshalReader(plainM1))
