@@ -59,7 +59,7 @@
 <body>
 <script src="main.js"></script>
 <script>
-    async function getStreams(url, tableID) {
+    async function getSources(url, tableID) {
         const table = document.getElementById(tableID);
         table.innerText = 'loading...';
 
@@ -69,11 +69,16 @@
             return;
         }
 
-        /** @type {{streams:Array<{name:string,url:string}>}} */
+        const td = value => value ? `<td>${value}</td>` : '';
+        const th = (name, value) => value ? `<th>${name}</th>` : '';
+
+        /** @type {{sources:Array<{id:string,name:string,url:string,location:string}>}} */
         const data = await r.json();
-        table.innerHTML = data.streams.reduce((html, item) => {
-            return html + `<tr><td>${item.name}</td><td>${item.url}</td></tr>`;
-        }, '<thead><tr><th>Name</th><th>Source</th></tr></thead><tbody>') + '</tbody>';
+        const i0 = data.sources[0];
+        const thead = `<tr>${th('ID', i0.id)}${th('Name', i0.name)}${th('URL', i0.url)}${th('Location', i0.location)}</tr>`;
+        table.innerHTML = data.sources.reduce((html, item) => {
+            return `${html}<tr>${td(item.id)}${td(item.name)}${td(item.url)}${td(item.location)}</tr>`;
+        }, `<thead>${thead}</thead><tbody>`) + '</tbody>';
     }
 </script>
 
@@ -179,7 +184,7 @@
 <script>
     document.getElementById('dvrip').addEventListener('click', async ev => {
         ev.target.nextElementSibling.style.display = 'block';
-        await getStreams('api/dvrip', 'dvrip-table');
+        await getSources('api/dvrip', 'dvrip-table');
     });
 </script>
 
@@ -192,7 +197,7 @@
 <script>
     document.getElementById('devices').addEventListener('click', async ev => {
         ev.target.nextElementSibling.style.display = 'block';
-        await getStreams('api/ffmpeg/devices', 'devices-table');
+        await getSources('api/ffmpeg/devices', 'devices-table');
     });
 </script>
 
@@ -205,7 +210,7 @@
 <script>
     document.getElementById('hardware').addEventListener('click', async ev => {
         ev.target.nextElementSibling.style.display = 'block';
-        await getStreams('api/ffmpeg/hardware', 'hardware-table');
+        await getSources('api/ffmpeg/hardware', 'hardware-table');
     });
 </script>
 
@@ -234,7 +239,7 @@
         const url = new URL('api/nest?' + query.toString(), location.href);
 
         const r = await fetch(url, {cache: 'no-cache'});
-        await getStreams(r, 'nest-table');
+        await getSources(r, 'nest-table');
     });
 </script>
 
@@ -246,7 +251,7 @@
 <script>
     document.getElementById('hass').addEventListener('click', async ev => {
         ev.target.nextElementSibling.style.display = 'block';
-        await getStreams('api/hass', 'hass-table');
+        await getSources('api/hass', 'hass-table');
     });
 </script>
 
@@ -262,7 +267,7 @@
 <script>
     document.getElementById('onvif').addEventListener('click', async ev => {
         ev.target.nextElementSibling.style.display = 'block';
-        await getStreams('api/onvif', 'onvif-table');
+        await getSources('api/onvif', 'onvif-table');
     });
 
     document.getElementById('onvif-form').addEventListener('submit', async ev => {
@@ -271,7 +276,7 @@
         const url = new URL('api/onvif', location.href);
         url.searchParams.set('src', ev.target.elements['src'].value);
 
-        await getStreams(url.toString(), 'onvif-table');
+        await getSources(url.toString(), 'onvif-table');
     });
 </script>
 
@@ -289,13 +294,13 @@
 <script>
     document.getElementById('roborock').addEventListener('click', async ev => {
         ev.target.nextElementSibling.style.display = 'block';
-        await getStreams('api/roborock', 'roborock-table');
+        await getSources('api/roborock', 'roborock-table');
     });
 
     document.getElementById('roborock-form').addEventListener('submit', async ev => {
         ev.preventDefault();
         const r = await fetch('api/roborock', {method: 'POST', body: new FormData(ev.target)});
-        await getStreams(r, 'roborock-table');
+        await getSources(r, 'roborock-table');
     });
 </script>
 
@@ -307,7 +312,7 @@
 <script>
     document.getElementById('webtorrent').addEventListener('click', async ev => {
         ev.target.nextElementSibling.style.display = 'block';
-        await getStreams('api/webtorrent', 'webtorrent-table');
+        await getSources('api/webtorrent', 'webtorrent-table');
     });
 </script>
 

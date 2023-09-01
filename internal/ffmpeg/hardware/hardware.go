@@ -1,11 +1,12 @@
 package hardware
 
 import (
-	"github.com/AlexxIT/go2rtc/internal/api"
-	"github.com/AlexxIT/go2rtc/pkg/ffmpeg"
 	"net/http"
 	"os/exec"
 	"strings"
+
+	"github.com/AlexxIT/go2rtc/internal/api"
+	"github.com/AlexxIT/go2rtc/pkg/ffmpeg"
 
 	"github.com/rs/zerolog/log"
 )
@@ -21,7 +22,7 @@ const (
 
 func Init(bin string) {
 	api.HandleFunc("api/ffmpeg/hardware", func(w http.ResponseWriter, r *http.Request) {
-		api.ResponseStreams(w, ProbeAll(bin))
+		api.ResponseSources(w, ProbeAll(bin))
 	})
 }
 

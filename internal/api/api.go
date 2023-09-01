@@ -213,21 +213,23 @@ func exitHandler(w http.ResponseWriter, r *http.Request) {
 	os.Exit(code)
 }
 
-type Stream struct {
-	Name string `json:"name"`
-	URL  string `json:"url"`
+type Source struct {
+	ID       string `json:"id,omitempty"`
+	Name     string `json:"name,omitempty"`
+	URL      string `json:"url,omitempty"`
+	Location string `json:"location,omitempty"`
 }
 
-func ResponseStreams(w http.ResponseWriter, streams []Stream) {
-	if len(streams) == 0 {
-		http.Error(w, "no streams", http.StatusNotFound)
+func ResponseSources(w http.ResponseWriter, sources []Source) {
+	if len(sources) == 0 {
+		http.Error(w, "no sources", http.StatusNotFound)
 		return
 	}
 
 	var response = struct {
-		Streams []Stream `json:"streams"`
+		Sources []Source `json:"sources"`
 	}{
-		Streams: streams,
+		Sources: sources,
 	}
 	ResponseJSON(w, response)
 }

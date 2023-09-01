@@ -72,11 +72,13 @@ func Init() {
 			}
 		})
 
-		var items []api.Stream
+		var items []api.Source
 		for name, url := range entities {
-			items = append(items, api.Stream{Name: name, URL: url})
+			items = append(items, api.Source{
+				Name: name, URL: "hass:" + name, Location: url,
+			})
 		}
-		api.ResponseStreams(w, items)
+		api.ResponseSources(w, items)
 	})
 
 	// for Addon listen on hassio interface, so WebUI feature will work
