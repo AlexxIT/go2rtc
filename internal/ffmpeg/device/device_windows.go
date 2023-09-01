@@ -80,7 +80,7 @@ func initDevices() {
 		name := m[1]
 		kind := m[2]
 
-		stream := api.Source{
+		stream := &api.Source{
 			Name: name, URL: "ffmpeg:device?" + kind + "=" + name,
 		}
 

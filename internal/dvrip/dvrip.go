@@ -48,7 +48,7 @@ func apiDvrip(w http.ResponseWriter, r *http.Request) {
 	api.ResponseSources(w, items)
 }
 
-func discover() ([]api.Source, error) {
+func discover() ([]*api.Source, error) {
 	addr := &net.UDPAddr{
 		Port: Port,
 		IP:   net.IP{239, 255, 255, 250},
@@ -63,7 +63,7 @@ func discover() ([]api.Source, error) {
 
 	go sendBroadcasts(conn)
 
-	var items []api.Source
+	var items []*api.Source
 
 	for _, info := range getResponses(conn) {
 		if info.HostIP == "" || info.HostName == "" {
@@ -75,7 +75,7 @@ func discover() ([]api.Source, error) {
 			continue
 		}
 
-		items = append(items, api.Source{
+		items = append(items, &api.Source{
 			Name: info.HostName,
 			URL:  "dvrip://user:pass@" + host + "?channel=0&subtype=0",
 		})

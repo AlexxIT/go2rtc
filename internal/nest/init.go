@@ -42,12 +42,12 @@ func apiNest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var items []api.Source
+	var items []*api.Source
 
 	for name, deviceID := range devices {
 		query.Set("device_id", deviceID)
 
-		items = append(items, api.Source{
+		items = append(items, &api.Source{
 			Name: name, URL: "nest:?" + query.Encode(),
 		})
 	}

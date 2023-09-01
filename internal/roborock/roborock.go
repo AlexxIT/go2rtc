@@ -85,7 +85,7 @@ func apiHandle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var items []api.Source
+	var items []*api.Source
 
 	for _, device := range devices {
 		source := fmt.Sprintf(
@@ -94,7 +94,7 @@ func apiHandle(w http.ResponseWriter, r *http.Request) {
 			Auth.UserData.IoT.User, Auth.UserData.IoT.Pass, Auth.UserData.IoT.Domain,
 			device.DID, device.Key,
 		)
-		items = append(items, api.Source{Name: device.Name, URL: source})
+		items = append(items, &api.Source{Name: device.Name, URL: source})
 	}
 
 	api.ResponseSources(w, items)

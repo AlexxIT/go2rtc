@@ -40,7 +40,7 @@ func GetInput(src string) (string, error) {
 var Bin string
 
 var videos, audios []string
-var streams []api.Source
+var streams []*api.Source
 var runonce sync.Once
 
 func apiDevices(w http.ResponseWriter, r *http.Request) {

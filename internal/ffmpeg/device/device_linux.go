@@ -70,7 +70,7 @@ func initDevices() {
 		m := re.FindAllStringSubmatch(string(b), -1)
 		for _, i := range m {
 			size, _, _ := strings.Cut(i[4], " ")
-			stream := api.Source{
+			stream := &api.Source{
 				Name: i[3] + " | " + i[4],
 				URL:  "ffmpeg:device?video=" + name + "&input_format=" + i[2] + "&video_size=" + size,
 			}
@@ -86,7 +86,7 @@ func initDevices() {
 
 	err = exec.Command(Bin, "-f", "alsa", "-i", "default", "-t", "1", "-f", "null", "-").Run()
 	if err == nil {
-		stream := api.Source{
+		stream := &api.Source{
 			Name: "ALSA default",
 			URL:  "ffmpeg:device?audio=default&channels=1&sample_rate=16000&#audio=opus",
 		}

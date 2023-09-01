@@ -75,9 +75,9 @@ func Init() {
 			}
 		})
 
-		var items []api.Source
+		var items []*api.Source
 		for name, url := range entities {
-			items = append(items, api.Source{
+			items = append(items, &api.Source{
 				Name: name, URL: "hass:" + name, Location: url,
 			})
 		}

@@ -79,7 +79,7 @@ func initDevices() {
 			audios = append(audios, name)
 		}
 
-		streams = append(streams, api.Source{
+		streams = append(streams, &api.Source{
 			Name: name, URL: "ffmpeg:device?" + kind + "=" + name,
 		})
 	}

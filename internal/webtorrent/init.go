@@ -111,11 +111,11 @@ func apiHandle(w http.ResponseWriter, r *http.Request) {
 			}
 		} else {
 			// response all shares
-			var items []api.Source
+			var items []*api.Source
 			for src, share := range shares {
 				pwd := srv.GetSharePwd(share)
 				source := fmt.Sprintf("webtorrent:?share=%s&pwd=%s", share, pwd)
-				items = append(items, api.Source{ID: src, URL: source})
+				items = append(items, &api.Source{ID: src, URL: source})
 			}
 			api.ResponseSources(w, items)
 		}

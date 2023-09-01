@@ -220,14 +220,14 @@ type Source struct {
 	Location string `json:"location,omitempty"`
 }
 
-func ResponseSources(w http.ResponseWriter, sources []Source) {
+func ResponseSources(w http.ResponseWriter, sources []*Source) {
 	if len(sources) == 0 {
 		http.Error(w, "no sources", http.StatusNotFound)
 		return
 	}
 
 	var response = struct {
-		Sources []Source `json:"sources"`
+		Sources []*Source `json:"sources"`
 	}{
 		Sources: sources,
 	}

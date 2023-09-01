@@ -122,7 +122,7 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 func apiOnvif(w http.ResponseWriter, r *http.Request) {
 	src := r.URL.Query().Get("src")
 
-	var items []api.Source
+	var items []*api.Source
 
 	if src == "" {
 		urls, err := onvif.DiscoveryStreamingURLs()
@@ -150,7 +150,7 @@ func apiOnvif(w http.ResponseWriter, r *http.Request) {
 				u.Path = ""
 			}
 
-			items = append(items, api.Source{Name: u.Host, URL: u.String()})
+			items = append(items, &api.Source{Name: u.Host, URL: u.String()})
 		}
 	} else {
 		client, err := onvif.NewClient(src)
@@ -177,14 +177,14 @@ func apiOnvif(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for i, token := range tokens {
-			items = append(items, api.Source{
+			items = append(items, &api.Source{
 				Name: name + " stream" + strconv.Itoa(i),
 				URL:  src + "?subtype=" + token,
 			})
 		}
 
 		if len(tokens) > 0 && client.HasSnapshots() {
-			items = append(items, api.Source{
+			items = append(items, &api.Source{
 				Name: name + " snapshot",
 				URL:  src + "?subtype=" + tokens[0] + "&snapshot",
 			})
