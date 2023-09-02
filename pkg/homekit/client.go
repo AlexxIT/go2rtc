@@ -95,6 +95,17 @@ func (c *Client) GetMedias() []*core.Media {
 	c.SDP = fmt.Sprintf("%+v\n%+v", c.videoConfig, c.audioConfig)
 
 	c.Medias = []*core.Media{
+		{
+			Kind:      core.KindVideo,
+			Direction: core.DirectionRecvonly,
+			Codecs: []*core.Codec{
+				{
+					Name:        core.CodecJPEG,
+					ClockRate:   90000,
+					PayloadType: core.PayloadTypeRAW,
+				},
+			},
+		},
 		videoToMedia(c.videoConfig.Codecs),
 		audioToMedia(c.audioConfig.Codecs),
 	}
@@ -164,8 +175,12 @@ func (c *Client) Start() error {
 func (c *Client) Stop() error {
 	_ = c.SuperProducer.Close()
 
-	c.srtp.DelSession(c.videoSession)
-	c.srtp.DelSession(c.audioSession)
+	if c.videoSession != nil {
+		c.srtp.DelSession(c.videoSession)
+	}
+	if c.audioSession != nil {
+		c.srtp.DelSession(c.audioSession)
+	}
 
 	return c.hap.Close()
 }
