@@ -61,7 +61,7 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 
 	h := w.Header()
 	h.Set("Content-Type", "image/jpeg")
-	h.Set("Content-Length", strconv.Itoa(once.Len()))
+	h.Set("Content-Length", strconv.Itoa(len(b)))
 	h.Set("Cache-Control", "no-cache")
 	h.Set("Connection", "close")
 	h.Set("Pragma", "no-cache")
