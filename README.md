@@ -13,7 +13,7 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
 - zero-delay for many supported protocols (lowest possible streaming latency)
 - streaming from [RTSP](#source-rtsp), [RTMP](#source-rtmp), [DVRIP](#source-dvrip), [HTTP](#source-http) (FLV/MJPEG/JPEG/TS), [USB Cameras](#source-ffmpeg-device) and [other sources](#module-streams)
 - streaming from any sources, supported by [FFmpeg](#source-ffmpeg)
-- streaming to [RTSP](#module-rtsp), [WebRTC](#module-webrtc), [MSE/MP4](#module-mp4), [HLS](#module-hls) or [MJPEG](#module-mjpeg)
+- streaming to [RTSP](#module-rtsp), [WebRTC](#module-webrtc), [MSE/MP4](#module-mp4), [HomeKit](#module-homekit) [HLS](#module-hls) or [MJPEG](#module-mjpeg)
 - first project in the World with support streaming from [HomeKit Cameras](#source-homekit)
 - support H265 for WebRTC in browser (Safari only, [read more](https://github.com/AlexxIT/Blog/issues/5))
 - on the fly transcoding for unsupported codecs via [FFmpeg](#source-ffmpeg)
@@ -57,6 +57,7 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
     * [Source: Bubble](#source-bubble)
     * [Source: DVRIP](#source-dvrip)
     * [Source: Tapo](#source-tapo)
+    * [Source: Kasa](#source-kasa)
     * [Source: Ivideon](#source-ivideon)
     * [Source: Hass](#source-hass)
     * [Source: ISAPI](#source-isapi)
@@ -69,6 +70,7 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
   * [Module: API](#module-api)
   * [Module: RTSP](#module-rtsp)
   * [Module: WebRTC](#module-webrtc)
+  * [Module: HomeKit](#module-homekit)
   * [Module: WebTorrent](#module-webtorrent)
   * [Module: Ngrok](#module-ngrok)
   * [Module: Hass](#module-hass)
@@ -185,6 +187,7 @@ Available source types:
 - [bubble](#source-bubble) - streaming from ESeeCloud/dvr163 NVR
 - [dvrip](#source-dvrip) - streaming from DVR-IP NVR
 - [tapo](#source-tapo) - TP-Link Tapo cameras with [two way audio](#two-way-audio) support
+- [kasa](#source-tapo) - TP-Link Kasa cameras
 - [ivideon](#source-ivideon) - public cameras from [Ivideon](https://tv.ivideon.com/) service
 - [hass](#source-hass) - Home Assistant integration
 - [isapi](#source-isapi) - two way audio for Hikvision (ISAPI) cameras
@@ -233,6 +236,15 @@ streams:
 - If the stream from your camera is glitchy, try using [ffmpeg source](#source-ffmpeg). It will not add CPU load if you won't use transcoding
 - If the stream from your camera is very glitchy, try to use transcoding with [ffmpeg source](#source-ffmpeg)
 
+**Other options**
+
+Format: `rtsp...#{param1}#{param2}#{param3}`
+
+- Add custom timeout `#timeout=30` (in seconds)
+- Ignore audio - `#media=video` or ignore video - `#media=audio` 
+- Ignore two way audio API `#backchannel=0` - important for some glitchy cameras
+- Use WebSocket transport `#transport=ws...`
+
 **RTSP over WebSocket**
 
 ```yaml
@@ -276,6 +288,9 @@ streams:
 
   # [MJPEG or H.264/H.265 bitstream or MPEG-TS]
   tcp_magic: tcp://192.168.1.123:12345
+
+  # Add custom header
+  custom_header: "https://mjpeg.sanford.io/count.mjpeg#header=Authorization: Bearer XXX"
 ```
 
 **PS.** Dahua camera has bug: if you select MJPEG codec for RTSP second stream - snapshot won't work.
@@ -424,9 +439,8 @@ If you see a device but it does not have a pair button - it is paired to some ec
 **Important:**
 
 - HomeKit audio uses very non-standard **AAC-ELD** codec with very non-standard params and specification violation
-- Audio can be transcoded by [ffmpeg](#source-ffmpeg) source with `#async` option
-- Audio can be played by `ffplay` with `-use_wallclock_as_timestamps 1 -async 1` options
 - Audio can't be played in `VLC` and probably any other player
+- Audio should be transcoded for using with MSE, WebRTC, etc.
 
 Recommended settings for using HomeKit Camera with WebRTC, MSE, MP4, RTSP:
 
@@ -434,7 +448,7 @@ Recommended settings for using HomeKit Camera with WebRTC, MSE, MP4, RTSP:
 streams:
   aqara_g3:
     - hass:Camera-Hub-G3-AB12
-    - ffmpeg:aqara_g3#audio=aac#audio=opus#async
+    - ffmpeg:aqara_g3#audio=aac#audio=opus
 ```
 
 RTSP link with "normal" audio for any player: `rtsp://192.168.1.123:8554/aqara_g3?video&audio=aac`
@@ -481,6 +495,15 @@ streams:
   camera1: tapo://cloud-password@192.168.1.123
   # admin username and UPPERCASE MD5 cloud-password hash
   camera2: tapo://admin:MD5-PASSWORD-HASH@192.168.1.123
+```
+
+#### Source: Kasa
+
+[TP-Link Kasa](https://www.kasasmart.com/) non-standard protocol [more info](https://medium.com/@hu3vjeen/reverse-engineering-tp-link-kc100-bac4641bf1cd).
+
+```yaml
+streams:
+  kasa: kasa://user:pass@192.168.1.123:19443/https/stream/mixed
 ```
 
 #### Source: Ivideon
@@ -573,6 +596,10 @@ This source type support four connection formats.
 
 This format is only supported in go2rtc. Unlike WHEP it supports asynchronous WebRTC connection and two way audio.
 
+**openipc**
+
+Support connection to [OpenIPC](https://openipc.org/) cameras.
+
 **wyze**
 
 Supports connection to [Wyze](https://www.wyze.com/) cameras, using WebRTC protocol. You can use [docker-wyze-bridge](https://github.com/mrlt8/docker-wyze-bridge) project to get connection credentials.
@@ -585,6 +612,7 @@ Supports [Amazon Kinesis Video Streams](https://aws.amazon.com/kinesis/video-str
 streams:
   webrtc-whep:    webrtc:http://192.168.1.123:1984/api/webrtc?src=camera1
   webrtc-go2rtc:  webrtc:ws://192.168.1.123:1984/api/ws?src=camera1
+  webrtc-openipc: webrtc:ws://192.168.1.123/webrtc_ws#format=openipc#ice_servers=[{"urls":"stun:stun.kinesisvideo.eu-north-1.amazonaws.com:443"}]
   webrtc-wyze:    webrtc:http://192.168.1.123:5000/signaling/camera1?kvs#format=wyze
   webrtc-kinesis: webrtc:wss://...amazonaws.com/?...#format=kinesis#client_id=...#ice_servers=[{...},{...}]
 ```
@@ -790,6 +818,58 @@ webrtc:
     - urls: [turn:123.123.123.123:3478]
       username: your_user
       credential: your_pass
+```
+
+### Module: HomeKit
+
+HomeKit module can work in two modes:
+
+- export any H264 camera to Apple HomeKit
+- transparent proxy any Apple HomeKit camera (Aqara, Eve, Eufy, etc.) back to Apple HomeKit, so you will have all camera features in Apple Home and also will have RTSP/WebRTC/MP4/etc. from your HomeKit camera
+
+**Important**
+
+- HomeKit cameras supports only H264 video and OPUS audio
+
+**Minimal config**
+
+```yaml
+streams:
+  dahua1: rtsp://admin:password@192.168.1.123/cam/realmonitor?channel=1&subtype=0
+homekit:
+  dahua1:  # same stream ID from streams list, default PIN - 195502224
+```
+
+**Full config**
+
+```yaml
+streams:
+  dahua1:
+    - rtsp://admin:password@192.168.1.123/cam/realmonitor?channel=1&subtype=0
+    - ffmpeg:dahua1#video=h264#hardware  # if your camera doesn't support H264, important for HomeKit
+    - ffmpeg:dahua1#audio=opus           # only OPUS audio supported by HomeKit
+
+homekit:
+  dahua1:                   # same stream ID from streams list
+    pin: 12345678           # custom PIN, default: 195502224
+    name: Dahua camera      # custom camera name, default: generated from stream ID
+    device_id: dahua1       # custom ID, default: generated from stream ID
+    device_private: dahua1  # custom key, default: generated from stream ID
+```
+
+**Proxy HomeKit camera**
+
+- Video stream from HomeKit camera to Apple device (iPhone, AppleTV) will be transmitted directly
+- Video stream from HomeKit camera to RTSP/WebRTC/MP4/etc. will be transmitted via go2rtc
+
+```yaml
+streams:
+  aqara1:
+    - homekit://...
+    - ffmpeg:aqara1#audio=aac#audio=opus  # optional audio transcoding
+
+homekit:
+  aqara1:  # same stream ID from streams list
 ```
 
 ### Module: WebTorrent
