@@ -15,7 +15,10 @@ type Server struct {
 }
 
 func NewServer(address string) *Server {
-	return &Server{address: address}
+	return &Server{
+		address:  address,
+		sessions: map[uint32]*Session{},
+	}
 }
 
 func (s *Server) Port() int {
@@ -45,10 +48,6 @@ func (s *Server) AddSession(session *Session) {
 	}
 
 	session.conn = s.conn
-
-	if s.sessions == nil {
-		s.sessions = map[uint32]*Session{}
-	}
 
 	s.sessions[session.Remote.SSRC] = session
 }
