@@ -1,7 +1,6 @@
 package homekit
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -50,7 +49,16 @@ func Dial(rawURL string, server *srtp.Server) (*Client, error) {
 		return nil, err
 	}
 
-	return &Client{hap: conn, srtp: server}, nil
+	client := &Client{
+		SuperProducer: core.SuperProducer{
+			Type: "HomeKit active producer",
+			URL:  conn.URL(),
+		},
+		hap:  conn,
+		srtp: server,
+	}
+
+	return client, nil
 }
 
 func (c *Client) Conn() net.Conn {
@@ -83,6 +91,7 @@ func (c *Client) GetMedias() []*core.Media {
 		return nil
 	}
 
+	c.URL = c.hap.URL()
 	c.SDP = fmt.Sprintf("%+v\n%+v", c.videoConfig, c.audioConfig)
 
 	c.Medias = []*core.Media{
@@ -126,15 +135,20 @@ func (c *Client) Start() error {
 		c.videoSession.OnReadRTP = func(packet *rtp.Packet) {
 			deadline.Reset(core.ConnDeadline)
 			videoTrack.WriteRTP(packet)
+			c.Recv += len(packet.Payload)
 		}
 
 		if audioTrack != nil {
-			c.audioSession.OnReadRTP = audioTrack.WriteRTP
+			c.audioSession.OnReadRTP = func(packet *rtp.Packet) {
+				audioTrack.WriteRTP(packet)
+				c.Recv += len(packet.Payload)
+			}
 		}
 	} else {
 		c.audioSession.OnReadRTP = func(packet *rtp.Packet) {
 			deadline.Reset(core.ConnDeadline)
 			audioTrack.WriteRTP(packet)
+			c.Recv += len(packet.Payload)
 		}
 	}
 
@@ -156,18 +170,6 @@ func (c *Client) Stop() error {
 	return c.hap.Close()
 }
 
-func (c *Client) MarshalJSON() ([]byte, error) {
-	info := &core.Info{
-		Type:      "HomeKit active producer",
-		URL:       c.hap.URL(),
-		SDP:       fmt.Sprintf("%+v\n%+v", c.videoConfig, c.audioConfig),
-		Medias:    c.Medias,
-		Receivers: c.Receivers,
-		Recv:      c.videoSession.Recv + c.audioSession.Recv,
-	}
-	return json.Marshal(info)
-}
-
 func (c *Client) trackByKind(kind string) *core.Receiver {
 	for _, receiver := range c.Receivers {
 		if receiver.Codec.Kind() == kind {
@@ -185,6 +187,8 @@ func (c *Client) startMJPEG() error {
 		if err != nil {
 			return err
 		}
+
+		c.Recv += len(b)
 
 		packet := &rtp.Packet{
 			Header:  rtp.Header{Timestamp: core.Now90000()},
