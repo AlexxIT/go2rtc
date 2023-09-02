@@ -95,7 +95,7 @@ func Init() {
 			srv.hap.Handler = homekit.ServerHandler(srv)
 		}
 
-		entry := &mdns.ServiceEntry{
+		srv.mdns = &mdns.ServiceEntry{
 			Name: name,
 			Port: uint16(api.Port()),
 			Info: map[string]string{
@@ -110,9 +110,11 @@ func Init() {
 				hap.TXTSetupHash:    srv.hap.SetupHash(),
 			},
 		}
-		entries = append(entries, entry)
+		entries = append(entries, srv.mdns)
 
-		host := entry.Host(mdns.ServiceHAP)
+		srv.UpdateStatus()
+
+		host := srv.mdns.Host(mdns.ServiceHAP)
 		servers[host] = srv
 	}
 

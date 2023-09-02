@@ -19,18 +19,29 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/hap/tlv8"
 	"github.com/AlexxIT/go2rtc/pkg/homekit"
 	"github.com/AlexxIT/go2rtc/pkg/magic"
+	"github.com/AlexxIT/go2rtc/pkg/mdns"
 	"github.com/AlexxIT/go2rtc/pkg/srtp"
 )
 
 type server struct {
 	stream    string      // stream name from YAML
 	hap       *hap.Server // server for HAP connection and encryption
+	mdns      *mdns.ServiceEntry
 	srtp      *srtp.Server
 	accessory *hap.Accessory // HAP accessory
 	pairings  []string       // pairings list
 
 	streams  map[string]*homekit.Consumer
 	consumer *homekit.Consumer
+}
+
+func (s *server) UpdateStatus() {
+	// true status is important, or device may be offline in Apple Home
+	if len(s.pairings) == 0 {
+		s.mdns.Info[hap.TXTStatusFlags] = hap.StatusNotPaired
+	} else {
+		s.mdns.Info[hap.TXTStatusFlags] = hap.StatusPaired
+	}
 }
 
 func (s *server) GetAccessories(_ net.Conn) []*hap.Accessory {
@@ -188,6 +199,7 @@ func (s *server) AddPair(conn net.Conn, id string, public []byte, permissions by
 		"permissions":   []string{string('0' + permissions)},
 	}
 	s.pairings = append(s.pairings, query.Encode())
+	s.UpdateStatus()
 	s.PatchConfig()
 }
 
@@ -201,6 +213,7 @@ func (s *server) DelPair(conn net.Conn, id string) {
 		}
 
 		s.pairings = append(s.pairings[:i], s.pairings[i+1:]...)
+		s.UpdateStatus()
 		s.PatchConfig()
 		break
 	}
