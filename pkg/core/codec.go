@@ -68,12 +68,10 @@ func (c *Codec) PrintName() string {
 	switch c.Name {
 	case CodecAAC:
 		return "AAC"
-	case CodecELD:
-		return "AAC-ELD"
 	case CodecPCM:
-		return "PCM-S16BE"
+		return "S16B"
 	case CodecPCML:
-		return "PCM-S16LE"
+		return "S16L"
 	}
 	return c.Name
 }
