@@ -61,7 +61,7 @@ var defaults = map[string]string{
 	// https://github.com/pion/webrtc/issues/1514
 	// https://ffmpeg.org/ffmpeg-resampler.html
 	// `-async 1` or `-min_comp 0` - force frame_size=960, important for WebRTC audio quality
-	"opus":       "-c:a libopus -ar:a 48000 -ac:a 2 -application:a voip -min_comp 0",
+	"opus":       "-c:a libopus -application:a lowdelay -frame_duration 20 -min_comp 0",
 	"pcmu":       "-c:a pcm_mulaw -ar:a 8000 -ac:a 1",
 	"pcmu/16000": "-c:a pcm_mulaw -ar:a 16000 -ac:a 1",
 	"pcmu/48000": "-c:a pcm_mulaw -ar:a 48000 -ac:a 1",
