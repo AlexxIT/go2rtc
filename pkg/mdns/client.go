@@ -30,12 +30,35 @@ func (e *ServiceEntry) String() string {
 	return string(b)
 }
 
+func (e *ServiceEntry) TXT() []string {
+	var txt []string
+	for k, v := range e.Info {
+		txt = append(txt, k+"="+v)
+	}
+	return txt
+}
+
 func (e *ServiceEntry) Complete() bool {
 	return e.IP != nil && e.Port > 0 && e.Info != nil
 }
 
 func (e *ServiceEntry) Addr() string {
 	return fmt.Sprintf("%s:%d", e.IP, e.Port)
+}
+
+func (e *ServiceEntry) Host(service string) string {
+	return e.name() + "." + strings.TrimRight(service, ".")
+}
+
+func (e *ServiceEntry) name() string {
+	b := []byte(e.Name)
+	for i, c := range b {
+		if 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' || '0' <= c && c <= '9' {
+			continue
+		}
+		b[i] = '-'
+	}
+	return string(b)
 }
 
 var MulticastAddr = &net.UDPAddr{
@@ -147,8 +170,6 @@ func (b *Browser) ListenMulticastUDP() error {
 		return err
 	}
 
-	ctx := context.Background()
-
 	// 2. Create senders
 	lc1 := net.ListenConfig{
 		Control: func(network, address string, c syscall.RawConn) error {
@@ -158,6 +179,8 @@ func (b *Browser) ListenMulticastUDP() error {
 			})
 		},
 	}
+
+	ctx := context.Background()
 
 	for _, ip4 := range ip4s {
 		conn, err := lc1.ListenPacket(ctx, "udp4", ip4.String()+":5353") // same port important

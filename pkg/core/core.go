@@ -110,6 +110,7 @@ const (
 type SuperProducer struct {
 	Type      string      `json:"type,omitempty"`
 	URL       string      `json:"url,omitempty"`
+	SDP       string      `json:"sdp,omitempty"`
 	Medias    []*Media    `json:"medias,omitempty"`
 	Receivers []*Receiver `json:"receivers,omitempty"`
 	Recv      int         `json:"recv,omitempty"`
@@ -142,9 +143,10 @@ type SuperConsumer struct {
 	URL        string    `json:"url,omitempty"`
 	RemoteAddr string    `json:"remote_addr,omitempty"`
 	UserAgent  string    `json:"user_agent,omitempty"`
+	SDP        string    `json:"sdp,omitempty"`
 	Medias     []*Media  `json:"medias,omitempty"`
-	Senders    []*Sender `json:"receivers,omitempty"`
-	Send       int       `json:"recv,omitempty"`
+	Senders    []*Sender `json:"senders,omitempty"`
+	Send       int       `json:"send,omitempty"`
 }
 
 func (s *SuperConsumer) GetMedias() []*Media {

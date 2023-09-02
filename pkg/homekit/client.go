@@ -3,6 +3,7 @@ package homekit
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/rand"
 	"net"
 	"net/url"
@@ -82,6 +83,8 @@ func (c *Client) GetMedias() []*core.Media {
 		return nil
 	}
 
+	c.SDP = fmt.Sprintf("%+v\n%+v", c.videoConfig, c.audioConfig)
+
 	c.Medias = []*core.Media{
 		videoToMedia(c.videoConfig.Codecs),
 		audioToMedia(c.audioConfig.Codecs),
@@ -135,6 +138,10 @@ func (c *Client) Start() error {
 		}
 	}
 
+	if c.audioSession.OnReadRTP != nil {
+		c.audioSession.OnReadRTP = timekeeper(c.audioSession.OnReadRTP)
+	}
+
 	<-deadline.C
 
 	return nil
@@ -151,9 +158,9 @@ func (c *Client) Stop() error {
 
 func (c *Client) MarshalJSON() ([]byte, error) {
 	info := &core.Info{
-		Type: "HomeKit active producer",
-		URL:  c.hap.URL(),
-		//SDP:       fmt.Sprintf("%+v", *c.config),
+		Type:      "HomeKit active producer",
+		URL:       c.hap.URL(),
+		SDP:       fmt.Sprintf("%+v\n%+v", c.videoConfig, c.audioConfig),
 		Medias:    c.Medias,
 		Receivers: c.Receivers,
 		Recv:      c.videoSession.Recv + c.audioSession.Recv,
@@ -197,7 +204,7 @@ func (c *Client) srtpEndpoint() *srtp.Endpoint {
 	}
 }
 
-func limitter(handler core.HandlerFunc) core.HandlerFunc {
+func timekeeper(handler core.HandlerFunc) core.HandlerFunc {
 	const sampleRate = 16000
 	const sampleSize = 480
 

@@ -32,19 +32,19 @@ func NewStream(
 
 	videoCodec.RTPParams = []RTPParams{
 		{
-			PayloadType:     99,
-			SSRC:            videoSession.Local.SSRC,
-			MaxBitrate:      299,
-			MinRTCPInterval: 0.5,
-			MaxMTU:          []uint16{1378},
+			PayloadType:  99,
+			SSRC:         videoSession.Local.SSRC,
+			MaxBitrate:   299,
+			RTCPInterval: 0.5,
+			MaxMTU:       []uint16{1378},
 		},
 	}
 	audioCodec.RTPParams = []RTPParams{
 		{
-			PayloadType:     110,
-			SSRC:            audioSession.Local.SSRC,
-			MaxBitrate:      24,
-			MinRTCPInterval: 5,
+			PayloadType:  110,
+			SSRC:         audioSession.Local.SSRC,
+			MaxBitrate:   24,
+			RTCPInterval: 5,
 
 			ComfortNoisePayloadType: []uint8{13},
 		},

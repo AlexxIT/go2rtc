@@ -26,7 +26,7 @@ type RTPParams struct {
 	PayloadType             uint8    `tlv8:"1"`
 	SSRC                    uint32   `tlv8:"2"`
 	MaxBitrate              uint16   `tlv8:"3"`
-	MinRTCPInterval         float32  `tlv8:"4"`
+	RTCPInterval            float32  `tlv8:"4"`
 	MaxMTU                  []uint16 `tlv8:"5"`
 	ComfortNoisePayloadType []uint8  `tlv8:"6"`
 }

@@ -32,10 +32,7 @@ func (s *Server) AddSession(session *Session) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if err := session.Local.Init(); err != nil {
-		return
-	}
-	if err := session.Remote.Init(); err != nil {
+	if err := session.init(); err != nil {
 		return
 	}
 
