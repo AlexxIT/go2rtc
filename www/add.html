@@ -130,11 +130,11 @@
         await getSources('homekit-table', 'api/homekit');
 
         const rows = document.querySelectorAll('#homekit-table tr');
-        rows.forEach((row) => {
+        rows.forEach((row, i) => {
             let commands = '';
             if (row.children[2].innerText.indexOf('status=1') > 0) {
                 commands += '<a href="#">pair</a>';
-            } else if (row.children[3].innerText) {
+            } else if (i > 0 && row.children[3].innerText) {
                 commands += '<a href="#">unpair</a>';
             }
             row.innerHTML += `<td>${commands}</td>`;
