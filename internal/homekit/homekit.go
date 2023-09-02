@@ -52,7 +52,7 @@ func Init() {
 		}
 
 		if conf.Pin == "" {
-			conf.Pin = "19841984" // default PIN
+			conf.Pin = "19550224" // default PIN
 		}
 
 		pin, err := hap.SanitizePin(conf.Pin)
