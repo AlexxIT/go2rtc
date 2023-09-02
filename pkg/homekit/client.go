@@ -95,6 +95,8 @@ func (c *Client) GetMedias() []*core.Media {
 	c.SDP = fmt.Sprintf("%+v\n%+v", c.videoConfig, c.audioConfig)
 
 	c.Medias = []*core.Media{
+		videoToMedia(c.videoConfig.Codecs),
+		audioToMedia(c.audioConfig.Codecs),
 		{
 			Kind:      core.KindVideo,
 			Direction: core.DirectionRecvonly,
@@ -106,8 +108,6 @@ func (c *Client) GetMedias() []*core.Media {
 				},
 			},
 		},
-		videoToMedia(c.videoConfig.Codecs),
-		audioToMedia(c.audioConfig.Codecs),
 	}
 
 	return c.Medias

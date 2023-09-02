@@ -24,9 +24,9 @@ func NewKeyframe() *Keyframe {
 					Kind:      core.KindVideo,
 					Direction: core.DirectionSendonly,
 					Codecs: []*core.Codec{
+						{Name: core.CodecJPEG},
 						{Name: core.CodecH264},
 						{Name: core.CodecH265},
-						{Name: core.CodecJPEG},
 					},
 				},
 			},
