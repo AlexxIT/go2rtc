@@ -44,9 +44,28 @@ type SPS struct {
 
 	vui_parameters_present_flag    byte
 	aspect_ratio_info_present_flag byte
-	aspect_ratio_idc               uint32
-	sar_width                      uint32
-	sar_height                     uint32
+	aspect_ratio_idc               byte
+	sar_width                      uint16
+	sar_height                     uint16
+
+	overscan_info_present_flag byte
+	overscan_appropriate_flag  byte
+
+	video_signal_type_present_flag byte
+	video_format                   uint8
+	video_full_range_flag          byte
+
+	colour_description_present_flag byte
+	colour_description              uint32
+
+	chroma_loc_info_present_flag        byte
+	chroma_sample_loc_type_top_field    uint32
+	chroma_sample_loc_type_bottom_field uint32
+
+	timing_info_present_flag byte
+	num_units_in_tick        uint32
+	time_scale               uint32
+	fixed_frame_rate_flag    byte
 }
 
 func (s *SPS) Width() uint16 {
@@ -146,13 +165,41 @@ func DecodeSPS(sps []byte) *SPS {
 	if s.vui_parameters_present_flag != 0 {
 		s.aspect_ratio_info_present_flag = r.ReadBit()
 		if s.aspect_ratio_info_present_flag != 0 {
-			s.aspect_ratio_idc = r.ReadBits(8)
+			s.aspect_ratio_idc = r.ReadByte()
 			if s.aspect_ratio_idc == 255 {
-				s.sar_width = r.ReadBits(16)
-				s.sar_height = r.ReadBits(16)
+				s.sar_width = r.ReadUint16()
+				s.sar_height = r.ReadUint16()
 			}
 		}
 
+		s.overscan_info_present_flag = r.ReadBit()
+		if s.overscan_info_present_flag != 0 {
+			s.overscan_appropriate_flag = r.ReadBit()
+		}
+
+		s.video_signal_type_present_flag = r.ReadBit()
+		if s.video_signal_type_present_flag != 0 {
+			s.video_format = r.ReadBits8(3)
+			s.video_full_range_flag = r.ReadBit()
+
+			s.colour_description_present_flag = r.ReadBit()
+			if s.colour_description_present_flag != 0 {
+				s.colour_description = r.ReadUint24()
+			}
+		}
+
+		s.chroma_loc_info_present_flag = r.ReadBit()
+		if s.chroma_loc_info_present_flag != 0 {
+			s.chroma_sample_loc_type_top_field = r.ReadUEGolomb()
+			s.chroma_sample_loc_type_bottom_field = r.ReadUEGolomb()
+		}
+
+		s.timing_info_present_flag = r.ReadBit()
+		if s.timing_info_present_flag != 0 {
+			s.num_units_in_tick = r.ReadUint32()
+			s.time_scale = r.ReadUint32()
+			s.fixed_frame_rate_flag = r.ReadBit()
+		}
 		//...
 	}
 

@@ -38,6 +38,38 @@ func TestDecodeSPS(t *testing.T) {
 	sps = DecodeSPS(b)
 	require.Equal(t, uint16(1920), sps.Width())
 	require.Equal(t, uint16(1080), sps.Height())
+
+	s = "Z01AMqaAKAC1kAA=" // Dahua
+	b, err = base64.StdEncoding.DecodeString(s)
+	require.Nil(t, err)
+
+	sps = DecodeSPS(b)
+	require.Equal(t, uint16(2560), sps.Width())
+	require.Equal(t, uint16(1440), sps.Height())
+
+	s = "Z2QAM6wVFKAoAPGQ" // Reolink
+	b, err = base64.StdEncoding.DecodeString(s)
+	require.Nil(t, err)
+
+	sps = DecodeSPS(b)
+	require.Equal(t, uint16(2560), sps.Width())
+	require.Equal(t, uint16(1920), sps.Height())
+
+	s = "Z2QAKKwa0AoAt03AQEBQAAADABAAAAMB6PFCKg==" // TP-Link
+	b, err = base64.StdEncoding.DecodeString(s)
+	require.Nil(t, err)
+
+	sps = DecodeSPS(b)
+	require.Equal(t, uint16(1280), sps.Width())
+	require.Equal(t, uint16(720), sps.Height())
+
+	s = "Z2QAFqwa0BQF/yzcBAQFAAADAAEAAAMAHo8UIqA=" // TP-Link sub
+	b, err = base64.StdEncoding.DecodeString(s)
+	require.Nil(t, err)
+
+	sps = DecodeSPS(b)
+	require.Equal(t, uint16(640), sps.Width())
+	require.Equal(t, uint16(360), sps.Height())
 }
 
 func TestGetProfileLevelID(t *testing.T) {
