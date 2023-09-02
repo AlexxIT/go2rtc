@@ -86,3 +86,21 @@ streams:
   camera1: url1
 `, string(b))
 }
+
+func TestPatch2(t *testing.T) {
+	b := []byte(`streams:
+  camera1:
+    - url1
+    - url2
+`)
+
+	b, err := Patch(b, "camera2", "url3", "streams")
+	require.Nil(t, err)
+
+	require.Equal(t, `streams:
+  camera1:
+    - url1
+    - url2
+  camera2: url3
+`, string(b))
+}

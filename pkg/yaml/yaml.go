@@ -93,7 +93,7 @@ func LastChild(node *yaml.Node) *yaml.Node {
 	if node.Content == nil {
 		return node
 	}
-	return node.Content[len(node.Content)-1]
+	return LastChild(node.Content[len(node.Content)-1])
 }
 
 func AddOrReplace(src []byte, key string, value any, nodeParent *yaml.Node) ([]byte, error) {
