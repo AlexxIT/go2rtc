@@ -31,8 +31,9 @@ const (
 	StatusPaired    = "0"
 	StatusNotPaired = "1"
 
-	CategoryBridge = "2"
-	CategoryCamera = "17"
+	CategoryBridge   = "2"
+	CategoryCamera   = "17"
+	CategoryDoorbell = "18"
 
 	StateM1 = 1
 	StateM2 = 2

@@ -71,7 +71,8 @@ func discovery() ([]*api.Source, error) {
 	err := mdns.Discovery(mdns.ServiceHAP, func(entry *mdns.ServiceEntry) bool {
 		log.Trace().Msgf("[homekit] mdns=%s", entry)
 
-		if entry.Complete() && entry.Info[hap.TXTCategory] == hap.CategoryCamera {
+		category := entry.Info[hap.TXTCategory]
+		if entry.Complete() && (category == hap.CategoryCamera || category == hap.CategoryDoorbell) {
 			source := &api.Source{
 				Name: entry.Name,
 				Info: entry.Info[hap.TXTModel],
