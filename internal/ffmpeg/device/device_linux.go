@@ -71,7 +71,8 @@ func initDevices() {
 		for _, i := range m {
 			size, _, _ := strings.Cut(i[4], " ")
 			stream := &api.Source{
-				Name: i[3] + " | " + i[4],
+				Name: i[3],
+				Info: i[4],
 				URL:  "ffmpeg:device?video=" + name + "&input_format=" + i[2] + "&video_size=" + size,
 			}
 
@@ -88,6 +89,7 @@ func initDevices() {
 	if err == nil {
 		stream := &api.Source{
 			Name: "ALSA default",
+			Info: " ",
 			URL:  "ffmpeg:device?audio=default&channels=1&sample_rate=16000&#audio=opus",
 		}
 
