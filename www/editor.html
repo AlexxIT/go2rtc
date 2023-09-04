@@ -29,38 +29,41 @@
 <br>
 <div id="config"></div>
 <script>
+    let dump;
+
     ace.config.set('basePath', 'https://cdnjs.cloudflare.com/ajax/libs/ace/1.24.1/');
     const editor = ace.edit('config', {
         mode: 'ace/mode/yaml',
     });
 
-    document.getElementById('save').addEventListener('click', () => {
-        fetch('api/config', {
-            method: 'POST', body: editor.getValue()
-        }).then(r => {
-            if (r.ok) {
-                alert('OK');
-                fetch('api/exit?code=100', {method: 'POST'});
-            } else {
-                r.text().then(alert);
-            }
-        });
+    document.getElementById('save').addEventListener('click', async () => {
+        let r = await fetch('api/config', {cache: 'no-cache'});
+        if (r.ok && dump !== await r.text()) {
+            alert('Config was changed from another place. Refresh the page and make changes again');
+            return;
+        }
+
+        r = await fetch('api/config', {method: 'POST', body: editor.getValue()});
+        if (r.ok) {
+            alert('OK');
+            fetch('api/exit?code=100', {method: 'POST'});
+        } else {
+            alert(await r.text());
+        }
     });
 
-    window.addEventListener('load', () => {
-        fetch('api/config', {cache: 'no-cache'}).then(r => {
-            if (r.status === 410) {
-                alert('Config file is not set');
-            } else if (r.status === 404) {
-                editor.setValue(''); // config file not exist
-            } else if (r.ok) {
-                r.text().then(data => {
-                    editor.setValue(data);
-                });
-            } else {
-                alert(`Unknown error: ${r.statusText} (${r.status})`);
-            }
-        });
+    window.addEventListener('load', async () => {
+        const r = await fetch('api/config', {cache: 'no-cache'});
+        if (r.status === 410) {
+            alert('Config file is not set');
+        } else if (r.status === 404) {
+            editor.setValue(''); // config file not exist
+        } else if (r.ok) {
+            dump = await r.text();
+            editor.setValue(dump);
+        } else {
+            alert(`Unknown error: ${r.statusText} (${r.status})`);
+        }
     });
 </script>
 </body>
