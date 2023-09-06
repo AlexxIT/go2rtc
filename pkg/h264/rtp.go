@@ -83,10 +83,10 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 			// some Chinese buggy cameras has single packet with SPS+PPS+IFrame separated by 00 00 00 01
 			// https://github.com/AlexxIT/WebRTC/issues/391
 			// https://github.com/AlexxIT/WebRTC/issues/392
-			payload = annexb.EncodeToAVCC(payload, false)
+			payload = annexb.FixAnnexBInAVCC(payload)
 		}
 
-		//log.Printf("[AVC] %v, len: %d, ts: %10d, seq: %d", Types(payload), len(payload), packet.Timestamp, packet.SequenceNumber)
+		//log.Printf("[AVC] %v, len: %d, ts: %10d, seq: %d", NALUTypes(payload), len(payload), packet.Timestamp, packet.SequenceNumber)
 
 		clone := *packet
 		clone.Version = RTPPacketVersionAVC

@@ -139,3 +139,22 @@ func IndexFrame(b []byte) int {
 
 	return -1
 }
+
+func FixAnnexBInAVCC(b []byte) []byte {
+	for i := 0; i < len(b); {
+		if i+4 >= len(b) {
+			break
+		}
+
+		size := bytes.Index(b[i+4:], []byte{0, 0, 0, 1})
+		if size < 0 {
+			size = len(b) - (i + 4)
+		}
+
+		binary.BigEndian.PutUint32(b[i:], uint32(size))
+
+		i += size + 4
+	}
+
+	return b
+}
