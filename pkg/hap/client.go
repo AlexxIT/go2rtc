@@ -317,8 +317,15 @@ func (c *Client) GetImage(width, height int) ([]byte, error) {
 }
 
 func (c *Client) LocalIP() string {
-	addr := c.Conn.LocalAddr().(*net.TCPAddr)
-	return addr.IP.To4().String()
+	conn, ok := c.Conn.(*net.TCPConn)
+	if !ok {
+		return ""
+	}
+	addr, ok := conn.LocalAddr().(*net.TCPAddr)
+	if !ok {
+		return ""
+	}
+	return addr.IP.String()
 }
 
 func DecodeKey(s string) []byte {
