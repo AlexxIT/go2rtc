@@ -156,6 +156,8 @@ func (c *Client) Pair(feature, pin string) (err error) {
 		Proof string `tlv8:"4"` // server proof
 		State byte   `tlv8:"6"`
 		Error byte   `tlv8:"7"`
+
+		EncryptedData string `tlv8:"5"` // skip EncryptedData validation (for MFi devices)
 	}
 	if err = tlv8.UnmarshalReader(res.Body, &plainM4); err != nil {
 		return
