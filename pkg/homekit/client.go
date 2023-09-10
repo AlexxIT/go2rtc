@@ -175,10 +175,10 @@ func (c *Client) Start() error {
 func (c *Client) Stop() error {
 	_ = c.SuperProducer.Close()
 
-	if c.videoSession != nil {
+	if c.videoSession != nil && c.videoSession.Remote != nil {
 		c.srtp.DelSession(c.videoSession)
 	}
-	if c.audioSession != nil {
+	if c.audioSession != nil && c.audioSession.Remote != nil {
 		c.srtp.DelSession(c.audioSession)
 	}
 
