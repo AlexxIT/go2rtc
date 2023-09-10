@@ -1,6 +1,7 @@
 package webrtc
 
 import (
+	"encoding/base64"
 	"errors"
 	"io"
 	"net/http"
@@ -62,7 +63,7 @@ func streamsHandler(rawURL string) (core.Producer, error) {
 // ex: ws://localhost:1984/api/ws?src=camera1
 func go2rtcClient(url string) (core.Producer, error) {
 	// 1. Connect to signalign server
-	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
+	conn, _, err := Dial(url)
 	if err != nil {
 		return nil, err
 	}
@@ -211,4 +212,28 @@ func whepClient(url string) (core.Producer, error) {
 	}
 
 	return prod, nil
+}
+
+// Dial - websocket.Dial with Basic auth support
+func Dial(rawURL string) (*websocket.Conn, *http.Response, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if u.User == nil {
+		return websocket.DefaultDialer.Dial(rawURL, nil)
+	}
+
+	user := u.User.Username()
+	pass, _ := u.User.Password()
+	u.User = nil
+
+	header := http.Header{
+		"Authorization": []string{
+			"Basic " + base64.StdEncoding.EncodeToString([]byte(user+":"+pass)),
+		},
+	}
+
+	return websocket.DefaultDialer.Dial(u.String(), header)
 }
