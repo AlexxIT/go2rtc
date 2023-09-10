@@ -296,10 +296,12 @@ func (c *Client) PutCharacters(characters ...*Character) error {
 		return err
 	}
 
-	_, err = c.Put(PathCharacteristics, MimeJSON, bytes.NewReader(body))
+	res, err := c.Put(PathCharacteristics, MimeJSON, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
+
+	_, _ = io.ReadAll(res.Body) // important to "clear" body
 
 	return nil
 }
