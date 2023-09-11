@@ -198,9 +198,11 @@ func (s *server) AddPair(conn net.Conn, id string, public []byte, permissions by
 		"client_public": []string{hex.EncodeToString(public)},
 		"permissions":   []string{string('0' + permissions)},
 	}
-	s.pairings = append(s.pairings, query.Encode())
-	s.UpdateStatus()
-	s.PatchConfig()
+	if s.GetPair(conn, id) == nil {
+		s.pairings = append(s.pairings, query.Encode())
+		s.UpdateStatus()
+		s.PatchConfig()
+	}
 }
 
 func (s *server) DelPair(conn net.Conn, id string) {
