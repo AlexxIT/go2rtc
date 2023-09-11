@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -14,6 +15,7 @@ import (
 )
 
 const ServiceHAP = "_hap._tcp.local." // HomeKit Accessory Protocol
+const SO_REUSEPORT = 0x0200
 
 type ServiceEntry struct {
 	Name string            `json:"name,omitempty"`
@@ -176,6 +178,9 @@ func (b *Browser) ListenMulticastUDP() error {
 			return c.Control(func(fd uintptr) {
 				// 1. Allow multicast UDP to listen concurrently across multiple listeners
 				_ = SetsockoptInt(fd, syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
+				if runtime.GOOS != "windows" {
+					_ = SetsockoptInt(fd, syscall.SOL_SOCKET, SO_REUSEPORT, 1)
+				}
 			})
 		},
 	}
@@ -200,6 +205,9 @@ func (b *Browser) ListenMulticastUDP() error {
 			return c.Control(func(fd uintptr) {
 				// 1. Allow multicast UDP to listen concurrently across multiple listeners
 				_ = SetsockoptInt(fd, syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
+				if runtime.GOOS != "windows" {
+					_ = SetsockoptInt(fd, syscall.SOL_SOCKET, SO_REUSEPORT, 1)
+				}
 
 				// 2. Disable loop responses
 				_ = SetsockoptInt(fd, syscall.IPPROTO_IP, syscall.IP_MULTICAST_LOOP, 0)
