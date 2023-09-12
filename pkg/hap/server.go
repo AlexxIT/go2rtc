@@ -146,7 +146,7 @@ func (s *Server) PairVerify(req *http.Request, rw *bufio.ReadWriter, conn net.Co
 
 	clientPublic := s.GetPair(conn, plainM3.Identifier)
 	if clientPublic == nil {
-		return fmt.Errorf("hap: PairVerify from: %s, with unknown client_id: %s", plainM3.Identifier)
+		return fmt.Errorf("hap: PairVerify from: %s, with unknown client_id: %s", conn.RemoteAddr(), plainM3.Identifier)
 	}
 
 	b = Append(plainM1.PublicKey, plainM3.Identifier, sessionPublic)
