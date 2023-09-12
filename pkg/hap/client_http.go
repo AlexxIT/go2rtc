@@ -1,6 +1,7 @@
 package hap
 
 import (
+	"bufio"
 	"errors"
 	"io"
 	"net/http"
@@ -21,6 +22,9 @@ const (
 func (c *Client) Do(req *http.Request) (*http.Response, error) {
 	if err := req.Write(c.Conn); err != nil {
 		return nil, err
+	}
+	if c.res != nil {
+		return <-c.res, c.err
 	}
 	return http.ReadResponse(c.reader, req)
 }
@@ -53,4 +57,28 @@ func (c *Client) Post(path, contentType string, body io.Reader) (*http.Response,
 
 func (c *Client) Put(path, contentType string, body io.Reader) (*http.Response, error) {
 	return c.Request("PUT", path, contentType, body)
+}
+
+const ProtoEvent = "EVENT/1.0"
+
+func ReadResponse(r *bufio.Reader, req *http.Request) (*http.Response, error) {
+	b, err := r.Peek(9)
+	if err != nil {
+		return nil, err
+	}
+
+	if string(b) != ProtoEvent {
+		return http.ReadResponse(r, req)
+	}
+
+	copy(b, "HTTP/1.1 ")
+
+	res, err := http.ReadResponse(r, req)
+	if err != nil {
+		return nil, err
+	}
+
+	res.Proto = ProtoEvent
+
+	return res, nil
 }

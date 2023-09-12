@@ -41,6 +41,9 @@ type Client struct {
 
 	Conn   net.Conn
 	reader *bufio.Reader
+
+	res chan *http.Response
+	err error
 }
 
 func NewClient(rawURL string) (*Client, error) {
@@ -216,6 +219,8 @@ func (c *Client) Dial() (err error) {
 	// new reader for new conn
 	c.reader = bufio.NewReaderSize(c.Conn, 32*1024) // 32K like default request body
 
+	go c.eventsReader()
+
 	return
 }
 
@@ -226,6 +231,32 @@ func (c *Client) Close() error {
 	conn := c.Conn
 	c.Conn = nil
 	return conn.Close()
+}
+
+func (c *Client) eventsReader() {
+	c.res = make(chan *http.Response)
+
+	for {
+		var res *http.Response
+		if res, c.err = ReadResponse(c.reader, nil); c.err != nil {
+			break
+		}
+
+		var body []byte
+		if body, c.err = io.ReadAll(res.Body); c.err != nil {
+			break
+		}
+
+		res.Body = io.NopCloser(bytes.NewReader(body))
+
+		if res.Proto != ProtoEvent {
+			c.res <- res
+		} else if c.OnEvent != nil {
+			c.OnEvent(res)
+		}
+	}
+
+	close(c.res)
 }
 
 func (c *Client) GetAccessories() ([]*Accessory, error) {

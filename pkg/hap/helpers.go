@@ -66,7 +66,8 @@ type JSONCharacters struct {
 type JSONCharacter struct {
 	AID   uint8  `json:"aid"`
 	IID   uint64 `json:"iid"`
-	Value any    `json:"value"`
+	Value any    `json:"value,omitempty"`
+	Event any    `json:"ev,omitempty"`
 }
 
 func SanitizePin(pin string) (string, error) {
