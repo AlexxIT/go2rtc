@@ -13,13 +13,14 @@ import (
 // Value should be omit for PW
 // Value may be empty for PR
 type Character struct {
+	Desc string `json:"description,omitempty"`
+
 	IID    uint64   `json:"iid"`
 	Type   string   `json:"type"`
 	Format string   `json:"format"`
 	Value  any      `json:"value,omitempty"`
 	Perms  []string `json:"perms"`
 
-	//Descr    string `json:"description,omitempty"`
 	//MaxLen   int    `json:"maxLen,omitempty"`
 	//Unit     string `json:"unit,omitempty"`
 	//MinValue any    `json:"minValue,omitempty"`

@@ -93,6 +93,8 @@ func (a *Accessory) GetCharacterByID(iid uint64) *Character {
 }
 
 type Service struct {
+	Desc string `json:"description,omitempty"`
+
 	Type       string       `json:"type"`
 	IID        uint64       `json:"iid"`
 	Primary    bool         `json:"primary,omitempty"`
