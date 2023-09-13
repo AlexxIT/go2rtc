@@ -1,16 +1,17 @@
 package onvif
 
 import (
-	"github.com/AlexxIT/go2rtc/pkg/core"
 	"net"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
 func FindTagValue(b []byte, tag string) string {
-	re := regexp.MustCompile(`<[^/>]*` + tag + `[^>]*>([^<]+)`)
+	re := regexp.MustCompile(`(?s)<[^/>]*` + tag + `[^>]*>([^<]+)`)
 	m := re.FindSubmatch(b)
 	if len(m) != 2 {
 		return ""
