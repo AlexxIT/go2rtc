@@ -1,0 +1,103 @@
+package amf
+
+import (
+	"encoding/hex"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+)
+
+func TestNewReader(t *testing.T) {
+	tests := []struct {
+		name   string
+		actual string
+		expect map[string]any
+	}{
+		{
+			name:   "ffmpeg-http",
+			actual: "02000a6f6e4d65746144617461080000001000086475726174696f6e000000000000000000000577696474680040940000000000000006686569676874004086800000000000000d766964656f646174617261746500409e62770000000000096672616d6572617465004038000000000000000c766964656f636f646563696400401c000000000000000d617564696f646174617261746500405ea93000000000000f617564696f73616d706c65726174650040e5888000000000000f617564696f73616d706c6573697a65004030000000000000000673746572656f0101000c617564696f636f6465636964004024000000000000000b6d616a6f725f6272616e640200046d703432000d6d696e6f725f76657273696f6e020001300011636f6d70617469626c655f6272616e647302000c69736f6d617663316d7034320007656e636f64657202000c4c61766636302e352e313030000866696c6573697a65000000000000000000000009",
+			expect: map[string]any{
+				"compatible_brands": "isomavc1mp42",
+				"major_brand":       "mp42",
+				"minor_version":     "0",
+				"encoder":           "Lavf60.5.100",
+
+				"filesize": float64(0),
+				"duration": float64(0),
+
+				"videocodecid":  float64(7),
+				"width":         float64(1280),
+				"height":        float64(720),
+				"framerate":     float64(24),
+				"videodatarate": 1944.6162109375,
+
+				"audiocodecid":    float64(10),
+				"audiosamplerate": float64(44100),
+				"stereo":          true,
+				"audiosamplesize": float64(16),
+				"audiodatarate":   122.6435546875,
+			},
+		},
+		{
+			name:   "ffmpeg-file",
+			actual: "02000a6f6e4d65746144617461080000000800086475726174696f6e004000000000000000000577696474680040940000000000000006686569676874004086800000000000000d766964656f646174617261746500000000000000000000096672616d6572617465004039000000000000000c766964656f636f646563696400401c0000000000000007656e636f64657202000c4c61766636302e352e313030000866696c6573697a6500411f541400000000000009",
+			expect: map[string]any{
+				"encoder": "Lavf60.5.100",
+
+				"filesize": float64(513285),
+				"duration": float64(2),
+
+				"videocodecid":  float64(7),
+				"width":         float64(1280),
+				"height":        float64(720),
+				"framerate":     float64(25),
+				"videodatarate": float64(0),
+			},
+		},
+		{
+			name:   "reolink",
+			actual: "02000a6f6e4d6574614461746103000577696474680040a4000000000000000668656967687400409e000000000000000c646973706c617957696474680040a4000000000000000d646973706c617948656967687400409e00000000000000086475726174696f6e000000000000000000000c766964656f636f646563696400401c000000000000000c617564696f636f6465636964004024000000000000000f617564696f73616d706c65726174650040cf40000000000000096672616d657261746500403e000000000000000009",
+			expect: map[string]any{
+				"duration": float64(0),
+
+				"videocodecid":  float64(7),
+				"width":         float64(2560),
+				"height":        float64(1920),
+				"displayWidth":  float64(2560),
+				"displayHeight": float64(1920),
+				"framerate":     float64(30),
+
+				"audiocodecid":    float64(10),
+				"audiosamplerate": float64(16000),
+			},
+		},
+		{
+			name:   "mediamtx-reolink",
+			actual: "02000d40736574446174614672616d6502000a6f6e4d6574614461746103000d766964656f6461746172617465000000000000000000000c766964656f636f646563696400401c000000000000000d617564696f6461746172617465000000000000000000000c617564696f636f6465636964004024000000000000000009",
+			expect: map[string]any{
+				"videocodecid":  float64(7),
+				"videodatarate": float64(0),
+				"audiocodecid":  float64(10),
+				"audiodatarate": float64(0),
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			b, err := hex.DecodeString(test.actual)
+			require.Nil(t, err)
+
+			rd := NewReader(b)
+			v, err := rd.ReadItems()
+			require.Nil(t, err)
+
+			if v[0] == "@setDataFrame" {
+				v = v[1:]
+			}
+
+			require.Equal(t, "onMetaData", v[0])
+
+			require.Equal(t, test.expect, v[1])
+		})
+	}
+}
