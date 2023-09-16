@@ -3,6 +3,7 @@ package core
 import (
 	"bytes"
 	"io"
+	"net/http"
 	"sync"
 )
 
@@ -32,6 +33,8 @@ func (w *WriteBuffer) Write(p []byte) (n int, err error) {
 	} else if n, err = w.Writer.Write(p); err != nil {
 		w.err = err
 		w.done()
+	} else if f, ok := w.Writer.(http.Flusher); ok {
+		f.Flush()
 	}
 	w.mu.Unlock()
 	return
