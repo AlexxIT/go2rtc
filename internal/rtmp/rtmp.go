@@ -9,6 +9,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/flv"
 	"github.com/AlexxIT/go2rtc/pkg/rtmp"
+	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/rs/zerolog/log"
 )
 
@@ -30,10 +31,39 @@ func streamsHandle(url string) (core.Producer, error) {
 
 func apiHandle(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
-		http.Error(w, "", http.StatusMethodNotAllowed)
+		outputFLV(w, r)
+	} else {
+		inputFLV(w, r)
+	}
+}
+
+func outputFLV(w http.ResponseWriter, r *http.Request) {
+	src := r.URL.Query().Get("src")
+	stream := streams.Get(src)
+	if stream == nil {
+		http.Error(w, api.StreamNotFound, http.StatusNotFound)
 		return
 	}
 
+	cons := flv.NewConsumer()
+	cons.Type = "HTTP-FLV consumer"
+	cons.RemoteAddr = tcp.RemoteAddr(r)
+	cons.UserAgent = r.UserAgent()
+
+	if err := stream.AddConsumer(cons); err != nil {
+		log.Error().Err(err).Caller().Send()
+		return
+	}
+
+	h := w.Header()
+	h.Set("Content-Type", "video/x-flv")
+
+	_, _ = cons.WriteTo(w)
+
+	stream.RemoveConsumer(cons)
+}
+
+func inputFLV(w http.ResponseWriter, r *http.Request) {
 	dst := r.URL.Query().Get("dst")
 	stream := streams.Get(dst)
 	if stream == nil {
