@@ -90,15 +90,31 @@
 <div>
     <h2>Play audio</h2>
     <pre>example: ffmpeg:https://example.com/song.mp3#audio=pcma#input=file</pre>
-    <input id="source" type="text" placeholder="source">
-    <a id="send" href="#">send</a> / cameras with two way audio support
+    <input id="play-url" type="text" placeholder="url">
+    <a id="play-send" href="#">send</a> / cameras with two way audio support
 </div>
 <script>
-    document.getElementById('send').addEventListener('click', ev => {
+    document.getElementById('play-send').addEventListener('click', ev => {
         ev.preventDefault();
         const url = new URL('api/streams', location.href);
         url.searchParams.set('dst', src);
-        url.searchParams.set('src', document.getElementById('source').value);
+        url.searchParams.set('src', document.getElementById('play-url').value);
+        fetch(url, {method: 'POST'});
+    });
+</script>
+
+<div>
+    <h2>Publish stream</h2>
+    <pre>example: rtmps://dc1-1.rtmp.t.me/s/1234567890:xxxxxxxx</pre>
+    <input id="pub-url" type="text" placeholder="url">
+    <a id="pub-send" href="#">send</a> / Telegram RTMPS server
+</div>
+<script>
+    document.getElementById('pub-send').addEventListener('click', ev => {
+        ev.preventDefault();
+        const url = new URL('api/streams', location.href);
+        url.searchParams.set('src', src);
+        url.searchParams.set('dst', document.getElementById('pub-url').value);
         fetch(url, {method: 'POST'});
     });
 </script>
