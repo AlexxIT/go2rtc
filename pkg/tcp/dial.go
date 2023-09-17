@@ -10,13 +10,22 @@ import (
 )
 
 // Dial - for RTSP(S|X) and RTMP(S|X)
-func Dial(u *url.URL, port string, timeout time.Duration) (net.Conn, error) {
+func Dial(u *url.URL, timeout time.Duration) (net.Conn, error) {
+	var address string
 	var hostname string // without port
 	if i := strings.IndexByte(u.Host, ':'); i > 0 {
+		address = u.Host
 		hostname = u.Host[:i]
 	} else {
+		switch u.Scheme {
+		case "rtsp", "rtsps", "rtspx":
+			address = u.Host + ":554"
+		case "rtmp":
+			address = u.Host + ":1935"
+		case "rtmps", "rtmpx":
+			address = u.Host + ":443"
+		}
 		hostname = u.Host
-		u.Host += ":" + port
 	}
 
 	var secure *tls.Config
@@ -33,7 +42,7 @@ func Dial(u *url.URL, port string, timeout time.Duration) (net.Conn, error) {
 		return nil, errors.New("unsupported scheme: " + u.Scheme)
 	}
 
-	conn, err := net.DialTimeout("tcp", u.Host, timeout)
+	conn, err := net.DialTimeout("tcp", address, timeout)
 	if err != nil {
 		return nil, err
 	}
