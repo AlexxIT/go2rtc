@@ -172,6 +172,10 @@ func streamsHandler(w http.ResponseWriter, r *http.Request) {
 				} else {
 					api.ResponseJSON(w, stream)
 				}
+			} else if stream = Get(src); stream != nil {
+				if err := stream.Publish(dst); err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+				}
 			} else {
 				http.Error(w, "", http.StatusNotFound)
 			}

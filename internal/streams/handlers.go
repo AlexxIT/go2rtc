@@ -73,3 +73,25 @@ func Location(url string) (string, error) {
 
 	return "", nil
 }
+
+// TODO: rework
+
+type ConsumerHandler func(url string) (core.Consumer, func(), error)
+
+var consumerHandlers = map[string]ConsumerHandler{}
+
+func HandleConsumerFunc(scheme string, handler ConsumerHandler) {
+	consumerHandlers[scheme] = handler
+}
+
+func GetConsumer(url string) (core.Consumer, func(), error) {
+	if i := strings.IndexByte(url, ':'); i > 0 {
+		scheme := url[:i]
+
+		if handler, ok := consumerHandlers[scheme]; ok {
+			return handler(url)
+		}
+	}
+
+	return nil, nil, errors.New("streams: unsupported scheme: " + url)
+}
