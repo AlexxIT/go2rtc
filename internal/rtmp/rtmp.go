@@ -1,32 +1,128 @@
 package rtmp
 
 import (
+	"errors"
 	"io"
+	"net"
 	"net/http"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
+	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/flv"
 	"github.com/AlexxIT/go2rtc/pkg/rtmp"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
 )
 
 func Init() {
+	var conf struct {
+		Mod struct {
+			Listen string `yaml:"listen" json:"listen"`
+		} `yaml:"rtmp"`
+	}
+
+	app.LoadConfig(&conf)
+
+	log = app.GetLogger("rtsp")
+
 	streams.HandleFunc("rtmp", streamsHandle)
 	streams.HandleFunc("rtmps", streamsHandle)
 	streams.HandleFunc("rtmpx", streamsHandle)
 
 	api.HandleFunc("api/stream.flv", apiHandle)
+
+	streams.HandleConsumerFunc("rtmp", streamsConsumerHandle)
+	streams.HandleConsumerFunc("rtmps", streamsConsumerHandle)
+	streams.HandleConsumerFunc("rtmpx", streamsConsumerHandle)
+
+	address := conf.Mod.Listen
+	if address == "" {
+		return
+	}
+
+	ln, err := net.Listen("tcp", address)
+	if err != nil {
+		log.Error().Err(err).Caller().Send()
+		return
+	}
+
+	log.Info().Str("addr", address).Msg("[rtmp] listen")
+
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+
+			go func() {
+				if err = tcpHandle(conn); err != nil {
+					log.Error().Err(err).Caller().Send()
+				}
+			}()
+		}
+	}()
 }
 
+func tcpHandle(conn net.Conn) error {
+	client, err := rtmp.NewServer(conn)
+	if err != nil {
+		return err
+	}
+
+	if err = client.ReadCommands(); err != nil {
+		return err
+	}
+
+	switch client.Intent {
+	case rtmp.CommandPlay:
+		stream := streams.Get(client.App)
+		if stream == nil {
+			return errors.New("stream not found: " + client.App)
+		}
+
+		cons := flv.NewConsumer()
+		if err = stream.AddConsumer(cons); err != nil {
+			return err
+		}
+
+		defer stream.RemoveConsumer(cons)
+
+		if err = client.WritePlayStart(); err != nil {
+			return err
+		}
+
+		_, _ = cons.WriteTo(client)
+
+	case rtmp.CommandPublish:
+	}
+
+	return nil
+}
+
+var log zerolog.Logger
+
 func streamsHandle(url string) (core.Producer, error) {
-	client, err := rtmp.Dial(url)
+	client, err := rtmp.DialPlay(url)
 	if err != nil {
 		return nil, err
 	}
 	return client, nil
+}
+
+func streamsConsumerHandle(url string) (core.Consumer, func(), error) {
+	cons := flv.NewConsumer()
+	run := func() {
+		wr, err := rtmp.DialPublish(url)
+		if err != nil {
+			return
+		}
+		_, err = cons.WriteTo(wr)
+	}
+
+	return cons, run, nil
 }
 
 func apiHandle(w http.ResponseWriter, r *http.Request) {
