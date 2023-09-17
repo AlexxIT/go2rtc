@@ -45,10 +45,8 @@ func (m *Muxer) GetInit() []byte {
 		}
 	}
 
-	wr := amf.NewWriter()
-	wr.WriteString("onMetaData")
-	wr.WriteEcmaArray(obj)
-	b = append(b, EncodePacket(TagData, 0, wr.Bytes())...)
+	data := amf.EncodeItems("@setDataFrame", "onMetaData", obj)
+	b = append(b, EncodeTag(TagData, 0, data)...)
 
 	for _, codec := range m.codecs {
 		switch codec.Name {
@@ -62,16 +60,14 @@ func (m *Muxer) GetInit() []byte {
 			}
 
 			config := h264.EncodeConfig(sps, pps)
-			payload := append(encodeAVData(codec, 0), config...)
-			b = append(b, EncodePacket(TagVideo, 0, payload)...)
+			video := append(encodeAVData(codec, 0), config...)
+			b = append(b, EncodeTag(TagVideo, 0, video)...)
 
 		case core.CodecAAC:
 			s := core.Between(codec.FmtpLine, "config=", ";")
 			config, _ := hex.DecodeString(s)
-			payload := append(
-				encodeAVData(codec, 0), config...,
-			)
-			b = append(b, EncodePacket(TagAudio, 0, payload)...)
+			audio := append(encodeAVData(codec, 0), config...)
+			b = append(b, EncodeTag(TagAudio, 0, audio)...)
 		}
 	}
 
@@ -102,7 +98,7 @@ func (m *Muxer) GetPayloader(codec *core.Codec) func(packet *rtp.Packet) []byte 
 			}
 
 			timeMS := (packet.Timestamp - ts0) / k
-			return EncodePacket(TagVideo, timeMS, buf)
+			return EncodeTag(TagVideo, timeMS, buf)
 		}
 
 	case core.CodecAAC:
@@ -116,14 +112,14 @@ func (m *Muxer) GetPayloader(codec *core.Codec) func(packet *rtp.Packet) []byte 
 			}
 
 			timeMS := (packet.Timestamp - ts0) / k
-			return EncodePacket(TagAudio, timeMS, buf)
+			return EncodeTag(TagAudio, timeMS, buf)
 		}
 	}
 
 	return nil
 }
 
-func EncodePacket(tagType byte, timeMS uint32, payload []byte) []byte {
+func EncodeTag(tagType byte, timeMS uint32, payload []byte) []byte {
 	payloadSize := uint32(len(payload))
 	tagSize := payloadSize + 11
 
