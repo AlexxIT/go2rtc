@@ -2,7 +2,6 @@ package hls
 
 import (
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -33,21 +32,12 @@ func Init() {
 	ws.HandleFunc("hls", handlerWSHLS)
 }
 
-type Consumer interface {
-	core.Consumer
-	Listen(f core.EventFunc)
-	Init() ([]byte, error)
-	MimeCodecs() string
-	Start()
-}
-
 var log zerolog.Logger
 
 const keepalive = 5 * time.Second
 
-var sessions = map[string]*Session{}
-
 // once I saw 404 on MP4 segment, so better to use mutex
+var sessions = map[string]*Session{}
 var sessionsMu sync.RWMutex
 
 func handlerStream(w http.ResponseWriter, r *http.Request) {
@@ -67,22 +57,22 @@ func handlerStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var cons Consumer
+	var cons core.Consumer
 
 	// use fMP4 with codecs filter and TS without
 	medias := mp4.ParseQuery(r.URL.Query())
 	if medias != nil {
-		cons = &mp4.Consumer{
-			Desc:       "HLS/HTTP",
-			RemoteAddr: tcp.RemoteAddr(r),
-			UserAgent:  r.UserAgent(),
-			Medias:     medias,
-		}
+		c := mp4.NewConsumer(medias)
+		c.Type = "HLS/fMP4 consumer"
+		c.RemoteAddr = tcp.RemoteAddr(r)
+		c.UserAgent = r.UserAgent()
+		cons = c
 	} else {
-		cons = &mpegts.Consumer{
-			RemoteAddr: tcp.RemoteAddr(r),
-			UserAgent:  r.UserAgent(),
-		}
+		c := mpegts.NewConsumer()
+		c.Type = "HLS/TS consumer"
+		c.RemoteAddr = tcp.RemoteAddr(r)
+		c.UserAgent = r.UserAgent()
+		cons = c
 	}
 
 	if err := stream.AddConsumer(cons); err != nil {
@@ -90,63 +80,22 @@ func handlerStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session := &Session{cons: cons}
-
-	cons.Listen(func(msg any) {
-		if data, ok := msg.([]byte); ok {
-			session.mu.Lock()
-			session.buffer = append(session.buffer, data...)
-			session.mu.Unlock()
-		}
-	})
-
-	sid := core.RandString(8, 62)
-
+	session := NewSession(cons)
 	session.alive = time.AfterFunc(keepalive, func() {
 		sessionsMu.Lock()
-		delete(sessions, sid)
+		delete(sessions, session.id)
 		sessionsMu.Unlock()
 
 		stream.RemoveConsumer(cons)
 	})
-	session.init, _ = cons.Init()
-
-	cons.Start()
-
-	// two segments important for Chromecast
-	if medias != nil {
-		session.template = `#EXTM3U
-#EXT-X-VERSION:6
-#EXT-X-TARGETDURATION:1
-#EXT-X-MEDIA-SEQUENCE:%d
-#EXT-X-MAP:URI="init.mp4?id=` + sid + `"
-#EXTINF:0.500,
-segment.m4s?id=` + sid + `&n=%d
-#EXTINF:0.500,
-segment.m4s?id=` + sid + `&n=%d`
-	} else {
-		session.template = `#EXTM3U
-#EXT-X-VERSION:3
-#EXT-X-TARGETDURATION:1
-#EXT-X-MEDIA-SEQUENCE:%d
-#EXTINF:0.500,
-segment.ts?id=` + sid + `&n=%d
-#EXTINF:0.500,
-segment.ts?id=` + sid + `&n=%d`
-	}
 
 	sessionsMu.Lock()
-	sessions[sid] = session
+	sessions[session.id] = session
 	sessionsMu.Unlock()
 
-	codecs := strings.Replace(cons.MimeCodecs(), mp4.MimeFlac, "fLaC", 1)
+	go session.Run()
 
-	// bandwidth important for Safari, codecs useful for smooth playback
-	data := []byte(`#EXTM3U
-#EXT-X-STREAM-INF:BANDWIDTH=192000,CODECS="` + codecs + `"
-hls/playlist.m3u8?id=` + sid)
-
-	if _, err := w.Write(data); err != nil {
+	if _, err := w.Write(session.Main()); err != nil {
 		log.Error().Err(err).Caller().Send()
 	}
 }
@@ -169,7 +118,7 @@ func handlerPlaylist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := w.Write([]byte(session.Playlist())); err != nil {
+	if _, err := w.Write(session.Playlist()); err != nil {
 		log.Error().Err(err).Caller().Send()
 	}
 }
@@ -224,11 +173,8 @@ func handlerInit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := session.init
-	session.init = nil
-
-	session.segment0 = session.Segment()
-	if session.segment0 == nil {
+	data := session.Init()
+	if data == nil {
 		log.Warn().Msgf("[hls] can't get init %s", r.URL.RawQuery)
 		http.NotFound(w, r)
 		return
@@ -261,14 +207,7 @@ func handlerSegmentMP4(w http.ResponseWriter, r *http.Request) {
 
 	session.alive.Reset(keepalive)
 
-	var data []byte
-
-	if query.Get("n") != "0" {
-		data = session.Segment()
-	} else {
-		data = session.segment0
-	}
-
+	data := session.Segment()
 	if data == nil {
 		log.Warn().Msgf("[hls] can't get segment %s", r.URL.RawQuery)
 		http.NotFound(w, r)

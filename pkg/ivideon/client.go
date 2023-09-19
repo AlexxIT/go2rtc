@@ -2,20 +2,20 @@ package ivideon
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/deepch/vdk/codec/h264parser"
-	"github.com/deepch/vdk/format/fmp4/fmp4io"
-	"github.com/gorilla/websocket"
-	"github.com/pion/rtp"
 	"io"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/h264"
+	"github.com/AlexxIT/go2rtc/pkg/iso"
+	"github.com/gorilla/websocket"
+	"github.com/pion/rtp"
 )
 
 type State byte
@@ -197,29 +197,15 @@ func (c *Client) getTracks() error {
 					continue
 				}
 
-				codec := &core.Codec{
-					Name:        core.CodecH264,
-					ClockRate:   90000,
-					FmtpLine:    "profile-level-id=" + msg.CodecString[i+1:],
-					PayloadType: core.PayloadTypeRAW,
-				}
-
 				i = bytes.Index(msg.Data, []byte("avcC")) - 4
 				if i < 0 {
-					return fmt.Errorf("wrong AVC: %s", msg.Data)
+					return fmt.Errorf("ivideon: wrong AVC: %s", msg.Data)
 				}
 
 				avccLen := binary.BigEndian.Uint32(msg.Data[i:])
 				data = msg.Data[i+8 : i+int(avccLen)]
 
-				record := h264parser.AVCDecoderConfRecord{}
-				if _, err = record.Unmarshal(data); err != nil {
-					return err
-				}
-
-				codec.FmtpLine += ";sprop-parameter-sets=" +
-					base64.StdEncoding.EncodeToString(record.SPS[0]) + "," +
-					base64.StdEncoding.EncodeToString(record.PPS[0])
+				codec := h264.ConfigToCodec(data)
 
 				media := &core.Media{
 					Kind:      core.KindVideo,
@@ -246,31 +232,37 @@ func (c *Client) getTracks() error {
 
 func (c *Client) worker(buffer chan []byte) {
 	for data := range buffer {
-		moof := &fmp4io.MovieFrag{}
-		if _, err := moof.Unmarshal(data, 0); err != nil {
+		atoms, err := iso.DecodeAtoms(data)
+		if err != nil {
 			continue
 		}
 
-		moofLen := binary.BigEndian.Uint32(data)
-		_ = moofLen
+		var trun *iso.Atom
+		var ts uint32
 
-		mdat := moof.Unknowns[0]
-		if mdat.Tag() != fmp4io.MDAT {
+		for _, atom := range atoms {
+			switch atom.Name {
+			case iso.MoofTrafTrun:
+				trun = atom
+			case iso.MoofTrafTfdt:
+				ts = uint32(atom.DecodeTime)
+			case iso.Mdat:
+				data = atom.Data
+			}
+		}
+
+		if trun == nil || trun.SamplesDuration == nil || trun.SamplesSize == nil {
 			continue
 		}
-		i, _ := mdat.Pos() // offset, size
-		data = data[i+8:]
 
-		traf := moof.Tracks[0]
-		ts := uint32(traf.DecodeTime.Time)
+		for i := 0; i < len(trun.SamplesDuration); i++ {
+			duration := trun.SamplesDuration[i]
+			size := trun.SamplesSize[i]
 
-		//println("!!!", (time.Duration(ts) * time.Millisecond).String(), time.Since(c.t0).String())
-
-		for _, entry := range traf.Run.Entries {
 			// synchronize framerate for WebRTC and MSE
 			d := time.Duration(ts)*time.Millisecond - time.Since(c.t0)
 			if d < 0 {
-				d = time.Duration(entry.Duration) * time.Millisecond / 2
+				d = time.Duration(duration) * time.Millisecond / 2
 			}
 			time.Sleep(d)
 
@@ -278,16 +270,12 @@ func (c *Client) worker(buffer chan []byte) {
 			packet := &rtp.Packet{
 				// ivideon clockrate=1000, RTP clockrate=90000
 				Header:  rtp.Header{Timestamp: ts * 90},
-				Payload: data[:entry.Size],
+				Payload: data[:size],
 			}
 			c.receiver.WriteRTP(packet)
 
-			data = data[entry.Size:]
-			ts += entry.Duration
-		}
-
-		if len(data) != 0 {
-			continue
+			data = data[size:]
+			ts += duration
 		}
 	}
 }

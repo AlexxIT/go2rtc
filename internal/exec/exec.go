@@ -5,6 +5,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
+	"sync"
+	"time"
+
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/rtsp"
 	"github.com/AlexxIT/go2rtc/internal/streams"
@@ -13,10 +18,6 @@ import (
 	pkg "github.com/AlexxIT/go2rtc/pkg/rtsp"
 	"github.com/AlexxIT/go2rtc/pkg/shell"
 	"github.com/rs/zerolog"
-	"os"
-	"os/exec"
-	"sync"
-	"time"
 )
 
 func Init() {
@@ -82,15 +83,7 @@ func handlePipe(url string, cmd *exec.Cmd) (core.Producer, error) {
 		return nil, err
 	}
 
-	client := magic.NewClient(r)
-	if err = client.Probe(); err != nil {
-		return nil, err
-	}
-
-	client.Desc = "exec active producer"
-	client.URL = url
-
-	return client, nil
+	return magic.Open(r)
 }
 
 func handleRTSP(url, path string, cmd *exec.Cmd) (core.Producer, error) {

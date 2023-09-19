@@ -2,6 +2,7 @@ package h265
 
 import (
 	"encoding/binary"
+
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/pion/rtp"
@@ -16,6 +17,10 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 
 	return func(packet *rtp.Packet) {
 		data := packet.Payload
+		if len(data) < 3 {
+			return
+		}
+
 		nuType := (data[0] >> 1) & 0x3F
 		//log.Printf("[RTP] codec: %s, nalu: %2d, size: %6d, ts: %10d, pt: %2d, ssrc: %d, seq: %d, %v", track.Codec.Name, nuType, len(packet.Payload), packet.Timestamp, packet.PayloadType, packet.SSRC, packet.SequenceNumber, packet.Marker)
 

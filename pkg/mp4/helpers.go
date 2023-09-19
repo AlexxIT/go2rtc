@@ -164,9 +164,3 @@ func PatchVideoScale(init []byte, scaleX, scaleY int) bool {
 
 	return true
 }
-
-const (
-	stateNone byte = iota
-	stateInit
-	stateStart
-)

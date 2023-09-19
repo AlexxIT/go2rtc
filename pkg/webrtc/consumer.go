@@ -53,7 +53,7 @@ func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiv
 		if track.Codec.IsRTP() {
 			sender.Handler = h264.RTPDepay(track.Codec, sender.Handler)
 		} else {
-			sender.Handler = h264.RepairAVC(track.Codec, sender.Handler)
+			sender.Handler = h264.RepairAVCC(track.Codec, sender.Handler)
 		}
 
 	case core.CodecH265:

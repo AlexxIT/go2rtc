@@ -2,12 +2,13 @@ package device
 
 import (
 	"errors"
-	"github.com/AlexxIT/go2rtc/internal/api"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/AlexxIT/go2rtc/internal/api"
 )
 
 func Init(bin string) {
@@ -39,13 +40,13 @@ func GetInput(src string) (string, error) {
 var Bin string
 
 var videos, audios []string
-var streams []api.Stream
+var streams []*api.Source
 var runonce sync.Once
 
 func apiDevices(w http.ResponseWriter, r *http.Request) {
 	runonce.Do(initDevices)
 
-	api.ResponseStreams(w, streams)
+	api.ResponseSources(w, streams)
 }
 
 func indexToItem(items []string, index string) string {

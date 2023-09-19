@@ -4,10 +4,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/pion/rtp"
 	"strconv"
 	"sync"
+
+	"github.com/pion/rtp"
 )
+
+type Packet struct {
+	PayloadType uint8
+	Sequence    uint16
+	Timestamp   uint32 // PTS if DTS == 0 else DTS
+	Composition uint32 // CTS = PTS-DTS (for support B-frames)
+	Payload     []byte
+}
 
 var ErrCantGetTrack = errors.New("can't get track")
 
@@ -180,4 +189,17 @@ func (s *Sender) String() string {
 
 func (s *Sender) MarshalJSON() ([]byte, error) {
 	return json.Marshal(s.String())
+}
+
+// VA - helper, for extract video and audio receivers from list
+func VA(receivers []*Receiver) (video, audio *Receiver) {
+	for _, receiver := range receivers {
+		switch GetKind(receiver.Codec.Name) {
+		case KindVideo:
+			video = receiver
+		case KindAudio:
+			audio = receiver
+		}
+	}
+	return
 }

@@ -2,13 +2,11 @@ package hls
 
 import (
 	"errors"
-	"strings"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"github.com/AlexxIT/go2rtc/internal/streams"
-	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/mp4"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 )
@@ -20,63 +18,37 @@ func handlerWSHLS(tr *ws.Transport, msg *ws.Message) error {
 	}
 
 	codecs := msg.String()
+	medias := mp4.ParseCodecs(codecs, true)
+	cons := mp4.NewConsumer(medias)
+	cons.Type = "HLS/fMP4 consumer"
+	cons.RemoteAddr = tcp.RemoteAddr(tr.Request)
+	cons.UserAgent = tr.Request.UserAgent()
 
 	log.Trace().Msgf("[hls] new ws consumer codecs=%s", codecs)
-
-	cons := &mp4.Consumer{
-		Desc:       "HLS/WebSocket",
-		RemoteAddr: tcp.RemoteAddr(tr.Request),
-		UserAgent:  tr.Request.UserAgent(),
-		Medias:     mp4.ParseCodecs(codecs, true),
-	}
 
 	if err := stream.AddConsumer(cons); err != nil {
 		log.Error().Err(err).Caller().Send()
 		return err
 	}
 
-	session := &Session{cons: cons}
-
-	cons.Listen(func(msg any) {
-		if data, ok := msg.([]byte); ok {
-			session.mu.Lock()
-			session.buffer = append(session.buffer, data...)
-			session.mu.Unlock()
-		}
-	})
+	session := NewSession(cons)
 
 	session.alive = time.AfterFunc(keepalive, func() {
+		sessionsMu.Lock()
+		delete(sessions, session.id)
+		sessionsMu.Unlock()
+
 		stream.RemoveConsumer(cons)
 	})
-	session.init, _ = cons.Init()
-
-	cons.Start()
-
-	sid := core.RandString(8, 62)
-
-	// two segments important for Chromecast
-	session.template = `#EXTM3U
-#EXT-X-VERSION:6
-#EXT-X-TARGETDURATION:1
-#EXT-X-MEDIA-SEQUENCE:%d
-#EXT-X-MAP:URI="init.mp4?id=` + sid + `"
-#EXTINF:0.500,
-segment.m4s?id=` + sid + `&n=%d
-#EXTINF:0.500,
-segment.m4s?id=` + sid + `&n=%d`
 
 	sessionsMu.Lock()
-	sessions[sid] = session
+	sessions[session.id] = session
 	sessionsMu.Unlock()
 
-	codecs = strings.Replace(cons.MimeCodecs(), mp4.MimeFlac, "fLaC", 1)
+	go session.Run()
 
-	// bandwidth important for Safari, codecs useful for smooth playback
-	data := `#EXTM3U
-#EXT-X-STREAM-INF:BANDWIDTH=192000,CODECS="` + codecs + `"
-hls/playlist.m3u8?id=` + sid
-
-	tr.Write(&ws.Message{Type: "hls", Value: data})
+	main := session.Main()
+	tr.Write(&ws.Message{Type: "hls", Value: string(main)})
 
 	return nil
 }

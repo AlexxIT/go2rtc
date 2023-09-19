@@ -32,7 +32,7 @@ func Do(req *http.Request) (*http.Response, error) {
 
 	var client *http.Client
 
-	if req.URL.Scheme == "httpx" {
+	if req.URL.Scheme == "httpx" || (req.URL.Scheme == "https" && IsIP(req.URL.Hostname())) {
 		req.URL.Scheme = "https"
 
 		if insecureClient == nil {
@@ -124,4 +124,8 @@ func Close(res *http.Response) {
 	if res.Body != nil {
 		_ = res.Body.Close()
 	}
+}
+
+func IsIP(hostname string) bool {
+	return net.ParseIP(hostname) != nil
 }

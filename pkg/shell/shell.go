@@ -44,6 +44,7 @@ func QuoteSplit(s string) []string {
 	return a
 }
 
+// ReplaceEnvVars - support format ${CAMERA_PASSWORD} and ${RTSP_USER:admin}
 func ReplaceEnvVars(text string) string {
 	re := regexp.MustCompile(`\${([^}{]+)}`)
 	return re.ReplaceAllStringFunc(text, func(match string) string {

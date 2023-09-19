@@ -90,10 +90,7 @@ func (m *Movie) WriteAudio(codec string, channels uint16, sampleRate uint32, con
 		m.Write(pcm.FLACHeader(false, sampleRate))
 		m.EndAtom()
 	case core.CodecOpus:
-		// don't know what means this magic
-		m.StartAtom("dOps")
-		m.WriteBytes(0, 0x02, 0x01, 0x38, 0, 0, 0xBB, 0x80, 0, 0, 0)
-		m.EndAtom()
+		m.WriteOpus(channels, sampleRate)
 	case core.CodecPCMU, core.CodecPCMA:
 		// don't know what means this magic
 		m.StartAtom("chan")
@@ -169,4 +166,16 @@ func (m *Movie) WriteEsdsMP3() {
 	m.WriteBytes(2) // ?
 
 	m.EndAtom() // ESDS
+}
+
+func (m *Movie) WriteOpus(channels uint16, sampleRate uint32) {
+	// https://www.opus-codec.org/docs/opus_in_isobmff.html
+	m.StartAtom("dOps")
+	m.Skip(1) // version
+	m.WriteBytes(byte(channels))
+	m.WriteUint16(0) // PreSkip ???
+	m.WriteUint32(sampleRate)
+	m.Skip(2) // OutputGain
+	m.Skip(1) // signed int(16) OutputGain;
+	m.EndAtom()
 }

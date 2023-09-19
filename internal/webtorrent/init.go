@@ -3,6 +3,9 @@ package webtorrent
 import (
 	"errors"
 	"fmt"
+	"net/http"
+	"net/url"
+
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/streams"
@@ -10,8 +13,6 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/webtorrent"
 	"github.com/rs/zerolog"
-	"net/http"
-	"net/url"
 )
 
 func Init() {
@@ -110,13 +111,13 @@ func apiHandle(w http.ResponseWriter, r *http.Request) {
 			}
 		} else {
 			// response all shares
-			var items []api.Stream
+			var items []*api.Source
 			for src, share := range shares {
 				pwd := srv.GetSharePwd(share)
 				source := fmt.Sprintf("webtorrent:?share=%s&pwd=%s", share, pwd)
-				items = append(items, api.Stream{Name: src, URL: source})
+				items = append(items, &api.Source{ID: src, URL: source})
 			}
-			api.ResponseStreams(w, items)
+			api.ResponseSources(w, items)
 		}
 
 	case "POST":

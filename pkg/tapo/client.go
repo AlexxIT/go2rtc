@@ -8,14 +8,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/mpegts"
-	"github.com/AlexxIT/go2rtc/pkg/tcp"
+	"io"
 	"mime/multipart"
 	"net"
 	"net/http"
 	"net/url"
 	"strconv"
+
+	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/mpegts"
+	"github.com/AlexxIT/go2rtc/pkg/tcp"
 )
 
 type Client struct {
@@ -45,13 +47,13 @@ type cbcMode interface {
 	SetIV([]byte)
 }
 
-func NewClient(url string) *Client {
-	return &Client{url: url}
-}
-
-func (c *Client) Dial() (err error) {
-	c.conn1, err = c.newConn()
-	return
+func Dial(url string) (*Client, error) {
+	var err error
+	c := &Client{url: url}
+	if c.conn1, err = c.newConn(); err != nil {
+		return nil, err
+	}
+	return c, nil
 }
 
 func (c *Client) newConn() (net.Conn, error) {
@@ -143,11 +145,11 @@ func (c *Client) SetupStream() (err error) {
 
 // Handle - first run will be in probe state
 func (c *Client) Handle() error {
-	mpReader := multipart.NewReader(c.conn1, "--device-stream-boundary--")
-	tsReader := mpegts.NewReader()
+	rd := multipart.NewReader(c.conn1, "--device-stream-boundary--")
+	demux := mpegts.NewDemuxer()
 
 	for {
-		p, err := mpReader.NextRawPart()
+		p, err := rd.NextRawPart()
 		if err != nil {
 			return err
 		}
@@ -176,16 +178,20 @@ func (c *Client) Handle() error {
 		}
 
 		body = c.decrypt(body)
-		tsReader.SetBuffer(body)
+		bytesRd := bytes.NewReader(body)
 
 		for {
-			pkt := tsReader.GetPacket()
-			if pkt == nil {
+			pkt, err2 := demux.ReadPacket(bytesRd)
+			if pkt == nil || err2 == io.EOF {
 				break
+			}
+			if err2 != nil {
+				return err2
 			}
 
 			for _, receiver := range c.receivers {
 				if receiver.ID == pkt.PayloadType {
+					mpegts.TimestampToRTP(pkt, receiver.Codec)
 					receiver.WriteRTP(pkt)
 					break
 				}

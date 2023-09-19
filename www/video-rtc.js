@@ -551,12 +551,16 @@ export class VideoRTC extends HTMLElement {
                 this.pcState = WebSocket.OPEN;
 
                 this.wsState = WebSocket.CLOSED;
-                this.ws.close();
-                this.ws = null;
+                if (this.ws) {
+                    this.ws.close();
+                    this.ws = null;
+                }
             } else {
                 this.pcState = WebSocket.CLOSED;
-                this.pc.close();
-                this.pc = null;
+                if (this.pc) {
+                    this.pc.close();
+                    this.pc = null;
+                }
             }
         }
 

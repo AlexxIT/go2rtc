@@ -3,9 +3,10 @@ package debug
 import (
 	"bytes"
 	"fmt"
-	"github.com/AlexxIT/go2rtc/internal/api"
 	"net/http"
 	"runtime"
+
+	"github.com/AlexxIT/go2rtc/internal/api"
 )
 
 var stackSkip = [][]byte{
@@ -23,6 +24,9 @@ var stackSkip = [][]byte{
 
 	[]byte("created by github.com/AlexxIT/go2rtc/internal/rtsp.Init"),
 	[]byte("created by github.com/AlexxIT/go2rtc/internal/srtp.Init"),
+
+	// homekit
+	[]byte("created by github.com/AlexxIT/go2rtc/internal/homekit.Init"),
 
 	// webrtc/api.go
 	[]byte("created by github.com/pion/ice/v2.NewTCPMuxDefault"),

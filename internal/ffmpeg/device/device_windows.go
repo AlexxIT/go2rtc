@@ -1,11 +1,12 @@
 package device
 
 import (
-	"github.com/AlexxIT/go2rtc/internal/api"
-	"github.com/AlexxIT/go2rtc/pkg/core"
 	"net/url"
 	"os/exec"
 	"regexp"
+
+	"github.com/AlexxIT/go2rtc/internal/api"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
 func queryToInput(query url.Values) string {
@@ -79,7 +80,7 @@ func initDevices() {
 		name := m[1]
 		kind := m[2]
 
-		stream := api.Stream{
+		stream := &api.Source{
 			Name: name, URL: "ffmpeg:device?" + kind + "=" + name,
 		}
 

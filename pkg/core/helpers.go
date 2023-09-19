@@ -1,12 +1,18 @@
 package core
 
 import (
-	cryptorand "crypto/rand"
-	"github.com/rs/zerolog/log"
+	"crypto/rand"
 	"runtime"
 	"strconv"
 	"strings"
 	"time"
+)
+
+const (
+	BufferSize      = 64 * 1024 // 64K
+	ConnDialTimeout = time.Second * 3
+	ConnDeadline    = time.Second * 5
+	ProbeTimeout    = time.Second * 3
 )
 
 // Now90000 - timestamp for Video (clock rate = 90000 samples per second)
@@ -16,11 +22,15 @@ func Now90000() uint32 {
 
 const symbols = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_"
 
-// RandString base10 - numbers, base16 - hex, base36 - digits+letters, base64 - URL safe symbols
+// RandString base10 - numbers, base16 - hex, base36 - digits+letters
+// base64 - URL safe symbols, base0 - crypto random
 func RandString(size, base byte) string {
 	b := make([]byte, size)
-	if _, err := cryptorand.Read(b); err != nil {
+	if _, err := rand.Read(b); err != nil {
 		panic(err)
+	}
+	if base == 0 {
+		return string(b)
 	}
 	for i := byte(0); i < size; i++ {
 		b[i] = symbols[b[i]%base]
@@ -44,12 +54,7 @@ func Between(s, sub1, sub2 string) string {
 	}
 	s = s[i+len(sub1):]
 
-	if len(sub2) == 1 {
-		i = strings.IndexByte(s, sub2[0])
-	} else {
-		i = strings.Index(s, sub2)
-	}
-	if i >= 0 {
+	if i = strings.Index(s, sub2); i >= 0 {
 		return s[:i]
 	}
 
@@ -57,7 +62,9 @@ func Between(s, sub1, sub2 string) string {
 }
 
 func Atoi(s string) (i int) {
-	i, _ = strconv.Atoi(s)
+	if s != "" {
+		i, _ = strconv.Atoi(s)
+	}
 	return
 }
 
@@ -69,7 +76,6 @@ func Assert(ok bool) {
 }
 
 func Caller() string {
-	log.Error().Caller(0).Send()
 	_, file, line, _ := runtime.Caller(1)
 	return file + ":" + strconv.Itoa(line)
 }

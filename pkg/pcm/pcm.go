@@ -11,6 +11,10 @@ import (
 func ResampleToG711(codec *core.Codec, sampleRate uint32, handler core.HandlerFunc) core.HandlerFunc {
 	n := float32(codec.ClockRate) / float32(sampleRate)
 
+	if codec.Channels == 2 {
+		n *= 2 // hacky way for support two channels audio
+	}
+
 	switch codec.Name {
 	case core.CodecPCMA:
 		return DownsampleByte(PCMAtoPCM, PCMtoPCMA, n, handler)

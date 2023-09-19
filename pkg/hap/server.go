@@ -2,154 +2,174 @@ package hap
 
 import (
 	"bufio"
-	"crypto/ed25519"
-	"github.com/brutella/hap"
-	"github.com/brutella/hap/tlv8"
+	"crypto/sha512"
+	"encoding/base64"
+	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
+
+	"github.com/AlexxIT/go2rtc/pkg/hap/chacha20poly1305"
+	"github.com/AlexxIT/go2rtc/pkg/hap/curve25519"
+	"github.com/AlexxIT/go2rtc/pkg/hap/ed25519"
+	"github.com/AlexxIT/go2rtc/pkg/hap/hkdf"
+	"github.com/AlexxIT/go2rtc/pkg/hap/secure"
+	"github.com/AlexxIT/go2rtc/pkg/hap/tlv8"
 )
 
+type HandlerFunc func(net.Conn) error
+
 type Server struct {
-	// Pin can't be null because server proof will be wrong
-	Pin string `json:"-"`
+	Pin           string
+	DeviceID      string
+	DevicePrivate []byte
 
-	ServerID string `json:"server_id"`
-	// 32 bytes private key + 32 bytes public key
-	ServerPrivate []byte `json:"server_private"`
+	GetPair func(conn net.Conn, id string) []byte
+	AddPair func(conn net.Conn, id string, public []byte, permissions byte)
 
-	// Pairings can be nil for disable pair verify check
-	// ClientID: 32 bytes client public + 1 byte (isAdmin)
-	Pairings map[string][]byte `json:"pairings"`
-
-	DefaultPlainHandler  func(w io.Writer, r *http.Request) error
-	DefaultSecureHandler func(w io.Writer, r *http.Request) error
-
-	OnPairChange func(clientID string, clientPublic []byte) `json:"-"`
-	OnRequest    func(w io.Writer, r *http.Request)         `json:"-"`
+	Handler HandlerFunc
 }
 
-func GenerateKey() []byte {
-	_, key, _ := ed25519.GenerateKey(nil)
-	return key
+func (s *Server) ServerPublic() []byte {
+	return s.DevicePrivate[32:]
 }
 
-func NewServer(name string) *Server {
-	return &Server{
-		ServerID:      GenerateID(name),
-		ServerPrivate: GenerateKey(),
-		Pairings:      map[string][]byte{},
-	}
+//func (s *Server) Status() string {
+//	if len(s.Pairings) == 0 {
+//		return StatusNotPaired
+//	}
+//	return StatusPaired
+//}
+
+func (s *Server) SetupHash() string {
+	// should be setup_id (random 4 alphanum) + device_id (mac address)
+	// but device_id is random, so OK
+	b := sha512.Sum512([]byte(s.DeviceID))
+	return base64.StdEncoding.EncodeToString(b[:4])
 }
 
-func (s *Server) Serve(address string) (err error) {
-	var ln net.Listener
-	if ln, err = net.Listen("tcp4", address); err != nil {
-		return
+func (s *Server) PairVerify(req *http.Request, rw *bufio.ReadWriter, conn net.Conn) error {
+	// Request from iPhone
+	var plainM1 struct {
+		PublicKey string `tlv8:"3"`
+		State     byte   `tlv8:"6"`
+	}
+	if err := tlv8.UnmarshalReader(io.LimitReader(rw, req.ContentLength), &plainM1); err != nil {
+		return err
+	}
+	if plainM1.State != StateM1 {
+		return newRequestError(plainM1)
 	}
 
-	for {
-		var conn net.Conn
-		if conn, err = ln.Accept(); err != nil {
-			continue
-		}
-		go func() {
-			//fmt.Printf("[%s] new connection\n", conn.RemoteAddr().String())
-			s.Accept(conn)
-			//fmt.Printf("[%s] close connection\n", conn.RemoteAddr().String())
-		}()
-	}
-}
-
-func (s *Server) Accept(conn net.Conn) (err error) {
-	defer conn.Close()
-
-	var req *http.Request
-	r := bufio.NewReader(conn)
-	if req, err = http.ReadRequest(r); err != nil {
-		return
+	// Generate the key pair
+	sessionPublic, sessionPrivate := curve25519.GenerateKeyPair()
+	sessionShared, err := curve25519.SharedSecret(sessionPrivate, []byte(plainM1.PublicKey))
+	if err != nil {
+		return err
 	}
 
-	return s.HandleRequest(conn, req)
-}
-
-func (s *Server) HandleRequest(conn net.Conn, req *http.Request) (err error) {
-	if s.OnRequest != nil {
-		s.OnRequest(conn, req)
+	encryptKey, err := hkdf.Sha512(
+		sessionShared, "Pair-Verify-Encrypt-Salt", "Pair-Verify-Encrypt-Info",
+	)
+	if err != nil {
+		return err
 	}
 
-	switch req.URL.Path {
-	case UriPairSetup:
-		if _, err = s.PairSetupHandler(conn, req); err != nil {
-			return
-		}
-
-	case UriPairVerify:
-		var secure *Secure
-		if secure, err = s.PairVerifyHandler(conn, req); err != nil {
-			return
-		}
-
-		err = s.HandleSecure(secure)
-
-	default:
-		if s.DefaultPlainHandler != nil {
-			err = s.DefaultPlainHandler(conn, req)
-		}
+	b := Append(sessionPublic, s.DeviceID, plainM1.PublicKey)
+	signature, err := ed25519.Signature(s.DevicePrivate, b)
+	if err != nil {
+		return err
 	}
 
-	return
-}
-
-func (s *Server) HandleSecure(secure *Secure) (err error) {
-	r := bufio.NewReader(secure)
-	for {
-		var req *http.Request
-		if req, err = http.ReadRequest(r); err != nil {
-			return
-		}
-
-		if s.OnRequest != nil {
-			s.OnRequest(secure, req)
-		}
-
-		switch req.URL.Path {
-		case UriPairings:
-			s.HandlePairings(secure, req)
-		default:
-			if err = s.DefaultSecureHandler(secure, req); err != nil {
-				return
-			}
-		}
-	}
-}
-
-func (s *Server) HandlePairings(w io.Writer, r *http.Request) {
-	req := struct {
-		Method     byte   `tlv8:"0"`
+	// STEP M2. Response to iPhone
+	plainM2 := struct {
 		Identifier string `tlv8:"1"`
-		PublicKey  []byte `tlv8:"3"`
-		Permission byte   `tlv8:"11"`
-		State      byte   `tlv8:"6"`
-	}{}
-
-	if err := tlv8.UnmarshalReader(r.Body, &req); err != nil {
-		panic(err)
+		Signature  string `tlv8:"10"`
+	}{
+		Identifier: s.DeviceID,
+		Signature:  string(signature),
+	}
+	if b, err = tlv8.Marshal(plainM2); err != nil {
+		return err
 	}
 
-	switch req.Method {
-	case hap.MethodAddPairing, hap.MethodDeletePairing:
-		res := struct {
-			State byte `tlv8:"6"`
-		}{
-			State: hap.M2,
-		}
-		data, err := tlv8.Marshal(res)
-		if err != nil {
-			panic(err)
-		}
-		if err = WriteResponse(w, http.StatusOK, MimeJSON, data); err != nil {
-			panic(err)
-		}
+	b, err = chacha20poly1305.Encrypt(encryptKey, "PV-Msg02", b)
+	if err != nil {
+		return err
 	}
+
+	cipherM2 := struct {
+		State         byte   `tlv8:"6"`
+		PublicKey     string `tlv8:"3"`
+		EncryptedData string `tlv8:"5"`
+	}{
+		State:         StateM2,
+		PublicKey:     string(sessionPublic),
+		EncryptedData: string(b),
+	}
+	body, err := tlv8.Marshal(cipherM2)
+	if err != nil {
+		return err
+	}
+	if err = WriteResponse(rw.Writer, http.StatusOK, MimeTLV8, body); err != nil {
+		return err
+	}
+
+	// STEP M3. Request from iPhone
+	if req, err = http.ReadRequest(rw.Reader); err != nil {
+		return err
+	}
+
+	var cipherM3 struct {
+		EncryptedData string `tlv8:"5"`
+		State         byte   `tlv8:"6"`
+	}
+	if err = tlv8.UnmarshalReader(req.Body, &cipherM3); err != nil {
+		return err
+	}
+	if cipherM3.State != StateM3 {
+		return newRequestError(cipherM3)
+	}
+
+	if b, err = chacha20poly1305.Decrypt(encryptKey, "PV-Msg03", []byte(cipherM3.EncryptedData)); err != nil {
+		return err
+	}
+
+	var plainM3 struct {
+		Identifier string `tlv8:"1"`
+		Signature  string `tlv8:"10"`
+	}
+	if err = tlv8.Unmarshal(b, &plainM3); err != nil {
+		return err
+	}
+
+	clientPublic := s.GetPair(conn, plainM3.Identifier)
+	if clientPublic == nil {
+		return fmt.Errorf("hap: PairVerify from: %s, with unknown client_id: %s", conn.RemoteAddr(), plainM3.Identifier)
+	}
+
+	b = Append(plainM1.PublicKey, plainM3.Identifier, sessionPublic)
+	if !ed25519.ValidateSignature(clientPublic, b, []byte(plainM3.Signature)) {
+		return errors.New("new: ValidateSignature")
+	}
+
+	// STEP M4. Response to iPhone
+	payloadM4 := struct {
+		State byte `tlv8:"6"`
+	}{
+		State: StateM4,
+	}
+	if body, err = tlv8.Marshal(payloadM4); err != nil {
+		return err
+	}
+	if err = WriteResponse(rw.Writer, http.StatusOK, MimeTLV8, body); err != nil {
+		return err
+	}
+
+	if conn, err = secure.Client(conn, sessionShared, false); err != nil {
+		return err
+	}
+
+	return s.Handler(conn)
 }

@@ -1,6 +1,8 @@
 package mpegts
 
-var ieeeCrc32Tbl = []uint32{
+// have to create this table manually because it is in another endian
+// https://github.com/arturvt/TSreader/blob/master/src/br/ufpe/cin/tool/mpegts/CRC32.java
+var table = [256]uint32{
 	0x00000000, 0xB71DC104, 0x6E3B8209, 0xD926430D, 0xDC760413, 0x6B6BC517,
 	0xB24D861A, 0x0550471E, 0xB8ED0826, 0x0FF0C922, 0xD6D68A2F, 0x61CB4B2B,
 	0x649B0C35, 0xD386CD31, 0x0AA08E3C, 0xBDBD4F38, 0x70DB114C, 0xC7C6D048,
@@ -43,12 +45,13 @@ var ieeeCrc32Tbl = []uint32{
 	0xAFF023EA, 0x18EDE2EE, 0x1DBDA5F0, 0xAAA064F4, 0x738627F9, 0xC49BE6FD,
 	0x09FDB889, 0xBEE0798D, 0x67C63A80, 0xD0DBFB84, 0xD58BBC9A, 0x62967D9E,
 	0xBBB03E93, 0x0CADFF97, 0xB110B0AF, 0x060D71AB, 0xDF2B32A6, 0x6836F3A2,
-	0x6D66B4BC, 0xDA7B75B8, 0x035D36B5, 0xB440F7B1, 0x00000001,
+	0x6D66B4BC, 0xDA7B75B8, 0x035D36B5, 0xB440F7B1,
 }
 
-func calcCRC32(crc uint32, data []byte) uint32 {
+func checksum(data []byte) uint32 {
+	crc := uint32(0xFFFFFFFF)
 	for _, b := range data {
-		crc = ieeeCrc32Tbl[b^byte(crc)] ^ (crc >> 8)
+		crc = table[b^byte(crc)] ^ (crc >> 8)
 	}
 	return crc
 }

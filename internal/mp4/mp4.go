@@ -47,18 +47,7 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	exit := make(chan []byte, 1)
-
-	cons := &mp4.Segment{OnlyKeyframe: true}
-	cons.Listen(func(msg any) {
-		if data, ok := msg.([]byte); ok && exit != nil {
-			select {
-			case exit <- data:
-			default:
-			}
-			exit = nil
-		}
-	})
+	cons := mp4.NewKeyframe(nil)
 
 	if err := stream.AddConsumer(cons); err != nil {
 		log.Error().Err(err).Caller().Send()
@@ -66,20 +55,21 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := <-exit
+	once := &core.OnceBuffer{} // init and first frame
+	_, _ = cons.WriteTo(once)
 
 	stream.RemoveConsumer(cons)
 
 	// Apple Safari won't show frame without length
 	header := w.Header()
-	header.Set("Content-Length", strconv.Itoa(len(data)))
-	header.Set("Content-Type", cons.MimeType)
+	header.Set("Content-Length", strconv.Itoa(once.Len()))
+	header.Set("Content-Type", mp4.ContentType(cons.Codecs()))
 
 	if filename := query.Get("filename"); filename != "" {
 		header.Set("Content-Disposition", `attachment; filename="`+filename+`"`)
 	}
 
-	if _, err := w.Write(data); err != nil {
+	if _, err := once.WriteTo(w); err != nil {
 		log.Error().Err(err).Caller().Send()
 	}
 }
@@ -108,29 +98,11 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	exit := make(chan error, 1) // Add buffer to prevent blocking
-
-	cons := &mp4.Consumer{
-		Desc:       "MP4/HTTP",
-		RemoteAddr: tcp.RemoteAddr(r),
-		UserAgent:  r.UserAgent(),
-		Medias:     mp4.ParseQuery(r.URL.Query()),
-	}
-
-	cons.Listen(func(msg any) {
-		if exit == nil {
-			return
-		}
-		if data, ok := msg.([]byte); ok {
-			if _, err := w.Write(data); err != nil {
-				select {
-				case exit <- err:
-				default:
-				}
-				exit = nil
-			}
-		}
-	})
+	medias := mp4.ParseQuery(r.URL.Query())
+	cons := mp4.NewConsumer(medias)
+	cons.Type = "MP4/HTTP active consumer"
+	cons.RemoteAddr = tcp.RemoteAddr(r)
+	cons.UserAgent = r.UserAgent()
 
 	if err := stream.AddConsumer(cons); err != nil {
 		log.Error().Err(err).Caller().Send()
@@ -138,59 +110,36 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	defer stream.RemoveConsumer(cons)
+	if rotate := query.Get("rotate"); rotate != "" {
+		cons.Rotate = core.Atoi(rotate)
+	}
 
-	data, err := cons.Init()
-	if err != nil {
-		log.Error().Err(err).Caller().Send()
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+	if scale := query.Get("scale"); scale != "" {
+		if sx, sy, ok := strings.Cut(scale, ":"); ok {
+			cons.ScaleX = core.Atoi(sx)
+			cons.ScaleY = core.Atoi(sy)
+		}
 	}
 
 	header := w.Header()
-	header.Set("Content-Type", cons.MimeType())
+	header.Set("Content-Type", mp4.ContentType(cons.Codecs()))
 
 	if filename := query.Get("filename"); filename != "" {
 		header.Set("Content-Disposition", `attachment; filename="`+filename+`"`)
 	}
 
-	if rotate := query.Get("rotate"); rotate != "" {
-		mp4.PatchVideoRotate(data, core.Atoi(rotate))
-	}
-
-	if scale := query.Get("scale"); scale != "" {
-		if sx, sy, ok := strings.Cut(scale, ":"); ok {
-			mp4.PatchVideoScale(data, core.Atoi(sx), core.Atoi(sy))
-		}
-	}
-
-	if _, err = w.Write(data); err != nil {
-		log.Error().Err(err).Caller().Send()
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	cons.Start()
-
 	var duration *time.Timer
 	if s := query.Get("duration"); s != "" {
 		if i, _ := strconv.Atoi(s); i > 0 {
 			duration = time.AfterFunc(time.Second*time.Duration(i), func() {
-				if exit != nil {
-					select {
-					case exit <- nil:
-					default:
-					}
-					exit = nil
-				}
+				_ = cons.Stop()
 			})
 		}
 	}
 
-	err = <-exit
-	exit = nil
+	_, _ = cons.WriteTo(w)
 
-	log.Trace().Err(err).Caller().Send()
+	stream.RemoveConsumer(cons)
 
 	if duration != nil {
 		duration.Stop()

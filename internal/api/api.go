@@ -60,7 +60,8 @@ func Init() {
 	HandleFunc("api/exit", exitHandler)
 
 	// ensure we can listen without errors
-	listener, err := net.Listen("tcp", cfg.Mod.Listen)
+	var err error
+	ln, err = net.Listen("tcp", cfg.Mod.Listen)
 	if err != nil {
 		log.Fatal().Err(err).Msg("[api] listen")
 		return
@@ -86,7 +87,7 @@ func Init() {
 	go func() {
 		s = http.Server{}
 		s.Handler = Handler
-		if err = s.Serve(listener); err != nil {
+		if err = s.Serve(ln); err != nil {
 			log.Fatal().Err(err).Msg("[api] serve")
 		}
 	}()
@@ -136,6 +137,13 @@ func Init() {
 			}
 		}()
 	}
+}
+
+func Port() int {
+	if ln == nil {
+		return 0
+	}
+	return ln.Addr().(*net.TCPAddr).Port
 }
 
 const (
@@ -219,6 +227,7 @@ func middlewareCORS(next http.Handler) http.Handler {
 	})
 }
 
+var ln net.Listener
 var mu sync.Mutex
 
 func apiHandler(w http.ResponseWriter, r *http.Request) {
@@ -240,21 +249,30 @@ func exitHandler(w http.ResponseWriter, r *http.Request) {
 	os.Exit(code)
 }
 
-type Stream struct {
-	Name string `json:"name"`
-	URL  string `json:"url"`
+type Source struct {
+	ID       string `json:"id,omitempty"`
+	Name     string `json:"name,omitempty"`
+	Info     string `json:"info,omitempty"`
+	URL      string `json:"url,omitempty"`
+	Location string `json:"location,omitempty"`
 }
 
-func ResponseStreams(w http.ResponseWriter, streams []Stream) {
-	if len(streams) == 0 {
-		http.Error(w, "no streams", http.StatusNotFound)
+func ResponseSources(w http.ResponseWriter, sources []*Source) {
+	if len(sources) == 0 {
+		http.Error(w, "no sources", http.StatusNotFound)
 		return
 	}
 
 	var response = struct {
-		Streams []Stream `json:"streams"`
+		Sources []*Source `json:"sources"`
 	}{
-		Streams: streams,
+		Sources: sources,
 	}
 	ResponseJSON(w, response)
+}
+
+func Error(w http.ResponseWriter, err error) {
+	log.Error().Err(err).Caller(1).Send()
+
+	http.Error(w, err.Error(), http.StatusInsufficientStorage)
 }

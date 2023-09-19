@@ -1,41 +1,44 @@
 package magic
 
 import (
-	"encoding/json"
+	"bytes"
+	"encoding/hex"
+	"errors"
+	"io"
+
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/flv"
+	"github.com/AlexxIT/go2rtc/pkg/h264/annexb"
+	"github.com/AlexxIT/go2rtc/pkg/magic/bitstream"
+	"github.com/AlexxIT/go2rtc/pkg/magic/mjpeg"
+	"github.com/AlexxIT/go2rtc/pkg/mpegts"
+	"github.com/AlexxIT/go2rtc/pkg/multipart"
 )
 
-func (c *Client) GetMedias() []*core.Media {
-	return c.medias
-}
+func Open(r io.Reader) (core.Producer, error) {
+	rd := core.NewReadBuffer(r)
 
-func (c *Client) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
-	if c.receiver == nil {
-		c.receiver = core.NewReceiver(media, codec)
+	b, err := rd.Peek(4)
+	if err != nil {
+		return nil, err
 	}
-	return c.receiver, nil
-}
 
-func (c *Client) Start() error {
-	return c.Handle()
-}
+	switch {
+	case bytes.HasPrefix(b, []byte(annexb.StartCode)):
+		return bitstream.Open(rd)
 
-func (c *Client) Stop() (err error) {
-	if c.receiver != nil {
-		c.receiver.Close()
-	}
-	return c.Close()
-}
+	case bytes.HasPrefix(b, []byte{0xFF, 0xD8}):
+		return mjpeg.Open(rd)
 
-func (c *Client) MarshalJSON() ([]byte, error) {
-	info := &core.Info{
-		Type:   c.Desc,
-		URL:    c.URL,
-		Medias: c.medias,
-		Recv:   c.recv,
+	case bytes.HasPrefix(b, []byte(flv.Signature)):
+		return flv.Open(rd)
+
+	case bytes.HasPrefix(b, []byte("--")):
+		return multipart.Open(rd)
+
+	case b[0] == mpegts.SyncByte:
+		return mpegts.Open(rd)
 	}
-	if c.receiver != nil {
-		info.Receivers = append(info.Receivers, c.receiver)
-	}
-	return json.Marshal(info)
+
+	return nil, errors.New("magic: unsupported header: " + hex.EncodeToString(b))
 }
