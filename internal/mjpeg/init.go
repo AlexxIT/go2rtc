@@ -2,6 +2,11 @@ package mjpeg
 
 import (
 	"errors"
+	"io"
+	"net/http"
+	"strconv"
+	"time"
+
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg"
@@ -11,10 +16,6 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/mjpeg"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/rs/zerolog/log"
-	"io"
-	"net/http"
-	"strconv"
-	"time"
 )
 
 func Init() {
@@ -26,33 +27,24 @@ func Init() {
 
 func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 	src := r.URL.Query().Get("src")
-	stream := streams.GetOrNew(src)
+	stream := streams.Get(src)
 	if stream == nil {
 		http.Error(w, api.StreamNotFound, http.StatusNotFound)
 		return
 	}
 
-	exit := make(chan []byte)
-
-	cons := &magic.Keyframe{
-		RemoteAddr: tcp.RemoteAddr(r),
-		UserAgent:  r.UserAgent(),
-	}
-	cons.Listen(func(msg any) {
-		if b, ok := msg.([]byte); ok {
-			select {
-			case exit <- b:
-			default:
-			}
-		}
-	})
+	cons := magic.NewKeyframe()
+	cons.RemoteAddr = tcp.RemoteAddr(r)
+	cons.UserAgent = r.UserAgent()
 
 	if err := stream.AddConsumer(cons); err != nil {
 		log.Error().Err(err).Caller().Send()
 		return
 	}
 
-	data := <-exit
+	once := &core.OnceBuffer{} // init and first frame
+	_, _ = cons.WriteTo(once)
+	b := once.Buffer()
 
 	stream.RemoveConsumer(cons)
 
@@ -60,7 +52,7 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 	case core.CodecH264, core.CodecH265:
 		ts := time.Now()
 		var err error
-		if data, err = ffmpeg.TranscodeToJPEG(data); err != nil {
+		if b, err = ffmpeg.JPEGWithQuery(b, r.URL.Query()); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -69,17 +61,15 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 
 	h := w.Header()
 	h.Set("Content-Type", "image/jpeg")
-	h.Set("Content-Length", strconv.Itoa(len(data)))
+	h.Set("Content-Length", strconv.Itoa(len(b)))
 	h.Set("Cache-Control", "no-cache")
 	h.Set("Connection", "close")
 	h.Set("Pragma", "no-cache")
 
-	if _, err := w.Write(data); err != nil {
+	if _, err := w.Write(b); err != nil {
 		log.Error().Err(err).Caller().Send()
 	}
 }
-
-const header = "--frame\r\nContent-Type: image/jpeg\r\nContent-Length: "
 
 func handlerStream(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
@@ -91,32 +81,15 @@ func handlerStream(w http.ResponseWriter, r *http.Request) {
 
 func outputMjpeg(w http.ResponseWriter, r *http.Request) {
 	src := r.URL.Query().Get("src")
-	stream := streams.GetOrNew(src)
+	stream := streams.Get(src)
 	if stream == nil {
 		http.Error(w, api.StreamNotFound, http.StatusNotFound)
 		return
 	}
 
-	flusher := w.(http.Flusher)
-
-	cons := &mjpeg.Consumer{
-		RemoteAddr: tcp.RemoteAddr(r),
-		UserAgent:  r.UserAgent(),
-	}
-	cons.Listen(func(msg any) {
-		switch msg := msg.(type) {
-		case []byte:
-			data := []byte(header + strconv.Itoa(len(msg)))
-			data = append(data, '\r', '\n', '\r', '\n')
-			data = append(data, msg...)
-			data = append(data, '\r', '\n')
-
-			// Chrome bug: mjpeg image always shows the second to last image
-			// https://bugs.chromium.org/p/chromium/issues/detail?id=527446
-			_, _ = w.Write(data)
-			flusher.Flush()
-		}
-	})
+	cons := mjpeg.NewConsumer()
+	cons.RemoteAddr = tcp.RemoteAddr(r)
+	cons.UserAgent = r.UserAgent()
 
 	if err := stream.AddConsumer(cons); err != nil {
 		log.Error().Err(err).Msg("[api.mjpeg] add consumer")
@@ -129,11 +102,33 @@ func outputMjpeg(w http.ResponseWriter, r *http.Request) {
 	h.Set("Connection", "close")
 	h.Set("Pragma", "no-cache")
 
-	<-r.Context().Done()
+	wr := &writer{wr: w, buf: []byte(header)}
+	_, _ = cons.WriteTo(wr)
 
 	stream.RemoveConsumer(cons)
+}
 
-	//log.Trace().Msg("[api.mjpeg] close")
+const header = "--frame\r\nContent-Type: image/jpeg\r\nContent-Length: "
+
+type writer struct {
+	wr  io.Writer
+	buf []byte
+}
+
+func (w *writer) Write(p []byte) (n int, err error) {
+	w.buf = w.buf[:len(header)]
+	w.buf = append(w.buf, strconv.Itoa(len(p))...)
+	w.buf = append(w.buf, "\r\n\r\n"...)
+	w.buf = append(w.buf, p...)
+	w.buf = append(w.buf, "\r\n"...)
+
+	// Chrome bug: mjpeg image always shows the second to last image
+	// https://bugs.chromium.org/p/chromium/issues/detail?id=527446
+	if n, err = w.wr.Write(w.buf); err == nil {
+		w.wr.(http.Flusher).Flush()
+	}
+
+	return
 }
 
 func inputMjpeg(w http.ResponseWriter, r *http.Request) {
@@ -158,21 +153,14 @@ func inputMjpeg(w http.ResponseWriter, r *http.Request) {
 }
 
 func handlerWS(tr *ws.Transport, _ *ws.Message) error {
-	src := tr.Request.URL.Query().Get("src")
-	stream := streams.GetOrNew(src)
+	stream := streams.GetOrPatch(tr.Request.URL.Query())
 	if stream == nil {
 		return errors.New(api.StreamNotFound)
 	}
 
-	cons := &mjpeg.Consumer{
-		RemoteAddr: tcp.RemoteAddr(tr.Request),
-		UserAgent:  tr.Request.UserAgent(),
-	}
-	cons.Listen(func(msg any) {
-		if data, ok := msg.([]byte); ok {
-			tr.Write(data)
-		}
-	})
+	cons := mjpeg.NewConsumer()
+	cons.RemoteAddr = tcp.RemoteAddr(tr.Request)
+	cons.UserAgent = tr.Request.UserAgent()
 
 	if err := stream.AddConsumer(cons); err != nil {
 		log.Error().Err(err).Caller().Send()
@@ -180,6 +168,8 @@ func handlerWS(tr *ws.Transport, _ *ws.Message) error {
 	}
 
 	tr.Write(&ws.Message{Type: "mjpeg"})
+
+	go cons.WriteTo(tr.Writer())
 
 	tr.OnClose(func() {
 		stream.RemoveConsumer(cons)

@@ -1,140 +1,139 @@
 package homekit
 
 import (
-	"encoding/json"
+	"errors"
 	"fmt"
-	"github.com/AlexxIT/go2rtc/internal/app/store"
-	"github.com/AlexxIT/go2rtc/internal/streams"
-	"github.com/AlexxIT/go2rtc/pkg/hap"
-	"github.com/AlexxIT/go2rtc/pkg/hap/mdns"
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/AlexxIT/go2rtc/internal/api"
+	"github.com/AlexxIT/go2rtc/internal/app"
+	"github.com/AlexxIT/go2rtc/internal/streams"
+	"github.com/AlexxIT/go2rtc/pkg/hap"
+	"github.com/AlexxIT/go2rtc/pkg/mdns"
 )
 
 func apiHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
-		items := make([]any, 0)
+		sources, err := discovery()
+		if err != nil {
+			api.Error(w, err)
+			return
+		}
 
-		for name, src := range store.GetDict("streams") {
-			if src := src.(string); strings.HasPrefix(src, "homekit") {
-				u, err := url.Parse(src)
-				if err != nil {
-					continue
+		urls := findHomeKitURLs()
+		for id, u := range urls {
+			deviceID := u.Query().Get("device_id")
+			for _, source := range sources {
+				if strings.Contains(source.URL, deviceID) {
+					source.Location = id
+					break
 				}
-				device := Device{
-					Name:   name,
-					Addr:   u.Host,
-					Paired: true,
-				}
-				items = append(items, device)
 			}
 		}
 
-		for info := range mdns.GetAll() {
-			if !strings.HasSuffix(info.Name, mdns.Suffix) {
-				continue
+		for _, source := range sources {
+			if source.Location == "" {
+				source.Location = " "
 			}
-			name := info.Name[:len(info.Name)-len(mdns.Suffix)]
-			device := Device{
-				Name: strings.ReplaceAll(name, "\\", ""),
-				Addr: fmt.Sprintf("%s:%d", info.AddrV4, info.Port),
-			}
-			for _, field := range info.InfoFields {
-				switch field[:2] {
-				case "id":
-					device.ID = field[3:]
-				case "md":
-					device.Model = field[3:]
-				case "sf":
-					device.Paired = field[3] == '0'
-				}
-			}
-			items = append(items, device)
 		}
 
-		_ = json.NewEncoder(w).Encode(items)
+		api.ResponseSources(w, sources)
 
 	case "POST":
-		// TODO: post params...
+		if err := r.ParseMultipartForm(1024); err != nil {
+			api.Error(w, err)
+			return
+		}
 
-		id := r.URL.Query().Get("id")
-		pin := r.URL.Query().Get("pin")
-		name := r.URL.Query().Get("name")
-		if err := hkPair(id, pin, name); err != nil {
-			log.Error().Err(err).Caller().Send()
-			_, err = w.Write([]byte(err.Error()))
+		if err := apiPair(r.Form.Get("id"), r.Form.Get("url")); err != nil {
+			api.Error(w, err)
 		}
 
 	case "DELETE":
-		src := r.URL.Query().Get("src")
-		if err := hkDelete(src); err != nil {
-			log.Error().Err(err).Caller().Send()
-			_, err = w.Write([]byte(err.Error()))
+		if err := r.ParseMultipartForm(1024); err != nil {
+			api.Error(w, err)
+			return
+		}
+
+		if err := apiUnpair(r.Form.Get("id")); err != nil {
+			api.Error(w, err)
 		}
 	}
 }
 
-func hkPair(deviceID, pin, name string) (err error) {
-	var conn *hap.Conn
+func discovery() ([]*api.Source, error) {
+	var sources []*api.Source
 
-	if conn, err = hap.Pair(deviceID, pin); err != nil {
-		return
-	}
+	// 1. Get streams from Discovery
+	err := mdns.Discovery(mdns.ServiceHAP, func(entry *mdns.ServiceEntry) bool {
+		log.Trace().Msgf("[homekit] mdns=%s", entry)
 
-	streams.New(name, conn.URL())
-
-	dict := store.GetDict("streams")
-	dict[name] = conn.URL()
-
-	return store.Set("streams", dict)
-}
-
-func hkDelete(name string) (err error) {
-	dict := store.GetDict("streams")
-	for key, rawURL := range dict {
-		if key != name {
-			continue
-		}
-
-		var conn *hap.Conn
-
-		if conn, err = hap.NewConn(rawURL.(string)); err != nil {
-			return
-		}
-
-		if err = conn.Dial(); err != nil {
-			return
-		}
-
-		go func() {
-			if err = conn.Handle(); err != nil {
-				log.Warn().Err(err).Caller().Send()
+		category := entry.Info[hap.TXTCategory]
+		if entry.Complete() && (category == hap.CategoryCamera || category == hap.CategoryDoorbell) {
+			source := &api.Source{
+				Name: entry.Name,
+				Info: entry.Info[hap.TXTModel],
+				URL: fmt.Sprintf(
+					"homekit://%s:%d?device_id=%s&feature=%s&status=%s",
+					entry.IP, entry.Port, entry.Info[hap.TXTDeviceID],
+					entry.Info[hap.TXTFeatureFlags], entry.Info[hap.TXTStatusFlags],
+				),
 			}
-		}()
 
-		if err = conn.ListPairings(); err != nil {
-			return
+			sources = append(sources, source)
 		}
+		return false
+	})
 
-		if err = conn.DeletePairing(conn.ClientID); err != nil {
-			log.Error().Err(err).Caller().Send()
-		}
-
-		delete(dict, name)
-
-		return store.Set("streams", dict)
+	if err != nil {
+		return nil, err
 	}
 
-	return nil
+	return sources, nil
 }
 
-type Device struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Addr   string `json:"addr"`
-	Model  string `json:"model"`
-	Paired bool   `json:"paired"`
-	//Type    string `json:"type"`
+func apiPair(id, url string) error {
+	conn, err := hap.Pair(url)
+	if err != nil {
+		return err
+	}
+
+	streams.New(id, conn.URL())
+
+	return app.PatchConfig(id, conn.URL(), "streams")
+}
+
+func apiUnpair(id string) error {
+	stream := streams.Get(id)
+	if stream == nil {
+		return errors.New(api.StreamNotFound)
+	}
+
+	rawURL := findHomeKitURL(stream)
+	if rawURL == "" {
+		return errors.New("not homekit source")
+	}
+
+	if err := hap.Unpair(rawURL); err != nil {
+		return err
+	}
+
+	streams.Delete(id)
+
+	return app.PatchConfig(id, nil, "streams")
+}
+
+func findHomeKitURLs() map[string]*url.URL {
+	urls := map[string]*url.URL{}
+	for id, stream := range streams.Streams() {
+		if rawURL := findHomeKitURL(stream); rawURL != "" {
+			if u, err := url.Parse(rawURL); err == nil {
+				urls[id] = u
+			}
+		}
+	}
+	return urls
 }

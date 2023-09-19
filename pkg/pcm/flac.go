@@ -6,11 +6,12 @@ package pcm
 
 import (
 	"encoding/binary"
+	"unicode/utf8"
+
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/pion/rtp"
 	"github.com/sigurn/crc16"
 	"github.com/sigurn/crc8"
-	"unicode/utf8"
 )
 
 func FLACHeader(magic bool, sampleRate uint32) []byte {
@@ -47,13 +48,9 @@ func FLACHeader(magic bool, sampleRate uint32) []byte {
 var table8 *crc8.Table
 var table16 *crc16.Table
 
-func FLACEncoder(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
-	if codec.Channels >= 2 {
-		return nil
-	}
-
+func FLACEncoder(codecName string, clockRate uint32, handler core.HandlerFunc) core.HandlerFunc {
 	var sr byte
-	switch codec.ClockRate {
+	switch clockRate {
 	case 8000:
 		sr = 0b0100
 	case 16000:
@@ -86,7 +83,7 @@ func FLACEncoder(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 	return func(packet *rtp.Packet) {
 		samples := uint16(len(packet.Payload))
 
-		if codec.Name == core.CodecPCM {
+		if codecName == core.CodecPCM || codecName == core.CodecPCML {
 			samples /= 2
 		}
 
@@ -114,7 +111,7 @@ func FLACEncoder(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 		n += 1
 
 		// 3. Subframe
-		switch codec.Name {
+		switch codecName {
 		case core.CodecPCMA:
 			for _, b := range packet.Payload {
 				s16 := PCMAtoPCM(b)
@@ -131,6 +128,14 @@ func FLACEncoder(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 			}
 		case core.CodecPCM:
 			n += copy(buf[n:], packet.Payload)
+		case core.CodecPCML:
+			// reverse endian from little to big
+			size := len(packet.Payload)
+			for i := 0; i < size; i += 2 {
+				buf[n] = packet.Payload[i+1]
+				buf[n+1] = packet.Payload[i]
+				n += 2
+			}
 		}
 
 		// 4. Frame footer

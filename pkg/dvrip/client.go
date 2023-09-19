@@ -8,14 +8,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/h264"
-	"github.com/AlexxIT/go2rtc/pkg/h265"
-	"github.com/pion/rtp"
 	"io"
 	"net"
 	"net/url"
 	"time"
+
+	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/h264"
+	"github.com/AlexxIT/go2rtc/pkg/h264/annexb"
+	"github.com/AlexxIT/go2rtc/pkg/h265"
+	"github.com/pion/rtp"
 )
 
 type Client struct {
@@ -173,7 +175,7 @@ func (c *Client) Handle() error {
 
 		switch dataType {
 		case 0x1FC, 0x1FE: // video IFrame
-			payload := h264.AnnexB2AVC(b[16:])
+			payload := annexb.EncodeToAVCC(b[16:], false)
 
 			if c.videoTrack == nil {
 				fps := b[5]
@@ -208,7 +210,7 @@ func (c *Client) Handle() error {
 
 				packet := &rtp.Packet{
 					Header:  rtp.Header{Timestamp: c.videoTS},
-					Payload: h264.AnnexB2AVC(b[8:]),
+					Payload: annexb.EncodeToAVCC(b[8:], false),
 				}
 
 				//log.Printf("[DVR] %v, len: %d, ts: %10d", h265.Types(packet.Payload), len(packet.Payload), packet.Timestamp)
@@ -337,7 +339,7 @@ func (c *Client) ResponseJSON() (res Response, err error) {
 func (c *Client) AddVideoTrack(mediaCode byte, payload []byte) {
 	var codec *core.Codec
 	switch mediaCode {
-	case 2:
+	case 0x02, 0x12:
 		codec = &core.Codec{
 			Name:        core.CodecH264,
 			ClockRate:   90000,
@@ -345,7 +347,7 @@ func (c *Client) AddVideoTrack(mediaCode byte, payload []byte) {
 			FmtpLine:    h264.GetFmtpLine(payload),
 		}
 
-	case 0x03, 0x13:
+	case 0x03, 0x13, 0x43, 0x53:
 		codec = &core.Codec{
 			Name:        core.CodecH265,
 			ClockRate:   90000,

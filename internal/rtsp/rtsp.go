@@ -26,7 +26,7 @@ func Init() {
 	}
 
 	// default config
-	conf.Mod.Listen = ":8554"
+	conf.Mod.Listen = "0.0.0.0:8554"
 	conf.Mod.DefaultQuery = "video&audio"
 
 	app.LoadConfig(&conf)
@@ -101,6 +101,8 @@ func rtspHandler(rawURL string) (core.Producer, error) {
 	if rawQuery != "" {
 		query := streams.ParseQuery(rawQuery)
 		conn.Backchannel = query.Get("backchannel") == "1"
+		conn.Media = query.Get("media")
+		conn.Timeout = core.Atoi(query.Get("timeout"))
 		conn.Transport = query.Get("transport")
 	}
 

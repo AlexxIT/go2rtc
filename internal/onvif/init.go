@@ -1,13 +1,6 @@
 package onvif
 
 import (
-	"github.com/AlexxIT/go2rtc/internal/api"
-	"github.com/AlexxIT/go2rtc/internal/app"
-	"github.com/AlexxIT/go2rtc/internal/rtsp"
-	"github.com/AlexxIT/go2rtc/internal/streams"
-	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/onvif"
-	"github.com/rs/zerolog"
 	"io"
 	"net"
 	"net/http"
@@ -15,6 +8,14 @@ import (
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/AlexxIT/go2rtc/internal/api"
+	"github.com/AlexxIT/go2rtc/internal/app"
+	"github.com/AlexxIT/go2rtc/internal/rtsp"
+	"github.com/AlexxIT/go2rtc/internal/streams"
+	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/onvif"
+	"github.com/rs/zerolog"
 )
 
 func Init() {
@@ -121,7 +122,7 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 func apiOnvif(w http.ResponseWriter, r *http.Request) {
 	src := r.URL.Query().Get("src")
 
-	var items []api.Stream
+	var items []*api.Source
 
 	if src == "" {
 		urls, err := onvif.DiscoveryStreamingURLs()
@@ -149,7 +150,7 @@ func apiOnvif(w http.ResponseWriter, r *http.Request) {
 				u.Path = ""
 			}
 
-			items = append(items, api.Stream{Name: u.Host, URL: u.String()})
+			items = append(items, &api.Source{Name: u.Host, URL: u.String()})
 		}
 	} else {
 		client, err := onvif.NewClient(src)
@@ -176,19 +177,19 @@ func apiOnvif(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for i, token := range tokens {
-			items = append(items, api.Stream{
+			items = append(items, &api.Source{
 				Name: name + " stream" + strconv.Itoa(i),
 				URL:  src + "?subtype=" + token,
 			})
 		}
 
 		if len(tokens) > 0 && client.HasSnapshots() {
-			items = append(items, api.Stream{
+			items = append(items, &api.Source{
 				Name: name + " snapshot",
 				URL:  src + "?subtype=" + tokens[0] + "&snapshot",
 			})
 		}
 	}
 
-	api.ResponseStreams(w, items)
+	api.ResponseSources(w, items)
 }

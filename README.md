@@ -3,6 +3,7 @@
 [![](https://img.shields.io/github/stars/AlexxIT/go2rtc?style=flat-square&logo=github)](https://github.com/AlexxIT/go2rtc/stargazers) 
 [![](https://img.shields.io/docker/pulls/alexxit/go2rtc?style=flat-square&logo=docker&logoColor=white&label=pulls)](https://hub.docker.com/r/alexxit/go2rtc) 
 [![](https://img.shields.io/github/downloads/AlexxIT/go2rtc/total?color=blue&style=flat-square&logo=github)](https://github.com/AlexxIT/go2rtc/releases)
+[![](https://goreportcard.com/badge/github.com/AlexxIT/go2rtc)](https://goreportcard.com/report/github.com/AlexxIT/go2rtc)
 
 Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg, RTMP, etc.
 
@@ -12,9 +13,9 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
 - zero-delay for many supported protocols (lowest possible streaming latency)
 - streaming from [RTSP](#source-rtsp), [RTMP](#source-rtmp), [DVRIP](#source-dvrip), [HTTP](#source-http) (FLV/MJPEG/JPEG/TS), [USB Cameras](#source-ffmpeg-device) and [other sources](#module-streams)
 - streaming from any sources, supported by [FFmpeg](#source-ffmpeg)
-- streaming to [RTSP](#module-rtsp), [WebRTC](#module-webrtc), [MSE/MP4](#module-mp4), [HLS](#module-hls) or [MJPEG](#module-mjpeg)
+- streaming to [RTSP](#module-rtsp), [WebRTC](#module-webrtc), [MSE/MP4](#module-mp4), [HomeKit](#module-homekit) [HLS](#module-hls) or [MJPEG](#module-mjpeg)
 - first project in the World with support streaming from [HomeKit Cameras](#source-homekit)
-- first project in the World with support H265 for WebRTC in browser (Safari only, [read more](https://github.com/AlexxIT/Blog/issues/5))
+- support H265 for WebRTC in browser (Safari only, [read more](https://github.com/AlexxIT/Blog/issues/5))
 - on the fly transcoding for unsupported codecs via [FFmpeg](#source-ffmpeg)
 - play audio files and live streams on some cameras with [speaker](#stream-to-camera)
 - multi-source 2-way [codecs negotiation](#codecs-negotiation)
@@ -40,6 +41,7 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
   * [go2rtc: Docker](#go2rtc-docker)
   * [go2rtc: Home Assistant Add-on](#go2rtc-home-assistant-add-on)
   * [go2rtc: Home Assistant Integration](#go2rtc-home-assistant-integration)
+  * [go2rtc: Dev version](#go2rtc-dev-version)
 * [Configuration](#configuration)
   * [Module: Streams](#module-streams)
     * [Two way audio](#two-way-audio)
@@ -52,11 +54,14 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
     * [Source: Exec](#source-exec)
     * [Source: Echo](#source-echo)
     * [Source: HomeKit](#source-homekit)
+    * [Source: Bubble](#source-bubble)
     * [Source: DVRIP](#source-dvrip)
     * [Source: Tapo](#source-tapo)
+    * [Source: Kasa](#source-kasa)
     * [Source: Ivideon](#source-ivideon)
     * [Source: Hass](#source-hass)
     * [Source: ISAPI](#source-isapi)
+    * [Source: Nest](#source-nest)
     * [Source: Roborock](#source-roborock)
     * [Source: WebRTC](#source-webrtc)
     * [Source: WebTorrent](#source-webtorrent)
@@ -65,6 +70,7 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
   * [Module: API](#module-api)
   * [Module: RTSP](#module-rtsp)
   * [Module: WebRTC](#module-webrtc)
+  * [Module: HomeKit](#module-homekit)
   * [Module: WebTorrent](#module-webtorrent)
   * [Module: Ngrok](#module-ngrok)
   * [Module: Hass](#module-hass)
@@ -108,7 +114,7 @@ Download binary for your OS from [latest release](https://github.com/AlexxIT/go2
 - `go2rtc_linux_arm64` - Linux ARM 64-bit (ex. Raspberry 64-bit OS)
 - `go2rtc_linux_arm` - Linux ARM 32-bit (ex. Raspberry 32-bit OS)
 - `go2rtc_linux_armv6` - Linux ARMv6 (for old Raspberry 1 and Zero)
-- `go2rtc_linux_mipsel` - Linux MIPS (ex. [Xiaomi Gateway 3](https://github.com/AlexxIT/XiaomiGateway3))
+- `go2rtc_linux_mipsel` - Linux MIPS (ex. [Xiaomi Gateway 3](https://github.com/AlexxIT/XiaomiGateway3), [Wyze cameras](https://github.com/gtxaspec/wz_mini_hacks))
 - `go2rtc_mac_amd64.zip` - Mac Intel 64-bit
 - `go2rtc_mac_arm64.zip` - Mac ARM 64-bit
 
@@ -130,6 +136,14 @@ Container [alexxit/go2rtc](https://hub.docker.com/r/alexxit/go2rtc) with support
 ### go2rtc: Home Assistant Integration
 
 [WebRTC Camera](https://github.com/AlexxIT/WebRTC) custom component can be used on any [Home Assistant installation](https://www.home-assistant.io/installation/), including [HassWP](https://github.com/AlexxIT/HassWP) on Windows. It can automatically download and use the latest version of go2rtc. Or it can connect to an existing version of go2rtc. Addon installation in this case is optional.
+
+### go2rtc: Dev version
+
+Latest, but maybe unstable version:
+
+- Binary: GitHub > [Actions](https://github.com/AlexxIT/go2rtc/actions) > [Build and Push](https://github.com/AlexxIT/go2rtc/actions/workflows/build.yml) > latest run > Artifacts section (you should be logged in to GitHub)
+- Docker: `alexxit/go2rtc:master` or `alexxit/go2rtc:master-hardware` versions
+- Hass Add-on: `go2rtc master` or `go2rtc master hardware` versions
 
 ## Configuration
 
@@ -170,8 +184,10 @@ Available source types:
 - [exec](#source-exec) - get media from external app output
 - [echo](#source-echo) - get stream link from bash or python
 - [homekit](#source-homekit) - streaming from HomeKit Camera
+- [bubble](#source-bubble) - streaming from ESeeCloud/dvr163 NVR
 - [dvrip](#source-dvrip) - streaming from DVR-IP NVR
 - [tapo](#source-tapo) - TP-Link Tapo cameras with [two way audio](#two-way-audio) support
+- [kasa](#source-tapo) - TP-Link Kasa cameras
 - [ivideon](#source-ivideon) - public cameras from [Ivideon](https://tv.ivideon.com/) service
 - [hass](#source-hass) - Home Assistant integration
 - [isapi](#source-isapi) - two way audio for Hikvision (ISAPI) cameras
@@ -205,7 +221,7 @@ streams:
     - rtsp://admin:password@192.168.1.123/cam/realmonitor?channel=1&subtype=1
   amcrest_doorbell:
     - rtsp://username:password@192.168.1.123:554/cam/realmonitor?channel=1&subtype=0#backchannel=0
-  unify_camera: rtspx://192.168.1.123:7441/fD6ouM72bWoFijxK
+  unifi_camera: rtspx://192.168.1.123:7441/fD6ouM72bWoFijxK
   glichy_camera: ffmpeg:rstp://username:password@192.168.1.123/live/ch00_1 
 ```
 
@@ -213,11 +229,31 @@ streams:
 
 - **Amcrest Doorbell** users may want to disable two way audio, because with an active stream you won't have a call button working. You need to add `#backchannel=0` to the end of your RTSP link in YAML config file
 - **Dahua Doorbell** users may want to change backchannel [audio codec](https://github.com/AlexxIT/go2rtc/issues/52)
-- **Unify** users may want to disable HTTPS verification. Use `rtspx://` prefix instead of `rtsps://`. And don't use `?enableSrtp` [suffix](https://github.com/AlexxIT/go2rtc/issues/81)
+- **Reolink** users may want NOT to use RTSP protocol at all, some camera models have a very awful unusable stream implementation
+- **Ubiquiti UniFi** users may want to disable HTTPS verification. Use `rtspx://` prefix instead of `rtsps://`. And don't use `?enableSrtp` [suffix](https://github.com/AlexxIT/go2rtc/issues/81)
 - **TP-Link Tapo** users may skip login and password, because go2rtc support login [without them](https://drmnsamoliu.github.io/video.html)
 - If your camera has two RTSP links - you can add both of them as sources. This is useful when streams has different codecs, as example AAC audio with main stream and PCMU/PCMA audio with second stream
 - If the stream from your camera is glitchy, try using [ffmpeg source](#source-ffmpeg). It will not add CPU load if you won't use transcoding
 - If the stream from your camera is very glitchy, try to use transcoding with [ffmpeg source](#source-ffmpeg)
+
+**Other options**
+
+Format: `rtsp...#{param1}#{param2}#{param3}`
+
+- Add custom timeout `#timeout=30` (in seconds)
+- Ignore audio - `#media=video` or ignore video - `#media=audio` 
+- Ignore two way audio API `#backchannel=0` - important for some glitchy cameras
+- Use WebSocket transport `#transport=ws...`
+
+**RTSP over WebSocket**
+
+```yaml
+streams:
+  # WebSocket with authorization, RTSP - without
+  axis-rtsp-ws:  rtsp://192.168.1.123:4567/axis-media/media.amp?overview=0&camera=1&resolution=1280x720&videoframeskipmode=empty&Axis-Orig-Sw=true#transport=ws://user:pass@192.168.1.123:4567/rtsp-over-websocket
+  # WebSocket without authorization, RTSP - with
+  dahua-rtsp-ws: rtsp://user:pass@192.168.1.123/cam/realmonitor?channel=1&subtype=1&proto=Private3#transport=ws://192.168.1.123/rtspoverwebsocket
+```
 
 #### Source: RTMP
 
@@ -252,6 +288,9 @@ streams:
 
   # [MJPEG or H.264/H.265 bitstream or MPEG-TS]
   tcp_magic: tcp://192.168.1.123:12345
+
+  # Add custom header
+  custom_header: "https://mjpeg.sanford.io/count.mjpeg#header=Authorization: Bearer XXX"
 ```
 
 **PS.** Dahua camera has bug: if you select MJPEG codec for RTSP second stream - snapshot won't work.
@@ -307,20 +346,25 @@ But you can override them via YAML config. You can also add your own formats to 
 ffmpeg:
   bin: ffmpeg  # path to ffmpeg binary
   h264: "-codec:v libx264 -g:v 30 -preset:v superfast -tune:v zerolatency -profile:v main -level:v 4.1"
-  mycodec: "-any args that support ffmpeg..."
+  mycodec: "-any args that supported by ffmpeg..."
   myinput: "-fflags nobuffer -flags low_delay -timeout 5000000 -i {input}"
+  myraw: "-ss 00:00:20"
 ```
 
-- You can use `video` and `audio` params multiple times (ex. `#video=copy#audio=copy#audio=pcmu`)
 - You can use go2rtc stream name as ffmpeg input (ex. `ffmpeg:camera1#video=h264`)
-- You can use `rotate` params with `90`, `180`, `270` or `-90` values, important with transcoding (ex. `#video=h264#rotate=90`)
+- You can use `video` and `audio` params multiple times (ex. `#video=copy#audio=copy#audio=pcmu`)
+- You can use `rotate` param with `90`, `180`, `270` or `-90` values, important with transcoding (ex. `#video=h264#rotate=90`)
 - You can use `width` and/or `height` params, important with transcoding (ex. `#video=h264#width=1280`)
+- You can use `drawtext` to add a timestamp (ex. `drawtext=x=2:y=2:fontsize=12:fontcolor=white:box=1:boxcolor=black`)
+  - This will greatly increase the CPU of the server, even with hardware acceleration
 - You can use `raw` param for any additional FFmpeg arguments (ex. `#raw=-vf transpose=1`)
 - You can use `input` param to override default input template (ex. `#input=rtsp/udp` will change RTSP transport from TCP to UDP+TCP)
   - You can use raw input value (ex. `#input=-timeout 5000000 -i {input}`)
   - You can add your own input templates
 
-Read more about encoding [hardware acceleration](https://github.com/AlexxIT/go2rtc/wiki/Hardware-acceleration).
+Read more about [hardware acceleration](https://github.com/AlexxIT/go2rtc/wiki/Hardware-acceleration).
+
+**PS.** It is recommended to check the available hardware in the WebUI add page.
 
 #### Source: FFmpeg Device
 
@@ -340,6 +384,8 @@ streams:
   windows_webcam: ffmpeg:device?video=0#video=h264
   macos_facetime: ffmpeg:device?video=0&audio=1&video_size=1280x720&framerate=30#video=h264#audio=pcma
 ```
+
+**PS.** It is recommended to check the available devices in the WebUI add page.
 
 #### Source: Exec
 
@@ -393,9 +439,8 @@ If you see a device but it does not have a pair button - it is paired to some ec
 **Important:**
 
 - HomeKit audio uses very non-standard **AAC-ELD** codec with very non-standard params and specification violation
-- Audio can be transcoded by [ffmpeg](#source-ffmpeg) source with `#async` option
-- Audio can be played by `ffplay` with `-use_wallclock_as_timestamps 1 -async 1` options
 - Audio can't be played in `VLC` and probably any other player
+- Audio should be transcoded for using with MSE, WebRTC, etc.
 
 Recommended settings for using HomeKit Camera with WebRTC, MSE, MP4, RTSP:
 
@@ -403,12 +448,24 @@ Recommended settings for using HomeKit Camera with WebRTC, MSE, MP4, RTSP:
 streams:
   aqara_g3:
     - hass:Camera-Hub-G3-AB12
-    - ffmpeg:aqara_g3#audio=aac#audio=opus#async
+    - ffmpeg:aqara_g3#audio=aac#audio=opus
 ```
 
 RTSP link with "normal" audio for any player: `rtsp://192.168.1.123:8554/aqara_g3?video&audio=aac`
 
 **This source is in active development!** Tested only with [Aqara Camera Hub G3](https://www.aqara.com/eu/product/camera-hub-g3) (both EU and CN versions).
+
+#### Source: Bubble
+
+Other names: [ESeeCloud](http://www.eseecloud.com/), [dvr163](http://help.dvr163.com/).
+
+- you can skip `username`, `password`, `port`, `ch` and `stream` if they are default
+- setup separate streams for different channels and streams
+
+```yaml
+streams:
+  camera1: bubble://username:password@192.168.1.123:34567/bubble/live?ch=0&stream=0
+```
 
 #### Source: DVRIP
 
@@ -440,6 +497,15 @@ streams:
   camera2: tapo://admin:MD5-PASSWORD-HASH@192.168.1.123
 ```
 
+#### Source: Kasa
+
+[TP-Link Kasa](https://www.kasasmart.com/) non-standard protocol [more info](https://medium.com/@hu3vjeen/reverse-engineering-tp-link-kc100-bac4641bf1cd).
+
+```yaml
+streams:
+  kasa: kasa://user:pass@192.168.1.123:19443/https/stream/mixed
+```
+
 #### Source: Ivideon
 
 Support public cameras from service [Ivideon](https://tv.ivideon.com/).
@@ -467,7 +533,23 @@ streams:
   aqara_g3: hass:Camera-Hub-G3-AB12
 ```
 
-More cameras, like [Tuya](https://www.home-assistant.io/integrations/tuya/), and possibly others can also be imported by using [this method](https://github.com/felipecrs/hass-expose-camera-stream-source#importing-home-assistant-cameras-to-go2rtc-andor-frigate).
+**WebRTC Cameras**
+
+Any cameras in WebRTC format are supported. But at the moment Home Assistant only supports some [Nest](https://www.home-assistant.io/integrations/nest/) cameras in this fomat.
+
+The Nest API only allows you to get a link to a stream for 5 minutes. So every 5 minutes the stream will be reconnected.
+
+```yaml
+streams:
+  # link to Home Assistant Supervised
+  hass-webrtc1: hass://supervisor?entity_id=camera.nest_doorbell
+  # link to external Hass with Long-Lived Access Tokens
+  hass-webrtc2: hass://192.168.1.123:8123?entity_id=camera.nest_doorbell&token=eyXYZ...
+```
+
+**RTSP Cameras**
+
+By default, the Home Assistant API does not allow you to get dynamic RTSP link to a camera stream. So more cameras, like [Tuya](https://www.home-assistant.io/integrations/tuya/), and possibly others can also be imported by using [this method](https://github.com/felipecrs/hass-expose-camera-stream-source#importing-home-assistant-cameras-to-go2rtc-andor-frigate).
 
 #### Source: ISAPI
 
@@ -478,6 +560,17 @@ streams:
   hikvision1:
     - rtsp://admin:password@192.168.1.123:554/Streaming/Channels/101
     - isapi://admin:password@192.168.1.123:80/
+```
+
+#### Source: Nest
+
+Currently only WebRTC cameras are supported. Stream reconnects every 5 minutes.
+
+For simplicity, it is recommended to connect the Nest/WebRTC camera to the [Home Assistant](#source-hass). But if you can somehow get the below parameters - Nest/WebRTC source will work without Hass.
+
+```yaml
+streams:
+  nest-doorbell: nest:?client_id=***&client_secret=***&refresh_token=***&project_id=***&device_id=***
 ```
 
 #### Source: Roborock
@@ -493,16 +586,38 @@ If you have graphic pin for your vacuum - add it as numeric pin (lines: 123, 456
 
 #### Source: WebRTC
 
-This source type support two connection formats:
+This source type support four connection formats.
 
-- [WebRTC/WHEP](https://www.ietf.org/id/draft-murillo-whep-01.html) - is an unapproved standard for WebRTC video/audio viewers. But it may already be supported in some third-party software. It is supported in go2rtc.
-- `go2rtc/WebSocket` - This format is only supported in go2rtc. Unlike WHEP it supports asynchronous WebRTC connection and two way audio.
+**whep**
+
+[WebRTC/WHEP](https://www.ietf.org/id/draft-murillo-whep-01.html) - is an unapproved standard for WebRTC video/audio viewers. But it may already be supported in some third-party software. It is supported in go2rtc.
+
+**go2rtc**
+
+This format is only supported in go2rtc. Unlike WHEP it supports asynchronous WebRTC connection and two way audio.
+
+**openipc**
+
+Support connection to [OpenIPC](https://openipc.org/) cameras.
+
+**wyze**
+
+Supports connection to [Wyze](https://www.wyze.com/) cameras, using WebRTC protocol. You can use [docker-wyze-bridge](https://github.com/mrlt8/docker-wyze-bridge) project to get connection credentials.
+
+**kinesis**
+
+Supports [Amazon Kinesis Video Streams](https://aws.amazon.com/kinesis/video-streams/), using WebRTC protocol. You need to specify signalling WebSocket URL with all credentials in query params, `client_id` and `ice_servers` list in [JSON format](https://developer.mozilla.org/en-US/docs/Web/API/RTCIceServer).
 
 ```yaml
 streams:
-  webrtc1: webrtc:http://192.168.1.123:1984/api/webrtc?src=dahua1
-  webrtc2: webrtc:ws://192.168.1.123:1984/api/ws?src=dahua1
+  webrtc-whep:    webrtc:http://192.168.1.123:1984/api/webrtc?src=camera1
+  webrtc-go2rtc:  webrtc:ws://192.168.1.123:1984/api/ws?src=camera1
+  webrtc-openipc: webrtc:ws://192.168.1.123/webrtc_ws#format=openipc#ice_servers=[{"urls":"stun:stun.kinesisvideo.eu-north-1.amazonaws.com:443"}]
+  webrtc-wyze:    webrtc:http://192.168.1.123:5000/signaling/camera1?kvs#format=wyze
+  webrtc-kinesis: webrtc:wss://...amazonaws.com/?...#format=kinesis#client_id=...#ice_servers=[{...},{...}]
 ```
+
+**PS.** For `kinesis` sources you can use [echo](#source-echo) to get connection params using `bash`/`python` or any other script language.
 
 #### Source: WebTorrent
 
@@ -580,33 +695,9 @@ POST http://localhost:1984/api/streams?dst=camera1&src=ffmpeg:http://example.com
 
 ### Module: API
 
-The HTTP API is the main part for interacting with the application. Default address: `http://127.0.0.1:1984/`.
+The HTTP API is the main part for interacting with the application. Default address: `http://localhost:1984/`.
 
-go2rtc has its own JS video player (`video-rtc.js`) with:
-
-- support technologies:
-   - WebRTC over UDP or TCP
-   - MSE or MP4 or MJPEG over WebSocket 
-- automatic selection best technology according on:
-   - codecs inside your stream
-   - current browser capabilities
-   - current network configuration
-- automatic stop stream while browser or page not active
-- automatic stop stream while player not inside page viewport
-- automatic reconnection
-
-Technology selection based on priorities:
-
-1. Video and Audio better than just Video
-2. H265 better than H264
-3. WebRTC better than MSE, than MP4, than MJPEG
-
-go2rtc has simple HTML page (`stream.html`) with support params in URL:
-
-- multiple streams on page `src=camera1&src=camera2...`
-- stream technology autoselection `mode=webrtc,mse,mp4,mjpeg`
-- stream technology comparison `src=camera1&mode=webrtc&mode=mse&mode=mp4`
-- player width setting in pixels `width=320px` or percents `width=50%`
+[API description](https://github.com/AlexxIT/go2rtc/tree/master/api).
 
 **Module config**
 
@@ -623,11 +714,19 @@ api:
   base_path: "/rtc"  # default "", API prefix for serve on suburl (/api => /rtc/api)
   static_dir: "www"  # default "", folder for static files (custom web interface)
   origin: "*"        # default "", allow CORS requests (only * supported)
+  tls_listen: ":443" # default "", enable HTTPS server
+  tls_cert: |        # default "", PEM-encoded fullchain certificate for HTTPS
+    -----BEGIN CERTIFICATE-----
+    ...
+    -----END CERTIFICATE-----
+  tls_key: |         # default "", PEM-encoded private key for HTTPS
+    -----BEGIN PRIVATE KEY-----
+    ...
+    -----END PRIVATE KEY-----
 ```
 
 **PS:**
 
-- go2rtc doesn't provide HTTPS. Use [Nginx](https://nginx.org/) or [Ngrok](#module-ngrok) or [Home Assistant Add-on](#go2rtc-home-assistant-add-on) for this tasks
 - MJPEG over WebSocket plays better than native MJPEG because Chrome [bug](https://bugs.chromium.org/p/chromium/issues/detail?id=527446)
 - MP4 over WebSocket was created only for Apple iOS because it doesn't support MSE and native MP4
 
@@ -719,6 +818,58 @@ webrtc:
     - urls: [turn:123.123.123.123:3478]
       username: your_user
       credential: your_pass
+```
+
+### Module: HomeKit
+
+HomeKit module can work in two modes:
+
+- export any H264 camera to Apple HomeKit
+- transparent proxy any Apple HomeKit camera (Aqara, Eve, Eufy, etc.) back to Apple HomeKit, so you will have all camera features in Apple Home and also will have RTSP/WebRTC/MP4/etc. from your HomeKit camera
+
+**Important**
+
+- HomeKit cameras supports only H264 video and OPUS audio
+
+**Minimal config**
+
+```yaml
+streams:
+  dahua1: rtsp://admin:password@192.168.1.123/cam/realmonitor?channel=1&subtype=0
+homekit:
+  dahua1:  # same stream ID from streams list, default PIN - 19550224
+```
+
+**Full config**
+
+```yaml
+streams:
+  dahua1:
+    - rtsp://admin:password@192.168.1.123/cam/realmonitor?channel=1&subtype=0
+    - ffmpeg:dahua1#video=h264#hardware  # if your camera doesn't support H264, important for HomeKit
+    - ffmpeg:dahua1#audio=opus           # only OPUS audio supported by HomeKit
+
+homekit:
+  dahua1:                   # same stream ID from streams list
+    pin: 12345678           # custom PIN, default: 19550224
+    name: Dahua camera      # custom camera name, default: generated from stream ID
+    device_id: dahua1       # custom ID, default: generated from stream ID
+    device_private: dahua1  # custom key, default: generated from stream ID
+```
+
+**Proxy HomeKit camera**
+
+- Video stream from HomeKit camera to Apple device (iPhone, AppleTV) will be transmitted directly
+- Video stream from HomeKit camera to RTSP/WebRTC/MP4/etc. will be transmitted via go2rtc
+
+```yaml
+streams:
+  aqara1:
+    - homekit://...
+    - ffmpeg:aqara1#audio=aac#audio=opus  # optional audio transcoding
+
+homekit:
+  aqara1:  # same stream ID from streams list
 ```
 
 ### Module: WebTorrent
@@ -814,7 +965,7 @@ You have several options on how to add a camera to Home Assistant:
    - Install any [go2rtc](#fast-start)
    - Add your stream to [go2rtc config](#configuration)
    - Hass > Settings > Integrations > Add Integration > [ONVIF](https://my.home-assistant.io/redirect/config_flow_start/?domain=onvif) > Host: `127.0.0.1`, Port: `1984`
-   - Hass > Settings > Integrations > Add Integration > [Generic Camera](https://my.home-assistant.io/redirect/config_flow_start/?domain=generic) > `rtsp://127.0.0.1:8554/camera1` (change to your stream name)
+   - Hass > Settings > Integrations > Add Integration > [Generic Camera](https://my.home-assistant.io/redirect/config_flow_start/?domain=generic) > Stream Source URL: `rtsp://127.0.0.1:8554/camera1` (change to your stream name, leave everything else as is)
 
 You have several options on how to watch the stream from the cameras in Home Assistant:
 
@@ -835,7 +986,9 @@ streams:
   "camera.hall": ffmpeg:{input}#video=copy#audio=opus
 ```
 
-PS. Default Home Assistant lovelace cards don't support 2-way audio. You can use 2-way audio from [Add-on Web UI](https://my.home-assistant.io/redirect/supervisor_addon/?addon=a889bffc_go2rtc&repository_url=https%3A%2F%2Fgithub.com%2FAlexxIT%2Fhassio-addons). But you need use HTTPS to access the microphone. This is a browser restriction and cannot be avoided.
+**PS.** Default Home Assistant lovelace cards don't support 2-way audio. You can use 2-way audio from [Add-on Web UI](https://my.home-assistant.io/redirect/supervisor_addon/?addon=a889bffc_go2rtc&repository_url=https%3A%2F%2Fgithub.com%2FAlexxIT%2Fhassio-addons). But you need use HTTPS to access the microphone. This is a browser restriction and cannot be avoided.
+
+**PS.** There is also another nice card with go2rtc support - [Frigate Lovelace Card](https://github.com/dermotduffy/frigate-hass-card).
 
 ### Module: MP4
 
@@ -849,8 +1002,16 @@ API examples:
 
 - MP4 snapshot: `http://192.168.1.123:1984/api/frame.mp4?src=camera1` (H264, H265)
 - MP4 stream: `http://192.168.1.123:1984/api/stream.mp4?src=camera1` (H264, H265, AAC)
+- MP4 file: `http://192.168.1.123:1984/api/stream.mp4?src=camera1` (H264, H265*, AAC, OPUS, MP3, PCMA, PCMU, PCM)
+  - You can use `mp4`, `mp4=flac` and `mp4=all` param for codec filters
+  - You can use `duration` param in seconds (ex. `duration=15`)
+  - You can use `filename` param (ex. `filename=record.mp4`)
+  - You can use `rotate` param with `90`, `180` or `270` values
+  - You can use `scale` param with positive integer values (ex. `scale=4:3`)
 
 Read more about [codecs filters](#codecs-filters).
+
+**PS.** Rotate and scale params don't use transcoding and change video using metadata. 
 
 ### Module: HLS
 
@@ -889,6 +1050,9 @@ API examples:
 
 - MJPEG stream: `http://192.168.1.123:1984/api/stream.mjpeg?src=camera1`
 - JPEG snapshots: `http://192.168.1.123:1984/api/frame.jpeg?src=camera1`
+  - You can use `width`/`w` and/or `height`/`h` params 
+  - You can use `rotate` param with `90`, `180`, `270` or `-90` values
+  - You can use `hardware`/`hw` param [read more](https://github.com/AlexxIT/go2rtc/wiki/Hardware-acceleration)
 
 ### Module: Log
 
@@ -958,17 +1122,21 @@ Some examples:
 
 `AVC/H.264` video can be played almost anywhere. But `HEVC/H.265` has a lot of limitations in supporting with different devices and browsers. It's all about patents and money, you can't do anything about it.
 
-| Device              | WebRTC                        | MSE                           | HTTP Progressive Streaming         |
-|---------------------|-------------------------------|-------------------------------|------------------------------------|
-| *latency*           | best                          | medium                        | bad                                |
-| Desktop Chrome 107+ | H264, OPUS, PCMU, PCMA        | H264, H265*, AAC, FLAC*, OPUS | H264, H265*, AAC, FLAC*, OPUS, MP3 |
-| Desktop Edge        | H264, OPUS, PCMU, PCMA        | H264, H265*, AAC, FLAC*, OPUS | H264, H265*, AAC, FLAC*, OPUS, MP3 |
-| Android Chrome 107+ | H264, OPUS, PCMU, PCMA        | H264, H265*, AAC, FLAC*, OPUS | H264, H265*, AAC, FLAC*, OPUS, MP3 |
-| Desktop Firefox     | H264, OPUS, PCMU, PCMA        | H264, AAC, FLAC*, OPUS        | H264, AAC, FLAC*, OPUS             |
-| Desktop Safari      | H264, H265*, OPUS, PCMU, PCMA | H264, H265, AAC, FLAC*        | **no!**                            |
-| iPad Safari 13+     | H264, H265*, OPUS, PCMU, PCMA | H264, H265, AAC, FLAC*        | **no!**                            |
-| iPhone Safari 13+   | H264, H265*, OPUS, PCMU, PCMA | **no!**                       | **no!**                            |
-| masOS Hass App      | no                            | no                            | no                                 |
+| Device              | WebRTC                        | MSE                           | HTTP                               | HLS                    |
+|---------------------|-------------------------------|-------------------------------|------------------------------------|------------------------|
+| *latency*           | best                          | medium                        | bad                                | bad                    |
+| Desktop Chrome 107+ | H264, OPUS, PCMU, PCMA        | H264, H265*, AAC, FLAC*, OPUS | H264, H265*, AAC, FLAC*, OPUS, MP3 | no                     |
+| Desktop Edge        | H264, OPUS, PCMU, PCMA        | H264, H265*, AAC, FLAC*, OPUS | H264, H265*, AAC, FLAC*, OPUS, MP3 | no                     |
+| Android Chrome 107+ | H264, OPUS, PCMU, PCMA        | H264, H265*, AAC, FLAC*, OPUS | H264, H265*, AAC, FLAC*, OPUS, MP3 | no                     |
+| Desktop Firefox     | H264, OPUS, PCMU, PCMA        | H264, AAC, FLAC*, OPUS        | H264, AAC, FLAC*, OPUS             | no                     |
+| Desktop Safari 14+  | H264, H265*, OPUS, PCMU, PCMA | H264, H265, AAC, FLAC*        | **no!**                            | H264, H265, AAC, FLAC* |
+| iPad Safari 14+     | H264, H265*, OPUS, PCMU, PCMA | H264, H265, AAC, FLAC*        | **no!**                            | H264, H265, AAC, FLAC* |
+| iPhone Safari 14+   | H264, H265*, OPUS, PCMU, PCMA | **no!**                       | **no!**                            | H264, H265, AAC, FLAC* |
+| macOS [Hass App][1] | no                            | no                            | no                                 | H264, H265, AAC, FLAC* |
+
+[1]: https://apps.apple.com/app/home-assistant/id1099568401
+
+`HTTP*` - HTTP Progressive Streaming, not related with [Progressive download](https://en.wikipedia.org/wiki/Progressive_download), because the file has no size and no end 
 
 - Chrome H265: [read this](https://chromestatus.com/feature/5186511939567616) and [read this](https://github.com/StaZhu/enable-chromium-hevc-hardware-decoding)
 - Edge H265: [read this](https://www.reddit.com/r/MicrosoftEdge/comments/v9iw8k/enable_hevc_support_in_edge/)
@@ -1058,16 +1226,23 @@ streams:
 ## Projects using go2rtc
 
 - [Frigate 12+](https://frigate.video/) - open source NVR built around real-time AI object detection
+- [Frigate Lovelace Card](https://github.com/dermotduffy/frigate-hass-card) - custom card for Home Assistant
 - [ring-mqtt](https://github.com/tsightler/ring-mqtt) - Ring devices to MQTT Bridge
 - [EufyP2PStream](https://github.com/oischinger/eufyp2pstream) - A small project that provides a Video/Audio Stream from Eufy cameras that don't directly support RTSP
+- [ioBroker.euSec](https://github.com/bropat/ioBroker.eusec) - [ioBroker](https://www.iobroker.net/) adapter for control Eufy security devices
+- [wz_mini_hacks](https://github.com/gtxaspec/wz_mini_hacks) - Custom firmware for Wyze cameras
+- [MMM-go2rtc](https://github.com/Anonym-tsk/MMM-go2rtc) - MagicMirror² Module
+- [Alpine Linux](https://pkgs.alpinelinux.org/packages?name=go2rtc)
+- [NixOS](https://search.nixos.org/packages?query=go2rtc)
 - [Proxmox Helper Scripts](https://tteck.github.io/Proxmox/)
 - [Unraid](https://unraid.net/community/apps?q=go2rtc)
 
 ## Cameras experience
 
 - [Dahua](https://www.dahuasecurity.com/) - reference implementation streaming protocols, a lot of settings, high stream quality, multiple streaming clients
+- [EZVIZ](https://www.ezviz.com/) - awful RTSP protocol realisation, many bugs in SDP
 - [Hikvision](https://www.hikvision.com/) - a lot of proprietary streaming technologies
-- [Reolink](https://reolink.com/) - some models has awful unusable RTSP realisation and not best HTTP-FLV alternative (I recommend that you contact Reolink support for new firmware), few settings
+- [Reolink](https://reolink.com/) - some models has awful unusable RTSP realisation and not best RTMP alternative (I recommend that you contact Reolink support for new firmware), few settings
 - [Sonoff](https://sonoff.tech/) - very low stream quality, no settings, not best protocol implementation
 - [TP-Link](https://www.tp-link.com/) - few streaming clients, packet loss?
 - Chinese cheap noname cameras, Wyze Cams, Xiaomi cameras with hacks (usual has `/live/ch00_1` in RTSP URL) - awful but usable RTSP protocol realisation, low stream quality, few settings, packet loss?

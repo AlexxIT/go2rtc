@@ -29,6 +29,18 @@ func (a *Args) InsertFilter(filter string) {
 	a.Filters = append([]string{filter}, a.Filters...)
 }
 
+func (a *Args) HasFilters(filters ...string) bool {
+	for _, f1 := range a.Filters {
+		for _, f2 := range filters {
+			if strings.HasPrefix(f1, f2) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
 func (a *Args) String() string {
 	b := bytes.NewBuffer(make([]byte, 0, 512))
 
@@ -65,12 +77,13 @@ func (a *Args) String() string {
 	if a.Filters != nil {
 		for i, filter := range a.Filters {
 			if i == 0 {
-				b.WriteString(" -vf ")
+				b.WriteString(` -vf "`)
 			} else {
 				b.WriteByte(',')
 			}
 			b.WriteString(filter)
 		}
+		b.WriteByte('"')
 	}
 
 	b.WriteByte(' ')

@@ -1,20 +1,22 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/shell"
+	"github.com/AlexxIT/go2rtc/pkg/yaml"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"gopkg.in/yaml.v3"
 )
 
-var Version = "1.5.0"
+var Version = "1.7.1"
 var UserAgent = "go2rtc/" + Version
 
 var ConfigPath string
@@ -75,6 +77,8 @@ func Init() {
 	modules = cfg.Mod
 
 	log.Info().Msgf("go2rtc version %s %s/%s", Version, runtime.GOOS, runtime.GOARCH)
+
+	migrateStore()
 }
 
 func GetLogFilepath() string {
@@ -128,6 +132,35 @@ func GetLogger(module string) zerolog.Logger {
 }
 
 // internals
+func PatchConfig(key string, value any, path ...string) error {
+	if ConfigPath == "" {
+		return errors.New("config file disabled")
+	}
+
+	// empty config is OK
+	b, _ := os.ReadFile(ConfigPath)
+
+	b, err := yaml.Patch(b, key, value, path...)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(ConfigPath, b, 0644)
+}
+
+// internal
+
+type Config []string
+
+func (c *Config) String() string {
+	return strings.Join(*c, " ")
+}
+
+func (c *Config) Set(value string) error {
+	*c = append(*c, value)
+	return nil
+}
+
 var configs [][]byte
 
 // modules log levels

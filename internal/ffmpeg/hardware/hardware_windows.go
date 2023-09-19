@@ -8,8 +8,8 @@ const ProbeDXVA2JPEG = "-init_hw_device dxva2 -f lavfi -i testsrc2 -t 1 -c mjpeg
 const ProbeCUDAH264 = "-init_hw_device cuda -f lavfi -i testsrc2 -t 1 -c h264_nvenc -f null -"
 const ProbeCUDAH265 = "-init_hw_device cuda -f lavfi -i testsrc2 -t 1 -c hevc_nvenc -f null -"
 
-func ProbeAll(bin string) []api.Stream {
-	return []api.Stream{
+func ProbeAll(bin string) []*api.Source {
+	return []*api.Source{
 		{
 			Name: runToString(bin, ProbeDXVA2H264),
 			URL:  "ffmpeg:...#video=h264#hardware=" + EngineDXVA2,

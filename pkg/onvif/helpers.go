@@ -1,16 +1,17 @@
 package onvif
 
 import (
-	"github.com/AlexxIT/go2rtc/pkg/core"
 	"net"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
 func FindTagValue(b []byte, tag string) string {
-	re := regexp.MustCompile(`<[^/>]*` + tag + `[^>]*>([^<]+)`)
+	re := regexp.MustCompile(`(?s)<[^/>]*` + tag + `[^>]*>([^<]+)`)
 	m := re.FindSubmatch(b)
 	if len(m) != 2 {
 		return ""
@@ -29,6 +30,8 @@ func DiscoveryStreamingURLs() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	defer conn.Close()
 
 	// https://www.onvif.org/wp-content/uploads/2016/12/ONVIF_Feature_Discovery_Specification_16.07.pdf
 	// 5.3 Discovery Procedure:

@@ -3,7 +3,7 @@
 # 0. Prepare images
 # only debian 12 (bookworm) has latest ffmpeg
 ARG DEBIAN_VERSION="bookworm-slim"
-ARG GO_VERSION="1.20-buster"
+ARG GO_VERSION="1.21-bookworm"
 ARG NGROK_VERSION="3"
 
 FROM debian:${DEBIAN_VERSION} AS base
@@ -12,7 +12,13 @@ FROM ngrok/ngrok:${NGROK_VERSION} AS ngrok
 
 
 # 1. Build go2rtc binary
-FROM go AS build
+FROM --platform=$BUILDPLATFORM go AS build
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+ENV GOOS=${TARGETOS}
+ENV GOARCH=${TARGETARCH}
 
 WORKDIR /build
 

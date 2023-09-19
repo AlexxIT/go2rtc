@@ -107,6 +107,7 @@ func GetForkGroupId() uint32 {
 	return uint32(gid)
 }
 
+// ReplaceEnvVars - support format ${CAMERA_PASSWORD} and ${RTSP_USER:admin}
 func ReplaceEnvVars(text string) string {
 	re := regexp.MustCompile(`\${([^}{]+)}`)
 	return re.ReplaceAllStringFunc(text, func(match string) string {

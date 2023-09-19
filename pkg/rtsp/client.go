@@ -4,12 +4,14 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"github.com/AlexxIT/go2rtc/pkg/tcp/websocket"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/AlexxIT/go2rtc/pkg/tcp/websocket"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
@@ -22,17 +24,22 @@ func NewClient(uri string) *Conn {
 }
 
 func (c *Conn) Dial() (err error) {
-	if c.Transport == "" {
-		c.conn, err = Dial(c.uri)
-	} else {
-		c.conn, err = websocket.Dial(c.Transport)
-	}
-
-	if err != nil {
+	if c.URL, err = url.Parse(c.uri); err != nil {
 		return
 	}
 
-	if c.URL, err = url.Parse(c.uri); err != nil {
+	var conn net.Conn
+
+	if c.Transport == "" {
+		timeout := core.ConnDialTimeout
+		if c.Timeout != 0 {
+			timeout = time.Second * time.Duration(c.Timeout)
+		}
+		conn, err = tcp.Dial(c.URL, timeout)
+	} else {
+		conn, err = websocket.Dial(c.Transport)
+	}
+	if err != nil {
 		return
 	}
 
@@ -40,8 +47,10 @@ func (c *Conn) Dial() (err error) {
 	c.auth = tcp.NewAuth(c.URL.User)
 	c.URL.User = nil
 
-	c.reader = bufio.NewReader(c.conn)
+	c.conn = conn
+	c.reader = bufio.NewReaderSize(conn, core.BufferSize)
 	c.session = ""
+	c.sequence = 0
 	c.state = StateConn
 
 	return nil
@@ -134,9 +143,21 @@ func (c *Conn) Describe() error {
 		}
 	}
 
+	c.sdp = string(res.Body) // for info
+
 	medias, err := UnmarshalSDP(res.Body)
 	if err != nil {
 		return err
+	}
+
+	if c.Media != "" {
+		clone := make([]*core.Media, 0, len(medias))
+		for _, media := range medias {
+			if strings.Contains(c.Media, media.Kind) {
+				clone = append(clone, media)
+			}
+		}
+		medias = clone
 	}
 
 	// TODO: rewrite more smart

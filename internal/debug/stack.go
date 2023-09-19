@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"runtime"
+
+	"github.com/AlexxIT/go2rtc/internal/api"
 )
 
 var stackSkip = [][]byte{
@@ -22,6 +24,9 @@ var stackSkip = [][]byte{
 
 	[]byte("created by github.com/AlexxIT/go2rtc/internal/rtsp.Init"),
 	[]byte("created by github.com/AlexxIT/go2rtc/internal/srtp.Init"),
+
+	// homekit
+	[]byte("created by github.com/AlexxIT/go2rtc/internal/homekit.Init"),
 
 	// webrtc/api.go
 	[]byte("created by github.com/pion/ice/v2.NewTCPMuxDefault"),
@@ -51,7 +56,5 @@ func stackHandler(w http.ResponseWriter, r *http.Request) {
 		"Total: %d, Skipped: %d", runtime.NumGoroutine(), skipped),
 	)
 
-	if _, err := w.Write(buf[:i]); err != nil {
-		panic(err)
-	}
+	api.Response(w, buf[:i], api.MimeText)
 }

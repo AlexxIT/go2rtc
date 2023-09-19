@@ -1,156 +1,163 @@
 package rtmp
 
 import (
-	"encoding/base64"
-	"encoding/hex"
-	"fmt"
+	"bufio"
+	"io"
+	"net"
+	"net/url"
+	"strings"
+
 	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/httpflv"
-	"github.com/deepch/vdk/av"
-	"github.com/deepch/vdk/codec/aacparser"
-	"github.com/deepch/vdk/codec/h264parser"
-	"github.com/deepch/vdk/format/rtmp"
-	"github.com/pion/rtp"
-	"net/http"
-	"time"
+	"github.com/AlexxIT/go2rtc/pkg/flv"
+	"github.com/AlexxIT/go2rtc/pkg/tcp"
 )
 
-// Conn for RTMP and RTMPT (flv over HTTP)
-type Conn interface {
-	Streams() (streams []av.CodecData, err error)
-	ReadPacket() (pkt av.Packet, err error)
-	Close() (err error)
-}
-
-type Client struct {
-	core.Listener
-
-	URI string
-
-	medias    []*core.Media
-	receivers []*core.Receiver
-
-	conn   Conn
-	closed bool
-
-	recv int
-}
-
-func NewClient(uri string) *Client {
-	return &Client{URI: uri}
-}
-
-func (c *Client) Dial() (err error) {
-	c.conn, err = rtmp.Dial(c.URI)
-	return
-}
-
-// Accept - convert http.Response to Client
-func Accept(res *http.Response) (*Client, error) {
-	conn, err := httpflv.Accept(res)
+func DialPlay(rawURL string) (core.Producer, error) {
+	u, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, err
 	}
-	return &Client{URI: res.Request.URL.String(), conn: conn}, nil
-}
 
-func (c *Client) Describe() (err error) {
-	// important to get SPS/PPS
-	streams, err := c.conn.Streams()
+	conn, err := tcp.Dial(u, core.ConnDialTimeout)
 	if err != nil {
-		return
+		return nil, err
 	}
 
-	for _, stream := range streams {
-		switch stream.Type() {
-		case av.H264:
-			info := stream.(h264parser.CodecData).RecordInfo
-
-			fmtp := fmt.Sprintf(
-				"profile-level-id=%02X%02X%02X;sprop-parameter-sets=%s,%s",
-				info.AVCProfileIndication, info.ProfileCompatibility, info.AVCLevelIndication,
-				base64.StdEncoding.EncodeToString(info.SPS[0]),
-				base64.StdEncoding.EncodeToString(info.PPS[0]),
-			)
-
-			codec := &core.Codec{
-				Name:        core.CodecH264,
-				ClockRate:   90000,
-				FmtpLine:    fmtp,
-				PayloadType: core.PayloadTypeRAW,
-			}
-
-			media := &core.Media{
-				Kind:      core.KindVideo,
-				Direction: core.DirectionRecvonly,
-				Codecs:    []*core.Codec{codec},
-			}
-			c.medias = append(c.medias, media)
-
-			track := core.NewReceiver(media, codec)
-			c.receivers = append(c.receivers, track)
-
-		case av.AAC:
-			// TODO: fix support
-			cd := stream.(aacparser.CodecData)
-
-			codec := &core.Codec{
-				Name:      core.CodecAAC,
-				ClockRate: uint32(cd.Config.SampleRate),
-				Channels:  uint16(cd.Config.ChannelConfig),
-				//  a=fmtp:97 streamtype=5;profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;config=1588
-				FmtpLine:    "streamtype=5;profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;config=" + hex.EncodeToString(cd.ConfigBytes),
-				PayloadType: core.PayloadTypeRAW,
-			}
-
-			media := &core.Media{
-				Kind:      core.KindAudio,
-				Direction: core.DirectionRecvonly,
-				Codecs:    []*core.Codec{codec},
-			}
-			c.medias = append(c.medias, media)
-
-			track := core.NewReceiver(media, codec)
-			c.receivers = append(c.receivers, track)
-
-		default:
-			fmt.Printf("[rtmp] unsupported codec %+v\n", stream)
-		}
+	client, err := NewClient(conn, u)
+	if err != nil {
+		return nil, err
 	}
 
-	return
+	if err = client.play(); err != nil {
+		return nil, err
+	}
+
+	return flv.Open(client)
 }
 
-func (c *Client) Handle() (err error) {
-	for {
-		var pkt av.Packet
-		pkt, err = c.conn.ReadPacket()
-		if err != nil {
-			if c.closed {
-				return nil
-			}
-			return
-		}
-
-		c.recv += len(pkt.Data)
-
-		track := c.receivers[int(pkt.Idx)]
-
-		// convert seconds to RTP timestamp
-		timestamp := uint32(pkt.Time * time.Duration(track.Codec.ClockRate) / time.Second)
-
-		packet := &rtp.Packet{
-			Header:  rtp.Header{Timestamp: timestamp},
-			Payload: pkt.Data,
-		}
-		track.WriteRTP(packet)
+func DialPublish(rawURL string) (io.Writer, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, err
 	}
+
+	conn, err := tcp.Dial(u, core.ConnDialTimeout)
+	if err != nil {
+		return nil, err
+	}
+
+	client, err := NewClient(conn, u)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = client.publish(); err != nil {
+		return nil, err
+	}
+
+	return client, nil
 }
 
-func (c *Client) Close() error {
-	if c.conn == nil {
-		return nil
+func NewClient(conn net.Conn, u *url.URL) (*Conn, error) {
+	c := &Conn{
+		url: u.String(),
+
+		conn: conn,
+		rd:   bufio.NewReaderSize(conn, core.BufferSize),
+		wr:   conn,
+
+		chunks: map[uint8]*header{},
+
+		rdPacketSize: 128,
+		wrPacketSize: 4096, // OBS - 4096, Reolink - 4096
 	}
-	c.closed = true
-	return c.conn.Close()
+
+	if args := strings.Split(u.Path, "/"); len(args) >= 2 {
+		c.App = args[1]
+		if len(args) >= 3 {
+			c.Stream = args[2]
+			if u.RawQuery != "" {
+				c.Stream += "?" + u.RawQuery
+			}
+		}
+	}
+
+	if err := c.clienHandshake(); err != nil {
+		return nil, err
+	}
+	if err := c.writePacketSize(); err != nil {
+		return nil, err
+	}
+
+	return c, nil
+}
+
+func (c *Conn) clienHandshake() error {
+	// simple handshake without real random and check response
+	b := make([]byte, 1+1536)
+	b[0] = 0x03
+	// write C0+C1
+	if _, err := c.conn.Write(b); err != nil {
+		return err
+	}
+	// read S0+S1
+	if _, err := io.ReadFull(c.rd, b); err != nil {
+		return err
+	}
+	// write S1
+	if _, err := c.conn.Write(b[1:]); err != nil {
+		return err
+	}
+	// read C1, skip check
+	if _, err := io.ReadFull(c.rd, b[1:]); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *Conn) play() error {
+	c.rdBuf = []byte{
+		'F', 'L', 'V', // signature
+		1,          // version
+		0,          // flags (has video/audio)
+		0, 0, 0, 9, // header size
+	}
+
+	if err := c.writeConnect(); err != nil {
+		return err
+	}
+	if err := c.writeCreateStream(); err != nil {
+		return err
+	}
+	if err := c.writePlay(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *Conn) publish() error {
+	if err := c.writeConnect(); err != nil {
+		return err
+	}
+	if err := c.writeReleaseStream(); err != nil {
+		return err
+	}
+	if err := c.writeCreateStream(); err != nil {
+		return err
+	}
+	if err := c.writePublish(); err != nil {
+		return err
+	}
+
+	go func() {
+		for {
+			_, _, _, err := c.readMessage()
+			//log.Printf("!!! %d %d %.30x", msgType, timeMS, b)
+			if err != nil {
+				return
+			}
+		}
+	}()
+
+	return nil
 }

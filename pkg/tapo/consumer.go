@@ -2,10 +2,11 @@ package tapo
 
 import (
 	"bytes"
+	"strconv"
+
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/mpegts"
 	"github.com/pion/rtp"
-	"strconv"
 )
 
 func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver) error {
@@ -14,17 +15,16 @@ func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver
 			return nil
 		}
 
-		w := mpegts.NewWriter()
-		w.AddPES(68, mpegts.StreamTypePCMATapo)
-		w.WritePAT()
-		w.WritePMT()
+		muxer := mpegts.NewMuxer()
+		pid := muxer.AddTrack(mpegts.StreamTypePCMATapo)
+		if err := c.WriteBackchannel(muxer.GetHeader()); err != nil {
+			return err
+		}
 
 		c.sender = core.NewSender(media, track.Codec)
 		c.sender.Handler = func(packet *rtp.Packet) {
-			// don't know why 68 and 192
-			w.WritePES(68, 192, packet.Payload)
-			_ = c.WriteBackchannel(w.Bytes())
-			w.Reset()
+			b := muxer.GetPayload(pid, packet.Timestamp, packet.Payload)
+			_ = c.WriteBackchannel(b)
 		}
 	}
 

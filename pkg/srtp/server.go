@@ -3,42 +3,71 @@ package srtp
 import (
 	"encoding/binary"
 	"net"
-	"sync/atomic"
+	"strconv"
+	"sync"
 )
 
-// Server using same UDP port for SRTP and for SRTCP as the iPhone does
-// this is not really necessary but anyway
 type Server struct {
+	address  string
 	conn     net.PacketConn
 	sessions map[uint32]*Session
+	mu       sync.Mutex
 }
 
-func (s *Server) Port() uint16 {
-	addr := s.conn.LocalAddr().(*net.UDPAddr)
-	return uint16(addr.Port)
+func NewServer(address string) *Server {
+	return &Server{
+		address:  address,
+		sessions: map[uint32]*Session{},
+	}
 }
 
-func (s *Server) Close() error {
-	return s.conn.Close()
+func (s *Server) Port() int {
+	if s.conn != nil {
+		return s.conn.LocalAddr().(*net.UDPAddr).Port
+	}
+
+	_, a, _ := net.SplitHostPort(s.address)
+	i, _ := strconv.Atoi(a)
+	return i
 }
 
 func (s *Server) AddSession(session *Session) {
-	if s.sessions == nil {
-		s.sessions = map[uint32]*Session{}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := session.init(); err != nil {
+		return
 	}
-	s.sessions[session.RemoteSSRC] = session
+
+	if len(s.sessions) == 0 {
+		var err error
+		if s.conn, err = net.ListenPacket("udp", s.address); err != nil {
+			return
+		}
+		go s.handle()
+	}
+
+	session.conn = s.conn
+
+	s.sessions[session.Remote.SSRC] = session
 }
 
-func (s *Server) RemoveSession(session *Session) {
-	delete(s.sessions, session.RemoteSSRC)
+func (s *Server) DelSession(session *Session) {
+	s.mu.Lock()
+
+	delete(s.sessions, session.Remote.SSRC)
+
+	if len(s.sessions) == 0 {
+		_ = s.conn.Close()
+	}
+
+	s.mu.Unlock()
 }
 
-func (s *Server) Serve(conn net.PacketConn) error {
-	s.conn = conn
-
-	buf := make([]byte, 2048)
+func (s *Server) handle() error {
+	b := make([]byte, 2048)
 	for {
-		n, addr, err := conn.ReadFrom(buf)
+		n, _, err := s.conn.ReadFrom(b)
 		if err != nil {
 			return err
 		}
@@ -46,30 +75,19 @@ func (s *Server) Serve(conn net.PacketConn) error {
 		// Multiplexing RTP Data and Control Packets on a Single Port
 		// https://datatracker.ietf.org/doc/html/rfc5761
 
-		// this is default position for SSRC in RTP packet
-		ssrc := binary.BigEndian.Uint32(buf[8:])
-		session, ok := s.sessions[ssrc]
-		if ok {
-			if session.Write == nil {
-				session.Write = func(b []byte) (int, error) {
-					return conn.WriteTo(b, addr)
-				}
+		switch packetType := b[1]; packetType {
+		case 99, 110, 0x80 | 99, 0x80 | 110:
+			// this is default position for SSRC in RTP packet
+			ssrc := binary.BigEndian.Uint32(b[8:])
+			if session, ok := s.sessions[ssrc]; ok {
+				session.ReadRTP(b[:n])
 			}
 
-			atomic.AddUint32(&session.Recv, uint32(n))
-
-			if err = session.HandleRTP(buf[:n]); err != nil {
-				return err
-			}
-		} else {
+		case 200, 201, 202, 203, 204, 205, 206, 207:
 			// this is default position for SSRC in RTCP packet
-			ssrc = binary.BigEndian.Uint32(buf[4:])
-			if session, ok = s.sessions[ssrc]; !ok {
-				continue // skip unknown ssrc
-			}
-
-			if err = session.HandleRTCP(buf[:n]); err != nil {
-				return err
+			ssrc := binary.BigEndian.Uint32(b[4:])
+			if session, ok := s.sessions[ssrc]; ok {
+				session.ReadRTCP(b[:n])
 			}
 		}
 	}

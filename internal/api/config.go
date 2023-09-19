@@ -1,11 +1,12 @@
 package api
 
 import (
-	"github.com/AlexxIT/go2rtc/internal/app"
-	"gopkg.in/yaml.v3"
 	"io"
 	"net/http"
 	"os"
+
+	"github.com/AlexxIT/go2rtc/internal/app"
+	"gopkg.in/yaml.v3"
 )
 
 func configHandler(w http.ResponseWriter, r *http.Request) {
@@ -21,9 +22,8 @@ func configHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "", http.StatusNotFound)
 			return
 		}
-		if _, err = w.Write(data); err != nil {
-			log.Warn().Err(err).Caller().Send()
-		}
+		// https://www.ietf.org/archive/id/draft-ietf-httpapi-yaml-mediatypes-00.html
+		Response(w, data, "application/yaml")
 
 	case "POST", "PATCH":
 		data, err := io.ReadAll(r.Body)
@@ -41,8 +41,7 @@ func configHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		} else {
 			// validate config
-			var tmp struct{}
-			if err = yaml.Unmarshal(data, &tmp); err != nil {
+			if err = yaml.Unmarshal(data, map[string]any{}); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}

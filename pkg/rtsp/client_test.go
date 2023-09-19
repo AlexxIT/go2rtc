@@ -1,11 +1,12 @@
 package rtsp
 
 import (
-	"github.com/stretchr/testify/require"
 	"net"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestTimeout(t *testing.T) {
@@ -88,7 +89,7 @@ Session: 1
 	require.Nil(t, err)
 	require.Len(t, client.Medias, 3)
 
-	ch, err := client.SetupMedia(client.Medias[2], true)
+	ch, err := client.SetupMedia(client.Medias[2])
 	require.Nil(t, err)
 	require.Equal(t, ch, byte(4))
 }

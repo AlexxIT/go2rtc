@@ -2,9 +2,8 @@ package mjpeg
 
 import (
 	"encoding/json"
-	"errors"
+
 	"github.com/AlexxIT/go2rtc/pkg/core"
-	"strings"
 )
 
 func (c *Client) GetMedias() []*core.Media {
@@ -14,7 +13,9 @@ func (c *Client) GetMedias() []*core.Media {
 			Direction: core.DirectionRecvonly,
 			Codecs: []*core.Codec{
 				{
-					Name: core.CodecJPEG, ClockRate: 90000, PayloadType: core.PayloadTypeRAW,
+					Name:        core.CodecJPEG,
+					ClockRate:   90000,
+					PayloadType: core.PayloadTypeRAW,
 				},
 			},
 		}}
@@ -30,18 +31,8 @@ func (c *Client) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver,
 }
 
 func (c *Client) Start() error {
-	ct := c.res.Header.Get("Content-Type")
-
-	if ct == "image/jpeg" {
-		return c.startJPEG()
-	}
-
-	// added in go1.18
-	if _, s, ok := strings.Cut(ct, "boundary="); ok {
-		return c.startMJPEG(s)
-	}
-
-	return errors.New("wrong Content-Type: " + ct)
+	// https://github.com/AlexxIT/go2rtc/issues/278
+	return c.Handle()
 }
 
 func (c *Client) Stop() error {
@@ -56,7 +47,7 @@ func (c *Client) Stop() error {
 
 func (c *Client) MarshalJSON() ([]byte, error) {
 	info := &core.Info{
-		Type:       "MJPEG active producer",
+		Type:       "JPEG active producer",
 		URL:        c.res.Request.URL.String(),
 		RemoteAddr: c.RemoteAddr,
 		UserAgent:  c.UserAgent,

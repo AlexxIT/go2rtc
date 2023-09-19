@@ -1,36 +1,34 @@
 package mp4
 
 import (
-	"encoding/json"
+	"errors"
+	"io"
+	"sync"
+
 	"github.com/AlexxIT/go2rtc/pkg/aac"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
 	"github.com/AlexxIT/go2rtc/pkg/pcm"
 	"github.com/pion/rtp"
-	"sync"
 )
 
 type Consumer struct {
-	core.Listener
-
-	Medias     []*core.Media
-	UserAgent  string
-	RemoteAddr string
-
-	senders []*core.Sender
-
+	core.SuperConsumer
+	wr    *core.WriteBuffer
 	muxer *Muxer
 	mu    sync.Mutex
-	wait  byte
+	start bool
 
-	send int
+	Rotate int `json:"-"`
+	ScaleX int `json:"-"`
+	ScaleY int `json:"-"`
 }
 
-func (c *Consumer) GetMedias() []*core.Media {
-	if c.Medias == nil {
+func NewConsumer(medias []*core.Media) *Consumer {
+	if medias == nil {
 		// default local medias
-		c.Medias = []*core.Media{
+		medias = []*core.Media{
 			{
 				Kind:      core.KindVideo,
 				Direction: core.DirectionSendonly,
@@ -49,64 +47,60 @@ func (c *Consumer) GetMedias() []*core.Media {
 		}
 	}
 
-	return c.Medias
+	cons := &Consumer{
+		muxer: &Muxer{},
+		wr:    core.NewWriteBuffer(nil),
+	}
+	cons.Medias = medias
+	return cons
 }
 
 func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver) error {
-	trackID := byte(len(c.senders))
+	trackID := byte(len(c.Senders))
 
 	codec := track.Codec.Clone()
 	handler := core.NewSender(media, codec)
 
 	switch track.Codec.Name {
 	case core.CodecH264:
-		c.wait = waitInit
-
 		handler.Handler = func(packet *rtp.Packet) {
-			if packet.Version != h264.RTPPacketVersionAVC {
-				return
-			}
-
-			if c.wait != waitNone {
-				if c.wait == waitInit || !h264.IsKeyframe(packet.Payload) {
+			if !c.start {
+				if !h264.IsKeyframe(packet.Payload) {
 					return
 				}
-				c.wait = waitNone
+				c.start = true
 			}
 
 			// important to use Mutex because right fragment order
 			c.mu.Lock()
-			buf := c.muxer.Marshal(trackID, packet)
-			c.Fire(buf)
-			c.send += len(buf)
+			b := c.muxer.GetPayload(trackID, packet)
+			if n, err := c.wr.Write(b); err == nil {
+				c.Send += n
+			}
 			c.mu.Unlock()
 		}
 
 		if track.Codec.IsRTP() {
 			handler.Handler = h264.RTPDepay(track.Codec, handler.Handler)
 		} else {
-			handler.Handler = h264.RepairAVC(track.Codec, handler.Handler)
+			handler.Handler = h264.RepairAVCC(track.Codec, handler.Handler)
 		}
 
 	case core.CodecH265:
-		c.wait = waitInit
-
 		handler.Handler = func(packet *rtp.Packet) {
-			if packet.Version != h264.RTPPacketVersionAVC {
-				return
-			}
-
-			if c.wait != waitNone {
-				if c.wait == waitInit || !h265.IsKeyframe(packet.Payload) {
+			if !c.start {
+				if !h265.IsKeyframe(packet.Payload) {
 					return
 				}
-				c.wait = waitNone
+				c.start = true
 			}
 
+			// important to use Mutex because right fragment order
 			c.mu.Lock()
-			buf := c.muxer.Marshal(trackID, packet)
-			c.Fire(buf)
-			c.send += len(buf)
+			b := c.muxer.GetPayload(trackID, packet)
+			if n, err := c.wr.Write(b); err == nil {
+				c.Send += n
+			}
 			c.mu.Unlock()
 		}
 
@@ -116,14 +110,16 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 
 	default:
 		handler.Handler = func(packet *rtp.Packet) {
-			if c.wait != waitNone {
+			if !c.start {
 				return
 			}
 
+			// important to use Mutex because right fragment order
 			c.mu.Lock()
-			buf := c.muxer.Marshal(trackID, packet)
-			c.Fire(buf)
-			c.send += len(buf)
+			b := c.muxer.GetPayload(trackID, packet)
+			if n, err := c.wr.Write(b); err == nil {
+				c.Send += n
+			}
 			c.mu.Unlock()
 		}
 
@@ -133,9 +129,14 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 				handler.Handler = aac.RTPDepay(handler.Handler)
 			}
 		case core.CodecOpus, core.CodecMP3: // no changes
-		case core.CodecPCMA, core.CodecPCMU, core.CodecPCM:
-			handler.Handler = pcm.FLACEncoder(track.Codec, handler.Handler)
+		case core.CodecPCMA, core.CodecPCMU, core.CodecPCM, core.CodecPCML:
 			codec.Name = core.CodecFLAC
+			if codec.Channels == 2 {
+				// hacky way for support two channels audio
+				codec.Channels = 1
+				codec.ClockRate *= 2
+			}
+			handler.Handler = pcm.FLACEncoder(track.Codec.Name, codec.ClockRate, handler.Handler)
 
 		default:
 			handler.Handler = nil
@@ -143,58 +144,44 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 	}
 
 	if handler.Handler == nil {
-		println("ERROR: MP4 unsupported codec: " + track.Codec.String())
-		return nil
+		s := "mp4: unsupported codec: " + track.Codec.String()
+		println(s)
+		return errors.New(s)
 	}
 
+	c.muxer.AddTrack(codec)
+
 	handler.HandleRTP(track)
-	c.senders = append(c.senders, handler)
+	c.Senders = append(c.Senders, handler)
 
 	return nil
+}
+
+func (c *Consumer) WriteTo(wr io.Writer) (int64, error) {
+	if len(c.Senders) == 1 && c.Senders[0].Codec.IsAudio() {
+		c.start = true
+	}
+
+	init, err := c.muxer.GetInit()
+	if err != nil {
+		return 0, err
+	}
+
+	if c.Rotate != 0 {
+		PatchVideoRotate(init, c.Rotate)
+	}
+	if c.ScaleX != 0 && c.ScaleY != 0 {
+		PatchVideoScale(init, c.ScaleX, c.ScaleY)
+	}
+
+	if _, err = wr.Write(init); err != nil {
+		return 0, err
+	}
+
+	return c.wr.WriteTo(wr)
 }
 
 func (c *Consumer) Stop() error {
-	for _, sender := range c.senders {
-		sender.Close()
-	}
-	return nil
-}
-
-func (c *Consumer) Codecs() []*core.Codec {
-	codecs := make([]*core.Codec, len(c.senders))
-	for i, sender := range c.senders {
-		codecs[i] = sender.Codec
-	}
-	return codecs
-}
-
-func (c *Consumer) MimeCodecs() string {
-	return c.muxer.MimeCodecs(c.Codecs())
-}
-
-func (c *Consumer) MimeType() string {
-	return `video/mp4; codecs="` + c.MimeCodecs() + `"`
-}
-
-func (c *Consumer) Init() ([]byte, error) {
-	c.muxer = &Muxer{}
-	return c.muxer.GetInit(c.Codecs())
-}
-
-func (c *Consumer) Start() {
-	if c.wait == waitInit {
-		c.wait = waitKeyframe
-	}
-}
-
-func (c *Consumer) MarshalJSON() ([]byte, error) {
-	info := &core.Info{
-		Type:       "MP4 passive consumer",
-		RemoteAddr: c.RemoteAddr,
-		UserAgent:  c.UserAgent,
-		Medias:     c.Medias,
-		Senders:    c.senders,
-		Send:       c.send,
-	}
-	return json.Marshal(info)
+	_ = c.SuperConsumer.Close()
+	return c.wr.Close()
 }

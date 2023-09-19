@@ -1,4 +1,14 @@
-# HTML5
+## Browser support
+
+[ECMAScript 2019 (ES10)](https://caniuse.com/?search=es10) supported by [iOS 12](https://en.wikipedia.org/wiki/IOS_12) (iPhone 5S, iPad Air, iPad Mini 2, etc.).
+
+But [ECMAScript 2017 (ES8)](https://caniuse.com/?search=es8) almost fine (`es6 + async`) and recommended for [React+TypeScript](https://github.com/typescript-cheatsheets/react).
+
+## Known problems
+
+- Autoplay doesn't work for WebRTC in Safari [read more](https://developer.apple.com/documentation/webkit/delivering_video_content_for_safari/).
+
+## HTML5
 
 **1. Autoplay video tag**
 
@@ -10,6 +20,8 @@
 
 <video id="video" autoplay controls playsinline muted></video>
 ```
+
+- https://developer.apple.com/documentation/webkit/delivering_video_content_for_safari/
 
 **2. [Safari] pc.createOffer**
 

@@ -1,15 +1,18 @@
 package api
 
 import (
+	"crypto/tls"
 	"encoding/json"
-	"github.com/AlexxIT/go2rtc/internal/app"
-	"github.com/rs/zerolog"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/AlexxIT/go2rtc/internal/app"
+	"github.com/rs/zerolog"
 )
 
 func Init() {
@@ -21,11 +24,14 @@ func Init() {
 			BasePath  string `yaml:"base_path"`
 			StaticDir string `yaml:"static_dir"`
 			Origin    string `yaml:"origin"`
+			TLSListen string `yaml:"tls_listen"`
+			TLSCert   string `yaml:"tls_cert"`
+			TLSKey    string `yaml:"tls_key"`
 		} `yaml:"api"`
 	}
 
 	// default config
-	cfg.Mod.Listen = ":1984"
+	cfg.Mod.Listen = "0.0.0.0:1984"
 
 	// load config from YAML
 	app.LoadConfig(&cfg)
@@ -44,7 +50,8 @@ func Init() {
 	HandleFunc("api/exit", exitHandler)
 
 	// ensure we can listen without errors
-	listener, err := net.Listen("tcp", cfg.Mod.Listen)
+	var err error
+	ln, err = net.Listen("tcp", cfg.Mod.Listen)
 	if err != nil {
 		log.Fatal().Err(err).Msg("[api] listen")
 		return
@@ -69,11 +76,53 @@ func Init() {
 	go func() {
 		s := http.Server{}
 		s.Handler = Handler
-		if err = s.Serve(listener); err != nil {
+		if err = s.Serve(ln); err != nil {
 			log.Fatal().Err(err).Msg("[api] serve")
 		}
 	}()
+
+	// Initialize the HTTPS server
+	if cfg.Mod.TLSListen != "" && cfg.Mod.TLSCert != "" && cfg.Mod.TLSKey != "" {
+		cert, err := tls.X509KeyPair([]byte(cfg.Mod.TLSCert), []byte(cfg.Mod.TLSKey))
+		if err != nil {
+			log.Error().Err(err).Caller().Send()
+			return
+		}
+
+		tlsListener, err := net.Listen("tcp", cfg.Mod.TLSListen)
+		if err != nil {
+			log.Fatal().Err(err).Caller().Send()
+			return
+		}
+
+		log.Info().Str("addr", cfg.Mod.TLSListen).Msg("[api] tls listen")
+
+		tlsServer := &http.Server{
+			Handler: Handler,
+			TLSConfig: &tls.Config{
+				Certificates: []tls.Certificate{cert},
+			},
+		}
+
+		go func() {
+			if err := tlsServer.ServeTLS(tlsListener, "", ""); err != nil {
+				log.Fatal().Err(err).Msg("[api] tls serve")
+			}
+		}()
+	}
 }
+
+func Port() int {
+	if ln == nil {
+		return 0
+	}
+	return ln.Addr().(*net.TCPAddr).Port
+}
+
+const (
+	MimeJSON = "application/json"
+	MimeText = "text/plain"
+)
 
 var Handler http.Handler
 
@@ -86,6 +135,33 @@ func HandleFunc(pattern string, handler http.HandlerFunc) {
 	}
 	log.Trace().Str("path", pattern).Msg("[api] register path")
 	http.HandleFunc(pattern, handler)
+}
+
+// ResponseJSON important always add Content-Type
+// so go won't need to call http.DetectContentType
+func ResponseJSON(w http.ResponseWriter, v any) {
+	w.Header().Set("Content-Type", MimeJSON)
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+func ResponsePrettyJSON(w http.ResponseWriter, v any) {
+	w.Header().Set("Content-Type", MimeJSON)
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	_ = enc.Encode(v)
+}
+
+func Response(w http.ResponseWriter, body any, contentType string) {
+	w.Header().Set("Content-Type", contentType)
+
+	switch v := body.(type) {
+	case []byte:
+		_, _ = w.Write(v)
+	case string:
+		_, _ = w.Write([]byte(v))
+	default:
+		_, _ = fmt.Fprint(w, body)
+	}
 }
 
 const StreamNotFound = "stream not found"
@@ -124,6 +200,7 @@ func middlewareCORS(next http.Handler) http.Handler {
 	})
 }
 
+var ln net.Listener
 var mu sync.Mutex
 
 func apiHandler(w http.ResponseWriter, r *http.Request) {
@@ -131,9 +208,7 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 	app.Info["host"] = r.Host
 	mu.Unlock()
 
-	if err := json.NewEncoder(w).Encode(app.Info); err != nil {
-		log.Warn().Err(err).Caller().Send()
-	}
+	ResponseJSON(w, app.Info)
 }
 
 func exitHandler(w http.ResponseWriter, r *http.Request) {
@@ -147,22 +222,30 @@ func exitHandler(w http.ResponseWriter, r *http.Request) {
 	os.Exit(code)
 }
 
-type Stream struct {
-	Name string `json:"name"`
-	URL  string `json:"url"`
+type Source struct {
+	ID       string `json:"id,omitempty"`
+	Name     string `json:"name,omitempty"`
+	Info     string `json:"info,omitempty"`
+	URL      string `json:"url,omitempty"`
+	Location string `json:"location,omitempty"`
 }
 
-func ResponseStreams(w http.ResponseWriter, streams []Stream) {
-	if len(streams) == 0 {
-		http.Error(w, "no streams", http.StatusNotFound)
+func ResponseSources(w http.ResponseWriter, sources []*Source) {
+	if len(sources) == 0 {
+		http.Error(w, "no sources", http.StatusNotFound)
 		return
 	}
 
-	var response struct {
-		Streams []Stream `json:"streams"`
+	var response = struct {
+		Sources []*Source `json:"sources"`
+	}{
+		Sources: sources,
 	}
-	response.Streams = streams
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
+	ResponseJSON(w, response)
+}
+
+func Error(w http.ResponseWriter, err error) {
+	log.Error().Err(err).Caller(1).Send()
+
+	http.Error(w, err.Error(), http.StatusInsufficientStorage)
 }

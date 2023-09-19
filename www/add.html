@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <title>Add Stream</title>
     <meta name="viewport" content="width=device-width, user-scalable=yes, initial-scale=1, maximum-scale=1">
@@ -7,6 +7,7 @@
     <style>
         body {
             font-family: Arial, Helvetica, sans-serif;
+            background-color: white;
         }
 
         body {
@@ -58,21 +59,28 @@
 <body>
 <script src="main.js"></script>
 <script>
-    async function getStreams(url, tableID) {
-        const table = document.getElementById(tableID)
-        table.innerText = 'loading...'
+    function drawTable(table, data) {
+        const cols = ['id', 'name', 'info', 'url', 'location'];
+        const th = (row) => cols.reduce((html, k) => k in row ? `${html}<th>${k}</th>` : html, '<tr>') + '</tr>';
+        const td = (row) => cols.reduce((html, k) => k in row ? `${html}<td>${row[k]}</td>` : html, '<tr>') + '</tr>';
 
-        const r = typeof url === 'string' ? await fetch(url, {cache: 'no-cache'}) : url
+        const thead = th(data.sources[0]);
+        const tbody = data.sources.reduce((html, source) => `${html}${td(source)}`, '');
+
+        table.innerHTML = `<thead>${thead}</thead><tbody>${tbody}</tbody>`;
+    }
+
+    async function getSources(tableID, url) {
+        const table = document.getElementById(tableID);
+        table.innerText = 'loading...';
+
+        const r = typeof url === 'string' ? await fetch(url, {cache: 'no-cache'}) : url;
         if (!r.ok) {
-            table.innerText = await r.text()
-            return
+            table.innerText = await r.text();
+            return;
         }
 
-        /** @type {{streams:Array<{name:string,url:string}>}} */
-        const data = await r.json()
-        table.innerHTML = data.streams.reduce((html, item) => {
-            return html + `<tr><td>${item.name}</td><td>${item.url}</td></tr>`
-        }, '<thead><tr><th>Name</th><th>Source</th></tr></thead><tbody>') + '</tbody>'
+        drawTable(table, await r.json());
     }
 </script>
 
@@ -87,113 +95,126 @@
 </div>
 <script>
     document.getElementById('stream').addEventListener('click', async ev => {
-        ev.target.nextElementSibling.style.display = 'block'
-    })
+        ev.target.nextElementSibling.style.display = 'block';
+    });
 
     document.getElementById('stream-form').addEventListener('submit', async ev => {
-        ev.preventDefault()
+        ev.preventDefault();
 
-        const url = new URL('api/streams', location.href)
-        url.searchParams.set('name', ev.target.elements['name'].value)
-        url.searchParams.set('src', ev.target.elements['src'].value)
+        const url = new URL('api/streams', location.href);
+        url.searchParams.set('name', ev.target.elements['name'].value);
+        url.searchParams.set('src', ev.target.elements['src'].value);
 
-        const r = await fetch(url, {method: 'PUT'})
-        alert(r.ok ? 'OK' : 'ERROR')
-    })
+        const r = await fetch(url, {method: 'PUT'});
+        alert(r.ok ? 'OK' : 'ERROR: ' + await r.text());
+    });
 </script>
 
 
 <button id="homekit">Apple HomeKit</button>
 <div class="module">
-    <div style="margin-bottom: 10px">
-        <label for="pin">PIN</label>
-        <input id="pin" type="text">
-    </div>
-    <table>
-        <thead>
-        <tr>
-            <th>Name</th>
-            <th>Address</th>
-            <th>Model</th>
-            <th>Commands</th>
-        </tr>
-        </thead>
-        <tbody id="homekit-body">
-        </tbody>
-    </table>
+    <form id="homekit-pair" style="margin-bottom: 10px">
+        <input type="text" name="id" placeholder="stream id" size="20">
+        <input type="text" name="url" placeholder="url" size="40">
+        <input type="text" name="pin" placeholder="pin" size="10">
+        <input type="submit" value="Pair">
+    </form>
+    <form id="homekit-unpair" style="margin-bottom: 10px">
+        <input type="text" name="id" placeholder="stream id" size="20">
+        <input type="submit" value="Unpair">
+    </form>
+    <table id="homekit-table"></table>
 </div>
 <script>
+    async function reloadHomeKit() {
+        await getSources('homekit-table', 'api/homekit');
+
+        const rows = document.querySelectorAll('#homekit-table tr');
+        rows.forEach((row, i) => {
+            let commands = '';
+            if (row.children[2].innerText.indexOf('status=1') > 0) {
+                commands += '<a href="#">pair</a>';
+            } else if (i > 0 && row.children[3].innerText) {
+                commands += '<a href="#">unpair</a>';
+            }
+            row.innerHTML += `<td>${commands}</td>`;
+        });
+    }
+
     document.getElementById('homekit').addEventListener('click', async ev => {
-        ev.target.nextElementSibling.style.display = 'block'
-        const r = await fetch('api/homekit', {cache: 'no-cache'})
+        ev.target.nextElementSibling.style.display = 'block';
+        await reloadHomeKit();
+    });
 
-        /** @type {Array<{id:string,name:string,addr:string,model:string,paired:boolean}>} */
-        const data = await r.json()
+    document.getElementById('homekit-table').addEventListener('click', ev => {
+        if (ev.target.innerText === 'pair') {
+            const form = document.querySelector('#homekit-pair');
+            const row = ev.target.closest('tr');
+            form.children[0].value = row.children[0].innerText;
+            form.children[1].value = row.children[2].innerText;
+        } else if (ev.target.innerText === 'unpair') {
+            const form = document.querySelector('#homekit-unpair');
+            const row = ev.target.closest('tr');
+            form.children[0].value = row.children[3].innerText;
+        }
+    });
 
-        const tbody = document.getElementById('homekit-body')
-        tbody.innerHTML =
-            data.reduce((res, item) => {
-                let commands = ''
-                if (item.id === "") {
-                    commands = `<a href="#" onclick="unpair('${item.name}')">unpair</a>`
-                } else if (item.paired === false) {
-                    commands = `<a href="#" onclick="pair('${item.id}','${item.name}')">pair</a>`
-                }
-                return res + `<tr>
-                        <td>${item.name}</td>
-                        <td>${item.addr}</td>
-                        <td>${item.model}</td>
-                        <td>${commands}</td>
-                    </tr>`
-            }, '')
-    })
+    document.getElementById('homekit-pair').addEventListener('submit', async ev => {
+        ev.preventDefault();
 
-    function pair(id, name) {
-        const pin = document.querySelector('#pin').value
-        fetch(`api/homekit?id=${id}&name=${name}&pin=${pin}`, {method: 'POST'})
-            .then(r => r.text())
-            .then(data => {
-                if (data.length > 0) alert(data)
-                else window.location.reload()
-            })
-            .catch(console.error)
-    }
+        const body = new FormData(ev.target);
+        body.set('url', body.get('url') + '&pin=' + body.get('pin'));
+        body.delete('pin');
 
-    function unpair(src) {
-        fetch(`api/homekit?src=${src}`, {method: 'DELETE'})
-            .then(r => r.text())
-            .then(data => {
-                if (data.length > 0) alert(data)
-                else window.location.reload()
-            })
-            .catch(console.error)
-    }
+        const r = await fetch('api/homekit', {method: 'POST', body: body});
+        alert(r.ok ? 'OK' : 'ERROR: ' + await r.text());
+
+        await reloadHomeKit();
+    });
+
+    document.getElementById('homekit-unpair').addEventListener('submit', async ev => {
+        ev.preventDefault();
+        const r = await fetch('api/homekit', {method: 'DELETE', body: new FormData(ev.target)});
+        alert(r.ok ? 'OK' : 'ERROR: ' + await r.text());
+
+        await reloadHomeKit();
+    });
+</script>
+
+
+<button id="dvrip">DVRIP</button>
+<div class="module">
+    <table id="dvrip-table"></table>
+</div>
+<script>
+    document.getElementById('dvrip').addEventListener('click', async ev => {
+        ev.target.nextElementSibling.style.display = 'block';
+        await getSources('dvrip-table', 'api/dvrip');
+    });
 </script>
 
 
 <button id="devices">FFmpeg Devices (USB)</button>
 <div class="module">
-    <table id="devices-table">
-    </table>
+    <table id="devices-table"></table>
 </div>
 <script>
     document.getElementById('devices').addEventListener('click', async ev => {
-        ev.target.nextElementSibling.style.display = 'block'
-        await getStreams('api/ffmpeg/devices', 'devices-table')
-    })
+        ev.target.nextElementSibling.style.display = 'block';
+        await getSources('devices-table', 'api/ffmpeg/devices');
+    });
 </script>
 
 
 <button id="hardware">FFmpeg Hardware</button>
 <div class="module">
-    <table id="hardware-table">
-    </table>
+    <table id="hardware-table"></table>
 </div>
 <script>
     document.getElementById('hardware').addEventListener('click', async ev => {
-        ev.target.nextElementSibling.style.display = 'block'
-        await getStreams('api/ffmpeg/hardware', 'hardware-table')
-    })
+        ev.target.nextElementSibling.style.display = 'block';
+        await getSources('hardware-table', 'api/ffmpeg/hardware');
+    });
 </script>
 
 
@@ -206,23 +227,22 @@
         <input type="text" name="project_id" placeholder="project_id">
         <input type="submit" value="Login">
     </form>
-    <table id="nest-table">
-    </table>
+    <table id="nest-table"></table>
 </div>
 <script>
     document.getElementById('nest').addEventListener('click', async ev => {
-        ev.target.nextElementSibling.style.display = 'block'
-    })
+        ev.target.nextElementSibling.style.display = 'block';
+    });
 
     document.getElementById('nest-form').addEventListener('submit', async ev => {
-        ev.preventDefault()
+        ev.preventDefault();
 
-        const query = new URLSearchParams(new FormData(ev.target))
-        const url = new URL('api/nest?' + query.toString(), location.href)
+        const query = new URLSearchParams(new FormData(ev.target));
+        const url = new URL('api/nest?' + query.toString(), location.href);
 
-        const r = await fetch(url, {cache: 'no-cache'})
-        await getStreams(r, 'nest-table')
-    })
+        const r = await fetch(url, {cache: 'no-cache'});
+        await getSources('nest-table', r);
+    });
 </script>
 
 
@@ -232,9 +252,9 @@
 </div>
 <script>
     document.getElementById('hass').addEventListener('click', async ev => {
-        ev.target.nextElementSibling.style.display = 'block'
-        await getStreams('api/hass', 'hass-table')
-    })
+        ev.target.nextElementSibling.style.display = 'block';
+        await getSources('hass-table', 'api/hass');
+    });
 </script>
 
 
@@ -248,18 +268,18 @@
 </div>
 <script>
     document.getElementById('onvif').addEventListener('click', async ev => {
-        ev.target.nextElementSibling.style.display = 'block'
-        await getStreams('api/onvif', 'onvif-table')
-    })
+        ev.target.nextElementSibling.style.display = 'block';
+        await getSources('onvif-table', 'api/onvif');
+    });
 
     document.getElementById('onvif-form').addEventListener('submit', async ev => {
-        ev.preventDefault()
+        ev.preventDefault();
 
-        const url = new URL('api/onvif', location.href)
-        url.searchParams.set('src', ev.target.elements['src'].value)
+        const url = new URL('api/onvif', location.href);
+        url.searchParams.set('src', ev.target.elements['src'].value);
 
-        await getStreams(url.toString(), 'onvif-table')
-    })
+        await getSources('onvif-table', url.toString());
+    });
 </script>
 
 
@@ -275,15 +295,15 @@
 </div>
 <script>
     document.getElementById('roborock').addEventListener('click', async ev => {
-        ev.target.nextElementSibling.style.display = 'block'
-        await getStreams('api/roborock', 'roborock-table')
-    })
+        ev.target.nextElementSibling.style.display = 'block';
+        await getSources('roborock-table', 'api/roborock');
+    });
 
     document.getElementById('roborock-form').addEventListener('submit', async ev => {
-        ev.preventDefault()
-        const r = await fetch('api/roborock', {method: 'POST', body: new FormData(ev.target)})
-        await getStreams(r, 'roborock-table')
-    })
+        ev.preventDefault();
+        const r = await fetch('api/roborock', {method: 'POST', body: new FormData(ev.target)});
+        await getSources('roborock-table', r);
+    });
 </script>
 
 
@@ -293,9 +313,9 @@
 </div>
 <script>
     document.getElementById('webtorrent').addEventListener('click', async ev => {
-        ev.target.nextElementSibling.style.display = 'block'
-        await getStreams('api/webtorrent', 'webtorrent-table')
-    })
+        ev.target.nextElementSibling.style.display = 'block';
+        await getSources('webtorrent-table', 'api/webtorrent');
+    });
 </script>
 
 

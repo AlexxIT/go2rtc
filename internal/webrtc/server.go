@@ -2,15 +2,17 @@ package webrtc
 
 import (
 	"encoding/json"
-	"github.com/AlexxIT/go2rtc/internal/streams"
-	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/webrtc"
-	pion "github.com/pion/webrtc/v3"
 	"io"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/AlexxIT/go2rtc/internal/api"
+	"github.com/AlexxIT/go2rtc/internal/streams"
+	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/webrtc"
+	pion "github.com/pion/webrtc/v3"
 )
 
 const MimeSDP = "application/sdp"
@@ -125,6 +127,8 @@ func outputWebRTC(w http.ResponseWriter, r *http.Request) {
 		_, err = w.Write([]byte(answer))
 
 	default:
+		w.Header().Set("Content-Type", mediaType)
+
 		_, err = w.Write([]byte(answer))
 	}
 
@@ -138,7 +142,8 @@ func inputWebRTC(w http.ResponseWriter, r *http.Request) {
 	dst := r.URL.Query().Get("dst")
 	stream := streams.Get(dst)
 	if stream == nil {
-		stream = streams.New(dst, nil)
+		http.Error(w, api.StreamNotFound, http.StatusNotFound)
+		return
 	}
 
 	// 1. Get offer

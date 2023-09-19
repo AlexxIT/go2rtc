@@ -3,6 +3,7 @@ package webrtc
 import (
 	"encoding/json"
 	"errors"
+
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
@@ -52,7 +53,7 @@ func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiv
 		if track.Codec.IsRTP() {
 			sender.Handler = h264.RTPDepay(track.Codec, sender.Handler)
 		} else {
-			sender.Handler = h264.RepairAVC(track.Codec, sender.Handler)
+			sender.Handler = h264.RepairAVCC(track.Codec, sender.Handler)
 		}
 
 	case core.CodecH265:
@@ -63,14 +64,17 @@ func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiv
 			sender.Handler = h265.RTPDepay(track.Codec, sender.Handler)
 		}
 
-	case core.CodecPCMA, core.CodecPCMU, core.CodecPCM:
+	case core.CodecPCMA, core.CodecPCMU, core.CodecPCM, core.CodecPCML:
 		if codec.ClockRate == 0 {
-			if codec.Name == core.CodecPCM {
+			if codec.Name == core.CodecPCM || codec.Name == core.CodecPCML {
 				codec.Name = core.CodecPCMA
 			}
 			codec.ClockRate = 8000
-			sender.Handler = pcm.Resample(track.Codec, 8000, sender.Handler)
+			sender.Handler = pcm.ResampleToG711(track.Codec, 8000, sender.Handler)
 		}
+
+		// Fix audio quality https://github.com/AlexxIT/WebRTC/issues/500
+		sender.Handler = pcm.RepackG711(false, sender.Handler)
 	}
 
 	sender.HandleRTP(track)

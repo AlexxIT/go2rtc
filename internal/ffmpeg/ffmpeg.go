@@ -1,16 +1,15 @@
 package ffmpeg
 
 import (
-	"errors"
+	"net/url"
+	"strings"
+
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg/device"
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg/hardware"
 	"github.com/AlexxIT/go2rtc/internal/rtsp"
 	"github.com/AlexxIT/go2rtc/internal/streams"
-	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/ffmpeg"
-	"net/url"
-	"strings"
 )
 
 func Init() {
@@ -26,12 +25,9 @@ func Init() {
 		defaults["global"] += " -v error"
 	}
 
-	streams.HandleFunc("ffmpeg", func(url string) (core.Producer, error) {
-		args := parseArgs(url[7:]) // remove `ffmpeg:`
-		if args == nil {
-			return nil, errors.New("can't generate ffmpeg command")
-		}
-		return streams.GetProducer("exec:" + args.String())
+	streams.RedirectFunc("ffmpeg", func(url string) (string, error) {
+		args := parseArgs(url[7:])
+		return "exec:" + args.String(), nil
 	})
 
 	device.Init(defaults["bin"])
@@ -62,7 +58,10 @@ var defaults = map[string]string{
 	//"mjpeg": "-c:v mjpeg -force_duplicated_matrix:v 1 -huffman:v 0 -pix_fmt:v yuvj420p",
 
 	// https://ffmpeg.org/ffmpeg-codecs.html#libopus-1
-	"opus":       "-c:a libopus -ar:a 48000 -ac:a 2 -application:a voip -compression_level:a 0",
+	// https://github.com/pion/webrtc/issues/1514
+	// https://ffmpeg.org/ffmpeg-resampler.html
+	// `-async 1` or `-min_comp 0` - force frame_size=960, important for WebRTC audio quality
+	"opus":       "-c:a libopus -application:a lowdelay -frame_duration 20 -min_comp 0",
 	"pcmu":       "-c:a pcm_mulaw -ar:a 8000 -ac:a 1",
 	"pcmu/16000": "-c:a pcm_mulaw -ar:a 16000 -ac:a 1",
 	"pcmu/48000": "-c:a pcm_mulaw -ar:a 48000 -ac:a 1",
@@ -75,6 +74,8 @@ var defaults = map[string]string{
 	"pcm":        "-c:a pcm_s16be -ar:a 8000 -ac:a 1",
 	"pcm/16000":  "-c:a pcm_s16be -ar:a 16000 -ac:a 1",
 	"pcm/48000":  "-c:a pcm_s16be -ar:a 48000 -ac:a 1",
+	"pcml":       "-c:a pcm_s16le -ar:a 8000 -ac:a 1",
+	"pcml/44100": "-c:a pcm_s16le -ar:a 44100 -ac:a 1",
 
 	// hardware Intel and AMD on Linux
 	// better not to set `-async_depth:v 1` like for QSV, because framedrops
@@ -89,8 +90,8 @@ var defaults = map[string]string{
 
 	// hardware NVidia on Linux and Windows
 	// preset=p2 - faster, tune=ll - low latency
-	"h264/cuda": "-c:v h264_nvenc -g 50 -profile:v high -level:v auto -preset:v p2 -tune:v ll",
-	"h265/cuda": "-c:v hevc_nvenc -g 50 -profile:v high -level:v auto",
+	"h264/cuda": "-c:v h264_nvenc -g 50 -bf 0 -profile:v high -level:v auto -preset:v p2 -tune:v ll",
+	"h265/cuda": "-c:v hevc_nvenc -g 50 -bf 0 -profile:v high -level:v auto",
 
 	// hardware Intel on Windows
 	"h264/dxva2":  "-c:v h264_qsv -g 50 -bf 0 -profile:v high -level:v 4.1 -async_depth:v 1",
@@ -102,15 +103,21 @@ var defaults = map[string]string{
 	"h265/videotoolbox": "-c:v hevc_videotoolbox -g 50 -bf 0 -profile:v high -level:v 5.1",
 }
 
+// configTemplate - return template from config (defaults) if exist or return raw template
+func configTemplate(template string) string {
+	if s := defaults[template]; s != "" {
+		return s
+	}
+	return template
+}
+
 // inputTemplate - select input template from YAML config by template name
-// if query has input param - select another tempalte by this name
+// if query has input param - select another template by this name
 // if there is no another template - use input param as template
 func inputTemplate(name, s string, query url.Values) string {
 	var template string
 	if input := query.Get("input"); input != "" {
-		if template = defaults[input]; template == "" {
-			template = input
-		}
+		template = configTemplate(input)
 	} else {
 		template = defaults[name]
 	}
@@ -191,6 +198,8 @@ func parseArgs(s string) *ffmpeg.Args {
 	if query != nil {
 		// 1. Process raw params for FFmpeg
 		for _, raw := range query["raw"] {
+			// support templates https://github.com/AlexxIT/go2rtc/issues/487
+			raw = configTemplate(raw)
 			args.AddCodec(raw)
 		}
 
@@ -226,6 +235,18 @@ func parseArgs(s string) *ffmpeg.Args {
 			}
 		}
 
+		for _, drawtext := range query["drawtext"] {
+			// support templates https://github.com/AlexxIT/go2rtc/issues/487
+			drawtext = configTemplate(drawtext)
+
+			// support default timestamp format
+			if !strings.Contains(drawtext, "text=") {
+				drawtext += `:text='%{localtime\:%Y-%m-%d %X}'`
+			}
+
+			args.AddFilter("drawtext=" + drawtext)
+		}
+
 		// 3. Process video codecs
 		if args.Video > 0 {
 			for _, video := range query["video"] {
@@ -239,8 +260,6 @@ func parseArgs(s string) *ffmpeg.Args {
 					args.AddCodec("-c:v copy")
 				}
 			}
-		} else {
-			args.AddCodec("-vn")
 		}
 
 		// 4. Process audio codecs
@@ -256,8 +275,6 @@ func parseArgs(s string) *ffmpeg.Args {
 					args.AddCodec("-c:a copy")
 				}
 			}
-		} else {
-			args.AddCodec("-an")
 		}
 
 		if query["hardware"] != nil {
@@ -265,8 +282,13 @@ func parseArgs(s string) *ffmpeg.Args {
 		}
 	}
 
-	if args.Codecs == nil {
+	switch {
+	case args.Video == 0 && args.Audio == 0:
 		args.AddCodec("-c copy")
+	case args.Video == 0:
+		args.AddCodec("-vn")
+	case args.Audio == 0:
+		args.AddCodec("-an")
 	}
 
 	// transcoding to only mjpeg

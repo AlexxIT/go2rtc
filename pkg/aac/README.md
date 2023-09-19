@@ -1,17 +1,17 @@
 ## AAC-LD and AAC-ELD
 
-Codec | Rate | QuickTime | ffmpeg | VLC
-------|------|-----------|--------|----
-AAC-LD  | 8000  | yes | no  | no
-AAC-LD  | 16000 | yes | no  | no
-AAC-LD  | 22050 | yes | yes | no
-AAC-LD  | 24000 | yes | yes | no
-AAC-LD  | 32000 | yes | yes | no
-AAC-ELD | 8000  | yes | no  | no
-AAC-ELD | 16000 | yes | no  | no
-AAC-ELD | 22050 | yes | yes | yes
-AAC-ELD | 24000 | yes | yes | yes
-AAC-ELD | 32000 | yes | yes | yes
+| Codec   | Rate  | QuickTime | ffmpeg | VLC |
+|---------|-------|-----------|--------|-----|
+| AAC-LD  | 8000  | yes       | no     | no  |
+| AAC-LD  | 16000 | yes       | no     | no  |
+| AAC-LD  | 22050 | yes       | yes    | no  |
+| AAC-LD  | 24000 | yes       | yes    | no  |
+| AAC-LD  | 32000 | yes       | yes    | no  |
+| AAC-ELD | 8000  | yes       | no     | no  |
+| AAC-ELD | 16000 | yes       | no     | no  |
+| AAC-ELD | 22050 | yes       | yes    | yes |
+| AAC-ELD | 24000 | yes       | yes    | yes |
+| AAC-ELD | 32000 | yes       | yes    | yes |
 
 ## Useful links
 

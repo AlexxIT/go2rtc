@@ -1,0 +1,486 @@
+openapi: 3.0.0
+
+info:
+  title: go2rtc
+  license: { name: MIT,url: https://opensource.org/licenses/MIT }
+  version: 1.0.0
+  contact: { url: https://github.com/AlexxIT/go2rtc }
+  description: |
+    Ultimate camera streaming application with support RTSP, RTMP, HTTP-FLV, WebRTC, MSE, HLS, MP4, MJPEG, HomeKit, FFmpeg, etc.
+
+servers:
+  - url: http://localhost:1984
+
+components:
+  parameters:
+    stream_src_path:
+      name: src
+      in: path
+      description: Source stream name
+      required: true
+      schema: { type: string }
+      example: camera1
+    stream_dst_path:
+      name: dst
+      in: path
+      description: Destination stream name
+      required: true
+      schema: { type: string }
+      example: camera1
+    stream_src_query:
+      name: src
+      in: query
+      description: Source stream name
+      required: true
+      schema: { type: string }
+      example: camera1
+    mp4_filter:
+      name: mp4
+      in: query
+      description: MP4 codecs filter
+      required: false
+      schema:
+        type: string
+        enum: [ "", flac, all ]
+      example: flac
+    video_filter:
+      name: video
+      in: query
+      description: Video codecs filter
+      schema:
+        type: string
+        enum: [ "", all, h264, h265, mjpeg ]
+      example: h264,h265
+    audio_filter:
+      name: audio
+      in: query
+      description: Audio codecs filter
+      schema:
+        type: string
+        enum: [ "", all, aac, opus, pcm, pcmu, pcma ]
+      example: aac
+  responses:
+    discovery:
+      description: ""
+      content:
+        application/json:
+          example: { streams: [ { "name": "Camera 1","url": "..." } ] }
+    webtorrent:
+      description: ""
+      content:
+        application/json:
+          example: { share: AKDypPy4zz, pwd: H0Km1HLTTP }
+
+tags:
+  - name: Application
+    description: "[Module: API](https://github.com/AlexxIT/go2rtc#module-api)"
+  - name: Config
+    description: "[Configuration](https://github.com/AlexxIT/go2rtc#configuration)"
+  - name: Streams list
+    description: "[Module: Streams](https://github.com/AlexxIT/go2rtc#module-streams)"
+  - name: Consume stream
+  - name: Snapshot
+  - name: Produce stream
+  - name: Discovery
+  - name: ONVIF
+  - name: RTSPtoWebRTC
+  - name: WebTorrent
+    description: "[Module: WebTorrent](https://github.com/AlexxIT/go2rtc#module-webtorrent)"
+  - name: Debug
+
+paths:
+  /api:
+    get:
+      summary: Get application info
+      tags: [ Application ]
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              example: { config_path: "/config/go2rtc.yaml",host: "192.168.1.123:1984",rtsp: { listen: ":8554",default_query: "video&audio" },version: "1.5.0" }
+
+  /api/exit:
+    post:
+      summary: Close application
+      tags: [ Application ]
+      parameters:
+        - name: code
+          in: query
+          description: Application exit code
+          required: false
+          schema: { type: integer }
+          example: 100
+      responses: { }
+
+
+
+  /api/config:
+    get:
+      summary: Get main config file content
+      tags: [ Config ]
+      responses:
+        "200":
+          description: ""
+          content:
+            application/yaml: { example: "streams:..." }
+    post:
+      summary: Rewrite main config file
+      tags: [ Config ]
+      requestBody:
+        content:
+          "*/*": { example: "streams:..." }
+      responses: { }
+    patch:
+      summary: Merge changes to main config file
+      tags: [ Config ]
+      requestBody:
+        content:
+          "*/*": { example: "streams:..." }
+      responses: { }
+
+
+
+  /api/streams:
+    get:
+      summary: Get all streams info
+      tags: [ Streams list ]
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json: { example: { camera1: { producers: [ ],consumers: [ ] } } }
+    put:
+      summary: Create new stream
+      tags: [ Streams list ]
+      parameters:
+        - name: src
+          in: query
+          description: Stream source (URI)
+          required: true
+          schema: { type: string }
+          example: "rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0"
+        - name: name
+          in: query
+          description: Stream name
+          required: false
+          schema: { type: string }
+          example: camera1
+      responses: { }
+    patch:
+      summary: Update stream source
+      tags: [ Streams list ]
+      parameters:
+        - name: src
+          in: query
+          description: Stream source (URI)
+          required: true
+          schema: { type: string }
+          example: "rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0"
+        - name: name
+          in: query
+          description: Stream name
+          required: true
+          schema: { type: string }
+          example: camera1
+      responses: { }
+    delete:
+      summary: Delete stream
+      tags: [ Streams list ]
+      parameters:
+        - name: src
+          in: query
+          description: Stream name
+          required: true
+          schema: { type: string }
+          example: camera1
+      responses: { }
+    post:
+      summary: Send stream from source to destination
+      description: "[Stream to camera](https://github.com/AlexxIT/go2rtc#stream-to-camera)"
+      tags: [ Streams list ]
+      parameters:
+        - name: src
+          in: query
+          description: Stream source (URI)
+          required: true
+          schema: { type: string }
+          example: "ffmpeg:http://example.com/song.mp3#audio=pcma#input=file"
+        - name: dst
+          in: query
+          description: Destination stream name
+          required: true
+          schema: { type: string }
+          example: camera1
+      responses: { }
+
+
+
+  /api/streams?src={src}:
+    get:
+      summary: Get stream info in JSON format
+      tags: [ Consume stream ]
+      parameters:
+        - $ref: "#/components/parameters/stream_src_path"
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              example: { producers: [ { url: "rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0" } ], consumers: [ ] }
+
+  /api/webrtc?src={src}:
+    post:
+      summary: Get stream in WebRTC format (WHEP)
+      description: "[Module: WebRTC](https://github.com/AlexxIT/go2rtc#module-webrtc)"
+      tags: [ Consume stream ]
+      parameters:
+        - $ref: "#/components/parameters/stream_src_path"
+      requestBody:
+        description: |
+          Support:
+          - JSON format (`Content-Type: application/json`)
+          - WHEP standard (`Content-Type: application/sdp`)
+          - raw SDP (`Content-Type: anything`)
+        required: true
+        content:
+          application/json: { example: { type: offer, sdp: "v=0..." } }
+          "application/sdp": { example: "v=0..." }
+          "*/*": { example: "v=0..." }
+
+      responses:
+        "200":
+          description: "Response on JSON or raw SDP"
+          content:
+            application/json: { example: { type: answer, sdp: "v=0..." } }
+            application/sdp: { example: "v=0..." }
+        "201":
+          description: "Response on `Content-Type: application/sdp`"
+          content:
+            application/sdp: { example: "v=0..." }
+
+  /api/stream.mp4?src={src}:
+    get:
+      summary: Get stream in MP4 format (HTTP progressive)
+      description: "[Module: MP4](https://github.com/AlexxIT/go2rtc#module-mp4)"
+      tags: [ Consume stream ]
+      parameters:
+        - $ref: "#/components/parameters/stream_src_path"
+        - name: duration
+          in: query
+          description: Limit the length of the stream in seconds
+          required: false
+          schema: { type: string }
+          example: 15
+        - name: filename
+          in: query
+          description: Download as a file with this name
+          required: false
+          schema: { type: string }
+          example: camera1.mp4
+        - $ref: "#/components/parameters/mp4_filter"
+        - $ref: "#/components/parameters/video_filter"
+        - $ref: "#/components/parameters/audio_filter"
+      responses:
+        200:
+          description: ""
+          content: { video/mp4: { example: "" } }
+
+  /api/stream.m3u8?src={src}:
+    get:
+      summary: Get stream in HLS format
+      description: "[Module: HLS](https://github.com/AlexxIT/go2rtc#module-hls)"
+      tags: [ Consume stream ]
+      parameters:
+        - $ref: "#/components/parameters/stream_src_path"
+        - $ref: "#/components/parameters/mp4_filter"
+        - $ref: "#/components/parameters/video_filter"
+        - $ref: "#/components/parameters/audio_filter"
+      responses:
+        200:
+          description: ""
+          content: { application/vnd.apple.mpegurl: { example: "" } }
+
+  /api/stream.mjpeg?src={src}:
+    get:
+      summary: Get stream in MJPEG format
+      description: "[Module: MJPEG](https://github.com/AlexxIT/go2rtc#module-mjpeg)"
+      tags: [ Consume stream ]
+      parameters:
+        - $ref: "#/components/parameters/stream_src_path"
+      responses:
+        200:
+          description: ""
+          content: { multipart/x-mixed-replace: { example: "" } }
+
+
+
+  /api/frame.jpeg?src={src}:
+    get:
+      summary: Get snapshot in JPEG format
+      description: "[Module: MJPEG](https://github.com/AlexxIT/go2rtc#module-mjpeg)"
+      tags: [ Snapshot ]
+      parameters:
+        - $ref: "#/components/parameters/stream_src_path"
+      responses:
+        200:
+          description: ""
+          content: { image/jpeg: { example: "" } }
+  /api/frame.mp4?src={src}:
+    get:
+      summary: Get snapshot in MP4 format
+      description: "[Module: MP4](https://github.com/AlexxIT/go2rtc#module-mp4)"
+      tags: [ Snapshot ]
+      parameters:
+        - $ref: "#/components/parameters/stream_src_path"
+      responses:
+        200:
+          description: ""
+          content: { video/mp4: { example: "" } }
+
+
+
+  /api/webrtc?dst={dst}:
+    post:
+      summary: Post stream in WebRTC format
+      description: "[Incoming: WebRTC/WHIP](https://github.com/AlexxIT/go2rtc#incoming-webrtcwhip)"
+      tags: [ Produce stream ]
+      parameters:
+        - $ref: "#/components/parameters/stream_dst_path"
+      responses: { }
+  /api/stream.flv?dst={dst}:
+    post:
+      summary: Post stream in FLV format
+      description: "[Incoming sources](https://github.com/AlexxIT/go2rtc#incoming-sources)"
+      tags: [ Produce stream ]
+      parameters:
+        - $ref: "#/components/parameters/stream_dst_path"
+      responses: { }
+  /api/stream.ts?dst={dst}:
+    post:
+      summary: Post stream in MPEG-TS format
+      description: "[Incoming sources](https://github.com/AlexxIT/go2rtc#incoming-sources)"
+      tags: [ Produce stream ]
+      parameters:
+        - $ref: "#/components/parameters/stream_dst_path"
+      responses: { }
+  /api/stream.mjpeg?dst={dst}:
+    post:
+      summary: Post stream in MJPEG format
+      description: "[Incoming sources](https://github.com/AlexxIT/go2rtc#incoming-sources)"
+      tags: [ Produce stream ]
+      parameters:
+        - $ref: "#/components/parameters/stream_dst_path"
+      responses: { }
+
+
+
+  /api/dvrip:
+    get:
+      summary: DVRIP cameras discovery
+      description: "[Source: DVRIP](https://github.com/AlexxIT/go2rtc#source-dvrip)"
+      tags: [ Discovery ]
+      responses: { }
+
+  /api/ffmpeg/devices:
+    get:
+      summary: FFmpeg USB devices discovery
+      description: "[Source: FFmpeg Device](https://github.com/AlexxIT/go2rtc#source-ffmpeg-device)"
+      tags: [ Discovery ]
+      responses: { }
+  /api/ffmpeg/hardware:
+    get:
+      summary: FFmpeg hardware transcoding discovery
+      description: "[Hardware acceleration](https://github.com/AlexxIT/go2rtc/wiki/Hardware-acceleration)"
+      tags: [ Discovery ]
+      responses: { }
+  /api/hass:
+    get:
+      summary: Home Assistant cameras discovery
+      description: "[Source: Hass](https://github.com/AlexxIT/go2rtc#source-hass)"
+      tags: [ Discovery ]
+      responses: { }
+  /api/homekit:
+    get:
+      summary: HomeKit cameras discovery
+      description: "[Source: HomeKit](https://github.com/AlexxIT/go2rtc#source-homekit)"
+      tags: [ Discovery ]
+      responses: { }
+  /api/nest:
+    get:
+      summary: Nest cameras discovery
+      tags: [ Discovery ]
+      responses: { }
+  /api/onvif:
+    get:
+      summary: ONVIF cameras discovery
+      description: "[Source: ONVIF](https://github.com/AlexxIT/go2rtc#source-onvif)"
+      tags: [ Discovery ]
+      responses: { }
+  /api/roborock:
+    get:
+      summary: Roborock vacuums discovery
+      description: "[Source: Roborock](https://github.com/AlexxIT/go2rtc#source-roborock)"
+      tags: [ Discovery ]
+      responses: { }
+
+
+
+  /onvif/:
+    get:
+      summary: ONVIF server implementation
+      description: Simple realisation of the ONVIF protocol. Accepts any suburl requests
+      tags: [ ONVIF ]
+      responses: { }
+
+
+
+  /stream/:
+    get:
+      summary: RTSPtoWebRTC server implementation
+      description: Simple API for support [RTSPtoWebRTC](https://www.home-assistant.io/integrations/rtsp_to_webrtc/) integration
+      tags: [ RTSPtoWebRTC ]
+      responses: { }
+
+
+
+  /api/webtorrent?src={src}:
+    get:
+      summary: Get WebTorrent share info
+      tags: [ WebTorrent ]
+      parameters:
+        - $ref: "#/components/parameters/stream_src_path"
+      responses:
+        200: { $ref: "#/components/responses/webtorrent" }
+    post:
+      summary: Add WebTorrent share
+      tags: [ WebTorrent ]
+      parameters:
+        - $ref: "#/components/parameters/stream_src_path"
+      responses:
+        200: { $ref: "#/components/responses/webtorrent" }
+
+    delete:
+      summary: Delete WebTorrent share
+      tags: [ WebTorrent ]
+      parameters:
+        - $ref: "#/components/parameters/stream_src_path"
+      responses: { }
+
+  /api/webtorrent:
+    get:
+      summary: Get all WebTorrent shares info
+      tags: [ WebTorrent ]
+      responses:
+        200: { $ref: "#/components/responses/discovery" }
+
+
+
+  /api/stack:
+    get:
+      summary: Show list unknown goroutines
+      tags: [ Debug ]
+      responses:
+        200:
+          description: ""
+          content: { text/plain: { example: "" } }

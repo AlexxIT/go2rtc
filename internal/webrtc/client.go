@@ -1,44 +1,75 @@
 package webrtc
 
 import (
+	"encoding/base64"
 	"errors"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
+	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	"github.com/gorilla/websocket"
 	pion "github.com/pion/webrtc/v3"
-	"io"
-	"net/http"
-	"strings"
-	"time"
 )
 
-func streamsHandler(url string) (core.Producer, error) {
-	url = url[7:]
-	if i := strings.Index(url, "://"); i > 0 {
-		switch url[:i] {
+// streamsHandler supports:
+//  1. WHEP:    webrtc:http://192.168.1.123:1984/api/webrtc?src=camera1
+//  2. go2rtc:  webrtc:ws://192.168.1.123:1984/api/ws?src=camera1
+//  3. Wyze:    webrtc:http://192.168.1.123:5000/signaling/camera1?kvs#format=wyze
+//  4. Kinesis: webrtc:wss://...amazonaws.com/?...#format=kinesis#client_id=...#ice_servers=[{...},{...}]
+func streamsHandler(rawURL string) (core.Producer, error) {
+	var query url.Values
+	if i := strings.IndexByte(rawURL, '#'); i > 0 {
+		query = streams.ParseQuery(rawURL[i+1:])
+		rawURL = rawURL[:i]
+	}
+
+	rawURL = rawURL[7:] // remove webrtc:
+	if i := strings.IndexByte(rawURL, ':'); i > 0 {
+		scheme := rawURL[:i]
+		format := query.Get("format")
+
+		switch scheme {
 		case "ws", "wss":
-			return asyncClient(url)
+			if format == "kinesis" {
+				// https://aws.amazon.com/kinesis/video-streams/
+				// https://docs.aws.amazon.com/kinesisvideostreams-webrtc-dg/latest/devguide/what-is-kvswebrtc.html
+				// https://github.com/orgs/awslabs/repositories?q=kinesis+webrtc
+				return kinesisClient(rawURL, query, "WebRTC/Kinesis")
+			} else if format == "openipc" {
+				return openIPCClient(rawURL, query)
+			} else {
+				return go2rtcClient(rawURL)
+			}
+
 		case "http", "https":
-			return syncClient(url)
+			if format == "wyze" {
+				// https://github.com/mrlt8/docker-wyze-bridge
+				return wyzeClient(rawURL)
+			} else {
+				return whepClient(rawURL)
+			}
 		}
 	}
-	return nil, errors.New("unsupported url: " + url)
+	return nil, errors.New("unsupported url: " + rawURL)
 }
 
-// asyncClient can connect only to go2rtc server
+// go2rtcClient can connect only to go2rtc server
 // ex: ws://localhost:1984/api/ws?src=camera1
-func asyncClient(url string) (core.Producer, error) {
+func go2rtcClient(url string) (core.Producer, error) {
 	// 1. Connect to signalign server
-	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
+	conn, _, err := Dial(url)
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		if err != nil {
-			_ = conn.Close()
-		}
-	}()
+
+	// close websocket when we ready return Producer or connection error
+	defer conn.Close()
 
 	// 2. Create PeerConnection
 	pc, err := PeerConnection(true)
@@ -47,22 +78,27 @@ func asyncClient(url string) (core.Producer, error) {
 		return nil, err
 	}
 
-	var sendOffer core.Waiter
+	// waiter will wait PC error or WS error or nil (connection OK)
+	var connState core.Waiter
 
 	prod := webrtc.NewConn(pc)
 	prod.Desc = "WebRTC/WebSocket async"
 	prod.Mode = core.ModeActiveProducer
 	prod.Listen(func(msg any) {
 		switch msg := msg.(type) {
-		case pion.PeerConnectionState:
-			_ = conn.Close()
-
 		case *pion.ICECandidate:
-			sendOffer.Wait()
-
 			s := msg.ToJSON().Candidate
 			log.Trace().Str("candidate", s).Msg("[webrtc] local")
 			_ = conn.WriteJSON(&ws.Message{Type: "webrtc/candidate", Value: s})
+
+		case pion.PeerConnectionState:
+			switch msg {
+			case pion.PeerConnectionStateConnecting:
+			case pion.PeerConnectionStateConnected:
+				connState.Done(nil)
+			default:
+				connState.Done(errors.New("webrtc: " + msg.String()))
+			}
 		}
 	})
 
@@ -84,8 +120,6 @@ func asyncClient(url string) (core.Producer, error) {
 		return nil, err
 	}
 
-	sendOffer.Done()
-
 	// 5. Get answer
 	if err = conn.ReadJSON(msg); err != nil {
 		return nil, err
@@ -102,13 +136,12 @@ func asyncClient(url string) (core.Producer, error) {
 
 	// 6. Continue to receiving candidates
 	go func() {
+		var err error
+
 		for {
 			// receive data from remote
-			msg := new(ws.Message)
-			if err = conn.ReadJSON(msg); err != nil {
-				if cerr, ok := err.(*websocket.CloseError); ok {
-					log.Trace().Err(err).Caller().Msgf("[webrtc] ws code=%d", cerr)
-				}
+			var msg ws.Message
+			if err = conn.ReadJSON(&msg); err != nil {
 				break
 			}
 
@@ -120,15 +153,19 @@ func asyncClient(url string) (core.Producer, error) {
 			}
 		}
 
-		_ = conn.Close()
+		connState.Done(err)
 	}()
+
+	if err = connState.Wait(); err != nil {
+		return nil, err
+	}
 
 	return prod, nil
 }
 
-// syncClient - support WebRTC-HTTP Egress Protocol (WHEP)
+// whepClient - support WebRTC-HTTP Egress Protocol (WHEP)
 // ex: http://localhost:1984/api/webrtc?src=camera1
-func syncClient(url string) (core.Producer, error) {
+func whepClient(url string) (core.Producer, error) {
 	// 2. Create PeerConnection
 	pc, err := PeerConnection(true)
 	if err != nil {
@@ -175,4 +212,28 @@ func syncClient(url string) (core.Producer, error) {
 	}
 
 	return prod, nil
+}
+
+// Dial - websocket.Dial with Basic auth support
+func Dial(rawURL string) (*websocket.Conn, *http.Response, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if u.User == nil {
+		return websocket.DefaultDialer.Dial(rawURL, nil)
+	}
+
+	user := u.User.Username()
+	pass, _ := u.User.Password()
+	u.User = nil
+
+	header := http.Header{
+		"Authorization": []string{
+			"Basic " + base64.StdEncoding.EncodeToString([]byte(user+":"+pass)),
+		},
+	}
+
+	return websocket.DefaultDialer.Dial(u.String(), header)
 }

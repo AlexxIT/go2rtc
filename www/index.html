@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, user-scalable=yes, initial-scale=1, maximum-scale=1">
@@ -46,10 +46,6 @@
             align-items: center;
         }
 
-        .header {
-            padding: 5px 5px;
-        }
-
         .controls {
             display: flex;
             padding: 5px;
@@ -67,18 +63,18 @@
     <button>stream</button>
     <label><input type="checkbox" name="webrtc" checked>webrtc</label>
     <label><input type="checkbox" name="mse" checked>mse</label>
-    <label><input type="checkbox" name="mp4" checked>mp4</label>
+    <label><input type="checkbox" name="hls" checked>hls</label>
     <label><input type="checkbox" name="mjpeg" checked>mjpeg</label>
 </div>
-<table id="streams">
+<table>
     <thead>
     <tr>
-        <th><input id="selectall" type="checkbox">Name</th>
+        <th><label><input id="selectall" type="checkbox">Name</label></th>
         <th>Online</th>
         <th>Commands</th>
     </tr>
     </thead>
-    <tbody>
+    <tbody id="streams">
     </tbody>
 </table>
 <script>
@@ -88,55 +84,55 @@
         '<a href="#" data-name="{name}">delete</a>',
     ];
 
-    document.querySelector(".controls > button")
-        .addEventListener("click", () => {
-            const url = new URL("stream.html", location.href);
+    document.querySelector('.controls > button')
+        .addEventListener('click', () => {
+            const url = new URL('stream.html', location.href);
 
-            const streams = document.querySelectorAll("#streams input");
+            const streams = document.querySelectorAll('#streams input');
             streams.forEach(i => {
-                if (i.checked) url.searchParams.append("src", i.name);
+                if (i.checked) url.searchParams.append('src', i.name);
             });
 
-            if (!url.searchParams.has("src")) return;
+            if (!url.searchParams.has('src')) return;
 
-            let mode = document.querySelectorAll(".controls input");
-            mode = Array.from(mode).filter(i => i.checked).map(i => i.name).join(",");
+            let mode = document.querySelectorAll('.controls input');
+            mode = Array.from(mode).filter(i => i.checked).map(i => i.name).join(',');
 
             window.location.href = `${url}&mode=${mode}`;
         });
 
-    const tbody = document.querySelector("#streams > tbody");
-    tbody.addEventListener("click", ev => {
-        if (ev.target.innerText !== "delete") return;
+    const tbody = document.getElementById('streams');
+    tbody.addEventListener('click', ev => {
+        if (ev.target.innerText !== 'delete') return;
 
         ev.preventDefault();
 
-        const url = new URL("api/streams", location.href);
+        const url = new URL('api/streams', location.href);
         const src = decodeURIComponent(ev.target.dataset.name);
-        url.searchParams.set("src", src);
-        fetch(url, {method: "DELETE"}).then(reload);
+        url.searchParams.set('src', src);
+        fetch(url, {method: 'DELETE'}).then(reload);
     });
 
     document.getElementById('selectall').addEventListener('change', ev => {
         document.querySelectorAll('#streams input').forEach(el => {
-            el.checked = ev.target.checked
-        })
-    })
+            el.checked = ev.target.checked;
+        });
+    });
 
     function reload() {
-        const url = new URL("api/streams", location.href);
+        const url = new URL('api/streams', location.href);
         fetch(url, {cache: 'no-cache'}).then(r => r.json()).then(data => {
-            tbody.innerHTML = "";
+            tbody.innerHTML = '';
 
             for (const [name, value] of Object.entries(data)) {
                 const online = value && value.consumers ? value.consumers.length : 0;
                 const src = encodeURIComponent(name);
                 const links = templates.map(link => {
-                    return link.replace("{name}", src);
-                }).join(" ");
+                    return link.replace('{name}', src);
+                }).join(' ');
 
-                const tr = document.createElement("tr");
-                tr.dataset["id"] = name;
+                const tr = document.createElement('tr');
+                tr.dataset['id'] = name;
                 tr.innerHTML =
                     `<td><label><input type="checkbox" name="${name}">${name}</label></td>` +
                     `<td><a href="api/streams?src=${src}">${online} / info</a></td>` +
@@ -146,9 +142,9 @@
         });
     }
 
-    const url = new URL("api", location.href);
+    const url = new URL('api', location.href);
     fetch(url, {cache: 'no-cache'}).then(r => r.json()).then(data => {
-        const info = document.querySelector(".info");
+        const info = document.querySelector('.info');
         info.innerText = `Version: ${data.version}, Config: ${data.config_path}`;
     });
 

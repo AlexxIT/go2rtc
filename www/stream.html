@@ -30,9 +30,9 @@
     const params = new URLSearchParams(location.search);
 
     // support multiple streams and multiple modes
-    const streams = params.getAll("src");
-    const modes = params.getAll("mode");
-    if (modes.length === 0) modes.push("");
+    const streams = params.getAll('src');
+    const modes = params.getAll('mode');
+    if (modes.length === 0) modes.push('');
 
     while (modes.length > streams.length) {
         streams.push(streams[0]);
@@ -42,19 +42,19 @@
     }
 
     if (streams.length > 1) {
-        document.body.className = "flex";
+        document.body.className = 'flex';
     }
 
-    const background = params.get("background") !== "false";
-    const width = "1 0 " + (params.get("width") || "320px");
+    const background = params.get('background') !== 'false';
+    const width = '1 0 ' + (params.get('width') || '320px');
 
     for (let i = 0; i < streams.length; i++) {
         /** @type {VideoStream} */
-        const video = document.createElement("video-stream");
+        const video = document.createElement('video-stream');
         video.background = background;
         video.mode = modes[i] || video.mode;
         video.style.flex = width;
-        video.src = new URL("api/ws?src=" + encodeURIComponent(streams[i]), location.href);
+        video.src = new URL('api/ws?src=' + encodeURIComponent(streams[i]), location.href);
         document.body.appendChild(video);
     }
 </script>

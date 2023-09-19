@@ -2,11 +2,12 @@ package core
 
 import (
 	"fmt"
+	"net/url"
+	"testing"
+
 	"github.com/pion/sdp/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"net/url"
-	"testing"
 )
 
 func TestSDP(t *testing.T) {
@@ -38,7 +39,7 @@ func TestParseQuery(t *testing.T) {
 		u, _ = url.Parse(rawULR)
 		medias = ParseQuery(u.Query())
 		assert.Equal(t, []*Media{
-			{Kind: KindVideo, Direction: DirectionRecvonly, Codecs: []*Codec{{Name: CodecAny}}},
+			{Kind: KindVideo, Direction: DirectionSendonly, Codecs: []*Codec{{Name: CodecAny}}},
 		}, medias)
 	}
 }

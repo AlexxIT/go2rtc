@@ -3,7 +3,6 @@ package srtp
 import (
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/pkg/srtp"
-	"net"
 )
 
 func Init() {
@@ -14,7 +13,7 @@ func Init() {
 	}
 
 	// default config
-	cfg.Mod.Listen = ":8443"
+	cfg.Mod.Listen = "0.0.0.0:8443"
 
 	// load config from YAML
 	app.LoadConfig(&cfg)
@@ -23,23 +22,8 @@ func Init() {
 		return
 	}
 
-	log := app.GetLogger("srtp")
-
-	// create SRTP server (endpoint) for receiving video from HomeKit camera
-	conn, err := net.ListenPacket("udp", cfg.Mod.Listen)
-	if err != nil {
-		log.Warn().Err(err).Caller().Send()
-	}
-
-	log.Info().Str("addr", cfg.Mod.Listen).Msg("[srtp] listen")
-
-	// run server
-	go func() {
-		Server = &srtp.Server{}
-		if err = Server.Serve(conn); err != nil {
-			log.Warn().Err(err).Caller().Send()
-		}
-	}()
+	// create SRTP server (endpoint) for receiving video from HomeKit cameras
+	Server = srtp.NewServer(cfg.Mod.Listen)
 }
 
 var Server *srtp.Server

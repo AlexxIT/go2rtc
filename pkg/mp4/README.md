@@ -33,3 +33,4 @@ https://ffmpeg.org/ffmpeg-formats.html#Options-13
 - https://jellyfin.org/docs/general/clients/codec-support.html
 - https://github.com/StaZhu/enable-chromium-hevc-hardware-decoding
 - https://developer.mozilla.org/ru/docs/Web/Media/Formats/codecs_parameter
+- https://gstreamer-devel.narkive.com/rhkUolp2/rtp-dts-pts-result-in-varying-mp4-frame-durations

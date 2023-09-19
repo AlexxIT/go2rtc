@@ -1,8 +1,9 @@
 package hardware
 
 import (
-	"github.com/AlexxIT/go2rtc/internal/api"
 	"runtime"
+
+	"github.com/AlexxIT/go2rtc/internal/api"
 )
 
 const ProbeV4L2M2MH264 = "-f lavfi -i testsrc2 -t 1 -c h264_v4l2m2m -f null -"
@@ -13,9 +14,9 @@ const ProbeVAAPIJPEG = "-init_hw_device vaapi -f lavfi -i testsrc2 -t 1 -vf form
 const ProbeCUDAH264 = "-init_hw_device cuda -f lavfi -i testsrc2 -t 1 -c h264_nvenc -f null -"
 const ProbeCUDAH265 = "-init_hw_device cuda -f lavfi -i testsrc2 -t 1 -c hevc_nvenc -f null -"
 
-func ProbeAll(bin string) []api.Stream {
+func ProbeAll(bin string) []*api.Source {
 	if runtime.GOARCH == "arm64" || runtime.GOARCH == "arm" {
-		return []api.Stream{
+		return []*api.Source{
 			{
 				Name: runToString(bin, ProbeV4L2M2MH264),
 				URL:  "ffmpeg:...#video=h264#hardware=" + EngineV4L2M2M,
@@ -27,7 +28,7 @@ func ProbeAll(bin string) []api.Stream {
 		}
 	}
 
-	return []api.Stream{
+	return []*api.Source{
 		{
 			Name: runToString(bin, ProbeVAAPIH264),
 			URL:  "ffmpeg:...#video=h264#hardware=" + EngineVAAPI,
