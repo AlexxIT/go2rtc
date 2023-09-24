@@ -23,6 +23,12 @@ require (
 )
 
 require (
+	github.com/tillberg/stringset v0.0.0-20220429204947-12df33ab1cd6 // indirect
+	github.com/tillberg/watcher v0.0.0-20200309151633-e9412552417a // indirect
+	gopkg.in/fsnotify/fsnotify.v1 v1.4.7 // indirect
+)
+
+require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/google/uuid v1.3.1 // indirect
 	github.com/kr/pretty v0.2.1 // indirect
@@ -37,6 +43,7 @@ require (
 	github.com/pion/transport/v2 v2.2.4 // indirect
 	github.com/pion/turn/v2 v2.1.3 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/tillberg/autorestart v0.0.0-20220524165049-22c3f5bc7fce
 	golang.org/x/mod v0.12.0 // indirect
 	golang.org/x/net v0.15.0 // indirect
 	golang.org/x/sys v0.12.0 // indirect

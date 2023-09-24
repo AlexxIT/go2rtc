@@ -24,7 +24,8 @@
 <body>
 <script src="main.js"></script>
 <div>
-    <button id="save">Save & Restart</button>
+    <button id="save">Save</button>
+    <button id="saverestart">Save & Restart</button>
 </div>
 <br>
 <div id="config"></div>
@@ -42,11 +43,19 @@
             alert('Config was changed from another place. Refresh the page and make changes again');
             return;
         }
+    });
+
+    document.getElementById('saverestart').addEventListener('click', async () => {
+        let r = await fetch('api/config', {cache: 'no-cache'});
+        if (r.ok && dump !== await r.text()) {
+            alert('Config was changed from another place. Refresh the page and make changes again');
+            return;
+        }
 
         r = await fetch('api/config', {method: 'POST', body: editor.getValue()});
         if (r.ok) {
             alert('OK');
-            fetch('api/exit?code=100', {method: 'POST'});
+            fetch('api/restart', {method: 'POST'});
         } else {
             alert(await r.text());
         }
