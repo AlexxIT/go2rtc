@@ -1,4 +1,4 @@
-openapi: 3.0.0
+openapi: 3.1.0
 
 info:
   title: go2rtc
@@ -111,7 +111,9 @@ paths:
           required: false
           schema: { type: integer }
           example: 100
-      responses: { }
+      responses:
+            default:
+              description: Default response
 
 
 
@@ -130,14 +132,18 @@ paths:
       requestBody:
         content:
           "*/*": { example: "streams:..." }
-      responses: { }
+      responses:
+            default:
+              description: Default response
     patch:
       summary: Merge changes to main config file
       tags: [ Config ]
       requestBody:
         content:
           "*/*": { example: "streams:..." }
-      responses: { }
+      responses:
+            default:
+              description: Default response
 
 
 
@@ -166,7 +172,9 @@ paths:
           required: false
           schema: { type: string }
           example: camera1
-      responses: { }
+      responses:
+            default:
+              description: Default response
     patch:
       summary: Update stream source
       tags: [ Streams list ]
@@ -183,7 +191,9 @@ paths:
           required: true
           schema: { type: string }
           example: camera1
-      responses: { }
+      responses:
+            default:
+              description: Default response
     delete:
       summary: Delete stream
       tags: [ Streams list ]
@@ -194,7 +204,9 @@ paths:
           required: true
           schema: { type: string }
           example: camera1
-      responses: { }
+      responses:
+            default:
+              description: Default response
     post:
       summary: Send stream from source to destination
       description: "[Stream to camera](https://github.com/AlexxIT/go2rtc#stream-to-camera)"
@@ -212,7 +224,9 @@ paths:
           required: true
           schema: { type: string }
           example: camera1
-      responses: { }
+      responses:
+            default:
+              description: Default response
 
 
 
@@ -347,7 +361,9 @@ paths:
       tags: [ Produce stream ]
       parameters:
         - $ref: "#/components/parameters/stream_dst_path"
-      responses: { }
+      responses:
+            default:
+              description: Default response
   /api/stream.flv?dst={dst}:
     post:
       summary: Post stream in FLV format
@@ -355,7 +371,9 @@ paths:
       tags: [ Produce stream ]
       parameters:
         - $ref: "#/components/parameters/stream_dst_path"
-      responses: { }
+      responses:
+            default:
+              description: Default response
   /api/stream.ts?dst={dst}:
     post:
       summary: Post stream in MPEG-TS format
@@ -363,7 +381,9 @@ paths:
       tags: [ Produce stream ]
       parameters:
         - $ref: "#/components/parameters/stream_dst_path"
-      responses: { }
+      responses:
+            default:
+              description: Default response
   /api/stream.mjpeg?dst={dst}:
     post:
       summary: Post stream in MJPEG format
@@ -371,7 +391,9 @@ paths:
       tags: [ Produce stream ]
       parameters:
         - $ref: "#/components/parameters/stream_dst_path"
-      responses: { }
+      responses:
+            default:
+              description: Default response
 
 
 
@@ -380,49 +402,65 @@ paths:
       summary: DVRIP cameras discovery
       description: "[Source: DVRIP](https://github.com/AlexxIT/go2rtc#source-dvrip)"
       tags: [ Discovery ]
-      responses: { }
+      responses:
+            default:
+              description: Default response
 
   /api/ffmpeg/devices:
     get:
       summary: FFmpeg USB devices discovery
       description: "[Source: FFmpeg Device](https://github.com/AlexxIT/go2rtc#source-ffmpeg-device)"
       tags: [ Discovery ]
-      responses: { }
+      responses:
+            default:
+              description: Default response
   /api/ffmpeg/hardware:
     get:
       summary: FFmpeg hardware transcoding discovery
       description: "[Hardware acceleration](https://github.com/AlexxIT/go2rtc/wiki/Hardware-acceleration)"
       tags: [ Discovery ]
-      responses: { }
+      responses:
+            default:
+              description: Default response
   /api/hass:
     get:
       summary: Home Assistant cameras discovery
       description: "[Source: Hass](https://github.com/AlexxIT/go2rtc#source-hass)"
       tags: [ Discovery ]
-      responses: { }
+      responses:
+            default:
+              description: Default response
   /api/homekit:
     get:
       summary: HomeKit cameras discovery
       description: "[Source: HomeKit](https://github.com/AlexxIT/go2rtc#source-homekit)"
       tags: [ Discovery ]
-      responses: { }
+      responses:
+            default:
+              description: Default response
   /api/nest:
     get:
       summary: Nest cameras discovery
       tags: [ Discovery ]
-      responses: { }
+      responses:
+            default:
+              description: Default response
   /api/onvif:
     get:
       summary: ONVIF cameras discovery
       description: "[Source: ONVIF](https://github.com/AlexxIT/go2rtc#source-onvif)"
       tags: [ Discovery ]
-      responses: { }
+      responses:
+            default:
+              description: Default response
   /api/roborock:
     get:
       summary: Roborock vacuums discovery
       description: "[Source: Roborock](https://github.com/AlexxIT/go2rtc#source-roborock)"
       tags: [ Discovery ]
-      responses: { }
+      responses:
+            default:
+              description: Default response
 
 
 
@@ -431,7 +469,9 @@ paths:
       summary: ONVIF server implementation
       description: Simple realisation of the ONVIF protocol. Accepts any suburl requests
       tags: [ ONVIF ]
-      responses: { }
+      responses:
+            default:
+              description: Default response
 
 
 
@@ -440,7 +480,9 @@ paths:
       summary: RTSPtoWebRTC server implementation
       description: Simple API for support [RTSPtoWebRTC](https://www.home-assistant.io/integrations/rtsp_to_webrtc/) integration
       tags: [ RTSPtoWebRTC ]
-      responses: { }
+      responses:
+            default:
+              description: Default response
 
 
 
@@ -465,7 +507,9 @@ paths:
       tags: [ WebTorrent ]
       parameters:
         - $ref: "#/components/parameters/stream_src_path"
-      responses: { }
+      responses:
+            default:
+              description: Default response
 
   /api/webtorrent:
     get:
