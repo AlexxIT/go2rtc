@@ -7,6 +7,7 @@
  * - ECMAScript 2017 (ES8) = ES6 + async
  * - RTCPeerConnection for Safari iOS 11.0+
  * - IntersectionObserver for Safari iOS 12.2+
+ * - ManagedMediaSource for Safari 17+
  *
  * Doesn't support:
  * - MediaSource for Safari iOS
@@ -174,11 +175,9 @@ export class VideoRTC extends HTMLElement {
         if (this.ws) this.ws.send(JSON.stringify(value));
     }
 
-    codecs(type) {
-        const test = type === 'mse'
-            ? codec => MediaSource.isTypeSupported(`video/mp4; codecs="${codec}"`)
-            : codec => this.video.canPlayType(`video/mp4; codecs="${codec}"`);
-        return this.CODECS.filter(test).join();
+    /** @param {Function} isSupported */
+    codecs(isSupported) {
+        return this.CODECS.filter(codec => isSupported(`video/mp4; codecs="${codec}"`)).join();
     }
 
     /**
@@ -334,7 +333,7 @@ export class VideoRTC extends HTMLElement {
 
         const modes = [];
 
-        if (this.mode.indexOf('mse') >= 0 && 'MediaSource' in window) { // iPhone
+        if (this.mode.indexOf('mse') >= 0 && ('MediaSource' in window || 'ManagedMediaSource' in window)) {
             modes.push('mse');
             this.onmse();
         } else if (this.mode.indexOf('hls') >= 0 && this.video.canPlayType('application/vnd.apple.mpegurl')) {
@@ -345,7 +344,7 @@ export class VideoRTC extends HTMLElement {
             this.onmp4();
         }
 
-        if (this.mode.indexOf('webrtc') >= 0 && 'RTCPeerConnection' in window) { // macOS Desktop app
+        if (this.mode.indexOf('webrtc') >= 0 && 'RTCPeerConnection' in window) {
             modes.push('webrtc');
             this.onwebrtc();
         }
@@ -387,14 +386,30 @@ export class VideoRTC extends HTMLElement {
     }
 
     onmse() {
-        const ms = new MediaSource();
-        ms.addEventListener('sourceopen', () => {
-            URL.revokeObjectURL(this.video.src);
-            this.send({type: 'mse', value: this.codecs('mse')});
-        }, {once: true});
+        /** @type {MediaSource} */
+        let ms;
 
-        this.video.src = URL.createObjectURL(ms);
-        this.video.srcObject = null;
+        if ('ManagedMediaSource' in window) {
+            const MediaSource = window.ManagedMediaSource;
+
+            ms = new MediaSource();
+            ms.addEventListener('sourceopen', () => {
+                this.send({type: 'mse', value: this.codecs(MediaSource.isTypeSupported)});
+            }, {once: true});
+
+            this.video.disableRemotePlayback = true;
+            this.video.srcObject = ms;
+        } else {
+            ms = new MediaSource();
+            ms.addEventListener('sourceopen', () => {
+                URL.revokeObjectURL(this.video.src);
+                this.send({type: 'mse', value: this.codecs(MediaSource.isTypeSupported)});
+            }, {once: true});
+
+            this.video.src = URL.createObjectURL(ms);
+            this.video.srcObject = null;
+        }
+
         this.play();
 
         this.mseCodecs = '';
@@ -586,7 +601,7 @@ export class VideoRTC extends HTMLElement {
             this.play();
         };
 
-        this.send({type: 'hls', value: this.codecs('hls')});
+        this.send({type: 'hls', value: this.codecs(this.video.canPlayType)});
     }
 
     onmp4() {
@@ -618,7 +633,7 @@ export class VideoRTC extends HTMLElement {
             video2.src = 'data:video/mp4;base64,' + VideoRTC.btoa(data);
         };
 
-        this.send({type: 'mp4', value: this.codecs('mp4')});
+        this.send({type: 'mp4', value: this.codecs(this.video.canPlayType)});
     }
 
     static btoa(buffer) {
