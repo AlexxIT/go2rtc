@@ -590,7 +590,7 @@ This source type support four connection formats.
 
 **whep**
 
-[WebRTC/WHEP](https://www.ietf.org/id/draft-murillo-whep-01.html) - is an unapproved standard for WebRTC video/audio viewers. But it may already be supported in some third-party software. It is supported in go2rtc.
+[WebRTC/WHEP](https://www.ietf.org/id/draft-murillo-whep-02.html) - is an unapproved standard for WebRTC video/audio viewers. But it may already be supported in some third-party software. It is supported in go2rtc.
 
 **go2rtc**
 
