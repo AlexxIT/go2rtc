@@ -25,7 +25,7 @@ func Init() {
 
 	app.LoadConfig(&conf)
 
-	log = app.GetLogger("rtsp")
+	log = app.GetLogger("rtmp")
 
 	streams.HandleFunc("rtmp", streamsHandle)
 	streams.HandleFunc("rtmps", streamsHandle)
