@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"regexp"
 	"sync"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/app"
@@ -13,18 +14,31 @@ import (
 
 func Init() {
 	var cfg struct {
-		Mod map[string]any `yaml:"streams"`
+		Streams map[string]any `yaml:"streams"`
+		Publish map[string]any `yaml:"publish"`
 	}
 
 	app.LoadConfig(&cfg)
 
 	log = app.GetLogger("streams")
 
-	for name, item := range cfg.Mod {
+	for name, item := range cfg.Streams {
 		streams[name] = NewStream(item)
 	}
 
 	api.HandleFunc("api/streams", streamsHandler)
+
+	if cfg.Publish == nil {
+		return
+	}
+
+	time.AfterFunc(5*time.Second, func() {
+		for name, dst := range cfg.Publish {
+			if stream := Get(name); stream != nil {
+				Publish(stream, dst)
+			}
+		}
+	})
 }
 
 func Get(name string) *Stream {
