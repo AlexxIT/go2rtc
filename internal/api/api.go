@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/AlexxIT/go2rtc/internal/app"
+	"github.com/AlexxIT/go2rtc/pkg/shell"
 	"github.com/rs/zerolog"
 )
 
@@ -48,6 +49,7 @@ func Init() {
 	HandleFunc("api", apiHandler)
 	HandleFunc("api/config", configHandler)
 	HandleFunc("api/exit", exitHandler)
+	HandleFunc("api/restart", restartHandler)
 
 	// ensure we can listen without errors
 	var err error
@@ -220,6 +222,15 @@ func exitHandler(w http.ResponseWriter, r *http.Request) {
 	s := r.URL.Query().Get("code")
 	code, _ := strconv.Atoi(s)
 	os.Exit(code)
+}
+
+func restartHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "", http.StatusBadRequest)
+		return
+	}
+
+	go shell.Restart()
 }
 
 type Source struct {

@@ -2,7 +2,9 @@ package shell
 
 import (
 	"os"
+	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"syscall"
@@ -74,4 +76,17 @@ func RunUntilSignal() {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	println("exit with signal:", (<-sigs).String())
+}
+
+func Restart() {
+	path, err := exec.LookPath(os.Args[0])
+	if err != nil {
+		return
+	}
+	path, err = filepath.Abs(path)
+	if err != nil {
+		return
+	}
+	path = filepath.Clean(path)
+	_ = syscall.Exec(path, os.Args, os.Environ())
 }

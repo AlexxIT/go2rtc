@@ -46,7 +46,7 @@
         r = await fetch('api/config', {method: 'POST', body: editor.getValue()});
         if (r.ok) {
             alert('OK');
-            fetch('api/exit?code=100', {method: 'POST'});
+            fetch('api/restart', {method: 'POST'});
         } else {
             alert(await r.text());
         }
