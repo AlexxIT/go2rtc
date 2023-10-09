@@ -78,6 +78,8 @@ func RunUntilSignal() {
 	println("exit with signal:", (<-sigs).String())
 }
 
+// Restart idea taken from https://github.com/tillberg/autorestart
+// Copyright (c) 2015, Dan Tillberg
 func Restart() {
 	path, err := exec.LookPath(os.Args[0])
 	if err != nil {
