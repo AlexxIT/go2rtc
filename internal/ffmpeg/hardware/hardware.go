@@ -58,6 +58,8 @@ func MakeHardware(args *ffmpeg.Args, engine string, defaults map[string]string) 
 		case EngineVAAPI:
 			args.Codecs[i] = defaults[name+"/"+engine]
 
+			fixYCbCrRange(args)
+
 			if !args.HasFilters("drawtext=") {
 				args.Input = "-hwaccel vaapi -hwaccel_output_format vaapi -hwaccel_flags allow_profile_mismatch " + args.Input
 
@@ -153,4 +155,22 @@ func cut(s string, sep byte, pos int) string {
 		return s[:i]
 	}
 	return s
+}
+
+// fixYCbCrRange convert jpeg/pc range to mpeg/tv range
+// vaapi(pc, bt709, progressive) == yuvj420p (jpeg/full/pc)
+// vaapi(tv, bt709, progressive) == yuv420p (mpeg/limited/tv)
+// https://ffmpeg.org/ffmpeg-all.html#scale-1
+func fixYCbCrRange(args *ffmpeg.Args) {
+	for i, filter := range args.Filters {
+		if strings.HasPrefix(filter, "scale=") {
+			if !strings.Contains(filter, "out_range=") {
+				args.Filters[i] = filter + ":out_range=tv"
+			}
+			return
+		}
+	}
+
+	// scale=out_color_matrix=bt709:out_range=tv
+	args.Filters = append(args.Filters, "scale=out_range=tv")
 }
