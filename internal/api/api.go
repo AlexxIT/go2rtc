@@ -85,7 +85,7 @@ func Init() {
 
 	// Initialize the HTTPS server
 	if cfg.Mod.TLSListen != "" && cfg.Mod.TLSCert != "" && cfg.Mod.TLSKey != "" {
-		cert, err := tls.X509KeyPair([]byte(cfg.Mod.TLSCert), []byte(cfg.Mod.TLSKey))
+		cert, err := tls.X509KeyPair(readPEM(cfg.Mod.TLSCert), readPEM(cfg.Mod.TLSKey))
 		if err != nil {
 			log.Error().Err(err).Caller().Send()
 			return
@@ -259,4 +259,13 @@ func Error(w http.ResponseWriter, err error) {
 	log.Error().Err(err).Caller(1).Send()
 
 	http.Error(w, err.Error(), http.StatusInsufficientStorage)
+}
+
+func readPEM(s string) []byte {
+	if strings.IndexByte(s, '\n') > 0 {
+		return []byte(s)
+	}
+
+	b, _ := os.ReadFile(s)
+	return b
 }
