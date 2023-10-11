@@ -32,7 +32,7 @@ func Init() {
 		return
 	}
 
-	time.AfterFunc(5*time.Second, func() {
+	time.AfterFunc(time.Second, func() {
 		for name, dst := range cfg.Publish {
 			if stream := Get(name); stream != nil {
 				Publish(stream, dst)
