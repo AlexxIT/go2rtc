@@ -12,7 +12,7 @@ import (
 func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver) error {
 	if c.sender == nil {
 		if err := c.SetupBackchannel(); err != nil {
-			return nil
+			return err
 		}
 
 		muxer := mpegts.NewMuxer()
