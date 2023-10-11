@@ -6,16 +6,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/roborock/iot"
-	"github.com/AlexxIT/go2rtc/pkg/webrtc"
-	pion "github.com/pion/webrtc/v3"
 	"log"
 	"net/rpc"
 	"net/url"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/roborock/iot"
+	"github.com/AlexxIT/go2rtc/pkg/webrtc"
+	pion "github.com/pion/webrtc/v3"
 )
 
 type Client struct {
@@ -38,13 +39,15 @@ func NewClient(url string) *Client {
 	return &Client{url: url}
 }
 
-func (c *Client) Dial() (err error) {
+func (c *Client) Dial() error {
 	u, err := url.Parse(c.url)
 	if err != nil {
-		return
+		return err
 	}
 
-	c.iot, err = iot.Dial(c.url)
+	if c.iot, err = iot.Dial(c.url); err != nil {
+		return err
+	}
 
 	c.pin = u.Query().Get("pin")
 	if c.pin != "" {
