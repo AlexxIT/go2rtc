@@ -228,9 +228,7 @@ func (c *Client) Close() error {
 	if c.Conn == nil {
 		return nil
 	}
-	conn := c.Conn
-	c.Conn = nil
-	return conn.Close()
+	return c.Conn.Close()
 }
 
 func (c *Client) eventsReader() {
