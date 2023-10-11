@@ -111,12 +111,12 @@ func (c *Conn) Handle() (err error) {
 
 		if c.Timeout == 0 {
 			// polling frames from remote RTSP Server (ex Camera)
-			if len(c.receivers) > 0 {
-				// if we receiving video/audio from camera
-				timeout = time.Second * 5
-			} else {
+			timeout = time.Second * 5
+
+			if len(c.receivers) == 0 {
 				// if we only send audio to camera
-				timeout = time.Second * 30
+				// https://github.com/AlexxIT/go2rtc/issues/659
+				timeout += keepaliveDT
 			}
 		} else {
 			timeout = time.Second * time.Duration(c.Timeout)
