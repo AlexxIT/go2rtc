@@ -1,5 +1,7 @@
 package streams
 
+import "time"
+
 func (s *Stream) Publish(url string) error {
 	cons, run, err := GetConsumer(url)
 	if err != nil {
@@ -13,6 +15,10 @@ func (s *Stream) Publish(url string) error {
 	go func() {
 		run()
 		s.RemoveConsumer(cons)
+
+		// TODO: more smart retry
+		time.Sleep(5 * time.Second)
+		_ = s.Publish(url)
 	}()
 
 	return nil
