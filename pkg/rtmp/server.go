@@ -81,6 +81,7 @@ func (c *Conn) ReadCommands() error {
 const (
 	CommandConnect       = "connect"
 	CommandReleaseStream = "releaseStream"
+	CommandFCPublish     = "FCPublish"
 	CommandCreateStream  = "createStream"
 	CommandPublish       = "publish"
 	CommandPlay          = "play"
@@ -122,12 +123,8 @@ func (c *Conn) acceptCommand(b []byte) error {
 
 		payload := amf.EncodeItems(
 			"_result", tID,
-			map[string]any{
-				"fmsVer": "FMS/3,0,1,123",
-			},
-			map[string]any{
-				"code": "NetConnection.Connect.Success",
-			},
+			map[string]any{"fmsVer": "FMS/3,0,1,123"},
+			map[string]any{"code": "NetConnection.Connect.Success"},
 		)
 		return c.writeMessage(3, TypeCommand, 0, payload)
 
@@ -139,8 +136,11 @@ func (c *Conn) acceptCommand(b []byte) error {
 		payload := amf.EncodeItems("_result", tID, nil, 1)
 		return c.writeMessage(3, TypeCommand, 0, payload)
 
-	case CommandPublish, CommandPlay:
+	case CommandPublish, CommandPlay: // response later
 		c.Intent = cmd
+		c.streamID = 1
+
+	case CommandFCPublish: // no response
 
 	default:
 		println("rtmp: unknown command: " + cmd)
@@ -149,19 +149,14 @@ func (c *Conn) acceptCommand(b []byte) error {
 	return nil
 }
 
-func (c *Conn) WritePlayStart() error {
-	payload := amf.EncodeItems("onStatus", 0, nil, map[string]any{
-		"code": "NetStream.Play.Start",
-	})
-	return c.writeMessage(3, TypeCommand, 0, payload)
-}
-
-func (c *Conn) code() string {
-	switch c.Intent {
-	case CommandPlay:
-		return "NetStream.Play.Start"
-	case CommandPublish:
-		return "NetStream.Publish.Start"
+func (c *Conn) WriteStart() error {
+	var code string
+	if c.Intent == CommandPublish {
+		code = "NetStream.Publish.Start"
+	} else {
+		code = "NetStream.Play.Start"
 	}
-	return ""
+
+	payload := amf.EncodeItems("onStatus", 0, nil, map[string]any{"code": code})
+	return c.writeMessage(3, TypeCommand, 0, payload)
 }

@@ -66,21 +66,21 @@ func Init() {
 	}()
 }
 
-func tcpHandle(conn net.Conn) error {
-	client, err := rtmp.NewServer(conn)
+func tcpHandle(netConn net.Conn) error {
+	rtmpConn, err := rtmp.NewServer(netConn)
 	if err != nil {
 		return err
 	}
 
-	if err = client.ReadCommands(); err != nil {
+	if err = rtmpConn.ReadCommands(); err != nil {
 		return err
 	}
 
-	switch client.Intent {
+	switch rtmpConn.Intent {
 	case rtmp.CommandPlay:
-		stream := streams.Get(client.App)
+		stream := streams.Get(rtmpConn.App)
 		if stream == nil {
-			return errors.New("stream not found: " + client.App)
+			return errors.New("stream not found: " + rtmpConn.App)
 		}
 
 		cons := flv.NewConsumer()
@@ -90,16 +90,39 @@ func tcpHandle(conn net.Conn) error {
 
 		defer stream.RemoveConsumer(cons)
 
-		if err = client.WritePlayStart(); err != nil {
+		if err = rtmpConn.WriteStart(); err != nil {
 			return err
 		}
 
-		_, _ = cons.WriteTo(client)
+		_, _ = cons.WriteTo(rtmpConn)
+
+		return nil
 
 	case rtmp.CommandPublish:
+		stream := streams.Get(rtmpConn.App)
+		if stream == nil {
+			return errors.New("stream not found: " + rtmpConn.App)
+		}
+
+		if err = rtmpConn.WriteStart(); err != nil {
+			return err
+		}
+
+		prod, err := rtmpConn.Producer()
+		if err != nil {
+			return err
+		}
+
+		stream.AddProducer(prod)
+
+		defer stream.RemoveProducer(prod)
+
+		_ = prod.Start()
+
+		return nil
 	}
 
-	return nil
+	return errors.New("rtmp: unknown command: " + rtmpConn.Intent)
 }
 
 var log zerolog.Logger
