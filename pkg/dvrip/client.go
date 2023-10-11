@@ -2,6 +2,7 @@ package dvrip
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/md5"
 	"encoding/binary"
 	"encoding/json"
@@ -28,7 +29,8 @@ type Client struct {
 	seq     uint32
 	stream  string
 
-	rd io.Reader
+	rd  io.Reader
+	buf []byte
 }
 
 func (c *Client) Dial(rawURL string) (err error) {
@@ -87,11 +89,11 @@ func (c *Client) Login(user, pass string) (err error) {
 		SofiaHash(pass), user,
 	)
 
-	if _, err = c.Request(Login, []byte(data)); err != nil {
+	if _, err = c.WriteCmd(Login, []byte(data)); err != nil {
 		return
 	}
 
-	_, err = c.ResponseJSON()
+	_, err = c.ReadJSON()
 	return
 }
 
@@ -99,15 +101,15 @@ func (c *Client) Play() error {
 	format := `{"Name":"OPMonitor","SessionID":"0x%08X","OPMonitor":{"Action":"%s","Parameter":%s}}` + "\x0A\x00"
 
 	data := fmt.Sprintf(format, c.session, "Claim", c.stream)
-	if _, err := c.Request(OPMonitorClaim, []byte(data)); err != nil {
+	if _, err := c.WriteCmd(OPMonitorClaim, []byte(data)); err != nil {
 		return err
 	}
-	if _, err := c.ResponseJSON(); err != nil {
+	if _, err := c.ReadJSON(); err != nil {
 		return err
 	}
 
 	data = fmt.Sprintf(format, c.session, "Start", c.stream)
-	_, err := c.Request(OPMonitorStart, []byte(data))
+	_, err := c.WriteCmd(OPMonitorStart, []byte(data))
 	return err
 }
 
@@ -115,19 +117,19 @@ func (c *Client) Talk() error {
 	format := `{"Name":"OPTalk","SessionID":"0x%08X","OPTalk":{"Action":"%s"}}` + "\x0A\x00"
 
 	data := fmt.Sprintf(format, c.session, "Claim")
-	if _, err := c.Request(OPTalkClaim, []byte(data)); err != nil {
+	if _, err := c.WriteCmd(OPTalkClaim, []byte(data)); err != nil {
 		return err
 	}
-	if _, err := c.ResponseJSON(); err != nil {
+	if _, err := c.ReadJSON(); err != nil {
 		return err
 	}
 
 	data = fmt.Sprintf(format, c.session, "Start")
-	_, err := c.Request(OPTalkStart, []byte(data))
+	_, err := c.WriteCmd(OPTalkStart, []byte(data))
 	return err
 }
 
-func (c *Client) Request(cmd uint16, payload []byte) (n int, err error) {
+func (c *Client) WriteCmd(cmd uint16, payload []byte) (n int, err error) {
 	b := make([]byte, 20, 128)
 	b[0] = 255
 	binary.LittleEndian.PutUint32(b[4:], c.session)
@@ -145,7 +147,7 @@ func (c *Client) Request(cmd uint16, payload []byte) (n int, err error) {
 	return c.conn.Write(b)
 }
 
-func (c *Client) Response() (b []byte, err error) {
+func (c *Client) ReadChunk() (b []byte, err error) {
 	if err = c.conn.SetReadDeadline(time.Now().Add(time.Second * 5)); err != nil {
 		return
 	}
@@ -170,10 +172,52 @@ func (c *Client) Response() (b []byte, err error) {
 	return
 }
 
+func (c *Client) ReadPacket() (pType byte, payload []byte, err error) {
+	var b []byte
+
+	// many cameras may split packet to multiple chunks
+	// some rare cameras may put multiple packets to single chunk
+	for len(c.buf) < 16 {
+		if b, err = c.ReadChunk(); err != nil {
+			return 0, nil, err
+		}
+		c.buf = append(c.buf, b...)
+	}
+
+	if !bytes.HasPrefix(c.buf, []byte{0, 0, 1}) {
+		return 0, nil, fmt.Errorf("dvrip: wrong packet: %0.16x", c.buf)
+	}
+
+	var size int
+
+	switch pType = c.buf[3]; pType {
+	case 0xFC, 0xFE:
+		size = int(binary.LittleEndian.Uint32(c.buf[12:])) + 16
+	case 0xFD: // PFrame
+		size = int(binary.LittleEndian.Uint32(c.buf[4:])) + 8
+	case 0xFA, 0xF9:
+		size = int(binary.LittleEndian.Uint16(c.buf[6:])) + 8
+	default:
+		return 0, nil, fmt.Errorf("dvrip: unknown packet type: %X", pType)
+	}
+
+	for len(c.buf) < size {
+		if b, err = c.ReadChunk(); err != nil {
+			return 0, nil, err
+		}
+		c.buf = append(c.buf, b...)
+	}
+
+	payload = c.buf[:size]
+	c.buf = c.buf[size:]
+
+	return
+}
+
 type Response map[string]any
 
-func (c *Client) ResponseJSON() (res Response, err error) {
-	b, err := c.Response()
+func (c *Client) ReadJSON() (res Response, err error) {
+	b, err := c.ReadChunk()
 	if err != nil {
 		return
 	}

@@ -29,21 +29,21 @@ type Producer struct {
 
 func (c *Producer) Start() error {
 	for {
-		tag, size, b, err := c.readPacket()
+		pType, b, err := c.client.ReadPacket()
 		if err != nil {
 			return err
 		}
 
 		//log.Printf("[DVR] type: %d, len: %d", dataType, len(b))
 
-		switch tag {
+		switch pType {
 		case 0xFC, 0xFE, 0xFD:
 			if c.video == nil {
 				continue
 			}
 
 			var payload []byte
-			if tag != 0xFD {
+			if pType != 0xFD {
 				payload = b[16:] // iframe
 			} else {
 				payload = b[8:] // pframe
@@ -65,31 +65,29 @@ func (c *Producer) Start() error {
 				continue
 			}
 
-			for b != nil {
-				payload := b[8:size]
-				if len(b) > size {
-					b = b[size:]
-				} else {
-					b = nil
-				}
+			payload := b[8:]
 
-				c.audioTS += uint32(len(payload))
-				c.audioSeq++
+			c.audioTS += uint32(len(payload))
+			c.audioSeq++
 
-				packet := &rtp.Packet{
-					Header: rtp.Header{
-						Version:        2,
-						Marker:         true,
-						SequenceNumber: c.audioSeq,
-						Timestamp:      c.audioTS,
-					},
-					Payload: payload,
-				}
-
-				//log.Printf("[DVR] len: %d, ts: %10d", len(packet.Payload), packet.Timestamp)
-
-				c.audio.WriteRTP(packet)
+			packet := &rtp.Packet{
+				Header: rtp.Header{
+					Version:        2,
+					Marker:         true,
+					SequenceNumber: c.audioSeq,
+					Timestamp:      c.audioTS,
+				},
+				Payload: payload,
 			}
+
+			//log.Printf("[DVR] len: %d, ts: %10d", len(packet.Payload), packet.Timestamp)
+
+			c.audio.WriteRTP(packet)
+
+		case 0xF9: // unknown
+
+		default:
+			println(fmt.Sprintf("dvrip: unknown packet type: %d", pType))
 		}
 	}
 }
@@ -105,14 +103,33 @@ func (c *Producer) probe() error {
 
 	rd := core.NewReadBuffer(c.client.rd)
 	rd.BufferSize = core.ProbeSize
-	defer rd.Reset()
+	defer func() {
+		c.client.buf = nil
+		rd.Reset()
+	}()
 
 	c.client.rd = rd
 
-	timeout := time.Now().Add(core.ProbeTimeout)
+	// some awful cameras has VERY rare keyframes
+	// so we wait video+audio for default probe time
+	// and wait anything for 15 seconds
+	timeoutBoth := time.Now().Add(core.ProbeTimeout)
+	timeoutAny := time.Now().Add(time.Second * 15)
 
-	for (c.video == nil || c.audio == nil) && time.Now().Before(timeout) {
-		tag, _, b, err := c.readPacket()
+	for {
+		if now := time.Now(); now.Before(timeoutBoth) {
+			if c.video != nil && c.audio != nil {
+				return nil
+			}
+		} else if now.Before(timeoutAny) {
+			if c.video != nil || c.audio != nil {
+				return nil
+			}
+		} else {
+			return errors.New("dvrip: can't probe medias")
+		}
+
+		tag, b, err := c.client.ReadPacket()
 		if err != nil {
 			return err
 		}
@@ -147,40 +164,6 @@ func (c *Producer) probe() error {
 			c.addAudioTrack(b[4], b[5])
 		}
 	}
-
-	return nil
-}
-
-func (c *Producer) readPacket() (tag byte, size int, data []byte, err error) {
-	if data, err = c.client.Response(); err != nil {
-		return 0, 0, nil, err
-	}
-
-	switch tag = data[3]; tag {
-	case 0xFC, 0xFE:
-		size = int(binary.LittleEndian.Uint32(data[12:])) + 16
-	case 0xFD: // PFrame
-		size = int(binary.LittleEndian.Uint32(data[4:])) + 8
-	case 0xFA, 0xF9:
-		size = int(binary.LittleEndian.Uint16(data[6:])) + 8
-	default:
-		return 0, 0, nil, fmt.Errorf("unknown type: %X", tag)
-	}
-
-	// collect data from multiple packets
-	for len(data) < size {
-		b, err := c.client.Response()
-		if err != nil {
-			return 0, 0, nil, err
-		}
-		data = append(data, b...)
-	}
-
-	if len(data) > size {
-		return 0, 0, nil, errors.New("wrong size")
-	}
-
-	return
 }
 
 func (c *Producer) addVideoTrack(mediaCode byte, payload []byte) {
