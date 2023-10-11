@@ -208,3 +208,8 @@ func TestParseArgsHwVideotoolbox(t *testing.T) {
 	args = parseArgs("device?video=0&video_size=1920x1080#video=h265#hardware=videotoolbox")
 	require.Equal(t, `ffmpeg -hide_banner -hwaccel videotoolbox -hwaccel_output_format videotoolbox_vld -f dshow -video_size 1920x1080 -i video="0" -c:v hevc_videotoolbox -g 50 -bf 0 -profile:v high -level:v 5.1 -an -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
 }
+
+func TestDeckLink(t *testing.T) {
+	args := parseArgs(`DeckLink SDI (2)#video=h264#hardware=vaapi#input=-format_code Hp29 -f decklink -i "{input}"`)
+	require.Equal(t, `ffmpeg -hide_banner -hwaccel vaapi -hwaccel_output_format vaapi -hwaccel_flags allow_profile_mismatch -format_code Hp29 -f decklink -i "DeckLink SDI (2)" -c:v h264_vaapi -g 50 -bf 0 -profile:v high -level:v 4.1 -sei:v 0 -an -vf "format=vaapi|nv12,hwupload,scale_vaapi=out_range=tv" -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
+}
