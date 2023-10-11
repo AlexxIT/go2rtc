@@ -23,17 +23,11 @@ func Init() {
 }
 
 func handle(url string) (core.Producer, error) {
-	conn := dvrip.NewClient(url)
-	if err := conn.Dial(); err != nil {
+	client, err := dvrip.Dial(url)
+	if err != nil {
 		return nil, err
 	}
-	if err := conn.Play(); err != nil {
-		return nil, err
-	}
-	if err := conn.Handle(); err != nil {
-		return nil, err
-	}
-	return conn, nil
+	return client, nil
 }
 
 const Port = 34569 // UDP port number for dvrip discovery
