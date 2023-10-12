@@ -217,7 +217,7 @@ func (c *Client) Dial() (err error) {
 		return
 	}
 	// new reader for new conn
-	c.reader = bufio.NewReaderSize(c.Conn, 32*1024) // 32K like default request body
+	c.reader = bufio.NewReader(c.Conn)
 
 	go c.eventsReader()
 
