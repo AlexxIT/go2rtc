@@ -170,7 +170,10 @@ func (c *Producer) probe() error {
 			if !bytes.Contains(pkt.Payload, []byte("onMetaData")) {
 				waitType = append(waitType, TagData)
 			}
-			if bytes.Contains(pkt.Payload, []byte("videocodecid")) {
+			// Dahua cameras doesn't send videocodecid
+			if bytes.Contains(pkt.Payload, []byte("videocodecid")) ||
+				bytes.Contains(pkt.Payload, []byte("width")) ||
+				bytes.Contains(pkt.Payload, []byte("framerate")) {
 				waitType = append(waitType, TagVideo)
 			}
 			if bytes.Contains(pkt.Payload, []byte("audiocodecid")) {
