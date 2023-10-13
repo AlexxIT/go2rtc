@@ -3,6 +3,7 @@ package secure
 import (
 	"bufio"
 	"encoding/binary"
+	"errors"
 	"io"
 	"net"
 	"sync"
@@ -17,7 +18,6 @@ type Conn struct {
 
 	rd *bufio.Reader
 	wr *bufio.Writer
-	rb []byte // temporary reading buffer
 
 	encryptKey []byte
 	decryptKey []byte
@@ -40,8 +40,8 @@ func Client(conn net.Conn, sharedKey []byte, isClient bool) (net.Conn, error) {
 
 	c := &Conn{
 		conn: conn,
-		rd:   bufio.NewReaderSize(conn, BufferSize),
-		wr:   bufio.NewWriterSize(conn, BufferSize),
+		rd:   bufio.NewReaderSize(conn, 32*1024),
+		wr:   bufio.NewWriterSize(conn, 32*1024),
 	}
 
 	if isClient {
@@ -60,16 +60,11 @@ const (
 	VerifySize = 2
 	NonceSize  = 8
 	Overhead   = 16 // chacha20poly1305.Overhead
-
-	BufferSize = 2 + 0xFFFF + Overhead
 )
 
 func (c *Conn) Read(b []byte) (n int, err error) {
-	// something in reading buffer
-	if len(c.rb) > 0 {
-		n = copy(b, c.rb)
-		c.rb = c.rb[n:]
-		return
+	if cap(b) < PacketSizeMax {
+		return 0, errors.New("hap: read buffer is too small")
 	}
 
 	verify := make([]byte, 2) // verify = plain message size
@@ -88,24 +83,14 @@ func (c *Conn) Read(b []byte) (n int, err error) {
 	binary.LittleEndian.PutUint64(nonce, c.decryptCnt)
 	c.decryptCnt++
 
-	// buffer size enought for direct reading
-	if n <= cap(b) {
-		_, err = chacha20poly1305.DecryptAndVerify(c.decryptKey, b[:0], nonce, ciphertext, verify)
-		return
-	}
-
-	// reading to temporary buffer
-	c.rb = make([]byte, 0, n)
-	if _, err = chacha20poly1305.DecryptAndVerify(c.decryptKey, c.rb, nonce, ciphertext, verify); err != nil {
-		return
-	}
-	return c.Read(b)
+	_, err = chacha20poly1305.DecryptAndVerify(c.decryptKey, b[:0], nonce, ciphertext, verify)
+	return
 }
 
 func (c *Conn) Write(b []byte) (n int, err error) {
-	var ciphertext []byte
-	var nonce = make([]byte, NonceSize)
-	var verify = make([]byte, VerifySize)
+	buf := make([]byte, 0, PacketSizeMax+Overhead)
+	nonce := make([]byte, NonceSize)
+	verify := make([]byte, VerifySize)
 
 	for len(b) > 0 {
 		size := len(b)
@@ -121,16 +106,12 @@ func (c *Conn) Write(b []byte) (n int, err error) {
 		binary.LittleEndian.PutUint64(nonce, c.encryptCnt)
 		c.encryptCnt++
 
-		if cap(ciphertext) < size+Overhead {
-			ciphertext = make([]byte, size+Overhead)
-		}
-
-		_, err = chacha20poly1305.EncryptAndSeal(c.encryptKey, ciphertext[:0], nonce, b[:size], verify)
+		_, err = chacha20poly1305.EncryptAndSeal(c.encryptKey, buf, nonce, b[:size], verify)
 		if err != nil {
 			return
 		}
 
-		if _, err = c.wr.Write(ciphertext); err != nil {
+		if _, err = c.wr.Write(buf[:size+Overhead]); err != nil {
 			return
 		}
 
