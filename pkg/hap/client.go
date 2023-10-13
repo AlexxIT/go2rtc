@@ -219,8 +219,6 @@ func (c *Client) Dial() (err error) {
 	// new reader for new conn
 	c.reader = bufio.NewReader(c.Conn)
 
-	go c.eventsReader()
-
 	return
 }
 
