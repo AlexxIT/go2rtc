@@ -38,6 +38,8 @@ func Init() {
 		os.Exit(0)
 	}
 
+	Info["version"] = Version
+
 	if confs == nil {
 		confs = []string{"go2rtc.yaml"}
 	}
