@@ -39,6 +39,12 @@ export class VideoRTC extends HTMLElement {
         this.mode = 'webrtc,mse,hls,mjpeg';
 
         /**
+         * [Config] Requested medias (video, audio, microphone).
+         * @type {string}
+         */
+        this.media = 'video,audio';
+
+        /**
          * [config] Run stream when not displayed on the screen. Default `false`.
          * @type {boolean}
          */
@@ -129,8 +135,8 @@ export class VideoRTC extends HTMLElement {
         this.ondata = null;
 
         /**
-         * [internal] Handlers list for receiving JSON from WebSocket
-         * @type {Object.<string,Function>}}
+         * [internal] Handlers list for receiving JSON from WebSocket.
+         * @type {Object.<string,Function>}
          */
         this.onmessage = null;
     }
@@ -177,7 +183,9 @@ export class VideoRTC extends HTMLElement {
 
     /** @param {Function} isSupported */
     codecs(isSupported) {
-        return this.CODECS.filter(codec => isSupported(`video/mp4; codecs="${codec}"`)).join();
+        return this.CODECS
+            .filter(codec => this.media.indexOf(codec.indexOf('vc1') > 0 ? 'video' : 'audio') >= 0)
+            .filter(codec => isSupported(`video/mp4; codecs="${codec}"`)).join();
     }
 
     /**
@@ -302,6 +310,9 @@ export class VideoRTC extends HTMLElement {
 
         this.pcState = WebSocket.CLOSED;
         if (this.pc) {
+            this.pc.getSenders().forEach(sender => {
+                if (sender.track) sender.track.stop();
+            });
             this.pc.close();
             this.pc = null;
         }
@@ -466,10 +477,6 @@ export class VideoRTC extends HTMLElement {
     onwebrtc() {
         const pc = new RTCPeerConnection(this.pcConfig);
 
-        /** @type {HTMLVideoElement} */
-        const video2 = document.createElement('video');
-        video2.addEventListener('loadeddata', ev => this.onpcvideo(ev), {once: true});
-
         pc.addEventListener('icecandidate', ev => {
             if (ev.candidate && this.mode.indexOf('webrtc/tcp') >= 0 && ev.candidate.protocol === 'udp') return;
 
@@ -477,21 +484,14 @@ export class VideoRTC extends HTMLElement {
             this.send({type: 'webrtc/candidate', value: candidate});
         });
 
-        pc.addEventListener('track', ev => {
-            // when stream already init
-            if (video2.srcObject !== null) return;
-
-            // when audio track not exist in Chrome
-            if (ev.streams.length === 0) return;
-
-            // when audio track not exist in Firefox
-            if (ev.streams[0].id[0] === '{') return;
-
-            video2.srcObject = ev.streams[0];
-        });
-
         pc.addEventListener('connectionstatechange', () => {
-            if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+            if (pc.connectionState === 'connected') {
+                const tracks = pc.getReceivers().map(receiver => receiver.track);
+                /** @type {HTMLVideoElement} */
+                const video2 = document.createElement('video');
+                video2.addEventListener('loadeddata', () => this.onpcvideo(video2), {once: true});
+                video2.srcObject = new MediaStream(tracks);
+            } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
                 pc.close(); // stop next events
 
                 this.pcState = WebSocket.CLOSED;
@@ -521,14 +521,8 @@ export class VideoRTC extends HTMLElement {
             }
         };
 
-        // Safari doesn't support "offerToReceiveVideo"
-        pc.addTransceiver('video', {direction: 'recvonly'});
-        pc.addTransceiver('audio', {direction: 'recvonly'});
-
-        pc.createOffer().then(offer => {
-            pc.setLocalDescription(offer).then(() => {
-                this.send({type: 'webrtc/offer', value: offer.sdp});
-            });
+        this.createOffer(pc).then(offer => {
+            this.send({type: 'webrtc/offer', value: offer.sdp});
         });
 
         this.pcState = WebSocket.CONNECTING;
@@ -536,31 +530,51 @@ export class VideoRTC extends HTMLElement {
     }
 
     /**
-     * @param ev {Event}
+     * @param pc {RTCPeerConnection}
+     * @return {Promise<RTCSessionDescriptionInit>}
      */
-    onpcvideo(ev) {
-        if (!this.pc) return;
+    async createOffer(pc) {
+        try {
+            if (this.media.indexOf('microphone') >= 0) {
+                const media = await navigator.mediaDevices.getUserMedia({audio: true});
+                media.getTracks().forEach(track => {
+                    pc.addTransceiver(track, {direction: 'sendonly'});
+                });
+            }
+        } catch (e) {
+            console.warn(e);
+        }
 
-        /** @type {HTMLVideoElement} */
-        const video2 = ev.target;
-        const state = this.pc.connectionState;
+        for (const kind of ['video', 'audio']) {
+            if (this.media.indexOf(kind) >= 0) {
+                pc.addTransceiver(kind, {direction: 'recvonly'});
+            }
+        }
 
-        // Firefox doesn't support pc.connectionState
-        if (state === 'connected' || state === 'connecting' || !state) {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        return offer;
+    }
+
+    /**
+     * @param video2 {HTMLVideoElement}
+     */
+    onpcvideo(video2) {
+        if (this.pc) {
             // Video+Audio > Video, H265 > H264, Video > Audio, WebRTC > MSE
             let rtcPriority = 0, msePriority = 0;
 
             /** @type {MediaStream} */
-            const ms = video2.srcObject;
-            if (ms.getVideoTracks().length > 0) rtcPriority += 0x220;
-            if (ms.getAudioTracks().length > 0) rtcPriority += 0x102;
+            const stream = video2.srcObject;
+            if (stream.getVideoTracks().length > 0) rtcPriority += 0x220;
+            if (stream.getAudioTracks().length > 0) rtcPriority += 0x102;
 
             if (this.mseCodecs.indexOf('hvc1.') >= 0) msePriority += 0x230;
             if (this.mseCodecs.indexOf('avc1.') >= 0) msePriority += 0x210;
             if (this.mseCodecs.indexOf('mp4a.') >= 0) msePriority += 0x101;
 
             if (rtcPriority >= msePriority) {
-                this.video.srcObject = ms;
+                this.video.srcObject = stream;
                 this.play();
 
                 this.pcState = WebSocket.OPEN;
