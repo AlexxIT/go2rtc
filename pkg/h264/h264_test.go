@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -82,4 +83,13 @@ func TestGetProfileLevelID(t *testing.T) {
 	s = "packetization-mode=1;profile-level-id=276400"
 	profile = GetProfileLevelID(s)
 	require.Equal(t, "640029", profile)
+}
+
+func TestDecodeSPS2(t *testing.T) {
+	s := "6764001fad84010c20086100430802184010c200843b50740932"
+	b, err := hex.DecodeString(s)
+	require.Nil(t, err)
+
+	sps := DecodeSPS(b)
+	assert.Nil(t, sps) // broken SPS?
 }
