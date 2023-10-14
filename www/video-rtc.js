@@ -601,7 +601,7 @@ export class VideoRTC extends HTMLElement {
             this.play();
         };
 
-        this.send({type: 'hls', value: this.codecs(this.video.canPlayType)});
+        this.send({type: 'hls', value: this.codecs(type => this.video.canPlayType(type))});
     }
 
     onmp4() {
