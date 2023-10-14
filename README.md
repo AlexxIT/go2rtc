@@ -14,6 +14,7 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
 - streaming from [RTSP](#source-rtsp), [RTMP](#source-rtmp), [DVRIP](#source-dvrip), [HTTP](#source-http) (FLV/MJPEG/JPEG/TS), [USB Cameras](#source-ffmpeg-device) and [other sources](#module-streams)
 - streaming from any sources, supported by [FFmpeg](#source-ffmpeg)
 - streaming to [RTSP](#module-rtsp), [WebRTC](#module-webrtc), [MSE/MP4](#module-mp4), [HomeKit](#module-homekit) [HLS](#module-hls) or [MJPEG](#module-mjpeg)
+- [publish](#publish-stream) any source to popular streaming services (YouTube, Telegram, etc.)
 - first project in the World with support streaming from [HomeKit Cameras](#source-homekit)
 - support H265 for WebRTC in browser (Safari only, [read more](https://github.com/AlexxIT/Blog/issues/5))
 - on the fly transcoding for unsupported codecs via [FFmpeg](#source-ffmpeg)
@@ -67,8 +68,10 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
     * [Source: WebTorrent](#source-webtorrent)
     * [Incoming sources](#incoming-sources)
     * [Stream to camera](#stream-to-camera)
+    * [Publish stream](#publish-stream)
   * [Module: API](#module-api)
   * [Module: RTSP](#module-rtsp)
+  * [Module: RTMP](#module-rtmp)
   * [Module: WebRTC](#module-webrtc)
   * [Module: HomeKit](#module-homekit)
   * [Module: WebTorrent](#module-webtorrent)
@@ -202,6 +205,7 @@ Read more about [incoming sources](#incoming-sources)
 Supported for sources:
 
 - [RTSP cameras](#source-rtsp) with [ONVIF Profile T](https://www.onvif.org/specs/stream/ONVIF-Streaming-Spec.pdf) (back channel connection)
+- [DVRIP](#source-dvrip) cameras
 - [TP-Link Tapo](#source-tapo) cameras
 - [Hikvision ISAPI](#source-isapi) cameras
 - [Roborock vacuums](#source-roborock) models with cameras
@@ -478,7 +482,11 @@ Other names: DVR-IP, NetSurveillance, Sofia protocol (NETsurveillance ActiveX pl
 
 ```yaml
 streams:
-  camera1: dvrip://username:password@192.168.1.123:34567?channel=0&subtype=0
+  only_stream: dvrip://username:password@192.168.1.123:34567?channel=0&subtype=0
+  only_tts: dvrip://username:password@192.168.1.123:34567?backchannel=1
+  two_way_audio:
+    - dvrip://username:password@192.168.1.123:34567?channel=0&subtype=0
+    - dvrip://username:password@192.168.1.123:34567?backchannel=1
 ```
 
 #### Source: Tapo
@@ -632,7 +640,7 @@ streams:
 
 By default, go2rtc establishes a connection to the source when any client requests it. Go2rtc drops the connection to the source when it has no clients left.
 
-- Go2rtc also can accepts incoming sources in [RTSP](#source-rtsp), [HTTP](#source-http) and **WebRTC/WHIP** formats
+- Go2rtc also can accepts incoming sources in [RTSP](#module-rtsp), [RTMP](#module-rtmp), [HTTP](#source-http) and **WebRTC/WHIP** formats
 - Go2rtc won't stop such a source if it has no clients
 - You can push data only to existing stream (create stream with empty source in config)
 - You can push multiple incoming sources to same stream
@@ -693,6 +701,39 @@ POST http://localhost:1984/api/streams?dst=camera1&src=ffmpeg:http://example.com
 - you can stop active playback by calling the API with the empty `src` parameter
 - you will see one active producer and one active consumer in go2rtc WebUI info page during streaming
 
+### Publish stream
+
+You can publish any stream to streaming services (YouTube, Telegram, etc.) via RTMP/RTMPS. Important:
+
+- Supported codecs: H264 for video and AAC for audio
+- Pixel format should be `yuv420p`, for cameras with `yuvj420p` format you SHOULD use [transcoding](#source-ffmpeg)
+- You don't need to enable [RTMP module](#module-rtmp) listening for this task
+
+You can use API:
+
+```
+POST http://localhost:1984/api/streams?src=camera1&dst=rtmps://...
+```
+
+Or config file:
+
+```yaml
+publish:
+  # publish stream "tplink_tapo" to Telegram
+  tplink_tapo: rtmps://xxx-x.rtmp.t.me/s/xxxxxxxxxx:xxxxxxxxxxxxxxxxxxxxxx
+  # publish stream "other_camera" to Telegram and YouTube
+  other_camera:
+    - rtmps://xxx-x.rtmp.t.me/s/xxxxxxxxxx:xxxxxxxxxxxxxxxxxxxxxx
+    - rtmps://xxx.rtmp.youtube.com/live2/xxxx-xxxx-xxxx-xxxx-xxxx
+
+streams:
+  # for TP-Link cameras it's important to use transcoding because of wrong pixel format
+  tplink_tapo: ffmpeg:rtsp://user:pass@192.168.1.123/stream1#video=h264#hardware=vaapi#audio=aac
+```
+
+- **Telegram Desktop App** > Any public or private channel or group (where you admin) > Live stream > Start with... > Start streaming.
+- **YouTube** > Create > Go live > Stream latency: Ultra low-latency > Copy: Stream URL + Stream key.
+
 ### Module: API
 
 The HTTP API is the main part for interacting with the application. Default address: `http://localhost:1984/`.
@@ -705,6 +746,7 @@ The HTTP API is the main part for interacting with the application. Default addr
 - you can enable HTTP API only on localhost with `listen: "127.0.0.1:1984"` setting
 - you can change API `base_path` and host go2rtc on your main app webserver suburl
 - all files from `static_dir` hosted on root path: `/`
+- you can use raw TLS cert/key content or path to files
 
 ```yaml
 api:
@@ -752,6 +794,17 @@ By default go2rtc provide RTSP-stream with only one first video and only one fir
 - `default_query: "video&audio=all"` - only one first any video and all audio as separate tracks
 
 Read more about [codecs filters](#codecs-filters).
+
+### Module: RTMP
+
+You can get any stream as RTMP-stream: `rtmp://192.168.1.123/{stream_name}`. Only H264/AAC codecs supported right now.
+
+[Incoming stream](#incoming-sources) in RTMP-format tested only with [OBS Studio](https://obsproject.com/) and Dahua camera. Different FFmpeg versions has differnt problems with this format. 
+
+```yaml
+rtmp:
+  listen: ":1935"  # by default - disabled!
+```
 
 ### Module: WebRTC
 
