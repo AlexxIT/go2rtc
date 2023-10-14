@@ -22,7 +22,6 @@ var UserAgent = "go2rtc/" + Version
 
 var ConfigPath string
 var Info = map[string]any{
-	"version": Version,
 }
 
 func Init() {
