@@ -34,6 +34,8 @@ import (
 )
 
 func main() {
+	app.Version = "1.8.0"
+
 	// 1. Core modules: app, api/ws, streams
 
 	app.Init() // init config and logs
