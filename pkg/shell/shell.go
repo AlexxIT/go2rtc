@@ -90,5 +90,7 @@ func Restart() {
 		return
 	}
 	path = filepath.Clean(path)
-	_ = syscall.Exec(path, os.Args, os.Environ())
+	if err = syscall.Exec(path, os.Args, os.Environ()); err != nil {
+		panic(err)
+	}
 }
