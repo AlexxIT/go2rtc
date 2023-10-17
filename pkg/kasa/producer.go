@@ -88,7 +88,7 @@ func (c *Producer) Start() error {
 					},
 					Payload: annexb.EncodeToAVCC(body, false),
 				}
-				video.WriteRTP(pkt)
+				video.Handler(pkt)
 			}
 
 		case MimeG711U:
@@ -102,7 +102,7 @@ func (c *Producer) Start() error {
 					},
 					Payload: body,
 				}
-				audio.WriteRTP(pkt)
+				audio.Handler(pkt)
 			}
 		}
 	}

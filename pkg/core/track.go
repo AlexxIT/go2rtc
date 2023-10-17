@@ -26,6 +26,8 @@ type Receiver struct {
 
 	ID byte // Channel for RTSP, PayloadType for MPEG-TS
 
+	Handler HandlerFunc
+
 	senders map[*Sender]chan *rtp.Packet
 	mu      sync.RWMutex
 	bytes   int
@@ -33,7 +35,14 @@ type Receiver struct {
 
 func NewReceiver(media *Media, codec *Codec) *Receiver {
 	Assert(codec != nil)
-	return &Receiver{Codec: codec, Media: media}
+
+	receiver := &Receiver{Codec: codec, Media: media}
+
+	receiver.Handler = func(packet *rtp.Packet) {
+		receiver.WriteRTP(packet)
+	}
+
+	return receiver
 }
 
 // WriteRTP - fast and non blocking write to all readers buffers

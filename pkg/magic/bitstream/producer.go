@@ -74,7 +74,7 @@ func (c *Producer) Start() error {
 				Header:  rtp.Header{Timestamp: core.Now90000()},
 				Payload: annexb.EncodeToAVCC(buf[:i], true),
 			}
-			c.Receivers[0].WriteRTP(pkt)
+			c.Receivers[0].Handler(pkt)
 
 			//log.Printf("[AVC] %v, len: %d", h264.Types(pkt.Payload), len(pkt.Payload))
 

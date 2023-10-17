@@ -39,7 +39,7 @@ func (c *Client) Handle() error {
 		Header:  rtp.Header{Timestamp: core.Now90000()},
 		Payload: body,
 	}
-	c.receiver.WriteRTP(pkt)
+	c.receiver.Handler(pkt)
 
 	c.recv += len(body)
 
@@ -67,7 +67,7 @@ func (c *Client) Handle() error {
 				Header:  rtp.Header{Timestamp: core.Now90000()},
 				Payload: body,
 			}
-			c.receiver.WriteRTP(pkt)
+			c.receiver.Handler(pkt)
 		}
 	}
 

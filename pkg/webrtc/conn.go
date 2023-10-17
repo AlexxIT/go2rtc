@@ -103,7 +103,7 @@ func NewConn(pc *webrtc.PeerConnection) *Conn {
 				continue
 			}
 
-			track.WriteRTP(packet)
+			track.Handler(packet)
 		}
 	})
 

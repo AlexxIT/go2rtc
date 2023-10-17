@@ -272,7 +272,7 @@ func (c *Client) worker(buffer chan []byte) {
 				Header:  rtp.Header{Timestamp: ts * 90},
 				Payload: data[:size],
 			}
-			c.receiver.WriteRTP(packet)
+			c.receiver.Handler(packet)
 
 			data = data[size:]
 			ts += duration
