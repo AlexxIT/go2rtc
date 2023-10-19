@@ -115,7 +115,14 @@ paths:
             default:
               description: Default response
 
-
+  /api/restart:
+    post:
+      summary: Restart Daemon
+      description: Restarts the daemon.
+      tags: [ Application ]
+      responses:
+            default:
+              description: Default response
 
   /api/config:
     get:
