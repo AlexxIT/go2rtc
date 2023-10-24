@@ -1285,9 +1285,13 @@ streams:
 - [ioBroker.euSec](https://github.com/bropat/ioBroker.eusec) - [ioBroker](https://www.iobroker.net/) adapter for control Eufy security devices
 - [wz_mini_hacks](https://github.com/gtxaspec/wz_mini_hacks) - Custom firmware for Wyze cameras
 - [MMM-go2rtc](https://github.com/Anonym-tsk/MMM-go2rtc) - MagicMirror² Module
+
+**Distributions**
+
 - [Alpine Linux](https://pkgs.alpinelinux.org/packages?name=go2rtc)
 - [NixOS](https://search.nixos.org/packages?query=go2rtc)
 - [Proxmox Helper Scripts](https://tteck.github.io/Proxmox/)
+- [Synology NAS](https://synocommunity.com/package/go2rtc)
 - [Unraid](https://unraid.net/community/apps?q=go2rtc)
 
 ## Cameras experience
