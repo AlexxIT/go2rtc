@@ -9,6 +9,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/dvrip"
 	"github.com/AlexxIT/go2rtc/internal/echo"
 	"github.com/AlexxIT/go2rtc/internal/exec"
+	"github.com/AlexxIT/go2rtc/internal/expr"
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg"
 	"github.com/AlexxIT/go2rtc/internal/hass"
 	"github.com/AlexxIT/go2rtc/internal/hls"
@@ -76,6 +77,7 @@ func main() {
 	homekit.Init()  // homekit source
 	nest.Init()     // nest source
 	bubble.Init()   // bubble source
+	expr.Init()     // expr source
 
 	// 6. Helper modules
 
