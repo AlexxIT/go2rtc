@@ -1,6 +1,7 @@
 package homekit
 
 import (
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -134,6 +135,10 @@ var log zerolog.Logger
 var servers map[string]*server
 
 func streamHandler(url string) (core.Producer, error) {
+	if srtp.Server == nil {
+		return nil, errors.New("homekit: can't work without SRTP server")
+	}
+
 	return homekit.Dial(url, srtp.Server)
 }
 
