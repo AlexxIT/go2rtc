@@ -1291,6 +1291,7 @@ streams:
 - [Alpine Linux](https://pkgs.alpinelinux.org/packages?name=go2rtc)
 - [NixOS](https://search.nixos.org/packages?query=go2rtc)
 - [Proxmox Helper Scripts](https://tteck.github.io/Proxmox/)
+- [QNAP](https://www.myqnap.org/product/go2rtc/)
 - [Synology NAS](https://synocommunity.com/package/go2rtc)
 - [Unraid](https://unraid.net/community/apps?q=go2rtc)
 
