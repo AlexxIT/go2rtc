@@ -1,8 +1,9 @@
 package rtsp
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestURLParse(t *testing.T) {
@@ -103,6 +104,30 @@ m=audio 0 RTP/AVP 8
 a=control:track3
 a=rtpmap:8 PCMA/8000
 a=sendonly`
+	medias, err := UnmarshalSDP([]byte(s))
+	assert.Nil(t, err)
+	assert.Len(t, medias, 3)
+}
+
+func TestBugSDP4(t *testing.T) {
+	s := `v=0
+o=- 14665860 31787219 1 IN IP4 10.0.0.94
+s=Session streamed by "MERCURY RTSP Server"
+t=0 0
+m=video 0 RTP/AVP 96
+c=IN IP4 0.0.0.0
+b=AS:4096
+a=range:npt=0-
+a=control:track1
+a=rtpmap:96 H264/90000
+a=fmtp:96 packetization-mode=1; profile-level-id=640016; sprop-parameter-sets=Z2QAFqzGoCgPaEAAAAMAQAAAB6E=,aOqPLA==
+m=audio 0 RTP/AVP 8
+a=rtpmap:8 PCMA/8000
+a=control:track2
+m=application/MERCURY 0 RTP/AVP smart/1/90000
+a=rtpmap:95 MERCURY/90000
+a=control:track3
+`
 	medias, err := UnmarshalSDP([]byte(s))
 	assert.Nil(t, err)
 	assert.Len(t, medias, 3)
