@@ -565,9 +565,14 @@ This source type support only backchannel audio for Hikvision ISAPI protocol. So
 
 ```yaml
 streams:
+  # Directly on camera
   hikvision1:
     - rtsp://admin:password@192.168.1.123:554/Streaming/Channels/101
     - isapi://admin:password@192.168.1.123:80/
+  # Camera through NVR (ex. main stream on channel 7)
+  hikvision2:
+    - rtsp://admin:password@192.168.1.123/Streaming/Channels/701
+    - isapi://admin:password@192.168.1.123:80/ISAPI/System/TwoWayAudio/channels/701
 ```
 
 #### Source: Nest
