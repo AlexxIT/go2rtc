@@ -1,11 +1,12 @@
 package webrtc
 
 import (
+	"net"
+	"strings"
+
 	"github.com/pion/ice/v2"
 	"github.com/pion/interceptor"
 	"github.com/pion/webrtc/v3"
-	"net"
-	"strings"
 )
 
 // ReceiveMTU = Ethernet MTU (1500) - IP Header (20) - UDP Header (8)
@@ -40,6 +41,7 @@ func NewAPI(address string) (*webrtc.API, error) {
 	// UDP6 may have problems with DNS resolving for STUN servers
 	s.SetNetworkTypes([]webrtc.NetworkType{
 		webrtc.NetworkTypeUDP4, webrtc.NetworkTypeTCP4,
+		webrtc.NetworkTypeUDP6, webrtc.NetworkTypeTCP6,
 	})
 
 	// fix https://github.com/pion/webrtc/pull/2407
@@ -50,13 +52,13 @@ func NewAPI(address string) (*webrtc.API, error) {
 	if address != "" {
 		address, network, _ := strings.Cut(address, "/")
 		if network == "" || network == "udp" {
-			if ln, err := net.ListenPacket("udp4", address); err == nil {
+			if ln, err := net.ListenPacket("udp", address); err == nil {
 				udpMux := webrtc.NewICEUDPMux(nil, ln)
 				s.SetICEUDPMux(udpMux)
 			}
 		}
 		if network == "" || network == "tcp" {
-			if ln, err := net.Listen("tcp4", address); err == nil {
+			if ln, err := net.Listen("tcp", address); err == nil {
 				tcpMux := webrtc.NewICETCPMux(nil, ln, 8)
 				s.SetICETCPMux(tcpMux)
 			}
