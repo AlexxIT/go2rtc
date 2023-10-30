@@ -58,10 +58,12 @@ func MakeHardware(args *ffmpeg.Args, engine string, defaults map[string]string) 
 		case EngineVAAPI:
 			args.Codecs[i] = defaults[name+"/"+engine]
 
-			fixYCbCrRange(args)
-
 			if !args.HasFilters("drawtext=") {
 				args.Input = "-hwaccel vaapi -hwaccel_output_format vaapi -hwaccel_flags allow_profile_mismatch " + args.Input
+
+				if name == "h264" {
+					fixPixelFormat(args)
+				}
 
 				for i, filter := range args.Filters {
 					if strings.HasPrefix(filter, "scale=") {
@@ -157,20 +159,23 @@ func cut(s string, sep byte, pos int) string {
 	return s
 }
 
-// fixYCbCrRange convert jpeg/pc range to mpeg/tv range
-// vaapi(pc, bt709, progressive) == yuvj420p (jpeg/full/pc)
-// vaapi(tv, bt709, progressive) == yuv420p (mpeg/limited/tv)
-// https://ffmpeg.org/ffmpeg-all.html#scale-1
-func fixYCbCrRange(args *ffmpeg.Args) {
+// fixPixelFormat:
+//   - good h264 pixel: yuv420p(tv, bt709) == yuv420p (mpeg/limited/tv)
+//   - bad h264 pixel: yuvj420p(pc, bt709) == yuvj420p (jpeg/full/pc)
+//   - bad jpeg pixel: yuvj422p(pc, bt470bg)
+func fixPixelFormat(args *ffmpeg.Args) {
+	// in my tests this filters has same CPU/GPU load:
+	//   - "hwupload"
+	//   - "hwupload,scale_vaapi=out_color_matrix=bt709:out_range=tv"
+	//   - "hwupload,scale_vaapi=out_color_matrix=bt709:out_range=tv:format=nv12"
+	const fixPixFmt = "out_color_matrix=bt709:out_range=tv:format=nv12"
+
 	for i, filter := range args.Filters {
 		if strings.HasPrefix(filter, "scale=") {
-			if !strings.Contains(filter, "out_range=") {
-				args.Filters[i] = filter + ":out_range=tv"
-			}
+			args.Filters[i] = filter + ":" + fixPixFmt
 			return
 		}
 	}
 
-	// scale=out_color_matrix=bt709:out_range=tv
-	args.Filters = append(args.Filters, "scale=out_range=tv")
+	args.Filters = append(args.Filters, "scale="+fixPixFmt)
 }
