@@ -2,9 +2,7 @@ package webrtc
 
 import (
 	"net"
-	"strings"
 
-	"github.com/pion/ice/v2"
 	"github.com/pion/interceptor"
 	"github.com/pion/webrtc/v3"
 )
@@ -13,7 +11,11 @@ import (
 // https://ffmpeg.org/ffmpeg-all.html#Muxer
 const ReceiveMTU = 1472
 
-func NewAPI(address string) (*webrtc.API, error) {
+func NewAPI() (*webrtc.API, error) {
+	return NewServerAPI("", "", nil)
+}
+
+func NewServerAPI(address, network string, candidateHost []string) (*webrtc.API, error) {
 	// for debug logs add to env: `PION_LOG_DEBUG=all`
 	m := &webrtc.MediaEngine{}
 	//if err := m.RegisterDefaultCodecs(); err != nil {
@@ -35,32 +37,31 @@ func NewAPI(address string) (*webrtc.API, error) {
 		return name != "hassio" && name != "docker0"
 	})
 
-	// disable mDNS listener
-	s.SetICEMulticastDNSMode(ice.MulticastDNSModeDisabled)
-
-	// UDP6 may have problems with DNS resolving for STUN servers
-	s.SetNetworkTypes([]webrtc.NetworkType{
-		webrtc.NetworkTypeUDP4, webrtc.NetworkTypeTCP4,
-		webrtc.NetworkTypeUDP6, webrtc.NetworkTypeTCP6,
-	})
-
 	// fix https://github.com/pion/webrtc/pull/2407
 	s.SetDTLSInsecureSkipHelloVerify(true)
 
 	s.SetReceiveMTU(ReceiveMTU)
 
+	s.SetNAT1To1IPs(candidateHost, webrtc.ICECandidateTypeHost)
+
+	// by default enable IPv4 + IPv6 modes
+	s.SetNetworkTypes([]webrtc.NetworkType{
+		webrtc.NetworkTypeUDP4, webrtc.NetworkTypeTCP4,
+		webrtc.NetworkTypeUDP6, webrtc.NetworkTypeTCP6,
+	})
+
 	if address != "" {
-		address, network, _ := strings.Cut(address, "/")
-		if network == "" || network == "udp" {
-			if ln, err := net.ListenPacket("udp", address); err == nil {
-				udpMux := webrtc.NewICEUDPMux(nil, ln)
-				s.SetICEUDPMux(udpMux)
-			}
-		}
 		if network == "" || network == "tcp" {
 			if ln, err := net.Listen("tcp", address); err == nil {
 				tcpMux := webrtc.NewICETCPMux(nil, ln, 8)
 				s.SetICETCPMux(tcpMux)
+			}
+		}
+
+		if network == "" || network == "udp" {
+			if ln, err := net.ListenPacket("udp", address); err == nil {
+				udpMux := webrtc.NewICEUDPMux(nil, ln)
+				s.SetICEUDPMux(udpMux)
 			}
 		}
 	}

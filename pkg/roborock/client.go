@@ -90,7 +90,7 @@ func (c *Client) Connect() error {
 	}
 
 	// 4. Create Peer Connection
-	api, err := webrtc.NewAPI("")
+	api, err := webrtc.NewAPI()
 	if err != nil {
 		return err
 	}

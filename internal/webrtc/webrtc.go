@@ -2,7 +2,7 @@ package webrtc
 
 import (
 	"errors"
-	"net"
+	"strings"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
@@ -32,10 +32,20 @@ func Init() {
 
 	log = app.GetLogger("webrtc")
 
-	address := cfg.Mod.Listen
+	address, network, _ := strings.Cut(cfg.Mod.Listen, "/")
+
+	var candidateHost []string
+	for _, candidate := range cfg.Mod.Candidates {
+		if strings.HasPrefix(candidate, "host:") {
+			candidateHost = append(candidateHost, candidate[5:])
+			continue
+		}
+
+		AddCandidate(candidate, network)
+	}
 
 	// create pionAPI with custom codecs list and custom network settings
-	serverAPI, err := webrtc.NewAPI(address)
+	serverAPI, err := webrtc.NewServerAPI(address, network, candidateHost)
 	if err != nil {
 		log.Error().Err(err).Caller().Send()
 		return
@@ -46,9 +56,8 @@ func Init() {
 
 	if address != "" {
 		log.Info().Str("addr", address).Msg("[webrtc] listen")
-		_, Port, _ = net.SplitHostPort(address)
 
-		clientAPI, _ = webrtc.NewAPI("")
+		clientAPI, _ = webrtc.NewAPI()
 	}
 
 	pionConf := pion.Configuration{
@@ -65,10 +74,6 @@ func Init() {
 		}
 	}
 
-	for _, candidate := range cfg.Mod.Candidates {
-		AddCandidate(candidate)
-	}
-
 	// async WebRTC server (two API versions)
 	ws.HandleFunc("webrtc", asyncHandler)
 	ws.HandleFunc("webrtc/offer", asyncHandler)
@@ -81,7 +86,6 @@ func Init() {
 	streams.HandleFunc("webrtc", streamsHandler)
 }
 
-var Port string
 var log zerolog.Logger
 
 var PeerConnection func(active bool) (*pion.PeerConnection, error)

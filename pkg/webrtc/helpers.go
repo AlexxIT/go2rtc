@@ -260,17 +260,15 @@ func MimeType(codec *core.Codec) string {
 // for server reflexive candidates, 110 for peer reflexive candidates,
 // and 0 for relayed candidates.
 
-// We use new priority 120 for Manual Host. It is lower than real Host,
-// but more then any other candidates.
+const PriorityTypeHostUDP = (1 << 24) * int(126)
+const PriorityTypeHostTCP = (1 << 24) * int(126-27)
+const PriorityLocalUDP = (1 << 8) * int(65535)
+const PriorityLocalTCPPassive = (1 << 8) * int((1<<13)*4+8191)
+const PriorityComponentRTP = 1 * int(256-ice.ComponentRTP)
 
-const PriorityManualHost = (1 << 24) * uint32(120)
-const PriorityLocalUDP = (1 << 8) * uint32(65535)
-const PriorityLocalTCPPassive = (1 << 8) * uint32((1<<13)*4+8191)
-const PriorityComponentRTP = uint32(256 - ice.ComponentRTP)
-
-func CandidateManualHostUDP(host string, port int) string {
+func CandidateManualHostUDP(host, port string, offset int) string {
 	foundation := crc32.ChecksumIEEE([]byte("host" + host + "udp4"))
-	priority := PriorityManualHost + PriorityLocalUDP + PriorityComponentRTP
+	priority := PriorityTypeHostUDP + PriorityLocalUDP + PriorityComponentRTP + offset
 
 	// 1. Foundation
 	// 2. Component, always 1 because RTP
@@ -279,19 +277,15 @@ func CandidateManualHostUDP(host string, port int) string {
 	// 5. Host - IP4 or IP6 or domain name
 	// 6. Port
 	// 7. typ host
-	return fmt.Sprintf(
-		"candidate:%d 1 udp %d %s %d typ host",
-		foundation, priority, host, port,
-	)
+	return fmt.Sprintf("candidate:%d 1 udp %d %s %s typ host", foundation, priority, host, port)
 }
 
-func CandidateManualHostTCPPassive(address string, port int) string {
-	foundation := crc32.ChecksumIEEE([]byte("host" + address + "tcp4"))
-	priority := PriorityManualHost + PriorityLocalTCPPassive + PriorityComponentRTP
+func CandidateManualHostTCPPassive(host, port string, offset int) string {
+	foundation := crc32.ChecksumIEEE([]byte("host" + host + "tcp4"))
+	priority := PriorityTypeHostTCP + PriorityLocalTCPPassive + PriorityComponentRTP + offset
 
 	return fmt.Sprintf(
-		"candidate:%d 1 tcp %d %s %d typ host tcptype passive",
-		foundation, priority, address, port,
+		"candidate:%d 1 tcp %d %s %s typ host tcptype passive", foundation, priority, host, port,
 	)
 }
 

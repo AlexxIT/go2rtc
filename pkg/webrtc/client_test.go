@@ -10,7 +10,7 @@ import (
 )
 
 func TestClient(t *testing.T) {
-	api, err := NewAPI("")
+	api, err := NewAPI()
 	require.Nil(t, err)
 
 	pc, err := api.NewPeerConnection(webrtc.Configuration{})
