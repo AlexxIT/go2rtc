@@ -138,7 +138,7 @@ func asyncHandler(tr *ws.Transport, msg *ws.Message) error {
 			_ = sendAnswer.Wait()
 
 			s := msg.ToJSON().Candidate
-			log.Trace().Str("candidate", s).Msg("[webrtc] local")
+			log.Trace().Str("candidate", s).Msg("[webrtc] local ")
 			tr.Write(&ws.Message{Type: "webrtc/candidate", Value: s})
 		}
 	})

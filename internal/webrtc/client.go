@@ -88,7 +88,7 @@ func go2rtcClient(url string) (core.Producer, error) {
 		switch msg := msg.(type) {
 		case *pion.ICECandidate:
 			s := msg.ToJSON().Candidate
-			log.Trace().Str("candidate", s).Msg("[webrtc] local")
+			log.Trace().Str("candidate", s).Msg("[webrtc] local ")
 			_ = conn.WriteJSON(&ws.Message{Type: "webrtc/candidate", Value: s})
 
 		case pion.PeerConnectionState:
