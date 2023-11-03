@@ -32,7 +32,7 @@ func Init() {
 	}
 
 	// default config
-	cfg.Mod.Listen = "0.0.0.0:1984"
+	cfg.Mod.Listen = ":1984"
 
 	// load config from YAML
 	app.LoadConfig(&cfg)

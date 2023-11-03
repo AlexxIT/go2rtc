@@ -1,16 +1,13 @@
 ## Config
 
-- supported networks: IPv4 (default), IPv6, both
 - supported TCP: fixed port (default), disabled 
 - supported UDP: random port (default), fixed port
 
-| Config examples              | IPv4 | IPv6 | TCP   | UDP    |
-|------------------------------|------|------|-------|--------|
-| `listen: "0.0.0.0:8555/tcp"` | yes  | no   | fixed | random |
-| `listen: "0.0.0.0:8555/udp"` | yes  | no   | no    | fixed  |
-| `listen: "[::]:8555/tcp"`    | no   | yes  | fixed | random |
-| `listen: ":8555"`            | yes  | yes  | fixed | fixed  |
-| `listen: ""`                 | yes  | yes  | no    | random |
+| Config examples       | TCP   | UDP    |
+|-----------------------|-------|--------|
+| `listen: ":8555/tcp"` | fixed | random |
+| `listen: ":8555"`     | fixed | fixed  |
+| `listen: ""`          | no    | random |
 
 ## Userful links
 
