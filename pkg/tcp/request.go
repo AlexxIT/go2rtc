@@ -2,6 +2,7 @@ package tcp
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -12,7 +13,21 @@ import (
 
 // Do - http.Client with support Digest Authorization
 func Do(req *http.Request) (*http.Response, error) {
-	if secureClient == nil {
+	var secure *tls.Config
+
+	switch req.URL.Scheme {
+	case "httpx":
+		secure = &tls.Config{InsecureSkipVerify: true}
+		req.URL.Scheme = "https"
+	case "https":
+		if hostname := req.URL.Hostname(); IsIP(hostname) {
+			secure = &tls.Config{InsecureSkipVerify: true}
+		} else {
+			secure = &tls.Config{ServerName: hostname}
+		}
+	}
+
+	if client == nil {
 		transport := http.DefaultTransport.(*http.Transport).Clone()
 
 		dial := transport.DialContext
@@ -23,31 +38,25 @@ func Do(req *http.Request) (*http.Response, error) {
 			}
 			return conn, err
 		}
+		transport.DialTLSContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+			conn, err := dial(ctx, network, addr)
+			if err != nil {
+				return nil, err
+			}
+			tlsConn := tls.Client(conn, secure)
+			if err = tlsConn.Handshake(); err != nil {
+				return nil, err
+			}
+			if pconn, ok := ctx.Value(connKey).(*net.Conn); ok {
+				*pconn = tlsConn
+			}
+			return tlsConn, err
+		}
 
-		secureClient = &http.Client{
+		client = &http.Client{
 			Timeout:   time.Second * 5000,
 			Transport: transport,
 		}
-	}
-
-	var client *http.Client
-
-	if req.URL.Scheme == "httpx" || (req.URL.Scheme == "https" && IsIP(req.URL.Hostname())) {
-		req.URL.Scheme = "https"
-
-		if insecureClient == nil {
-			transport := secureClient.Transport.(*http.Transport).Clone()
-			transport.TLSClientConfig.InsecureSkipVerify = true
-
-			insecureClient = &http.Client{
-				Timeout:   secureClient.Timeout,
-				Transport: transport,
-			}
-		}
-
-		client = insecureClient
-	} else {
-		client = secureClient
 	}
 
 	user := req.URL.User
@@ -112,7 +121,7 @@ func Do(req *http.Request) (*http.Response, error) {
 	return res, nil
 }
 
-var secureClient, insecureClient *http.Client
+var client *http.Client
 var connKey struct{}
 
 func WithConn() (context.Context, *net.Conn) {
