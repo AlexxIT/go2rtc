@@ -140,9 +140,7 @@ func (s *Sender) HandleRTP(track *Receiver) {
 	go func() {
 		// read packets from buffer channel until it will be closed
 		for packet := range buffer {
-			s.mu.Lock()
 			s.bytes += len(packet.Payload)
-			s.mu.Unlock()
 			s.Handler(packet)
 		}
 
