@@ -27,6 +27,11 @@ func Do(req *http.Request) (*http.Response, error) {
 		}
 	}
 
+	if secure != nil {
+		ctx := context.WithValue(req.Context(), secureKey, secure)
+		req = req.WithContext(ctx)
+	}
+
 	if client == nil {
 		transport := http.DefaultTransport.(*http.Transport).Clone()
 
@@ -43,6 +48,7 @@ func Do(req *http.Request) (*http.Response, error) {
 			if err != nil {
 				return nil, err
 			}
+			secure := ctx.Value(connKey).(*tls.Config)
 			tlsConn := tls.Client(conn, secure)
 			if err = tlsConn.Handshake(); err != nil {
 				return nil, err
@@ -122,7 +128,7 @@ func Do(req *http.Request) (*http.Response, error) {
 }
 
 var client *http.Client
-var connKey struct{}
+var connKey, secureKey struct{}
 
 func WithConn() (context.Context, *net.Conn) {
 	pconn := new(net.Conn)
