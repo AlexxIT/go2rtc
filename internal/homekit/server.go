@@ -246,8 +246,18 @@ func calcDeviceID(deviceID, seed string) string {
 		// 2. Use device_id as seed if not zero
 		seed = deviceID
 	}
+	var macParts []string
 	b := sha512.Sum512([]byte(seed))
-	return fmt.Sprintf("%02X:%02X:%02X:%02X:%02X:%02X", b[32], b[34], b[36], b[38], b[40], b[42])
+	for i := 0; i < 6; i++ {
+		// Take every second byte starting from an offset, which makes sure that
+		// the first byte is from a private/local range (e.g., x2, x6, xA, xE)
+		// and that the 'locally administered' bit is set
+		// https://standards.ieee.org/wp-content/uploads/import/documents/tutorials/eui.pdf
+		part := b[2*i+32] | 0x02
+		part &= 0xFE // Ensure the 'unicast' bit is set
+		macParts = append(macParts, fmt.Sprintf("%02X", part))
+	}
+	return strings.Join(macParts, ":")
 }
 
 func calcDevicePrivate(private, seed string) []byte {
