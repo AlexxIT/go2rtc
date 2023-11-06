@@ -67,7 +67,7 @@ func (c *Producer) Start() error {
 
 			pkt.Timestamp = TimeToRTP(pkt.Timestamp, c.audio.Codec.ClockRate)
 			pkt.Payload = pkt.Payload[2:]
-			c.audio.WriteRTP(pkt)
+			c.audio.Handler(pkt)
 
 		case TagVideo:
 			// frame type 4b, codecID 4b, avc packet type 8b, composition time 24b
@@ -77,7 +77,7 @@ func (c *Producer) Start() error {
 
 			pkt.Timestamp = TimeToRTP(pkt.Timestamp, c.video.Codec.ClockRate)
 			pkt.Payload = pkt.Payload[5:]
-			c.video.WriteRTP(pkt)
+			c.video.Handler(pkt)
 		}
 	}
 }

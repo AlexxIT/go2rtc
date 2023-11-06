@@ -58,7 +58,7 @@ func (c *Producer) Start() error {
 
 			//log.Printf("[AVC] %v, len: %d, ts: %10d", h265.Types(payload), len(payload), packet.Timestamp)
 
-			c.video.WriteRTP(packet)
+			c.video.Handler(packet)
 
 		case 0xFA: // audio
 			if c.audio == nil {
@@ -82,7 +82,7 @@ func (c *Producer) Start() error {
 
 			//log.Printf("[DVR] len: %d, ts: %10d", len(packet.Payload), packet.Timestamp)
 
-			c.audio.WriteRTP(packet)
+			c.audio.Handler(packet)
 
 		case 0xF9: // unknown
 

@@ -145,20 +145,20 @@ func (c *Client) Start() error {
 	if videoTrack != nil {
 		c.videoSession.OnReadRTP = func(packet *rtp.Packet) {
 			deadline.Reset(core.ConnDeadline)
-			videoTrack.WriteRTP(packet)
+			videoTrack.Handler(packet)
 			c.Recv += len(packet.Payload)
 		}
 
 		if audioTrack != nil {
 			c.audioSession.OnReadRTP = func(packet *rtp.Packet) {
-				audioTrack.WriteRTP(packet)
+				audioTrack.Handler(packet)
 				c.Recv += len(packet.Payload)
 			}
 		}
 	} else {
 		c.audioSession.OnReadRTP = func(packet *rtp.Packet) {
 			deadline.Reset(core.ConnDeadline)
-			audioTrack.WriteRTP(packet)
+			audioTrack.Handler(packet)
 			c.Recv += len(packet.Payload)
 		}
 	}
@@ -209,7 +209,7 @@ func (c *Client) startMJPEG() error {
 			Header:  rtp.Header{Timestamp: core.Now90000()},
 			Payload: b,
 		}
-		receiver.WriteRTP(packet)
+		receiver.Handler(packet)
 	}
 }
 

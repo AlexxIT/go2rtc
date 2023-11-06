@@ -45,7 +45,7 @@ func (c *Producer) Start() error {
 		for _, receiver := range c.Receivers {
 			if receiver.ID == pkt.PayloadType {
 				TimestampToRTP(pkt, receiver.Codec)
-				receiver.WriteRTP(pkt)
+				receiver.Handler(pkt)
 				break
 			}
 		}

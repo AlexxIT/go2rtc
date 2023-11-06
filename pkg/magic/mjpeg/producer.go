@@ -63,7 +63,7 @@ func (c *Producer) Start() error {
 			Header:  rtp.Header{Timestamp: core.Now90000()},
 			Payload: buf[:i],
 		}
-		c.Receivers[0].WriteRTP(pkt)
+		c.Receivers[0].Handler(pkt)
 
 		//log.Printf("[mjpeg] ts=%d size=%d", pkt.Header.Timestamp, len(pkt.Payload))
 

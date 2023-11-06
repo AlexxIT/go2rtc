@@ -244,7 +244,7 @@ func (c *Conn) Handle() (err error) {
 
 			for _, receiver := range c.receivers {
 				if receiver.ID == channelID {
-					receiver.WriteRTP(packet)
+					receiver.Handler(packet)
 					break
 				}
 			}

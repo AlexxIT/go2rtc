@@ -2,6 +2,7 @@ package webrtc
 
 import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/pcm"
 	"github.com/pion/webrtc/v3"
 )
 
@@ -9,9 +10,19 @@ func (c *Conn) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, e
 	core.Assert(media.Direction == core.DirectionRecvonly)
 
 	for _, track := range c.receivers {
-		if track.Codec == codec {
+		if track.Codec.Match(codec) {
 			return track, nil
 		}
+	}
+
+	track := core.NewReceiver(media, codec)
+
+	if codec.ClockRate == 0 {
+		if codec.Name == core.CodecPCM || codec.Name == core.CodecPCML {
+			codec.Name = core.CodecPCMA
+		}
+		codec.ClockRate = 8000
+		track.Handler = pcm.ResampleToPCMA(track.Codec, 16000, track.Handler) //TODO
 	}
 
 	switch c.Mode {
@@ -38,7 +49,6 @@ func (c *Conn) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, e
 		panic(core.Caller())
 	}
 
-	track := core.NewReceiver(media, codec)
 	c.receivers = append(c.receivers, track)
 	return track, nil
 }

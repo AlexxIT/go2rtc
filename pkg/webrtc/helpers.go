@@ -58,7 +58,7 @@ func UnmarshalMedias(descriptions []*sdp.MediaDescription) (medias []*core.Media
 // so it can add resampling for PCMA/PCMU and repack for PCM/PCML
 func WithResampling(medias []*core.Media) []*core.Media {
 	for _, media := range medias {
-		if media.Kind != core.KindAudio || media.Direction != core.DirectionSendonly {
+		if media.Kind != core.KindAudio {
 			continue
 		}
 
@@ -252,7 +252,7 @@ func MimeType(codec *core.Codec) string {
 	case core.CodecG722:
 		return webrtc.MimeTypeG722
 	}
-	panic("not implemented")
+	panic("codec not implemented: " + codec.Name)
 }
 
 // 4.1.2.2.  Guidelines for Choosing Type and Local Preferences

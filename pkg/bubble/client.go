@@ -228,7 +228,7 @@ func (c *Client) Handle() error {
 				},
 				Payload: annexb.EncodeToAVCC(b[6:], false),
 			}
-			c.videoTrack.WriteRTP(pkt)
+			c.videoTrack.Handler(pkt)
 		} else {
 			if c.audioTrack == nil {
 				continue
@@ -251,7 +251,7 @@ func (c *Client) Handle() error {
 				Payload: b[6+36:],
 			}
 			audioTS += uint32(len(pkt.Payload))
-			c.audioTrack.WriteRTP(pkt)
+			c.audioTrack.Handler(pkt)
 		}
 	}
 }

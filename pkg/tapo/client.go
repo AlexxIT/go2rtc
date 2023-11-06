@@ -192,7 +192,7 @@ func (c *Client) Handle() error {
 			for _, receiver := range c.receivers {
 				if receiver.ID == pkt.PayloadType {
 					mpegts.TimestampToRTP(pkt, receiver.Codec)
-					receiver.WriteRTP(pkt)
+					receiver.Handler(pkt)
 					break
 				}
 			}
