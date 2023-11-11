@@ -54,6 +54,7 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
     * [Source: FFmpeg Device](#source-ffmpeg-device)
     * [Source: Exec](#source-exec)
     * [Source: Echo](#source-echo)
+    * [Source: Expr](#source-expr)
     * [Source: HomeKit](#source-homekit)
     * [Source: Bubble](#source-bubble)
     * [Source: DVRIP](#source-dvrip)
@@ -186,6 +187,7 @@ Available source types:
 - [ffmpeg:device](#source-ffmpeg-device) - local USB Camera or Webcam
 - [exec](#source-exec) - get media from external app output
 - [echo](#source-echo) - get stream link from bash or python
+- [expr](#source-expr) - get stream link via built-in expression language
 - [homekit](#source-homekit) - streaming from HomeKit Camera
 - [bubble](#source-bubble) - streaming from ESeeCloud/dvr163 NVR
 - [dvrip](#source-dvrip) - streaming from DVR-IP NVR
@@ -425,6 +427,10 @@ Check examples in [wiki](https://github.com/AlexxIT/go2rtc/wiki/Source-Echo-exam
 streams:
   apple_hls: echo:python3 hls.py https://developer.apple.com/streaming/examples/basic-stream-osx-ios5.html
 ```
+
+#### Source: Expr
+
+Like `echo` source, but uses the built-in [expr](https://github.com/antonmedv/expr) expression language ([read more](https://github.com/AlexxIT/go2rtc/blob/master/internal/expr/README.md)).
 
 #### Source: HomeKit
 
