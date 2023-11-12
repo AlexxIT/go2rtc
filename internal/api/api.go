@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/pkg/shell"
@@ -19,15 +20,16 @@ import (
 func Init() {
 	var cfg struct {
 		Mod struct {
-			Listen    string `yaml:"listen"`
-			Username  string `yaml:"username"`
-			Password  string `yaml:"password"`
-			BasePath  string `yaml:"base_path"`
-			StaticDir string `yaml:"static_dir"`
-			Origin    string `yaml:"origin"`
-			TLSListen string `yaml:"tls_listen"`
-			TLSCert   string `yaml:"tls_cert"`
-			TLSKey    string `yaml:"tls_key"`
+			Listen     string `yaml:"listen"`
+			Username   string `yaml:"username"`
+			Password   string `yaml:"password"`
+			BasePath   string `yaml:"base_path"`
+			StaticDir  string `yaml:"static_dir"`
+			Origin     string `yaml:"origin"`
+			TLSListen  string `yaml:"tls_listen"`
+			TLSCert    string `yaml:"tls_cert"`
+			TLSKey     string `yaml:"tls_key"`
+			UnixListen string `yaml:"unix_listen"`
 		} `yaml:"api"`
 	}
 
@@ -37,7 +39,7 @@ func Init() {
 	// load config from YAML
 	app.LoadConfig(&cfg)
 
-	if cfg.Mod.Listen == "" {
+	if cfg.Mod.Listen == "" && cfg.Mod.UnixListen == "" && cfg.Mod.TLSListen == "" {
 		return
 	}
 
@@ -50,16 +52,6 @@ func Init() {
 	HandleFunc("api/config", configHandler)
 	HandleFunc("api/exit", exitHandler)
 	HandleFunc("api/restart", restartHandler)
-
-	// ensure we can listen without errors
-	var err error
-	ln, err = net.Listen("tcp", cfg.Mod.Listen)
-	if err != nil {
-		log.Fatal().Err(err).Msg("[api] listen")
-		return
-	}
-
-	log.Info().Str("addr", cfg.Mod.Listen).Msg("[api] listen")
 
 	Handler = http.DefaultServeMux // 4th
 
@@ -75,49 +67,65 @@ func Init() {
 		Handler = middlewareLog(Handler) // 1st
 	}
 
-	go func() {
-		s := http.Server{}
-		s.Handler = Handler
-		if err = s.Serve(ln); err != nil {
-			log.Fatal().Err(err).Msg("[api] serve")
-		}
-	}()
+	if cfg.Mod.Listen != "" {
+		go listen("tcp", cfg.Mod.Listen)
+	}
+
+	if cfg.Mod.UnixListen != "" {
+		_ = syscall.Unlink(cfg.Mod.UnixListen)
+		go listen("unix", cfg.Mod.UnixListen)
+	}
 
 	// Initialize the HTTPS server
 	if cfg.Mod.TLSListen != "" && cfg.Mod.TLSCert != "" && cfg.Mod.TLSKey != "" {
-		var cert tls.Certificate
-		if strings.IndexByte(cfg.Mod.TLSCert, '\n') < 0 && strings.IndexByte(cfg.Mod.TLSKey, '\n') < 0 {
-			// check if file path
-			cert, err = tls.LoadX509KeyPair(cfg.Mod.TLSCert, cfg.Mod.TLSKey)
-		} else {
-			// if text file content
-			cert, err = tls.X509KeyPair([]byte(cfg.Mod.TLSCert), []byte(cfg.Mod.TLSKey))
-		}
-		if err != nil {
-			log.Error().Err(err).Caller().Send()
-			return
-		}
+		go tlsListen("tcp", cfg.Mod.TLSListen, cfg.Mod.TLSCert, cfg.Mod.TLSKey)
+	}
+}
 
-		tlsListener, err := net.Listen("tcp", cfg.Mod.TLSListen)
-		if err != nil {
-			log.Fatal().Err(err).Caller().Send()
-			return
-		}
+func listen(network, address string) {
+	ln, err := net.Listen(network, address)
+	if err != nil {
+		log.Error().Err(err).Msg("[api] listen")
+		return
+	}
 
-		log.Info().Str("addr", cfg.Mod.TLSListen).Msg("[api] tls listen")
+	log.Info().Str("addr", address).Msg("[api] listen")
 
-		tlsServer := &http.Server{
-			Handler: Handler,
-			TLSConfig: &tls.Config{
-				Certificates: []tls.Certificate{cert},
-			},
-		}
+	server := http.Server{Handler: Handler}
+	if err = server.Serve(ln); err != nil {
+		log.Fatal().Err(err).Msg("[api] serve")
+	}
+}
 
-		go func() {
-			if err := tlsServer.ServeTLS(tlsListener, "", ""); err != nil {
-				log.Fatal().Err(err).Msg("[api] tls serve")
-			}
-		}()
+func tlsListen(network, address, certFile, keyFile string) {
+	var cert tls.Certificate
+	var err error
+	if strings.IndexByte(certFile, '\n') < 0 && strings.IndexByte(keyFile, '\n') < 0 {
+		// check if file path
+		cert, err = tls.LoadX509KeyPair(certFile, keyFile)
+	} else {
+		// if text file content
+		cert, err = tls.X509KeyPair([]byte(certFile), []byte(keyFile))
+	}
+	if err != nil {
+		log.Error().Err(err).Caller().Send()
+		return
+	}
+
+	ln, err := net.Listen(network, address)
+	if err != nil {
+		log.Error().Err(err).Msg("[api] tls listen")
+		return
+	}
+
+	log.Info().Str("addr", address).Msg("[api] tls listen")
+
+	server := &http.Server{
+		Handler:   Handler,
+		TLSConfig: &tls.Config{Certificates: []tls.Certificate{cert}},
+	}
+	if err = server.ServeTLS(ln, "", ""); err != nil {
+		log.Fatal().Err(err).Msg("[api] tls serve")
 	}
 }
 
@@ -187,7 +195,7 @@ func middlewareLog(next http.Handler) http.Handler {
 
 func middlewareAuth(username, password string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasPrefix(r.RemoteAddr, "127.") && !strings.HasPrefix(r.RemoteAddr, "[::1]") {
+		if !strings.HasPrefix(r.RemoteAddr, "127.") && !strings.HasPrefix(r.RemoteAddr, "[::1]") && r.RemoteAddr != "@" {
 			user, pass, ok := r.BasicAuth()
 			if !ok || user != username || pass != password {
 				w.Header().Set("Www-Authenticate", `Basic realm="go2rtc"`)
