@@ -103,7 +103,7 @@ func Do(req *http.Request) (*http.Response, error) {
 			response := HexMD5(ha1, nonce, ha2)
 			header = fmt.Sprintf(
 				`Digest username="%s", realm="%s", nonce="%s", uri="%s", response="%s"`,
-				user, realm, nonce, uri, response,
+				username, realm, nonce, uri, response,
 			)
 		case "auth":
 			nc := "00000001"
