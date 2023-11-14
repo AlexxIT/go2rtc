@@ -65,11 +65,6 @@ func (c *Client) newConn() (net.Conn, error) {
 		return nil, err
 	}
 
-	// support raw username/password or cloud password in place of username
-	if _, ok := u.User.Password(); !ok {
-		u.User = url.UserPassword("admin", u.User.Username())
-	}
-
 	if u.Port() == "" {
 		u.Host += ":8800"
 	}
@@ -269,10 +264,14 @@ func dial(req *http.Request) (net.Conn, *http.Response, error) {
 		return nil, nil, err
 	}
 
-	if strings.Contains(auth, `encrypt_type="3"`) {
-		password = fmt.Sprintf("%32X", sha256.Sum256([]byte(password)))
-	} else {
-		password = fmt.Sprintf("%16X", md5.Sum([]byte(password)))
+	if password == "" {
+		// support cloud password in place of username
+		if strings.Contains(auth, `encrypt_type="3"`) {
+			password = fmt.Sprintf("%32X", sha256.Sum256([]byte(username)))
+		} else {
+			password = fmt.Sprintf("%16X", md5.Sum([]byte(username)))
+		}
+		username = "admin"
 	}
 
 	realm := tcp.Between(auth, `realm="`, `"`)
