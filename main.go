@@ -11,6 +11,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/exec"
 	"github.com/AlexxIT/go2rtc/internal/expr"
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg"
+	"github.com/AlexxIT/go2rtc/internal/gopro"
 	"github.com/AlexxIT/go2rtc/internal/hass"
 	"github.com/AlexxIT/go2rtc/internal/hls"
 	"github.com/AlexxIT/go2rtc/internal/homekit"
@@ -78,6 +79,7 @@ func main() {
 	nest.Init()     // nest source
 	bubble.Init()   // bubble source
 	expr.Init()     // expr source
+	gopro.Init()    // gopro source
 
 	// 6. Helper modules
 
