@@ -22,8 +22,6 @@ func Do(req *http.Request) (*http.Response, error) {
 	case "https":
 		if hostname := req.URL.Hostname(); IsIP(hostname) {
 			secure = &tls.Config{InsecureSkipVerify: true}
-		} else {
-			secure = &tls.Config{ServerName: hostname}
 		}
 	}
 
@@ -48,11 +46,21 @@ func Do(req *http.Request) (*http.Response, error) {
 			if err != nil {
 				return nil, err
 			}
-			secure := ctx.Value(connKey).(*tls.Config)
-			tlsConn := tls.Client(conn, secure)
+
+			var conf *tls.Config
+			if v, ok := ctx.Value(secureKey).(*tls.Config); ok {
+				conf = v
+			} else if host, _, err := net.SplitHostPort(addr); err != nil {
+				conf = &tls.Config{ServerName: addr}
+			} else {
+				conf = &tls.Config{ServerName: host}
+			}
+
+			tlsConn := tls.Client(conn, conf)
 			if err = tlsConn.Handshake(); err != nil {
 				return nil, err
 			}
+
 			if pconn, ok := ctx.Value(connKey).(*net.Conn); ok {
 				*pconn = tlsConn
 			}
@@ -128,7 +136,11 @@ func Do(req *http.Request) (*http.Response, error) {
 }
 
 var client *http.Client
-var connKey, secureKey struct{}
+
+type key string
+
+var connKey = key("conn")
+var secureKey = key("secure")
 
 func WithConn() (context.Context, *net.Conn) {
 	pconn := new(net.Conn)
