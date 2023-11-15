@@ -60,6 +60,7 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
     * [Source: DVRIP](#source-dvrip)
     * [Source: Tapo](#source-tapo)
     * [Source: Kasa](#source-kasa)
+    * [Source: GoPro](#source-gopro)
     * [Source: Ivideon](#source-ivideon)
     * [Source: Hass](#source-hass)
     * [Source: ISAPI](#source-isapi)
@@ -193,6 +194,7 @@ Available source types:
 - [dvrip](#source-dvrip) - streaming from DVR-IP NVR
 - [tapo](#source-tapo) - TP-Link Tapo cameras with [two way audio](#two-way-audio) support
 - [kasa](#source-tapo) - TP-Link Kasa cameras
+- [gopro](#source-gopro) - GoPro cameras
 - [ivideon](#source-ivideon) - public cameras from [Ivideon](https://tv.ivideon.com/) service
 - [hass](#source-hass) - Home Assistant integration
 - [isapi](#source-isapi) - two way audio for Hikvision (ISAPI) cameras
@@ -519,6 +521,10 @@ streams:
 streams:
   kasa: kasa://user:pass@192.168.1.123:19443/https/stream/mixed
 ```
+
+#### Source: GoPro
+
+Support streaming from [GoPro](https://gopro.com/) cameras, connected via USB or Wi-Fi to Linux, Mac, Windows. [Read more](https://github.com/AlexxIT/go2rtc/tree/master/internal/gopro).
 
 #### Source: Ivideon
 
