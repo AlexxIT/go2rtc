@@ -1298,6 +1298,7 @@ streams:
 **Distributions**
 
 - [Alpine Linux](https://pkgs.alpinelinux.org/packages?name=go2rtc)
+- [Gentoo](https://github.com/inode64/inode64-overlay/tree/main/media-video/go2rtc)
 - [NixOS](https://search.nixos.org/packages?query=go2rtc)
 - [Proxmox Helper Scripts](https://tteck.github.io/Proxmox/)
 - [QNAP](https://www.myqnap.org/product/go2rtc/)
