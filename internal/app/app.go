@@ -17,7 +17,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-var Version = "1.8.2"
+var Version = "1.8.3"
 var UserAgent = "go2rtc/" + Version
 
 var ConfigPath string
