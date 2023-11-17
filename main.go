@@ -83,7 +83,7 @@ func main() {
 
 	// 6. Helper modules
 
-	ngrok.Init() // Ngrok module
+	ngrok.Init() // ngrok module
 	srtp.Init()  // SRTP server
 	debug.Init() // debug API
 
