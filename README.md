@@ -23,7 +23,7 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
    - mixing tracks from different sources to single stream
    - auto match client supported codecs
    - [2-way audio](#two-way-audio) for some cameras
-- streaming from private networks via [Ngrok](#module-ngrok)
+- streaming from private networks via [ngrok](#module-ngrok)
 - can be [integrated to](#module-api) any smart home platform or be used as [standalone app](#go2rtc-binary)
 
 **Inspired by:**
@@ -77,7 +77,7 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
   * [Module: WebRTC](#module-webrtc)
   * [Module: HomeKit](#module-homekit)
   * [Module: WebTorrent](#module-webtorrent)
-  * [Module: Ngrok](#module-ngrok)
+  * [Module: ngrok](#module-ngrok)
   * [Module: Hass](#module-hass)
   * [Module: MP4](#module-mp4)
   * [Module: HLS](#module-hls)
@@ -127,7 +127,7 @@ Don't forget to fix the rights `chmod +x go2rtc_xxx_xxx` on Linux and Mac.
 
 ### go2rtc: Docker
 
-Container [alexxit/go2rtc](https://hub.docker.com/r/alexxit/go2rtc) with support `amd64`, `386`, `arm64`, `arm`. This container is the same as [Home Assistant Add-on](#go2rtc-home-assistant-add-on), but can be used separately from Home Assistant. Container has preinstalled [FFmpeg](#source-ffmpeg), [Ngrok](#module-ngrok) and [Python](#source-echo).
+Container [alexxit/go2rtc](https://hub.docker.com/r/alexxit/go2rtc) with support `amd64`, `386`, `arm64`, `arm`. This container is the same as [Home Assistant Add-on](#go2rtc-home-assistant-add-on), but can be used separately from Home Assistant. Container has preinstalled [FFmpeg](#source-ffmpeg), [ngrok](#module-ngrok) and [Python](#source-echo).
 
 ### go2rtc: Home Assistant Add-on
 
@@ -170,7 +170,7 @@ Available modules:
 - [hls](#module-hls) - HLS TS or fMP4 stream Server
 - [mjpeg](#module-mjpeg) - MJPEG Server
 - [ffmpeg](#source-ffmpeg) - FFmpeg integration
-- [ngrok](#module-ngrok) - Ngrok integration (external access for private network)
+- [ngrok](#module-ngrok) - ngrok integration (external access for private network)
 - [hass](#module-hass) - Home Assistant integration
 - [log](#module-log) - logs config
 
@@ -861,7 +861,7 @@ webrtc:
 
 **Private IP**
 
-- setup integration with [Ngrok service](#module-ngrok)
+- setup integration with [ngrok service](#module-ngrok)
 
 ```yaml
 ngrok:
@@ -963,29 +963,29 @@ Link example: https://alexxit.github.io/go2rtc/#share=02SNtgjKXY&pwd=wznEQqznxW&
 
 TODO: article how it works...
 
-### Module: Ngrok
+### Module: ngrok
 
-With Ngrok integration you can get external access to your streams in situation when you have Internet with private IP-address.
+With ngrok integration you can get external access to your streams in situations when you have Internet with private IP-address.
 
-- Ngrok preistalled for **Docker** and **Hass Add-on** users
+- ngrok is pre-installed for **Docker** and **Hass Add-on** users
 - you may need external access for two different things:
   - WebRTC stream, so you need tunnel WebRTC TCP port (ex. 8555)
   - go2rtc web interface, so you need tunnel API HTTP port (ex. 1984)
-- Ngrok support authorization for your web interface
-- Ngrok automatically adds HTTPS to your web interface
+- ngrok support authorization for your web interface
+- ngrok automatically adds HTTPS to your web interface
 
-Ngrok free subscription limitations:
+The ngrok free subscription has the following limitations:
 
-- you will always get random external address (not a problem for webrtc stream)
-- you can forward multiple ports but use only one Ngrok app
+- You can reserve a free domain for serving the web interface, but the TCP address you get will always be random and change with each restart of the ngrok agent (not a problem for webrtc stream)
+- You can forward multiple ports from a single agent, but you can only run one ngrok agent on the free plan
 
 go2rtc will automatically get your external TCP address (if you enable it in ngrok config) and use it with WebRTC connection (if you enable it in webrtc config).
 
-You need manually download [Ngrok agent app](https://ngrok.com/download) for your OS and register in [Ngrok service](https://ngrok.com/).
+You need to manually download the [ngrok agent app](https://ngrok.com/download) for your OS and register with the [ngrok service](https://ngrok.com/signup).
 
 **Tunnel for only WebRTC Stream**
 
-You need to add your [Ngrok token](https://dashboard.ngrok.com/get-started/your-authtoken) and WebRTC TCP port to YAML:
+You need to add your [ngrok authtoken](https://dashboard.ngrok.com/get-started/your-authtoken) and WebRTC TCP port to YAML:
 
 ```yaml
 ngrok:
@@ -1001,7 +1001,7 @@ ngrok:
   command: ngrok start --all --config ngrok.yaml
 ```
 
-Ngrok config example:
+ngrok config example:
 
 ```yaml
 version: "2"
@@ -1016,6 +1016,8 @@ tunnels:
     addr: 8555  # use the same port as in go2rtc config
     proto: tcp
 ```
+
+See the [ngrok agent documentation](https://ngrok.com/docs/agent/config/) for more details on the ngrok configuration file.
 
 ### Module: Hass
 
@@ -1156,7 +1158,7 @@ webrtc:
 - external access to WebRTC TCP port is not a problem, because it used only for transmit encrypted media data
   - anyway you need to open this port to your local network and to the Internet in order for WebRTC to work
 
-If you need Web interface protection without Home Assistant Add-on - you need to use reverse proxy, like [Nginx](https://nginx.org/), [Caddy](https://caddyserver.com/), [Ngrok](https://ngrok.com/), etc.
+If you need Web interface protection without Home Assistant Add-on - you need to use reverse proxy, like [Nginx](https://nginx.org/), [Caddy](https://caddyserver.com/), [ngrok](https://ngrok.com/), etc.
 
 PS. Additionally WebRTC will try to use the 8555 UDP port for transmit encrypted media. It works without problems on the local network. And sometimes also works for external access, even if you haven't opened this port on your router ([read more](https://en.wikipedia.org/wiki/UDP_hole_punching)). But for stable external WebRTC access, you need to open the 8555 port on your router for both TCP and UDP.
 
