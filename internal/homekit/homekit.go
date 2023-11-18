@@ -98,7 +98,7 @@ func Init() {
 
 		srv.mdns = &mdns.ServiceEntry{
 			Name: name,
-			Port: uint16(api.Port()),
+			Port: uint16(api.Port),
 			Info: map[string]string{
 				hap.TXTConfigNumber: "1",
 				hap.TXTFeatureFlags: "0",

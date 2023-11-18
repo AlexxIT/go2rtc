@@ -91,6 +91,10 @@ func listen(network, address string) {
 
 	log.Info().Str("addr", address).Msg("[api] listen")
 
+	if network == "tcp" {
+		Port = ln.Addr().(*net.TCPAddr).Port
+	}
+
 	server := http.Server{Handler: Handler}
 	if err = server.Serve(ln); err != nil {
 		log.Fatal().Err(err).Msg("[api] serve")
@@ -129,12 +133,7 @@ func tlsListen(network, address, certFile, keyFile string) {
 	}
 }
 
-func Port() int {
-	if ln == nil {
-		return 0
-	}
-	return ln.Addr().(*net.TCPAddr).Port
-}
+var Port int
 
 const (
 	MimeJSON = "application/json"
@@ -217,7 +216,6 @@ func middlewareCORS(next http.Handler) http.Handler {
 	})
 }
 
-var ln net.Listener
 var mu sync.Mutex
 
 func apiHandler(w http.ResponseWriter, r *http.Request) {
