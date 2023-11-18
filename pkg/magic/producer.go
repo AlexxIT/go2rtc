@@ -44,5 +44,16 @@ func Open(r io.Reader) (core.Producer, error) {
 		return mpegts.Open(rd)
 	}
 
-	return nil, errors.New("magic: unsupported header: " + hex.EncodeToString(b))
+	// support MJPEG with trash on start
+	// https://github.com/AlexxIT/go2rtc/issues/747
+	if b, err = rd.Peek(4096); err != nil {
+		return nil, err
+	}
+
+	if i := bytes.Index(b, []byte{0xFF, 0xD8, 0xFF, 0xDB}); i > 0 {
+		_, _ = io.ReadFull(rd, make([]byte, i))
+		return mjpeg.Open(rd)
+	}
+
+	return nil, errors.New("magic: unsupported header: " + hex.EncodeToString(b[:4]))
 }
