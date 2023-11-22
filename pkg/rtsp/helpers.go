@@ -52,6 +52,9 @@ func UnmarshalSDP(rawSDP []byte) ([]*core.Media, error) {
 		}
 	}
 
+	// fix buggy camera https://github.com/AlexxIT/go2rtc/issues/771
+	forceDirection := sd.Origin.Username == "CV-RTSPHandler"
+
 	var medias []*core.Media
 
 	for _, md := range sd.MediaDescriptions {
@@ -65,7 +68,7 @@ func UnmarshalSDP(rawSDP []byte) ([]*core.Media, error) {
 			}
 		}
 
-		if media.Direction == "" {
+		if media.Direction == "" || forceDirection {
 			media.Direction = core.DirectionRecvonly
 		}
 
