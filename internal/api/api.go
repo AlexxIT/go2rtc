@@ -52,6 +52,7 @@ func Init() {
 	HandleFunc("api/config", configHandler)
 	HandleFunc("api/exit", exitHandler)
 	HandleFunc("api/restart", restartHandler)
+	HandleFunc("api/log", logHandler)
 
 	Handler = http.DefaultServeMux // 4th
 
@@ -244,6 +245,48 @@ func restartHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	go shell.Restart()
+}
+
+// logHandler handles HTTP requests for log file operations.
+// It supports two HTTP methods:
+// - GET: Retrieves the content of the log file and sends it back to the client as plain text.
+// - DELETE: Deletes the log file from the server.
+//
+// The function expects a valid http.ResponseWriter and an http.Request as parameters.
+// For a GET request, it reads the log file specified by app.GetLogFilepath() and writes
+// the content to the response writer with a "text/plain" content type. If the log file
+// cannot be read, it responds with an HTTP 404 (Not Found) status.
+//
+// For a DELETE request, it attempts to delete the log file. If the deletion fails,
+// it responds with an HTTP 503 (Service Unavailable) status.
+//
+// For any other HTTP method, it responds with an HTTP 400 (Bad Request) status.
+//
+// Parameters:
+// - w http.ResponseWriter: The response writer to write the HTTP response to.
+// - r *http.Request: The HTTP request object containing the request details.
+//
+// No return values are provided since the function writes directly to the response writer.
+func logHandler(w http.ResponseWriter, r *http.Request) {
+
+	if r.Method == "GET" {
+		data, err := os.ReadFile(app.GetLogFilepath())
+		if err != nil {
+			http.Error(w, "", http.StatusNotFound)
+			return
+		}
+		Response(w, data, "text/plain")
+	} else if r.Method == "DELETE" {
+		err := os.Truncate(app.GetLogFilepath(), 0)
+		if err != nil {
+			http.Error(w, "", http.StatusServiceUnavailable)
+			return
+		}
+	} else {
+		http.Error(w, "", http.StatusBadRequest)
+		return
+	}
+
 }
 
 type Source struct {
