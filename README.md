@@ -1223,8 +1223,8 @@ Some examples:
 
 - H264 = H.264 = AVC (Advanced Video Coding)
 - H265 = H.265 = HEVC (High Efficiency Video Coding)
-- PCMU = G.711 PCM (A-law) = PCM A-law (`alaw`)
-- PCMA = G.711 PCM (µ-law) = PCM mu-law (`mulaw`)
+- PCMA = G.711 PCM (A-law) = PCM A-law (`alaw`)
+- PCMU = G.711 PCM (µ-law) = PCM mu-law (`mulaw`)
 - PCM = L16 = PCM signed 16-bit big-endian (`s16be`)
 - AAC = MPEG4-GENERIC
 - MP3 = MPEG-1 Audio Layer III or MPEG-2 Audio Layer III
