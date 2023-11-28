@@ -268,25 +268,27 @@ func restartHandler(w http.ResponseWriter, r *http.Request) {
 //
 // No return values are provided since the function writes directly to the response writer.
 func logHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		logFilePath := app.GetLogFilepath()
 
-	if r.Method == "GET" {
-		data, err := os.ReadFile(app.GetLogFilepath())
+		// Send current state of the log file immediately
+		data, err := os.ReadFile(logFilePath)
 		if err != nil {
-			http.Error(w, "", http.StatusNotFound)
+			http.Error(w, "Error reading log file", http.StatusInternalServerError)
 			return
 		}
 		Response(w, data, "text/plain")
-	} else if r.Method == "DELETE" {
+	case "DELETE":
 		err := os.Truncate(app.GetLogFilepath(), 0)
 		if err != nil {
-			http.Error(w, "", http.StatusServiceUnavailable)
+			http.Error(w, "Error truncating log file", http.StatusServiceUnavailable)
 			return
 		}
-	} else {
-		http.Error(w, "", http.StatusBadRequest)
-		return
+		Response(w, "Log file deleted", "text/plain")
+	default:
+		http.Error(w, "Method not allowed", http.StatusBadRequest)
 	}
-
 }
 
 type Source struct {

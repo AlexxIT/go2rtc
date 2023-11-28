@@ -31,12 +31,41 @@
         .info { color: #0174DF; }
         .debug { color: #585858; }
         .error { color: #DF0101; }
+
+        /* Button styling */
+        #clean, .switch {
+            background-color: #b89d94; 
+            border: none;
+            color: #695753;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 4px 2px;
+            cursor: pointer;
+            outline: none;
+            transition: background-color 0.3s;
+        }
+
+        /* Switch styling to make it look like a button */
+        .switch {
+            width: auto;
+            padding: 10px 20px;
+            background-color: #f4433644; /* Red */
+        }
+
+        .switch.active {
+            background-color: #4caf4f4e; /* Green */
+        }
     </style>
 </head>
 <body>
 <script src="main.js"></script>
 <div>
     <button id="clean">Clean</button>
+    <!-- Switch for auto-update -->
+    <button class="switch active" id="autoUpdate">Auto Update: ON</button>
 </div>
 <br>
 <div class="log-viewer" id="log"></div>
@@ -44,7 +73,7 @@
     const logbody = document.getElementById('log');
 
     document.getElementById('clean').addEventListener('click', async () => {
-        r = await fetch('api/log', {method: 'DELETE'});
+        let r = await fetch('api/log', {method: 'DELETE'});
         if (r.ok) {
             reload();
             alert('OK');
@@ -78,6 +107,16 @@
         return styledLines.join('');
     }
 
+    // Handle auto-update switch
+    const autoUpdateButton = document.getElementById('autoUpdate');
+    let autoUpdateEnabled = true;
+    autoUpdateButton.addEventListener('click', () => {
+        autoUpdateEnabled = !autoUpdateEnabled;
+        autoUpdateButton.classList.toggle('active');
+        autoUpdateButton.textContent = `Auto Update: ${autoUpdateEnabled ? 'ON' : 'OFF'}`;
+    });
+
+
     function reload() {
         const url = new URL('api/log', location.href);
         fetch(url, {cache: 'no-cache'})
@@ -92,7 +131,11 @@
     }
 
   // Reload the logs every 5 seconds
-  setInterval(reload, 5000);
+  setInterval(() => {
+        if (autoUpdateEnabled) {
+            reload();
+        }
+    }, 5000);
 
   reload();
 </script>
