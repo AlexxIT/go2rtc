@@ -1,7 +1,9 @@
 package secure
 
 import (
+	"bufio"
 	"encoding/binary"
+	"errors"
 	"io"
 	"net"
 	"sync"
@@ -13,6 +15,9 @@ import (
 
 type Conn struct {
 	conn net.Conn
+
+	rd *bufio.Reader
+	wr *bufio.Writer
 
 	encryptKey []byte
 	decryptKey []byte
@@ -33,11 +38,19 @@ func Client(conn net.Conn, sharedKey []byte, isClient bool) (net.Conn, error) {
 		return nil, err
 	}
 
-	if isClient {
-		return &Conn{conn: conn, encryptKey: key2, decryptKey: key1}, nil
-	} else {
-		return &Conn{conn: conn, encryptKey: key1, decryptKey: key2}, nil
+	c := &Conn{
+		conn: conn,
+		rd:   bufio.NewReaderSize(conn, 32*1024),
+		wr:   bufio.NewWriterSize(conn, 32*1024),
 	}
+
+	if isClient {
+		c.encryptKey, c.decryptKey = key2, key1
+	} else {
+		c.encryptKey, c.decryptKey = key1, key2
+	}
+
+	return c, nil
 }
 
 const (
@@ -50,84 +63,63 @@ const (
 )
 
 func (c *Conn) Read(b []byte) (n int, err error) {
-	verify := make([]byte, VerifySize) // = packet length
-	buf := make([]byte, PacketSizeMax+Overhead)
-	nonce := make([]byte, NonceSize)
-
-	for {
-		if len(b) < PacketSizeMax {
-			return
-		}
-
-		if _, err = io.ReadFull(c.conn, verify); err != nil {
-			return
-		}
-
-		size := binary.LittleEndian.Uint16(verify)
-		ciphertext := buf[:size+Overhead]
-
-		if _, err = io.ReadFull(c.conn, ciphertext); err != nil {
-			return
-		}
-
-		binary.LittleEndian.PutUint64(nonce, c.decryptCnt)
-		c.decryptCnt++
-
-		// put decrypted text to b's end
-		_, err = chacha20poly1305.DecryptAndVerify(c.decryptKey, b[:0], nonce, ciphertext, verify)
-		if err != nil {
-			return
-		}
-
-		n += int(size) // plaintext size
-
-		// Finish when all bytes fit in b
-		if size < PacketSizeMax {
-			return
-		}
-
-		b = b[size:]
+	if cap(b) < PacketSizeMax {
+		return 0, errors.New("hap: read buffer is too small")
 	}
+
+	verify := make([]byte, 2) // verify = plain message size
+	if _, err = io.ReadFull(c.rd, verify); err != nil {
+		return
+	}
+
+	n = int(binary.LittleEndian.Uint16(verify))
+	ciphertext := make([]byte, n+Overhead)
+
+	if _, err = io.ReadFull(c.rd, ciphertext); err != nil {
+		return
+	}
+
+	nonce := make([]byte, NonceSize)
+	binary.LittleEndian.PutUint64(nonce, c.decryptCnt)
+	c.decryptCnt++
+
+	_, err = chacha20poly1305.DecryptAndVerify(c.decryptKey, b[:0], nonce, ciphertext, verify)
+	return
 }
 
 func (c *Conn) Write(b []byte) (n int, err error) {
-	c.mx.Lock()
-	defer c.mx.Unlock()
-
+	buf := make([]byte, 0, PacketSizeMax+Overhead)
 	nonce := make([]byte, NonceSize)
-	buf := make([]byte, NonceSize+PacketSizeMax+Overhead)
-	verify := buf[:VerifySize] // part of write buffer
+	verify := make([]byte, VerifySize)
 
-	for {
+	for len(b) > 0 {
 		size := len(b)
 		if size > PacketSizeMax {
 			size = PacketSizeMax
 		}
 
 		binary.LittleEndian.PutUint16(verify, uint16(size))
+		if _, err = c.wr.Write(verify); err != nil {
+			return
+		}
 
 		binary.LittleEndian.PutUint64(nonce, c.encryptCnt)
 		c.encryptCnt++
 
-		// put encrypted text to writing buffer just after size (2 bytes)
-		_, err = chacha20poly1305.EncryptAndSeal(c.encryptKey, buf[2:2], nonce, b[:size], verify)
+		_, err = chacha20poly1305.EncryptAndSeal(c.encryptKey, buf, nonce, b[:size], verify)
 		if err != nil {
 			return
 		}
 
-		if _, err = c.conn.Write(buf[:VerifySize+size+Overhead]); err != nil {
+		if _, err = c.wr.Write(buf[:size+Overhead]); err != nil {
 			return
 		}
 
-		n += size // plaintext size
-
-		if size < PacketSizeMax {
-			break
-		}
-
-		b = b[PacketSizeMax:]
+		b = b[size:]
+		n += size
 	}
 
+	err = c.wr.Flush()
 	return
 }
 

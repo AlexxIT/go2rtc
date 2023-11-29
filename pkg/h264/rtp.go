@@ -29,6 +29,12 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 			return
 		}
 
+		// Memory overflow protection. Can happen if we miss a lot of packets with the marker.
+		// https://github.com/AlexxIT/go2rtc/issues/675
+		if len(buf) > 5*1024*1024 {
+			buf = buf[: 0 : 512*1024]
+		}
+
 		// Fix TP-Link Tapo TC70: sends SPS and PPS with packet.Marker = true
 		// Reolink Duo 2: sends SPS with Marker and PPS without
 		if packet.Marker && len(payload) < PSMaxSize {

@@ -1,3 +1,14 @@
+## Config
+
+- supported TCP: fixed port (default), disabled 
+- supported UDP: random port (default), fixed port
+
+| Config examples       | TCP   | UDP    |
+|-----------------------|-------|--------|
+| `listen: ":8555/tcp"` | fixed | random |
+| `listen: ":8555"`     | fixed | fixed  |
+| `listen: ""`          | no    | random |
+
 ## Userful links
 
 - https://www.ietf.org/archive/id/draft-ietf-wish-whip-01.html

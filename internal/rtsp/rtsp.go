@@ -26,7 +26,7 @@ func Init() {
 	}
 
 	// default config
-	conf.Mod.Listen = "0.0.0.0:8554"
+	conf.Mod.Listen = ":8554"
 	conf.Mod.DefaultQuery = "video&audio"
 
 	app.LoadConfig(&conf)

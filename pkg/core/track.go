@@ -117,9 +117,9 @@ func (s *Sender) HandleRTP(track *Receiver) {
 
 	if GetKind(track.Codec.Name) == KindVideo {
 		if track.Codec.IsRTP() {
-			// H.264 2560x1440 4096kbs can have 700+ packets between 25 frames
-			// H.265 5120x1440 can have 700+ packets between two keyframes
-			bufferSize = 1000
+			// in my tests 40Mbit/s 4K-video can generate up to 1500 items
+			// for the h264.RTPDepay => RTPPay queue
+			bufferSize = 5000
 		} else {
 			bufferSize = 50
 		}
@@ -140,9 +140,7 @@ func (s *Sender) HandleRTP(track *Receiver) {
 	go func() {
 		// read packets from buffer channel until it will be closed
 		for packet := range buffer {
-			s.mu.Lock()
 			s.bytes += len(packet.Payload)
-			s.mu.Unlock()
 			s.Handler(packet)
 		}
 

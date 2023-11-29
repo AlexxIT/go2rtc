@@ -56,19 +56,17 @@ func inputMpegTS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res := &http.Response{Body: r.Body, Request: r}
-	client, err := mpegts.Open(res.Body)
+	client, err := mpegts.Open(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	stream.AddProducer(client)
+	defer stream.RemoveProducer(client)
 
 	if err = client.Start(); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
-	stream.RemoveProducer(client)
 }

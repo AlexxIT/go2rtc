@@ -2,10 +2,11 @@ package hass
 
 import (
 	"errors"
+	"net/url"
+
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	pion "github.com/pion/webrtc/v3"
-	"net/url"
 )
 
 type Client struct {
@@ -48,7 +49,7 @@ func NewClient(rawURL string) (*Client, error) {
 	defer hassAPI.Close()
 
 	// 2. Create WebRTC client
-	rtcAPI, err := webrtc.NewAPI("")
+	rtcAPI, err := webrtc.NewAPI()
 	if err != nil {
 		return nil, err
 	}

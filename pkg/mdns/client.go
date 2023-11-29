@@ -219,7 +219,7 @@ func (b *Browser) ListenMulticastUDP() error {
 		},
 	}
 
-	b.Recv, err = lc2.ListenPacket(ctx, "udp4", "0.0.0.0:5353")
+	b.Recv, err = lc2.ListenPacket(ctx, "udp4", ":5353")
 
 	return err
 }

@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/hls"
@@ -22,6 +23,8 @@ func Init() {
 	streams.HandleFunc("httpx", handleHTTP)
 
 	streams.HandleFunc("tcp", handleTCP)
+
+	api.HandleFunc("api/stream", apiStream)
 }
 
 func handleHTTP(rawURL string) (core.Producer, error) {
@@ -88,4 +91,27 @@ func handleTCP(rawURL string) (core.Producer, error) {
 	}
 
 	return magic.Open(conn)
+}
+
+func apiStream(w http.ResponseWriter, r *http.Request) {
+	dst := r.URL.Query().Get("dst")
+	stream := streams.Get(dst)
+	if stream == nil {
+		http.Error(w, api.StreamNotFound, http.StatusNotFound)
+		return
+	}
+
+	client, err := magic.Open(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	stream.AddProducer(client)
+	defer stream.RemoveProducer(client)
+
+	if err = client.Start(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }

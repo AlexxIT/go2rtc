@@ -1,8 +1,8 @@
-//go:build darwin || linux
-
 package mdns
 
-import "syscall"
+import (
+	"syscall"
+)
 
 func SetsockoptInt(fd uintptr, level, opt int, value int) (err error) {
 	return syscall.SetsockoptInt(int(fd), level, opt, value)

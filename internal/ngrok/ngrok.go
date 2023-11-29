@@ -2,12 +2,13 @@ package ngrok
 
 import (
 	"fmt"
+	"net"
+	"strings"
+
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/webrtc"
 	"github.com/AlexxIT/go2rtc/pkg/ngrok"
 	"github.com/rs/zerolog"
-	"net"
-	"strings"
 )
 
 func Init() {
@@ -39,7 +40,7 @@ func Init() {
 			}
 
 			// Addr: "//localhost:8555", URL: "tcp://1.tcp.eu.ngrok.io:12345"
-			if msg.Addr == "//localhost:"+webrtc.Port && strings.HasPrefix(msg.URL, "tcp://") {
+			if strings.HasPrefix(msg.Addr, "//localhost:") && strings.HasPrefix(msg.URL, "tcp://") {
 				// don't know if really necessary use IP
 				address, err := ConvertHostToIP(msg.URL[6:])
 				if err != nil {
@@ -49,7 +50,7 @@ func Init() {
 
 				log.Info().Str("addr", address).Msg("[ngrok] add external candidate for WebRTC")
 
-				webrtc.AddCandidate(address)
+				webrtc.AddCandidate(address, "tcp")
 			}
 		}
 	})

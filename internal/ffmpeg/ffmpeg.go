@@ -52,7 +52,8 @@ var defaults = map[string]string{
 	// `-preset superfast` - we can't use ultrafast because it doesn't support `-profile main -level 4.1`
 	// `-tune zerolatency` - for minimal latency
 	// `-profile high -level 4.1` - most used streaming profile
-	"h264":  "-c:v libx264 -g 50 -profile:v high -level:v 4.1 -preset:v superfast -tune:v zerolatency -pix_fmt:v yuvj420p",
+	// `-pix_fmt:v yuv420p` - important for Telegram
+	"h264":  "-c:v libx264 -g 50 -profile:v high -level:v 4.1 -preset:v superfast -tune:v zerolatency -pix_fmt:v yuv420p",
 	"h265":  "-c:v libx265 -g 50 -profile:v main -level:v 5.1 -preset:v superfast -tune:v zerolatency",
 	"mjpeg": "-c:v mjpeg",
 	//"mjpeg": "-c:v mjpeg -force_duplicated_matrix:v 1 -huffman:v 0 -pix_fmt:v yuvj420p",
@@ -63,18 +64,22 @@ var defaults = map[string]string{
 	// `-async 1` or `-min_comp 0` - force frame_size=960, important for WebRTC audio quality
 	"opus":       "-c:a libopus -application:a lowdelay -frame_duration 20 -min_comp 0",
 	"pcmu":       "-c:a pcm_mulaw -ar:a 8000 -ac:a 1",
+	"pcmu/8000":  "-c:a pcm_mulaw -ar:a 8000 -ac:a 1",
 	"pcmu/16000": "-c:a pcm_mulaw -ar:a 16000 -ac:a 1",
 	"pcmu/48000": "-c:a pcm_mulaw -ar:a 48000 -ac:a 1",
 	"pcma":       "-c:a pcm_alaw -ar:a 8000 -ac:a 1",
+	"pcma/8000":  "-c:a pcm_alaw -ar:a 8000 -ac:a 1",
 	"pcma/16000": "-c:a pcm_alaw -ar:a 16000 -ac:a 1",
 	"pcma/48000": "-c:a pcm_alaw -ar:a 48000 -ac:a 1",
 	"aac":        "-c:a aac", // keep sample rate and channels
 	"aac/16000":  "-c:a aac -ar:a 16000 -ac:a 1",
 	"mp3":        "-c:a libmp3lame -q:a 8",
 	"pcm":        "-c:a pcm_s16be -ar:a 8000 -ac:a 1",
+	"pcm/8000":   "-c:a pcm_s16be -ar:a 8000 -ac:a 1",
 	"pcm/16000":  "-c:a pcm_s16be -ar:a 16000 -ac:a 1",
 	"pcm/48000":  "-c:a pcm_s16be -ar:a 48000 -ac:a 1",
 	"pcml":       "-c:a pcm_s16le -ar:a 8000 -ac:a 1",
+	"pcml/8000":  "-c:a pcm_s16le -ar:a 8000 -ac:a 1",
 	"pcml/44100": "-c:a pcm_s16le -ar:a 44100 -ac:a 1",
 
 	// hardware Intel and AMD on Linux

@@ -70,13 +70,15 @@ func (c *Producer) Start() error {
 				break
 			}
 
-			pkt := &rtp.Packet{
-				Header:  rtp.Header{Timestamp: core.Now90000()},
-				Payload: annexb.EncodeToAVCC(buf[:i], true),
-			}
-			c.Receivers[0].WriteRTP(pkt)
+			if len(c.Receivers) > 0 {
+				pkt := &rtp.Packet{
+					Header:  rtp.Header{Timestamp: core.Now90000()},
+					Payload: annexb.EncodeToAVCC(buf[:i], true),
+				}
+				c.Receivers[0].WriteRTP(pkt)
 
-			//log.Printf("[AVC] %v, len: %d", h264.Types(pkt.Payload), len(pkt.Payload))
+				//log.Printf("[AVC] %v, len: %d", h264.Types(pkt.Payload), len(pkt.Payload))
+			}
 
 			buf = buf[i:]
 		}

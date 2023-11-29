@@ -52,6 +52,8 @@ func (k *Keyframe) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 
 		if track.Codec.IsRTP() {
 			sender.Handler = h264.RTPDepay(track.Codec, sender.Handler)
+		} else {
+			sender.Handler = h264.RepairAVCC(track.Codec, sender.Handler)
 		}
 
 	case core.CodecH265:
@@ -66,9 +68,7 @@ func (k *Keyframe) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 		}
 
 		if track.Codec.IsRTP() {
-			sender.Handler = h264.RTPDepay(track.Codec, sender.Handler)
-		} else {
-			sender.Handler = h264.RepairAVCC(track.Codec, sender.Handler)
+			sender.Handler = h265.RTPDepay(track.Codec, sender.Handler)
 		}
 
 	case core.CodecJPEG:

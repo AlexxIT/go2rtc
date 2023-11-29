@@ -1,58 +1,66 @@
 package webrtc
 
 import (
+	"net"
+
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	"github.com/pion/sdp/v3"
-	"strconv"
-	"strings"
 )
 
 type Address struct {
-	Host string
-	Port int
+	Host    string
+	Port    string
+	Network string
+	Offset  int
 }
 
-var addresses []Address
-
-func AddCandidate(address string) {
-	var port int
-
-	// try to get port from address string
-	if i := strings.LastIndexByte(address, ':'); i > 0 {
-		if v, _ := strconv.Atoi(address[i+1:]); v != 0 {
-			address = address[:i]
-			port = v
+func (a *Address) Marshal() string {
+	host := a.Host
+	if host == "stun" {
+		ip, err := webrtc.GetCachedPublicIP()
+		if err != nil {
+			return ""
 		}
+		host = ip.String()
 	}
 
-	// use default WebRTC port
-	if port == 0 {
-		port, _ = strconv.Atoi(Port)
+	switch a.Network {
+	case "udp":
+		return webrtc.CandidateManualHostUDP(host, a.Port, a.Offset)
+	case "tcp":
+		return webrtc.CandidateManualHostTCPPassive(host, a.Port, a.Offset)
 	}
 
-	addresses = append(addresses, Address{Host: address, Port: port})
+	return ""
+}
+
+var addresses []*Address
+
+func AddCandidate(address, network string) {
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return
+	}
+
+	offset := -1 - len(addresses) // every next candidate will have a lower priority
+
+	switch network {
+	case "tcp", "udp":
+		addresses = append(addresses, &Address{host, port, network, offset})
+	default:
+		addresses = append(
+			addresses, &Address{host, port, "udp", offset}, &Address{host, port, "tcp", offset},
+		)
+	}
 }
 
 func GetCandidates() (candidates []string) {
 	for _, address := range addresses {
-		// using stun server for receive public IP-address
-		if address.Host == "stun" {
-			ip, err := webrtc.GetCachedPublicIP()
-			if err != nil {
-				continue
-			}
-			// this is a copy, original host unchanged
-			address.Host = ip.String()
+		if candidate := address.Marshal(); candidate != "" {
+			candidates = append(candidates, candidate)
 		}
-
-		candidates = append(
-			candidates,
-			webrtc.CandidateManualHostUDP(address.Host, address.Port),
-			webrtc.CandidateManualHostTCPPassive(address.Host, address.Port),
-		)
 	}
-
 	return
 }
 

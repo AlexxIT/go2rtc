@@ -115,9 +115,14 @@ func DecodeSPS(sps []byte) *SPS {
 		s.seq_scaling_matrix_present_flag = r.ReadBit()
 		if s.seq_scaling_matrix_present_flag != 0 {
 			for i := byte(0); i < n; i++ {
-				ssl := r.ReadBit() // seq_scaling_list_present_flag[i]
-				if ssl != 0 {
-					return nil // not implemented
+				//goland:noinspection GoSnakeCaseUsage
+				seq_scaling_list_present_flag := r.ReadBit()
+				if seq_scaling_list_present_flag != 0 {
+					if i < 6 {
+						s.scaling_list(r, 16)
+					} else {
+						s.scaling_list(r, 64)
+					}
 				}
 			}
 		}
@@ -208,4 +213,19 @@ func DecodeSPS(sps []byte) *SPS {
 	}
 
 	return s
+}
+
+//goland:noinspection GoSnakeCaseUsage
+func (s *SPS) scaling_list(r *bits.Reader, sizeOfScalingList int) {
+	lastScale := int32(8)
+	nextScale := int32(8)
+	for j := 0; j < sizeOfScalingList; j++ {
+		if nextScale != 0 {
+			delta_scale := r.ReadSEGolomb()
+			nextScale = (lastScale + delta_scale + 256) % 256
+		}
+		if nextScale != 0 {
+			lastScale = nextScale
+		}
+	}
 }

@@ -21,11 +21,19 @@ func RTPDepay(handler core.HandlerFunc) core.HandlerFunc {
 
 		//log.Printf("[RTP/AAC] units: %d, size: %4d, ts: %10d, %t", headersSize/2, len(packet.Payload), packet.Timestamp, packet.Marker)
 
+		if len(packet.Payload) < int(2+headersSize) {
+			return
+		}
+
 		headers := packet.Payload[2 : 2+headersSize]
 		units := packet.Payload[2+headersSize:]
 
-		for len(headers) > 0 {
+		for len(headers) >= 2 {
 			unitSize := binary.BigEndian.Uint16(headers) >> 3
+
+			if len(units) < int(unitSize) {
+				return
+			}
 
 			unit := units[:unitSize]
 

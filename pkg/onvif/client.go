@@ -5,7 +5,6 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"errors"
-	"github.com/AlexxIT/go2rtc/pkg/core"
 	"html"
 	"io"
 	"net/http"
@@ -13,6 +12,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
 const PathDevice = "/onvif/device_service"
@@ -78,10 +79,10 @@ func (c *Client) GetURI() (string, error) {
 		return "", err
 	}
 
-	uri := FindTagValue(b, "Uri")
-	uri = html.UnescapeString(uri)
+	rawURL := FindTagValue(b, "Uri")
+	rawURL = strings.TrimSpace(html.UnescapeString(rawURL))
 
-	u, err := url.Parse(uri)
+	u, err := url.Parse(rawURL)
 	if err != nil {
 		return "", err
 	}

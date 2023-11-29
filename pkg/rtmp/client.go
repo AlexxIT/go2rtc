@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/flv"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 )
 
@@ -23,16 +22,16 @@ func DialPlay(rawURL string) (core.Producer, error) {
 		return nil, err
 	}
 
-	client, err := NewClient(conn, u)
+	rtmpConn, err := NewClient(conn, u)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = client.play(); err != nil {
+	if err = rtmpConn.play(); err != nil {
 		return nil, err
 	}
 
-	return flv.Open(client)
+	return rtmpConn.Producer()
 }
 
 func DialPublish(rawURL string) (io.Writer, error) {
@@ -116,13 +115,6 @@ func (c *Conn) clienHandshake() error {
 }
 
 func (c *Conn) play() error {
-	c.rdBuf = []byte{
-		'F', 'L', 'V', // signature
-		1,          // version
-		0,          // flags (has video/audio)
-		0, 0, 0, 9, // header size
-	}
-
 	if err := c.writeConnect(); err != nil {
 		return err
 	}

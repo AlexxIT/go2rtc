@@ -2,7 +2,6 @@ package mp4
 
 import (
 	"encoding/hex"
-	"errors"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
@@ -43,13 +42,17 @@ func (m *Muxer) GetInit() ([]byte, error) {
 				pps = []byte{0x68, 0xce, 0x38, 0x80}
 			}
 
-			s := h264.DecodeSPS(sps)
-			if s == nil {
-				return nil, errors.New("mp4: can't parse SPS")
+			var width, height uint16
+			if s := h264.DecodeSPS(sps); s != nil {
+				width = s.Width()
+				height = s.Height()
+			} else {
+				width = 1920
+				height = 1080
 			}
 
 			mv.WriteVideoTrack(
-				uint32(i+1), codec.Name, codec.ClockRate, s.Width(), s.Height(), h264.EncodeConfig(sps, pps),
+				uint32(i+1), codec.Name, codec.ClockRate, width, height, h264.EncodeConfig(sps, pps),
 			)
 
 		case core.CodecH265:
@@ -65,13 +68,17 @@ func (m *Muxer) GetInit() ([]byte, error) {
 				pps = []byte{0x44, 0x01, 0xc0, 0x73, 0xc0, 0x4c, 0x90}
 			}
 
-			s := h265.DecodeSPS(sps)
-			if s == nil {
-				return nil, errors.New("mp4: can't parse SPS")
+			var width, height uint16
+			if s := h265.DecodeSPS(sps); s != nil {
+				width = s.Width()
+				height = s.Height()
+			} else {
+				width = 1920
+				height = 1080
 			}
 
 			mv.WriteVideoTrack(
-				uint32(i+1), codec.Name, codec.ClockRate, s.Width(), s.Height(), h265.EncodeConfig(vps, sps, pps),
+				uint32(i+1), codec.Name, codec.ClockRate, width, height, h265.EncodeConfig(vps, sps, pps),
 			)
 
 		case core.CodecAAC:

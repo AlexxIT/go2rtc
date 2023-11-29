@@ -5,7 +5,9 @@ import (
 	"io"
 )
 
-const ProbeSize = 1024 * 1024 // 1MB
+// ProbeSize
+// in my tests MPEG-TS 40Mbit/s 4K-video require more than 1MB for probe
+const ProbeSize = 5 * 1024 * 1024 // 5MB
 
 const (
 	BufferDisable       = 0

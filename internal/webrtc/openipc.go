@@ -33,7 +33,7 @@ func openIPCClient(rawURL string, query url.Values) (core.Producer, error) {
 	defer conn.Close()
 
 	// 3. Create Peer Connection
-	api, err := webrtc.NewAPI("")
+	api, err := webrtc.NewAPI()
 	if err != nil {
 		return nil, err
 	}

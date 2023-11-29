@@ -1,8 +1,9 @@
 package rtsp
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestURLParse(t *testing.T) {
@@ -106,4 +107,55 @@ a=sendonly`
 	medias, err := UnmarshalSDP([]byte(s))
 	assert.Nil(t, err)
 	assert.Len(t, medias, 3)
+}
+
+func TestBugSDP4(t *testing.T) {
+	s := `v=0
+o=- 14665860 31787219 1 IN IP4 10.0.0.94
+s=Session streamed by "MERCURY RTSP Server"
+t=0 0
+m=video 0 RTP/AVP 96
+c=IN IP4 0.0.0.0
+b=AS:4096
+a=range:npt=0-
+a=control:track1
+a=rtpmap:96 H264/90000
+a=fmtp:96 packetization-mode=1; profile-level-id=640016; sprop-parameter-sets=Z2QAFqzGoCgPaEAAAAMAQAAAB6E=,aOqPLA==
+m=audio 0 RTP/AVP 8
+a=rtpmap:8 PCMA/8000
+a=control:track2
+m=application/MERCURY 0 RTP/AVP smart/1/90000
+a=rtpmap:95 MERCURY/90000
+a=control:track3
+`
+	medias, err := UnmarshalSDP([]byte(s))
+	assert.Nil(t, err)
+	assert.Len(t, medias, 3)
+}
+
+func TestBugSDP5(t *testing.T) {
+	s := `v=0
+o=CV-RTSPHandler 1123412 0 IN IP4 192.168.1.22
+s=Camera
+c=IN IP4 192.168.1.22
+t=0 0
+a=charset:Shift_JIS
+a=range:npt=0-
+a=control:*
+a=etag:1234567890
+m=video 0 RTP/AVP 99
+a=rtpmap:99 H264/90000
+a=fmtp:99 profile-level-id=42A01E;packetization-mode=1;sprop-parameter-sets=Z0KgKedAPAET8uAIEAABd2AAK/IGAAADAC+vCAAAHc1lP//jAAADABfXhAAADuayn//wIA==,aN48gA==
+a=control:trackID=1
+a=sendonly
+m=audio 0 RTP/AVP 127
+a=rtpmap:127 mpeg4-generic/8000/1
+a=fmtp:127 streamtype=5; profile-level-id=15; mode=AAC-hbr; sizeLength=13; indexLength=3; indexDeltalength=3; config=1588; CTSDeltaLength=0; DTSDeltaLength=0;
+a=control:trackID=2
+`
+	medias, err := UnmarshalSDP([]byte(s))
+	assert.Nil(t, err)
+	assert.Len(t, medias, 2)
+	assert.Equal(t, "recvonly", medias[0].Direction)
+	assert.Equal(t, "recvonly", medias[1].Direction)
 }

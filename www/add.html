@@ -246,6 +246,18 @@
 </script>
 
 
+<button id="gopro">GoPro</button>
+<div class="module">
+    <table id="gopro-table"></table>
+</div>
+<script>
+    document.getElementById('gopro').addEventListener('click', async ev => {
+        ev.target.nextElementSibling.style.display = 'block';
+        await getSources('gopro-table', 'api/gopro');
+    });
+</script>
+
+
 <button id="hass">Home Assistant</button>
 <div class="module">
     <table id="hass-table"></table>

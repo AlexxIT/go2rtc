@@ -2,6 +2,7 @@ package tcp
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -12,7 +13,24 @@ import (
 
 // Do - http.Client with support Digest Authorization
 func Do(req *http.Request) (*http.Response, error) {
-	if secureClient == nil {
+	var secure *tls.Config
+
+	switch req.URL.Scheme {
+	case "httpx":
+		secure = &tls.Config{InsecureSkipVerify: true}
+		req.URL.Scheme = "https"
+	case "https":
+		if hostname := req.URL.Hostname(); IsIP(hostname) {
+			secure = &tls.Config{InsecureSkipVerify: true}
+		}
+	}
+
+	if secure != nil {
+		ctx := context.WithValue(req.Context(), secureKey, secure)
+		req = req.WithContext(ctx)
+	}
+
+	if client == nil {
 		transport := http.DefaultTransport.(*http.Transport).Clone()
 
 		dial := transport.DialContext
@@ -23,31 +41,36 @@ func Do(req *http.Request) (*http.Response, error) {
 			}
 			return conn, err
 		}
+		transport.DialTLSContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+			conn, err := dial(ctx, network, addr)
+			if err != nil {
+				return nil, err
+			}
 
-		secureClient = &http.Client{
+			var conf *tls.Config
+			if v, ok := ctx.Value(secureKey).(*tls.Config); ok {
+				conf = v
+			} else if host, _, err := net.SplitHostPort(addr); err != nil {
+				conf = &tls.Config{ServerName: addr}
+			} else {
+				conf = &tls.Config{ServerName: host}
+			}
+
+			tlsConn := tls.Client(conn, conf)
+			if err = tlsConn.Handshake(); err != nil {
+				return nil, err
+			}
+
+			if pconn, ok := ctx.Value(connKey).(*net.Conn); ok {
+				*pconn = tlsConn
+			}
+			return tlsConn, err
+		}
+
+		client = &http.Client{
 			Timeout:   time.Second * 5000,
 			Transport: transport,
 		}
-	}
-
-	var client *http.Client
-
-	if req.URL.Scheme == "httpx" || (req.URL.Scheme == "https" && IsIP(req.URL.Hostname())) {
-		req.URL.Scheme = "https"
-
-		if insecureClient == nil {
-			transport := secureClient.Transport.(*http.Transport).Clone()
-			transport.TLSClientConfig.InsecureSkipVerify = true
-
-			insecureClient = &http.Client{
-				Timeout:   secureClient.Timeout,
-				Transport: transport,
-			}
-		}
-
-		client = insecureClient
-	} else {
-		client = secureClient
 	}
 
 	user := req.URL.User
@@ -88,7 +111,7 @@ func Do(req *http.Request) (*http.Response, error) {
 			response := HexMD5(ha1, nonce, ha2)
 			header = fmt.Sprintf(
 				`Digest username="%s", realm="%s", nonce="%s", uri="%s", response="%s"`,
-				user, realm, nonce, uri, response,
+				username, realm, nonce, uri, response,
 			)
 		case "auth":
 			nc := "00000001"
@@ -112,8 +135,12 @@ func Do(req *http.Request) (*http.Response, error) {
 	return res, nil
 }
 
-var secureClient, insecureClient *http.Client
-var connKey struct{}
+var client *http.Client
+
+type key string
+
+var connKey = key("conn")
+var secureKey = key("secure")
 
 func WithConn() (context.Context, *net.Conn) {
 	pconn := new(net.Conn)

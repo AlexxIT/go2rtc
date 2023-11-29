@@ -1,5 +1,21 @@
 package rtmp
 
+import (
+	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/flv"
+)
+
+func (c *Conn) Producer() (core.Producer, error) {
+	c.rdBuf = []byte{
+		'F', 'L', 'V', // signature
+		1,          // version
+		0,          // flags (has video/audio)
+		0, 0, 0, 9, // header size
+	}
+
+	return flv.Open(c)
+}
+
 // Read - convert RTMP to FLV format
 func (c *Conn) Read(p []byte) (n int, err error) {
 	// 1. Check temporary tempbuffer
