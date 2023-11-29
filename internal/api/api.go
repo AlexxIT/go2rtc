@@ -233,7 +233,14 @@ func exitHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s := r.URL.Query().Get("code")
-	code, _ := strconv.Atoi(s)
+	code, err := strconv.Atoi(s)
+
+	// https://pubs.opengroup.org/onlinepubs/9699919799/utilities/V3_chap02.html#tag_18_08_02
+	if err != nil || code < 0 || code > 125 {
+		http.Error(w, "Code must be in the range [0, 125]", http.StatusBadRequest)
+		return
+	}
+
 	os.Exit(code)
 }
 
