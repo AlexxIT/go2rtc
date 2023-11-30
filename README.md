@@ -780,7 +780,7 @@ publish:
 
 streams:
   # for TP-Link cameras it's important to use transcoding because of wrong pixel format
-  tplink_tapo: ffmpeg:rtsp://user:pass@192.168.1.123/stream1#video=h264#hardware=vaapi#audio=aac
+  tplink_tapo: ffmpeg:rtsp://user:pass@192.168.1.123/stream1#video=h264#hardware#audio=aac
 ```
 
 - **Telegram Desktop App** > Any public or private channel or group (where you admin) > Live stream > Start with... > Start streaming.
