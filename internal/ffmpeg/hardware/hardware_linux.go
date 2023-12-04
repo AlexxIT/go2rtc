@@ -8,6 +8,8 @@ import (
 
 const ProbeV4L2M2MH264 = "-f lavfi -i testsrc2 -t 1 -c h264_v4l2m2m -f null -"
 const ProbeV4L2M2MH265 = "-f lavfi -i testsrc2 -t 1 -c hevc_v4l2m2m -f null -"
+const ProbeRockchipH264 = "-f lavfi -i testsrc2 -t 1 -c h264_rkmpp_encoder -f null -"
+const ProbeRockchipH265 = "-f lavfi -i testsrc2 -t 1 -c hevc_rkmpp_encoder -f null -"
 const ProbeVAAPIH264 = "-init_hw_device vaapi -f lavfi -i testsrc2 -t 1 -vf format=nv12,hwupload -c h264_vaapi -f null -"
 const ProbeVAAPIH265 = "-init_hw_device vaapi -f lavfi -i testsrc2 -t 1 -vf format=nv12,hwupload -c hevc_vaapi -f null -"
 const ProbeVAAPIJPEG = "-init_hw_device vaapi -f lavfi -i testsrc2 -t 1 -vf format=nv12,hwupload -c mjpeg_vaapi -f null -"
@@ -24,6 +26,14 @@ func ProbeAll(bin string) []*api.Source {
 			{
 				Name: runToString(bin, ProbeV4L2M2MH265),
 				URL:  "ffmpeg:...#video=h265#hardware=" + EngineV4L2M2M,
+			},
+			{
+				Name: runToString(bin, ProbeRockchipH264),
+				URL:  "ffmpeg:...#video=h264#hardware=" + EngineRKMPP,
+			},
+			{
+				Name: runToString(bin, ProbeRockchipH265),
+				URL:  "ffmpeg:...#video=h265#hardware=" + EngineRKMPP,
 			},
 		}
 	}

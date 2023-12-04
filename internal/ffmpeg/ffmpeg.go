@@ -93,6 +93,12 @@ var defaults = map[string]string{
 	"h264/v4l2m2m": "-c:v h264_v4l2m2m -g 50 -bf 0",
 	"h265/v4l2m2m": "-c:v hevc_v4l2m2m -g 50 -bf 0",
 
+	// hardware Rockchip
+	// important to use custom ffmpeg https://github.com/AlexxIT/go2rtc/issues/768
+	// hevc - doesn't have a profile setting
+	"h264/rkmpp": "-c:v h264_rkmpp_encoder -g 50 -bf 0 -profile:v high -level:v 4.1",
+	"h265/rkmpp": "-c:v hevc_rkmpp_encoder -g 50 -bf 0 -level:v 5.1",
+
 	// hardware NVidia on Linux and Windows
 	// preset=p2 - faster, tune=ll - low latency
 	"h264/cuda": "-c:v h264_nvenc -g 50 -bf 0 -profile:v high -level:v auto -preset:v p2 -tune:v ll",

@@ -18,6 +18,7 @@ const (
 	EngineCUDA         = "cuda"         // NVidia on Windows and Linux
 	EngineDXVA2        = "dxva2"        // Intel on Windows
 	EngineVideoToolbox = "videotoolbox" // macOS
+	EngineRKMPP        = "rkmpp"        // Rockchip
 )
 
 func Init(bin string) {
@@ -124,6 +125,9 @@ func MakeHardware(args *ffmpeg.Args, engine string, defaults map[string]string) 
 			args.Codecs[i] = defaults[name+"/"+engine]
 
 		case EngineV4L2M2M:
+			args.Codecs[i] = defaults[name+"/"+engine]
+
+		case EngineRKMPP:
 			args.Codecs[i] = defaults[name+"/"+engine]
 		}
 	}
