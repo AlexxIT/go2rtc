@@ -247,18 +247,16 @@ func restartHandler(w http.ResponseWriter, r *http.Request) {
 	go shell.Restart()
 }
 
-// logHandler handles HTTP requests for log file operations.
+// logHandler handles HTTP requests for log buffer operations.
 // It supports two HTTP methods:
-// - GET: Retrieves the content of the log file and sends it back to the client as plain text.
-// - DELETE: Deletes the log file from the server.
+// - GET: Retrieves the content of in-memory log and sends it back to the client as plain text.
+// - DELETE: Clear the in-memory log buffer.
 //
 // The function expects a valid http.ResponseWriter and an http.Request as parameters.
-// For a GET request, it reads the log file specified by app.GetLogFilepath() and writes
-// the content to the response writer with a "text/plain" content type. If the log file
-// cannot be read, it responds with an HTTP 404 (Not Found) status.
+// For a GET request, it reads the log from in-memory buffer and writes
+// the content to the response writer with a "text/plain" content type.
 //
-// For a DELETE request, it attempts to delete the log file. If the deletion fails,
-// it responds with an HTTP 503 (Service Unavailable) status.
+// For a DELETE request, it clears the in-memory buffer.
 //
 // For any other HTTP method, it responds with an HTTP 400 (Bad Request) status.
 //
