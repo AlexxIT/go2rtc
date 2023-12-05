@@ -23,7 +23,6 @@ var Version = "1.8.4"
 var UserAgent = "go2rtc/" + Version
 
 var ConfigPath string
-var LogFilePath string
 var Info = map[string]any{
 	"version": Version,
 }
