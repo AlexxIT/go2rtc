@@ -71,9 +71,15 @@ func ProbeHardware(bin, name string) string {
 			if run(bin, ProbeV4L2M2MH264) {
 				return EngineV4L2M2M
 			}
+			if run(bin, ProbeRKMPPH264) {
+				return EngineRKMPP
+			}
 		case "h265":
 			if run(bin, ProbeV4L2M2MH265) {
 				return EngineV4L2M2M
+			}
+			if run(bin, ProbeRKMPPH265) {
+				return EngineRKMPP
 			}
 		}
 
