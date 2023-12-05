@@ -74,7 +74,7 @@ func (a *Args) String() string {
 		b.WriteString(codec)
 	}
 
-	if a.Filters != nil {
+	if len(a.Filters) > 0 {
 		for i, filter := range a.Filters {
 			if i == 0 {
 				b.WriteString(` -vf "`)

@@ -163,7 +163,7 @@ func TestParseArgsHwRKMPP(t *testing.T) {
 	require.Equal(t, `ffmpeg -hide_banner -fflags nobuffer -flags low_delay -i http://example.com -c:v h264_rkmpp_encoder -g 50 -bf 0 -profile:v high -level:v 4.1 -an -vf "transpose=1,transpose=1" -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
 
 	args = parseArgs("http://example.com#video=h264#height=320#hardware=rkmpp")
-	require.Equal(t, `ffmpeg -hide_banner -fflags nobuffer -flags low_delay -i http://example.com -c:v h264_rkmpp_encoder -g 50 -bf 0 -profile:v high -level:v 4.1 -an -vf "scale=-1:320" -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
+	require.Equal(t, `ffmpeg -hide_banner -fflags nobuffer -flags low_delay -i http://example.com -c:v h264_rkmpp_encoder -g 50 -bf 0 -profile:v high -level:v 4.1 -height 320 -an -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
 }
 
 func TestParseArgsHwCuda(t *testing.T) {
