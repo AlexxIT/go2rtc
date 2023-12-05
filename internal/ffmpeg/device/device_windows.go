@@ -45,28 +45,18 @@ func queryToInput(query url.Values) string {
 	}
 
 	if video != "" {
-		input += ` -i video="` + video + `"`
+		input += ` -i "video=` + video
 
 		if audio != "" {
-			input += `:audio="` + audio + `"`
+			input += `:audio=` + audio
 		}
+
+		input += `"`
 	} else {
-		input += ` -i audio="` + audio + `"`
+		input += ` -i "audio=` + audio + `"`
 	}
 
 	return input
-}
-
-func deviceInputSuffix(video, audio string) string {
-	switch {
-	case video != "" && audio != "":
-		return `video="` + video + `":audio=` + audio + `"`
-	case video != "":
-		return `video="` + video + `"`
-	case audio != "":
-		return `audio="` + audio + `"`
-	}
-	return ""
 }
 
 func initDevices() {
