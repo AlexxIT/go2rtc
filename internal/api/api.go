@@ -270,22 +270,14 @@ func restartHandler(w http.ResponseWriter, r *http.Request) {
 func logHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
-		logFilePath := app.GetLogFilepath()
 
 		// Send current state of the log file immediately
-		data, err := os.ReadFile(logFilePath)
-		if err != nil {
-			http.Error(w, "Error reading log file", http.StatusInternalServerError)
-			return
-		}
+		data := app.LogCollector.Bytes()
 		Response(w, data, "text/plain")
 	case "DELETE":
-		err := os.Truncate(app.GetLogFilepath(), 0)
-		if err != nil {
-			http.Error(w, "Error truncating log file", http.StatusServiceUnavailable)
-			return
-		}
-		Response(w, "Log file deleted", "text/plain")
+		app.LogCollector.Reset()
+
+		Response(w, "Log truncated", "text/plain")
 	default:
 		http.Error(w, "Method not allowed", http.StatusBadRequest)
 	}

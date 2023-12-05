@@ -1,11 +1,12 @@
 package app
 
 import (
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
+
 	"os"
 	"path/filepath"
 	"runtime"
@@ -26,6 +27,8 @@ var LogFilePath string
 var Info = map[string]any{
 	"version": Version,
 }
+
+var LogCollector bytes.Buffer
 
 func Init() {
 	var confs Config
@@ -79,66 +82,16 @@ func Init() {
 
 	LoadConfig(&cfg)
 
-	log.Logger = NewLogger(cfg.Mod["format"], cfg.Mod["level"], GetLogFilepath())
+	log.Logger = NewLogger(cfg.Mod["format"], cfg.Mod["level"])
 
 	modules = cfg.Mod
 
 	log.Info().Msgf("go2rtc version %s %s/%s", Version, runtime.GOOS, runtime.GOARCH)
-	log.Debug().Msgf("[log] file: %s", GetLogFilepath())
 
 	migrateStore()
 }
 
-// GetLogFilepath retrieves the file path for the log file from the application's configuration.
-// The configuration is expected to be in YAML format and contain a "log" section with a "file" key.
-// It uses the LoadConfig function to populate the cfg structure with the configuration data.
-//
-// Returns:
-//
-//	string: The file path of the log file as specified in the configuration.
-//
-// Note:
-//
-//	The function assumes that the LoadConfig function is defined elsewhere and is responsible
-//	for loading and parsing the configuration into the provided struct.
-//	The cfg struct is an anonymous struct with a Mod field, which is a map with string keys and values.
-//	The "log" key within the Mod map is expected to contain a sub-map with the "file" key that holds the log file path.
-//
-// Example of expected YAML configuration:
-//
-//	log:
-//	  file: "/path/to/logfile.log"
-//
-// If the "file" key is not found within the "log" section of the configuration, the function will return an empty string.
-func GetLogFilepath() string {
-	var cfg struct {
-		Mod map[string]string `yaml:"log"`
-	}
-
-	if LogFilePath != "" {
-		return LogFilePath
-	}
-
-	LoadConfig(&cfg)
-
-	if cfg.Mod["file"] == "" {
-		// Generate temporary log file
-		tmpFile, err := ioutil.TempFile("", "go2rtc*.log")
-		if err != nil {
-			return ""
-		}
-		defer tmpFile.Close()
-
-		LogFilePath = tmpFile.Name()
-
-	} else {
-		LogFilePath = cfg.Mod["file"]
-	}
-
-	return LogFilePath
-}
-
-func NewLogger(format string, level string, file string) zerolog.Logger {
+func NewLogger(format string, level string) zerolog.Logger {
 	var writer io.Writer = os.Stdout
 
 	if format != "json" {
@@ -147,19 +100,12 @@ func NewLogger(format string, level string, file string) zerolog.Logger {
 			NoColor: writer != os.Stdout || format == "text",
 		}
 	}
-
-	if file != "" {
-		fileHandler, err := os.OpenFile(file, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-		fileLogger := zerolog.ConsoleWriter{
-			Out: fileHandler, TimeFormat: "15:04:05.000",
-			NoColor: true,
-		}
-
-		if err == nil {
-			writer = zerolog.MultiLevelWriter(writer, fileLogger)
-		}
-
+	memoryLogger := zerolog.ConsoleWriter{
+		Out: &LogCollector, TimeFormat: "15:04:05.000",
+		NoColor: true,
 	}
+
+	writer = zerolog.MultiLevelWriter(writer, memoryLogger)
 
 	zerolog.TimeFieldFormat = time.RFC3339Nano
 
