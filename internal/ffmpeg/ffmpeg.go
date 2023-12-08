@@ -2,6 +2,7 @@ package ffmpeg
 
 import (
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/AlexxIT/go2rtc/internal/app"
@@ -10,6 +11,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/rtsp"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/ffmpeg"
+	"github.com/rs/zerolog/log"
 )
 
 func Init() {
@@ -30,6 +32,7 @@ func Init() {
 		return "exec:" + args.String(), nil
 	})
 
+	checkFfmpegBinary()
 	device.Init(defaults["bin"])
 	hardware.Init(defaults["bin"])
 }
@@ -310,4 +313,18 @@ func parseArgs(s string) *ffmpeg.Args {
 	}
 
 	return args
+}
+
+// checkFfmpegBinary - checks if the custom ffmpeg binary path exists.
+// If it's not there, logs an error and exits the app.
+func checkFfmpegBinary() {
+	var bin = defaults["bin"]
+	if bin == "ffmpeg" {
+		return
+	}
+
+	if _, error := os.Stat(bin); error != nil {
+		log.Error().Err(error).Msg("[ffmpeg] can't find ffmpeg binary")
+		os.Exit(1)
+	}
 }
