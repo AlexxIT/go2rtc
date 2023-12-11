@@ -14,49 +14,38 @@
             flex-direction: column;
         }
 
-        html, body, #config {
+        html, body {
             width: 100%;
             height: 100%;
         }
 
-        .log-viewer {
-            background-color: #f4f4f4;
-            border: 1px solid #ddd;
-            padding: 10px;
+        table {
+            background-color: white;
+            text-align: left;
+            border-collapse: collapse;
         }
-        .log-entry {
-            font-family: 'Courier New', monospace;
-            margin-bottom: 5px;
-        }
-        .info { color: #0174DF; }
-        .debug { color: #585858; }
-        .error { color: #DF0101; }
 
-        /* Button styling */
-        #clean, .switch {
-            background-color: #b89d94; 
-            border: none;
-            color: #695753;
-            padding: 10px 20px;
+        table td, table th {
+            border: 1px solid black;
+            padding: 5px 5px;
+        }
+
+        table tbody td {
+            font-size: 13px;
+            vertical-align: top;
+        }
+
+        table thead {
+            background: #CFCFCF;
+            background: linear-gradient(to bottom, #dbdbdb 0%, #d3d3d3 66%, #CFCFCF 100%);
+            border-bottom: 3px solid black;
+        }
+
+        table thead th {
+            font-size: 15px;
+            font-weight: bold;
+            color: black;
             text-align: center;
-            text-decoration: none;
-            display: inline-block;
-            font-size: 16px;
-            margin: 4px 2px;
-            cursor: pointer;
-            outline: none;
-            transition: background-color 0.3s;
-        }
-
-        /* Switch styling to make it look like a button */
-        .switch {
-            width: auto;
-            padding: 10px 20px;
-            background-color: #f4433644; /* Red */
-        }
-
-        .switch.active {
-            background-color: #4caf4f4e; /* Green */
         }
     </style>
 </head>
@@ -64,80 +53,78 @@
 <script src="main.js"></script>
 <div>
     <button id="clean">Clean</button>
-    <!-- Switch for auto-update -->
-    <button class="switch active" id="autoUpdate">Auto Update: ON</button>
+    <button id="update">Auto Update: ON</button>
 </div>
 <br>
-<div class="log-viewer" id="log"></div>
+<table>
+    <thead>
+    <tr>
+        <th style="width: 130px">Time</th>
+        <th style="width: 40px">Level</th>
+        <th>Message</th>
+    </tr>
+    </thead>
+    <tbody id="log">
+    </tbody>
+</table>
 <script>
-    const logbody = document.getElementById('log');
-
     document.getElementById('clean').addEventListener('click', async () => {
-        let r = await fetch('api/log', {method: 'DELETE'});
-        if (r.ok) {
-            reload();
-            alert('OK');
-        } else {
-            alert(await r.text());
-        }
+        const r = await fetch('api/log', {method: 'DELETE'});
+        if (r.ok) reload();
+        alert(await r.text());
     });
 
     // Sanitizes the input text to prevent XSS when inserting into the DOM
     function escapeHTML(text) {
         return text
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;')
+            .replace(/\n/g, '<br>');
     }
 
-    function applyLogStyling(logText) {
-        // Split the log into lines
-        const lines = logText.split('\n');
-        // Create HTML content with styled spans
-        const styledLines = lines.map(line => {
-        let className = '';
-        if (line.includes(' INF ')) className = 'info';
-        if (line.includes(' DBG ')) className = 'debug';
-        if (line.includes(' ERR ')) className = 'error';
-        return `<div class="log-entry ${className}">${escapeHTML(line)}</div>`;
-        });
-        // Join the lines back into a single string
-        return styledLines.join('');
+    function applyLogStyling(jsonlines) {
+        const KEYS = ['time', 'level', 'message'];
+        const lines = JSON.parse('[' + jsonlines.trimEnd().replaceAll('\n', ',') + ']');
+        return lines.map(line => {
+            const ts = new Date(line['time']);
+            const msg = Object.keys(line).reduce((msg, key) => {
+                return KEYS.indexOf(key) < 0 ? `${msg} ${key}=${line[key]}` : msg;
+            }, line['message']);
+            return `<tr><td>${ts.toLocaleString()}</td><td>${line['level']}</td><td>${escapeHTML(msg)}</td></tr>`;
+        }).join('');
     }
-
-    // Handle auto-update switch
-    const autoUpdateButton = document.getElementById('autoUpdate');
-    let autoUpdateEnabled = true;
-    autoUpdateButton.addEventListener('click', () => {
-        autoUpdateEnabled = !autoUpdateEnabled;
-        autoUpdateButton.classList.toggle('active');
-        autoUpdateButton.textContent = `Auto Update: ${autoUpdateEnabled ? 'ON' : 'OFF'}`;
-    });
-
 
     function reload() {
         const url = new URL('api/log', location.href);
         fetch(url, {cache: 'no-cache'})
-        .then(response => response.text())
-        .then(data => {
-            // Apply styling to the log data
-            logbody.innerHTML = applyLogStyling(data);
-        })
-        .catch(error => {
-            console.error('An error occurred:', error);
-        });
+            .then(response => response.text())
+            .then(data => {
+                // Apply styling to the log data
+                document.getElementById('log').innerHTML = applyLogStyling(data);
+            })
+            .catch(error => {
+                console.error('An error occurred:', error);
+            });
     }
 
-  // Reload the logs every 5 seconds
-  setInterval(() => {
-        if (autoUpdateEnabled) {
-            reload();
-        }
-    }, 5000);
+    reload();
 
-  reload();
+    // Handle auto-update switch
+    let autoUpdateEnabled = true;
+
+    const update = document.getElementById('update');
+    update.addEventListener('click', () => {
+        autoUpdateEnabled = !autoUpdateEnabled;
+        update.textContent = `Auto Update: ${autoUpdateEnabled ? 'ON' : 'OFF'}`;
+    });
+
+    // Reload the logs every 5 seconds
+    setInterval(() => {
+        if (autoUpdateEnabled) reload();
+    }, 5000);
 </script>
 </body>
 </html>
