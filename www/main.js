@@ -47,6 +47,7 @@ nav li {
         <li><a href="index.html">Streams</a></li>
         <li><a href="add.html">Add</a></li>
         <li><a href="editor.html">Config</a></li>
+        <li><a href="log.html">Log</a></li>
     </ul>
 </nav>
 ` + document.body.innerHTML;

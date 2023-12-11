@@ -1,10 +1,12 @@
 package app
 
 import (
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
+
 	"os"
 	"path/filepath"
 	"runtime"
@@ -24,6 +26,8 @@ var ConfigPath string
 var Info = map[string]any{
 	"version": Version,
 }
+
+var LogCollector bytes.Buffer
 
 func Init() {
 	var confs Config
@@ -95,6 +99,12 @@ func NewLogger(format string, level string) zerolog.Logger {
 			NoColor: writer != os.Stdout || format == "text",
 		}
 	}
+	memoryLogger := zerolog.ConsoleWriter{
+		Out: &LogCollector, TimeFormat: "15:04:05.000",
+		NoColor: true,
+	}
+
+	writer = zerolog.MultiLevelWriter(writer, memoryLogger)
 
 	zerolog.TimeFieldFormat = time.RFC3339Nano
 

@@ -52,6 +52,7 @@ func Init() {
 	HandleFunc("api/config", configHandler)
 	HandleFunc("api/exit", exitHandler)
 	HandleFunc("api/restart", restartHandler)
+	HandleFunc("api/log", logHandler)
 
 	Handler = http.DefaultServeMux // 4th
 
@@ -251,6 +252,40 @@ func restartHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	go shell.Restart()
+}
+
+// logHandler handles HTTP requests for log buffer operations.
+// It supports two HTTP methods:
+// - GET: Retrieves the content of in-memory log and sends it back to the client as plain text.
+// - DELETE: Clear the in-memory log buffer.
+//
+// The function expects a valid http.ResponseWriter and an http.Request as parameters.
+// For a GET request, it reads the log from in-memory buffer and writes
+// the content to the response writer with a "text/plain" content type.
+//
+// For a DELETE request, it clears the in-memory buffer.
+//
+// For any other HTTP method, it responds with an HTTP 400 (Bad Request) status.
+//
+// Parameters:
+// - w http.ResponseWriter: The response writer to write the HTTP response to.
+// - r *http.Request: The HTTP request object containing the request details.
+//
+// No return values are provided since the function writes directly to the response writer.
+func logHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+
+		// Send current state of the log file immediately
+		data := app.LogCollector.Bytes()
+		Response(w, data, "text/plain")
+	case "DELETE":
+		app.LogCollector.Reset()
+
+		Response(w, "Log truncated", "text/plain")
+	default:
+		http.Error(w, "Method not allowed", http.StatusBadRequest)
+	}
 }
 
 type Source struct {

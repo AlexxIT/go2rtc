@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Logs</title>
+    <meta name="viewport" content="width=device-width, user-scalable=yes, initial-scale=1, maximum-scale=1">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <style>
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            background-color: white;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        html, body, #config {
+            width: 100%;
+            height: 100%;
+        }
+
+        .log-viewer {
+            background-color: #f4f4f4;
+            border: 1px solid #ddd;
+            padding: 10px;
+        }
+        .log-entry {
+            font-family: 'Courier New', monospace;
+            margin-bottom: 5px;
+        }
+        .info { color: #0174DF; }
+        .debug { color: #585858; }
+        .error { color: #DF0101; }
+
+        /* Button styling */
+        #clean, .switch {
+            background-color: #b89d94; 
+            border: none;
+            color: #695753;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 4px 2px;
+            cursor: pointer;
+            outline: none;
+            transition: background-color 0.3s;
+        }
+
+        /* Switch styling to make it look like a button */
+        .switch {
+            width: auto;
+            padding: 10px 20px;
+            background-color: #f4433644; /* Red */
+        }
+
+        .switch.active {
+            background-color: #4caf4f4e; /* Green */
+        }
+    </style>
+</head>
+<body>
+<script src="main.js"></script>
+<div>
+    <button id="clean">Clean</button>
+    <!-- Switch for auto-update -->
+    <button class="switch active" id="autoUpdate">Auto Update: ON</button>
+</div>
+<br>
+<div class="log-viewer" id="log"></div>
+<script>
+    const logbody = document.getElementById('log');
+
+    document.getElementById('clean').addEventListener('click', async () => {
+        let r = await fetch('api/log', {method: 'DELETE'});
+        if (r.ok) {
+            reload();
+            alert('OK');
+        } else {
+            alert(await r.text());
+        }
+    });
+
+    // Sanitizes the input text to prevent XSS when inserting into the DOM
+    function escapeHTML(text) {
+        return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function applyLogStyling(logText) {
+        // Split the log into lines
+        const lines = logText.split('\n');
+        // Create HTML content with styled spans
+        const styledLines = lines.map(line => {
+        let className = '';
+        if (line.includes(' INF ')) className = 'info';
+        if (line.includes(' DBG ')) className = 'debug';
+        if (line.includes(' ERR ')) className = 'error';
+        return `<div class="log-entry ${className}">${escapeHTML(line)}</div>`;
+        });
+        // Join the lines back into a single string
+        return styledLines.join('');
+    }
+
+    // Handle auto-update switch
+    const autoUpdateButton = document.getElementById('autoUpdate');
+    let autoUpdateEnabled = true;
+    autoUpdateButton.addEventListener('click', () => {
+        autoUpdateEnabled = !autoUpdateEnabled;
+        autoUpdateButton.classList.toggle('active');
+        autoUpdateButton.textContent = `Auto Update: ${autoUpdateEnabled ? 'ON' : 'OFF'}`;
+    });
+
+
+    function reload() {
+        const url = new URL('api/log', location.href);
+        fetch(url, {cache: 'no-cache'})
+        .then(response => response.text())
+        .then(data => {
+            // Apply styling to the log data
+            logbody.innerHTML = applyLogStyling(data);
+        })
+        .catch(error => {
+            console.error('An error occurred:', error);
+        });
+    }
+
+  // Reload the logs every 5 seconds
+  setInterval(() => {
+        if (autoUpdateEnabled) {
+            reload();
+        }
+    }, 5000);
+
+  reload();
+</script>
+</body>
+</html>
