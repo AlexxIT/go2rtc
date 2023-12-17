@@ -83,7 +83,12 @@ func handlePipe(url string, cmd *exec.Cmd) (core.Producer, error) {
 		return nil, err
 	}
 
-	return magic.Open(r)
+	prod, err := magic.Open(r)
+	if err != nil {
+		_ = r.Close()
+	}
+
+	return prod, err
 }
 
 func handleRTSP(url, path string, cmd *exec.Cmd) (core.Producer, error) {
