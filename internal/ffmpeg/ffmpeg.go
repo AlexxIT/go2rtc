@@ -86,7 +86,7 @@ var defaults = map[string]string{
 	// better not to set `-async_depth:v 1` like for QSV, because framedrops
 	// `-bf 0` - disable B-frames is very important
 	"h264/vaapi":  "-c:v h264_vaapi -g 50 -bf 0 -profile:v high -level:v 4.1 -sei:v 0",
-	"h265/vaapi":  "-c:v hevc_vaapi -g 50 -bf 0 -profile:v high -level:v 5.1 -sei:v 0",
+	"h265/vaapi":  "-c:v hevc_vaapi -g 50 -bf 0 -profile:v main -level:v 5.1 -sei:v 0",
 	"mjpeg/vaapi": "-c:v mjpeg_vaapi",
 
 	// hardware Raspberry
@@ -102,16 +102,16 @@ var defaults = map[string]string{
 	// hardware NVidia on Linux and Windows
 	// preset=p2 - faster, tune=ll - low latency
 	"h264/cuda": "-c:v h264_nvenc -g 50 -bf 0 -profile:v high -level:v auto -preset:v p2 -tune:v ll",
-	"h265/cuda": "-c:v hevc_nvenc -g 50 -bf 0 -profile:v high -level:v auto",
+	"h265/cuda": "-c:v hevc_nvenc -g 50 -bf 0 -profile:v main -level:v auto",
 
 	// hardware Intel on Windows
 	"h264/dxva2":  "-c:v h264_qsv -g 50 -bf 0 -profile:v high -level:v 4.1 -async_depth:v 1",
-	"h265/dxva2":  "-c:v hevc_qsv -g 50 -bf 0 -profile:v high -level:v 5.1 -async_depth:v 1",
-	"mjpeg/dxva2": "-c:v mjpeg_qsv -profile:v high -level:v 5.1",
+	"h265/dxva2":  "-c:v hevc_qsv -g 50 -bf 0 -profile:v main -level:v 5.1 -async_depth:v 1",
+	"mjpeg/dxva2": "-c:v mjpeg_qsv",
 
 	// hardware macOS
 	"h264/videotoolbox": "-c:v h264_videotoolbox -g 50 -bf 0 -profile:v high -level:v 4.1",
-	"h265/videotoolbox": "-c:v hevc_videotoolbox -g 50 -bf 0 -profile:v high -level:v 5.1",
+	"h265/videotoolbox": "-c:v hevc_videotoolbox -g 50 -bf 0 -profile:v main -level:v 5.1",
 }
 
 // configTemplate - return template from config (defaults) if exist or return raw template
