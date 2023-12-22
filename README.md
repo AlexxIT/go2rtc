@@ -1339,11 +1339,12 @@ streams:
 
 - [Frigate 12+](https://frigate.video/) - open source NVR built around real-time AI object detection
 - [Frigate Lovelace Card](https://github.com/dermotduffy/frigate-hass-card) - custom card for Home Assistant
-- [ring-mqtt](https://github.com/tsightler/ring-mqtt) - Ring devices to MQTT Bridge
+- [OpenIPC](https://github.com/OpenIPC/firmware/tree/master/general/package/go2rtc) - Alternative IP Camera firmware from an open community
+- [wz_mini_hacks](https://github.com/gtxaspec/wz_mini_hacks) - Custom firmware for Wyze cameras
 - [EufyP2PStream](https://github.com/oischinger/eufyp2pstream) - A small project that provides a Video/Audio Stream from Eufy cameras that don't directly support RTSP
 - [ioBroker.euSec](https://github.com/bropat/ioBroker.eusec) - [ioBroker](https://www.iobroker.net/) adapter for control Eufy security devices
-- [wz_mini_hacks](https://github.com/gtxaspec/wz_mini_hacks) - Custom firmware for Wyze cameras
 - [MMM-go2rtc](https://github.com/Anonym-tsk/MMM-go2rtc) - MagicMirror² Module
+- [ring-mqtt](https://github.com/tsightler/ring-mqtt) - Ring devices to MQTT Bridge
 
 **Distributions**
 
