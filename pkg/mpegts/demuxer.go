@@ -1,6 +1,7 @@
 package mpegts
 
 import (
+	"bytes"
 	"errors"
 	"io"
 
@@ -98,6 +99,11 @@ func (d *Demuxer) skip(i byte) {
 	d.pos += i
 }
 
+func (d *Demuxer) readBytes(i byte) []byte {
+	d.pos += i
+	return d.buf[d.pos-i : d.pos]
+}
+
 func (d *Demuxer) readPSIHeader() {
 	// https://en.wikipedia.org/wiki/Program-specific_information#Table_Sections
 	pointer := d.readByte() // Pointer field
@@ -159,7 +165,11 @@ func (d *Demuxer) readPMT() {
 		_ = d.readBits(4)          // Reserved bits
 		_ = d.readBits(2)          // ES Info length unused bits
 		size = d.readBits(10)      // ES Info length
-		d.skip(byte(size))
+		info := d.readBytes(byte(size))
+
+		if streamType == StreamTypePrivate && bytes.HasPrefix(info, opusInfo) {
+			streamType = StreamTypePrivateOPUS
+		}
 
 		d.pes[pid] = &PES{StreamType: streamType}
 	}
@@ -175,7 +185,7 @@ func (d *Demuxer) readPES(pid uint16, start bool) *rtp.Packet {
 
 	// if new payload beging
 	if start {
-		if pes.Payload != nil {
+		if len(pes.Payload) != 0 {
 			d.pos = skipRead
 			return pes.GetPacket() // finish previous packet
 		}
@@ -314,12 +324,13 @@ const (
 
 // https://en.wikipedia.org/wiki/Program-specific_information#Elementary_stream_types
 const (
-	StreamTypeMetadata = 0    // Reserved
-	StreamTypePrivate  = 0x06 // PCMU or PCMA or FLAC from FFmpeg
-	StreamTypeAAC      = 0x0F
-	StreamTypeH264     = 0x1B
-	StreamTypeH265     = 0x24
-	StreamTypePCMATapo = 0x90
+	StreamTypeMetadata    = 0    // Reserved
+	StreamTypePrivate     = 0x06 // PCMU or PCMA or FLAC from FFmpeg
+	StreamTypeAAC         = 0x0F
+	StreamTypeH264        = 0x1B
+	StreamTypeH265        = 0x24
+	StreamTypePCMATapo    = 0x90
+	StreamTypePrivateOPUS = 0xEB
 )
 
 // PES - Packetized Elementary Stream
@@ -397,6 +408,23 @@ func (p *PES) GetPacket() (pkt *rtp.Packet) {
 		}
 
 		//p.Timestamp += uint32(len(p.Payload)) // update next timestamp!
+
+	case StreamTypePrivateOPUS:
+		p.Sequence++
+
+		pkt = &rtp.Packet{
+			Header: rtp.Header{
+				Version:        2,
+				Marker:         true,
+				PayloadType:    p.StreamType,
+				SequenceNumber: p.Sequence,
+				Timestamp:      p.PTS,
+			},
+		}
+
+		pkt.Payload, p.Payload = CutOPUSPacket(p.Payload)
+		p.PTS += opusDT
+		return
 	}
 
 	p.Payload = nil

@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Logs</title>
+    <meta name="viewport" content="width=device-width, user-scalable=yes, initial-scale=1, maximum-scale=1">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <style>
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            background-color: white;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+        }
+
+        table {
+            background-color: white;
+            text-align: left;
+            border-collapse: collapse;
+        }
+
+        table td, table th {
+            border: 1px solid black;
+            padding: 5px 5px;
+        }
+
+        table tbody td {
+            font-size: 13px;
+            vertical-align: top;
+        }
+
+        table thead {
+            background: #CFCFCF;
+            background: linear-gradient(to bottom, #dbdbdb 0%, #d3d3d3 66%, #CFCFCF 100%);
+            border-bottom: 3px solid black;
+        }
+
+        table thead th {
+            font-size: 15px;
+            font-weight: bold;
+            color: black;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+<script src="main.js"></script>
+<div>
+    <button id="clean">Clean</button>
+    <button id="update">Auto Update: ON</button>
+</div>
+<br>
+<table>
+    <thead>
+    <tr>
+        <th style="width: 130px">Time</th>
+        <th style="width: 40px">Level</th>
+        <th>Message</th>
+    </tr>
+    </thead>
+    <tbody id="log">
+    </tbody>
+</table>
+<script>
+    document.getElementById('clean').addEventListener('click', async () => {
+        const r = await fetch('api/log', {method: 'DELETE'});
+        if (r.ok) reload();
+        alert(await r.text());
+    });
+
+    // Sanitizes the input text to prevent XSS when inserting into the DOM
+    function escapeHTML(text) {
+        return text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;')
+            .replace(/\n/g, '<br>');
+    }
+
+    function applyLogStyling(jsonlines) {
+        const KEYS = ['time', 'level', 'message'];
+        const lines = JSON.parse('[' + jsonlines.trimEnd().replaceAll('\n', ',') + ']');
+        return lines.map(line => {
+            const ts = new Date(line['time']);
+            const msg = Object.keys(line).reduce((msg, key) => {
+                return KEYS.indexOf(key) < 0 ? `${msg} ${key}=${line[key]}` : msg;
+            }, line['message']);
+            return `<tr><td>${ts.toLocaleString()}</td><td>${line['level']}</td><td>${escapeHTML(msg)}</td></tr>`;
+        }).join('');
+    }
+
+    function reload() {
+        const url = new URL('api/log', location.href);
+        fetch(url, {cache: 'no-cache'})
+            .then(response => response.text())
+            .then(data => {
+                // Apply styling to the log data
+                document.getElementById('log').innerHTML = applyLogStyling(data);
+            })
+            .catch(error => {
+                console.error('An error occurred:', error);
+            });
+    }
+
+    reload();
+
+    // Handle auto-update switch
+    let autoUpdateEnabled = true;
+
+    const update = document.getElementById('update');
+    update.addEventListener('click', () => {
+        autoUpdateEnabled = !autoUpdateEnabled;
+        update.textContent = `Auto Update: ${autoUpdateEnabled ? 'ON' : 'OFF'}`;
+    });
+
+    // Reload the logs every 5 seconds
+    setInterval(() => {
+        if (autoUpdateEnabled) reload();
+    }, 5000);
+</script>
+</body>
+</html>

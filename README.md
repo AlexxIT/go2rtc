@@ -305,6 +305,8 @@ streams:
 
 #### Source: ONVIF
 
+*[New in v1.5.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.5.0)*
+
 The source is not very useful if you already know RTSP and snapshot links for your camera. But it can be useful if you don't.
 
 **WebUI > Add** webpage support ONVIF autodiscovery. Your server must be on the same subnet as the camera. If you use docker, you must use "network host".
@@ -397,7 +399,7 @@ streams:
 
 #### Source: Exec
 
-Exec source can run any external application and expect data from it. Two transports are supported - **pipe** and **RTSP**.
+Exec source can run any external application and expect data from it. Two transports are supported - **pipe** (*from [v1.5.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.5.0)*) and **RTSP**.
 
 If you want to use **RTSP** transport - the command must contain the `{output}` argument in any place. On launch, it will be replaced by the local address of the RTSP server.
 
@@ -431,6 +433,8 @@ streams:
 ```
 
 #### Source: Expr
+
+*[New in v1.8.2](https://github.com/AlexxIT/go2rtc/releases/tag/v1.8.2)*
 
 Like `echo` source, but uses the built-in [expr](https://github.com/antonmedv/expr) expression language ([read more](https://github.com/AlexxIT/go2rtc/blob/master/internal/expr/README.md)).
 
@@ -469,6 +473,8 @@ RTSP link with "normal" audio for any player: `rtsp://192.168.1.123:8554/aqara_g
 
 #### Source: Bubble
 
+*[New in v1.6.1](https://github.com/AlexxIT/go2rtc/releases/tag/v1.6.1)*
+
 Other names: [ESeeCloud](http://www.eseecloud.com/), [dvr163](http://help.dvr163.com/).
 
 - you can skip `username`, `password`, `port`, `ch` and `stream` if they are default
@@ -480,6 +486,8 @@ streams:
 ```
 
 #### Source: DVRIP
+
+*[New in v1.2.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.2.0)*
 
 Other names: DVR-IP, NetSurveillance, Sofia protocol (NETsurveillance ActiveX plugin XMeye SDK).
 
@@ -499,21 +507,33 @@ streams:
 
 #### Source: Tapo
 
+*[New in v1.2.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.2.0)*
+
 [TP-Link Tapo](https://www.tapo.com/) proprietary camera protocol with **two way audio** support.
 
 - stream quality is the same as [RTSP protocol](https://www.tapo.com/en/faq/34/)
 - use the **cloud password**, this is not the RTSP password! you do not need to add a login!
 - you can also use UPPERCASE MD5 hash from your cloud password with `admin` username
+- some new camera firmwares requires SHA256 instead of MD5
 
 ```yaml
 streams:
   # cloud password without username
   camera1: tapo://cloud-password@192.168.1.123
   # admin username and UPPERCASE MD5 cloud-password hash
-  camera2: tapo://admin:MD5-PASSWORD-HASH@192.168.1.123
+  camera2: tapo://admin:UPPERCASE-MD5@192.168.1.123
+  # admin username and UPPERCASE SHA256 cloud-password hash
+  camera3: tapo://admin:UPPERCASE-SHA256@192.168.1.123
+```
+
+```bash
+echo -n "cloud password" | md5 | awk '{print toupper($0)}'
+echo -n "cloud password" | shasum -a 256 | awk '{print toupper($0)}'
 ```
 
 #### Source: Kasa
+
+*[New in v1.7.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.7.0)*
 
 [TP-Link Kasa](https://www.kasasmart.com/) non-standard protocol [more info](https://medium.com/@hu3vjeen/reverse-engineering-tp-link-kc100-bac4641bf1cd).
 
@@ -523,6 +543,8 @@ streams:
 ```
 
 #### Source: GoPro
+
+*[New in v1.8.3](https://github.com/AlexxIT/go2rtc/releases/tag/v1.8.3)*
 
 Support streaming from [GoPro](https://gopro.com/) cameras, connected via USB or Wi-Fi to Linux, Mac, Windows. [Read more](https://github.com/AlexxIT/go2rtc/tree/master/internal/gopro).
 
@@ -553,7 +575,7 @@ streams:
   aqara_g3: hass:Camera-Hub-G3-AB12
 ```
 
-**WebRTC Cameras**
+**WebRTC Cameras** (*from [v1.6.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.6.0)*)
 
 Any cameras in WebRTC format are supported. But at the moment Home Assistant only supports some [Nest](https://www.home-assistant.io/integrations/nest/) cameras in this fomat.
 
@@ -573,6 +595,8 @@ By default, the Home Assistant API does not allow you to get dynamic RTSP link t
 
 #### Source: ISAPI
 
+*[New in v1.3.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.3.0)*
+
 This source type support only backchannel audio for Hikvision ISAPI protocol. So it should be used as second source in addition to the RTSP protocol.
 
 ```yaml
@@ -583,6 +607,8 @@ streams:
 ```
 
 #### Source: Nest
+
+*[New in v1.6.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.6.0)*
 
 Currently only WebRTC cameras are supported. Stream reconnects every 5 minutes.
 
@@ -595,6 +621,8 @@ streams:
 
 #### Source: Roborock
 
+*[New in v1.3.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.3.0)*
+
 This source type support Roborock vacuums with cameras. Known working models:
 
 - Roborock S6 MaxV - only video (the vacuum has no microphone)
@@ -606,6 +634,8 @@ If you have graphic pin for your vacuum - add it as numeric pin (lines: 123, 456
 
 #### Source: WebRTC
 
+*[New in v1.3.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.3.0)*
+
 This source type support four connection formats.
 
 **whep**
@@ -616,15 +646,15 @@ This source type support four connection formats.
 
 This format is only supported in go2rtc. Unlike WHEP it supports asynchronous WebRTC connection and two way audio.
 
-**openipc**
+**openipc** (*from [v1.7.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.7.0)*)
 
 Support connection to [OpenIPC](https://openipc.org/) cameras.
 
-**wyze**
+**wyze** (*from [v1.6.1](https://github.com/AlexxIT/go2rtc/releases/tag/v1.6.1)*)
 
 Supports connection to [Wyze](https://www.wyze.com/) cameras, using WebRTC protocol. You can use [docker-wyze-bridge](https://github.com/mrlt8/docker-wyze-bridge) project to get connection credentials.
 
-**kinesis**
+**kinesis** (*from [v1.6.1](https://github.com/AlexxIT/go2rtc/releases/tag/v1.6.1)*)
 
 Supports [Amazon Kinesis Video Streams](https://aws.amazon.com/kinesis/video-streams/), using WebRTC protocol. You need to specify signalling WebSocket URL with all credentials in query params, `client_id` and `ice_servers` list in [JSON format](https://developer.mozilla.org/en-US/docs/Web/API/RTCIceServer).
 
@@ -640,6 +670,8 @@ streams:
 **PS.** For `kinesis` sources you can use [echo](#source-echo) to get connection params using `bash`/`python` or any other script language.
 
 #### Source: WebTorrent
+
+*[New in v1.3.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.3.0)*
 
 This source can get a stream from another go2rtc via [WebTorrent](#module-webtorrent) protocol.
 
@@ -679,6 +711,8 @@ By default, go2rtc establishes a connection to the source when any client reques
 
 #### Incoming: Browser
 
+*[New in v1.3.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.3.0)*
+
 You can turn the browser of any PC or mobile into an IP-camera with support video and two way audio. Or even broadcast your PC screen:
 
 1. Create empty stream in the `go2rtc.yaml`
@@ -689,11 +723,15 @@ You can turn the browser of any PC or mobile into an IP-camera with support vide
 
 #### Incoming: WebRTC/WHIP
 
+*[New in v1.3.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.3.0)*
+
 You can use **OBS Studio** or any other broadcast software with [WHIP](https://www.ietf.org/archive/id/draft-ietf-wish-whip-01.html) protocol support. This standard has not yet been approved. But you can download OBS Studio [dev version](https://github.com/obsproject/obs-studio/actions/runs/3969201209):
 
 - Settings > Stream > Service: WHIP > http://192.168.1.123:1984/api/webrtc?dst=camera1
 
 #### Stream to camera
+
+*[New in v1.3.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.3.0)*
 
 go2rtc support play audio files (ex. music or [TTS](https://www.home-assistant.io/integrations/#text-to-speech)) and live streams (ex. radio) on cameras with [two way audio](#two-way-audio) support (RTSP/ONVIF cameras, TP-Link Tapo, Hikvision ISAPI, Roborock vacuums, any Browser).
 
@@ -714,6 +752,8 @@ POST http://localhost:1984/api/streams?dst=camera1&src=ffmpeg:http://example.com
 - you will see one active producer and one active consumer in go2rtc WebUI info page during streaming
 
 ### Publish stream
+
+*[New in v1.8.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.8.0)*
 
 You can publish any stream to streaming services (YouTube, Telegram, etc.) via RTMP/RTMPS. Important:
 
@@ -740,7 +780,7 @@ publish:
 
 streams:
   # for TP-Link cameras it's important to use transcoding because of wrong pixel format
-  tplink_tapo: ffmpeg:rtsp://user:pass@192.168.1.123/stream1#video=h264#hardware=vaapi#audio=aac
+  tplink_tapo: ffmpeg:rtsp://user:pass@192.168.1.123/stream1#video=h264#hardware#audio=aac
 ```
 
 - **Telegram Desktop App** > Any public or private channel or group (where you admin) > Live stream > Start with... > Start streaming.
@@ -808,6 +848,8 @@ By default go2rtc provide RTSP-stream with only one first video and only one fir
 Read more about [codecs filters](#codecs-filters).
 
 ### Module: RTMP
+
+*[New in v1.8.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.8.0)*
 
 You can get any stream as RTMP-stream: `rtmp://192.168.1.123/{stream_name}`. Only H264/AAC codecs supported right now.
 
@@ -887,6 +929,8 @@ webrtc:
 
 ### Module: HomeKit
 
+*[New in v1.7.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.7.0)*
+
 HomeKit module can work in two modes:
 
 - export any H264 camera to Apple HomeKit
@@ -938,6 +982,8 @@ homekit:
 ```
 
 ### Module: WebTorrent
+
+*[New in v1.3.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.3.0)*
 
 This module support:
 
@@ -1081,6 +1127,8 @@ Read more about [codecs filters](#codecs-filters).
 **PS.** Rotate and scale params don't use transcoding and change video using metadata. 
 
 ### Module: HLS
+
+*[New in v1.1.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.1.0)*
 
 [HLS](https://en.wikipedia.org/wiki/HTTP_Live_Streaming) is the worst technology for real-time streaming. It can only be useful on devices that do not support more modern technology, like [WebRTC](#module-webrtc), [MSE/MP4](#module-mp4).
 

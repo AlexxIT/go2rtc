@@ -35,12 +35,15 @@ func TestParseArgsFile(t *testing.T) {
 func TestParseArgsDevice(t *testing.T) {
 	// [DEVICE] video will be output for MJPEG to pipe, with size 1920x1080
 	args := parseArgs("device?video=0&video_size=1920x1080")
-	require.Equal(t, `ffmpeg -hide_banner -f dshow -video_size 1920x1080 -i video="0" -c copy -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
+	require.Equal(t, `ffmpeg -hide_banner -f dshow -video_size 1920x1080 -i "video=0" -c copy -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
 
 	// [DEVICE] video will be transcoded to H265 with framerate 20, audio will be skipped
 	//args = parseArgs("device?video=0&video_size=1280x720&framerate=20#video=h265#audio=pcma")
-	args = parseArgs("device?video=0&framerate=20#video=h265#audio=pcma")
-	require.Equal(t, `ffmpeg -hide_banner -f dshow -framerate 20 -i video="0" -c:v libx265 -g 50 -profile:v main -level:v 5.1 -preset:v superfast -tune:v zerolatency -c:a pcm_alaw -ar:a 8000 -ac:a 1 -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
+	args = parseArgs("device?video=0&framerate=20#video=h265")
+	require.Equal(t, `ffmpeg -hide_banner -f dshow -framerate 20 -i "video=0" -c:v libx265 -g 50 -profile:v main -level:v 5.1 -preset:v superfast -tune:v zerolatency -an -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
+
+	args = parseArgs("device?video=FaceTime HD Camera&audio=Microphone (High Definition Audio Device)")
+	require.Equal(t, `ffmpeg -hide_banner -f dshow -i "video=FaceTime HD Camera:audio=Microphone (High Definition Audio Device)" -c copy -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
 }
 
 func TestParseArgsIpCam(t *testing.T) {
@@ -149,6 +152,18 @@ func TestParseArgsHwV4l2m2m(t *testing.T) {
 	// [DEVICE] MJPEG video with size 1920x1080 will be transcoded to H265
 	args = parseArgs("device?video=0&video_size=1920x1080#video=h265#hardware=v4l2m2m")
 	require.Equal(t, `ffmpeg -hide_banner -f dshow -video_size 1920x1080 -i video="0" -c:v hevc_v4l2m2m -g 50 -bf 0 -an -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
+}
+
+func TestParseArgsHwRKMPP(t *testing.T) {
+	// [HTTP-MJPEG] video will be transcoded to H264
+	args := parseArgs("http://example.com#video=h264#hardware=rkmpp")
+	require.Equal(t, `ffmpeg -hide_banner -fflags nobuffer -flags low_delay -i http://example.com -c:v h264_rkmpp_encoder -g 50 -bf 0 -profile:v high -level:v 4.1 -an -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
+
+	args = parseArgs("http://example.com#video=h264#rotate=180#hardware=rkmpp")
+	require.Equal(t, `ffmpeg -hide_banner -fflags nobuffer -flags low_delay -i http://example.com -c:v h264_rkmpp_encoder -g 50 -bf 0 -profile:v high -level:v 4.1 -an -vf "transpose=1,transpose=1" -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
+
+	args = parseArgs("http://example.com#video=h264#height=320#hardware=rkmpp")
+	require.Equal(t, `ffmpeg -hide_banner -fflags nobuffer -flags low_delay -i http://example.com -c:v h264_rkmpp_encoder -g 50 -bf 0 -profile:v high -level:v 4.1 -height 320 -an -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
 }
 
 func TestParseArgsHwCuda(t *testing.T) {

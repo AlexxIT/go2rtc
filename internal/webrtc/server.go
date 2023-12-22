@@ -49,6 +49,9 @@ func syncHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "", http.StatusBadRequest)
 		}
 
+	case "OPTIONS":
+		w.WriteHeader(http.StatusNoContent)
+
 	default:
 		http.Error(w, "", http.StatusMethodNotAllowed)
 	}

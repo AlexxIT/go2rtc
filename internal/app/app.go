@@ -3,16 +3,13 @@ package app
 import (
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
-	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/shell"
 	"github.com/AlexxIT/go2rtc/pkg/yaml"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -162,6 +159,3 @@ func (c *Config) Set(value string) error {
 }
 
 var configs [][]byte
-
-// modules log levels
-var modules map[string]string

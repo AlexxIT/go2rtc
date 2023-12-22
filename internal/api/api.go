@@ -52,6 +52,7 @@ func Init() {
 	HandleFunc("api/config", configHandler)
 	HandleFunc("api/exit", exitHandler)
 	HandleFunc("api/restart", restartHandler)
+	HandleFunc("api/log", logHandler)
 
 	Handler = http.DefaultServeMux // 4th
 
@@ -211,7 +212,7 @@ func middlewareCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Authorization")
+		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
 		next.ServeHTTP(w, r)
 	})
 }
@@ -251,6 +252,20 @@ func restartHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	go shell.Restart()
+}
+
+func logHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		// Send current state of the log file immediately
+		w.Header().Set("Content-Type", "application/jsonlines")
+		_, _ = app.MemoryLog.WriteTo(w)
+	case "DELETE":
+		app.MemoryLog.Reset()
+		Response(w, "OK", "text/plain")
+	default:
+		http.Error(w, "Method not allowed", http.StatusBadRequest)
+	}
 }
 
 type Source struct {
