@@ -9,9 +9,9 @@ import (
 )
 
 // https://datatracker.ietf.org/doc/html/rfc6716#
-
+//
 // Input:
-
+//
 // For code 0 packets, the TOC byte is immediately followed by N-1 bytes
 // of compressed data for a single frame (where N is the size of the
 // packet)
@@ -26,15 +26,12 @@ import (
 // |                                                               |
 // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
-
-
 var CONFIG_10 = []uint8{SILK_NB_10, SILK_MB_10, SILK_WB_10, HYBRID_SWB_10, HYBRID_FB_10, CELT_NB_10, CELT_WB_10, CELT_SWB_10, CELT_FB_10}
 var CONFIG_20 = []uint8{SILK_NB_20, SILK_MB_20, SILK_WB_20, HYBRID_SWB_20, HYBRID_FB_20, CELT_NB_20, CELT_WB_20, CELT_SWB_20, CELT_FB_20}
 
 // ffmpeg sends 20ms Opus frames, and 20ms frame is requested (Wi-Fi connection)
 // only timestamp is mangled
 func TestOpusPacket20(t *testing.T) {
-
 	for _, conf := range CONFIG_20 {
 		audioSession := &Session{
 			AudioFrameDuration: 20,
@@ -60,12 +57,11 @@ func TestOpusPacket20(t *testing.T) {
 // ffmpeg sends 20ms Opus frames, and 60ms frame is requested (Cellular connection)
 // merge three frames into one packet
 func TestOpusRepacketize20to60(t *testing.T) {
-	audioSession := &Session{
-		AudioFrameDuration: 60,
-	}
-
-	packets := make([]*rtp.Packet, 3)
 	for _, conf := range CONFIG_20 {
+		audioSession := &Session{
+			AudioFrameDuration: 60,
+		}
+		packets := make([]*rtp.Packet, 3)
 		for i := 1; i <= 15; i++ {
 			packet := newRandomOpusPacket(conf<<3, uint16(i))
 			repacketizedPacket := audioSession.repacketizeOpus(packet.Clone())
@@ -83,7 +79,6 @@ func TestOpusRepacketize20to60(t *testing.T) {
 				if packets[0] != nil {
 					require.Equal(t, packets[0].Timestamp+uint32(audioSession.AudioFrameDuration)*SAMPLE_RATE, repacketizedPacket.Timestamp)
 				}
-
 				// compare config bytes
 				require.Equal(t, byte(conf<<3+3), repacketizedPacket.Payload[0])
 				// compaer frame count byte (M)

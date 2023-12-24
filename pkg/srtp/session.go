@@ -102,7 +102,6 @@ func (s *Session) repacketizeOpus(packet *rtp.Packet) *rtp.Packet {
 		if len(s.frameSize) < 3 {
 			s.frameBuffer = append(s.frameBuffer, packet.Payload[1:]...)
 			s.frameSize = append(s.frameSize, len(packet.Payload[1:]))
-
 		}
 		if len(s.frameSize) == 3 {
 			toc |= 0b00000011                  // code 3: signaled number of frames
