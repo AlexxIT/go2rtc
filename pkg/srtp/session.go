@@ -25,6 +25,13 @@ type Session struct {
 
 	senderRTCP rtcp.SenderReport
 	senderTime time.Time
+
+	AudioFrameDuration  uint8
+	firstTimestamp      uint32
+	frameBuffer         []byte
+	frameSize           []int
+	audioSequenceNumber uint16
+	audioPacketCount    uint32
 }
 
 type Endpoint struct {
@@ -68,7 +75,72 @@ func (s *Session) init() error {
 	return nil
 }
 
-func (s *Session) WriteRTP(packet *rtp.Packet) (int, error) {
+func (s *Session) repacketizeOpus(packet *rtp.Packet) *rtp.Packet {
+	if s.firstTimestamp == 0 {
+		s.firstTimestamp = packet.Header.Timestamp
+	}
+
+	framesPerPacket := s.AudioFrameDuration / 20
+	toc := packet.Payload[0]
+	config := (toc & 0b11111000) >> 3
+	switch config {
+	case SILK_NB_20, SILK_MB_20, SILK_WB_20, HYBRID_SWB_20, HYBRID_FB_20, CELT_NB_20, CELT_WB_20, CELT_SWB_20, CELT_FB_20: // 20ms
+		break
+	default: // frame sizes not 20ms, return packet as is
+		return packet
+	}
+
+	code := toc & 0b00000011
+
+	// ffmpeg sends 20ms Opus frames, and 60ms frame is requested (Cellular connection)
+	if code == 0 && framesPerPacket == 3 {
+		// merge 3 frames into one packet
+		if len(packet.Payload) == 1 || len(packet.Payload) > MAX_PAYLOAD_LENGTH {
+			// no frame or exceed encode size, return packet as is
+			return packet
+		}
+		if len(s.frameSize) < 3 {
+			s.frameBuffer = append(s.frameBuffer, packet.Payload[1:]...)
+			s.frameSize = append(s.frameSize, len(packet.Payload[1:]))
+
+		}
+		if len(s.frameSize) == 3 {
+			toc |= 0b00000011                  // code 3: signaled number of frames
+			frameCountByte := byte(0b10000011) // vbr, no padding, 3 frames
+			frameLengthsBytes := make([]byte, 0)
+			for _, size := range s.frameSize[:2] {
+				// encode size
+				if size < 252 {
+					frameLengthsBytes = append(frameLengthsBytes, uint8(size))
+				} else {
+					sizeFirstByte := 252 + (size & 0x3)
+					frameLengthsBytes = append(frameLengthsBytes, uint8(sizeFirstByte), uint8((size-sizeFirstByte)>>2))
+				}
+			}
+			packet.Payload = []byte{toc, frameCountByte}
+			packet.Payload = append(packet.Payload, frameLengthsBytes...)
+			packet.Payload = append(packet.Payload, s.frameBuffer...)
+
+			if s.audioSequenceNumber == 0 {
+				s.audioSequenceNumber = packet.Header.SequenceNumber
+			}
+			packet.Header.SequenceNumber = s.audioSequenceNumber
+			s.audioSequenceNumber++
+
+			s.frameBuffer = s.frameBuffer[:0]
+			s.frameSize = s.frameSize[:0]
+		} else {
+			return nil
+		}
+	}
+
+	// Timestamp increment = frame duration(ms) * sampling rate(kHz)
+	packet.Header.Timestamp = s.firstTimestamp + s.audioPacketCount*uint32(s.AudioFrameDuration)*SAMPLE_RATE
+	s.audioPacketCount++
+	return packet
+}
+
+func (s *Session) WriteRTP(packet *rtp.Packet, isOpus bool) (int, error) {
 	if s.Local.srtp == nil {
 		return 0, nil // before init call
 	}
@@ -77,6 +149,13 @@ func (s *Session) WriteRTP(packet *rtp.Packet) (int, error) {
 		s.senderRTCP.NTPTime = uint64(now.UnixNano())
 		s.senderTime = now.Add(s.RTCPInterval)
 		_, _ = s.WriteRTCP(&s.senderRTCP)
+	}
+
+	if isOpus {
+		packet = s.repacketizeOpus(packet)
+		if packet == nil {
+			return 0, nil
+		}
 	}
 
 	clone := rtp.Packet{

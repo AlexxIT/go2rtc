@@ -114,6 +114,10 @@ func (c *Consumer) SetConfig(conf *camera.SelectedStreamConfig) bool {
 	c.audioSession.PayloadType = conf.AudioCodec.RTPParams[0].PayloadType
 	c.audioSession.RTCPInterval = toDuration(conf.AudioCodec.RTPParams[0].RTCPInterval)
 
+	if conf.AudioCodec.CodecType == camera.AudioCodecTypeOpus && conf.AudioCodec.CodecParams[0].RTPTime != nil {
+		c.audioSession.AudioFrameDuration = conf.AudioCodec.CodecParams[0].RTPTime[0]
+	}
+
 	c.srtp.AddSession(c.videoSession)
 	c.srtp.AddSession(c.audioSession)
 
@@ -132,16 +136,15 @@ func (c *Consumer) AddTrack(media *core.Media, codec *core.Codec, track *core.Re
 
 	if c.deadline == nil {
 		c.deadline = time.NewTimer(time.Second * 30)
-
 		sender.Handler = func(packet *rtp.Packet) {
 			c.deadline.Reset(core.ConnDeadline)
-			if n, err := session.WriteRTP(packet); err == nil {
+			if n, err := session.WriteRTP(packet, codec.Name == core.CodecOpus); err == nil {
 				c.Send += n
 			}
 		}
 	} else {
 		sender.Handler = func(packet *rtp.Packet) {
-			if n, err := session.WriteRTP(packet); err == nil {
+			if n, err := session.WriteRTP(packet, codec.Name == core.CodecOpus); err == nil {
 				c.Send += n
 			}
 		}
@@ -155,6 +158,8 @@ func (c *Consumer) AddTrack(media *core.Media, codec *core.Codec, track *core.Re
 		} else {
 			sender.Handler = h264.RepairAVCC(track.Codec, sender.Handler)
 		}
+		// case core.CodecOpus:
+		// 	sender.Handler = h264.RTPPay(400, sender.Handler)
 	}
 
 	sender.HandleRTP(track)
