@@ -158,8 +158,6 @@ func (c *Consumer) AddTrack(media *core.Media, codec *core.Codec, track *core.Re
 		} else {
 			sender.Handler = h264.RepairAVCC(track.Codec, sender.Handler)
 		}
-		// case core.CodecOpus:
-		// 	sender.Handler = h264.RTPPay(400, sender.Handler)
 	}
 
 	sender.HandleRTP(track)
