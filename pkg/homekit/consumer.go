@@ -10,6 +10,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/hap/camera"
+	"github.com/AlexxIT/go2rtc/pkg/opus"
 	"github.com/AlexxIT/go2rtc/pkg/srtp"
 	"github.com/pion/rtp"
 )
@@ -24,6 +25,7 @@ type Consumer struct {
 	sessionID    string
 	videoSession *srtp.Session
 	audioSession *srtp.Session
+	audioRTPTime byte
 }
 
 func NewConsumer(conn net.Conn, server *srtp.Server) *Consumer {
@@ -113,6 +115,7 @@ func (c *Consumer) SetConfig(conf *camera.SelectedStreamConfig) bool {
 	c.audioSession.Remote.SSRC = conf.AudioCodec.RTPParams[0].SSRC
 	c.audioSession.PayloadType = conf.AudioCodec.RTPParams[0].PayloadType
 	c.audioSession.RTCPInterval = toDuration(conf.AudioCodec.RTPParams[0].RTCPInterval)
+	c.audioRTPTime = conf.AudioCodec.CodecParams[0].RTPTime[0]
 
 	c.srtp.AddSession(c.videoSession)
 	c.srtp.AddSession(c.audioSession)
@@ -155,6 +158,8 @@ func (c *Consumer) AddTrack(media *core.Media, codec *core.Codec, track *core.Re
 		} else {
 			sender.Handler = h264.RepairAVCC(track.Codec, sender.Handler)
 		}
+	case core.CodecOpus:
+		sender.Handler = opus.RepackToHAP(c.audioRTPTime, sender.Handler)
 	}
 
 	sender.HandleRTP(track)
