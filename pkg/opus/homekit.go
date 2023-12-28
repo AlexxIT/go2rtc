@@ -74,7 +74,7 @@ func repackToHAP60(handler core.HandlerFunc) core.HandlerFunc {
 
 		toc := pkt.Payload[0]
 
-		payload := make([]byte, 2, len(framesSize)+len(framesData))
+		payload := make([]byte, 2, 2+len(framesSize)+len(framesData))
 		payload[0] = toc | 0b11  // code 3 (multiple frames per packet)
 		payload[1] = 0b1000_0011 // VBR, no padding, 3 frames
 		payload = append(payload, framesSize...)
