@@ -39,6 +39,7 @@ type Client struct {
 
 	session1 string
 	session2 string
+	request  string
 
 	recv int
 	send int
@@ -90,6 +91,25 @@ func (c *Client) newConn() (net.Conn, error) {
 		c.newDectypter(res)
 	}
 
+	query := u.Query()
+	channel := query.Get("channel")
+	if channel == "" {
+		channel = "0"
+	}
+
+	subtype := query.Get("subtype")
+	switch subtype {
+	case "", "0":
+		subtype = "HD"
+	case "1":
+		subtype = "VGA"
+	}
+
+	c.request = fmt.Sprintf(
+		`{"params":{"preview":{"audio":["default"],"channels":[%s],"resolutions":["%s"]},"method":"get"},"seq":1,"type":"request"}`,
+		channel, subtype,
+	)
+
 	return conn, nil
 }
 
@@ -131,7 +151,7 @@ func (c *Client) SetupStream() (err error) {
 	}
 
 	// audio: default, disable, enable
-	c.session1, err = c.Request(c.conn1, []byte(`{"params":{"preview":{"audio":["default"],"channels":[0],"resolutions":["HD"]},"method":"get"},"seq":1,"type":"request"}`))
+	c.session1, err = c.Request(c.conn1, []byte(c.request))
 	return
 }
 
