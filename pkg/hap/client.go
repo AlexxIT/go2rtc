@@ -83,6 +83,10 @@ func (c *Client) DeviceHost() string {
 }
 
 func (c *Client) Dial() (err error) {
+	if len(c.ClientID) == 0 || len(c.ClientPrivate) == 0 {
+		return errors.New("hap: can't dial witout client_id or client_private")
+	}
+
 	// update device address (host and/or port) before dial
 	_ = mdns.QueryOrDiscovery(c.DeviceHost(), mdns.ServiceHAP, func(entry *mdns.ServiceEntry) bool {
 		if entry.Complete() && entry.Info["id"] == c.DeviceID {
