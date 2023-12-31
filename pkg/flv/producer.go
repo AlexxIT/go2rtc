@@ -10,6 +10,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/aac"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
+	"github.com/AlexxIT/go2rtc/pkg/h265"
 	"github.com/pion/rtp"
 )
 
@@ -38,6 +39,21 @@ const (
 
 	CodecAAC = 10
 	CodecAVC = 7
+)
+
+const (
+	PacketTypeAVCHeader = iota
+	PacketTypeAVCNALU
+	PacketTypeAVCEnd
+)
+
+const (
+	PacketTypeSequenceStart = iota
+	PacketTypeCodedFrames
+	PacketTypeSequenceEnd
+	PacketTypeCodedFramesX
+	PacketTypeMetadata
+	PacketTypeMPEG2TSSequenceStart
 )
 
 func (c *Producer) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
@@ -70,13 +86,32 @@ func (c *Producer) Start() error {
 			c.audio.WriteRTP(pkt)
 
 		case TagVideo:
-			// frame type 4b, codecID 4b, avc packet type 8b, composition time 24b
-			if c.video == nil || pkt.Payload[1] == 0 {
+			if c.video == nil {
 				continue
 			}
 
+			if isExHeader(pkt.Payload) {
+				switch packetType := pkt.Payload[0] & 0b1111; packetType {
+				case PacketTypeCodedFrames:
+					// frame type 4b, packet type 4b, fourCC 32b, composition time 24b
+					pkt.Payload = pkt.Payload[8:]
+				case PacketTypeCodedFramesX:
+					// frame type 4b, packet type 4b, fourCC 32b
+					pkt.Payload = pkt.Payload[5:]
+				default:
+					continue
+				}
+			} else {
+				switch pkt.Payload[1] {
+				case PacketTypeAVCNALU:
+					// frame type 4b, codecID 4b, avc packet type 8b, composition time 24b
+					pkt.Payload = pkt.Payload[5:]
+				default:
+					continue
+				}
+			}
+
 			pkt.Timestamp = TimeToRTP(pkt.Timestamp, c.video.Codec.ClockRate)
-			pkt.Payload = pkt.Payload[5:]
 			c.video.WriteRTP(pkt)
 		}
 	}
@@ -145,20 +180,32 @@ func (c *Producer) probe() error {
 			c.Medias = append(c.Medias, media)
 
 		case TagVideo:
-			_ = pkt.Payload[1] // bounds
+			var codec *core.Codec
 
-			_ = pkt.Payload[0] >> 4            // FrameType
-			codecID := pkt.Payload[0] & 0b1111 // CodecID
+			if isExHeader(pkt.Payload) {
+				if string(pkt.Payload[1:5]) != "hvc1" {
+					continue
+				}
 
-			if codecID != CodecAVC {
-				continue
+				if packetType := pkt.Payload[0] & 0b1111; packetType != PacketTypeSequenceStart {
+					continue
+				}
+
+				codec = h265.ConfigToCodec(pkt.Payload[5:])
+			} else {
+				_ = pkt.Payload[0] >> 4 // FrameType
+
+				if codecID := pkt.Payload[0] & 0b1111; codecID != CodecAVC {
+					continue
+				}
+
+				if packetType := pkt.Payload[1]; packetType != PacketTypeAVCHeader { // check if header
+					continue
+				}
+
+				codec = h264.ConfigToCodec(pkt.Payload[5:])
 			}
 
-			if pkt.Payload[1] != 0 { // check if header
-				continue
-			}
-
-			codec := h264.ConfigToCodec(pkt.Payload[5:])
 			media := &core.Media{
 				Kind:      core.KindVideo,
 				Direction: core.DirectionRecvonly,
@@ -229,9 +276,15 @@ func (c *Producer) readPacket() (*rtp.Packet, error) {
 		return nil, err
 	}
 
+	//log.Printf("[FLV] %d %.40x", pkt.PayloadType, pkt.Payload)
+
 	return pkt, nil
 }
 
 func TimeToRTP(timeMS uint32, clockRate uint32) uint32 {
 	return timeMS * clockRate / 1000
+}
+
+func isExHeader(data []byte) bool {
+	return data[0]&0b1000_0000 != 0
 }
