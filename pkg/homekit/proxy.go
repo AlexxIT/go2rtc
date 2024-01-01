@@ -55,11 +55,8 @@ func proxy(r, w net.Conn, pair ServerPair) error {
 			continue
 		}
 
-		//if n > 512 {
-		//	log.Printf("[hap] %d bytes => %s\n%s...", n, w.RemoteAddr(), b[:512])
-		//} else {
-		//	log.Printf("[hap] %d bytes => %s\n%s", n, w.RemoteAddr(), b[:n])
-		//}
+		//log.Printf("[hap] %d bytes => %s\n%.512s", n, w.RemoteAddr(), b[:n])
+
 		if _, err = w.Write(b[:n]); err != nil {
 			break
 		}
