@@ -121,7 +121,7 @@ func (a *API) GetDevices(projectID string) (map[string]string, error) {
 	return devices, nil
 }
 
-func (a *API) ExchangeSDP(projectID, deviceID, offer string) (string, error) {
+func (a *API) ExchangeSDP(projectID, deviceID, offer string) (string, string, time.Time, error) {
 	var reqv struct {
 		Command string `json:"command"`
 		Params  struct {
@@ -133,14 +133,14 @@ func (a *API) ExchangeSDP(projectID, deviceID, offer string) (string, error) {
 
 	b, err := json.Marshal(reqv)
 	if err != nil {
-		return "", err
+		return "", "", time.Time{}, err
 	}
 
 	uri := "https://smartdevicemanagement.googleapis.com/v1/enterprises/" +
 		projectID + "/devices/" + deviceID + ":executeCommand"
 	req, err := http.NewRequest("POST", uri, bytes.NewReader(b))
 	if err != nil {
-		return "", err
+		return "", "", time.Time{}, err
 	}
 
 	req.Header.Set("Authorization", "Bearer "+a.Token)
@@ -148,11 +148,11 @@ func (a *API) ExchangeSDP(projectID, deviceID, offer string) (string, error) {
 	client := &http.Client{Timeout: time.Second * 5000}
 	res, err := client.Do(req)
 	if err != nil {
-		return "", err
+		return "", "", time.Time{}, err
 	}
 
 	if res.StatusCode != 200 {
-		return "", errors.New("nest: wrong status: " + res.Status)
+		return "", "", time.Time{}, errors.New("nest: wrong status: " + res.Status)
 	}
 
 	var resv struct {
@@ -164,10 +164,58 @@ func (a *API) ExchangeSDP(projectID, deviceID, offer string) (string, error) {
 	}
 
 	if err = json.NewDecoder(res.Body).Decode(&resv); err != nil {
-		return "", err
+		return "", "", time.Time{}, err
 	}
 
-	return resv.Results.Answer, nil
+	return resv.Results.Answer, resv.Results.MediaSessionId, resv.Results.ExpiresAt, nil
+}
+
+func (a *API) ExtendStream(projectID, deviceID, mediaSessionID string) (string, time.Time, error) {
+	var reqv struct {
+		Command string `json:"command"`
+		Params  struct {
+			MediaSessionID string `json:"mediaSessionId"`
+		} `json:"params"`
+	}
+	reqv.Command = "sdm.devices.commands.CameraLiveStream.ExtendWebRtcStream"
+	reqv.Params.MediaSessionID = mediaSessionID
+
+	b, err := json.Marshal(reqv)
+	if err != nil {
+		return "", time.Time{}, err
+	}
+
+	uri := "https://smartdevicemanagement.googleapis.com/v1/enterprises/" +
+		projectID + "/devices/" + deviceID + ":executeCommand"
+	req, err := http.NewRequest("POST", uri, bytes.NewReader(b))
+	if err != nil {
+		return "", time.Time{}, err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+a.Token)
+
+	client := &http.Client{Timeout: time.Second * 5000}
+	res, err := client.Do(req)
+	if err != nil {
+		return "", time.Time{}, err
+	}
+
+	if res.StatusCode != 200 {
+		return "", time.Time{}, errors.New("nest: wrong status: " + res.Status)
+	}
+
+	var resv struct {
+		Results struct {
+			ExpiresAt      time.Time `json:"expiresAt"`
+			MediaSessionId string    `json:"mediaSessionId"`
+		} `json:"results"`
+	}
+
+	if err = json.NewDecoder(res.Body).Decode(&resv); err != nil {
+		return "", time.Time{}, err
+	}
+
+	return resv.Results.MediaSessionId, resv.Results.ExpiresAt, nil
 }
 
 type Device struct {
