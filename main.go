@@ -1,6 +1,8 @@
 package main
 
 import (
+	"github.com/AlexxIT/go2rtc/internal/outputbc"
+
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"github.com/AlexxIT/go2rtc/internal/app"
@@ -80,6 +82,7 @@ func main() {
 	bubble.Init()   // bubble source
 	expr.Init()     // expr source
 	gopro.Init()    // gopro source
+	outputbc.Init()
 
 	// 6. Helper modules
 
