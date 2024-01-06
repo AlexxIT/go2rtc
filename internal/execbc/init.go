@@ -17,6 +17,5 @@ func handle(url string) (core.Producer, error) {
 	if err != nil {
 		return nil, err
 	}
-	con.Dial()
 	return con, nil
 }

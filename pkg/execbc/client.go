@@ -4,7 +4,6 @@ import (
 	"io"
 	"net"
 	"os/exec"
-	"sync"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 )
@@ -19,14 +18,8 @@ type Client struct {
 	cmd         *exec.Cmd
 }
 
-var lock = &sync.Mutex{}
-var singleInstance *Client
-
 func NewClient(commandArgs []string) (*Client, error) {
-	return &Client{commandArgs: commandArgs}, nil
-}
-
-func (c *Client) Dial() error {
+	c := &Client{commandArgs: commandArgs}
 	media := &core.Media{
 		Kind:      core.KindAudio,
 		Direction: core.DirectionSendonly,
@@ -43,11 +36,11 @@ func (c *Client) Dial() error {
 
 	pipeCloser, error := PipeCloser(&cmd)
 	if error != nil {
-		return error
+		return nil, error
 	}
 	c.pipeCloser = pipeCloser
 	c.cmd = &cmd
-	return nil
+	return c, nil
 }
 
 func (c Client) Open() (err error) {
