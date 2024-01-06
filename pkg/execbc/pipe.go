@@ -21,7 +21,7 @@ func PipeCloser(cmd *exec.Cmd) (io.WriteCloser, error) {
 		return nil, err
 	}
 
-	return pipeCloser{bufio.NewWriterSize(stdin, 640), stdin, cmd}, nil
+	return pipeCloser{bufio.NewWriterSize(stdin, core.BufferSize), stdin, cmd}, nil
 }
 
 func (p pipeCloser) Close() (err error) {
