@@ -1,7 +1,6 @@
 package execbc
 
 import (
-	"bufio"
 	"io"
 	"os/exec"
 
@@ -20,8 +19,7 @@ func PipeCloser(cmd *exec.Cmd) (io.WriteCloser, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	return pipeCloser{bufio.NewWriterSize(stdin, core.BufferSize), stdin, cmd}, nil
+	return pipeCloser{stdin, stdin, cmd}, nil
 }
 
 func (p pipeCloser) Close() (err error) {
