@@ -20,6 +20,12 @@ import (
 	"github.com/rs/zerolog"
 )
 
+type Params struct {
+	KillSignal  os.Signal
+	Command     string
+	KillTimeout time.Duration
+}
+
 func Init() {
 	rtsp.HandleFunc(func(conn *pkg.Conn) bool {
 		waitersMu.Lock()
@@ -47,7 +53,12 @@ func Init() {
 func execHandle(url string) (core.Producer, error) {
 	var path string
 
-	args := shell.QuoteSplit(url[5:]) // remove `exec:`
+	params, err := parseParams(url)
+	if err != nil {
+		return nil, err
+	}
+
+	args := shell.QuoteSplit(params.Command[5:]) // remove `exec:`
 	for i, arg := range args {
 		if arg == "{output}" {
 			if rtsp.Port == "" {
@@ -67,14 +78,14 @@ func execHandle(url string) (core.Producer, error) {
 	}
 
 	if path == "" {
-		return handlePipe(url, cmd)
+		return handlePipe(url, cmd, params)
 	}
 
 	return handleRTSP(url, path, cmd)
 }
 
-func handlePipe(url string, cmd *exec.Cmd) (core.Producer, error) {
-	r, err := PipeCloser(cmd)
+func handlePipe(_ string, cmd *exec.Cmd, params *Params) (core.Producer, error) {
+	r, err := PipeCloser(cmd, params)
 	if err != nil {
 		return nil, err
 	}
@@ -144,6 +155,8 @@ func handleRTSP(url, path string, cmd *exec.Cmd) (core.Producer, error) {
 
 // internal
 
-var log zerolog.Logger
-var waiters = map[string]chan core.Producer{}
-var waitersMu sync.Mutex
+var (
+	log       zerolog.Logger
+	waiters   = map[string]chan core.Producer{}
+	waitersMu sync.Mutex
+)
