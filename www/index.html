@@ -124,7 +124,8 @@
         fetch(url, {cache: 'no-cache'}).then(r => r.json()).then(data => {
             tbody.innerHTML = '';
 
-            for (const [name, value] of Object.entries(data)) {
+            for (const [key, value] of Object.entries(data)) {
+                const name = key.replace(/[<">]/g, ''); // sanitize
                 const online = value && value.consumers ? value.consumers.length : 0;
                 const src = encodeURIComponent(name);
                 const links = templates.map(link => {
