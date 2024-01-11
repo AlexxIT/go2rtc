@@ -817,6 +817,7 @@ api:
     -----BEGIN PRIVATE KEY-----
     ...
     -----END PRIVATE KEY-----
+  unix_listen: "/tmp/go2rtc.sock"  # default "", unix socket listener for API
 ```
 
 **PS:**
