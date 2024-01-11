@@ -790,6 +790,8 @@ streams:
 
 The HTTP API is the main part for interacting with the application. Default address: `http://localhost:1984/`.
 
+**Important!** go2rtc passes requests from localhost and from unix socket without HTTP authorisation, even if you have it configured! It is your responsibility to set up secure external access to API. If not properly configured, an attacker can gain access to your cameras and even your server.
+
 [API description](https://github.com/AlexxIT/go2rtc/tree/master/api).
 
 **Module config**
