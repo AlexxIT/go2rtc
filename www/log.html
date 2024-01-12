@@ -87,7 +87,7 @@
 
     function applyLogStyling(jsonlines) {
         const KEYS = ['time', 'level', 'message'];
-        const lines = JSON.parse('[' + jsonlines.trimEnd().replaceAll('\n', ',') + ']');
+        const lines = JSON.parse('[' + jsonlines.trimEnd().replaceAll('\n', ',') + ']').reverse();
         return lines.map(line => {
             const ts = new Date(line['time']);
             const msg = Object.keys(line).reduce((msg, key) => {
