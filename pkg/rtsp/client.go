@@ -219,6 +219,9 @@ func (c *Conn) SetupMedia(media *core.Media) (byte, error) {
 			rawURL += "/"
 		}
 		rawURL += media.ID
+	} else if strings.HasPrefix(rawURL, "rtsp://rtsp://") {
+		// fix https://github.com/AlexxIT/go2rtc/issues/830
+		rawURL = rawURL[7:]
 	}
 	trackURL, err := urlParse(rawURL)
 	if err != nil {
