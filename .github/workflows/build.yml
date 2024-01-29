@@ -112,7 +112,6 @@ jobs:
         uses: actions/upload-artifact@v3
         with: { name: go2rtc_freebsd_arm64, path: go2rtc }
 
-
   docker-master:
     name: Build docker master
     runs-on: ubuntu-latest
