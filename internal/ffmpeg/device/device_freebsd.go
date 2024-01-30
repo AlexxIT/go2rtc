@@ -2,6 +2,7 @@ package device
 
 import (
 	"net/url"
+	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -11,76 +12,86 @@ import (
 )
 
 func queryToInput(query url.Values) string {
-	video := query.Get("video")
-	audio := query.Get("audio")
-
-	if video == "" && audio == "" {
-		return ""
-	}
-
-	// https://ffmpeg.org/ffmpeg-devices.html#avfoundation
-	input := "-f avfoundation"
-
-	if video != "" {
-		video = indexToItem(videos, video)
+	if video := query.Get("video"); video != "" {
+		// https://ffmpeg.org/ffmpeg-devices.html#video4linux2_002c-v4l2
+		input := "-f v4l2"
 
 		for key, value := range query {
 			switch key {
 			case "resolution":
 				input += " -video_size " + value[0]
-			case "pixel_format", "framerate", "video_size", "capture_cursor", "capture_mouse_clicks", "capture_raw_data":
+			case "video_size", "pixel_format", "input_format", "framerate", "use_libv4l2":
 				input += " -" + key + " " + value[0]
 			}
 		}
+
+		return input + " -i " + indexToItem(videos, video)
 	}
 
-	if audio != "" {
-		audio = indexToItem(audios, audio)
+	if audio := query.Get("audio"); audio != "" {
+		input := "-f oss"
+
+		for key, value := range query {
+			switch key {
+			case "channels", "sample_rate":
+				input += " -" + key + " " + value[0]
+			}
+		}
+
+		return input + " -i " + indexToItem(audios, audio)
 	}
 
-	return input + ` -i "` + video + `:` + audio + `"`
+	return ""
 }
 
 func initDevices() {
-	// [AVFoundation indev @ 0x147f04510] AVFoundation video devices:
-	// [AVFoundation indev @ 0x147f04510] [0] FaceTime HD Camera
-	// [AVFoundation indev @ 0x147f04510] [1] Capture screen 0
-	// [AVFoundation indev @ 0x147f04510] AVFoundation audio devices:
-	// [AVFoundation indev @ 0x147f04510] [0] MacBook Pro Microphone
-	cmd := exec.Command(
-		Bin, "-hide_banner", "-list_devices", "true", "-f", "avfoundation", "-i", "",
-	)
-	b, _ := cmd.CombinedOutput()
+	files, err := os.ReadDir("/dev")
+	if err != nil {
+		return
+	}
 
-	re := regexp.MustCompile(`\[\d+] (.+)`)
-
-	var kind string
-	for _, line := range strings.Split(string(b), "\n") {
-		switch {
-		case strings.HasSuffix(line, "video devices:"):
-			kind = core.KindVideo
-			continue
-		case strings.HasSuffix(line, "audio devices:"):
-			kind = core.KindAudio
+	for _, file := range files {
+		if !strings.HasPrefix(file.Name(), core.KindVideo) {
 			continue
 		}
 
-		m := re.FindStringSubmatch(line)
-		if m == nil {
-			continue
-		}
+		name := "/dev/" + file.Name()
 
-		name := m[1]
+		cmd := exec.Command(
+			Bin, "-hide_banner", "-f", "v4l2", "-list_formats", "all", "-i", name,
+		)
+		b, _ := cmd.CombinedOutput()
 
-		switch kind {
-		case core.KindVideo:
+		// [video4linux2,v4l2 @ 0x860b92280] Raw       :     yuyv422 :           YUYV 4:2:2 : 640x480 160x120 176x144 320x176 320x240 352x288 432x240 544x288 640x360 752x416 800x448 800x600 864x480 960x544 960x720 1024x576 1184x656 1280x720 1280x960
+		// [video4linux2,v4l2 @ 0x860b92280] Compressed:       mjpeg :          Motion-JPEG : 640x480 160x120 176x144 320x176 320x240 352x288 432x240 544x288 640x360 752x416 800x448 800x600 864x480 960x544 960x720 1024x576 1184x656 1280x720 1280x960
+		re := regexp.MustCompile("(Raw *|Compressed): +(.+?) : +(.+?) : (.+)")
+		m := re.FindAllStringSubmatch(string(b), -1)
+		for _, i := range m {
+			size, _, _ := strings.Cut(i[4], " ")
+			stream := &api.Source{
+				Name: i[3],
+				Info: i[4],
+				URL:  "ffmpeg:device?video=" + name + "&input_format=" + i[2] + "&video_size=" + size,
+			}
+
+			if i[1] != "Compressed" {
+				stream.URL += "#video=h264#hardware"
+			}
+
 			videos = append(videos, name)
-		case core.KindAudio:
-			audios = append(audios, name)
+			streams = append(streams, stream)
+		}
+	}
+
+	err = exec.Command(Bin, "-f", "oss", "-i", "/dev/dsp", "-t", "1", "-f", "null", "-").Run()
+	if err == nil {
+		stream := &api.Source{
+			Name: "OSS default",
+			Info: " ",
+			URL:  "ffmpeg:device?audio=default&channels=1&sample_rate=16000&#audio=opus",
 		}
 
-		streams = append(streams, &api.Source{
-			Name: name, URL: "ffmpeg:device?" + kind + "=" + name,
-		})
+		audios = append(audios, "default")
+		streams = append(streams, stream)
 	}
 }
