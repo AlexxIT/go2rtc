@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/AlexxIT/go2rtc/pkg/expr"
 	"github.com/AlexxIT/go2rtc/pkg/shell"
 	"github.com/AlexxIT/go2rtc/pkg/yaml"
 	"github.com/rs/zerolog/log"
@@ -85,7 +86,13 @@ func Init() {
 
 func LoadConfig(v any) {
 	for _, data := range configs {
-		if err := yaml.Unmarshal(data, v); err != nil {
+		processedData, err := expr.ProcessConfig(data)
+		if err != nil {
+			log.Warn().Err(err).Msg("[app] process config")
+			continue
+		}
+
+		if err := yaml.Unmarshal(processedData, v); err != nil {
 			log.Warn().Err(err).Msg("[app] read config")
 		}
 	}
