@@ -5,12 +5,17 @@ import (
 	"encoding/json"
 	"net"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/internal/webrtc"
 )
+
+// UniFi streams will start with rtsps and end with ?enableSrtp
+// this is not compatible with go2rtc and requires some manipulation
+var UnifiMatch = regexp.MustCompile(`rtsps://.+[?]enableSrtp`)
 
 func apiOK(w http.ResponseWriter, r *http.Request) {
 	api.Response(w, `{"status":1,"payload":{}}`, api.MimeJSON)
@@ -30,7 +35,15 @@ func apiStream(w http.ResponseWriter, r *http.Request) {
 		// 1. link to go2rtc stream: rtsp://...:8554/{stream_name}
 		// 2. static link to Hass camera
 		// 3. dynamic link to Hass camera
-		if streams.Patch(v.Name, v.Channels.First.Url) != nil {
+
+		// Mutate incompatible UniFi URLs
+		streamURL := v.Channels.First.Url
+		if UnifiMatch.MatchString(streamURL) {
+			streamURL = strings.Replace(streamURL, "rtsps", "rtspx", 1)
+			streamURL = strings.Replace(streamURL, "?enableSrtp", "", 1)
+			log.Debug().Msgf("Cleaning UniFi stream URL: %v", streamURL)
+		}
+		if streams.Patch(v.Name, streamURL) != nil {
 			apiOK(w, r)
 		} else {
 			http.Error(w, "", http.StatusBadRequest)
