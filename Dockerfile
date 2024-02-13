@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:labs
+# syntax=docker/dockerfile:1.6
 
 # 0. Prepare images
 ARG PYTHON_VERSION="3.11"
@@ -61,3 +61,6 @@ VOLUME /config
 WORKDIR /config
 
 CMD ["go2rtc", "-config", "/config/go2rtc.yaml"]
+
+HEALTHCHECK --start-period=10s --start-interval=2s --interval=30s --timeout=10s --retries=3 \
+    CMD curl --fail --silent --show-error --output /dev/null http://127.0.0.1:1984/api || exit 1
