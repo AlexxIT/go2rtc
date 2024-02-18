@@ -2,7 +2,6 @@ package homekit
 
 import (
 	"encoding/hex"
-	"slices"
 
 	"github.com/AlexxIT/go2rtc/pkg/aac"
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -22,8 +21,8 @@ func videoToMedia(codecs []camera.VideoCodec) *core.Media {
 	for _, codec := range codecs {
 		for _, param := range codec.CodecParams {
 			// get best profile and level
-			profileID := slices.Max(param.ProfileID)
-			level := slices.Max(param.Level)
+			profileID := maxByteSlice(param.ProfileID)
+			level := maxByteSlice(param.Level)
 			profile := videoProfiles[profileID] + videoLevels[level]
 			mediaCodec := &core.Codec{
 				Name:      videoCodecs[codec.CodecType],
@@ -35,6 +34,38 @@ func videoToMedia(codecs []camera.VideoCodec) *core.Media {
 	}
 
 	return media
+}
+
+// maxByteSlice returns the maximum byte value from the provided slice.
+//
+// If the slice is empty, it will return 0. It iterates through each byte in the slice,
+// compares them and retains the highest value found. This function assumes that the
+// slice is not nil and does contain at least one element unless an empty slice is
+// intentionally passed to it.
+//
+// Usage:
+//
+//	maxVal := maxByteSlice([]byte{10, 30, 20})
+//	fmt.Println(maxVal) // Output: 30
+//
+// Params:
+//
+//	slice []byte - A slice of bytes from which the maximum value will be determined.
+//
+// Returns:
+//
+//	byte - The maximum byte value found in the slice. If the slice is empty, returns 0.
+func maxByteSlice(slice []byte) byte {
+	if len(slice) == 0 {
+		return 0
+	}
+	max := slice[0]
+	for _, value := range slice[1:] {
+		if value > max {
+			max = value
+		}
+	}
+	return max
 }
 
 var audioCodecs = [...]string{core.CodecPCMU, core.CodecPCMA, core.CodecELD, core.CodecOpus}
