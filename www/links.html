@@ -170,6 +170,57 @@ Telegram: rtmps://xxx-x.rtmp.t.me/s/xxxxxxxxxx:xxxxxxxxxxxxxxxxxxxxxx</pre>
         document.getElementById('sharedel').style.display = 'none';
     }
 
+    function copyTextToClipboard(text) {
+        // Modern approach with the Clipboard API
+        if (navigator.clipboard && window.isSecureContext) {
+            // Navigator clipboard is available
+            navigator.clipboard.writeText(text).then(function() {
+                console.log('Async: Copying to clipboard was successful!');
+            }, function(err) {
+                console.error('Async: Could not copy text: ', err);
+            });
+        } else {
+            // Fallback using document.execCommand()
+            try {
+                // Create a temporary element to hold the text to copy
+                var textarea = document.createElement("textarea");
+                // Make it almost invisible and uneditable
+                textarea.style.position = 'fixed';
+                textarea.style.top = 0;
+                textarea.style.left = 0;
+                textarea.style.width = '2em';
+                textarea.style.height = '2em';
+                textarea.style.padding = 0;
+                textarea.style.border = 'none';
+                textarea.style.outline = 'none';
+                textarea.style.boxShadow = 'none';
+                textarea.style.background = 'transparent';
+
+                // Set the text content and append the textarea to the body
+                textarea.value = text;
+                document.body.appendChild(textarea);
+
+                // Select all the text in the textarea
+                textarea.focus();
+                textarea.select();
+
+                // Attempt to copy the text selected in the textarea
+                var successful = document.execCommand('copy');
+                if (successful) {
+                    console.log('Fallback: Copying text command was successful!');
+                } else {
+                    console.error('Fallback: Could not copy text');
+                }
+
+                // Cleanup - remove the temporary textarea
+                document.body.removeChild(textarea);
+            } catch (err) {
+                console.error('Fallback: Exception while trying to copy', err);
+            }
+        }
+    }
+
+
     document.getElementById('shareadd').addEventListener('click', ev => {
         ev.preventDefault();
         share('POST').then(r => r.json()).then(r => onshareadd(r));
@@ -177,7 +228,7 @@ Telegram: rtmps://xxx-x.rtmp.t.me/s/xxxxxxxxxx:xxxxxxxxxxxxxxxxxxxxxx</pre>
 
     document.getElementById('shareget').addEventListener('click', ev => {
         ev.preventDefault();
-        navigator.clipboard.writeText(ev.target.href);
+        copyTextToClipboard(ev.target.href);
     });
 
     document.getElementById('sharedel').addEventListener('click', ev => {
