@@ -164,6 +164,15 @@ func runToString(bin string, args string) string {
 	}
 }
 
+// cut returns the element at the specified position after splitting the input string using the given separator.
+//
+// Parameters:
+//   - s: the input string
+//   - sep: the separator used to split the string
+//   - pos: the position of the element to return
+//
+// Return type:
+//   - string: the element at the specified position, or an empty string if the position is out of range
 func cut(s string, sep byte, pos int) string {
 	for n := 0; n < pos; n++ {
 		if i := strings.IndexByte(s, sep); i > 0 {

@@ -55,3 +55,11 @@ func indexToItem(items []string, index string) string {
 	}
 	return index
 }
+
+// shellEscape escapes a string for use as a shell argument.
+//
+// arg: the string to be escaped.
+// returns: the escaped string.
+func shellEscape(arg string) string {
+	return "'" + strings.ReplaceAll(arg, "'", "'\\''") + "'"
+}
