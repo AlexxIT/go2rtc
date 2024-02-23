@@ -281,7 +281,7 @@ func dial(req *http.Request) (net.Conn, *http.Response, error) {
 	auth := res.Header.Get("WWW-Authenticate")
 
 	if res.StatusCode != http.StatusUnauthorized || !strings.HasPrefix(auth, "Digest") {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("Expected StatusCode to be %d, received %d", http.StatusUnauthorized, res.StatusCode)
 	}
 
 	if password == "" {
