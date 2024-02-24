@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -25,13 +26,32 @@ var Info = map[string]any{
 func Init() {
 	var confs Config
 	var version bool
+	var daemon bool
 
 	flag.Var(&confs, "config", "go2rtc config (path to file or raw text), support multiple")
+	if runtime.GOOS != "windows" {
+		flag.BoolVar(&daemon, "daemon", false, "Run program in background")
+	} else {
+		daemon = false
+	}
 	flag.BoolVar(&version, "version", false, "Print the version of the application and exit")
 	flag.Parse()
 
 	if version {
 		fmt.Println("Current version: ", Version)
+		os.Exit(0)
+	}
+
+	if daemon {
+		for i, arg := range os.Args[1:] {
+			if arg == "-daemon" {
+				os.Args[i+1] = ""
+			}
+		}
+		// Re-run the program in background and exit
+		cmd := exec.Command(os.Args[0], os.Args[1:]...)
+		cmd.Start()
+		fmt.Println("Running in daemon mode with PID:", cmd.Process.Pid)
 		os.Exit(0)
 	}
 
