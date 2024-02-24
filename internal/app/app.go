@@ -43,8 +43,13 @@ func Init() {
 	}
 
 	if daemon {
+		for i, arg := range os.Args[1:] {
+			if arg == "-daemon" {
+				os.Args[i+1] = ""
+			}
+		}
 		// Re-run the program in background and exit
-		cmd := exec.Command(os.Args[0], os.Args[2:]...)
+		cmd := exec.Command(os.Args[0], os.Args[1:]...)
 		cmd.Start()
 		fmt.Println("Running in daemon mode with PID:", cmd.Process.Pid)
 		os.Exit(0)
