@@ -115,7 +115,9 @@ func Do(req *http.Request) (*http.Response, error) {
 			)
 		case "auth":
 			nc := "00000001"
-			cnonce := "00000001" // TODO: random...
+			// TODO: Random cnonce
+         // Here is temp static cnonce of required 32 bytes
+			cnonce := "ZDlmODczZTk2NjQyZTQ4OGQ5ZGEzOTI3YTc5Y2Q0ZGM="
 			response := HexMD5(ha1, nonce, nc, cnonce, qop, ha2)
 			header = fmt.Sprintf(
 				`Digest username="%s", realm="%s", nonce="%s", uri="%s", qop=%s, nc=%s, cnonce="%s", response="%s"`,

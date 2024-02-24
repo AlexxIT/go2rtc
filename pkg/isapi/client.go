@@ -86,12 +86,28 @@ func (c *Client) Dial() (err error) {
 func (c *Client) Open() (err error) {
 	link := c.url + "/ISAPI/System/TwoWayAudio/channels/" + c.channel
 
-	req, err := http.NewRequest("PUT", link+"/open", nil)
+   // Hikvision ISAPI may not accept a new open request if the previous one was not closed (e.g.
+   // using the test button on-camera or via curl command) but a close request can be sent even if
+   // the audio is already closed. So, we send a close request first and then open it again. Seems
+   // janky but it works.
+	req, err := http.NewRequest("PUT", link+"/close", nil)
 	if err != nil {
 		return err
 	}
 
 	res, err := tcp.Do(req)
+	if err != nil {
+		return err
+	}
+
+	tcp.Close(res)
+
+	req, err = http.NewRequest("PUT", link+"/open", nil)
+	if err != nil {
+		return err
+	}
+
+	res, err = tcp.Do(req)
 	if err != nil {
 		return
 	}
@@ -124,8 +140,8 @@ func (c *Client) Open() (err error) {
 }
 
 func (c *Client) Close() (err error) {
-	link := c.url + "/ISAPI/System/TwoWayAudio/channels/" + c.channel + "/close"
-	req, err := http.NewRequest("PUT", link+"/open", nil)
+	link := c.url + "/ISAPI/System/TwoWayAudio/channels/" + c.channel
+	req, err := http.NewRequest("PUT", link+"/close", nil)
 	if err != nil {
 		return err
 	}
