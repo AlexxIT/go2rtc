@@ -15,87 +15,87 @@ jobs:
     env: { CGO_ENABLED: 0 }
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with: { go-version: '1.21' }
 
       - name: Build go2rtc_win64
         env: { GOOS: windows, GOARCH: amd64 }
         run: go build -ldflags "-s -w" -trimpath
       - name: Upload go2rtc_win64
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with: { name: go2rtc_win64, path: go2rtc.exe }
 
       - name: Build go2rtc_win32
         env: { GOOS: windows, GOARCH: 386 }
         run: go build -ldflags "-s -w" -trimpath
       - name: Upload go2rtc_win32
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with: { name: go2rtc_win32, path: go2rtc.exe }
 
       - name: Build go2rtc_win_arm64
         env: { GOOS: windows, GOARCH: arm64 }
         run: go build -ldflags "-s -w" -trimpath
       - name: Upload go2rtc_win_arm64
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with: { name: go2rtc_win_arm64, path: go2rtc.exe }
 
       - name: Build go2rtc_linux_amd64
         env: { GOOS: linux, GOARCH: amd64 }
         run: go build -ldflags "-s -w" -trimpath
       - name: Upload go2rtc_linux_amd64
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with: { name: go2rtc_linux_amd64, path: go2rtc }
 
       - name: Build go2rtc_linux_i386
         env: { GOOS: linux, GOARCH: 386 }
         run: go build -ldflags "-s -w" -trimpath
       - name: Upload go2rtc_linux_i386
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with: { name: go2rtc_linux_i386, path: go2rtc }
 
       - name: Build go2rtc_linux_arm64
         env: { GOOS: linux, GOARCH: arm64 }
         run: go build -ldflags "-s -w" -trimpath
       - name: Upload go2rtc_linux_arm64
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with: { name: go2rtc_linux_arm64, path: go2rtc }
 
       - name: Build go2rtc_linux_arm
         env: { GOOS: linux, GOARCH: arm, GOARM: 7 }
         run: go build -ldflags "-s -w" -trimpath
       - name: Upload go2rtc_linux_arm
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with: { name: go2rtc_linux_arm, path: go2rtc }
 
       - name: Build go2rtc_linux_armv6
         env: { GOOS: linux, GOARCH: arm, GOARM: 6 }
         run: go build -ldflags "-s -w" -trimpath
       - name: Upload go2rtc_linux_armv6
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with: { name: go2rtc_linux_armv6, path: go2rtc }
 
       - name: Build go2rtc_linux_mipsel
         env: { GOOS: linux, GOARCH: mipsle }
         run: go build -ldflags "-s -w" -trimpath
       - name: Upload go2rtc_linux_mipsel
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with: { name: go2rtc_linux_mipsel, path: go2rtc }
 
       - name: Build go2rtc_mac_amd64
         env: { GOOS: darwin, GOARCH: amd64 }
         run: go build -ldflags "-s -w" -trimpath
       - name: Upload go2rtc_mac_amd64
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with: { name: go2rtc_mac_amd64, path: go2rtc }
 
       - name: Build go2rtc_mac_arm64
         env: { GOOS: darwin, GOARCH: arm64 }
         run: go build -ldflags "-s -w" -trimpath
       - name: Upload go2rtc_mac_arm64
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with: { name: go2rtc_mac_arm64, path: go2rtc }
 
   docker-master:
@@ -103,11 +103,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Docker meta
         id: meta
-        uses: docker/metadata-action@v4
+        uses: docker/metadata-action@v5
         with:
           images: ${{ github.repository }}
           tags: |
@@ -116,20 +116,20 @@ jobs:
             type=match,pattern=v(.*),group=1
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
 
       - name: Login to DockerHub
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and push
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v5
         with:
           context: .
           platforms: |
@@ -148,11 +148,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Docker meta
         id: meta-hw
-        uses: docker/metadata-action@v4
+        uses: docker/metadata-action@v5
         with:
           images: ${{ github.repository }}
           flavor: |
@@ -164,20 +164,20 @@ jobs:
             type=match,pattern=v(.*),group=1
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
 
       - name: Login to DockerHub
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and push
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v5
         with:
           context: .
           file: hardware.Dockerfile
