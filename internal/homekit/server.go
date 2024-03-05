@@ -250,6 +250,22 @@ func calcDeviceID(deviceID, seed string) string {
 	return fmt.Sprintf("%02X:%02X:%02X:%02X:%02X:%02X", b[32], b[34], b[36], b[38], b[40], b[42])
 }
 
+func calcDeviceCategory(deviceCategory) {
+	if deviceCategory != "" {
+		if deviceCategory == "Bridge" {
+			return hap.CategoryBridge
+		}
+		if deviceCategory == "Camera" {
+			return hap.CategoryCamera
+		}
+		if deviceCategory == "Doorbell" {
+			return hap.CategoryDoorbell
+		}
+	}
+	// return hap.CategoryCamera as default
+	return hap.CategoryCamera
+}
+
 func calcDevicePrivate(private, seed string) []byte {
 	if private != "" {
 		// 1. Decode private from HEX string

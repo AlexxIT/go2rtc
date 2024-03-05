@@ -63,6 +63,7 @@ func Init() {
 		}
 
 		deviceID := calcDeviceID(conf.DeviceID, id) // random MAC-address
+		deviceCategory := calcDeviceCategory(conf.DeviceCategory)
 		name := calcName(conf.Name, deviceID)
 
 		srv := &server{
@@ -72,12 +73,13 @@ func Init() {
 		}
 
 		srv.hap = &hap.Server{
-			Pin:           pin,
-			DeviceID:      deviceID,
-			DevicePrivate: calcDevicePrivate(conf.DevicePrivate, id),
-			GetPair:       srv.GetPair,
-			AddPair:       srv.AddPair,
-			Handler:       homekit.ServerHandler(srv),
+			Pin:           	pin,
+			DeviceID:      	deviceID,
+			DeviceCategory:	deviceCategory
+			DevicePrivate: 	calcDevicePrivate(conf.DevicePrivate, id),
+			GetPair:       	srv.GetPair,
+			AddPair:       	srv.AddPair,
+			Handler:       	homekit.ServerHandler(srv),
 		}
 
 		if url := findHomeKitURL(stream); url != "" {
@@ -107,7 +109,7 @@ func Init() {
 				hap.TXTProtoVersion: "1.1",
 				hap.TXTStateNumber:  "1",
 				hap.TXTStatusFlags:  hap.StatusNotPaired,
-				hap.TXTCategory:     hap.CategoryCamera,
+				hap.TXTCategory:     deviceCategory,
 				hap.TXTSetupHash:    srv.hap.SetupHash(),
 			},
 		}
