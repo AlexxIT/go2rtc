@@ -22,8 +22,13 @@ func NewStream(source any) *Stream {
 		}
 	case []any:
 		s := new(Stream)
-		for _, source := range source {
-			s.producers = append(s.producers, NewProducer(source.(string)))
+		for _, src := range source {
+			str, ok := src.(string)
+			if !ok {
+				log.Error().Msgf("[stream] NewStream: Expected string, got %v", src)
+				continue
+			}
+			s.producers = append(s.producers, NewProducer(str))
 		}
 		return s
 	case map[string]any:
