@@ -54,6 +54,7 @@
 <div>
     <button id="clean">Clean</button>
     <button id="update">Auto Update: ON</button>
+    <button id="reverse">Reverse Log Order: ON</button>
 </div>
 <br>
 <table>
@@ -85,9 +86,14 @@
             .replace(/\n/g, '<br>');
     }
 
+    let reverseOrder = false;
+
     function applyLogStyling(jsonlines) {
         const KEYS = ['time', 'level', 'message'];
-        const lines = JSON.parse('[' + jsonlines.trimEnd().replaceAll('\n', ',') + ']').reverse();
+        const lines = JSON.parse('[' + jsonlines.trimEnd().replaceAll('\n', ',') + ']');
+        if (reverseOrder) {
+            lines = lines.reverse();
+        }
         return lines.map(line => {
             const ts = new Date(line['time']);
             const msg = Object.keys(line).reduce((msg, key) => {
@@ -119,6 +125,14 @@
     update.addEventListener('click', () => {
         autoUpdateEnabled = !autoUpdateEnabled;
         update.textContent = `Auto Update: ${autoUpdateEnabled ? 'ON' : 'OFF'}`;
+    });
+
+    // Toggle log order
+    const reverseBtn = document.getElementById('reverse');
+    reverseBtn.addEventListener('click', () => {
+        reverseOrder = !reverseOrder;
+        reverseBtn.textContent = `Reverse Log Order: ${reverseOrder ? 'ON' : 'OFF'}`;
+        reload(); // Reload logs to apply the new order
     });
 
     // Reload the logs every 5 seconds
