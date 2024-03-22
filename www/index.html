@@ -143,6 +143,9 @@
         });
     }
 
+    // Auto-reload every 5 seconds
+    setInterval(reload, 5000);
+
     const url = new URL('api', location.href);
     fetch(url, {cache: 'no-cache'}).then(r => r.json()).then(data => {
         const info = document.querySelector('.info');
