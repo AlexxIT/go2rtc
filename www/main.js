@@ -77,14 +77,18 @@ body.dark-mode nav ul {
     background: #333;
 }
 
-body.dark-mode nav a {
-    background: rgba(255, 255, 255, .1);
-    border-right: 1px solid #444;
-    color: #ccc;
+body.dark-mode a {
+    background: rgba(45, 45, 45, .8);
+    border-right: 1px solid #2c2c2c;
+    color: #c7c7c7;
 }
 
-body.dark-mode nav a:hover {
+body.dark-mode a:hover {
     background: #555;
+}
+
+body.dark-mode a:visited {
+    color: #999;
 }
 
 body.dark-mode table {
