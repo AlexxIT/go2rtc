@@ -75,6 +75,15 @@ func (c *Client) newConn() (net.Conn, error) {
 		return nil, err
 	}
 
+	query := u.Query()
+
+	deviceId := query.Get("deviceId")
+	if deviceId != "" {
+		q := req.URL.Query()
+		q.Set("deviceId", deviceId)
+		req.URL.RawQuery = q.Encode()
+	}
+
 	req.URL.User = u.User
 	req.Header.Set("Content-Type", "multipart/mixed; boundary=--client-stream-boundary--")
 
@@ -91,7 +100,6 @@ func (c *Client) newConn() (net.Conn, error) {
 		c.newDectypter(res)
 	}
 
-	query := u.Query()
 	channel := query.Get("channel")
 	if channel == "" {
 		channel = "0"
@@ -284,6 +292,9 @@ func dial(req *http.Request) (net.Conn, *http.Response, error) {
 		return nil, nil, err
 	}
 
+	// Read the entire request body to prevent issues later - H200 seems to send HTTP ERROR 401 as body response.
+	_, _ = io.Copy(io.Discard, res.Body)
+
 	if password == "" {
 		// support cloud password in place of username
 		if strings.Contains(auth, `encrypt_type="3"`) {
@@ -297,17 +308,33 @@ func dial(req *http.Request) (net.Conn, *http.Response, error) {
 	realm := tcp.Between(auth, `realm="`, `"`)
 	nonce := tcp.Between(auth, `nonce="`, `"`)
 	qop := tcp.Between(auth, `qop="`, `"`)
+	// opaque is optional
+	op := ""
+	if strings.Contains(auth, `opaque="`) {
+		op = tcp.Between(auth, `opaque="`, `"`)
+	}
 	uri := req.URL.RequestURI()
 	ha1 := tcp.HexMD5(username, realm, password)
 	ha2 := tcp.HexMD5(req.Method, uri)
 	nc := "00000001"
-	cnonce := "00000001"
+
+	// Generate a random cnonce
+	cnonce := core.RandString(32, 64)
+
 	response := tcp.HexMD5(ha1, nonce, nc, cnonce, qop, ha2)
 
-	header := fmt.Sprintf(
-		`Digest username="%s", realm="%s", nonce="%s", uri="%s", qop=%s, nc=%s, cnonce="%s", response="%s"`,
-		username, realm, nonce, uri, qop, nc, cnonce, response,
-	)
+	header := ""
+	if op != "" {
+		header = fmt.Sprintf(
+			`Digest username="%s", realm="%s", nonce="%s", uri="%s", qop=%s, nc=%s, cnonce="%s", response="%s", opaque="%s", algorithm=MD5`,
+			username, realm, nonce, uri, qop, nc, cnonce, response, op,
+		)
+	} else {
+		header = fmt.Sprintf(
+			`Digest username="%s", realm="%s", nonce="%s", uri="%s", qop=%s, nc=%s, cnonce="%s", response="%s"`,
+			username, realm, nonce, uri, qop, nc, cnonce, response,
+		)
+	}
 
 	req.Header.Set("Authorization", header)
 
