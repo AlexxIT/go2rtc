@@ -138,6 +138,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const darkModeToggle = document.getElementById('darkModeToggle');
     const prefersDarkScheme = window.matchMedia('(prefers-color-scheme: dark)');
 
+    const isDarkModeEnabled = () => document.body.classList.contains('dark-mode');
+
+    // Update the toggle button based on the dark mode state
     const updateToggleButton = () => {
         if (isDarkModeEnabled()) {
             darkModeToggle.innerHTML = sunIcon;
@@ -148,33 +151,33 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const isDarkModeEnabled = () => document.body.classList.contains('dark-mode');
-
     const updateDarkMode = () => {
-        if (prefersDarkScheme.matches) {
+        if (localStorage.getItem('darkMode') === 'enabled' || prefersDarkScheme.matches && localStorage.getItem('darkMode') !== 'disabled') {
             document.body.classList.add('dark-mode');
         } else {
             document.body.classList.remove('dark-mode');
         }
+        updateEditorTheme();
+        updateToggleButton();
     };
 
+    // Update the editor theme based on the dark mode state
+    const updateEditorTheme = () => {
+        if (typeof editor !== 'undefined') {
+            editor.setTheme(isDarkModeEnabled() ? "ace/theme/tomorrow_night_eighties" : "ace/theme/github");        }
+    };
+
+    // Initial update for dark mode and toggle button
     updateDarkMode();
-    updateToggleButton();
 
-    prefersDarkScheme.addListener(updateDarkMode);
+    // Listen for changes in the system's color scheme preference
+    prefersDarkScheme.addEventListener('change', updateDarkMode); // Modern approach
 
+    // Toggle dark mode and update local storage on button click
     darkModeToggle.addEventListener('click', () => {
-        document.body.classList.toggle('dark-mode');
-        if (document.body.classList.contains('dark-mode')) {
-            localStorage.setItem('darkMode', 'enabled');
-            darkModeToggle.innerHTML = sunIcon;
-        } else {
-            localStorage.removeItem('darkMode');
-            darkModeToggle.innerHTML = moonIcon;
-        }
+        const enabled = document.body.classList.toggle('dark-mode');
+        localStorage.setItem('darkMode', enabled ? 'enabled' : 'disabled');
+        updateToggleButton(); // Update the button after toggling
+        updateEditorTheme();
     });
-
-    if (localStorage.getItem('darkMode') === 'enabled' || prefersDarkScheme.matches) {
-        document.body.classList.add('dark-mode');
-    }
 });
