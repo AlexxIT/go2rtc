@@ -18,7 +18,6 @@ i {
 
 nav {
     display: block;
-    /*width: 660px;*/
     margin: 0 auto 10px;
 }
 
@@ -116,6 +115,22 @@ body.dark-mode button {
     color: #ccc;
 }
 
+body.dark-mode input, 
+body.dark-mode select, 
+body.dark-mode textarea {
+    background-color: #333;
+    color: #e0e0e0;
+    border: 1px solid #444;
+}
+
+body.dark-mode input::placeholder,
+body.dark-mode textarea::placeholder {
+    color: #bbb;
+}
+
+body.dark-mode hr {
+    border-top: 1px solid #444;
+}
 </style>
 <nav>
     <ul>
