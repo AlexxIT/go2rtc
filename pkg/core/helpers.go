@@ -2,11 +2,14 @@ package core
 
 import (
 	"crypto/rand"
-	"github.com/Masterminds/semver/v3"
+	"unicode"
+
 	"runtime"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/unascribed/FlexVer/go/flexver"
 )
 
 const (
@@ -114,41 +117,43 @@ func MaxCPUThreads(reservedCores int) int {
 	return maxThreads
 }
 
-// CompareVersions compares two semantic version strings and returns the comparison result.
+// CompareVersions compares two version strings, v1 and v2, after optionally removing a leading letter from each.
+// The comparison is performed using the flexver.Compare function. If the first character of either version string
+// is a letter, that character is removed before comparison. This function is useful for comparing version strings
+// where a leading character might indicate a special version type or pre-release status that should not affect
+// the numerical version comparison.
 //
-// The function takes two version strings, v1 and v2, as input and attempts to parse them into semantic versions.
-// It then compares these versions according to semantic versioning rules:
+// The function returns an integer indicating the relationship between the two versions:
+// - 0 if v1 == v2,
+// - -1 if v1 < v2,
+// - 1 if v1 > v2.
 //
-// - If v1 is less than v2, it returns -1.
-// - If v1 is equal to v2, it returns 0.
-// - If v1 is greater than v2, it returns 1.
+// Parameters:
 //
-// This function panics if either version string cannot be parsed. This means that callers must ensure
-// the version strings are valid semantic versions before calling CompareVersions.
+//	v1 (string): The first version string to compare.
+//	v2 (string): The second version string to compare.
 //
-// Example usage:
+// Returns:
 //
-//	result := CompareVersions("1.0.0", "2.0.0")
-//	if result < 0 {
-//	    fmt.Println("Version 1 is older than Version 2")
-//	} else if result > 0 {
-//	    fmt.Println("Version 1 is newer than Version 2")
-//	} else {
-//	    fmt.Println("Version 1 and Version 2 are equal")
-//	}
+//	int: An integer indicating the result of the comparison (-1, 0, 1).
 //
-// Note: It's highly recommended to handle versions in a way that avoids panicking for invalid inputs.
-// Consider validating version strings or using a safer approach to error handling.
+// Example:
+//
+//	result := CompareVersions("a1.0", "1.2")
+//	// result will be -1 since "1.0" is considered less than "1.2"
 func CompareVersions(v1, v2 string) int {
-	version1, err := semver.NewVersion(v1)
-	if err != nil {
-		panic("Error parsing version 1: " + err.Error())
+	if len(v1) > 0 && unicode.IsLetter(rune(v1[0])) {
+		v1 = v1[1:]
 	}
-
-	version2, err := semver.NewVersion(v2)
-	if err != nil {
-		panic("Error parsing version 2: " + err.Error())
+	if len(v2) > 0 && unicode.IsLetter(rune(v2[0])) {
+		v2 = v2[1:]
 	}
+	result := flexver.Compare(v1, v2)
 
-	return version1.Compare(version2)
+	if result < 0 {
+		return -1
+	} else if result > 0 {
+		return 1
+	}
+	return 0
 }

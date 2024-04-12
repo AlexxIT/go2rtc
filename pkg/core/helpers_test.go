@@ -69,6 +69,16 @@ func TestCompareVersions(t *testing.T) {
 			args: args{v1: "1.3.0", v2: "1.2.9"},
 			want: 1,
 		},
+		{
+			name: "btbn-ffmpeg ebobo version format",
+			args: args{v1: "n7.0-7-gd38bf5e08e-20240411", v2: "6.1.1"},
+			want: 1,
+		},
+		{
+			name: "btbn-ffmpeg ebobo version format 2",
+			args: args{v1: "n7.0-7-gd38bf5e08e-20240411", v2: "7.1"},
+			want: -1,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

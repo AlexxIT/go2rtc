@@ -26,7 +26,6 @@ require (
 
 require (
 	github.com/asticode/go-astikit v0.30.0 // indirect
-	github.com/Masterminds/semver/v3 v3.2.1
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/google/uuid v1.5.0 // indirect
 	github.com/kr/pretty v0.2.1 // indirect
@@ -41,6 +40,7 @@ require (
 	github.com/pion/transport/v2 v2.2.4 // indirect
 	github.com/pion/turn/v2 v2.1.4 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/unascribed/FlexVer/go/flexver v1.0.0
 	golang.org/x/mod v0.14.0 // indirect
 	golang.org/x/net v0.19.0 // indirect
 	golang.org/x/sys v0.15.0 // indirect
