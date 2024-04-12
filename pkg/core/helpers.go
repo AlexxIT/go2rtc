@@ -148,8 +148,10 @@ func CompareVersions(v1, v2 string) int {
 	if len(v2) > 0 && unicode.IsLetter(rune(v2[0])) {
 		v2 = v2[1:]
 	}
-	result := flexver.Compare(v1, v2)
-
+	result, err := flexver.CompareError(v1, v2)
+	if err != nil {
+		return -1
+	}
 	if result < 0 {
 		return -1
 	} else if result > 0 {
