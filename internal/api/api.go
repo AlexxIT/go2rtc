@@ -222,6 +222,7 @@ var mu sync.Mutex
 func apiHandler(w http.ResponseWriter, r *http.Request) {
 	mu.Lock()
 	app.Info["host"] = r.Host
+	app.Info["ffmpeg"] = app.FFmpegVersion
 	mu.Unlock()
 
 	ResponseJSON(w, app.Info)

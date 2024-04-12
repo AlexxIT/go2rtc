@@ -15,8 +15,6 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-var ffmpegVersion string
-
 func Init() {
 	var cfg struct {
 		Mod map[string]string `yaml:"ffmpeg"`
@@ -35,10 +33,10 @@ func Init() {
 		return "exec:" + args.String(), nil
 	})
 
-	ffmpegVersion, _ := parseArgs("").GetFFmpegVersion()
-	log.Info().Str("version", ffmpegVersion).Msg("[ffmpeg] found")
+	app.FFmpegVersion, _ = parseArgs("").GetFFmpegVersion()
+	log.Info().Str("version", app.FFmpegVersion).Msg("[ffmpeg] found")
 
-	if core.CompareVersions(ffmpegVersion, "7.0") >= 0 {
+	if core.CompareVersions(app.FFmpegVersion, "7.0") >= 0 {
 		maxThreadsStr := strconv.Itoa(core.MaxCPUThreads(1))
 		filterThreadsParam := " -filter_threads " + maxThreadsStr
 
