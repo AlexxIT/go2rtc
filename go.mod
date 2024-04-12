@@ -26,6 +26,7 @@ require (
 
 require (
 	github.com/asticode/go-astikit v0.30.0 // indirect
+	github.com/Masterminds/semver/v3 v3.2.1
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/google/uuid v1.5.0 // indirect
 	github.com/kr/pretty v0.2.1 // indirect

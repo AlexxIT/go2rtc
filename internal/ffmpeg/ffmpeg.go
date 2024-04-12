@@ -2,6 +2,7 @@ package ffmpeg
 
 import (
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/AlexxIT/go2rtc/internal/app"
@@ -9,8 +10,12 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg/hardware"
 	"github.com/AlexxIT/go2rtc/internal/rtsp"
 	"github.com/AlexxIT/go2rtc/internal/streams"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/ffmpeg"
+	"github.com/rs/zerolog/log"
 )
+
+var ffmpegVersion string
 
 func Init() {
 	var cfg struct {
@@ -29,6 +34,21 @@ func Init() {
 		args := parseArgs(url[7:])
 		return "exec:" + args.String(), nil
 	})
+
+	ffmpegVersion, _ := parseArgs("").GetFFmpegVersion()
+	log.Info().Str("version", ffmpegVersion).Msg("[ffmpeg] found")
+
+	if core.CompareVersions(ffmpegVersion, "7.0") >= 0 {
+		maxThreadsStr := strconv.Itoa(core.MaxCPUThreads(1))
+		filterThreadsParam := " -filter_threads " + maxThreadsStr
+
+		keysToUpdate := []string{"h264", "h265", "mjpeg"}
+
+		for _, key := range keysToUpdate {
+			defaults[key] += filterThreadsParam
+			log.Trace().Str("filter_thread", maxThreadsStr).Str("preset", key).Msg("[ffmpeg] modify defaults")
+		}
+	}
 
 	device.Init(defaults["bin"])
 	hardware.Init(defaults["bin"])
