@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/pkg/shell"
@@ -96,7 +97,10 @@ func listen(network, address string) {
 		Port = ln.Addr().(*net.TCPAddr).Port
 	}
 
-	server := http.Server{Handler: Handler}
+	server := http.Server{
+		Handler:           Handler,
+		ReadHeaderTimeout: 5 * time.Second, // Example: Set to 5 seconds
+	}
 	if err = server.Serve(ln); err != nil {
 		log.Fatal().Err(err).Msg("[api] serve")
 	}
@@ -126,8 +130,9 @@ func tlsListen(network, address, certFile, keyFile string) {
 	log.Info().Str("addr", address).Msg("[api] tls listen")
 
 	server := &http.Server{
-		Handler:   Handler,
-		TLSConfig: &tls.Config{Certificates: []tls.Certificate{cert}},
+		Handler:           Handler,
+		TLSConfig:         &tls.Config{Certificates: []tls.Certificate{cert}},
+		ReadHeaderTimeout: 5 * time.Second,
 	}
 	if err = server.ServeTLS(ln, "", ""); err != nil {
 		log.Fatal().Err(err).Msg("[api] tls serve")
