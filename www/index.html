@@ -161,8 +161,8 @@
         });
     }
 
-    // Auto-reload every 5 seconds
-    setInterval(reload, 5000);
+    // Auto-reload
+    setInterval(reload, 1000);
 
     const url2 = new URL('api', location.href);
     fetch(url2, {cache: 'no-cache'}).then(r => r.json()).then(data => {
