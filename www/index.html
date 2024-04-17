@@ -121,33 +121,51 @@
 
     function reload() {
         const url = new URL('api/streams', location.href);
+        const checkboxStates = {};
+        tbody.querySelectorAll('input[type="checkbox"][name]').forEach(checkbox => {
+            checkboxStates[checkbox.name] = checkbox.checked;
+        });
         fetch(url, {cache: 'no-cache'}).then(r => r.json()).then(data => {
-            tbody.innerHTML = '';
+            const existingIds = Array.from(tbody.querySelectorAll('tr')).map(tr => tr.dataset['id']);
+            const fetchedIds = [];
 
             for (const [key, value] of Object.entries(data)) {
                 const name = key.replace(/[<">]/g, ''); // sanitize
+                fetchedIds.push(name);
+
+                let tr = tbody.querySelector(`tr[data-id="${name}"]`);
                 const online = value && value.consumers ? value.consumers.length : 0;
                 const src = encodeURIComponent(name);
-                const links = templates.map(link => {
-                    return link.replace('{name}', src);
-                }).join(' ');
+                const links = templates.map(link => link.replace('{name}', src)).join(' ');
 
-                const tr = document.createElement('tr');
-                tr.dataset['id'] = name;
+                if (!tr) {
+                    tr = document.createElement('tr');
+                    tr.dataset['id'] = name;
+                    tbody.appendChild(tr);
+                }
+
+                const isChecked = checkboxStates[name] ? 'checked' : '';
                 tr.innerHTML =
-                    `<td><label><input type="checkbox" name="${name}">${name}</label></td>` +
+                    `<td><label><input type="checkbox" name="${name}" ${isChecked}>${name}</label></td>` +
                     `<td><a href="api/streams?src=${src}">${online} / info</a></td>` +
                     `<td>${links}</td>`;
-                tbody.appendChild(tr);
             }
+
+            // Remove old rows
+            existingIds.forEach(id => {
+                if (!fetchedIds.includes(id)) {
+                    const trToRemove = tbody.querySelector(`tr[data-id="${id}"]`);
+                    tbody.removeChild(trToRemove);
+                }
+            });
         });
     }
 
     // Auto-reload every 5 seconds
     setInterval(reload, 5000);
 
-    const url = new URL('api', location.href);
-    fetch(url, {cache: 'no-cache'}).then(r => r.json()).then(data => {
+    const url2 = new URL('api', location.href);
+    fetch(url2, {cache: 'no-cache'}).then(r => r.json()).then(data => {
         const info = document.querySelector('.info');
         info.innerText = `Version: ${data.version}, Config: ${data.config_path}`;
     });
