@@ -141,14 +141,17 @@
                 tbody.appendChild(tr);
             }
         });
+
+        const url2 = new URL('api', location.href);
+        fetch(url2, {cache: 'no-cache'}).then(r => r.json()).then(data => {
+            const info = document.querySelector('.info');
+            info.innerText = `Version: ${data.version}, Config: ${data.config_path}\nCPU: ${parseFloat(data.stats.cpu).toFixed(2)}%, RAM: ${parseFloat(data.stats.mem.usedPercent).toFixed(2)}%`;
+        });
     }
 
-    const url = new URL('api', location.href);
-    fetch(url, {cache: 'no-cache'}).then(r => r.json()).then(data => {
-        const info = document.querySelector('.info');
-        info.innerText = `Version: ${data.version}, Config: ${data.config_path}`;
-    });
-
+    // Auto-reload every 5 seconds
+    setInterval(reload, 5000);
+    
     reload();
 </script>
 </body>
