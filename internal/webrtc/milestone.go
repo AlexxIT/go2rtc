@@ -30,6 +30,7 @@ type MilestoneClient struct {
 	ClientID       string
 	Token          string
 	GrantType      string
+	InsecureTls    bool
 	PeerConnection *pion.PeerConnection
 }
 
@@ -59,7 +60,7 @@ func setupMilestoneClient(rawURL string, query url.Values) *MilestoneClient {
 	}
 }
 
-func parseSessionDetails(query url.Values) WebRTCSessionDetails {
+func parseSessionDetails(mc *MilestoneClient, query url.Values) WebRTCSessionDetails {
 	details := WebRTCSessionDetails{
 		CameraId:   query.Get("cameraId"),
 		Resolution: "notInUse",
@@ -95,11 +96,34 @@ func parseSessionDetails(query url.Values) WebRTCSessionDetails {
 		}
 	}
 
+	if insecureTls := query.Get("insecureTls"); insecureTls != "" {
+		insecureTlsBool, err := strconv.ParseBool(insecureTls)
+		if err == nil {
+			mc.InsecureTls = insecureTlsBool
+		}
+	}
+
 	if hasPlaybackDetails {
 		details.PlaybackTimeNode = &playbackTimeNode
 	}
 
 	return details
+}
+
+// Helper function to create an HTTP client based on URL schema
+func createHTTPClient(insecureTls bool) *http.Client {
+	tlsConfig := &tls.Config{}
+
+	// Set InsecureSkipVerify true only for "https" schema
+	if insecureTls {
+		tlsConfig.InsecureSkipVerify = true // FIXME, use httpx protocol
+	}
+
+	return &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: tlsConfig,
+		},
+	}
 }
 
 func createWebRTCSession(mc *MilestoneClient, details WebRTCSessionDetails) (*http.Response, error) {
@@ -116,9 +140,7 @@ func createWebRTCSession(mc *MilestoneClient, details WebRTCSessionDetails) (*ht
 	req.Header.Set("Authorization", "Bearer "+mc.Token)
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}}
+	client := createHTTPClient(mc.InsecureTls)
 	return client.Do(req)
 }
 
@@ -137,9 +159,7 @@ func updateWebRTCSession(mc *MilestoneClient, sessionID string, answer pion.Sess
 	req.Header.Set("Authorization", "Bearer "+mc.Token)
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}}
+	client := createHTTPClient(mc.InsecureTls)
 	return client.Do(req)
 }
 
@@ -151,7 +171,8 @@ func (mc *MilestoneClient) Authenticate() error {
 		"client_id":  {mc.ClientID},
 	}
 
-	resp, err := http.PostForm(mc.ApiGatewayUrl+"/IDP/connect/token", formData)
+	client := createHTTPClient(mc.InsecureTls)
+	resp, err := client.PostForm(mc.ApiGatewayUrl+"/IDP/connect/token", formData)
 	if err != nil {
 		return err
 	}
@@ -178,11 +199,11 @@ func (mc *MilestoneClient) Authenticate() error {
 func milestoneClient(rawURL string, query url.Values, desc string) (core.Producer, error) {
 	mc := setupMilestoneClient(rawURL, query)
 
+	details := parseSessionDetails(mc, query)
+
 	if err := mc.Authenticate(); err != nil {
 		return nil, err
 	}
-
-	details := parseSessionDetails(query)
 
 	config := pion.Configuration{
 		ICEServers: []pion.ICEServer{
