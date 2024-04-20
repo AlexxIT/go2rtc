@@ -164,8 +164,8 @@
     // Auto-reload
     setInterval(reload, 1000);
 
-    const url2 = new URL('api', location.href);
-    fetch(url2, {cache: 'no-cache'}).then(r => r.json()).then(data => {
+    const url = new URL('api', location.href);
+    fetch(url, {cache: 'no-cache'}).then(r => r.json()).then(data => {
         const info = document.querySelector('.info');
         info.innerText = `Version: ${data.version}, Config: ${data.config_path}`;
     });
