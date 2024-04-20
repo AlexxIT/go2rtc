@@ -132,6 +132,9 @@ func (c *Client) Handle() error {
 		case "stream-init":
 			continue
 
+		case "metadata":
+			continue
+
 		case "fragment":
 			_, data, err = c.conn.ReadMessage()
 			if err != nil {
@@ -183,6 +186,9 @@ func (c *Client) getTracks() error {
 		}
 
 		switch msg.Type {
+		case "metadata":
+			continue
+
 		case "stream-init":
 			s := msg.CodecString
 			i := strings.IndexByte(s, '.')
