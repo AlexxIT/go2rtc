@@ -53,7 +53,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked --mount=type=cache,t
         python3 curl jq \
         intel-media-va-driver-non-free \
         mesa-va-drivers \
-        libasound2-plugins
+        libasound2-plugins && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY --link --from=rootfs / /
 COPY --chmod=755 entrypoint.sh /entrypoint.sh
