@@ -579,7 +579,7 @@ streams:
 
 Any cameras in WebRTC format are supported. But at the moment Home Assistant only supports some [Nest](https://www.home-assistant.io/integrations/nest/) cameras in this fomat.
 
-The Nest API only allows you to get a link to a stream for 5 minutes. So every 5 minutes the stream will be reconnected.
+**Important.** The Nest API only allows you to get a link to a stream for 5 minutes. Do not use this with Frigate! If the stream expires, Frigate will consume all available ram on your machine within seconds. It's recommended to use [Nest source](#source-nest) - it supports extending the stream.
 
 ```yaml
 streams:
@@ -610,7 +610,7 @@ streams:
 
 *[New in v1.6.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.6.0)*
 
-Currently only WebRTC cameras are supported. Stream reconnects every 5 minutes.
+Currently only WebRTC cameras are supported.
 
 For simplicity, it is recommended to connect the Nest/WebRTC camera to the [Home Assistant](#source-hass). But if you can somehow get the below parameters - Nest/WebRTC source will work without Hass.
 
