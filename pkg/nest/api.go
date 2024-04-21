@@ -281,5 +281,8 @@ func (a *API) StartExtendStreamTimer() {
 }
 
 func (a *API) StopExtendStreamTimer() {
+	if a.extendTimer == nil {
+		return
+	}
 	a.extendTimer.Stop()
 }
