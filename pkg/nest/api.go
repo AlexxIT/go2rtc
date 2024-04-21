@@ -14,6 +14,13 @@ import (
 type API struct {
 	Token     string
 	ExpiresAt time.Time
+
+	StreamProjectID string
+	StreamDeviceID  string
+	StreamSessionID string
+	StreamExpiresAt time.Time
+
+	extendTimer *time.Timer
 }
 
 type Auth struct {
@@ -121,7 +128,7 @@ func (a *API) GetDevices(projectID string) (map[string]string, error) {
 	return devices, nil
 }
 
-func (a *API) ExchangeSDP(projectID, deviceID, offer string) (string, string, time.Time, error) {
+func (a *API) ExchangeSDP(projectID, deviceID, offer string) (string, error) {
 	var reqv struct {
 		Command string `json:"command"`
 		Params  struct {
@@ -133,14 +140,14 @@ func (a *API) ExchangeSDP(projectID, deviceID, offer string) (string, string, ti
 
 	b, err := json.Marshal(reqv)
 	if err != nil {
-		return "", "", time.Time{}, err
+		return "", err
 	}
 
 	uri := "https://smartdevicemanagement.googleapis.com/v1/enterprises/" +
 		projectID + "/devices/" + deviceID + ":executeCommand"
 	req, err := http.NewRequest("POST", uri, bytes.NewReader(b))
 	if err != nil {
-		return "", "", time.Time{}, err
+		return "", err
 	}
 
 	req.Header.Set("Authorization", "Bearer "+a.Token)
@@ -148,29 +155,34 @@ func (a *API) ExchangeSDP(projectID, deviceID, offer string) (string, string, ti
 	client := &http.Client{Timeout: time.Second * 5000}
 	res, err := client.Do(req)
 	if err != nil {
-		return "", "", time.Time{}, err
+		return "", err
 	}
 
 	if res.StatusCode != 200 {
-		return "", "", time.Time{}, errors.New("nest: wrong status: " + res.Status)
+		return "", errors.New("nest: wrong status: " + res.Status)
 	}
 
 	var resv struct {
 		Results struct {
 			Answer         string    `json:"answerSdp"`
 			ExpiresAt      time.Time `json:"expiresAt"`
-			MediaSessionId string    `json:"mediaSessionId"`
+			MediaSessionID string    `json:"mediaSessionId"`
 		} `json:"results"`
 	}
 
 	if err = json.NewDecoder(res.Body).Decode(&resv); err != nil {
-		return "", "", time.Time{}, err
+		return "", err
 	}
 
-	return resv.Results.Answer, resv.Results.MediaSessionId, resv.Results.ExpiresAt, nil
+	a.StreamProjectID = projectID
+	a.StreamDeviceID = deviceID
+	a.StreamSessionID = resv.Results.MediaSessionID
+	a.StreamExpiresAt = resv.Results.ExpiresAt
+
+	return resv.Results.Answer, nil
 }
 
-func (a *API) ExtendStream(projectID, deviceID, mediaSessionID string) (string, time.Time, error) {
+func (a *API) ExtendStream() error {
 	var reqv struct {
 		Command string `json:"command"`
 		Params  struct {
@@ -178,18 +190,18 @@ func (a *API) ExtendStream(projectID, deviceID, mediaSessionID string) (string, 
 		} `json:"params"`
 	}
 	reqv.Command = "sdm.devices.commands.CameraLiveStream.ExtendWebRtcStream"
-	reqv.Params.MediaSessionID = mediaSessionID
+	reqv.Params.MediaSessionID = a.StreamSessionID
 
 	b, err := json.Marshal(reqv)
 	if err != nil {
-		return "", time.Time{}, err
+		return err
 	}
 
 	uri := "https://smartdevicemanagement.googleapis.com/v1/enterprises/" +
-		projectID + "/devices/" + deviceID + ":executeCommand"
+		a.StreamProjectID + "/devices/" + a.StreamDeviceID + ":executeCommand"
 	req, err := http.NewRequest("POST", uri, bytes.NewReader(b))
 	if err != nil {
-		return "", time.Time{}, err
+		return err
 	}
 
 	req.Header.Set("Authorization", "Bearer "+a.Token)
@@ -197,25 +209,28 @@ func (a *API) ExtendStream(projectID, deviceID, mediaSessionID string) (string, 
 	client := &http.Client{Timeout: time.Second * 5000}
 	res, err := client.Do(req)
 	if err != nil {
-		return "", time.Time{}, err
+		return err
 	}
 
 	if res.StatusCode != 200 {
-		return "", time.Time{}, errors.New("nest: wrong status: " + res.Status)
+		return errors.New("nest: wrong status: " + res.Status)
 	}
 
 	var resv struct {
 		Results struct {
 			ExpiresAt      time.Time `json:"expiresAt"`
-			MediaSessionId string    `json:"mediaSessionId"`
+			MediaSessionID string    `json:"mediaSessionId"`
 		} `json:"results"`
 	}
 
 	if err = json.NewDecoder(res.Body).Decode(&resv); err != nil {
-		return "", time.Time{}, err
+		return err
 	}
 
-	return resv.Results.MediaSessionId, resv.Results.ExpiresAt, nil
+	a.StreamSessionID = resv.Results.MediaSessionID
+	a.StreamExpiresAt = resv.Results.ExpiresAt
+
+	return nil
 }
 
 type Device struct {
@@ -250,4 +265,21 @@ type Device struct {
 	//	Parent      string `json:"parent"`
 	//	DisplayName string `json:"displayName"`
 	//} `json:"parentRelations"`
+}
+
+func (a *API) StartExtendStreamTimer() {
+	// Calculate the duration until 30 seconds before the stream expires
+	duration := time.Until(a.StreamExpiresAt.Add(-30 * time.Second))
+	a.extendTimer = time.AfterFunc(duration, func() {
+		if err := a.ExtendStream(); err != nil {
+			return
+		}
+		duration = time.Until(a.StreamExpiresAt.Add(-30 * time.Second))
+		a.extendTimer.Reset(duration)
+	})
+
+}
+
+func (a *API) StopExtendStreamTimer() {
+	a.extendTimer.Stop()
 }

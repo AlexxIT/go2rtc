@@ -4,21 +4,14 @@ import (
 	"errors"
 	"net/url"
 
-	"time"
-
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	pion "github.com/pion/webrtc/v3"
 )
 
 type Client struct {
-	conn            *webrtc.Conn
-	projectId       string
-	deviceId        string
-	mediaSessionId  string
-	streamExpiresAt time.Time
-	nestApi         *API
-	timer           *time.Timer
+	conn *webrtc.Conn
+	api  *API
 }
 
 func NewClient(rawURL string) (*Client, error) {
@@ -72,7 +65,7 @@ func NewClient(rawURL string) (*Client, error) {
 	}
 
 	// 4. Exchange SDP via Hass
-	answer, mediaSessionId, expiresAt, err := nestAPI.ExchangeSDP(projectID, deviceID, offer)
+	answer, err := nestAPI.ExchangeSDP(projectID, deviceID, offer)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +75,7 @@ func NewClient(rawURL string) (*Client, error) {
 		return nil, err
 	}
 
-	return &Client{conn: conn, deviceId: deviceID, projectId: projectID, mediaSessionId: mediaSessionId, streamExpiresAt: expiresAt, nestApi: nestAPI}, nil
+	return &Client{conn: conn, api: nestAPI}, nil
 }
 
 func (c *Client) GetMedias() []*core.Media {
@@ -98,35 +91,12 @@ func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Rece
 }
 
 func (c *Client) Start() error {
-	c.StartExtendStreamTimer()
-
+	c.api.StartExtendStreamTimer()
 	return c.conn.Start()
 }
 
-func (c *Client) StartExtendStreamTimer() {
-	ontimer := func() {
-		c.ExtendStream()
-		c.StartExtendStreamTimer()
-	}
-	// Calculate the duration until 30 seconds before the stream expires
-	duration := time.Until(c.streamExpiresAt.Add(-30 * time.Second))
-
-	// Start the timer
-	c.timer = time.AfterFunc(duration, ontimer)
-}
-
-func (c *Client) ExtendStream() error {
-	mediaSessionId, expiresAt, err := c.nestApi.ExtendStream(c.projectId, c.deviceId, c.mediaSessionId)
-	if err != nil {
-		return err
-	}
-	c.mediaSessionId = mediaSessionId
-	c.streamExpiresAt = expiresAt
-	return nil
-}
-
 func (c *Client) Stop() error {
-	c.timer.Stop()
+	c.api.StopExtendStreamTimer()
 	return c.conn.Stop()
 }
 
