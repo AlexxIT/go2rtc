@@ -152,7 +152,7 @@ Latest, but maybe unstable version:
 
 ## Configuration
 
-- by default go2rtc will search `go2rtc.yaml` in the current work dirrectory
+- by default go2rtc will search `go2rtc.yaml` in the current work directory
 - `api` server will start on default **1984 port** (TCP)
 - `rtsp` server will start on default **8554 port** (TCP)
 - `webrtc` will use port **8555** (TCP/UDP) for connections
