@@ -19,34 +19,17 @@
             height: 100%;
         }
 
-        table {
-            background-color: white;
-            text-align: left;
-            border-collapse: collapse;
-        }
+        
 
-        table td, table th {
-            border: 1px solid black;
-            padding: 5px 5px;
-        }
+        
 
         table tbody td {
             font-size: 13px;
             vertical-align: top;
         }
 
-        table thead {
-            background: #CFCFCF;
-            background: linear-gradient(to bottom, #dbdbdb 0%, #d3d3d3 66%, #CFCFCF 100%);
-            border-bottom: 3px solid black;
-        }
+        
 
-        table thead th {
-            font-size: 15px;
-            font-weight: bold;
-            color: black;
-            text-align: center;
-        }
     </style>
 </head>
 <body>
@@ -54,6 +37,7 @@
 <div>
     <button id="clean">Clean</button>
     <button id="update">Auto Update: ON</button>
+    <button id="reverse">Reverse Log Order: OFF</button>
 </div>
 <br>
 <table>
@@ -85,9 +69,21 @@
             .replace(/\n/g, '<br>');
     }
 
+    let reverseBtn = document.getElementById('reverse');
+    let update = document.getElementById('update');
+
+    let reverseOrder = false;
+    let autoUpdateEnabled = true;
+
+    reverseBtn.textContent = `Reverse Log Order: ${reverseOrder ? 'ON' : 'OFF'}`;
+    update.textContent = `Auto Update: ${autoUpdateEnabled ? 'ON' : 'OFF'}`;
+
     function applyLogStyling(jsonlines) {
         const KEYS = ['time', 'level', 'message'];
-        const lines = JSON.parse('[' + jsonlines.trimEnd().replaceAll('\n', ',') + ']');
+        let lines = JSON.parse('[' + jsonlines.trimEnd().replaceAll('\n', ',') + ']');
+        if (reverseOrder) {
+            lines = lines.reverse();
+        }
         return lines.map(line => {
             const ts = new Date(line['time']);
             const msg = Object.keys(line).reduce((msg, key) => {
@@ -112,13 +108,18 @@
 
     reload();
 
-    // Handle auto-update switch
-    let autoUpdateEnabled = true;
-
-    const update = document.getElementById('update');
+    update.textContent = `Auto Update: ${autoUpdateEnabled ? 'ON' : 'OFF'}`;
     update.addEventListener('click', () => {
         autoUpdateEnabled = !autoUpdateEnabled;
         update.textContent = `Auto Update: ${autoUpdateEnabled ? 'ON' : 'OFF'}`;
+    });
+
+    // Toggle log order
+    reverseBtn.textContent = `Reverse Log Order: ${reverseOrder ? 'ON' : 'OFF'}`;
+    reverseBtn.addEventListener('click', () => {
+        reverseOrder = !reverseOrder;
+        reverseBtn.textContent = `Reverse Log Order: ${reverseOrder ? 'ON' : 'OFF'}`;
+        reload(); // Reload logs to apply the new order
     });
 
     // Reload the logs every 5 seconds
