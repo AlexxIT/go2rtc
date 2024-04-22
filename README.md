@@ -230,7 +230,7 @@ streams:
   amcrest_doorbell:
     - rtsp://username:password@192.168.1.123:554/cam/realmonitor?channel=1&subtype=0#backchannel=0
   unifi_camera: rtspx://192.168.1.123:7441/fD6ouM72bWoFijxK
-  glichy_camera: ffmpeg:rstp://username:password@192.168.1.123/live/ch00_1 
+  glichy_camera: ffmpeg:rtsp://username:password@192.168.1.123/live/ch00_1 
 ```
 
 **Recommendations**
