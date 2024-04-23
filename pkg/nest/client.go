@@ -11,6 +11,7 @@ import (
 
 type Client struct {
 	conn *webrtc.Conn
+	api  *API
 }
 
 func NewClient(rawURL string) (*Client, error) {
@@ -74,7 +75,7 @@ func NewClient(rawURL string) (*Client, error) {
 		return nil, err
 	}
 
-	return &Client{conn: conn}, nil
+	return &Client{conn: conn, api: nestAPI}, nil
 }
 
 func (c *Client) GetMedias() []*core.Media {
@@ -90,10 +91,12 @@ func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Rece
 }
 
 func (c *Client) Start() error {
+	c.api.StartExtendStreamTimer()
 	return c.conn.Start()
 }
 
 func (c *Client) Stop() error {
+	c.api.StopExtendStreamTimer()
 	return c.conn.Stop()
 }
 

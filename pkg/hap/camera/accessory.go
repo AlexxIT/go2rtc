@@ -62,6 +62,7 @@ func ServiceCameraRTPStreamManagement() *hap.Service {
 				VideoAttrs: []VideoAttrs{
 					{Width: 1920, Height: 1080, Framerate: 30},
 					{Width: 1280, Height: 720, Framerate: 30}, // important for iPhones
+					{Width: 320, Height: 240, Framerate: 15}, // apple watch
 				},
 			},
 		},
