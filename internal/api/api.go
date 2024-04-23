@@ -142,14 +142,7 @@ func tlsListen(network, address, certFile, keyFile string) {
 	}
 
 	tlsExpire := certInfo.NotAfter
-
-	if tlsExpire.Before(time.Now()) {
-		log.Error().Str("ExpireDate", tlsExpire.Local().String()).Str("listen addr", address).Msg("[api] tls cert expired")
-	} else if tlsExpire.Add(time.Hour * 24).After(time.Now()) {
-		log.Warn().Str("ExpireDate", tlsExpire.Local().String()).Str("listen addr", address).Msg("[api] tls cert will expire today")
-	} else {
-		log.Info().Str("ExpireDate", tlsExpire.Local().String()).Str("listen addr", address).Msg("[api] tls")
-	}
+	checkCertExpiration(tlsExpire, address)
 
 	server := &http.Server{
 		Handler:           Handler,
@@ -158,6 +151,22 @@ func tlsListen(network, address, certFile, keyFile string) {
 	}
 	if err = server.ServeTLS(ln, "", ""); err != nil {
 		log.Fatal().Err(err).Msg("[api] tls serve")
+	}
+}
+
+// checkCertExpiration logs the certificate expiration status.
+func checkCertExpiration(expirationTime time.Time, address string) (int, time.Duration) {
+	now := time.Now()
+	switch {
+	case now.Unix()-expirationTime.Unix() > 0 && now.Unix()-expirationTime.Unix() < int64(time.Hour.Seconds()*24):
+		log.Warn().Str("ExpireDate", expirationTime.Local().String()).Str("listen addr", address).Msg("[api] tls cert will expire today")
+		return 1, time.Until(expirationTime)
+	case expirationTime.Before(now):
+		log.Error().Str("ExpireDate", expirationTime.Local().String()).Str("listen addr", address).Msg("[api] tls cert expired")
+		return -1, time.Until(expirationTime)
+	default:
+		log.Info().Str("ExpireDate", expirationTime.Local().String()).Str("listen addr", address).Msg("[api] tls")
+		return 0, time.Until(expirationTime)
 	}
 }
 
