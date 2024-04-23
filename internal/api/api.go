@@ -144,12 +144,12 @@ func tlsListen(network, address, certFile, keyFile string) {
 	tlsExpire := certInfo.NotAfter
 
 	if tlsExpire.Before(time.Now()) {
-		log.Error().Str("ExpireDate", tlsExpire.Local().String()).Msg("[api] tls cert expired")
+		log.Error().Str("ExpireDate", tlsExpire.Local().String()).Str("listen addr", address).Msg("[api] tls cert expired")
+	} else if tlsExpire.Add(time.Hour * 24).After(time.Now()) {
+		log.Warn().Str("ExpireDate", tlsExpire.Local().String()).Str("listen addr", address).Msg("[api] tls cert will expire today")
 	} else {
-		log.Info().Str("ExpireDate", tlsExpire.Local().String()).Msg("[api] tls cert")
+		log.Info().Str("ExpireDate", tlsExpire.Local().String()).Str("listen addr", address).Msg("[api] tls")
 	}
-
-	log.Info().Str("addr", address).Msg("[api] tls listen")
 
 	server := &http.Server{
 		Handler:           Handler,
