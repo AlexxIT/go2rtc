@@ -2,6 +2,7 @@ package api
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -106,9 +107,9 @@ func listen(network, address string) {
 	}
 }
 
-func tlsListen(network, address, certFile, keyFile string) {
-	var cert tls.Certificate
+func LoadCertificate(certFile, keyFile string) (tls.Certificate, error) {
 	var err error
+	var cert tls.Certificate
 	if strings.IndexByte(certFile, '\n') < 0 && strings.IndexByte(keyFile, '\n') < 0 {
 		// check if file path
 		cert, err = tls.LoadX509KeyPair(certFile, keyFile)
@@ -116,15 +117,36 @@ func tlsListen(network, address, certFile, keyFile string) {
 		// if text file content
 		cert, err = tls.X509KeyPair([]byte(certFile), []byte(keyFile))
 	}
+
+	return cert, err
+}
+
+func tlsListen(network, address, certFile, keyFile string) {
+	log.Trace().Str("address", address).Msg("[api] tls listen")
+	cert, err := LoadCertificate(certFile, keyFile)
+	if err != nil {
+		log.Error().Err(err).Caller().Send()
+		return
+	}
+	ln, err := net.Listen(network, address)
+	if err != nil {
+		log.Error().Err(err).Msg("[api] tls listen")
+		return
+	}
+
+	certInfo, err := x509.ParseCertificate(cert.Certificate[0])
+
 	if err != nil {
 		log.Error().Err(err).Caller().Send()
 		return
 	}
 
-	ln, err := net.Listen(network, address)
-	if err != nil {
-		log.Error().Err(err).Msg("[api] tls listen")
-		return
+	tlsExpire := certInfo.NotAfter
+
+	if tlsExpire.Before(time.Now()) {
+		log.Error().Str("ExpireDate", tlsExpire.Local().String()).Msg("[api] tls cert expired")
+	} else {
+		log.Info().Str("ExpireDate", tlsExpire.Local().String()).Msg("[api] tls cert")
 	}
 
 	log.Info().Str("addr", address).Msg("[api] tls listen")
