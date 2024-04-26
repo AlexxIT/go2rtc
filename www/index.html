@@ -81,7 +81,7 @@
         });
 
     const tbody = document.getElementById('streams');
-    tbody.addEventListener('click', ev => {
+    tbody.addEventListener('click', async ev => {
         if (ev.target.innerText !== 'delete') return;
 
         ev.preventDefault();
@@ -89,8 +89,22 @@
         const url = new URL('api/streams', location.href);
         const src = decodeURIComponent(ev.target.dataset.name);
         url.searchParams.set('src', src);
-        fetch(url, {method: 'DELETE'}).then(reload);
+        const message = `Please type the name of the stream "${src}" to confirm its stop and deletion from the configuration. This action is irreversible.`;
+        
+        const userInput = prompt(message);
+        if (userInput !== src) {
+            alert("Stream name does not match. Deletion cancelled.");
+            return;
+        }
+        
+        try {    
+            await fetch(url, { method: 'DELETE' });
+            reload();
+        } catch (error) {
+            console.error('Failed to delete the stream:', error);
+        }
     });
+    
 
     document.getElementById('selectall').addEventListener('change', ev => {
         document.querySelectorAll('#streams input').forEach(el => {
