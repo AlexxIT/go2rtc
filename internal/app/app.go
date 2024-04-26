@@ -2,7 +2,6 @@ package app
 
 import (
 	"errors"
-	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -23,23 +22,17 @@ var Info = map[string]any{
 }
 
 func Init() {
-	var confs Config
-	var version bool
 
-	flag.Var(&confs, "config", "go2rtc config (path to file or raw text), support multiple")
-	flag.BoolVar(&version, "version", false, "Print the version of the application and exit")
-	flag.Parse()
-
-	if version {
+	if shell.Version {
 		fmt.Println("Current version: ", Version)
 		os.Exit(0)
 	}
 
-	if confs == nil {
-		confs = []string{"go2rtc.yaml"}
+	if shell.Confs == nil {
+		shell.Confs = []string{"go2rtc.yaml"}
 	}
 
-	for _, conf := range confs {
+	for _, conf := range shell.Confs {
 		if conf[0] != '{' {
 			// config as file
 			if ConfigPath == "" {
@@ -67,6 +60,8 @@ func Init() {
 		}
 		Info["config_path"] = ConfigPath
 	}
+	Info["pid"] = os.Getpid()
+	Info["uid"] = os.Getuid()
 
 	var cfg struct {
 		Mod map[string]string `yaml:"log"`
@@ -83,6 +78,16 @@ func Init() {
 	migrateStore()
 }
 
+func GetLogFilepath() string {
+	var cfg struct {
+		Mod map[string]string `yaml:"log"`
+	}
+
+	LoadConfig(&cfg)
+
+	return cfg.Mod["file"]
+}
+
 func LoadConfig(v any) {
 	for _, data := range configs {
 		if err := yaml.Unmarshal(data, v); err != nil {
@@ -91,6 +96,7 @@ func LoadConfig(v any) {
 	}
 }
 
+// internals
 func PatchConfig(key string, value any, path ...string) error {
 	if ConfigPath == "" {
 		return errors.New("config file disabled")

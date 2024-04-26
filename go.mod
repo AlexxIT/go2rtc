@@ -14,6 +14,7 @@ require (
 	github.com/pion/sdp/v3 v3.0.6
 	github.com/pion/srtp/v2 v2.0.18
 	github.com/pion/stun v0.6.1
+	github.com/sevlyar/go-daemon v0.1.6
 	github.com/pion/webrtc/v3 v3.2.24
 	github.com/rs/zerolog v1.31.0
 	github.com/sigurn/crc16 v0.0.0-20211026045750-20ab5afb07e3
@@ -27,6 +28,8 @@ require (
 require (
 	github.com/asticode/go-astikit v0.30.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/go-chi/chi v1.5.4 // indirect
+	github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0 // indirect
 	github.com/google/uuid v1.5.0 // indirect
 	github.com/kr/pretty v0.2.1 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect

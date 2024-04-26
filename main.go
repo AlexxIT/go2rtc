@@ -1,6 +1,11 @@
 package main
 
 import (
+	"os"
+	"runtime"
+
+	"syscall"
+
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"github.com/AlexxIT/go2rtc/internal/app"
@@ -33,15 +38,82 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/webrtc"
 	"github.com/AlexxIT/go2rtc/internal/webtorrent"
 	"github.com/AlexxIT/go2rtc/pkg/shell"
+
+	"github.com/rs/zerolog/log"
+	daemon "github.com/sevlyar/go-daemon"
+)
+
+var (
+	stop = make(chan struct{})
+	done = make(chan struct{})
 )
 
 func main() {
-	// 1. Core modules: app, api/ws, streams
+	shell.Init()
 
 	app.Init() // init config and logs
 
 	api.Init() // init API before all others
-	ws.Init()  // init WS API endpoint
+
+	if shell.Daemonize {
+		cntxt := &daemon.Context{
+			PidFileName: shell.PidFilePath,
+			PidFilePerm: 0644,
+			LogFileName: app.GetLogFilepath(),
+			LogFilePerm: 0644,
+		}
+
+		daemon.SetSigHandler(termHandler, syscall.SIGQUIT)
+		daemon.SetSigHandler(termHandler, syscall.SIGTERM)
+		daemon.SetSigHandler(termHandler, syscall.SIGSEGV)
+		daemon.SetSigHandler(reloadHandler, syscall.SIGHUP)
+
+		d, err := cntxt.Reborn()
+		if err != nil {
+			log.Fatal().Err(err)
+		}
+		if d != nil {
+			log.Info().Msgf("daemon started with pid %d", d.Pid)
+			return
+		}
+		defer cntxt.Release()
+
+		//log.Debug().Msg("- - - - - - - - - - - - - - -")
+
+		go looper()
+
+		err = daemon.ServeSignals()
+		if err != nil {
+			log.Printf("Error: %s", err.Error())
+		}
+
+		log.Info().Msg("daemon terminated")
+	} else {
+		mainLoop()
+	}
+}
+
+func looper() {
+LOOP:
+	for {
+		mainLoop()
+		select {
+		case <-stop:
+			break LOOP
+		default:
+		}
+	}
+	done <- struct{}{}
+}
+
+func mainLoop() {
+	if runtime.GOOS != "windows" && (os.Getuid() != int(shell.GetForkUserId())) { // user sets by CLI
+		shell.CheckRootAndDropPrivileges()
+	}
+
+	// 1. Core modules: app, api/ws, streams
+
+	ws.Init() // init WS API endpoint
 
 	streams.Init() // streams module
 
@@ -90,4 +162,17 @@ func main() {
 	// 7. Go
 
 	shell.RunUntilSignal()
+}
+func termHandler(sig os.Signal) error {
+	log.Debug().Msg("terminating...")
+	stop <- struct{}{}
+	if sig == syscall.SIGQUIT {
+		<-done
+	}
+	return daemon.ErrStop
+}
+
+func reloadHandler(sig os.Signal) error {
+	log.Info().Msg("Not implemented yet :)")
+	return nil
 }
