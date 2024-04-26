@@ -124,8 +124,8 @@ func (c *Client) Open() (err error) {
 }
 
 func (c *Client) Close() (err error) {
-	link := c.url + "/ISAPI/System/TwoWayAudio/channels/" + c.channel + "/close"
-	req, err := http.NewRequest("PUT", link+"/open", nil)
+	link := c.url + "/ISAPI/System/TwoWayAudio/channels/" + c.channel
+	req, err := http.NewRequest("PUT", link+"/close", nil)
 	if err != nil {
 		return err
 	}
