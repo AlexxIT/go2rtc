@@ -8,7 +8,7 @@ import (
 	"regexp"
 
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
-	"github.com/antonmedv/expr"
+	"github.com/expr-lang/expr"
 )
 
 func newRequest(method, url string, headers map[string]any) (*http.Request, error) {

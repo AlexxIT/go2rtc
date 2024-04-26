@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 
@@ -83,7 +84,12 @@ func handlePipe(url string, cmd *exec.Cmd) (core.Producer, error) {
 		return nil, err
 	}
 
-	return magic.Open(r)
+	prod, err := magic.Open(r)
+	if err != nil {
+		_ = r.Close()
+	}
+
+	return prod, err
 }
 
 func handleRTSP(url, path string, cmd *exec.Cmd) (core.Producer, error) {
@@ -103,7 +109,7 @@ func handleRTSP(url, path string, cmd *exec.Cmd) (core.Producer, error) {
 		waitersMu.Unlock()
 	}()
 
-	log.Debug().Str("url", url).Msg("[exec] run")
+	log.Debug().Str("url", url).Str("cmd", fmt.Sprintf("%s", strings.Join(cmd.Args, " "))).Msg("[exec] run")
 
 	ts := time.Now()
 

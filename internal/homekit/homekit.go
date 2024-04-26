@@ -122,7 +122,7 @@ func Init() {
 	api.HandleFunc(hap.PathPairSetup, hapPairSetup)
 	api.HandleFunc(hap.PathPairVerify, hapPairVerify)
 
-	log.Trace().Msgf("[homekit] mnds: %s", entries)
+	log.Trace().Msgf("[homekit] mdns: %s", entries)
 
 	go func() {
 		if err := mdns.Serve(mdns.ServiceHAP, entries); err != nil {

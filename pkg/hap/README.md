@@ -51,3 +51,4 @@ Requires ffmpeg built with `--enable-libfdk-aac`
 - [HAP in AirPlay2 receiver](https://github.com/openairplay/airplay2-receiver/blob/master/ap2/pairing/hap.py)
 - [HomeKit Secure Video Unofficial Specification](https://github.com/Supereg/secure-video-specification)
 - [Homebridge Camera FFmpeg](https://sunoo.github.io/homebridge-camera-ffmpeg/configs/)
+- https://github.com/ljezny/Particle-HAP/blob/master/HAP-Specification-Non-Commercial-Version.pdf

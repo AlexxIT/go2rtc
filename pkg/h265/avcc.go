@@ -7,7 +7,25 @@ import (
 	"encoding/binary"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/h264"
+	"github.com/pion/rtp"
 )
+
+func RepairAVCC(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
+	vds, sps, pps := GetParameterSet(codec.FmtpLine)
+	ps := h264.JoinNALU(vds, sps, pps)
+
+	return func(packet *rtp.Packet) {
+		switch NALUType(packet.Payload) {
+		case NALUTypeIFrame, NALUTypeIFrame2, NALUTypeIFrame3:
+			clone := *packet
+			clone.Payload = h264.Join(ps, packet.Payload)
+			handler(&clone)
+		default:
+			handler(packet)
+		}
+	}
+}
 
 func AVCCToCodec(avcc []byte) *core.Codec {
 	buf := bytes.NewBufferString("profile-id=1")

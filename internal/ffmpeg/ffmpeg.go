@@ -61,8 +61,9 @@ var defaults = map[string]string{
 	// https://ffmpeg.org/ffmpeg-codecs.html#libopus-1
 	// https://github.com/pion/webrtc/issues/1514
 	// https://ffmpeg.org/ffmpeg-resampler.html
-	// `-async 1` or `-min_comp 0` - force frame_size=960, important for WebRTC audio quality
-	"opus":       "-c:a libopus -application:a lowdelay -frame_duration 20 -min_comp 0",
+	// `-async 1` or `-min_comp 0` - force resampling for static timestamp inc, important for WebRTC audio quality
+	"opus":       "-c:a libopus -application:a lowdelay -min_comp 0",
+	"opus/16000": "-c:a libopus -application:a lowdelay -min_comp 0 -ar:a 16000 -ac:a 1",
 	"pcmu":       "-c:a pcm_mulaw -ar:a 8000 -ac:a 1",
 	"pcmu/8000":  "-c:a pcm_mulaw -ar:a 8000 -ac:a 1",
 	"pcmu/16000": "-c:a pcm_mulaw -ar:a 16000 -ac:a 1",
@@ -86,7 +87,7 @@ var defaults = map[string]string{
 	// better not to set `-async_depth:v 1` like for QSV, because framedrops
 	// `-bf 0` - disable B-frames is very important
 	"h264/vaapi":  "-c:v h264_vaapi -g 50 -bf 0 -profile:v high -level:v 4.1 -sei:v 0",
-	"h265/vaapi":  "-c:v hevc_vaapi -g 50 -bf 0 -profile:v high -level:v 5.1 -sei:v 0",
+	"h265/vaapi":  "-c:v hevc_vaapi -g 50 -bf 0 -profile:v main -level:v 5.1 -sei:v 0",
 	"mjpeg/vaapi": "-c:v mjpeg_vaapi",
 
 	// hardware Raspberry
@@ -102,16 +103,16 @@ var defaults = map[string]string{
 	// hardware NVidia on Linux and Windows
 	// preset=p2 - faster, tune=ll - low latency
 	"h264/cuda": "-c:v h264_nvenc -g 50 -bf 0 -profile:v high -level:v auto -preset:v p2 -tune:v ll",
-	"h265/cuda": "-c:v hevc_nvenc -g 50 -bf 0 -profile:v high -level:v auto",
+	"h265/cuda": "-c:v hevc_nvenc -g 50 -bf 0 -profile:v main -level:v auto",
 
 	// hardware Intel on Windows
 	"h264/dxva2":  "-c:v h264_qsv -g 50 -bf 0 -profile:v high -level:v 4.1 -async_depth:v 1",
-	"h265/dxva2":  "-c:v hevc_qsv -g 50 -bf 0 -profile:v high -level:v 5.1 -async_depth:v 1",
-	"mjpeg/dxva2": "-c:v mjpeg_qsv -profile:v high -level:v 5.1",
+	"h265/dxva2":  "-c:v hevc_qsv -g 50 -bf 0 -profile:v main -level:v 5.1 -async_depth:v 1",
+	"mjpeg/dxva2": "-c:v mjpeg_qsv",
 
 	// hardware macOS
 	"h264/videotoolbox": "-c:v h264_videotoolbox -g 50 -bf 0 -profile:v high -level:v 4.1",
-	"h265/videotoolbox": "-c:v hevc_videotoolbox -g 50 -bf 0 -profile:v high -level:v 5.1",
+	"h265/videotoolbox": "-c:v hevc_videotoolbox -g 50 -bf 0 -profile:v main -level:v 5.1",
 }
 
 // configTemplate - return template from config (defaults) if exist or return raw template

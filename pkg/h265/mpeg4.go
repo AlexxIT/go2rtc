@@ -1,7 +1,40 @@
 // Package h265 - MPEG4 format related functions
 package h265
 
-import "encoding/binary"
+import (
+	"bytes"
+	"encoding/base64"
+	"encoding/binary"
+
+	"github.com/AlexxIT/go2rtc/pkg/core"
+)
+
+func DecodeConfig(conf []byte) (profile, vps, sps, pps []byte) {
+	profile = conf[1:4]
+
+	b := conf[23:]
+	if binary.BigEndian.Uint16(b[1:]) != 1 {
+		return
+	}
+	vpsSize := binary.BigEndian.Uint16(b[3:])
+	vps = b[5 : 5+vpsSize]
+
+	b = conf[23+5+vpsSize:]
+	if binary.BigEndian.Uint16(b[1:]) != 1 {
+		return
+	}
+	spsSize := binary.BigEndian.Uint16(b[3:])
+	sps = b[5 : 5+spsSize]
+
+	b = conf[23+5+vpsSize+5+spsSize:]
+	if binary.BigEndian.Uint16(b[1:]) != 1 {
+		return
+	}
+	ppsSize := binary.BigEndian.Uint16(b[3:])
+	pps = b[5 : 5+ppsSize]
+
+	return
+}
 
 func EncodeConfig(vps, sps, pps []byte) []byte {
 	vpsSize := uint16(len(vps))
@@ -37,4 +70,29 @@ func EncodeConfig(vps, sps, pps []byte) []byte {
 	copy(b[5:], pps)
 
 	return buf
+}
+
+func ConfigToCodec(conf []byte) *core.Codec {
+	buf := bytes.NewBufferString("profile-id=1")
+
+	_, vps, sps, pps := DecodeConfig(conf)
+	if vps != nil {
+		buf.WriteString(";sprop-vps=")
+		buf.WriteString(base64.StdEncoding.EncodeToString(vps))
+	}
+	if sps != nil {
+		buf.WriteString(";sprop-sps=")
+		buf.WriteString(base64.StdEncoding.EncodeToString(sps))
+	}
+	if pps != nil {
+		buf.WriteString(";sprop-pps=")
+		buf.WriteString(base64.StdEncoding.EncodeToString(pps))
+	}
+
+	return &core.Codec{
+		Name:        core.CodecH265,
+		ClockRate:   90000,
+		FmtpLine:    buf.String(),
+		PayloadType: core.PayloadTypeRAW,
+	}
 }

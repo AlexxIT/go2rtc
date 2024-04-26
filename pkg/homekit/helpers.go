@@ -2,6 +2,7 @@ package homekit
 
 import (
 	"encoding/hex"
+	"slices"
 
 	"github.com/AlexxIT/go2rtc/pkg/aac"
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -20,17 +21,16 @@ func videoToMedia(codecs []camera.VideoCodec) *core.Media {
 
 	for _, codec := range codecs {
 		for _, param := range codec.CodecParams {
-			for _, profileID := range param.ProfileID {
-				for _, level := range param.Level {
-					profile := videoProfiles[profileID] + videoLevels[level]
-					mediaCodec := &core.Codec{
-						Name:      videoCodecs[codec.CodecType],
-						ClockRate: 90000,
-						FmtpLine:  "profile-level-id=" + profile,
-					}
-					media.Codecs = append(media.Codecs, mediaCodec)
-				}
+			// get best profile and level
+			profileID := slices.Max(param.ProfileID)
+			level := slices.Max(param.Level)
+			profile := videoProfiles[profileID] + videoLevels[level]
+			mediaCodec := &core.Codec{
+				Name:      videoCodecs[codec.CodecType],
+				ClockRate: 90000,
+				FmtpLine:  "profile-level-id=" + profile,
 			}
+			media.Codecs = append(media.Codecs, mediaCodec)
 		}
 	}
 
@@ -55,7 +55,7 @@ func audioToMedia(codecs []camera.AudioCodec) *core.Media {
 				}
 
 				if mediaCodec.Name == core.CodecELD {
-					// onli this version works with FFmpeg
+					// only this version works with FFmpeg
 					conf := aac.EncodeConfig(aac.TypeAACELD, 24000, 1, true)
 					mediaCodec.FmtpLine = aac.FMTP + hex.EncodeToString(conf)
 				}
@@ -71,6 +71,7 @@ func audioToMedia(codecs []camera.AudioCodec) *core.Media {
 func trackToVideo(track *core.Receiver, video0 *camera.VideoCodec) *camera.VideoCodec {
 	profileID := video0.CodecParams[0].ProfileID[0]
 	level := video0.CodecParams[0].Level[0]
+	attrs := video0.VideoAttrs[0]
 
 	if track != nil {
 		profile := h264.GetProfileLevelID(track.Codec.FmtpLine)
@@ -88,6 +89,12 @@ func trackToVideo(track *core.Receiver, video0 *camera.VideoCodec) *camera.Video
 				break
 			}
 		}
+
+		for _, s := range video0.VideoAttrs {
+			if s.Width > attrs.Width || s.Height > attrs.Height {
+				attrs = s
+			}
+		}
 	}
 
 	return &camera.VideoCodec{
@@ -98,9 +105,7 @@ func trackToVideo(track *core.Receiver, video0 *camera.VideoCodec) *camera.Video
 				Level:     []byte{level},
 			},
 		},
-		VideoAttrs: []camera.VideoAttrs{
-			{Width: 1920, Height: 1080, Framerate: 30},
-		},
+		VideoAttrs: []camera.VideoAttrs{attrs},
 	}
 }
 
