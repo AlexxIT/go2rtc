@@ -77,11 +77,8 @@ func (c *Client) newConn() (net.Conn, error) {
 
 	query := u.Query()
 
-	deviceId := query.Get("deviceId")
-	if deviceId != "" {
-		q := req.URL.Query()
-		q.Set("deviceId", deviceId)
-		req.URL.RawQuery = q.Encode()
+	if deviceId := query.Get("deviceId"); deviceId != "" {
+		req.URL.RawQuery = "deviceId=" + deviceId
 	}
 
 	req.URL.User = u.User
@@ -285,15 +282,13 @@ func dial(req *http.Request) (net.Conn, *http.Response, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	_ = res.Body.Close() // ignore response body
 
 	auth := res.Header.Get("WWW-Authenticate")
 
 	if res.StatusCode != http.StatusUnauthorized || !strings.HasPrefix(auth, "Digest") {
 		return nil, nil, err
 	}
-
-	// Read the entire request body to prevent issues later - H200 seems to send HTTP ERROR 401 as body response.
-	_, _ = io.Copy(io.Discard, res.Body)
 
 	if password == "" {
 		// support cloud password in place of username
@@ -308,32 +303,21 @@ func dial(req *http.Request) (net.Conn, *http.Response, error) {
 	realm := tcp.Between(auth, `realm="`, `"`)
 	nonce := tcp.Between(auth, `nonce="`, `"`)
 	qop := tcp.Between(auth, `qop="`, `"`)
-	// opaque is optional
-	op := ""
-	if strings.Contains(auth, `opaque="`) {
-		op = tcp.Between(auth, `opaque="`, `"`)
-	}
 	uri := req.URL.RequestURI()
 	ha1 := tcp.HexMD5(username, realm, password)
 	ha2 := tcp.HexMD5(req.Method, uri)
 	nc := "00000001"
-
-	// Generate a random cnonce
 	cnonce := core.RandString(32, 64)
-
 	response := tcp.HexMD5(ha1, nonce, nc, cnonce, qop, ha2)
 
-	header := ""
-	if op != "" {
-		header = fmt.Sprintf(
-			`Digest username="%s", realm="%s", nonce="%s", uri="%s", qop=%s, nc=%s, cnonce="%s", response="%s", opaque="%s", algorithm=MD5`,
-			username, realm, nonce, uri, qop, nc, cnonce, response, op,
-		)
-	} else {
-		header = fmt.Sprintf(
-			`Digest username="%s", realm="%s", nonce="%s", uri="%s", qop=%s, nc=%s, cnonce="%s", response="%s"`,
-			username, realm, nonce, uri, qop, nc, cnonce, response,
-		)
+	// https://datatracker.ietf.org/doc/html/rfc7616
+	header := fmt.Sprintf(
+		`Digest username="%s", realm="%s", nonce="%s", uri="%s", qop=%s, nc=%s, cnonce="%s", response="%s"`,
+		username, realm, nonce, uri, qop, nc, cnonce, response,
+	)
+
+	if opaque := tcp.Between(auth, `opaque="`, `"`); opaque != "" {
+		header += fmt.Sprintf(`, opaque="%s", algorithm=MD5`, opaque)
 	}
 
 	req.Header.Set("Authorization", header)
