@@ -37,6 +37,7 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
 - [GStreamer](https://gstreamer.freedesktop.org/) framework pipeline idea
 - [MediaSoup](https://mediasoup.org/) framework routing idea
 - HomeKit Accessory Protocol from [@brutella](https://github.com/brutella/hap)
+- creator of the project's logo [@v_novoseltsev](https://www.instagram.com/v_novoseltsev) 
 
 ---
 
