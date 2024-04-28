@@ -191,10 +191,10 @@ func whepClient(url string) (core.Producer, error) {
 	}
 
 	req, err := http.NewRequest("POST", url, strings.NewReader(offer))
-	req.Header.Set("Content-Type", MimeSDP)
 	if err != nil {
 		return nil, err
 	}
+	req.Header.Set("Content-Type", MimeSDP)
 
 	client := http.Client{Timeout: time.Second * 5000}
 	defer client.CloseIdleConnections()
