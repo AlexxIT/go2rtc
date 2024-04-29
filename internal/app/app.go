@@ -27,6 +27,8 @@ func Init() {
 	var confs Config
 	var daemon bool
 	var version bool
+	configflag := false
+	confs = append(confs, "")
 
 	flag.Var(&confs, "config", "go2rtc config (path to file or raw text), support multiple")
 	if runtime.GOOS != "windows" {
@@ -61,15 +63,21 @@ func Init() {
 	}
 
 	for _, conf := range confs {
+		if len(conf) < 1 {
+			continue
+		}
 		if conf[0] != '{' {
-			// config as file
-			if ConfigPath == "" {
-				ConfigPath = conf
-			}
 
-			data, _ := os.ReadFile(conf)
+			data, err := os.ReadFile(conf)
 			if data == nil {
 				continue
+			}
+			if err == nil {
+				configflag = true
+				// config as file
+				if ConfigPath == "" {
+					ConfigPath = conf
+				}
 			}
 
 			data = []byte(shell.ReplaceEnvVars(string(data)))
@@ -77,6 +85,15 @@ func Init() {
 		} else {
 			// config as raw YAML
 			configs = append(configs, []byte(conf))
+		}
+	}
+
+	if !configflag {
+		data, _ := os.ReadFile("go2rtc.yaml")
+		if data != nil {
+			data = []byte(shell.ReplaceEnvVars(string(data)))
+			configs = prepend(configs, data)
+			ConfigPath = "go2rtc.yaml"
 		}
 	}
 
@@ -102,6 +119,10 @@ func Init() {
 	log.Info().Msgf("go2rtc version %s %s/%s", Version, runtime.GOOS, runtime.GOARCH)
 
 	migrateStore()
+}
+
+func prepend[T any](slice []T, item T) []T {
+	return append([]T{item}, slice...)
 }
 
 func LoadConfig(v any) {
