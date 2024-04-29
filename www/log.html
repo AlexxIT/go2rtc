@@ -89,7 +89,7 @@
             const msg = Object.keys(line).reduce((msg, key) => {
                 return KEYS.indexOf(key) < 0 ? `${msg} ${key}=${line[key]}` : msg;
             }, line['message']);
-            return `<tr><td>${ts.toLocaleString()}</td><td>${line['level']}</td><td>${escapeHTML(msg)}</td></tr>`;
+            return `<tr class="${line['level']}"><td>${ts.toLocaleString()}</td><td>${escapeHTML(line['level'])}</td><td>${escapeHTML(msg)}</td></tr>`;
         }).join('');
     }
 
