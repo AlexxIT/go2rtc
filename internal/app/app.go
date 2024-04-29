@@ -121,8 +121,23 @@ func Init() {
 	migrateStore()
 }
 
+// prepend adds an item to the beginning of a slice. It works with slices of any type,
+// thanks to Go's type parameters feature. The function creates a new slice with enough
+// capacity to hold the additional item plus all existing items in the input slice.
+// It then appends the new item followed by all items of the input slice to this new slice.
+//
+// Parameters:
+//   - slice: The original slice to which the item will be prepended.
+//   - item: The item to prepend to the slice.
+//
+// Returns:
+//
+//	A new slice with the item added at the beginning.
 func prepend[T any](slice []T, item T) []T {
-	return append([]T{item}, slice...)
+	result := make([]T, 0, len(slice)+1)
+	result = append(result, item)
+	result = append(result, slice...)
+	return result
 }
 
 func LoadConfig(v any) {
