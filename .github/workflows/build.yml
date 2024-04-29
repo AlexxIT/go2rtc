@@ -98,6 +98,20 @@ jobs:
         uses: actions/upload-artifact@v4
         with: { name: go2rtc_mac_arm64, path: go2rtc }
 
+      - name: Build go2rtc_freebsd_amd64
+        env: { GOOS: freebsd, GOARCH: amd64 }
+        run: go build -ldflags "-s -w" -trimpath
+      - name: Upload go2rtc_freebsd_amd64
+        uses: actions/upload-artifact@v3
+        with: { name: go2rtc_freebsd_amd64, path: go2rtc }
+
+      - name: Build go2rtc_freebsd_arm64
+        env: { GOOS: freebsd, GOARCH: arm64 }
+        run: go build -ldflags "-s -w" -trimpath
+      - name: Upload go2rtc_freebsd_arm64
+        uses: actions/upload-artifact@v3
+        with: { name: go2rtc_freebsd_arm64, path: go2rtc }
+
   docker-master:
     name: Build docker master
     runs-on: ubuntu-latest
