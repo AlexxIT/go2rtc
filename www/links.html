@@ -167,55 +167,29 @@ Telegram: rtmps://xxx-x.rtmp.t.me/s/xxxxxxxxxx:xxxxxxxxxxxxxxxxxxxxxx</pre>
     }
 
     function copyTextToClipboard(text) {
-        // Modern approach with the Clipboard API
+        // https://web.dev/patterns/clipboard/copy-text
         if (navigator.clipboard && window.isSecureContext) {
-            // Navigator clipboard is available
-            navigator.clipboard.writeText(text).then(function() {
-                console.log('Async: Copying to clipboard was successful!');
-            }, function(err) {
-                console.error('Async: Could not copy text: ', err);
+            navigator.clipboard.writeText(text).catch(err => {
+                console.error(err.name, err.message);
             });
         } else {
-            // Fallback using document.execCommand()
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+
+            textarea.focus();
+            textarea.select();
+
             try {
-                // Create a temporary element to hold the text to copy
-                var textarea = document.createElement("textarea");
-                // Make it almost invisible and uneditable
-                textarea.style.position = 'fixed';
-                textarea.style.top = 0;
-                textarea.style.left = 0;
-                textarea.style.width = '2em';
-                textarea.style.height = '2em';
-                textarea.style.padding = 0;
-                textarea.style.border = 'none';
-                textarea.style.outline = 'none';
-                textarea.style.boxShadow = 'none';
-                textarea.style.background = 'transparent';
-
-                // Set the text content and append the textarea to the body
-                textarea.value = text;
-                document.body.appendChild(textarea);
-
-                // Select all the text in the textarea
-                textarea.focus();
-                textarea.select();
-
-                // Attempt to copy the text selected in the textarea
-                var successful = document.execCommand('copy');
-                if (successful) {
-                    console.log('Fallback: Copying text command was successful!');
-                } else {
-                    console.error('Fallback: Could not copy text');
-                }
-
-                // Cleanup - remove the temporary textarea
-                document.body.removeChild(textarea);
+                document.execCommand('copy');
             } catch (err) {
-                console.error('Fallback: Exception while trying to copy', err);
+                console.error(err.name, err.message);
             }
+
+            document.body.removeChild(textarea);
         }
     }
-
 
     document.getElementById('shareadd').addEventListener('click', ev => {
         ev.preventDefault();
