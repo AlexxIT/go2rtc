@@ -41,14 +41,14 @@ func Init() {
 	}
 
 	if daemon {
-		for i, arg := range os.Args {
+		args := os.Args[1:]
+		for i, arg := range args {
 			if arg == "-daemon" {
-				os.Args[i+1] = ""
-				break
+				args[i] = ""
 			}
 		}
 		// Re-run the program in background and exit
-		cmd := exec.Command(os.Args[0], os.Args[1:]...)
+		cmd := exec.Command(os.Args[0], args...)
 		if err := cmd.Start(); err != nil {
 			log.Fatal().Err(err).Send()
 		}
