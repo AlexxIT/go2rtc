@@ -5,8 +5,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 
@@ -19,12 +21,6 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/shell"
 	"github.com/rs/zerolog"
 )
-
-type Params struct {
-	KillSignal  os.Signal
-	Command     string
-	KillTimeout time.Duration
-}
 
 func Init() {
 	rtsp.HandleFunc(func(conn *pkg.Conn) bool {
@@ -50,22 +46,19 @@ func Init() {
 	log = app.GetLogger("exec")
 }
 
-func execHandle(url string) (core.Producer, error) {
+func execHandle(rawURL string) (core.Producer, error) {
 	var path string
 
-	params, err := parseParams(url)
-	if err != nil {
-		return nil, err
-	}
+	rawURL, rawQuery, _ := strings.Cut(rawURL, "#")
 
-	args := shell.QuoteSplit(params.Command[5:]) // remove `exec:`
+	args := shell.QuoteSplit(rawURL[5:]) // remove `exec:`
 	for i, arg := range args {
 		if arg == "{output}" {
 			if rtsp.Port == "" {
 				return nil, errors.New("rtsp module disabled")
 			}
 
-			sum := md5.Sum([]byte(url))
+			sum := md5.Sum([]byte(rawURL))
 			path = "/" + hex.EncodeToString(sum[:])
 			args[i] = "rtsp://127.0.0.1:" + rtsp.Port + path
 			break
@@ -78,14 +71,15 @@ func execHandle(url string) (core.Producer, error) {
 	}
 
 	if path == "" {
-		return handlePipe(url, cmd, params)
+		query := streams.ParseQuery(rawQuery)
+		return handlePipe(rawURL, cmd, query)
 	}
 
-	return handleRTSP(url, path, cmd)
+	return handleRTSP(rawURL, path, cmd)
 }
 
-func handlePipe(_ string, cmd *exec.Cmd, params *Params) (core.Producer, error) {
-	r, err := PipeCloser(cmd, params)
+func handlePipe(_ string, cmd *exec.Cmd, query url.Values) (core.Producer, error) {
+	r, err := PipeCloser(cmd, query)
 	if err != nil {
 		return nil, err
 	}

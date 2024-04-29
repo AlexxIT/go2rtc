@@ -6,6 +6,9 @@ import (
 )
 
 func ParseQuery(s string) url.Values {
+	if len(s) == 0 {
+		return nil
+	}
 	params := url.Values{}
 	for _, key := range strings.Split(s, "#") {
 		var value string

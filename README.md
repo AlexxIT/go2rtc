@@ -412,11 +412,17 @@ The source can be used with:
 - [Raspberry Pi Cameras](https://www.raspberrypi.com/documentation/computers/camera_software.html)
 - any your own software
 
+Pipe commands support two parameters (format: `exec:{command}#{param1}#{param2}`):
+
+- `killsignal` - signal which will be send to stop the process (numeric form)
+- `killtimeout` - time in seconds for forced termination with sigkill
+
 ```yaml
 streams:
   stream: exec:ffmpeg -re -i /media/BigBuckBunny.mp4 -c copy -rtsp_transport tcp -f rtsp {output}
   picam_h264: exec:libcamera-vid -t 0 --inline -o -
   picam_mjpeg: exec:libcamera-vid -t 0 --codec mjpeg -o -
+  canon: exec:gphoto2 --capture-movie --stdout#killsignal=2#killtimeout=5
 ```
 
 #### Source: Echo
