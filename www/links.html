@@ -166,6 +166,31 @@ Telegram: rtmps://xxx-x.rtmp.t.me/s/xxxxxxxxxx:xxxxxxxxxxxxxxxxxxxxxx</pre>
         document.getElementById('sharedel').style.display = 'none';
     }
 
+    function copyTextToClipboard(text) {
+        // https://web.dev/patterns/clipboard/copy-text
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text).catch(err => {
+                console.error(err.name, err.message);
+            });
+        } else {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+
+            textarea.focus();
+            textarea.select();
+
+            try {
+                document.execCommand('copy');
+            } catch (err) {
+                console.error(err.name, err.message);
+            }
+
+            document.body.removeChild(textarea);
+        }
+    }
+
     document.getElementById('shareadd').addEventListener('click', ev => {
         ev.preventDefault();
         share('POST').then(r => r.json()).then(r => onshareadd(r));
@@ -173,7 +198,7 @@ Telegram: rtmps://xxx-x.rtmp.t.me/s/xxxxxxxxxx:xxxxxxxxxxxxxxxxxxxxxx</pre>
 
     document.getElementById('shareget').addEventListener('click', ev => {
         ev.preventDefault();
-        navigator.clipboard.writeText(ev.target.href);
+        copyTextToClipboard(ev.target.href);
     });
 
     document.getElementById('sharedel').addEventListener('click', ev => {
