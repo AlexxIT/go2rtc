@@ -46,7 +46,7 @@
         r = await fetch('api/config', {method: 'POST', body: editor.getValue()});
         if (r.ok) {
             alert('OK');
-            fetch('api/restart', {method: 'POST'});
+            await fetch('api/restart', {method: 'POST'});
         } else {
             alert(await r.text());
         }
