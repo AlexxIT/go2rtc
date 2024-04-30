@@ -1,6 +1,8 @@
 package webrtc
 
 import (
+	"sync"
+
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
 )
@@ -12,6 +14,7 @@ type Track struct {
 	sequence uint16
 	ssrc     uint32
 	writer   webrtc.TrackLocalWriter
+	mu       sync.Mutex
 }
 
 func NewTrack(kind string) *Track {
@@ -23,8 +26,10 @@ func NewTrack(kind string) *Track {
 }
 
 func (t *Track) Bind(context webrtc.TrackLocalContext) (webrtc.RTPCodecParameters, error) {
+	t.mu.Lock()
 	t.ssrc = uint32(context.SSRC())
 	t.writer = context.WriteStream()
+	t.mu.Unlock()
 
 	for _, parameters := range context.CodecParameters() {
 		// return first parameters
@@ -35,7 +40,9 @@ func (t *Track) Bind(context webrtc.TrackLocalContext) (webrtc.RTPCodecParameter
 }
 
 func (t *Track) Unbind(context webrtc.TrackLocalContext) error {
+	t.mu.Lock()
 	t.writer = nil
+	t.mu.Unlock()
 	return nil
 }
 
@@ -55,19 +62,22 @@ func (t *Track) Kind() webrtc.RTPCodecType {
 	return webrtc.NewRTPCodecType(t.kind)
 }
 
-func (t *Track) WriteRTP(payloadType uint8, packet *rtp.Packet) error {
+func (t *Track) WriteRTP(payloadType uint8, packet *rtp.Packet) (err error) {
+	// using mutex because Unbind https://github.com/AlexxIT/go2rtc/issues/994
+	t.mu.Lock()
+
 	// in case when we start WriteRTP before Track.Bind
-	if t.writer == nil {
-		return nil
+	if t.writer != nil {
+		// important to have internal counter if input packets from different sources
+		t.sequence++
+
+		header := packet.Header
+		header.SSRC = t.ssrc
+		header.PayloadType = payloadType
+		header.SequenceNumber = t.sequence
+		_, err = t.writer.WriteRTP(&header, packet.Payload)
 	}
 
-	// important to have internal counter if input packets from different sources
-	t.sequence++
-
-	header := packet.Header
-	header.SSRC = t.ssrc
-	header.PayloadType = payloadType
-	header.SequenceNumber = t.sequence
-	_, err := t.writer.WriteRTP(&header, packet.Payload)
-	return err
+	t.mu.Unlock()
+	return
 }
