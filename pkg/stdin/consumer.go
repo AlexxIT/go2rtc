@@ -1,4 +1,4 @@
-package execbc
+package stdin
 
 import (
 	"encoding/json"
@@ -19,8 +19,7 @@ func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver
 	if c.sender == nil {
 		c.sender = core.NewSender(media, track.Codec)
 		c.sender.Handler = func(packet *rtp.Packet) {
-			c.pipeCloser.Write(packet.Payload)
-
+			_, _ = c.pipe.Write(packet.Payload)
 			c.send += len(packet.Payload)
 		}
 	}
@@ -30,28 +29,19 @@ func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver
 }
 
 func (c *Client) Start() (err error) {
-	if err = c.Open(); err != nil {
-		return
-	}
-	return
+	return c.cmd.Run()
 }
 
 func (c *Client) Stop() (err error) {
 	if c.sender != nil {
 		c.sender.Close()
 	}
-
-	if c.conn != nil {
-		_ = c.Close()
-		return c.conn.Close()
-	}
-
-	return nil
+	return c.pipe.Close()
 }
 
 func (c *Client) MarshalJSON() ([]byte, error) {
 	info := &core.Info{
-		Type:   "Command Backchannel PCMA",
+		Type:   "Exec active consumer",
 		Medias: c.medias,
 		Send:   c.send,
 	}

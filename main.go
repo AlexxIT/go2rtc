@@ -9,7 +9,6 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/dvrip"
 	"github.com/AlexxIT/go2rtc/internal/echo"
 	"github.com/AlexxIT/go2rtc/internal/exec"
-	"github.com/AlexxIT/go2rtc/internal/execbc"
 	"github.com/AlexxIT/go2rtc/internal/expr"
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg"
 	"github.com/AlexxIT/go2rtc/internal/gopro"
@@ -81,7 +80,6 @@ func main() {
 	bubble.Init()   // bubble source
 	expr.Init()     // expr source
 	gopro.Init()    // gopro source
-	execbc.Init()   // Local Backchannel
 
 	// 6. Helper modules
 

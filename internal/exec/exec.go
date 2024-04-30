@@ -19,6 +19,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/magic"
 	pkg "github.com/AlexxIT/go2rtc/pkg/rtsp"
 	"github.com/AlexxIT/go2rtc/pkg/shell"
+	"github.com/AlexxIT/go2rtc/pkg/stdin"
 	"github.com/rs/zerolog"
 )
 
@@ -79,6 +80,10 @@ func execHandle(rawURL string) (core.Producer, error) {
 }
 
 func handlePipe(_ string, cmd *exec.Cmd, query url.Values) (core.Producer, error) {
+	if query.Get("backchannel") == "1" {
+		return stdin.NewClient(cmd)
+	}
+
 	r, err := PipeCloser(cmd, query)
 	if err != nil {
 		return nil, err
