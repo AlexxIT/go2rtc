@@ -131,13 +131,6 @@ body.dark-mode textarea::placeholder {
 body.dark-mode hr {
     border-top: 1px solid #444;
 }
-
-.info { color: #0174DF; }
-.debug { color: #808080; }
-.error { color: #DF0101; }
-.trace { color: #585858; }
-.warn { color: #FF9966; }
-
 </style>
 <nav>
     <ul>
