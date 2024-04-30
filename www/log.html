@@ -19,17 +19,30 @@
             height: 100%;
         }
 
-        
-
-        
-
         table tbody td {
             font-size: 13px;
             vertical-align: top;
         }
 
-        
+        .info {
+            color: #0174DF;
+        }
 
+        .debug {
+            color: #808080;
+        }
+
+        .error {
+            color: #DF0101;
+        }
+
+        .trace {
+            color: #585858;
+        }
+
+        .warn {
+            color: #FF9966;
+        }
     </style>
 </head>
 <body>
@@ -89,7 +102,7 @@
             const msg = Object.keys(line).reduce((msg, key) => {
                 return KEYS.indexOf(key) < 0 ? `${msg} ${key}=${line[key]}` : msg;
             }, line['message']);
-            return `<tr><td>${ts.toLocaleString()}</td><td>${line['level']}</td><td>${escapeHTML(msg)}</td></tr>`;
+            return `<tr class="${line['level']}"><td>${ts.toLocaleString()}</td><td>${escapeHTML(line['level'])}</td><td>${escapeHTML(msg)}</td></tr>`;
         }).join('');
     }
 
