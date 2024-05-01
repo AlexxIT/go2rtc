@@ -47,19 +47,18 @@ func Init() {
 	log = app.GetLogger("exec")
 }
 
-func execHandle(rawURL string) (core.Producer, error) {
+func execHandle(url string) (core.Producer, error) {
 	var path string
 
-	rawURL, rawQuery, _ := strings.Cut(rawURL, "#")
+	args := shell.QuoteSplit(url[5:]) // remove `exec:`
 
-	args := shell.QuoteSplit(rawURL[5:]) // remove `exec:`
 	for i, arg := range args {
 		if arg == "{output}" {
 			if rtsp.Port == "" {
 				return nil, errors.New("rtsp module disabled")
 			}
 
-			sum := md5.Sum([]byte(rawURL))
+			sum := md5.Sum([]byte(url))
 			path = "/" + hex.EncodeToString(sum[:])
 			args[i] = "rtsp://127.0.0.1:" + rtsp.Port + path
 			break
@@ -72,11 +71,11 @@ func execHandle(rawURL string) (core.Producer, error) {
 	}
 
 	if path == "" {
-		query := streams.ParseQuery(rawQuery)
-		return handlePipe(rawURL, cmd, query)
+		query := streams.ParseQuery(strings.Join(args, ""))
+		return handlePipe(url, cmd, query)
 	}
 
-	return handleRTSP(rawURL, path, cmd)
+	return handleRTSP(url, path, cmd)
 }
 
 func handlePipe(_ string, cmd *exec.Cmd, query url.Values) (core.Producer, error) {
