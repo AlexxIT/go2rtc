@@ -5,8 +5,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,6 +19,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/magic"
 	pkg "github.com/AlexxIT/go2rtc/pkg/rtsp"
 	"github.com/AlexxIT/go2rtc/pkg/shell"
+	"github.com/AlexxIT/go2rtc/pkg/stdin"
 	"github.com/rs/zerolog"
 )
 
@@ -44,17 +47,19 @@ func Init() {
 	log = app.GetLogger("exec")
 }
 
-func execHandle(url string) (core.Producer, error) {
+func execHandle(rawURL string) (core.Producer, error) {
 	var path string
 
-	args := shell.QuoteSplit(url[5:]) // remove `exec:`
+	rawURL, rawQuery, _ := strings.Cut(rawURL, "#")
+
+	args := shell.QuoteSplit(rawURL[5:]) // remove `exec:`
 	for i, arg := range args {
 		if arg == "{output}" {
 			if rtsp.Port == "" {
 				return nil, errors.New("rtsp module disabled")
 			}
 
-			sum := md5.Sum([]byte(url))
+			sum := md5.Sum([]byte(rawURL))
 			path = "/" + hex.EncodeToString(sum[:])
 			args[i] = "rtsp://127.0.0.1:" + rtsp.Port + path
 			break
@@ -67,14 +72,19 @@ func execHandle(url string) (core.Producer, error) {
 	}
 
 	if path == "" {
-		return handlePipe(url, cmd)
+		query := streams.ParseQuery(rawQuery)
+		return handlePipe(rawURL, cmd, query)
 	}
 
-	return handleRTSP(url, path, cmd)
+	return handleRTSP(rawURL, path, cmd)
 }
 
-func handlePipe(url string, cmd *exec.Cmd) (core.Producer, error) {
-	r, err := PipeCloser(cmd)
+func handlePipe(_ string, cmd *exec.Cmd, query url.Values) (core.Producer, error) {
+	if query.Get("backchannel") == "1" {
+		return stdin.NewClient(cmd)
+	}
+
+	r, err := PipeCloser(cmd, query)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +118,7 @@ func handleRTSP(url, path string, cmd *exec.Cmd) (core.Producer, error) {
 		waitersMu.Unlock()
 	}()
 
-	log.Debug().Str("url", url).Msg("[exec] run")
+	log.Debug().Str("url", url).Str("cmd", fmt.Sprintf("%s", strings.Join(cmd.Args, " "))).Msg("[exec] run")
 
 	ts := time.Now()
 
@@ -144,6 +154,8 @@ func handleRTSP(url, path string, cmd *exec.Cmd) (core.Producer, error) {
 
 // internal
 
-var log zerolog.Logger
-var waiters = map[string]chan core.Producer{}
-var waitersMu sync.Mutex
+var (
+	log       zerolog.Logger
+	waiters   = map[string]chan core.Producer{}
+	waitersMu sync.Mutex
+)

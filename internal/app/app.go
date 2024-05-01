@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -14,7 +15,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-var Version = "1.8.5"
+var Version = "1.9.0"
 var UserAgent = "go2rtc/" + Version
 var FFmpegVersion = ""
 
@@ -25,14 +26,34 @@ var Info = map[string]any{
 
 func Init() {
 	var confs Config
+	var daemon bool
 	var version bool
 
 	flag.Var(&confs, "config", "go2rtc config (path to file or raw text), support multiple")
+	if runtime.GOOS != "windows" {
+		flag.BoolVar(&daemon, "daemon", false, "Run program in background")
+	}
 	flag.BoolVar(&version, "version", false, "Print the version of the application and exit")
 	flag.Parse()
 
 	if version {
-		fmt.Println("Current version: ", Version)
+		fmt.Println("Current version:", Version)
+		os.Exit(0)
+	}
+
+	if daemon {
+		args := os.Args[1:]
+		for i, arg := range args {
+			if arg == "-daemon" {
+				args[i] = ""
+			}
+		}
+		// Re-run the program in background and exit
+		cmd := exec.Command(os.Args[0], args...)
+		if err := cmd.Start(); err != nil {
+			log.Fatal().Err(err).Send()
+		}
+		fmt.Println("Running in daemon mode with PID:", cmd.Process.Pid)
 		os.Exit(0)
 	}
 
