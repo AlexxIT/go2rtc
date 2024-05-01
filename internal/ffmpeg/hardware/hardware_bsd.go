@@ -1,3 +1,5 @@
+//go:build freebsd || netbsd || openbsd || dragonfly
+
 package hardware
 
 import (
