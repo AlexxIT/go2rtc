@@ -22,5 +22,10 @@ func PipeCloser(cmd *exec.Cmd) (io.WriteCloser, error) {
 }
 
 func (p pipeCloser) Close() (err error) {
-	return errors.Join(p.Closer.Close(), p.cmd.Process.Kill(), p.cmd.Wait())
+	var killErr error = nil
+	process := p.cmd.Process
+	if process != nil {
+		killErr = process.Kill()
+	}
+	return errors.Join(p.Closer.Close(), killErr, p.cmd.Wait())
 }
