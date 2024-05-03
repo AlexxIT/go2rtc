@@ -163,7 +163,7 @@ func handlerWS(tr *ws.Transport, _ *ws.Message) error {
 	cons.UserAgent = tr.Request.UserAgent()
 
 	if err := stream.AddConsumer(cons); err != nil {
-		log.Error().Err(err).Caller().Send()
+		log.Debug().Err(err).Msg("[mjpeg] add consumer")
 		return err
 	}
 
