@@ -1,15 +1,13 @@
 package stdin
 
 import (
-	"io"
 	"os/exec"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
 type Client struct {
-	cmd  *exec.Cmd
-	pipe io.WriteCloser
+	cmd *exec.Cmd
 
 	medias []*core.Media
 	sender *core.Sender
@@ -17,14 +15,8 @@ type Client struct {
 }
 
 func NewClient(cmd *exec.Cmd) (*Client, error) {
-	pipe, err := PipeCloser(cmd)
-	if err != nil {
-		return nil, err
-	}
-
 	c := &Client{
-		pipe: pipe,
-		cmd:  cmd,
+		cmd: cmd,
 		medias: []*core.Media{
 			{
 				Kind:      core.KindAudio,
