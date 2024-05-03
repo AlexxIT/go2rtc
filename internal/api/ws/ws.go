@@ -11,7 +11,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/gorilla/websocket"
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
 )
 
 func Init() {
@@ -23,10 +23,14 @@ func Init() {
 
 	app.LoadConfig(&cfg)
 
+	log = app.GetLogger("api")
+
 	initWS(cfg.Mod.Origin)
 
 	api.HandleFunc("api/ws", apiWS)
 }
+
+var log zerolog.Logger
 
 // Message - struct for data exchange in Web API
 type Message struct {
