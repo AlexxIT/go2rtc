@@ -57,6 +57,8 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		log.Debug().Msgf("[mjpeg] transcoding time=%s", time.Since(ts))
+	case core.CodecJPEG:
+		b = mjpeg.FixJPEG(b)
 	}
 
 	h := w.Header()
