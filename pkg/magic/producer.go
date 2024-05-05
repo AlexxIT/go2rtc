@@ -34,11 +34,11 @@ func Open(r io.Reader) (core.Producer, error) {
 	case bytes.HasPrefix(b, []byte(flv.Signature)):
 		return flv.Open(rd)
 
-	case bytes.HasPrefix(b, []byte{0xFF, 0xF1}):
-		return aac.Open(rd)
-
 	case bytes.HasPrefix(b, []byte("--")):
 		return multipart.Open(rd)
+
+	case b[0] == 0xFF && b[1]&0xF7 == 0xF1:
+		return aac.Open(rd)
 
 	case b[0] == mpegts.SyncByte:
 		return mpegts.Open(rd)
