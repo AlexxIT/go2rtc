@@ -146,7 +146,19 @@ func (c *Conn) Accept() error {
 			if strings.HasPrefix(tr, transport) {
 				c.session = core.RandString(8, 10)
 				c.state = StateSetup
-				res.Header.Set("Transport", tr[:len(transport)+3])
+
+				if c.mode == core.ModePassiveConsumer {
+					if i := reqTrackID(req); i >= 0 && i < len(c.senders) {
+						// mark sender as SETUP
+						c.senders[i].Media.ID = MethodSetup
+						tr = fmt.Sprintf("RTP/AVP/TCP;unicast;interleaved=%d-%d", i*2, i*2+1)
+						res.Header.Set("Transport", tr)
+					} else {
+						res.Status = "400 Bad Request"
+					}
+				} else {
+					res.Header.Set("Transport", tr[:len(transport)+3])
+				}
 			} else {
 				res.Status = "461 Unsupported transport"
 			}
@@ -156,6 +168,15 @@ func (c *Conn) Accept() error {
 			}
 
 		case MethodRecord, MethodPlay:
+			if c.mode == core.ModePassiveConsumer {
+				// stop unconfigured senders
+				for _, track := range c.senders {
+					if track.Media.ID != MethodSetup {
+						track.Close()
+					}
+				}
+			}
+
 			res := &tcp.Response{Request: req}
 			err = c.WriteResponse(res)
 			c.playOK = true
@@ -171,4 +192,19 @@ func (c *Conn) Accept() error {
 			return fmt.Errorf("unsupported method: %s", req.Method)
 		}
 	}
+}
+
+func reqTrackID(req *tcp.Request) int {
+	var s string
+	if req.URL.RawQuery != "" {
+		s = req.URL.RawQuery
+	} else {
+		s = req.URL.Path
+	}
+	if i := strings.LastIndexByte(s, '='); i > 0 {
+		if i, err := strconv.Atoi(s[i+1:]); err == nil {
+			return i
+		}
+	}
+	return -1
 }
