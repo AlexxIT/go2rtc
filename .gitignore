@@ -5,3 +5,5 @@ go2rtc.yaml
 go2rtc.json
 
 0_test.go
+
+.DS_Store

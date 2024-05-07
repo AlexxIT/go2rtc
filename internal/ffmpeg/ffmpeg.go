@@ -7,6 +7,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg/device"
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg/hardware"
+	"github.com/AlexxIT/go2rtc/internal/ffmpeg/virtual"
 	"github.com/AlexxIT/go2rtc/internal/rtsp"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/ffmpeg"
@@ -145,7 +146,7 @@ func parseArgs(s string) *ffmpeg.Args {
 	}
 
 	var query url.Values
-	if i := strings.IndexByte(s, '#'); i > 0 {
+	if i := strings.IndexByte(s, '#'); i >= 0 {
 		query = streams.ParseQuery(s[i+1:])
 		args.Video = len(query["video"])
 		args.Audio = len(query["audio"])
@@ -191,6 +192,11 @@ func parseArgs(s string) *ffmpeg.Args {
 		var err error
 		args.Input, err = device.GetInput(s)
 		if err != nil {
+			return nil
+		}
+	} else if strings.HasPrefix(s, "virtual?") {
+		var err error
+		if args.Input, err = virtual.GetInput(s[8:]); err != nil {
 			return nil
 		}
 	} else {

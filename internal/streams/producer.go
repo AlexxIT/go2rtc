@@ -245,10 +245,10 @@ func (p *Producer) stop() {
 
 	switch p.state {
 	case stateExternal:
-		log.Debug().Msgf("[streams] can't stop external producer")
+		log.Trace().Msgf("[streams] skip stop external producer")
 		return
 	case stateNone:
-		log.Debug().Msgf("[streams] can't stop none producer")
+		log.Trace().Msgf("[streams] skip stop none producer")
 		return
 	case stateStart:
 		p.workerID++
