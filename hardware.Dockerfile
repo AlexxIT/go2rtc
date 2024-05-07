@@ -29,12 +29,11 @@ RUN --mount=type=cache,target=/root/.cache/go-build go mod download
 
 COPY . .
 RUN --mount=type=cache,target=/root/.cache/go-build CGO_ENABLED=0 go build -ldflags "-s -w" -trimpath
-RUN --mount=type=cache,target=/root/.cache/go-build CGO_ENABLED=0 go install -ldflags "-s -w" -trimpath github.com/mikefarah/yq/v4@v4.42.1
 
 # 2. Collect all files
 FROM scratch AS rootfs
 
-COPY --link --from=build /build/go2rtc /go/bin/yq /usr/local/bin/
+COPY --link --from=build /build/go2rtc /usr/local/bin/
 COPY --link --from=ngrok /bin/ngrok /usr/local/bin/
 
 # 3. Final image
