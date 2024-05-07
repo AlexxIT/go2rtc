@@ -67,11 +67,15 @@ func EmitNalus(nals []byte, isAVC bool, emit func([]byte)) {
 		}
 	} else {
 		for {
-			end := 4 + binary.BigEndian.Uint32(nals)
-			emit(nals[4:end])
-			if int(end) >= len(nals) {
+			n := uint32(len(nals))
+			if n < 4 {
 				break
 			}
+			end := 4 + binary.BigEndian.Uint32(nals)
+			if n < end {
+				break
+			}
+			emit(nals[4:end])
 			nals = nals[end:]
 		}
 	}

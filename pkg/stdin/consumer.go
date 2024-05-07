@@ -2,6 +2,7 @@ package stdin
 
 import (
 	"encoding/json"
+	"errors"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/pion/rtp"
@@ -17,9 +18,14 @@ func (c *Client) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver,
 
 func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver) error {
 	if c.sender == nil {
+		stdin, err := c.cmd.StdinPipe()
+		if err != nil {
+			return err
+		}
+
 		c.sender = core.NewSender(media, track.Codec)
 		c.sender.Handler = func(packet *rtp.Packet) {
-			_, _ = c.pipe.Write(packet.Payload)
+			_, _ = stdin.Write(packet.Payload)
 			c.send += len(packet.Payload)
 		}
 	}
@@ -36,7 +42,10 @@ func (c *Client) Stop() (err error) {
 	if c.sender != nil {
 		c.sender.Close()
 	}
-	return c.pipe.Close()
+	if c.cmd.Process == nil {
+		return nil
+	}
+	return errors.Join(c.cmd.Process.Kill(), c.cmd.Wait())
 }
 
 func (c *Client) MarshalJSON() ([]byte, error) {
