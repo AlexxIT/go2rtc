@@ -33,7 +33,7 @@ func Init() {
 		return "exec:" + args.String(), nil
 	})
 
-	if cfg.Mod["version"] == "" {
+	if cfg.Mod["version"] == "6.0-default" {
 		app.FFmpegVersion, _ = parseArgs("").GetFFmpegVersion()
 	} else {
 		app.FFmpegVersion = cfg.Mod["version"]
@@ -58,7 +58,7 @@ func Init() {
 
 var defaults = map[string]string{
 	"bin":     "ffmpeg",
-	"version": "6.0",
+	"version": "6.0-default",
 	"global":  "-hide_banner",
 
 	// inputs
