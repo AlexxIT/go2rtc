@@ -57,6 +57,8 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		log.Debug().Msgf("[mjpeg] transcoding time=%s", time.Since(ts))
+	case core.CodecJPEG:
+		b = mjpeg.FixJPEG(b)
 	}
 
 	h := w.Header()
@@ -163,7 +165,7 @@ func handlerWS(tr *ws.Transport, _ *ws.Message) error {
 	cons.UserAgent = tr.Request.UserAgent()
 
 	if err := stream.AddConsumer(cons); err != nil {
-		log.Error().Err(err).Caller().Send()
+		log.Debug().Err(err).Msg("[mjpeg] add consumer")
 		return err
 	}
 

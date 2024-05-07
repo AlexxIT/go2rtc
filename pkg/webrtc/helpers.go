@@ -47,10 +47,28 @@ func UnmarshalMedias(descriptions []*sdp.MediaDescription) (medias []*core.Media
 				continue
 			}
 
+			// skip non-media codecs to avoid confusing users in info and logs
+			media.Codecs = SkipNonMediaCodecs(media.Codecs)
+
 			medias = append(medias, media)
 		}
 	}
 
+	return
+}
+
+func SkipNonMediaCodecs(input []*core.Codec) (output []*core.Codec) {
+	for _, codec := range input {
+		switch codec.Name {
+		case "RTX", "RED", "ULPFEC", "FLEXFEC-03":
+			continue
+		case "CN", "TELEPHONE-EVENT":
+			continue // https://datatracker.ietf.org/doc/html/rfc7874
+		}
+		// VP8, VP9, H264, H265, AV1
+		// OPUS, G722, PCMU, PCMA
+		output = append(output, codec)
+	}
 	return
 }
 

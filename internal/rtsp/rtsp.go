@@ -239,7 +239,7 @@ func tcpHandler(conn *rtsp.Conn) {
 
 	if closer != nil {
 		if err := conn.Handle(); err != nil {
-			log.Debug().Msgf("[rtsp] handle=%s", err)
+			log.Debug().Err(err).Msg("[rtsp] handle")
 		}
 
 		closer()

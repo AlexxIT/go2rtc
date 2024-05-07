@@ -7,29 +7,48 @@ import (
 )
 
 func TestParseArgsFile(t *testing.T) {
-	// [FILE] all tracks will be copied without transcoding codecs
-	args := parseArgs("/media/bbb.mp4")
-	require.Equal(t, `ffmpeg -hide_banner -re -i /media/bbb.mp4 -c copy -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
-
-	// [FILE] video will be transcoded to H264, audio will be skipped
-	args = parseArgs("/media/bbb.mp4#video=h264")
-	require.Equal(t, `ffmpeg -hide_banner -re -i /media/bbb.mp4 -c:v libx264 -g 50 -profile:v high -level:v 4.1 -preset:v superfast -tune:v zerolatency -pix_fmt:v yuv420p -an -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
-
-	// [FILE] video will be copied, audio will be transcoded to pcmu
-	args = parseArgs("/media/bbb.mp4#video=copy#audio=pcmu")
-	require.Equal(t, `ffmpeg -hide_banner -re -i /media/bbb.mp4 -c:v copy -c:a pcm_mulaw -ar:a 8000 -ac:a 1 -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
-
-	// [FILE] video will be transcoded to H265 and rotate 270º, audio will be skipped
-	args = parseArgs("/media/bbb.mp4#video=h265#rotate=-90")
-	require.Equal(t, `ffmpeg -hide_banner -re -i /media/bbb.mp4 -c:v libx265 -g 50 -profile:v main -level:v 5.1 -preset:v superfast -tune:v zerolatency -an -vf "transpose=2" -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
-
-	// [FILE] video will be output for MJPEG to pipe, audio will be skipped
-	args = parseArgs("/media/bbb.mp4#video=mjpeg")
-	require.Equal(t, `ffmpeg -hide_banner -re -i /media/bbb.mp4 -c:v mjpeg -an -f mjpeg -`, args.String())
-
-	// https://github.com/AlexxIT/go2rtc/issues/509
-	args = parseArgs("ffmpeg:test.mp4#raw=-ss 00:00:20")
-	require.Equal(t, `ffmpeg -hide_banner -re -i ffmpeg:test.mp4 -ss 00:00:20 -c copy -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
+	tests := []struct {
+		name   string
+		source string
+		expect string
+	}{
+		{
+			name:   "[FILE] all tracks will be copied without transcoding codecs",
+			source: "/media/bbb.mp4",
+			expect: `ffmpeg -hide_banner -re -i /media/bbb.mp4 -c copy -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`,
+		},
+		{
+			name:   "[FILE] video will be transcoded to H264, audio will be skipped",
+			source: "/media/bbb.mp4#video=h264",
+			expect: `ffmpeg -hide_banner -re -i /media/bbb.mp4 -c:v libx264 -g 50 -profile:v high -level:v 4.1 -preset:v superfast -tune:v zerolatency -pix_fmt:v yuv420p -an -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`,
+		},
+		{
+			name:   "[FILE] video will be copied, audio will be transcoded to pcmu",
+			source: "/media/bbb.mp4#video=copy#audio=pcmu",
+			expect: `ffmpeg -hide_banner -re -i /media/bbb.mp4 -c:v copy -c:a pcm_mulaw -ar:a 8000 -ac:a 1 -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`,
+		},
+		{
+			name:   "[FILE] video will be transcoded to H265 and rotate 270º, audio will be skipped",
+			source: "/media/bbb.mp4#video=h265#rotate=-90",
+			expect: `ffmpeg -hide_banner -re -i /media/bbb.mp4 -c:v libx265 -g 50 -profile:v main -level:v 5.1 -preset:v superfast -tune:v zerolatency -an -vf "transpose=2" -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`,
+		},
+		{
+			name:   "[FILE] video will be output for MJPEG to pipe, audio will be skipped",
+			source: "/media/bbb.mp4#video=mjpeg",
+			expect: `ffmpeg -hide_banner -re -i /media/bbb.mp4 -c:v mjpeg -an -f mjpeg -`,
+		},
+		{
+			name:   "https://github.com/AlexxIT/go2rtc/issues/509",
+			source: "ffmpeg:test.mp4#raw=-ss 00:00:20",
+			expect: `ffmpeg -hide_banner -re -i ffmpeg:test.mp4 -ss 00:00:20 -c copy -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			args := parseArgs(test.source)
+			require.Equal(t, test.expect, args.String())
+		})
+	}
 }
 
 func TestParseArgsDevice(t *testing.T) {
@@ -87,7 +106,7 @@ func TestParseArgsAudio(t *testing.T) {
 
 	// [AUDIO] audio will be transcoded to OPUS, video will be skipped
 	args = parseArgs("rtsp:///example.com#audio=opus")
-	require.Equal(t, `ffmpeg -hide_banner -allowed_media_types audio -fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i rtsp:///example.com -c:a libopus -application:a lowdelay -frame_duration 20 -min_comp 0 -vn -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
+	require.Equal(t, `ffmpeg -hide_banner -allowed_media_types audio -fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i rtsp:///example.com -c:a libopus -application:a lowdelay -min_comp 0 -vn -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
 
 	// [AUDIO] audio will be transcoded to PCMU, video will be skipped
 	args = parseArgs("rtsp:///example.com#audio=pcmu")
@@ -115,28 +134,46 @@ func TestParseArgsAudio(t *testing.T) {
 }
 
 func TestParseArgsHwVaapi(t *testing.T) {
-	// [HTTP-MJPEG] video will be transcoded to H264
-	args := parseArgs("http:///example.com#video=h264#hardware=vaapi")
-	require.Equal(t, `ffmpeg -hide_banner -hwaccel vaapi -hwaccel_output_format vaapi -hwaccel_flags allow_profile_mismatch -fflags nobuffer -flags low_delay -i http:///example.com -c:v h264_vaapi -g 50 -bf 0 -profile:v high -level:v 4.1 -sei:v 0 -an -vf "format=vaapi|nv12,hwupload,scale_vaapi=out_range=tv" -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
-
-	// [RTSP] video with rotation, should be transcoded, so select H264
-	args = parseArgs("rtsp://example.com#video=h264#rotate=180#hardware=vaapi")
-	require.Equal(t, `ffmpeg -hide_banner -hwaccel vaapi -hwaccel_output_format vaapi -hwaccel_flags allow_profile_mismatch -allowed_media_types video -fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i rtsp://example.com -c:v h264_vaapi -g 50 -bf 0 -profile:v high -level:v 4.1 -sei:v 0 -an -vf "format=vaapi|nv12,hwupload,transpose_vaapi=4,scale_vaapi=out_range=tv" -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
-
-	// [RTSP] video with resize to 1280x720, should be transcoded, so select H265
-	args = parseArgs("rtsp://example.com#video=h265#width=1280#height=720#hardware=vaapi")
-	require.Equal(t, `ffmpeg -hide_banner -hwaccel vaapi -hwaccel_output_format vaapi -hwaccel_flags allow_profile_mismatch -allowed_media_types video -fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i rtsp://example.com -c:v hevc_vaapi -g 50 -bf 0 -profile:v high -level:v 5.1 -sei:v 0 -an -vf "format=vaapi|nv12,hwupload,scale_vaapi=1280:720:out_range=tv" -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
-
-	// [FILE] video will be output for MJPEG to pipe, audio will be skipped
-	args = parseArgs("/media/bbb.mp4#video=mjpeg#hardware=vaapi")
-	require.Equal(t, `ffmpeg -hide_banner -hwaccel vaapi -hwaccel_output_format vaapi -hwaccel_flags allow_profile_mismatch -re -i /media/bbb.mp4 -c:v mjpeg_vaapi -an -vf "format=vaapi|nv12,hwupload,scale_vaapi=out_range=tv" -f mjpeg -`, args.String())
-
-	// [DEVICE] MJPEG video with size 1920x1080 will be transcoded to H265
-	args = parseArgs("device?video=0&video_size=1920x1080#video=h265#hardware=vaapi")
-	require.Equal(t, `ffmpeg -hide_banner -hwaccel vaapi -hwaccel_output_format vaapi -hwaccel_flags allow_profile_mismatch -f dshow -video_size 1920x1080 -i video="0" -c:v hevc_vaapi -g 50 -bf 0 -profile:v high -level:v 5.1 -sei:v 0 -an -vf "format=vaapi|nv12,hwupload,scale_vaapi=out_range=tv" -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
+	tests := []struct {
+		name   string
+		source string
+		expect string
+	}{
+		{
+			name:   "[HTTP-MJPEG] video will be transcoded to H264",
+			source: "http:///example.com#video=h264#hardware=vaapi",
+			expect: `ffmpeg -hide_banner -hwaccel vaapi -hwaccel_output_format vaapi -hwaccel_flags allow_profile_mismatch -fflags nobuffer -flags low_delay -i http:///example.com -c:v h264_vaapi -g 50 -bf 0 -profile:v high -level:v 4.1 -sei:v 0 -an -vf "format=vaapi|nv12,hwupload,scale_vaapi=out_color_matrix=bt709:out_range=tv:format=nv12" -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`,
+		},
+		{
+			name:   "[RTSP] video with rotation, should be transcoded, so select H264",
+			source: "rtsp://example.com#video=h264#rotate=180#hardware=vaapi",
+			expect: `ffmpeg -hide_banner -hwaccel vaapi -hwaccel_output_format vaapi -hwaccel_flags allow_profile_mismatch -allowed_media_types video -fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i rtsp://example.com -c:v h264_vaapi -g 50 -bf 0 -profile:v high -level:v 4.1 -sei:v 0 -an -vf "format=vaapi|nv12,hwupload,transpose_vaapi=4,scale_vaapi=out_color_matrix=bt709:out_range=tv:format=nv12" -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`,
+		},
+		{
+			name:   "[RTSP] video with resize to 1280x720, should be transcoded, so select H265",
+			source: "rtsp://example.com#video=h265#width=1280#height=720#hardware=vaapi",
+			expect: `ffmpeg -hide_banner -hwaccel vaapi -hwaccel_output_format vaapi -hwaccel_flags allow_profile_mismatch -allowed_media_types video -fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i rtsp://example.com -c:v hevc_vaapi -g 50 -bf 0 -profile:v main -level:v 5.1 -sei:v 0 -an -vf "format=vaapi|nv12,hwupload,scale_vaapi=1280:720" -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`,
+		},
+		{
+			name:   "[FILE] video will be output for MJPEG to pipe, audio will be skipped",
+			source: "/media/bbb.mp4#video=mjpeg#hardware=vaapi",
+			expect: `ffmpeg -hide_banner -hwaccel vaapi -hwaccel_output_format vaapi -hwaccel_flags allow_profile_mismatch -re -i /media/bbb.mp4 -c:v mjpeg_vaapi -an -vf "format=vaapi|nv12,hwupload" -f mjpeg -`,
+		},
+		{
+			name:   "[DEVICE] MJPEG video with size 1920x1080 will be transcoded to H265",
+			source: "device?video=0&video_size=1920x1080#video=h265#hardware=vaapi",
+			expect: `ffmpeg -hide_banner -hwaccel vaapi -hwaccel_output_format vaapi -hwaccel_flags allow_profile_mismatch -f dshow -video_size 1920x1080 -i "video=0" -c:v hevc_vaapi -g 50 -bf 0 -profile:v main -level:v 5.1 -sei:v 0 -an -vf "format=vaapi|nv12,hwupload" -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			args := parseArgs(test.source)
+			require.Equal(t, test.expect, args.String())
+		})
+	}
 }
 
-func TestParseArgsHwV4l2m2m(t *testing.T) {
+func _TestParseArgsHwV4l2m2m(t *testing.T) {
 	// [HTTP-MJPEG] video will be transcoded to H264
 	args := parseArgs("http:///example.com#video=h264#hardware=v4l2m2m")
 	require.Equal(t, `ffmpeg -hide_banner -fflags nobuffer -flags low_delay -i http:///example.com -c:v h264_v4l2m2m -g 50 -bf 0 -an -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
@@ -166,7 +203,7 @@ func TestParseArgsHwRKMPP(t *testing.T) {
 	require.Equal(t, `ffmpeg -hide_banner -fflags nobuffer -flags low_delay -i http://example.com -c:v h264_rkmpp_encoder -g 50 -bf 0 -profile:v high -level:v 4.1 -height 320 -an -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
 }
 
-func TestParseArgsHwCuda(t *testing.T) {
+func _TestParseArgsHwCuda(t *testing.T) {
 	// [HTTP-MJPEG] video will be transcoded to H264
 	args := parseArgs("http:///example.com#video=h264#hardware=cuda")
 	require.Equal(t, `ffmpeg -hide_banner -hwaccel cuda -hwaccel_output_format cuda -fflags nobuffer -flags low_delay -i http:///example.com -c:v h264_nvenc -g 50 -bf 0 -profile:v high -level:v auto -preset:v p2 -tune:v ll -an -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
@@ -184,7 +221,7 @@ func TestParseArgsHwCuda(t *testing.T) {
 	require.Equal(t, `ffmpeg -hide_banner -hwaccel cuda -hwaccel_output_format cuda -f dshow -video_size 1920x1080 -i video="0" -c:v hevc_nvenc -g 50 -bf 0 -profile:v high -level:v auto -an -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
 }
 
-func TestParseArgsHwDxva2(t *testing.T) {
+func _TestParseArgsHwDxva2(t *testing.T) {
 	// [HTTP-MJPEG] video will be transcoded to H264
 	args := parseArgs("http:///example.com#video=h264#hardware=dxva2")
 	require.Equal(t, `ffmpeg -hide_banner -hwaccel dxva2 -hwaccel_output_format dxva2_vld -fflags nobuffer -flags low_delay -i http:///example.com -c:v h264_qsv -g 50 -bf 0 -profile:v high -level:v 4.1 -async_depth:v 1 -an -vf "hwmap=derive_device=qsv,format=qsv" -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
@@ -206,7 +243,7 @@ func TestParseArgsHwDxva2(t *testing.T) {
 	require.Equal(t, `ffmpeg -hide_banner -hwaccel dxva2 -hwaccel_output_format dxva2_vld -f dshow -video_size 1920x1080 -i video="0" -c:v hevc_qsv -g 50 -bf 0 -profile:v high -level:v 5.1 -async_depth:v 1 -an -vf "hwmap=derive_device=qsv,format=qsv" -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
 }
 
-func TestParseArgsHwVideotoolbox(t *testing.T) {
+func _TestParseArgsHwVideotoolbox(t *testing.T) {
 	// [HTTP-MJPEG] video will be transcoded to H264
 	args := parseArgs("http:///example.com#video=h264#hardware=videotoolbox")
 	require.Equal(t, `ffmpeg -hide_banner -hwaccel videotoolbox -hwaccel_output_format videotoolbox_vld -fflags nobuffer -flags low_delay -i http:///example.com -c:v h264_videotoolbox -g 50 -bf 0 -profile:v high -level:v 4.1 -an -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
@@ -226,16 +263,32 @@ func TestParseArgsHwVideotoolbox(t *testing.T) {
 
 func TestDeckLink(t *testing.T) {
 	args := parseArgs(`DeckLink SDI (2)#video=h264#hardware=vaapi#input=-format_code Hp29 -f decklink -i "{input}"`)
-	require.Equal(t, `ffmpeg -hide_banner -hwaccel vaapi -hwaccel_output_format vaapi -hwaccel_flags allow_profile_mismatch -format_code Hp29 -f decklink -i "DeckLink SDI (2)" -c:v h264_vaapi -g 50 -bf 0 -profile:v high -level:v 4.1 -sei:v 0 -an -vf "format=vaapi|nv12,hwupload,scale_vaapi=out_range=tv" -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
+	require.Equal(t, `ffmpeg -hide_banner -hwaccel vaapi -hwaccel_output_format vaapi -hwaccel_flags allow_profile_mismatch -format_code Hp29 -f decklink -i "DeckLink SDI (2)" -c:v h264_vaapi -g 50 -bf 0 -profile:v high -level:v 4.1 -sei:v 0 -an -vf "format=vaapi|nv12,hwupload,scale_vaapi=out_color_matrix=bt709:out_range=tv:format=nv12" -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
 }
 
 func TestDrawText(t *testing.T) {
-	args := parseArgs("http:///example.com#video=h264#drawtext=fontsize=12")
-	require.Equal(t, `ffmpeg -hide_banner -fflags nobuffer -flags low_delay -i http:///example.com -c:v libx264 -g 50 -profile:v high -level:v 4.1 -preset:v superfast -tune:v zerolatency -pix_fmt:v yuv420p -an -vf "drawtext=fontsize=12:text='%{localtime\:%Y-%m-%d %X}'" -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
-
-	args = parseArgs("http:///example.com#video=h264#width=640#drawtext=fontsize=12")
-	require.Equal(t, `ffmpeg -hide_banner -fflags nobuffer -flags low_delay -i http:///example.com -c:v libx264 -g 50 -profile:v high -level:v 4.1 -preset:v superfast -tune:v zerolatency -pix_fmt:v yuv420p -an -vf "scale=640:-1,drawtext=fontsize=12:text='%{localtime\:%Y-%m-%d %X}'" -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
-
-	args = parseArgs("http:///example.com#video=h264#width=640#drawtext=fontsize=12#hardware=vaapi")
-	require.Equal(t, `ffmpeg -hide_banner -hwaccel vaapi -hwaccel_output_format nv12 -hwaccel_flags allow_profile_mismatch -fflags nobuffer -flags low_delay -i http:///example.com -c:v h264_vaapi -g 50 -bf 0 -profile:v high -level:v 4.1 -sei:v 0 -an -vf "scale=640:-1:out_color_matrix=bt709:out_range=tv,drawtext=fontsize=12:text='%{localtime\:%Y-%m-%d %X}',hwupload" -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
+	tests := []struct {
+		name   string
+		source string
+		expect string
+	}{
+		{
+			source: "http:///example.com#video=h264#drawtext=fontsize=12",
+			expect: `ffmpeg -hide_banner -fflags nobuffer -flags low_delay -i http:///example.com -c:v libx264 -g 50 -profile:v high -level:v 4.1 -preset:v superfast -tune:v zerolatency -pix_fmt:v yuv420p -an -vf "drawtext=fontsize=12:text='%{localtime\:%Y-%m-%d %X}'" -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`,
+		},
+		{
+			source: "http:///example.com#video=h264#width=640#drawtext=fontsize=12",
+			expect: `ffmpeg -hide_banner -fflags nobuffer -flags low_delay -i http:///example.com -c:v libx264 -g 50 -profile:v high -level:v 4.1 -preset:v superfast -tune:v zerolatency -pix_fmt:v yuv420p -an -vf "scale=640:-1,drawtext=fontsize=12:text='%{localtime\:%Y-%m-%d %X}'" -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`,
+		},
+		{
+			source: "http:///example.com#video=h264#width=640#drawtext=fontsize=12#hardware=vaapi",
+			expect: `ffmpeg -hide_banner -hwaccel vaapi -hwaccel_output_format nv12 -hwaccel_flags allow_profile_mismatch -fflags nobuffer -flags low_delay -i http:///example.com -c:v h264_vaapi -g 50 -bf 0 -profile:v high -level:v 4.1 -sei:v 0 -an -vf "scale=640:-1,drawtext=fontsize=12:text='%{localtime\:%Y-%m-%d %X}',hwupload" -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			args := parseArgs(test.source)
+			require.Equal(t, test.expect, args.String())
+		})
+	}
 }

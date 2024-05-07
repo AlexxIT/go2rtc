@@ -3,6 +3,7 @@ package streams
 import (
 	"encoding/json"
 	"sync"
+	"sync/atomic"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 )
@@ -11,7 +12,7 @@ type Stream struct {
 	producers []*Producer
 	consumers []core.Consumer
 	mu        sync.Mutex
-	requests  int32
+	pending   atomic.Int32
 }
 
 func NewStream(source any) *Stream {

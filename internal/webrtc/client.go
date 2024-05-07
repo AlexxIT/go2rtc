@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
@@ -82,6 +83,7 @@ func go2rtcClient(url string) (core.Producer, error) {
 
 	// waiter will wait PC error or WS error or nil (connection OK)
 	var connState core.Waiter
+	var connMu sync.Mutex
 
 	prod := webrtc.NewConn(pc)
 	prod.Desc = "WebRTC/WebSocket async"
@@ -91,7 +93,9 @@ func go2rtcClient(url string) (core.Producer, error) {
 		case *pion.ICECandidate:
 			s := msg.ToJSON().Candidate
 			log.Trace().Str("candidate", s).Msg("[webrtc] local ")
+			connMu.Lock()
 			_ = conn.WriteJSON(&ws.Message{Type: "webrtc/candidate", Value: s})
+			connMu.Unlock()
 
 		case pion.PeerConnectionState:
 			switch msg {
@@ -118,9 +122,9 @@ func go2rtcClient(url string) (core.Producer, error) {
 
 	// 4. Send offer
 	msg := &ws.Message{Type: "webrtc/offer", Value: offer}
-	if err = conn.WriteJSON(msg); err != nil {
-		return nil, err
-	}
+	connMu.Lock()
+	_ = conn.WriteJSON(msg)
+	connMu.Unlock()
 
 	// 5. Get answer
 	if err = conn.ReadJSON(msg); err != nil {

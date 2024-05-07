@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"os/exec"
@@ -19,6 +20,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/magic"
 	pkg "github.com/AlexxIT/go2rtc/pkg/rtsp"
 	"github.com/AlexxIT/go2rtc/pkg/shell"
+	"github.com/AlexxIT/go2rtc/pkg/stdin"
 	"github.com/rs/zerolog"
 )
 
@@ -48,37 +50,41 @@ func Init() {
 
 func execHandle(rawURL string) (core.Producer, error) {
 	var path string
+	var query url.Values
 
-	rawURL, rawQuery, _ := strings.Cut(rawURL, "#")
-
-	args := shell.QuoteSplit(rawURL[5:]) // remove `exec:`
-	for i, arg := range args {
-		if arg == "{output}" {
-			if rtsp.Port == "" {
-				return nil, errors.New("rtsp module disabled")
-			}
-
-			sum := md5.Sum([]byte(rawURL))
-			path = "/" + hex.EncodeToString(sum[:])
-			args[i] = "rtsp://127.0.0.1:" + rtsp.Port + path
-			break
+	// RTSP flow should have `{output}` inside URL
+	// pipe flow may have `#{params}` inside URL
+	if i := strings.Index(rawURL, "{output}"); i > 0 {
+		if rtsp.Port == "" {
+			return nil, errors.New("exec: rtsp module disabled")
 		}
+
+		sum := md5.Sum([]byte(rawURL))
+		path = "/" + hex.EncodeToString(sum[:])
+		rawURL = rawURL[:i] + "rtsp://127.0.0.1:" + rtsp.Port + path + rawURL[i+8:]
+	} else if i = strings.IndexByte(rawURL, '#'); i > 0 {
+		query = streams.ParseQuery(rawURL[i+1:])
+		rawURL = rawURL[:i]
 	}
 
+	args := shell.QuoteSplit(rawURL[5:]) // remove `exec:`
 	cmd := exec.Command(args[0], args[1:]...)
 	if log.Debug().Enabled() {
 		cmd.Stderr = os.Stderr
 	}
 
 	if path == "" {
-		query := streams.ParseQuery(rawQuery)
 		return handlePipe(rawURL, cmd, query)
 	}
 
-	return handleRTSP(rawURL, path, cmd)
+	return handleRTSP(rawURL, cmd, path)
 }
 
 func handlePipe(_ string, cmd *exec.Cmd, query url.Values) (core.Producer, error) {
+	if query.Get("backchannel") == "1" {
+		return stdin.NewClient(cmd)
+	}
+
 	r, err := PipeCloser(cmd, query)
 	if err != nil {
 		return nil, err
@@ -96,15 +102,23 @@ func handlePipe(_ string, cmd *exec.Cmd, query url.Values) (core.Producer, error
 	return prod, err
 }
 
-func handleRTSP(url, path string, cmd *exec.Cmd) (core.Producer, error) {
+func handleRTSP(url string, cmd *exec.Cmd, path string) (core.Producer, error) {
+	stderr := limitBuffer{buf: make([]byte, 512)}
+
+	if cmd.Stderr != nil {
+		cmd.Stderr = io.MultiWriter(cmd.Stderr, &stderr)
+	} else {
+		cmd.Stderr = &stderr
+	}
+
 	if log.Trace().Enabled() {
 		cmd.Stdout = os.Stdout
 	}
 
-	ch := make(chan core.Producer)
+	waiter := make(chan core.Producer)
 
 	waitersMu.Lock()
-	waiters[path] = ch
+	waiters[path] = waiter
 	waitersMu.Unlock()
 
 	defer func() {
@@ -122,16 +136,9 @@ func handleRTSP(url, path string, cmd *exec.Cmd) (core.Producer, error) {
 		return nil, err
 	}
 
-	chErr := make(chan error)
-
+	done := make(chan error, 1)
 	go func() {
-		err := cmd.Wait()
-		// unblocking write to channel
-		select {
-		case chErr <- err:
-		default:
-			log.Trace().Str("url", url).Msg("[exec] close")
-		}
+		done <- cmd.Wait()
 	}()
 
 	select {
@@ -139,9 +146,10 @@ func handleRTSP(url, path string, cmd *exec.Cmd) (core.Producer, error) {
 		_ = cmd.Process.Kill()
 		log.Error().Str("url", url).Msg("[exec] timeout")
 		return nil, errors.New("timeout")
-	case err := <-chErr:
-		return nil, fmt.Errorf("exec: %s", err)
-	case prod := <-ch:
+	case <-done:
+		// limit message size
+		return nil, errors.New("exec: " + stderr.String())
+	case prod := <-waiter:
 		log.Debug().Stringer("launch", time.Since(ts)).Msg("[exec] run")
 		return prod, nil
 	}
@@ -154,3 +162,22 @@ var (
 	waiters   = map[string]chan core.Producer{}
 	waitersMu sync.Mutex
 )
+
+type limitBuffer struct {
+	buf []byte
+	n   int
+}
+
+func (l *limitBuffer) String() string {
+	if l.n == len(l.buf) {
+		return string(l.buf) + "..."
+	}
+	return string(l.buf[:l.n])
+}
+
+func (l *limitBuffer) Write(p []byte) (int, error) {
+	if l.n < cap(l.buf) {
+		l.n += copy(l.buf[l.n:], p)
+	}
+	return len(p), nil
+}
