@@ -1,6 +1,6 @@
 <h1 align="center">
 
-  ![go2rtc](assets/logo.png)
+  ![go2rtc](assets/logo.gif)
   <br>
   [![stars](https://img.shields.io/github/stars/AlexxIT/go2rtc?style=flat-square&logo=github)](https://github.com/AlexxIT/go2rtc/stargazers) 
   [![docker pulls](https://img.shields.io/docker/pulls/alexxit/go2rtc?style=flat-square&logo=docker&logoColor=white&label=pulls)](https://hub.docker.com/r/alexxit/go2rtc) 
