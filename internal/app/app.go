@@ -36,7 +36,7 @@ func Init() {
 	flag.Parse()
 
 	if version {
-		fmt.Println("Current version:", Version)
+		fmt.Printf("go2rtc version %s %s/%s\n", Version, runtime.GOOS, runtime.GOARCH)
 		os.Exit(0)
 	}
 
@@ -99,7 +99,13 @@ func Init() {
 
 	modules = cfg.Mod
 
-	log.Info().Msgf("go2rtc version %s %s/%s", Version, runtime.GOOS, runtime.GOARCH)
+	platform := fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH)
+	log.Info().Str("version", Version).Str("platform", platform).Msg("go2rtc")
+	log.Debug().Str("version", runtime.Version()).Msg("build")
+
+	if ConfigPath != "" {
+		log.Info().Str("path", ConfigPath).Msg("config")
+	}
 
 	migrateStore()
 }
