@@ -170,8 +170,8 @@ jobs:
         with:
           images: ${{ github.repository }}
           flavor: |
-            suffix=-hardware
-            latest=false
+            suffix=-hardware,onlatest=true
+            latest=auto
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}},enable=false

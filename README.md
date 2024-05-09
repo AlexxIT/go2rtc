@@ -131,7 +131,34 @@ Don't forget to fix the rights `chmod +x go2rtc_xxx_xxx` on Linux and Mac.
 
 ### go2rtc: Docker
 
-Container [alexxit/go2rtc](https://hub.docker.com/r/alexxit/go2rtc) with support `amd64`, `386`, `arm64`, `arm`. This container is the same as [Home Assistant Add-on](#go2rtc-home-assistant-add-on), but can be used separately from Home Assistant. Container has preinstalled [FFmpeg](#source-ffmpeg), [ngrok](#module-ngrok) and [Python](#source-echo).
+The Docker container [`alexxit/go2rtc`](https://hub.docker.com/r/alexxit/go2rtc) supports multiple architectures including `amd64`, `386`, `arm64`, and `arm`. This container offers the same functionality as the [Home Assistant Add-on](#go2rtc-home-assistant-add-on) but is designed to operate independently of Home Assistant. It comes preinstalled with [FFmpeg](#source-ffmpeg), [ngrok](#module-ngrok), and [Python](#source-echo).
+
+#### Basic Deployment
+
+```bash
+docker run -d \
+  --name go2rtc \
+  --network host \
+  --privileged \
+  --restart unless-stopped \
+  -e TZ=Atlantic/Bermuda \
+  -v ~/go2rtc:/config \
+  alexxit/go2rtc
+```
+
+#### Deployment with GPU Acceleration
+
+```bash
+docker run -d \
+  --name go2rtc \
+  --network host \
+  --privileged \
+  --restart unless-stopped \
+  -e TZ=Atlantic/Bermuda \
+  --gpus all \
+  -v ~/go2rtc:/config \
+  alexxit/go2rtc:latest-hardware
+```
 
 ### go2rtc: Home Assistant Add-on
 
