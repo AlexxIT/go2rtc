@@ -37,12 +37,32 @@ func Dial(url string) (*Producer, error) {
 		return nil, err
 	}
 
+	// KC200
+	//   HTTP/1.0 200 OK
+	//   Content-Type: multipart/x-mixed-replace;boundary=data-boundary--
+	// KD110, KC401, KC420WS:
+	//   HTTP/1.0 200 OK
+	//   Content-Type: multipart/x-mixed-replace;boundary=data-boundary--
+	//   Transfer-Encoding: chunked
+	// HTTP/1.0 + chunked = out of standard, so golang remove this header
+	// and we need to check first two bytes
+	buf := bufio.NewReader(res.Body)
+
+	b, err := buf.Peek(2)
+	if err != nil {
+		return nil, err
+	}
+
 	rd := struct {
 		io.Reader
 		io.Closer
 	}{
-		httputil.NewChunkedReader(res.Body),
+		buf,
 		res.Body,
+	}
+
+	if string(b) != "--" {
+		rd.Reader = httputil.NewChunkedReader(buf)
 	}
 
 	prod := &Producer{rd: core.NewReadBuffer(rd)}
