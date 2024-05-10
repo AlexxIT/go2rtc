@@ -178,10 +178,7 @@ func inputWebRTC(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	answer, err := prod.GetCompleteAnswer()
-	if err == nil {
-		answer, err = syncCanditates(answer)
-	}
+	answer, err := prod.GetCompleteAnswer(GetCandidates(), FilterCandidate)
 	if err != nil {
 		log.Warn().Err(err).Caller().Send()
 		http.Error(w, err.Error(), http.StatusInternalServerError)

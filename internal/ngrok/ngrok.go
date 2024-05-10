@@ -50,7 +50,7 @@ func Init() {
 
 				log.Info().Str("addr", address).Msg("[ngrok] add external candidate for WebRTC")
 
-				webrtc.AddCandidate(address, "tcp")
+				webrtc.AddCandidate("tcp", address)
 			}
 		}
 	})
