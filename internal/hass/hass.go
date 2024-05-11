@@ -21,7 +21,7 @@ import (
 func Init() {
 	var conf struct {
 		API struct {
-			Listen string `json:"listen"`
+			Listen string `yaml:"listen"`
 		} `yaml:"api"`
 		Mod struct {
 			Config string `yaml:"config"`
