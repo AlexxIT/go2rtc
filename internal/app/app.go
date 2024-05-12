@@ -38,25 +38,27 @@ func Init() {
 	flag.Parse()
 
 	if version {
-		vcsRevision := ""
-		vcsTime := time.Now().Local()
+		var vcsRevision string
+		vcsTime := time.Now()
+
 		if info, ok := debug.ReadBuildInfo(); ok {
 			for _, setting := range info.Settings {
-				if setting.Key == "vcs.revision" {
-					if len(setting.Value) > 7 {
-						vcsRevision = setting.Value[:7]
-					} else {
-						vcsRevision = setting.Value
+				switch setting.Key {
+				case "vcs.revision":
+					vcsRevision = setting.Value
+					if len(vcsRevision) > 7 {
+						vcsRevision = vcsRevision[:7]
 					}
 					vcsRevision = "(" + vcsRevision + ")"
-				}
-				if setting.Key == "vcs.time" {
-					vcsTime, _ = time.Parse(time.RFC3339, setting.Value)
-					vcsTime = vcsTime.Local()
+				case "vcs.time":
+					if parsedTime, err := time.Parse(time.RFC3339, setting.Value); err == nil {
+						vcsTime = parsedTime.Local()
+					}
 				}
 			}
 		}
-		fmt.Printf("go2rtc version %s%s: %s %s/%s\n", Version, vcsRevision, vcsTime.Local().String(), runtime.GOOS, runtime.GOARCH)
+
+		fmt.Printf("go2rtc version %s%s: %s %s/%s\n", Version, vcsRevision, vcsTime.String(), runtime.GOOS, runtime.GOARCH)
 		os.Exit(0)
 	}
 
