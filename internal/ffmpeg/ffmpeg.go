@@ -280,6 +280,12 @@ func parseArgs(s string) *ffmpeg.Args {
 			}
 		}
 
+		if query["bitrate"] != nil {
+			// https://trac.ffmpeg.org/wiki/Limiting%20the%20output%20bitrate
+			b := query["bitrate"][0]
+			args.AddCodec("-b:v " + b + " -maxrate " + b + " -bufsize " + b)
+		}
+
 		// 4. Process audio codecs
 		if args.Audio > 0 {
 			for _, audio := range query["audio"] {
