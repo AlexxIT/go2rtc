@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"io"
 	"os"
 	"sync"
@@ -65,20 +66,28 @@ func newBuffer(chunks int) *circularBuffer {
 }
 
 func (b *circularBuffer) Write(p []byte) (n int, err error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	n = len(p)
+	if n == 0 {
+		return 0, nil
+	}
+
+	if len(b.chunks) == 0 {
+		b.chunks = append(b.chunks, make([]byte, 0, chunkSize))
+	}
 
 	// check if chunk has size
 	if len(b.chunks[b.w])+n > chunkSize {
 		// increase write chunk index
-		if b.w++; b.w == cap(b.chunks) {
+		b.w++
+		if b.w == cap(b.chunks) {
 			b.w = 0
 		}
 		// check overflow
 		if b.r == b.w {
-			// increase read chunk index
-			if b.r++; b.r == cap(b.chunks) {
-				b.r = 0
-			}
+			return 0, errors.New("circularBuffer overflow, cannot write without overwriting unread data")
 		}
 		// check if current chunk exists
 		if b.w == len(b.chunks) {
@@ -91,7 +100,7 @@ func (b *circularBuffer) Write(p []byte) (n int, err error) {
 	}
 
 	b.chunks[b.w] = append(b.chunks[b.w], p...)
-	return
+	return n, nil
 }
 
 func (b *circularBuffer) WriteTo(w io.Writer) (n int64, err error) {
