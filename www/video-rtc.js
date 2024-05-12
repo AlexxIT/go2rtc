@@ -70,6 +70,7 @@ export class VideoRTC extends HTMLElement {
          * @type {RTCConfiguration}
          */
         this.pcConfig = {
+            bundlePolicy: 'max-bundle',
             iceServers: [{urls: 'stun:stun.l.google.com:19302'}],
             sdpSemantics: 'unified-plan',  // important for Chromecast 1
         };
