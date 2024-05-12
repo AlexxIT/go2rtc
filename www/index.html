@@ -4,11 +4,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, user-scalable=yes, initial-scale=1, maximum-scale=1">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
-
     <title>go2rtc</title>
-
     <style>
-
         body {
             margin: 0;
             padding: 0;
@@ -81,15 +78,28 @@
         });
 
     const tbody = document.getElementById('streams');
-    tbody.addEventListener('click', ev => {
+    tbody.addEventListener('click', async ev => {
         if (ev.target.innerText !== 'delete') return;
 
         ev.preventDefault();
 
-        const url = new URL('api/streams', location.href);
         const src = decodeURIComponent(ev.target.dataset.name);
+
+        const message = `Please type the name of the stream "${src}" to confirm its deletion from the configuration. This action is irreversible.`;
+        if (prompt(message) !== src) {
+            alert('Stream name does not match. Deletion cancelled.');
+            return;
+        }
+
+        const url = new URL('api/streams', location.href);
         url.searchParams.set('src', src);
-        fetch(url, {method: 'DELETE'}).then(reload);
+
+        try {
+            await fetch(url, {method: 'DELETE'});
+            reload();
+        } catch (error) {
+            console.error('Failed to delete the stream:', error);
+        }
     });
 
     document.getElementById('selectall').addEventListener('change', ev => {

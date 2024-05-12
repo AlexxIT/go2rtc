@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -14,7 +15,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-var Version = "1.8.5"
+var Version = "1.9.1"
 var UserAgent = "go2rtc/" + Version
 
 var ConfigPath string
@@ -24,14 +25,34 @@ var Info = map[string]any{
 
 func Init() {
 	var confs Config
+	var daemon bool
 	var version bool
 
 	flag.Var(&confs, "config", "go2rtc config (path to file or raw text), support multiple")
+	if runtime.GOOS != "windows" {
+		flag.BoolVar(&daemon, "daemon", false, "Run program in background")
+	}
 	flag.BoolVar(&version, "version", false, "Print the version of the application and exit")
 	flag.Parse()
 
 	if version {
-		fmt.Println("Current version: ", Version)
+		fmt.Printf("go2rtc version %s %s/%s\n", Version, runtime.GOOS, runtime.GOARCH)
+		os.Exit(0)
+	}
+
+	if daemon {
+		args := os.Args[1:]
+		for i, arg := range args {
+			if arg == "-daemon" {
+				args[i] = ""
+			}
+		}
+		// Re-run the program in background and exit
+		cmd := exec.Command(os.Args[0], args...)
+		if err := cmd.Start(); err != nil {
+			log.Fatal().Err(err).Send()
+		}
+		fmt.Println("Running in daemon mode with PID:", cmd.Process.Pid)
 		os.Exit(0)
 	}
 
@@ -78,7 +99,13 @@ func Init() {
 
 	modules = cfg.Mod
 
-	log.Info().Msgf("go2rtc version %s %s/%s", Version, runtime.GOOS, runtime.GOARCH)
+	platform := fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH)
+	log.Info().Str("version", Version).Str("platform", platform).Msg("go2rtc")
+	log.Debug().Str("version", runtime.Version()).Msg("build")
+
+	if ConfigPath != "" {
+		log.Info().Str("path", ConfigPath).Msg("config")
+	}
 
 	migrateStore()
 }

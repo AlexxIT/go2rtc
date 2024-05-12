@@ -3,6 +3,7 @@ package streams
 import (
 	"encoding/json"
 	"sync"
+	"sync/atomic"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 )
@@ -11,7 +12,7 @@ type Stream struct {
 	producers []*Producer
 	consumers []core.Consumer
 	mu        sync.Mutex
-	requests  int32
+	pending   atomic.Int32
 }
 
 func NewStream(source any) *Stream {
@@ -22,8 +23,13 @@ func NewStream(source any) *Stream {
 		}
 	case []any:
 		s := new(Stream)
-		for _, source := range source {
-			s.producers = append(s.producers, NewProducer(source.(string)))
+		for _, src := range source {
+			str, ok := src.(string)
+			if !ok {
+				log.Error().Msgf("[stream] NewStream: Expected string, got %v", src)
+				continue
+			}
+			s.producers = append(s.producers, NewProducer(str))
 		}
 		return s
 	case map[string]any:

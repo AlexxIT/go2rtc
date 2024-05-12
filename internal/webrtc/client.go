@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
@@ -48,7 +49,9 @@ func streamsHandler(rawURL string) (core.Producer, error) {
 			}
 
 		case "http", "https":
-			if format == "wyze" {
+			if format == "milestone" {
+				return milestoneClient(rawURL, query)
+			} else if format == "wyze" {
 				// https://github.com/mrlt8/docker-wyze-bridge
 				return wyzeClient(rawURL)
 			} else {
@@ -80,6 +83,7 @@ func go2rtcClient(url string) (core.Producer, error) {
 
 	// waiter will wait PC error or WS error or nil (connection OK)
 	var connState core.Waiter
+	var connMu sync.Mutex
 
 	prod := webrtc.NewConn(pc)
 	prod.Desc = "WebRTC/WebSocket async"
@@ -89,7 +93,9 @@ func go2rtcClient(url string) (core.Producer, error) {
 		case *pion.ICECandidate:
 			s := msg.ToJSON().Candidate
 			log.Trace().Str("candidate", s).Msg("[webrtc] local ")
+			connMu.Lock()
 			_ = conn.WriteJSON(&ws.Message{Type: "webrtc/candidate", Value: s})
+			connMu.Unlock()
 
 		case pion.PeerConnectionState:
 			switch msg {
@@ -116,9 +122,9 @@ func go2rtcClient(url string) (core.Producer, error) {
 
 	// 4. Send offer
 	msg := &ws.Message{Type: "webrtc/offer", Value: offer}
-	if err = conn.WriteJSON(msg); err != nil {
-		return nil, err
-	}
+	connMu.Lock()
+	_ = conn.WriteJSON(msg)
+	connMu.Unlock()
 
 	// 5. Get answer
 	if err = conn.ReadJSON(msg); err != nil {
@@ -189,10 +195,10 @@ func whepClient(url string) (core.Producer, error) {
 	}
 
 	req, err := http.NewRequest("POST", url, strings.NewReader(offer))
-	req.Header.Set("Content-Type", MimeSDP)
 	if err != nil {
 		return nil, err
 	}
+	req.Header.Set("Content-Type", MimeSDP)
 
 	client := http.Client{Timeout: time.Second * 5000}
 	defer client.CloseIdleConnections()
