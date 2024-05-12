@@ -8,7 +8,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"strings"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/shell"
 	"github.com/AlexxIT/go2rtc/pkg/yaml"
@@ -36,7 +38,25 @@ func Init() {
 	flag.Parse()
 
 	if version {
-		fmt.Printf("go2rtc version %s %s/%s\n", Version, runtime.GOOS, runtime.GOARCH)
+		vcsRevision := ""
+		vcsTime := time.Now().Local()
+		if info, ok := debug.ReadBuildInfo(); ok {
+			for _, setting := range info.Settings {
+				if setting.Key == "vcs.revision" {
+					if len(setting.Value) > 7 {
+						vcsRevision = setting.Value[:7]
+					} else {
+						vcsRevision = setting.Value
+					}
+					vcsRevision = "(" + vcsRevision + ")"
+				}
+				if setting.Key == "vcs.time" {
+					vcsTime, _ = time.Parse(time.RFC3339, setting.Value)
+					vcsTime = vcsTime.Local()
+				}
+			}
+		}
+		fmt.Printf("go2rtc version %s%s: %s %s/%s\n", Version, vcsRevision, vcsTime.Local().String(), runtime.GOOS, runtime.GOARCH)
 		os.Exit(0)
 	}
 
