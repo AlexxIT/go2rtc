@@ -79,22 +79,26 @@ func Init() {
 	}
 
 	for _, conf := range confs {
-		if conf[0] != '{' {
+		if len(conf) == 0 {
+			continue
+		}
+		if conf[0] == '{' {
+			// config as raw YAML or JSON
+			configs = append(configs, []byte(conf))
+		} else if data := parseConfString(conf); data != nil {
+			configs = append(configs, data)
+		} else {
 			// config as file
 			if ConfigPath == "" {
 				ConfigPath = conf
 			}
 
-			data, _ := os.ReadFile(conf)
-			if data == nil {
+			if data, _ = os.ReadFile(conf); data == nil {
 				continue
 			}
 
 			data = []byte(shell.ReplaceEnvVars(string(data)))
 			configs = append(configs, data)
-		} else {
-			// config as raw YAML
-			configs = append(configs, []byte(conf))
 		}
 	}
 
@@ -189,4 +193,26 @@ func readRevisionTime() (revision, vcsTime string) {
 		}
 	}
 	return
+}
+
+func parseConfString(s string) []byte {
+	i := strings.IndexByte(s, '=')
+	if i < 0 {
+		return nil
+	}
+
+	items := strings.Split(s[:i], ".")
+	if len(items) < 2 {
+		return nil
+	}
+
+	// `log.level=trace` => `{log: {level: trace}}`
+	var pre string
+	var suf = s[i+1:]
+	for _, item := range items {
+		pre += "{" + item + ": "
+		suf += "}"
+	}
+
+	return []byte(pre + suf)
 }
