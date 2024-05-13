@@ -21,7 +21,7 @@ func Init() {
 			Username     string `yaml:"username" json:"-"`
 			Password     string `yaml:"password" json:"-"`
 			DefaultQuery string `yaml:"default_query" json:"default_query"`
-			PacketSize   uint16 `yaml:"pkt_size" json:"packet_size"`
+			PacketSize   uint16 `yaml:"pkt_size" json:"pkt_size,omitempty"`
 		} `yaml:"rtsp"`
 	}
 
