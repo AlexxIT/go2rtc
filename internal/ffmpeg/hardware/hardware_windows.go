@@ -1,3 +1,5 @@
+//go:build windows
+
 package hardware
 
 import "github.com/AlexxIT/go2rtc/internal/api"
