@@ -10,7 +10,6 @@ import (
 	"runtime"
 	"runtime/debug"
 	"strings"
-	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/shell"
 	"github.com/AlexxIT/go2rtc/pkg/yaml"
@@ -25,51 +24,41 @@ var Info = map[string]any{
 	"version": Version,
 }
 
+const usage = `Usage of go2rtc:
+
+  -c, --config   Path to config file or config string as YAML or JSON, support multiple
+  -d, --daemon   Run in background
+  -v, --version  Print version and exit
+`
+
 func Init() {
 	var confs Config
 	var daemon bool
 	var version bool
 
-	flag.Var(&confs, "config", "go2rtc config (path to file or raw text), support multiple")
+	flag.Var(&confs, "config", "")
 	flag.Var(&confs, "c", "")
-	if runtime.GOOS != "windows" {
-		flag.BoolVar(&daemon, "daemon", false, "Run program in background")
-	}
-	flag.BoolVar(&version, "version", false, "Print the version of the application and exit")
+	flag.BoolVar(&daemon, "daemon", false, "")
+	flag.BoolVar(&daemon, "d", false, "")
+	flag.BoolVar(&version, "version", false, "")
 	flag.BoolVar(&version, "v", false, "")
 
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage of go2rtc\nversion %s\n\n", GetVersionString())
-		flag.VisitAll(func(f *flag.Flag) {
-			pname := ""
-			if f.Usage != "" {
-				switch f.Name {
-				case "config":
-					pname = "-c --config"
-					break
-				case "daemon":
-					pname = "-d --daemon"
-					break
-				case "version":
-					pname = "-v --version"
-					break
-				default:
-					pname = "-" + f.Name
-				}
-				fmt.Fprintf(os.Stderr, "\t%s\n\t\t%s (default %q)\n", pname, f.Usage, f.DefValue)
-			}
-		})
-		fmt.Fprintf(os.Stderr, "\t%s\n\t\t%s\n", "-h --help", "Print this help")
-	}
-
+	flag.Usage = func() { fmt.Print(usage) }
 	flag.Parse()
 
+	revision, vcsTime := readRevisionTime()
+
 	if version {
-		fmt.Println("go2rtc version " + GetVersionString())
+		fmt.Printf("go2rtc version %s (%s) %s/%s\n", Version, revision, runtime.GOOS, runtime.GOARCH)
 		os.Exit(0)
 	}
 
 	if daemon {
+		if runtime.GOOS == "windows" {
+			fmt.Println("Daemon not supported on Windows")
+			os.Exit(1)
+		}
+
 		args := os.Args[1:]
 		for i, arg := range args {
 			if arg == "-daemon" {
@@ -118,6 +107,8 @@ func Init() {
 		Info["config_path"] = ConfigPath
 	}
 
+	Info["revision"] = revision
+
 	var cfg struct {
 		Mod map[string]string `yaml:"log"`
 	}
@@ -129,8 +120,8 @@ func Init() {
 	modules = cfg.Mod
 
 	platform := fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH)
-	log.Info().Str("version", Version).Str("platform", platform).Msg("go2rtc")
-	log.Debug().Str("version", runtime.Version()).Msg("build")
+	log.Info().Str("version", Version).Str("platform", platform).Str("revision", revision).Msg("go2rtc")
+	log.Debug().Str("version", runtime.Version()).Str("vcs.time", vcsTime).Msg("build")
 
 	if ConfigPath != "" {
 		log.Info().Str("path", ConfigPath).Msg("config")
@@ -178,26 +169,24 @@ func (c *Config) Set(value string) error {
 
 var configs [][]byte
 
-func GetVersionString() string {
-	var vcsRevision string
-	vcsTime := time.Now()
-
+func readRevisionTime() (revision, vcsTime string) {
 	if info, ok := debug.ReadBuildInfo(); ok {
 		for _, setting := range info.Settings {
 			switch setting.Key {
 			case "vcs.revision":
-				vcsRevision = setting.Value
-				if len(vcsRevision) > 7 {
-					vcsRevision = vcsRevision[:7]
+				if len(setting.Value) > 7 {
+					revision = setting.Value[:7]
+				} else {
+					revision = setting.Value
 				}
-				vcsRevision = "(" + vcsRevision + ")"
 			case "vcs.time":
-				if parsedTime, err := time.Parse(time.RFC3339, setting.Value); err == nil {
-					vcsTime = parsedTime.Local()
+				vcsTime = setting.Value
+			case "vcs.modified":
+				if setting.Value == "true" {
+					revision = "mod." + revision
 				}
 			}
 		}
 	}
-
-	return fmt.Sprintf("%s%s: %s %s/%s", Version, vcsRevision, vcsTime.String(), runtime.GOOS, runtime.GOARCH)
+	return
 }
