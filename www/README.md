@@ -72,6 +72,22 @@ User-Agent: `Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/537.36 (KHTML, like Gec
 
 https://webrtc.org/getting-started/unified-plan-transition-guide?hl=en
 
+## Web Icons
+
+[Favicon checker](https://realfavicongenerator.net/), skip:
+
+- Windows 8 and 10 (`browserconfig.xml`)
+- Mac OS X El Capitan Safari
+
+```html
+    <!-- iOS Safari -->
+    <link rel="apple-touch-icon" href="https://alexxit.github.io/go2rtc/icons/apple-touch-icon-180x180.png" sizes="180x180">
+    <!-- Classic, desktop browsers -->
+    <link rel="icon" href="https://alexxit.github.io/go2rtc/icons/favicon.ico">
+    <!-- Android Chrome -->
+    <link rel="manifest" href="https://alexxit.github.io/go2rtc/manifest.json">
+```
+
 ## Useful links
 
 - https://www.webrtc-experiment.com/DetectRTC/
