@@ -120,6 +120,10 @@ func NewConn(pc *webrtc.PeerConnection) *Conn {
 		c.Fire(state)
 
 		switch state {
+		case webrtc.PeerConnectionStateConnected:
+			for _, sender := range c.senders {
+				sender.Start()
+			}
 		case webrtc.PeerConnectionStateDisconnected, webrtc.PeerConnectionStateFailed, webrtc.PeerConnectionStateClosed:
 			// disconnect event comes earlier, than failed
 			// but it comes only for success connections
