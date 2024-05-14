@@ -19,7 +19,7 @@ export class VideoRTC extends HTMLElement {
         super();
 
         this.DISCONNECT_TIMEOUT = 5000;
-        this.RECONNECT_TIMEOUT = 30000;
+        this.RECONNECT_TIMEOUT = 15000;
 
         this.CODECS = [
             'avc1.640029',      // H.264 high 4.1 (Chromecast 1st and 2nd Gen)
@@ -247,6 +247,11 @@ export class VideoRTC extends HTMLElement {
         this.video.style.height = '100%';
 
         this.appendChild(this.video);
+
+        this.video.addEventListener('error', ev => {
+            console.warn(ev);
+            if (this.ws) this.ws.close(); // run reconnect for broken MSE stream
+        });
 
         // all Safari lies about supported audio codecs
         const m = window.navigator.userAgent.match(/Version\/(\d+).+Safari/);
