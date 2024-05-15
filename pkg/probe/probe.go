@@ -43,7 +43,7 @@ func (p *Probe) GetMedias() []*core.Media {
 }
 
 func (p *Probe) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
-	sender := core.NewSender(media, codec)
+	sender := core.NewSender(media, track.Codec)
 	sender.Bind(track)
 	p.Senders = append(p.Senders, sender)
 	return nil
