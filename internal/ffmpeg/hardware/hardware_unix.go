@@ -1,3 +1,5 @@
+//go:build unix && !darwin && !freebsd && !netbsd && !openbsd && !dragonfly
+
 package hardware
 
 import (

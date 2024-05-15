@@ -1,3 +1,5 @@
+//go:build unix && !darwin && !freebsd && !netbsd && !openbsd && !dragonfly
+
 package device
 
 import (
@@ -29,7 +31,8 @@ func queryToInput(query url.Values) string {
 	}
 
 	if audio := query.Get("audio"); audio != "" {
-		input := "-f oss"
+		// https://trac.ffmpeg.org/wiki/Capture/ALSA
+		input := "-f alsa"
 
 		for key, value := range query {
 			switch key {
@@ -62,8 +65,9 @@ func initDevices() {
 		)
 		b, _ := cmd.CombinedOutput()
 
-		// [video4linux2,v4l2 @ 0x860b92280] Raw       :     yuyv422 :           YUYV 4:2:2 : 640x480 160x120 176x144 320x176 320x240 352x288 432x240 544x288 640x360 752x416 800x448 800x600 864x480 960x544 960x720 1024x576 1184x656 1280x720 1280x960
-		// [video4linux2,v4l2 @ 0x860b92280] Compressed:       mjpeg :          Motion-JPEG : 640x480 160x120 176x144 320x176 320x240 352x288 432x240 544x288 640x360 752x416 800x448 800x600 864x480 960x544 960x720 1024x576 1184x656 1280x720 1280x960
+		// [video4linux2,v4l2 @ 0x204e1c0] Compressed:       mjpeg :          Motion-JPEG : 640x360 1280x720 1920x1080
+		// [video4linux2,v4l2 @ 0x204e1c0] Raw       :     yuyv422 :           YUYV 4:2:2 : 640x360 1280x720 1920x1080
+		// [video4linux2,v4l2 @ 0x204e1c0] Compressed:        h264 :                H.264 : 640x360 1280x720 1920x1080
 		re := regexp.MustCompile("(Raw *|Compressed): +(.+?) : +(.+?) : (.+)")
 		m := re.FindAllStringSubmatch(string(b), -1)
 		for _, i := range m {
@@ -83,10 +87,10 @@ func initDevices() {
 		}
 	}
 
-	err = exec.Command(Bin, "-f", "oss", "-i", "/dev/dsp", "-t", "1", "-f", "null", "-").Run()
+	err = exec.Command(Bin, "-f", "alsa", "-i", "default", "-t", "1", "-f", "null", "-").Run()
 	if err == nil {
 		stream := &api.Source{
-			Name: "OSS default",
+			Name: "ALSA default",
 			Info: " ",
 			URL:  "ffmpeg:device?audio=default&channels=1&sample_rate=16000&#audio=opus",
 		}

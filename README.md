@@ -1,6 +1,6 @@
 <h1 align="center">
 
-  ![go2rtc](assets/logo.png)
+  ![go2rtc](assets/logo.gif)
   <br>
   [![stars](https://img.shields.io/github/stars/AlexxIT/go2rtc?style=flat-square&logo=github)](https://github.com/AlexxIT/go2rtc/stargazers) 
   [![docker pulls](https://img.shields.io/docker/pulls/alexxit/go2rtc?style=flat-square&logo=docker&logoColor=white&label=pulls)](https://hub.docker.com/r/alexxit/go2rtc) 
@@ -131,7 +131,7 @@ Don't forget to fix the rights `chmod +x go2rtc_xxx_xxx` on Linux and Mac.
 
 ### go2rtc: Docker
 
-Container [alexxit/go2rtc](https://hub.docker.com/r/alexxit/go2rtc) with support `amd64`, `386`, `arm64`, `arm`. This container is the same as [Home Assistant Add-on](#go2rtc-home-assistant-add-on), but can be used separately from Home Assistant. Container has preinstalled [FFmpeg](#source-ffmpeg), [ngrok](#module-ngrok) and [Python](#source-echo).
+The Docker container [`alexxit/go2rtc`](https://hub.docker.com/r/alexxit/go2rtc) supports multiple architectures including `amd64`, `386`, `arm64`, and `arm`. This container offers the same functionality as the [Home Assistant Add-on](#go2rtc-home-assistant-add-on) but is designed to operate independently of Home Assistant. It comes preinstalled with [FFmpeg](#source-ffmpeg), [ngrok](#module-ngrok), and [Python](#source-echo).
 
 ### go2rtc: Home Assistant Add-on
 
@@ -429,6 +429,7 @@ streams:
   stream: exec:ffmpeg -re -i /media/BigBuckBunny.mp4 -c copy -rtsp_transport tcp -f rtsp {output}
   picam_h264: exec:libcamera-vid -t 0 --inline -o -
   picam_mjpeg: exec:libcamera-vid -t 0 --codec mjpeg -o -
+  pi5cam_h264: exec:libcamera-vid -t 0 --libav-format h264 -o -
   canon: exec:gphoto2 --capture-movie --stdout#killsignal=2#killtimeout=5
   play_pcma: exec:ffplay -fflags nobuffer -f alaw -ar 8000 -i -#backchannel=1
   play_pcm48k: exec:ffplay -fflags nobuffer -f s16be -ar 48000 -i -#backchannel=1
@@ -552,10 +553,15 @@ echo -n "cloud password" | shasum -a 256 | awk '{print toupper($0)}'
 
 [TP-Link Kasa](https://www.kasasmart.com/) non-standard protocol [more info](https://medium.com/@hu3vjeen/reverse-engineering-tp-link-kc100-bac4641bf1cd).
 
+- `username` - urlsafe email, `alex@gmail.com` -> `alex%40gmail.com`
+- `password` - base64password, `secret1` -> `c2VjcmV0MQ==`
+
 ```yaml
 streams:
-  kasa: kasa://user:pass@192.168.1.123:19443/https/stream/mixed
+  kc401: kasa://username:password@192.168.1.123:19443/https/stream/mixed
 ```
+
+Tested: KD110, KC200, KC401, KC420WS, EC71.
 
 #### Source: GoPro
 

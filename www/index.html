@@ -4,6 +4,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, user-scalable=yes, initial-scale=1, maximum-scale=1">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <link rel="apple-touch-icon" href="https://alexxit.github.io/go2rtc/icons/apple-touch-icon-180x180.png" sizes="180x180">
+    <link rel="icon" href="https://alexxit.github.io/go2rtc/icons/favicon.ico">
+    <link rel="manifest" href="https://alexxit.github.io/go2rtc/manifest.json">
     <title>go2rtc</title>
     <style>
         body {
@@ -57,6 +60,7 @@
     const templates = [
         '<a href="stream.html?src={name}">stream</a>',
         '<a href="links.html?src={name}">links</a>',
+        '<a href="api/streams?src={name}&video=all&audio=all&microphone">probe</a>',
         '<a href="#" data-name="{name}">delete</a>',
     ];
 

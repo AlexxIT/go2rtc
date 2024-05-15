@@ -2,6 +2,7 @@ package webrtc
 
 import (
 	"net"
+	"slices"
 
 	"github.com/pion/interceptor"
 	"github.com/pion/webrtc/v3"
@@ -15,7 +16,15 @@ func NewAPI() (*webrtc.API, error) {
 	return NewServerAPI("", "", nil)
 }
 
-func NewServerAPI(address, network string, candidateHost []string) (*webrtc.API, error) {
+type Filters struct {
+	Candidates []string `yaml:"candidates"`
+	Interfaces []string `yaml:"interfaces"`
+	IPs        []string `yaml:"ips"`
+	Networks   []string `yaml:"networks"`
+	UDPPorts   []uint16 `yaml:"udp_ports"`
+}
+
+func NewServerAPI(network, address string, filters *Filters) (*webrtc.API, error) {
 	// for debug logs add to env: `PION_LOG_DEBUG=all`
 	m := &webrtc.MediaEngine{}
 	//if err := m.RegisterDefaultCodecs(); err != nil {
@@ -32,23 +41,55 @@ func NewServerAPI(address, network string, candidateHost []string) (*webrtc.API,
 
 	s := webrtc.SettingEngine{}
 
-	// disable listen on Hassio docker interfaces
-	s.SetInterfaceFilter(func(name string) bool {
-		return name != "hassio" && name != "docker0"
-	})
-
 	// fix https://github.com/pion/webrtc/pull/2407
 	s.SetDTLSInsecureSkipHelloVerify(true)
 
-	s.SetReceiveMTU(ReceiveMTU)
+	if filters != nil && filters.Interfaces != nil {
+		s.SetIncludeLoopbackCandidate(true)
+		s.SetInterfaceFilter(func(name string) bool {
+			return slices.Contains(filters.Interfaces, name)
+		})
+	} else {
+		// disable listen on Hassio docker interfaces
+		s.SetInterfaceFilter(func(name string) bool {
+			return name != "hassio" && name != "docker0"
+		})
+	}
 
-	s.SetNAT1To1IPs(candidateHost, webrtc.ICECandidateTypeHost)
+	if filters != nil && filters.IPs != nil {
+		s.SetIncludeLoopbackCandidate(true)
+		s.SetIPFilter(func(ip net.IP) bool {
+			return slices.Contains(filters.IPs, ip.String())
+		})
+	}
 
-	// by default enable IPv4 + IPv6 modes
-	s.SetNetworkTypes([]webrtc.NetworkType{
-		webrtc.NetworkTypeUDP4, webrtc.NetworkTypeTCP4,
-		webrtc.NetworkTypeUDP6, webrtc.NetworkTypeTCP6,
-	})
+	if filters != nil && filters.Networks != nil {
+		var networkTypes []webrtc.NetworkType
+		for _, s := range filters.Networks {
+			if networkType, err := webrtc.NewNetworkType(s); err == nil {
+				networkTypes = append(networkTypes, networkType)
+			}
+		}
+		s.SetNetworkTypes(networkTypes)
+	} else {
+		s.SetNetworkTypes([]webrtc.NetworkType{
+			webrtc.NetworkTypeUDP4, webrtc.NetworkTypeUDP6,
+			webrtc.NetworkTypeTCP4, webrtc.NetworkTypeTCP6,
+		})
+	}
+
+	if filters != nil && len(filters.UDPPorts) == 2 {
+		_ = s.SetEphemeralUDPPortRange(filters.UDPPorts[0], filters.UDPPorts[1])
+	}
+
+	//if len(hosts) != 0 {
+	//	// support only: host, srflx
+	//	if candidateType, err := webrtc.NewICECandidateType(hosts[0]); err == nil {
+	//		s.SetNAT1To1IPs(hosts[1:], candidateType)
+	//	} else {
+	//		s.SetNAT1To1IPs(hosts, 0) // 0 = host
+	//	}
+	//}
 
 	if address != "" {
 		if network == "" || network == "tcp" {

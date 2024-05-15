@@ -1,3 +1,5 @@
+//go:build darwin || ios || freebsd || openbsd || netbsd || dragonfly
+
 package mdns
 
 import (
