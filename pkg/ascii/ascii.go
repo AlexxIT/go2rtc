@@ -10,7 +10,11 @@ import (
 )
 
 func NewWriter(w io.Writer, foreground, background, text string) io.Writer {
-	a := &writer{wr: w, buf: []byte(clearScreen)}
+	// once clear screen
+	_, _ = w.Write([]byte(csiClear))
+
+	// every frame - move to home
+	a := &writer{wr: w, buf: []byte(csiHome)}
 
 	var idx0 uint8
 
@@ -47,6 +51,7 @@ func NewWriter(w io.Writer, foreground, background, text string) io.Writer {
 	case "256":
 		a.color = func(r, g, b uint8) {
 			if idx := xterm256color(r, g, b, 255); idx != idx0 {
+				idx0 = idx
 				a.buf = append(a.buf, fmt.Sprintf("\033[48;5;%dm", idx)...)
 			}
 		}
@@ -100,7 +105,8 @@ type writer struct {
 }
 
 // https://stackoverflow.com/questions/37774983/clearing-the-screen-by-printing-a-character
-const clearScreen = "\033[2J" + "\033[H"
+const csiClear = "\033[2J"
+const csiHome = "\033[H"
 
 func (a *writer) Write(p []byte) (n int, err error) {
 	img, err := jpeg.Decode(bytes.NewReader(p))
@@ -108,7 +114,7 @@ func (a *writer) Write(p []byte) (n int, err error) {
 		return 0, err
 	}
 
-	a.buf = a.buf[:len(clearScreen)]
+	a.buf = a.buf[:len(csiHome)]
 
 	w := img.Bounds().Dy()
 	h := img.Bounds().Dx()
