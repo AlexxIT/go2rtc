@@ -9,18 +9,19 @@
 - escape text param with urlencode
 - you can stream any camera or file from a disc
 
-**go2rtc.yaml** - transcoding to MJPEG, terminal size - 210x60, fps - 4
+**go2rtc.yaml** - transcoding to MJPEG, terminal size - 210x59 (16/9), fps - 10
 
 ```yaml
 streams:
-  macarena: ffmpeg:macarena.mp4#video=mjpeg#hardware#width=210#height=60#raw=-r 4
+  macarena: ffmpeg:macarena.mp4#video=mjpeg#hardware#width=210#height=59#raw=-r 10
 ```
 
 **API params**
 
 - `color` - foreground color, values: empty, `8`, `256`, `rgb`
 - `back` - background color, values: empty, `8`, `256`, `rgb`
-- `text` - character set, values: empty, one space, two spaces, anything you like (in order of brightness)
+- `text` - character set, values: empty, one char, `block`, list of chars (in order of brightness)
+  - example: `%20` (space), `block` (block elements), `ox` (two chars)
 
 **Examples**
 

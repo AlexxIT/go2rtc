@@ -61,35 +61,30 @@ func NewWriter(w io.Writer, foreground, background, text string) io.Writer {
 		}
 	}
 
-	var ascii string
-	switch text {
-	case "":
-		ascii = ` .::--~~==++**##%%$@`
-	case " ":
-		a.text = func(r, g, b uint32) {
-			a.buf = append(a.buf, ' ')
+	if len(text) == 1 {
+		// fast 1 symbol version
+		a.text = func(_, _, _ uint32) {
+			a.buf = append(a.buf, text[0])
 		}
-	case "  ":
-		a.text = func(r, g, b uint32) {
-			a.buf = append(a.buf, ' ', ' ')
+	} else {
+		switch text {
+		case "":
+			text = ` .::--~~==++**##%%$@` // default for empty text
+		case "block":
+			text = " ░░▒▒▓▓█" // https://en.wikipedia.org/wiki/Block_Elements
 		}
-	case "block":
-		ascii = " ░░▒▒▓▓█" // https://en.wikipedia.org/wiki/Block_Elements
-	default:
-		ascii = text
-	}
-	if ascii != "" {
-		if runes := []rune(ascii); len(runes) != len(ascii) {
+
+		if runes := []rune(text); len(runes) != len(text) {
 			k := float32(len(runes)-1) / 255
 			a.text = func(r, g, b uint32) {
 				i := gray(r, g, b, k)
 				a.buf = utf8.AppendRune(a.buf, runes[i])
 			}
 		} else {
-			k := float32(len(ascii)-1) / 255
+			k := float32(len(text)-1) / 255
 			a.text = func(r, g, b uint32) {
 				i := gray(r, g, b, k)
-				a.buf = append(a.buf, ascii[i])
+				a.buf = append(a.buf, text[i])
 			}
 		}
 	}
@@ -130,7 +125,7 @@ func (a *writer) Write(p []byte) (n int, err error) {
 		a.buf = append(a.buf, '\n')
 	}
 
-	a.buf = append(a.buf, "\033[0m\n"...)
+	a.buf = append(a.buf, "\033[0m"...)
 
 	if n, err = a.wr.Write(a.buf); err == nil {
 		a.wr.(http.Flusher).Flush()
