@@ -20,6 +20,7 @@ func NewWriter(w io.Writer, foreground, background, text string) io.Writer {
 
 	// https://en.wikipedia.org/wiki/ANSI_escape_code
 	switch foreground {
+	case "":
 	case "8":
 		a.color = func(r, g, b uint8) {
 			if idx := xterm256color(r, g, b, 8); idx != idx0 {
@@ -38,9 +39,12 @@ func NewWriter(w io.Writer, foreground, background, text string) io.Writer {
 		a.color = func(r, g, b uint8) {
 			a.buf = append(a.buf, fmt.Sprintf("\033[38;2;%d;%d;%dm", r, g, b)...)
 		}
+	default:
+		a.buf = append(a.buf, "\033["+foreground+"m"...)
 	}
 
 	switch background {
+	case "":
 	case "8":
 		a.color = func(r, g, b uint8) {
 			if idx := xterm256color(r, g, b, 8); idx != idx0 {
@@ -59,7 +63,11 @@ func NewWriter(w io.Writer, foreground, background, text string) io.Writer {
 		a.color = func(r, g, b uint8) {
 			a.buf = append(a.buf, fmt.Sprintf("\033[48;2;%d;%d;%dm", r, g, b)...)
 		}
+	default:
+		a.buf = append(a.buf, "\033["+background+"m"...)
 	}
+
+	a.pre = len(a.buf) // save prefix size
 
 	if len(text) == 1 {
 		// fast 1 symbol version
@@ -95,6 +103,7 @@ func NewWriter(w io.Writer, foreground, background, text string) io.Writer {
 type writer struct {
 	wr    io.Writer
 	buf   []byte
+	pre   int
 	color func(r, g, b uint8)
 	text  func(r, g, b uint32)
 }
@@ -109,7 +118,7 @@ func (a *writer) Write(p []byte) (n int, err error) {
 		return 0, err
 	}
 
-	a.buf = a.buf[:len(csiHome)]
+	a.buf = a.buf[:a.pre] // restore prefix
 
 	w := img.Bounds().Dx()
 	h := img.Bounds().Dy()
