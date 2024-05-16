@@ -111,11 +111,11 @@ func (a *writer) Write(p []byte) (n int, err error) {
 
 	a.buf = a.buf[:len(csiHome)]
 
-	w := img.Bounds().Dy()
-	h := img.Bounds().Dx()
+	w := img.Bounds().Dx()
+	h := img.Bounds().Dy()
 
-	for y := 0; y < w; y++ {
-		for x := 0; x < h; x++ {
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
 			r, g, b, _ := img.At(x, y).RGBA()
 			if a.color != nil {
 				a.color(uint8(r>>8), uint8(g>>8), uint8(b>>8))
