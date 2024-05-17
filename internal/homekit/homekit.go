@@ -22,12 +22,11 @@ import (
 func Init() {
 	var cfg struct {
 		Mod map[string]struct {
-			Pin           string   `json:"pin"`
-			Name          string   `json:"name"`
-			DeviceID      string   `json:"device_id"`
-			DevicePrivate string   `json:"device_private"`
-			Pairings      []string `json:"pairings"`
-			//Listen        string   `json:"listen"`
+			Pin           string   `yaml:"pin"`
+			Name          string   `yaml:"name"`
+			DeviceID      string   `yaml:"device_id"`
+			DevicePrivate string   `yaml:"device_private"`
+			Pairings      []string `yaml:"pairings"`
 		} `yaml:"homekit"`
 	}
 	app.LoadConfig(&cfg)

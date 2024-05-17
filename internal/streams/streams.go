@@ -9,6 +9,8 @@ import (
 
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/app"
+	"github.com/AlexxIT/go2rtc/pkg/probe"
+	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/rs/zerolog"
 )
 
@@ -148,7 +150,27 @@ func streamsHandler(w http.ResponseWriter, r *http.Request) {
 	// Not sure about all this API. Should be rewrited...
 	switch r.Method {
 	case "GET":
-		api.ResponsePrettyJSON(w, streams[src])
+		stream := Get(src)
+		if stream == nil {
+			http.Error(w, "", http.StatusNotFound)
+			return
+		}
+
+		cons := probe.NewProbe(query)
+		if len(cons.Medias) != 0 {
+			cons.RemoteAddr = tcp.RemoteAddr(r)
+			cons.UserAgent = r.UserAgent()
+			if err := stream.AddConsumer(cons); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			api.ResponsePrettyJSON(w, stream)
+
+			stream.RemoveConsumer(cons)
+		} else {
+			api.ResponsePrettyJSON(w, streams[src])
+		}
 
 	case "PUT":
 		name := query.Get("name")

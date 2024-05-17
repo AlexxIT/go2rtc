@@ -88,6 +88,11 @@ func (s *Stream) RemoveProducer(prod core.Producer) {
 }
 
 func (s *Stream) stopProducers() {
+	if s.pending.Load() > 0 {
+		log.Trace().Msg("[streams] skip stop pending producer")
+		return
+	}
+
 	s.mu.Lock()
 producers:
 	for _, producer := range s.producers {

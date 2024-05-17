@@ -83,7 +83,7 @@ func initWS(origin string) {
 			if o.Host == r.Host {
 				return true
 			}
-			log.Trace().Msgf("[api.ws] origin=%s, host=%s", o.Host, r.Host)
+			log.Trace().Msgf("[api] ws origin=%s, host=%s", o.Host, r.Host)
 			// https://github.com/AlexxIT/go2rtc/issues/118
 			if i := strings.IndexByte(o.Host, ':'); i > 0 {
 				return o.Host[:i] == r.Host
@@ -127,7 +127,7 @@ func apiWS(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 
-		log.Trace().Str("type", msg.Type).Msg("[api.ws] msg")
+		log.Trace().Str("type", msg.Type).Msg("[api] ws msg")
 
 		if handler := wsHandlers[msg.Type]; handler != nil {
 			go func() {

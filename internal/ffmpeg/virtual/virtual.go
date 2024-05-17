@@ -11,13 +11,13 @@ func GetInput(src string) (string, error) {
 	}
 
 	// set defaults (using Add instead of Set)
-	query.Add("source", "testsrc")
+	query.Add("video", "testsrc")
 	query.Add("size", "1920x1080")
 	query.Add("decimals", "2")
 
 	// https://ffmpeg.org/ffmpeg-filters.html
-	source := query.Get("source")
-	input := "-re -f lavfi -i " + source
+	video := query.Get("video")
+	input := "-re -f lavfi -i " + video
 
 	sep := "=" // first separator
 	for key, values := range query {
@@ -29,18 +29,18 @@ func GetInput(src string) (string, error) {
 		case "size":
 			switch value {
 			case "720":
-				value = "1280x720"
+				value = "1280x720" // crf=1 -> 12 Mbps
 			case "1080":
-				value = "1920x1080"
+				value = "1920x1080" // crf=1 -> 25 Mbps
 			case "2K":
-				value = "2560x1440"
+				value = "2560x1440" // crf=1 -> 43 Mbps
 			case "4K":
-				value = "3840x2160"
+				value = "3840x2160" // crf=1 -> 103 Mbps
 			case "8K":
 				value = "7680x4230" // https://reolink.com/blog/8k-resolution/
 			}
 		case "decimals":
-			if source != "testsrc" {
+			if video != "testsrc" {
 				continue
 			}
 		default:

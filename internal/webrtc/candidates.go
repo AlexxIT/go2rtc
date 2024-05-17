@@ -2,57 +2,60 @@ package webrtc
 
 import (
 	"net"
+	"slices"
+	"strings"
 
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
-	"github.com/pion/sdp/v3"
+	pion "github.com/pion/webrtc/v3"
 )
 
 type Address struct {
-	Host    string
-	Port    string
-	Network string
-	Offset  int
+	host     string
+	Port     string
+	Network  string
+	Priority uint32
 }
 
-func (a *Address) Marshal() string {
-	host := a.Host
-	if host == "stun" {
+func (a *Address) Host() string {
+	if a.host == "stun" {
 		ip, err := webrtc.GetCachedPublicIP()
 		if err != nil {
 			return ""
 		}
-		host = ip.String()
+		return ip.String()
 	}
+	return a.host
+}
 
-	switch a.Network {
-	case "udp":
-		return webrtc.CandidateManualHostUDP(host, a.Port, a.Offset)
-	case "tcp":
-		return webrtc.CandidateManualHostTCPPassive(host, a.Port, a.Offset)
+func (a *Address) Marshal() string {
+	if host := a.Host(); host != "" {
+		return webrtc.CandidateICE(a.Network, host, a.Port, a.Priority)
 	}
-
 	return ""
 }
 
 var addresses []*Address
+var filters webrtc.Filters
 
-func AddCandidate(address, network string) {
+func AddCandidate(network, address string) {
+	if network == "" {
+		AddCandidate("tcp", address)
+		AddCandidate("udp", address)
+		return
+	}
+
 	host, port, err := net.SplitHostPort(address)
 	if err != nil {
 		return
 	}
 
-	offset := -1 - len(addresses) // every next candidate will have a lower priority
+	// start from 1, so manual candidates will be lower than built-in
+	// and every next candidate will have a lower priority
+	candidateIndex := 1 + len(addresses)
 
-	switch network {
-	case "tcp", "udp":
-		addresses = append(addresses, &Address{host, port, network, offset})
-	default:
-		addresses = append(
-			addresses, &Address{host, port, "udp", offset}, &Address{host, port, "tcp", offset},
-		)
-	}
+	priority := webrtc.CandidateHostPriority(network, candidateIndex)
+	addresses = append(addresses, &Address{host, port, network, priority})
 }
 
 func GetCandidates() (candidates []string) {
@@ -62,6 +65,38 @@ func GetCandidates() (candidates []string) {
 		}
 	}
 	return
+}
+
+// FilterCandidate return true if candidate passed the check
+func FilterCandidate(candidate *pion.ICECandidate) bool {
+	if candidate == nil {
+		return false
+	}
+
+	// host candidate should be in the hosts list
+	if candidate.Typ == pion.ICECandidateTypeHost && filters.Candidates != nil {
+		if !slices.Contains(filters.Candidates, candidate.Address) {
+			return false
+		}
+	}
+
+	if filters.Networks != nil {
+		networkType := NetworkType(candidate.Protocol.String(), candidate.Address)
+		if !slices.Contains(filters.Networks, networkType) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// NetworkType convert tcp/udp network to tcp4/tcp6/udp4/udp6
+func NetworkType(network, host string) string {
+	if strings.IndexByte(host, ':') >= 0 {
+		return network + "6"
+	} else {
+		return network + "4"
+	}
 }
 
 func asyncCandidates(tr *ws.Transport, cons *webrtc.Conn) {
@@ -84,30 +119,6 @@ func asyncCandidates(tr *ws.Transport, cons *webrtc.Conn) {
 		log.Trace().Str("candidate", candidate).Msg("[webrtc] config")
 		tr.Write(&ws.Message{Type: "webrtc/candidate", Value: candidate})
 	}
-}
-
-func syncCanditates(answer string) (string, error) {
-	if len(addresses) == 0 {
-		return answer, nil
-	}
-
-	sd := &sdp.SessionDescription{}
-	if err := sd.Unmarshal([]byte(answer)); err != nil {
-		return "", err
-	}
-
-	md := sd.MediaDescriptions[0]
-
-	for _, candidate := range GetCandidates() {
-		md.WithPropertyAttribute(candidate)
-	}
-
-	data, err := sd.Marshal()
-	if err != nil {
-		return "", err
-	}
-
-	return string(data), nil
 }
 
 func candidateHandler(tr *ws.Transport, msg *ws.Message) error {
