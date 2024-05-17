@@ -16,28 +16,23 @@ func NewWriter(w io.Writer, foreground, background, text string) io.Writer {
 	// every frame - move to home
 	a := &writer{wr: w, buf: []byte(csiHome)}
 
-	var idx0 uint8
-
 	// https://en.wikipedia.org/wiki/ANSI_escape_code
 	switch foreground {
 	case "":
 	case "8":
 		a.color = func(r, g, b uint8) {
-			if idx := xterm256color(r, g, b, 8); idx != idx0 {
-				idx0 = idx
-				a.buf = append(a.buf, fmt.Sprintf("\033[%dm", 30+idx)...)
-			}
+			idx := xterm256color(r, g, b, 8)
+			a.appendEsc(fmt.Sprintf("\033[%dm", 30+idx))
+
 		}
 	case "256":
 		a.color = func(r, g, b uint8) {
-			if idx := xterm256color(r, g, b, 255); idx != idx0 {
-				idx0 = idx
-				a.buf = append(a.buf, fmt.Sprintf("\033[38;5;%dm", idx)...)
-			}
+			idx := xterm256color(r, g, b, 255)
+			a.appendEsc(fmt.Sprintf("\033[38;5;%dm", idx))
 		}
 	case "rgb":
 		a.color = func(r, g, b uint8) {
-			a.buf = append(a.buf, fmt.Sprintf("\033[38;2;%d;%d;%dm", r, g, b)...)
+			a.appendEsc(fmt.Sprintf("\033[38;2;%d;%d;%dm", r, g, b))
 		}
 	default:
 		a.buf = append(a.buf, "\033["+foreground+"m"...)
@@ -47,21 +42,17 @@ func NewWriter(w io.Writer, foreground, background, text string) io.Writer {
 	case "":
 	case "8":
 		a.color = func(r, g, b uint8) {
-			if idx := xterm256color(r, g, b, 8); idx != idx0 {
-				idx0 = idx
-				a.buf = append(a.buf, fmt.Sprintf("\033[%dm", 40+idx)...)
-			}
+			idx := xterm256color(r, g, b, 8)
+			a.appendEsc(fmt.Sprintf("\033[%dm", 40+idx))
 		}
 	case "256":
 		a.color = func(r, g, b uint8) {
-			if idx := xterm256color(r, g, b, 255); idx != idx0 {
-				idx0 = idx
-				a.buf = append(a.buf, fmt.Sprintf("\033[48;5;%dm", idx)...)
-			}
+			idx := xterm256color(r, g, b, 255)
+			a.appendEsc(fmt.Sprintf("\033[48;5;%dm", idx))
 		}
 	case "rgb":
 		a.color = func(r, g, b uint8) {
-			a.buf = append(a.buf, fmt.Sprintf("\033[48;2;%d;%d;%dm", r, g, b)...)
+			a.appendEsc(fmt.Sprintf("\033[48;2;%d;%d;%dm", r, g, b))
 		}
 	default:
 		a.buf = append(a.buf, "\033["+background+"m"...)
@@ -104,6 +95,7 @@ type writer struct {
 	wr    io.Writer
 	buf   []byte
 	pre   int
+	esc   string
 	color func(r, g, b uint8)
 	text  func(r, g, b uint32)
 }
@@ -122,7 +114,6 @@ func (a *writer) Write(p []byte) (n int, err error) {
 
 	w := img.Bounds().Dx()
 	h := img.Bounds().Dy()
-
 	for y := 0; y < h; y++ {
 		for x := 0; x < w; x++ {
 			r, g, b, _ := img.At(x, y).RGBA()
@@ -134,7 +125,7 @@ func (a *writer) Write(p []byte) (n int, err error) {
 		a.buf = append(a.buf, '\n')
 	}
 
-	a.buf = append(a.buf, "\033[0m"...)
+	a.appendEsc("\033[0m")
 
 	if _, err = a.wr.Write(a.buf); err != nil {
 		return 0, err
@@ -143,6 +134,14 @@ func (a *writer) Write(p []byte) (n int, err error) {
 	a.wr.(http.Flusher).Flush()
 
 	return len(p), nil
+}
+
+// appendEsc - append ESC code to buffer, and skip duplicates
+func (a *writer) appendEsc(s string) {
+	if a.esc != s {
+		a.esc = s
+		a.buf = append(a.buf, s...)
+	}
 }
 
 func gray(r, g, b uint32, k float32) uint8 {
