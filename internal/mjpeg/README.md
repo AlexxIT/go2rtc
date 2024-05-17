@@ -1,5 +1,7 @@
 ## Stream as ASCII to Terminal
 
+[![](https://img.youtube.com/vi/sHj_3h_sX7M/mqdefault.jpg)](https://www.youtube.com/watch?v=sHj_3h_sX7M)
+
 **Tips**
 
 - this feature works only with MJPEG codec (use transcoding)
@@ -13,22 +15,24 @@
 
 ```yaml
 streams:
-  macarena: ffmpeg:macarena.mp4#video=mjpeg#hardware#width=210#height=59#raw=-r 10
+  gamazda: ffmpeg:gamazda.mp4#video=mjpeg#hardware#width=210#height=59#raw=-r 10
 ```
 
 **API params**
 
-- `color` - foreground color, values: empty, `8`, `256`, `rgb`
-- `back` - background color, values: empty, `8`, `256`, `rgb`
+- `color` - foreground color, values: empty, `8`, `256`, `rgb`, [SGR](https://en.wikipedia.org/wiki/ANSI_escape_code)
+  - example: `30` (black), `37` (white), `38;5;226` (yellow)
+- `back` - background color, values: empty, `8`, `256`, `rgb`, [SGR](https://en.wikipedia.org/wiki/ANSI_escape_code)
+  - example: `40` (black), `47` (white), `48;5;226` (yellow)
 - `text` - character set, values: empty, one char, `block`, list of chars (in order of brightness)
-  - example: `%20` (space), `block` (block elements), `ox` (two chars)
+  - example: `%20` (space), `block` (keyword for block elements), `ox` (two chars)
 
 **Examples**
 
 ```bash
-% curl "http://192.168.1.123:1984/api/stream.ascii?src=macarena"
-% curl "http://192.168.1.123:1984/api/stream.ascii?src=macarena&color=256"
-% curl "http://192.168.1.123:1984/api/stream.ascii?src=macarena&back=256&text=%20"
-% curl "http://192.168.1.123:1984/api/stream.ascii?src=macarena&back=8&text=%20%20"
-% curl "http://192.168.1.123:1984/api/stream.ascii?src=macarena&text=helloworld"
+% curl "http://192.168.1.123:1984/api/stream.ascii?src=gamazda"
+% curl "http://192.168.1.123:1984/api/stream.ascii?src=gamazda&color=256"
+% curl "http://192.168.1.123:1984/api/stream.ascii?src=gamazda&back=256&text=%20"
+% curl "http://192.168.1.123:1984/api/stream.ascii?src=gamazda&back=8&text=%20%20"
+% curl "http://192.168.1.123:1984/api/stream.ascii?src=gamazda&text=helloworld"
 ```
