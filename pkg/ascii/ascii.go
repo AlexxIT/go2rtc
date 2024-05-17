@@ -136,11 +136,13 @@ func (a *writer) Write(p []byte) (n int, err error) {
 
 	a.buf = append(a.buf, "\033[0m"...)
 
-	if n, err = a.wr.Write(a.buf); err == nil {
-		a.wr.(http.Flusher).Flush()
+	if _, err = a.wr.Write(a.buf); err != nil {
+		return 0, err
 	}
 
-	return
+	a.wr.(http.Flusher).Flush()
+
+	return len(p), nil
 }
 
 func gray(r, g, b uint32, k float32) uint8 {

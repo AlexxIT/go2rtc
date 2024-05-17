@@ -28,9 +28,11 @@ func (w *writer) Write(p []byte) (n int, err error) {
 
 	// Chrome bug: mjpeg image always shows the second to last image
 	// https://bugs.chromium.org/p/chromium/issues/detail?id=527446
-	if n, err = w.wr.Write(w.buf); err == nil {
-		w.wr.(http.Flusher).Flush()
+	if _, err = w.wr.Write(w.buf); err != nil {
+		return 0, err
 	}
 
-	return
+	w.wr.(http.Flusher).Flush()
+
+	return len(p), nil
 }
