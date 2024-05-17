@@ -5,12 +5,14 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg"
 	"github.com/AlexxIT/go2rtc/internal/streams"
+	"github.com/AlexxIT/go2rtc/pkg/ascii"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/magic"
 	"github.com/AlexxIT/go2rtc/pkg/mjpeg"
@@ -21,6 +23,7 @@ import (
 func Init() {
 	api.HandleFunc("api/frame.jpeg", handlerKeyframe)
 	api.HandleFunc("api/stream.mjpeg", handlerStream)
+	api.HandleFunc("api/stream.ascii", handlerStream)
 
 	ws.HandleFunc("mjpeg", handlerWS)
 }
@@ -99,38 +102,22 @@ func outputMjpeg(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h := w.Header()
-	h.Set("Content-Type", "multipart/x-mixed-replace; boundary=frame")
 	h.Set("Cache-Control", "no-cache")
 	h.Set("Connection", "close")
 	h.Set("Pragma", "no-cache")
 
-	wr := &writer{wr: w, buf: []byte(header)}
-	_, _ = cons.WriteTo(wr)
+	if strings.HasSuffix(r.URL.Path, "mjpeg") {
+		wr := mjpeg.NewWriter(w)
+		_, _ = cons.WriteTo(wr)
+	} else {
+		cons.Type = "ASCII passive consumer "
 
-	stream.RemoveConsumer(cons)
-}
-
-const header = "--frame\r\nContent-Type: image/jpeg\r\nContent-Length: "
-
-type writer struct {
-	wr  io.Writer
-	buf []byte
-}
-
-func (w *writer) Write(p []byte) (n int, err error) {
-	w.buf = w.buf[:len(header)]
-	w.buf = append(w.buf, strconv.Itoa(len(p))...)
-	w.buf = append(w.buf, "\r\n\r\n"...)
-	w.buf = append(w.buf, p...)
-	w.buf = append(w.buf, "\r\n"...)
-
-	// Chrome bug: mjpeg image always shows the second to last image
-	// https://bugs.chromium.org/p/chromium/issues/detail?id=527446
-	if n, err = w.wr.Write(w.buf); err == nil {
-		w.wr.(http.Flusher).Flush()
+		query := r.URL.Query()
+		wr := ascii.NewWriter(w, query.Get("color"), query.Get("back"), query.Get("text"))
+		_, _ = cons.WriteTo(wr)
 	}
 
-	return
+	stream.RemoveConsumer(cons)
 }
 
 func inputMjpeg(w http.ResponseWriter, r *http.Request) {

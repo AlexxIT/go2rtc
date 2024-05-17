@@ -16,7 +16,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-var Version = "1.9.1"
+var Version = "1.9.2"
 var UserAgent = "go2rtc/" + Version
 var FFmpegVersion = ""
 
