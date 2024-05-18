@@ -178,8 +178,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Update the editor theme based on the dark mode state
     const updateEditorTheme = () => {
-        if (typeof editor !== 'undefined') {
-            editor.setTheme(isDarkModeEnabled() ? 'ace/theme/tomorrow_night_eighties' : 'ace/theme/github');
+        if (typeof monaco !== 'undefined') {
+            const theme = isDarkModeEnabled() ? 'vs-dark' : 'vs-light';
+            monaco.editor.setTheme(theme);
         }
     };
 
