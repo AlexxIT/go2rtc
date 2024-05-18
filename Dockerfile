@@ -20,6 +20,8 @@ ENV GOARCH=${TARGETARCH}
 
 WORKDIR /build
 
+RUN apk add git
+
 # Cache dependencies
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/root/.cache/go-build go mod download
