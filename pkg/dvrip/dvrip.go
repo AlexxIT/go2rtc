@@ -23,8 +23,9 @@ func Dial(url string) (core.Producer, error) {
 				Kind:      core.KindAudio,
 				Direction: core.DirectionSendonly,
 				Codecs: []*core.Codec{
+					// leave only one codec here for better compatibility with cameras
+					// https://github.com/AlexxIT/go2rtc/issues/1111
 					{Name: core.CodecPCMA, ClockRate: 8000, PayloadType: 8},
-					{Name: core.CodecPCMU, ClockRate: 8000, PayloadType: 0},
 				},
 			},
 		}
