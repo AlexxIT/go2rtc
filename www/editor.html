@@ -41,6 +41,7 @@
     require(['vs/editor/editor.main'], function() {
         editor = monaco.editor.create(document.getElementById('config'), {
             language: 'yaml',
+            tabSize: 2,
             theme: document.body.classList.contains('dark-mode') ? 'vs-dark' : 'vs-light' // 🩼
         });
 
