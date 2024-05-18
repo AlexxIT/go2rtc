@@ -4,7 +4,7 @@
     <title>go2rtc - File Editor</title>
     <meta name="viewport" content="width=device-width, user-scalable=yes, initial-scale=1, maximum-scale=1">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.48.0/min/vs/loader.min.js"></script>
+    <script src="https://unpkg.com/monaco-editor@0.48.0/min/vs/loader.js"></script>
     <style>
         body {
             font-family: Arial, Helvetica, sans-serif;
@@ -37,11 +37,11 @@
     let editor;
 
     // Load Monaco Editor
-    require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.48.0/min/vs' }});
+    require.config({ paths: { 'vs': 'https://unpkg.com/monaco-editor@0.48.0/min/vs' }});
     require(['vs/editor/editor.main'], function() {
         editor = monaco.editor.create(document.getElementById('config'), {
             language: 'yaml',
-            theme: 'vs-dark'
+            theme: document.body.classList.contains('dark-mode') ? 'vs-dark' : 'vs-light' // 🩼
         });
 
         window.addEventListener('load', async () => {
