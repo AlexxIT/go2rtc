@@ -18,6 +18,7 @@ import (
 
 var Version = "1.9.2"
 var UserAgent = "go2rtc/" + Version
+var FFmpegVersion = ""
 
 var ConfigPath string
 var Info = map[string]any{

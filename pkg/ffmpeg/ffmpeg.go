@@ -2,8 +2,12 @@ package ffmpeg
 
 import (
 	"bytes"
+	"fmt"
+	"os/exec"
 	"strconv"
 	"strings"
+
+	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
 type Args struct {
@@ -84,10 +88,28 @@ func (a *Args) String() string {
 			b.WriteString(filter)
 		}
 		b.WriteByte('"')
+		ffmpegVersion, _ := a.GetFFmpegVersion()
+		if core.CompareVersions(ffmpegVersion, "7.0") >= 0 {
+
+			b.WriteString(fmt.Sprintf(` -filter_complex_threads %d`, core.MaxCPUThreads(1)))
+		}
 	}
 
 	b.WriteByte(' ')
 	b.WriteString(a.Output)
 
 	return b.String()
+}
+
+func (a *Args) GetFFmpegVersion() (string, error) {
+	cmd := exec.Command(a.Bin, "-version")
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	err := cmd.Run()
+	if err != nil {
+		return "", err
+	}
+	firstLine := strings.Split(out.String(), "\n")[0]
+	versionInfo := strings.Fields(firstLine)[2]
+	return versionInfo, nil
 }

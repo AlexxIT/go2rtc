@@ -40,6 +40,7 @@ require (
 	github.com/pion/transport/v2 v2.2.5 // indirect
 	github.com/pion/turn/v2 v2.1.6 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/unascribed/FlexVer/go/flexver v1.0.0
 	golang.org/x/mod v0.17.0 // indirect
 	golang.org/x/net v0.25.0 // indirect
 	golang.org/x/sync v0.7.0 // indirect

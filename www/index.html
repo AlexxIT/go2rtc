@@ -159,7 +159,7 @@
     const url = new URL('api', location.href);
     fetch(url, {cache: 'no-cache'}).then(r => r.json()).then(data => {
         const info = document.querySelector('.info');
-        info.innerText = `Version: ${data.version}, Config: ${data.config_path}`;
+        info.innerText = `Version: ${data.version}, FFmpeg: ${data.ffmpeg}, Config: ${data.config_path}`;
     });
 
     reload();
