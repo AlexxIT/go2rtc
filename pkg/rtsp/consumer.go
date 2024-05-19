@@ -74,19 +74,38 @@ func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiv
 	return nil
 }
 
+const (
+	startVideoBuf = 32 * 1024   // 32KB
+	startAudioBuf = 2 * 1024    // 2KB
+	maxBuf        = 1024 * 1024 // 1MB
+	rtpHdr        = 12          // basic RTP header size
+	intHdr        = 4           // interleaved header size
+)
+
 func (c *Conn) packetWriter(codec *core.Codec, channel, payloadType uint8) core.HandlerFunc {
 	var buf []byte
 	var n int
 
 	video := codec.IsVideo()
 	if video {
-		buf = make([]byte, 32*1024) // 32KB
+		buf = make([]byte, startVideoBuf)
 	} else {
-		buf = make([]byte, 2*1024) // 2KB
+		buf = make([]byte, startAudioBuf)
+	}
+
+	flushBuf := func() {
+		if err := c.conn.SetWriteDeadline(time.Now().Add(Timeout)); err != nil {
+			return
+		}
+		//log.Printf("[rtsp] channel:%2d write_size:%6d buffer_size:%6d", channel, n, len(buf))
+		if _, err := c.conn.Write(buf[:n]); err == nil {
+			c.send += n
+		}
+		n = 0
 	}
 
 	handlerFunc := func(packet *rtp.Packet) {
-		if c.state == StateNone || !c.playOK {
+		if c.state == StateNone {
 			return
 		}
 
@@ -106,16 +125,13 @@ func (c *Conn) packetWriter(codec *core.Codec, channel, payloadType uint8) core.
 			packet.Marker = true // better to have marker on all audio packets
 		}
 
-		size := 12 + len(packet.Payload)
+		size := rtpHdr + len(packet.Payload)
 
-		if n+4+size > len(buf) {
-			if len(buf) < 1024*1024 {
-				buf = append(buf, make([]byte, len(buf))...)
+		if l := len(buf); n+intHdr+size > l {
+			if l < maxBuf {
+				buf = append(buf, make([]byte, l)...) // double buffer size
 			} else {
-				if _, err := c.conn.Write(buf[:n]); err == nil {
-					c.send += n
-				}
-				n = 0
+				flushBuf()
 			}
 		}
 
@@ -134,21 +150,14 @@ func (c *Conn) packetWriter(codec *core.Codec, channel, payloadType uint8) core.
 
 		n += 4 + size
 
-		if !packet.Marker {
-			return // collect continious video packets to buffer
-		}
-
-		if err := c.conn.SetWriteDeadline(time.Now().Add(Timeout)); err != nil {
+		if !packet.Marker || !c.playOK {
+			// collect continious video packets to buffer
+			// or wait OK for PLAY command for backchannel
+			//log.Printf("[rtsp] collecting buffer ok=%t", c.playOK)
 			return
 		}
 
-		//log.Printf("[rtsp] channel:%2d write_size:%6d buffer_size:%6d", channel, n, len(buf))
-
-		if _, err := c.conn.Write(buf[:n]); err == nil {
-			c.send += n
-		}
-
-		n = 0
+		flushBuf()
 	}
 
 	if !codec.IsRTP() {

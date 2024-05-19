@@ -2,6 +2,8 @@ package streams
 
 import (
 	"errors"
+	"time"
+
 	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
@@ -81,15 +83,17 @@ func (s *Stream) Play(source string) error {
 		s.AddInternalConsumer(cons)
 
 		go func() {
-			_ = src.Start()
-			_ = dst.Stop()
-			s.RemoveProducer(src)
-		}()
-
-		go func() {
 			_ = dst.Start()
 			_ = src.Stop()
 			s.RemoveInternalConsumer(cons)
+		}()
+
+		go func() {
+			_ = src.Start()
+			// little timeout before stop dst, so the buffer can be transferred
+			time.Sleep(time.Second)
+			_ = dst.Stop()
+			s.RemoveProducer(src)
 		}()
 
 		return nil
