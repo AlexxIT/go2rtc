@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>go2rtc - HLS</title>
+    <style>
+        body {
+            background-color: black;
+            margin: 0;
+            padding: 0;
+        }
+
+        html, body, video {
+            height: 100%;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
+<video id="video" autoplay controls playsinline muted></video>
+<script>
+    // http://192.168.1.123:1984/hls.html?src=demo&mp4
+    // const url = new URL('api/stream.m3u8' + location.search, location.href);
+    const url = 'http://192.168.10.5:1984/api/stream.m3u8?src=rtsp-dahua2&mp4';
+
+    const video = document.getElementById('video');
+    if (Hls.isSupported()) {
+        const hls = new Hls();
+        hls.loadSource(url.toString());
+        hls.attachMedia(video);
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        video.src = url.toString();
+    }
+</script>
+</body>
+</html>
