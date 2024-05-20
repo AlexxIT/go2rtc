@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <title>go2rtc - File Editor</title>
     <meta name="viewport" content="width=device-width, user-scalable=yes, initial-scale=1, maximum-scale=1">
@@ -15,7 +16,9 @@
             flex-direction: column;
         }
 
-        html, body, #config {
+        html,
+        body,
+        #config {
             width: 100%;
             height: 100%;
         }
@@ -25,56 +28,139 @@
         }
     </style>
 </head>
+
 <body>
-<script src="main.js"></script>
-<div>
-    <button id="save">Save & Restart</button>
-</div>
-<br>
-<div id="config"></div>
-<script>
-    let dump;
-    let editor;
+    <script src="main.js"></script>
+    <div>
+        <button id="save">Save & Restart</button>
+    </div>
+    <br>
+    <div id="config"></div>
+    <script>
+        let dump;
+        let editor;
 
-    // Load Monaco Editor
-    require.config({ paths: { 'vs': 'https://unpkg.com/monaco-editor@0.48.0/min/vs' }});
-    require(['vs/editor/editor.main'], function() {
-        editor = monaco.editor.create(document.getElementById('config'), {
-            language: 'yaml',
-            tabSize: 2,
-            theme: document.body.classList.contains('dark-mode') ? 'vs-dark' : 'vs-light' // 🩼
+        // Load Monaco Editor
+        require.config({ paths: { 'vs': 'https://unpkg.com/monaco-editor@0.48.0/min/vs' } });
+        require(['vs/editor/editor.main'], function () {
+            require(['vs/language/yaml/monaco.contribution'], function() {
+                monaco.languages.yaml.yamlDefaults.setDiagnosticsOptions({
+                    validate: true,
+                    schemas: [{
+                        uri: "http://myserver/go2rtc-schema.json", // Arbitrary schema identifier
+                        fileMatch: ["*"],
+                        schema: {
+                            "type": "object",
+                            "properties": {
+                                "api": {
+                                    "type": "object",
+                                    "properties": {
+                                        "listen": { "type": "string" },
+                                        "username": { "type": "string" },
+                                        "password": { "type": "string" },
+                                        "base_path": { "type": "string" },
+                                        "static_dir": { "type": "string" },
+                                        "origin": { "type": "string" },
+                                        "tls_listen": { "type": "string" },
+                                        "tls_cert": { "type": "string" },
+                                        "tls_key": { "type": "string" },
+                                        "unix_listen": { "type": "string" }
+                                    },
+                                    "required": ["listen"]
+                                },
+                                "rtsp": {
+                                    "type": "object",
+                                    "properties": {
+                                        "listen": { "type": "string" },
+                                        "username": { "type": "string" },
+                                        "password": { "type": "string" },
+                                        "default_query": { "type": "string" }
+                                    },
+                                    "required": ["listen"]
+                                },
+                                "webrtc": {
+                                    "type": "object",
+                                    "properties": {
+                                        "listen": { "type": "string" }
+                                    },
+                                    "required": ["listen"]
+                                },
+                                "streams": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "type": "array",
+                                        "items": { "type": "string" }
+                                    }
+                                },
+                                "ngrok": {
+                                    "type": "object",
+                                    "properties": {
+                                        "command": { "type": "string" }
+                                    },
+                                    "required": ["command"]
+                                },
+                                "ffmpeg": {
+                                    "type": "object",
+                                    "properties": {
+                                        "hardware": { "type": "string" }
+                                    }
+                                },
+                                "log": {
+                                    "type": "object",
+                                    "properties": {
+                                        "level": { "type": "string" },
+                                        "api": { "type": "string" },
+                                        "exec": { "type": "string" },
+                                        "ngrok": { "type": "string" },
+                                        "rtsp": { "type": "string" },
+                                        "streams": { "type": "string" },
+                                        "webrtc": { "type": "string" }
+                                    },
+                                    "required": ["level"]
+                                }
+                            },
+                            "required": ["api", "rtsp", "webrtc", "streams"]
+                        }
+                    }]
+                });
+            });
+            editor = monaco.editor.create(document.getElementById('config'), {
+                language: 'yaml',
+                tabSize: 2,
+                theme: document.body.classList.contains('dark-mode') ? 'vs-dark' : 'vs-light' // 🩼
+            });
+
+            window.addEventListener('load', async () => {
+                const r = await fetch('api/config', { cache: 'no-cache' });
+                if (r.status === 410) {
+                    alert('Config file is not set');
+                } else if (r.status === 404) {
+                    editor.setValue(''); // config file not exist
+                } else if (r.ok) {
+                    dump = await r.text();
+                    editor.setValue(dump);
+                } else {
+                    alert(`Unknown error: ${r.statusText} (${r.status})`);
+                }
+            });
+
+            document.getElementById('save').addEventListener('click', async () => {
+                let r = await fetch('api/config', { cache: 'no-cache' });
+                if (r.ok && dump !== await r.text()) {
+                    alert('Config was changed from another place. Refresh the page and make changes again');
+                    return;
+                }
+
+                r = await fetch('api/config', { method: 'POST', body: editor.getValue() });
+                if (r.ok) {
+                    alert('OK');
+                    await fetch('api/restart', { method: 'POST' });
+                } else {
+                    alert(await r.text());
+                }
+            });
         });
-
-        window.addEventListener('load', async () => {
-            const r = await fetch('api/config', {cache: 'no-cache'});
-            if (r.status === 410) {
-                alert('Config file is not set');
-            } else if (r.status === 404) {
-                editor.setValue(''); // config file not exist
-            } else if (r.ok) {
-                dump = await r.text();
-                editor.setValue(dump);
-            } else {
-                alert(`Unknown error: ${r.statusText} (${r.status})`);
-            }
-        });
-
-        document.getElementById('save').addEventListener('click', async () => {
-            let r = await fetch('api/config', {cache: 'no-cache'});
-            if (r.ok && dump !== await r.text()) {
-                alert('Config was changed from another place. Refresh the page and make changes again');
-                return;
-            }
-
-            r = await fetch('api/config', {method: 'POST', body: editor.getValue()});
-            if (r.ok) {
-                alert('OK');
-                await fetch('api/restart', {method: 'POST'});
-            } else {
-                alert(await r.text());
-            }
-        });
-    });
-</script>
+    </script>
 </body>
+
 </html>
