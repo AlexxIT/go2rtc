@@ -139,10 +139,10 @@ func findHomeKitURLs() map[string]*url.URL {
 }
 
 type PairingInfo struct {
-	Name         string     `json:"name"`
-	DeviceID     string     `json:"device_id"`
-	Pin          string     `json:"pin"`
-	Status       string     `json:"status"`
+	Name         string     `yaml:"name"`
+	DeviceID     string     `yaml:"device_id"`
+	Pin          string     `yaml:"pin"`
+	Status       string     `yaml:"status"`
 }
 
 func getPairingInfo(host string, s *server) PairingInfo {
