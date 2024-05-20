@@ -36,6 +36,7 @@ func Init() {
 	streams.HandleFunc("homekit", streamHandler)
 
 	api.HandleFunc("api/homekit", apiHandler)
+	api.HandleFunc("api/homekit/pairing", apiPairingHandler)
 
 	if cfg.Mod == nil {
 		return

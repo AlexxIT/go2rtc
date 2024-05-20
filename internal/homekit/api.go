@@ -137,3 +137,48 @@ func findHomeKitURLs() map[string]*url.URL {
 	}
 	return urls
 }
+
+type PairingInfo struct {
+	Name         string     `json:"name"`
+	DeviceID     string     `json:"device_id"`
+	Pin          string     `json:"pin"`
+	Status       string     `json:"status"`
+}
+
+func getPairingInfo(host string, s *server) PairingInfo {
+	status := "unpaired"
+	if len(s.pairings) > 0 {
+		status = "paired"
+	}
+	return PairingInfo {
+		Name: s.mdns.Name ,
+		DeviceID: s.hap.DeviceID,
+		Pin: s.hap.Pin,
+		Status: status,
+	}
+}
+
+func apiPairingHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		pairingInfo := map[string]PairingInfo{}
+		for host, s := range servers {
+			pairingInfo[s.stream] = getPairingInfo(host, s)
+		}
+		api.ResponseJSON(w, pairingInfo)
+
+	case "DELETE":
+		query := r.URL.Query()
+		name := query.Get("name")
+		stream := query.Get("stream")
+		device_id := query.Get("device_id")
+		for _, s := range servers {
+			if name == s.mdns.Name || stream == s.stream || device_id == s.hap.DeviceID {
+				s.pairings = nil
+				s.UpdateStatus()
+				s.PatchConfig()
+				break;
+			}
+		}
+	}
+}

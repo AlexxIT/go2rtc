@@ -214,7 +214,11 @@ func (s *server) DelPair(conn net.Conn, id string) {
 			continue
 		}
 
-		s.pairings = append(s.pairings[:i], s.pairings[i+1:]...)
+		if strings.Contains(pairing, "permissions=1") {
+			s.pairings = nil
+		} else {
+			s.pairings = append(s.pairings[:i], s.pairings[i+1:]...)
+		}
 		s.UpdateStatus()
 		s.PatchConfig()
 		break
