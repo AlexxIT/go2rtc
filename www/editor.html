@@ -5,7 +5,7 @@
     <title>go2rtc - File Editor</title>
     <meta name="viewport" content="width=device-width, user-scalable=yes, initial-scale=1, maximum-scale=1">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
-    <script src="https://unpkg.com/monaco-editor@0.48.0/min/vs/loader.js"></script>
+    <script src="https://unpkg.com/@skrashevich/monaco-yaml-prebuilt@1.1.2/dist/monaco-editor.bundle.js"></script>
     <style>
         body {
             font-family: Arial, Helvetica, sans-serif;
@@ -41,125 +41,294 @@
         let editor;
 
         // Load Monaco Editor
-        require.config({ paths: { 'vs': 'https://unpkg.com/monaco-editor@0.48.0/min/vs' } });
-        require(['vs/editor/editor.main'], function () {
-            require(['vs/language/yaml/monaco.contribution'], function() {
-                monaco.languages.yaml.yamlDefaults.setDiagnosticsOptions({
-                    validate: true,
-                    schemas: [{
-                        uri: "http://myserver/go2rtc-schema.json", // Arbitrary schema identifier
-                        fileMatch: ["*"],
-                        schema: {
+        const yamlModelUri = monaco.Uri.parse('a://b/foo.yaml');
+
+        monacoYaml.configureMonacoYaml(monaco, {
+            validate: true,
+            schemas: [{
+                uri: "http://go2rtc/go2rtc-schema.json", // Arbitrary schema identifier
+                fileMatch: ["*"],
+                schema: {
+                    "type": "object",
+                    "properties": {
+                        "streams": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string",
+                                    "description": "Stream source URL with optional parameters"
+                                }
+                            }
+                        },
+                        "api": {
                             "type": "object",
                             "properties": {
-                                "api": {
-                                    "type": "object",
-                                    "properties": {
-                                        "listen": { "type": "string" },
-                                        "username": { "type": "string" },
-                                        "password": { "type": "string" },
-                                        "base_path": { "type": "string" },
-                                        "static_dir": { "type": "string" },
-                                        "origin": { "type": "string" },
-                                        "tls_listen": { "type": "string" },
-                                        "tls_cert": { "type": "string" },
-                                        "tls_key": { "type": "string" },
-                                        "unix_listen": { "type": "string" }
-                                    },
-                                    "required": ["listen"]
+                                "listen": {
+                                    "type": "string",
+                                    "description": "HTTP API port (default: :1984)"
                                 },
-                                "rtsp": {
-                                    "type": "object",
-                                    "properties": {
-                                        "listen": { "type": "string" },
-                                        "username": { "type": "string" },
-                                        "password": { "type": "string" },
-                                        "default_query": { "type": "string" }
-                                    },
-                                    "required": ["listen"]
+                                "username": {
+                                    "type": "string",
+                                    "description": "Basic auth username for WebUI"
                                 },
-                                "webrtc": {
-                                    "type": "object",
-                                    "properties": {
-                                        "listen": { "type": "string" }
-                                    },
-                                    "required": ["listen"]
+                                "password": {
+                                    "type": "string",
+                                    "description": "Basic auth password for WebUI"
                                 },
-                                "streams": {
+                                "base_path": {
+                                    "type": "string",
+                                    "description": "API prefix for serving on a suburl (e.g., /rtc/api)"
+                                },
+                                "static_dir": {
+                                    "type": "string",
+                                    "description": "Folder for static files (custom web interface)"
+                                },
+                                "origin": {
+                                    "type": "string",
+                                    "description": "Allow CORS requests (only * supported)"
+                                },
+                                "tls_listen": {
+                                    "type": "string",
+                                    "description": "Enable HTTPS server"
+                                },
+                                "tls_cert": {
+                                    "type": "string",
+                                    "description": "PEM-encoded fullchain certificate for HTTPS"
+                                },
+                                "tls_key": {
+                                    "type": "string",
+                                    "description": "PEM-encoded private key for HTTPS"
+                                },
+                                "unix_listen": {
+                                    "type": "string",
+                                    "description": "Unix socket listener for API"
+                                }
+                            }
+                        },
+                        "rtsp": {
+                            "type": "object",
+                            "properties": {
+                                "listen": {
+                                    "type": "string",
+                                    "description": "RTSP Server TCP port (default: 8554)"
+                                },
+                                "username": {
+                                    "type": "string",
+                                    "description": "RTSP username"
+                                },
+                                "password": {
+                                    "type": "string",
+                                    "description": "RTSP password"
+                                },
+                                "default_query": {
+                                    "type": "string",
+                                    "description": "Default codecs filters (e.g., video&audio)"
+                                }
+                            }
+                        },
+                        "rtmp": {
+                            "type": "object",
+                            "properties": {
+                                "listen": {
+                                    "type": "string",
+                                    "description": "RTMP Server TCP port"
+                                }
+                            }
+                        },
+                        "webrtc": {
+                            "type": "object",
+                            "properties": {
+                                "listen": {
+                                    "type": "string",
+                                    "description": "WebRTC TCP/UDP port (default: 8555)"
+                                },
+                                "candidates": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string",
+                                        "description": "External IP address and port (e.g., 216.58.210.174:8555)"
+                                    }
+                                },
+                                "ice_servers": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "urls": {
+                                                "type": "array",
+                                                "items": {
+                                                    "type": "string"
+                                                },
+                                                "description": "STUN/TURN server URLs"
+                                            },
+                                            "username": {
+                                                "type": "string",
+                                                "description": "TURN server username"
+                                            },
+                                            "credential": {
+                                                "type": "string",
+                                                "description": "TURN server credential"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "homekit": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "object",
+                                "properties": {
+                                    "pin": {
+                                        "type": "string",
+                                        "description": "Custom PIN for HomeKit"
+                                    },
+                                    "name": {
+                                        "type": "string",
+                                        "description": "Custom camera name"
+                                    },
+                                    "device_id": {
+                                        "type": "string",
+                                        "description": "Custom device ID"
+                                    },
+                                    "device_private": {
+                                        "type": "string",
+                                        "description": "Custom private key"
+                                    }
+                                }
+                            }
+                        },
+                        "webtorrent": {
+                            "type": "object",
+                            "properties": {
+                                "shares": {
                                     "type": "object",
                                     "additionalProperties": {
-                                        "type": "array",
-                                        "items": { "type": "string" }
+                                        "type": "object",
+                                        "properties": {
+                                            "pwd": {
+                                                "type": "string",
+                                                "description": "Share password"
+                                            },
+                                            "src": {
+                                                "type": "string",
+                                                "description": "Stream name from streams section"
+                                            }
+                                        }
                                     }
-                                },
-                                "ngrok": {
-                                    "type": "object",
-                                    "properties": {
-                                        "command": { "type": "string" }
-                                    },
-                                    "required": ["command"]
-                                },
-                                "ffmpeg": {
-                                    "type": "object",
-                                    "properties": {
-                                        "hardware": { "type": "string" }
-                                    }
-                                },
-                                "log": {
-                                    "type": "object",
-                                    "properties": {
-                                        "level": { "type": "string" },
-                                        "api": { "type": "string" },
-                                        "exec": { "type": "string" },
-                                        "ngrok": { "type": "string" },
-                                        "rtsp": { "type": "string" },
-                                        "streams": { "type": "string" },
-                                        "webrtc": { "type": "string" }
-                                    },
-                                    "required": ["level"]
                                 }
-                            },
-                            "required": ["api", "rtsp", "webrtc", "streams"]
+                            }
+                        },
+                        "ngrok": {
+                            "type": "object",
+                            "properties": {
+                                "command": {
+                                    "type": "string",
+                                    "description": "ngrok command to start the tunnel"
+                                }
+                            }
+                        },
+                        "ffmpeg": {
+                            "type": "object",
+                            "properties": {
+                                "bin": {
+                                    "type": "string",
+                                    "description": "Path to ffmpeg binary"
+                                },
+                                "h264": {
+                                    "type": "string",
+                                    "description": "FFmpeg H264 encoding arguments"
+                                },
+                                "mycodec": {
+                                    "type": "string",
+                                    "description": "Custom FFmpeg codec arguments"
+                                },
+                                "myinput": {
+                                    "type": "string",
+                                    "description": "Custom FFmpeg input arguments"
+                                },
+                                "myraw": {
+                                    "type": "string",
+                                    "description": "Custom FFmpeg raw arguments"
+                                }
+                            }
+                        },
+                        "hass": {
+                            "type": "object",
+                            "properties": {
+                                "config": {
+                                    "type": "string",
+                                    "description": "Home Assistant config directory"
+                                }
+                            }
+                        },
+                        "publish": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string",
+                                    "description": "RTMP/RTMPS URL for streaming"
+                                }
+                            }
+                        },
+                        "log": {
+                            "type": "object",
+                            "properties": {
+                                "level": {
+                                    "type": "string",
+                                    "description": "Logging level"
+                                },
+                                "path": {
+                                    "type": "string",
+                                    "description": "Path to log file"
+                                }
+                            }
                         }
-                    }]
-                });
-            });
-            editor = monaco.editor.create(document.getElementById('config'), {
-                language: 'yaml',
-                tabSize: 2,
-                theme: document.body.classList.contains('dark-mode') ? 'vs-dark' : 'vs-light' // 🩼
-            });
-
-            window.addEventListener('load', async () => {
-                const r = await fetch('api/config', { cache: 'no-cache' });
-                if (r.status === 410) {
-                    alert('Config file is not set');
-                } else if (r.status === 404) {
-                    editor.setValue(''); // config file not exist
-                } else if (r.ok) {
-                    dump = await r.text();
-                    editor.setValue(dump);
-                } else {
-                    alert(`Unknown error: ${r.statusText} (${r.status})`);
+                    },
+                    "additionalProperties": false,
+                    "required": ["streams"]
                 }
-            });
-
-            document.getElementById('save').addEventListener('click', async () => {
-                let r = await fetch('api/config', { cache: 'no-cache' });
-                if (r.ok && dump !== await r.text()) {
-                    alert('Config was changed from another place. Refresh the page and make changes again');
-                    return;
-                }
-
-                r = await fetch('api/config', { method: 'POST', body: editor.getValue() });
-                if (r.ok) {
-                    alert('OK');
-                    await fetch('api/restart', { method: 'POST' });
-                } else {
-                    alert(await r.text());
-                }
-            });
+            }]
         });
+        editor = monaco.editor.create(document.getElementById('config'), {
+            language: 'yaml',
+            tabSize: 2,
+            theme: document.body.classList.contains('dark-mode') ? 'vs-dark' : 'vs-light', // 🩼
+            model: monaco.editor.createModel('', 'yaml', yamlModelUri),
+        });
+
+        window.addEventListener('load', async () => {
+            const r = await fetch('api/config', { cache: 'no-cache' });
+            if (r.status === 410) {
+                alert('Config file is not set');
+            } else if (r.status === 404) {
+                editor.setValue(''); // config file not exist
+            } else if (r.ok) {
+                dump = await r.text();
+                editor.setValue(dump);
+            } else {
+                alert(`Unknown error: ${r.statusText} (${r.status})`);
+            }
+        });
+
+        document.getElementById('save').addEventListener('click', async () => {
+            let r = await fetch('api/config', { cache: 'no-cache' });
+            if (r.ok && dump !== await r.text()) {
+                alert('Config was changed from another place. Refresh the page and make changes again');
+                return;
+            }
+
+            r = await fetch('api/config', { method: 'POST', body: editor.getValue() });
+            if (r.ok) {
+                alert('OK');
+                await fetch('api/restart', { method: 'POST' });
+            } else {
+                alert(await r.text());
+            }
+        });
+
     </script>
 </body>
 
