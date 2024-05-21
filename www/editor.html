@@ -71,6 +71,7 @@
                                 "listen": {
                                     "type": "string",
                                     "description": "HTTP API port (default: :1984)",
+                                    "default": ":1984",
                                     "examples": [
                                         ":1984",
                                         "0.0.0.0:8080"
@@ -89,16 +90,19 @@
                                 "base_path": {
                                     "type": "string",
                                     "description": "API prefix for serving on a suburl (e.g., /rtc/api)",
+                                    "default": "",
                                     "examples": ["/api", "/rtc/api"]
                                 },
                                 "static_dir": {
                                     "type": "string",
                                     "description": "Folder for static files (custom web interface)",
+                                    "default": "",
                                     "examples": ["/var/www", "/usr/local/share/static"]
                                 },
                                 "origin": {
                                     "type": "string",
                                     "description": "Allow CORS requests (only * supported)",
+                                    "default": "",
                                     "examples": ["*", "https://example.com"]
                                 },
                                 "tls_listen": {
@@ -129,6 +133,7 @@
                                 "listen": {
                                     "type": "string",
                                     "description": "RTSP Server TCP port (default: 8554)",
+                                    "default": ":8554",
                                     "examples": [":8554", "0.0.0.0:8554"]
                                 },
                                 "username": {
@@ -144,6 +149,7 @@
                                 "default_query": {
                                     "type": "string",
                                     "description": "Default codecs filters (e.g., video&audio)",
+                                    "default": "video&audio",
                                     "examples": ["video&audio", "video"]
                                 }
                             }
@@ -164,6 +170,7 @@
                                 "listen": {
                                     "type": "string",
                                     "description": "WebRTC TCP/UDP port (default: 8555)",
+                                    "default": ":8555/tcp",
                                     "examples": [":8555/tcp", ":8555"]
                                 },
                                 "candidates": {
@@ -205,7 +212,12 @@
                                                 "examples": ["your_pass"]
                                             }
                                         }
-                                    }
+                                    },
+                                    "default": [
+                                        {
+                                            "urls": ["stun:stun.l.google.com:19302"]
+                                        }
+                                    ]
                                 }
                             }
                         },
@@ -279,6 +291,7 @@
                                 "bin": {
                                     "type": "string",
                                     "description": "Path to ffmpeg binary",
+                                    "default": "ffmpeg",
                                     "examples": ["/usr/bin/ffmpeg"]
                                 }
                             }
@@ -289,6 +302,7 @@
                                 "config": {
                                     "type": "string",
                                     "description": "Home Assistant config directory",
+                                    "default": "",
                                     "examples": ["/config"]
                                 }
                             }
