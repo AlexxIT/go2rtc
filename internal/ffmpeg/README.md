@@ -49,7 +49,7 @@
 
 ```yaml
 streams:
-  tts: ffmpeg:#input=-re -f lavfi -i "flite=text='1 2 3 4 5 6 7 8 9 0'"#audio=pcma
+  tts: ffmpeg:#input=-readrate 1 -readrate_initial_burst 0.001 -f lavfi -i "flite=text='1 2 3 4 5 6 7 8 9 0'"#audio=pcma
 ```
 
 ## Useful links

@@ -49,6 +49,7 @@ var defaults = map[string]string{
 	// output
 	"output":       "-user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}",
 	"output/mjpeg": "-f mjpeg -",
+	"output/wav":   "-f wav -",
 
 	// `-preset superfast` - we can't use ultrafast because it doesn't support `-profile main -level 4.1`
 	// `-tune zerolatency` - for minimal latency
@@ -315,11 +316,23 @@ func parseArgs(s string) *ffmpeg.Args {
 		args.AddCodec("-an")
 	}
 
-	// transcoding to only mjpeg
-	if (args.Video == 1 && args.Audio == 0 && query.Get("video") == "mjpeg") ||
-		// no transcoding from mjpeg input
-		(args.Video == 0 && args.Audio == 0 && strings.Contains(args.Input, " mjpeg ")) {
-		args.Output = defaults["output/mjpeg"]
+	// change otput from RTSP to some other pipe format
+	switch {
+	case args.Video == 0 && args.Audio == 0:
+		// no transcoding from mjpeg input (ffmpeg device with support output as raw MJPEG)
+		if strings.Contains(args.Input, " mjpeg ") {
+			args.Output = defaults["output/mjpeg"]
+		}
+	case args.Video == 1 && args.Audio == 0:
+		if query.Get("video") == "mjpeg" {
+			args.Output = defaults["output/mjpeg"]
+		}
+	case args.Video == 0 && args.Audio == 1:
+		codec, _, _ := strings.Cut(query.Get("audio"), "/")
+		switch codec {
+		case "pcma", "pcmu", "pcml":
+			args.Output = defaults["output/wav"]
+		}
 	}
 
 	return args
