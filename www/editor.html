@@ -354,7 +354,7 @@
         editor = monaco.editor.create(document.getElementById('config'), {
             language: 'yaml',
             tabSize: 2,
-            theme: document.body.classList.contains('dark-mode') ? 'vs-dark' : 'vs-light', // 🩼
+            theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'vs-dark' : 'vs-light',
             model: monaco.editor.createModel('', 'yaml', yamlModelUri),
         });
 
