@@ -14,6 +14,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/magic/mjpeg"
 	"github.com/AlexxIT/go2rtc/pkg/mpegts"
 	"github.com/AlexxIT/go2rtc/pkg/multipart"
+	"github.com/AlexxIT/go2rtc/pkg/wav"
 )
 
 func Open(r io.Reader) (core.Producer, error) {
@@ -27,6 +28,9 @@ func Open(r io.Reader) (core.Producer, error) {
 	switch {
 	case string(b) == annexb.StartCode:
 		return bitstream.Open(rd)
+
+	case string(b) == wav.FourCC:
+		return wav.Open(rd)
 
 	case bytes.HasPrefix(b, []byte{0xFF, 0xD8}):
 		return mjpeg.Open(rd)
