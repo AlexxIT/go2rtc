@@ -57,7 +57,11 @@
                                 "type": "array",
                                 "items": {
                                     "type": "string",
-                                    "description": "Stream source URL with optional parameters"
+                                    "description": "Stream source URL with optional parameters",
+                                    "examples": [
+                                        "rtsp://admin:password@192.168.1.123:554/cam/realmonitor?channel=1&subtype=0",
+                                        "ffmpeg:input.mp4#video=h264#hardware"
+                                    ]
                                 }
                             }
                         },
@@ -66,43 +70,56 @@
                             "properties": {
                                 "listen": {
                                     "type": "string",
-                                    "description": "HTTP API port (default: :1984)"
+                                    "description": "HTTP API port (default: :1984)",
+                                    "examples": [
+                                        ":1984",
+                                        "0.0.0.0:8080"
+                                    ]
                                 },
                                 "username": {
                                     "type": "string",
-                                    "description": "Basic auth username for WebUI"
+                                    "description": "Basic auth username for WebUI",
+                                    "examples": ["admin", "user"]
                                 },
                                 "password": {
                                     "type": "string",
-                                    "description": "Basic auth password for WebUI"
+                                    "description": "Basic auth password for WebUI",
+                                    "examples": ["password", "secret"]
                                 },
                                 "base_path": {
                                     "type": "string",
-                                    "description": "API prefix for serving on a suburl (e.g., /rtc/api)"
+                                    "description": "API prefix for serving on a suburl (e.g., /rtc/api)",
+                                    "examples": ["/api", "/rtc/api"]
                                 },
                                 "static_dir": {
                                     "type": "string",
-                                    "description": "Folder for static files (custom web interface)"
+                                    "description": "Folder for static files (custom web interface)",
+                                    "examples": ["/var/www", "/usr/local/share/static"]
                                 },
                                 "origin": {
                                     "type": "string",
-                                    "description": "Allow CORS requests (only * supported)"
+                                    "description": "Allow CORS requests (only * supported)",
+                                    "examples": ["*", "https://example.com"]
                                 },
                                 "tls_listen": {
                                     "type": "string",
-                                    "description": "Enable HTTPS server"
+                                    "description": "Enable HTTPS server",
+                                    "examples": [":8443"]
                                 },
                                 "tls_cert": {
                                     "type": "string",
-                                    "description": "PEM-encoded fullchain certificate for HTTPS"
+                                    "description": "PEM-encoded fullchain certificate for HTTPS",
+                                    "examples": ["/etc/ssl/certs/fullchain.pem"]
                                 },
                                 "tls_key": {
                                     "type": "string",
-                                    "description": "PEM-encoded private key for HTTPS"
+                                    "description": "PEM-encoded private key for HTTPS",
+                                    "examples": ["/etc/ssl/private/privkey.pem"]
                                 },
                                 "unix_listen": {
                                     "type": "string",
-                                    "description": "Unix socket listener for API"
+                                    "description": "Unix socket listener for API",
+                                    "examples": ["/var/run/go2rtc.sock"]
                                 }
                             }
                         },
@@ -111,19 +128,23 @@
                             "properties": {
                                 "listen": {
                                     "type": "string",
-                                    "description": "RTSP Server TCP port (default: 8554)"
+                                    "description": "RTSP Server TCP port (default: 8554)",
+                                    "examples": [":8554", "0.0.0.0:8554"]
                                 },
                                 "username": {
                                     "type": "string",
-                                    "description": "RTSP username"
+                                    "description": "RTSP username",
+                                    "examples": ["admin", "user"]
                                 },
                                 "password": {
                                     "type": "string",
-                                    "description": "RTSP password"
+                                    "description": "RTSP password",
+                                    "examples": ["password", "secret"]
                                 },
                                 "default_query": {
                                     "type": "string",
-                                    "description": "Default codecs filters (e.g., video&audio)"
+                                    "description": "Default codecs filters (e.g., video&audio)",
+                                    "examples": ["video&audio", "video"]
                                 }
                             }
                         },
@@ -132,7 +153,8 @@
                             "properties": {
                                 "listen": {
                                     "type": "string",
-                                    "description": "RTMP Server TCP port"
+                                    "description": "RTMP Server TCP port",
+                                    "examples": [":1935", "0.0.0.0:1935"]
                                 }
                             }
                         },
@@ -141,13 +163,19 @@
                             "properties": {
                                 "listen": {
                                     "type": "string",
-                                    "description": "WebRTC TCP/UDP port (default: 8555)"
+                                    "description": "WebRTC TCP/UDP port (default: 8555)",
+                                    "examples": [":8555/tcp", ":8555"]
                                 },
                                 "candidates": {
                                     "type": "array",
                                     "items": {
                                         "type": "string",
-                                        "description": "External IP address and port (e.g., 216.58.210.174:8555)"
+                                        "description": "External IP address and port (e.g., 216.58.210.174:8555)",
+                                        "examples": [
+                                            "216.58.210.174:8555",
+                                            "stun:8555",
+                                            "home.duckdns.org:8555"
+                                        ]
                                     }
                                 },
                                 "ice_servers": {
@@ -158,17 +186,23 @@
                                             "urls": {
                                                 "type": "array",
                                                 "items": {
-                                                    "type": "string"
+                                                    "type": "string",
+                                                    "examples": [
+                                                        "stun:stun.l.google.com:19302",
+                                                        "turn:123.123.123.123:3478"
+                                                    ]
                                                 },
                                                 "description": "STUN/TURN server URLs"
                                             },
                                             "username": {
                                                 "type": "string",
-                                                "description": "TURN server username"
+                                                "description": "TURN server username",
+                                                "examples": ["your_user"]
                                             },
                                             "credential": {
                                                 "type": "string",
-                                                "description": "TURN server credential"
+                                                "description": "TURN server credential",
+                                                "examples": ["your_pass"]
                                             }
                                         }
                                     }
@@ -182,19 +216,23 @@
                                 "properties": {
                                     "pin": {
                                         "type": "string",
-                                        "description": "Custom PIN for HomeKit"
+                                        "description": "Custom PIN for HomeKit",
+                                        "examples": ["031-45-154"]
                                     },
                                     "name": {
                                         "type": "string",
-                                        "description": "Custom camera name"
+                                        "description": "Custom camera name",
+                                        "examples": ["Front Door Camera"]
                                     },
                                     "device_id": {
                                         "type": "string",
-                                        "description": "Custom device ID"
+                                        "description": "Custom device ID",
+                                        "examples": ["device-1234"]
                                     },
                                     "device_private": {
                                         "type": "string",
-                                        "description": "Custom private key"
+                                        "description": "Custom private key",
+                                        "examples": ["-----BEGIN PRIVATE KEY----- ..."]
                                     }
                                 }
                             }
@@ -209,11 +247,13 @@
                                         "properties": {
                                             "pwd": {
                                                 "type": "string",
-                                                "description": "Share password"
+                                                "description": "Share password",
+                                                "examples": ["sharepassword"]
                                             },
                                             "src": {
                                                 "type": "string",
-                                                "description": "Stream name from streams section"
+                                                "description": "Stream name from streams section",
+                                                "examples": ["camera1"]
                                             }
                                         }
                                     }
@@ -225,7 +265,11 @@
                             "properties": {
                                 "command": {
                                     "type": "string",
-                                    "description": "ngrok command to start the tunnel"
+                                    "description": "ngrok command to start the tunnel",
+                                    "examples": [
+                                        "ngrok tcp 192.168.1.123:554 --authtoken yourauthtoken",
+                                        "ngrok http 8080 --authtoken yourauthtoken"
+                                    ]
                                 }
                             }
                         },
@@ -234,23 +278,8 @@
                             "properties": {
                                 "bin": {
                                     "type": "string",
-                                    "description": "Path to ffmpeg binary"
-                                },
-                                "h264": {
-                                    "type": "string",
-                                    "description": "FFmpeg H264 encoding arguments"
-                                },
-                                "mycodec": {
-                                    "type": "string",
-                                    "description": "Custom FFmpeg codec arguments"
-                                },
-                                "myinput": {
-                                    "type": "string",
-                                    "description": "Custom FFmpeg input arguments"
-                                },
-                                "myraw": {
-                                    "type": "string",
-                                    "description": "Custom FFmpeg raw arguments"
+                                    "description": "Path to ffmpeg binary",
+                                    "examples": ["/usr/bin/ffmpeg"]
                                 }
                             }
                         },
@@ -259,7 +288,8 @@
                             "properties": {
                                 "config": {
                                     "type": "string",
-                                    "description": "Home Assistant config directory"
+                                    "description": "Home Assistant config directory",
+                                    "examples": ["/config"]
                                 }
                             }
                         },
@@ -269,7 +299,11 @@
                                 "type": "array",
                                 "items": {
                                     "type": "string",
-                                    "description": "RTMP/RTMPS URL for streaming"
+                                    "description": "RTMP/RTMPS URL for streaming",
+                                    "examples": [
+                                        "rtmp://a.rtmp.youtube.com/live2/your_stream_key",
+                                        "rtmps://live-api-s.facebook.com:443/rtmp/your_stream_key"
+                                    ]
                                 }
                             }
                         },
@@ -278,18 +312,29 @@
                             "properties": {
                                 "level": {
                                     "type": "string",
-                                    "description": "Logging level"
+                                    "enum": ["trace", "debug", "info", "warn", "error"],
+                                    "default": "info",
+                                    "description": "Log level (e.g., debug, info, warn, error)."
                                 },
                                 "path": {
                                     "type": "string",
-                                    "description": "Path to log file"
+                                    "description": "Path to log file",
+                                    "examples": ["/var/log/go2rtc.log"]
+                                },
+                                "format": {
+                                    "type": "string",
+                                    "enum": ["json", "text"],
+                                    "default": "",
+                                    "description": "Log format (e.g., JSON, text).",
+                                    "examples": ["json", "text"]
                                 }
                             }
                         }
                     },
-                    "additionalProperties": false,
+                    "additionalProperties": true,
                     "required": ["streams"]
                 }
+
             }]
         });
         editor = monaco.editor.create(document.getElementById('config'), {
