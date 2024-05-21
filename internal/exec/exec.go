@@ -4,7 +4,6 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
 	"net/url"
 	"os"
@@ -90,6 +89,10 @@ func handlePipe(_ string, cmd *exec.Cmd, query url.Values) (core.Producer, error
 		return nil, err
 	}
 
+	log.Debug().Strs("args", cmd.Args).Msg("[exec] run pipe")
+
+	ts := time.Now()
+
 	if err = cmd.Start(); err != nil {
 		return nil, err
 	}
@@ -98,6 +101,8 @@ func handlePipe(_ string, cmd *exec.Cmd, query url.Values) (core.Producer, error
 	if err != nil {
 		_ = r.Close()
 	}
+
+	log.Debug().Stringer("launch", time.Since(ts)).Msg("[exec] run pipe")
 
 	return prod, err
 }
@@ -127,7 +132,7 @@ func handleRTSP(url string, cmd *exec.Cmd, path string) (core.Producer, error) {
 		waitersMu.Unlock()
 	}()
 
-	log.Debug().Str("url", url).Str("cmd", fmt.Sprintf("%s", strings.Join(cmd.Args, " "))).Msg("[exec] run")
+	log.Debug().Strs("args", cmd.Args).Msg("[exec] run rtsp")
 
 	ts := time.Now()
 
@@ -150,7 +155,7 @@ func handleRTSP(url string, cmd *exec.Cmd, path string) (core.Producer, error) {
 		// limit message size
 		return nil, errors.New("exec: " + stderr.String())
 	case prod := <-waiter:
-		log.Debug().Stringer("launch", time.Since(ts)).Msg("[exec] run")
+		log.Debug().Stringer("launch", time.Since(ts)).Msg("[exec] run rtsp")
 		return prod, nil
 	}
 }
