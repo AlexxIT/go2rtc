@@ -129,6 +129,7 @@ func Init() {
 			log.Error().Err(err).Caller().Send()
 		}
 	}()
+	discovery()
 }
 
 var log zerolog.Logger

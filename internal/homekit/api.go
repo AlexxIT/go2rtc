@@ -180,5 +180,6 @@ func apiPairingHandler(w http.ResponseWriter, r *http.Request) {
 				break;
 			}
 		}
+		discovery()
 	}
 }
