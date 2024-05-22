@@ -189,19 +189,19 @@ func parseArgs(s string) *ffmpeg.Args {
 			s += "?video&audio"
 		}
 		args.Input = inputTemplate("rtsp", s, query)
-	} else if strings.HasPrefix(s, "device?") {
-		var err error
-		args.Input, err = device.GetInput(s)
-		if err != nil {
-			return nil
-		}
-	} else if strings.HasPrefix(s, "virtual?") {
-		var err error
-		if args.Input, err = virtual.GetInput(s[8:]); err != nil {
-			return nil
+	} else if i = strings.Index(s, "?"); i > 0 {
+		switch s[:i] {
+		case "device":
+			args.Input = device.GetInput(s[i+1:])
+		case "virtual":
+			args.Input = virtual.GetInput(s[i+1:])
 		}
 	} else {
 		args.Input = inputTemplate("file", s, query)
+	}
+
+	if args.Input == "" {
+		return nil
 	}
 
 	if query["async"] != nil {
