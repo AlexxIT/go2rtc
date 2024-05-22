@@ -2,6 +2,7 @@ package ffmpeg
 
 import (
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/AlexxIT/go2rtc/internal/app"
@@ -28,8 +29,13 @@ func Init() {
 
 	streams.RedirectFunc("ffmpeg", func(url string) (string, error) {
 		args := parseArgs(url[7:])
+		if slices.Contains(args.Codecs, "auto") {
+			return "", nil // force call streams.HandleFunc("ffmpeg")
+		}
 		return "exec:" + args.String(), nil
 	})
+
+	streams.HandleFunc("ffmpeg", NewProducer)
 
 	device.Init(defaults["bin"])
 	hardware.Init(defaults["bin"])
@@ -84,6 +90,8 @@ var defaults = map[string]string{
 	"pcml":       "-c:a pcm_s16le -ar:a 8000 -ac:a 1",
 	"pcml/8000":  "-c:a pcm_s16le -ar:a 8000 -ac:a 1",
 	"pcml/44100": "-c:a pcm_s16le -ar:a 44100 -ac:a 1",
+
+	"opus/48000/2": "-c:a libopus -application:a lowdelay -min_comp 0 -ar:a 48000 -ac:a 2",
 
 	// hardware Intel and AMD on Linux
 	// better not to set `-async_depth:v 1` like for QSV, because framedrops
@@ -200,10 +208,6 @@ func parseArgs(s string) *ffmpeg.Args {
 		}
 	} else {
 		args.Input = inputTemplate("file", s, query)
-	}
-
-	if args.Input == "" {
-		return nil
 	}
 
 	if query["async"] != nil {
