@@ -195,6 +195,8 @@ func parseArgs(s string) *ffmpeg.Args {
 			args.Input = device.GetInput(s[i+1:])
 		case "virtual":
 			args.Input = virtual.GetInput(s[i+1:])
+		case "tts":
+			args.Input = virtual.GetInputTTS(s[i+1:])
 		}
 	} else {
 		args.Input = inputTemplate("file", s, query)

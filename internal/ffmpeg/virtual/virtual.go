@@ -60,3 +60,20 @@ func GetInput(src string) string {
 
 	return input
 }
+
+func GetInputTTS(src string) string {
+	query, err := url.ParseQuery(src)
+	if err != nil {
+		return ""
+	}
+
+	input := `-re -f lavfi -i "flite=text='` + query.Get("text") + `'`
+
+	// ffmpeg -f lavfi -i flite=list_voices=1
+	// awb, kal, kal16, rms, slt
+	if voice := query.Get("voice"); voice != "" {
+		input += ":voice" + voice
+	}
+
+	return input + `"`
+}
