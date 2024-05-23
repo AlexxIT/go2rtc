@@ -55,6 +55,7 @@ var defaults = map[string]string{
 	// output
 	"output":       "-user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}",
 	"output/mjpeg": "-f mjpeg -",
+	"output/aac":   "-f adts -",
 	"output/wav":   "-f wav -",
 
 	// `-preset superfast` - we can't use ultrafast because it doesn't support `-profile main -level 4.1`
@@ -336,6 +337,8 @@ func parseArgs(s string) *ffmpeg.Args {
 	case args.Video == 0 && args.Audio == 1:
 		codec, _, _ := strings.Cut(query.Get("audio"), "/")
 		switch codec {
+		case "aac":
+			args.Output = defaults["output/aac"]
 		case "pcma", "pcmu", "pcml":
 			args.Output = defaults["output/wav"]
 		}
