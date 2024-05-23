@@ -92,8 +92,6 @@ var defaults = map[string]string{
 	"pcml/8000":  "-c:a pcm_s16le -ar:a 8000 -ac:a 1",
 	"pcml/44100": "-c:a pcm_s16le -ar:a 44100 -ac:a 1",
 
-	"opus/48000/2": "-c:a libopus -application:a lowdelay -min_comp 0 -ar:a 48000 -ac:a 2",
-
 	// hardware Intel and AMD on Linux
 	// better not to set `-async_depth:v 1` like for QSV, because framedrops
 	// `-bf 0` - disable B-frames is very important

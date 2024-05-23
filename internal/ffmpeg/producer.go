@@ -34,16 +34,19 @@ func NewProducer(url string) (core.Producer, error) {
 	p.Type = "FFmpeg producer"
 	p.Medias = []*core.Media{
 		{
+			// we can support only audio, because don't know FmtpLine for H264 and PayloadType for MJPEG
 			Kind:      core.KindAudio,
 			Direction: core.DirectionRecvonly,
+			// codecs in order from best to worst
 			Codecs: []*core.Codec{
+				// OPUS will always marked as OPUS/48000/2
 				{Name: core.CodecOpus, ClockRate: 48000, Channels: 2},
 				{Name: core.CodecAAC, ClockRate: 16000, FmtpLine: aac.FMTP + "1408"},
 				{Name: core.CodecPCM, ClockRate: 16000},
-				{Name: core.CodecPCM, ClockRate: 8000},
 				{Name: core.CodecPCMA, ClockRate: 16000},
-				{Name: core.CodecPCMA, ClockRate: 8000},
 				{Name: core.CodecPCMU, ClockRate: 16000},
+				{Name: core.CodecPCM, ClockRate: 8000},
+				{Name: core.CodecPCMA, ClockRate: 8000},
 				{Name: core.CodecPCMU, ClockRate: 8000},
 			},
 		},
@@ -96,7 +99,7 @@ func (p *Producer) newURL() string {
 		case core.CodecAAC:
 			s += "#audio=aac/16000"
 		case core.CodecOpus:
-			s += "#audio=opus/48000/2"
+			s += "#audio=opus"
 		}
 	}
 	// add other params
