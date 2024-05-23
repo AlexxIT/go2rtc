@@ -28,6 +28,9 @@ func Init() {
 	}
 
 	streams.RedirectFunc("ffmpeg", func(url string) (string, error) {
+		if _, err := Version(); err != nil {
+			return "", err
+		}
 		args := parseArgs(url[7:])
 		if slices.Contains(args.Codecs, "auto") {
 			return "", nil // force call streams.HandleFunc("ffmpeg")
@@ -46,7 +49,7 @@ var defaults = map[string]string{
 	"global": "-hide_banner",
 
 	// inputs
-	"file": "-re -i {input}",
+	"file": "-re -readrate_initial_burst 0.001 -i {input}",
 	"http": "-fflags nobuffer -flags low_delay -i {input}",
 	"rtsp": "-fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i {input}",
 
