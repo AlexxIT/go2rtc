@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg/device"
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg/hardware"
@@ -39,6 +40,8 @@ func Init() {
 	})
 
 	streams.HandleFunc("ffmpeg", NewProducer)
+
+	api.HandleFunc("api/ffmpeg", apiFFmpeg)
 
 	device.Init(defaults["bin"])
 	hardware.Init(defaults["bin"])
