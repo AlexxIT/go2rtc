@@ -41,13 +41,14 @@ func NewProducer(url string) (core.Producer, error) {
 			Codecs: []*core.Codec{
 				// OPUS will always marked as OPUS/48000/2
 				{Name: core.CodecOpus, ClockRate: 48000, Channels: 2},
-				{Name: core.CodecAAC, ClockRate: 16000, FmtpLine: aac.FMTP + "1408"},
 				{Name: core.CodecPCM, ClockRate: 16000},
 				{Name: core.CodecPCMA, ClockRate: 16000},
 				{Name: core.CodecPCMU, ClockRate: 16000},
 				{Name: core.CodecPCM, ClockRate: 8000},
 				{Name: core.CodecPCMA, ClockRate: 8000},
 				{Name: core.CodecPCMU, ClockRate: 8000},
+				// AAC has unknown problems on Dahua two way
+				{Name: core.CodecAAC, ClockRate: 16000, FmtpLine: aac.FMTP + "1408"},
 			},
 		},
 	}
@@ -91,15 +92,16 @@ func (p *Producer) newURL() string {
 	for _, receiver := range p.Receivers {
 		codec := receiver.Codec
 		switch codec.Name {
-		case core.CodecPCMU, core.CodecPCMA:
-			s += "#audio=" + strings.ToLower(codec.Name)
-			if codec.ClockRate != 0 {
-				s += "/" + strconv.Itoa(int(codec.ClockRate))
-			}
-		case core.CodecAAC:
-			s += "#audio=aac/16000"
 		case core.CodecOpus:
 			s += "#audio=opus"
+		case core.CodecAAC:
+			s += "#audio=aac/16000"
+		case core.CodecPCM:
+			s += "#audio=pcm/" + strconv.Itoa(int(codec.ClockRate))
+		case core.CodecPCMA:
+			s += "#audio=pcma/" + strconv.Itoa(int(codec.ClockRate))
+		case core.CodecPCMU:
+			s += "#audio=pcmu/" + strconv.Itoa(int(codec.ClockRate))
 		}
 	}
 	// add other params
