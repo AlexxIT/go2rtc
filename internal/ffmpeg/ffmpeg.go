@@ -49,7 +49,7 @@ var defaults = map[string]string{
 	"global": "-hide_banner",
 
 	// inputs
-	"file": "-re -readrate_initial_burst 0.001 -i {input}",
+	"file": "-re -i {input}",
 	"http": "-fflags nobuffer -flags low_delay -i {input}",
 	"rtsp": "-fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i {input}",
 
@@ -151,9 +151,10 @@ func inputTemplate(name, s string, query url.Values) string {
 func parseArgs(s string) *ffmpeg.Args {
 	// init FFmpeg arguments
 	args := &ffmpeg.Args{
-		Bin:    defaults["bin"],
-		Global: defaults["global"],
-		Output: defaults["output"],
+		Bin:     defaults["bin"],
+		Global:  defaults["global"],
+		Output:  defaults["output"],
+		Version: verAV,
 	}
 
 	var query url.Values
