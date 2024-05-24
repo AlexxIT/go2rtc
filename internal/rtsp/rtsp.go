@@ -210,6 +210,11 @@ func tcpHandler(conn *rtsp.Conn) {
 				return
 			}
 
+			query := conn.URL.Query()
+			if s := query.Get("timeout"); s != "" {
+				conn.Timeout = core.Atoi(s)
+			}
+
 			log.Debug().Str("stream", name).Msg("[rtsp] new producer")
 
 			stream.AddProducer(conn)
