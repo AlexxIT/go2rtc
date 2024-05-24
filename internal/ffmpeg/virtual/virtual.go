@@ -67,7 +67,7 @@ func GetInputTTS(src string) string {
 		return ""
 	}
 
-	input := `-re -f lavfi -i "flite=text='` + query.Get("text") + `'`
+	input := `-re -readrate_initial_burst 0.001 -f lavfi -i "flite=text='` + query.Get("text") + `'`
 
 	// ffmpeg -f lavfi -i flite=list_voices=1
 	// awb, kal, kal16, rms, slt
