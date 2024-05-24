@@ -179,6 +179,21 @@ func xterm256color(r, g, b uint8, n int) (index uint8) {
 	return
 }
 
+// resizeImage resizes the given image to the specified new width and height.
+// If either newWidth or newHeight is set to 0, the function calculates the missing dimension
+// to maintain the aspect ratio of the original image.
+//
+// Parameters:
+//   - img: The source image to be resized.
+//   - newWidth: The desired width of the resized image. If set to 0, it will be calculated based on newHeight.
+//   - newHeight: The desired height of the resized image. If set to 0, it will be calculated based on newWidth.
+//
+// Returns:
+//   - A new image.Image object that is the resized version of the input image.
+//
+// Example usage:
+//
+//	resizedImg := resizeImage(originalImg, 200, 0) // Resizes to a width of 200 while maintaining aspect ratio.
 func resizeImage(img image.Image, newWidth, newHeight int) image.Image {
 	bounds := img.Bounds()
 	width, height := bounds.Max.X, bounds.Max.Y
@@ -194,10 +209,21 @@ func resizeImage(img image.Image, newWidth, newHeight int) image.Image {
 
 	newImg := image.NewRGBA(image.Rect(0, 0, newWidth, newHeight))
 
+	xRatio := float64(width) / float64(newWidth)
+	yRatio := float64(height) / float64(newHeight)
+
 	for y := 0; y < newHeight; y++ {
 		for x := 0; x < newWidth; x++ {
-			srcX := int(float64(x) * float64(width) / float64(newWidth))
-			srcY := int(float64(y) * float64(height) / float64(newHeight))
+			srcX := int(xRatio * float64(x))
+			srcY := int(yRatio * float64(y))
+
+			if srcX >= width {
+				srcX = width - 1
+			}
+			if srcY >= height {
+				srcY = height - 1
+			}
+
 			newColor := img.At(srcX, srcY)
 			newImg.Set(x, y, newColor)
 		}
