@@ -17,6 +17,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/magic"
 	"github.com/AlexxIT/go2rtc/pkg/mjpeg"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
+	"github.com/AlexxIT/go2rtc/pkg/y4m"
 	"github.com/rs/zerolog/log"
 )
 
@@ -24,6 +25,7 @@ func Init() {
 	api.HandleFunc("api/frame.jpeg", handlerKeyframe)
 	api.HandleFunc("api/stream.mjpeg", handlerStream)
 	api.HandleFunc("api/stream.ascii", handlerStream)
+	api.HandleFunc("api/stream.y4m", apiStreamY4M)
 
 	ws.HandleFunc("mjpeg", handlerWS)
 }
@@ -165,4 +167,26 @@ func handlerWS(tr *ws.Transport, _ *ws.Message) error {
 	})
 
 	return nil
+}
+
+func apiStreamY4M(w http.ResponseWriter, r *http.Request) {
+	src := r.URL.Query().Get("src")
+	stream := streams.Get(src)
+	if stream == nil {
+		http.Error(w, api.StreamNotFound, http.StatusNotFound)
+		return
+	}
+
+	cons := y4m.NewConsumer()
+	cons.RemoteAddr = tcp.RemoteAddr(r)
+	cons.UserAgent = r.UserAgent()
+
+	if err := stream.AddConsumer(cons); err != nil {
+		log.Error().Err(err).Caller().Send()
+		return
+	}
+
+	_, _ = cons.WriteTo(w)
+
+	stream.RemoveConsumer(cons)
 }
