@@ -65,7 +65,7 @@ func NewClient(conn net.Conn, u *url.URL) (*Conn, error) {
 		rd:   bufio.NewReaderSize(conn, core.BufferSize),
 		wr:   conn,
 
-		chunks: map[uint8]*header{},
+		chunks: map[uint8]*chunk{},
 
 		rdPacketSize: 128,
 		wrPacketSize: 4096, // OBS - 4096, Reolink - 4096

@@ -17,7 +17,7 @@ func NewServer(conn net.Conn) (*Conn, error) {
 		rd:   bufio.NewReaderSize(conn, core.BufferSize),
 		wr:   conn,
 
-		chunks: map[uint8]*header{},
+		chunks: map[uint8]*chunk{},
 
 		rdPacketSize: 128,
 		wrPacketSize: 4096,
