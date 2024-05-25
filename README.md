@@ -779,7 +779,7 @@ POST http://localhost:1984/api/streams?dst=camera1&src=ffmpeg:http://example.com
 You can publish any stream to streaming services (YouTube, Telegram, etc.) via RTMP/RTMPS. Important:
 
 - Supported codecs: H264 for video and AAC for audio
-- Pixel format should be `yuv420p`, for cameras with `yuvj420p` format you SHOULD use [transcoding](#source-ffmpeg)
+- AAC audio is required for YouTube, videos without audio will not work
 - You don't need to enable [RTMP module](#module-rtmp) listening for this task
 
 You can use API:
@@ -792,16 +792,19 @@ Or config file:
 
 ```yaml
 publish:
-  # publish stream "tplink_tapo" to Telegram
-  tplink_tapo: rtmps://xxx-x.rtmp.t.me/s/xxxxxxxxxx:xxxxxxxxxxxxxxxxxxxxxx
-  # publish stream "other_camera" to Telegram and YouTube
-  other_camera:
+  # publish stream "video_audio_transcode" to Telegram
+  video_audio_transcode:
     - rtmps://xxx-x.rtmp.t.me/s/xxxxxxxxxx:xxxxxxxxxxxxxxxxxxxxxx
-    - rtmps://xxx.rtmp.youtube.com/live2/xxxx-xxxx-xxxx-xxxx-xxxx
+  # publish stream "audio_transcode" to Telegram and YouTube
+  audio_transcode:
+    - rtmps://xxx-x.rtmp.t.me/s/xxxxxxxxxx:xxxxxxxxxxxxxxxxxxxxxx
+    - rtmp://xxx.rtmp.youtube.com/live2/xxxx-xxxx-xxxx-xxxx-xxxx
 
 streams:
-  # for TP-Link cameras it's important to use transcoding because of wrong pixel format
-  tplink_tapo: ffmpeg:rtsp://user:pass@192.168.1.123/stream1#video=h264#hardware#audio=aac
+  video_audio_transcode:
+    - ffmpeg:rtsp://user:pass@192.168.1.123/stream1#video=h264#hardware#audio=aac
+  audio_transcode:
+    - ffmpeg:rtsp://user:pass@192.168.1.123/stream1#video=copy#audio=aac
 ```
 
 - **Telegram Desktop App** > Any public or private channel or group (where you admin) > Live stream > Start with... > Start streaming.
