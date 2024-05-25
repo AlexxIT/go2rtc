@@ -22,6 +22,7 @@ func NewConsumer() *Consumer {
 					Direction: core.DirectionSendonly,
 					Codecs: []*core.Codec{
 						{Name: core.CodecJPEG},
+						{Name: core.CodecRAW},
 					},
 				},
 			},
@@ -40,6 +41,8 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 
 	if track.Codec.IsRTP() {
 		sender.Handler = RTPDepay(sender.Handler)
+	} else if track.Codec.Name == core.CodecRAW {
+		sender.Handler = Encoder(track.Codec, sender.Handler)
 	}
 
 	sender.HandleRTP(track)

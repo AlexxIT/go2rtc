@@ -12,6 +12,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg/virtual"
 	"github.com/AlexxIT/go2rtc/internal/rtsp"
 	"github.com/AlexxIT/go2rtc/internal/streams"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/ffmpeg"
 )
 
@@ -61,6 +62,7 @@ var defaults = map[string]string{
 	// output
 	"output":       "-user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}",
 	"output/mjpeg": "-f mjpeg -",
+	"output/raw":   "-f yuv4mpegpipe -",
 	"output/aac":   "-f adts -",
 	"output/wav":   "-f wav -",
 
@@ -72,6 +74,12 @@ var defaults = map[string]string{
 	"h265":  "-c:v libx265 -g 50 -profile:v main -level:v 5.1 -preset:v superfast -tune:v zerolatency -pix_fmt:v yuv420p",
 	"mjpeg": "-c:v mjpeg",
 	//"mjpeg": "-c:v mjpeg -force_duplicated_matrix:v 1 -huffman:v 0 -pix_fmt:v yuvj420p",
+
+	"raw":         "-c:v rawvideo",
+	"raw/gray8":   "-c:v rawvideo -pix_fmt:v gray8",
+	"raw/yuv420p": "-c:v rawvideo -pix_fmt:v yuv420p",
+	"raw/yuv422p": "-c:v rawvideo -pix_fmt:v yuv422p",
+	"raw/yuv444p": "-c:v rawvideo -pix_fmt:v yuv444p",
 
 	// https://ffmpeg.org/ffmpeg-codecs.html#libopus-1
 	// https://github.com/pion/webrtc/issues/1514
@@ -336,12 +344,14 @@ func parseArgs(s string) *ffmpeg.Args {
 			args.Output = defaults["output/mjpeg"]
 		}
 	case args.Video == 1 && args.Audio == 0:
-		if query.Get("video") == "mjpeg" {
+		switch core.Before(query.Get("video"), "/") {
+		case "mjpeg":
 			args.Output = defaults["output/mjpeg"]
+		case "raw":
+			args.Output = defaults["output/raw"]
 		}
 	case args.Video == 0 && args.Audio == 1:
-		codec, _, _ := strings.Cut(query.Get("audio"), "/")
-		switch codec {
+		switch core.Before(query.Get("audio"), "/") {
 		case "aac":
 			args.Output = defaults["output/aac"]
 		case "pcma", "pcmu", "pcml":
