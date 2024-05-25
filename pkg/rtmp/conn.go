@@ -52,13 +52,14 @@ func (c *Conn) readResponse(transID float64) ([]any, error) {
 		if err != nil {
 			return nil, err
 		}
+		//log.Printf("[rtmp] type=%d data=%s", msgType, b)
 
 		switch msgType {
 		case TypeSetPacketSize:
 			c.rdPacketSize = binary.BigEndian.Uint32(b)
 		case TypeCommand:
 			items, _ := amf.NewReader(b).ReadItems()
-			if len(items) >= 3 && items[1] == transID {
+			if len(items) >= 3 && (items[1] == transID || items[1] == float64(0)) {
 				return items, nil
 			}
 		}
@@ -288,7 +289,7 @@ func (c *Conn) writePublish() error {
 		return err
 	}
 
-	v, err := c.readResponse(0)
+	v, err := c.readResponse(5)
 	if err != nil {
 		return nil
 	}
@@ -307,7 +308,8 @@ func (c *Conn) writePlay() error {
 		return err
 	}
 
-	v, err := c.readResponse(0)
+	// Reolink response with ID=0, other software respose with ID=5
+	v, err := c.readResponse(5)
 	if err != nil {
 		return nil
 	}
