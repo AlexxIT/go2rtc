@@ -970,7 +970,7 @@ HomeKit module can work in two modes:
 streams:
   dahua1: rtsp://admin:password@192.168.1.123/cam/realmonitor?channel=1&subtype=0
 homekit:
-  dahua1:  # same stream ID from streams list, default PIN - 19550224
+  dahua1:  # same stream ID from streams list, default PIN - 19550224, default setup_id - HMXS
 ```
 
 **Full config**
@@ -985,6 +985,7 @@ streams:
 homekit:
   dahua1:                   # same stream ID from streams list
     pin: 12345678           # custom PIN, default: 19550224
+    setup_id: ABCD          # custom setup ID, default: HMXS
     name: Dahua camera      # custom camera name, default: generated from stream ID
     device_id: dahua1       # custom ID, default: generated from stream ID
     device_private: dahua1  # custom key, default: generated from stream ID

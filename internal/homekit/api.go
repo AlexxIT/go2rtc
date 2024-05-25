@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"strconv"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/app"
@@ -143,9 +144,15 @@ type PairingInfo struct {
 	DeviceID     string     `yaml:"device_id"`
 	Pin          string     `yaml:"pin"`
 	Status       string     `yaml:"status"`
+	SetupURI     string     `yaml:"setup_uri"`
 }
 
 func getPairingInfo(host string, s *server) PairingInfo {
+	// for QR-Code
+	category, _ := strconv.ParseInt(hap.CategoryCamera, 10, 64)
+	pin, _ := strconv.ParseInt(strings.Replace(s.hap.Pin, "-", "", -1), 10, 64)
+	payload := "00000000" + strconv.FormatInt(category << 31 + 1 << 28 + pin, 36)
+	uri := strings.ToUpper("X-HM://" + payload[len(payload)-9:] + s.hap.SetupID[:4])
 	status := "unpaired"
 	if len(s.pairings) > 0 {
 		status = "paired"
@@ -153,6 +160,7 @@ func getPairingInfo(host string, s *server) PairingInfo {
 	return PairingInfo {
 		Name: s.mdns.Name ,
 		DeviceID: s.hap.DeviceID,
+		SetupURI: uri,
 		Pin: s.hap.Pin,
 		Status: status,
 	}

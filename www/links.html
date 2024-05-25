@@ -218,5 +218,40 @@ Telegram: rtmps://xxx-x.rtmp.t.me/s/xxxxxxxxxx:xxxxxxxxxxxxxxxxxxxxxx</pre>
     webrtcLinksUpdate();
 </script>
 
+<div>
+  <h2>HomeKit</h2>
+  <div id="homekit-info"></div>
+  <div id="homekit-qrcode"></div>
+  <div id="homekit-unpair"></div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+    const homekit = new URL('api/homekit/pairing', location.href);
+    fetch(homekit, {cache: 'no-cache'}).then(r => r.json()).then(data => {
+      try {
+        const homekitInfo = data[src];
+        console.log(homekitInfo);
+        document.getElementById('homekit-info').innerHTML = `
+          Setup Code : ${homekitInfo.Pin}<br>
+          Device ID : ${homekitInfo.DeviceID}<br>
+          Status : ${homekitInfo.Status}<br>
+        `;
+        new QRCode('homekit-qrcode', {
+          text: homekitInfo.SetupURI,
+          width: 128,
+          height: 128,
+        });
+        document.getElementById('homekit-unpair').innerHTML = '<br><button>unpair</button><br>';
+        document.getElementById('homekit-unpair').addEventListener('click', ev => {
+          const unpair = new URL(`api/homekit/pairing?stream=${src}`, location.href);
+          fetch(unpair, { method: 'DELETE' }).then(data => {
+            location.reload();
+          }).catch(e => {
+          });
+        });
+      } catch(e) {
+      }
+    });
+</script>
 </body>
 </html>
