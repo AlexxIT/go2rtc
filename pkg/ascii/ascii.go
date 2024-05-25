@@ -156,11 +156,18 @@ const x256b = "\x00\x00\x00\x00\x80\x80\x80\xc0\x80\x00\x00\x00\xff\xff\xff\xff\
 func xterm256color(r, g, b uint8, n int) (index uint8) {
 	best := uint16(0xFFFF)
 	for i := 0; i < n; i++ {
-		diff := uint16(r-x256r[i]) + uint16(g-x256g[i]) + uint16(b-x256b[i])
+		diff := sqDiff(r, x256r[i]) + sqDiff(g, x256g[i]) + sqDiff(b, x256b[i])
 		if diff < best {
 			best = diff
 			index = uint8(i)
 		}
 	}
 	return
+}
+
+// sqDiff - just like from image/color/color.go
+func sqDiff(x, y uint8) uint16 {
+	d := uint16(x - y)
+	//return d
+	return (d * d) >> 2
 }
