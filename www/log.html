@@ -56,7 +56,7 @@
 <table>
     <thead>
     <tr>
-        <th style="width: 130px">Time</th>
+        <th style="width: 100px">Time</th>
         <th style="width: 40px">Level</th>
         <th>Message</th>
     </tr>
@@ -98,11 +98,16 @@
             lines = lines.reverse();
         }
         return lines.map(line => {
-            const ts = new Date(line['time']);
+            const ts = new Date(line['time']).toLocaleString(undefined, {
+                hour: 'numeric',
+                minute: 'numeric',
+                second: 'numeric',
+                fractionalSecondDigits: 3
+            });
             const msg = Object.keys(line).reduce((msg, key) => {
                 return KEYS.indexOf(key) < 0 ? `${msg} ${key}=${line[key]}` : msg;
             }, line['message']);
-            return `<tr class="${line['level']}"><td>${ts.toLocaleString()}</td><td>${escapeHTML(line['level'])}</td><td>${escapeHTML(msg)}</td></tr>`;
+            return `<tr class="${line['level']}"><td>${ts}</td><td>${line['level']}</td><td>${escapeHTML(msg)}</td></tr>`;
         }).join('');
     }
 
