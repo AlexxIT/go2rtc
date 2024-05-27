@@ -120,7 +120,7 @@ func Init() {
 
 	cfg.Mod = map[string]string{
 		"format": "color",
-		"level":  zerolog.LevelInfoValue,
+		"level":  "info",
 		"output": "stdout", // TODO: change to stderr someday
 		"time":   zerolog.TimeFormatUnixMs,
 	}
