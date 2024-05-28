@@ -30,7 +30,6 @@
   "properties": {
     "api": {
       "description": "Configuration for the API server.",
-      "type": "object",
       "properties": {
         "base_path": {
           "description": "Base path for the API endpoints.",
@@ -97,11 +96,15 @@
           ],
           "type": "string"
         }
-      }
+      },
+      "type": "object"
     },
     "ffmpeg": {
+      "additionalProperties": {
+        "description": "Template for FFmpeg command line options.",
+        "type": "string"
+      },
       "description": "Configuration for FFmpeg integration.",
-      "type": "object",
       "properties": {
         "bin": {
           "default": "ffmpeg",
@@ -109,14 +112,10 @@
           "type": "string"
         }
       },
-      "additionalProperties": {
-        "description": "Template for FFmpeg command line options.",
-        "type": "string"
-      }
+      "type": "object"
     },
     "hass": {
       "description": "Configuration for Home Assistant integration.",
-      "type": "object",
       "properties": {
         "config": {
           "description": "Path to the Home Assistant configuration directory.",
@@ -125,13 +124,11 @@
           ],
           "type": "string"
         }
-      }
+      },
+      "type": "object"
     },
     "homekit": {
-      "description": "Configuration for HomeKit integration.",
-      "type": "object",
       "additionalProperties": {
-        "type": "object",
         "properties": {
           "device_id": {
             "description": "Device ID for the HomeKit device.",
@@ -147,10 +144,10 @@
           },
           "pairings": {
             "description": "List of paired devices.",
-            "type": "array",
             "items": {
               "type": "string"
-            }
+            },
+            "type": "array"
           },
           "pin": {
             "default": "19550224",
@@ -158,12 +155,14 @@
             "pattern": "^[0-9]{8}$",
             "type": "string"
           }
-        }
-      }
+        },
+        "type": "object"
+      },
+      "description": "Configuration for HomeKit integration.",
+      "type": "object"
     },
     "log": {
       "description": "Configuration for logging.",
-      "type": "object",
       "properties": {
         "api": {
           "$ref": "#/definitions/log_level"
@@ -261,11 +260,11 @@
         "webtorrent": {
           "$ref": "#/definitions/log_level"
         }
-      }
+      },
+      "type": "object"
     },
     "ngrok": {
       "description": "Configuration for ngrok integration for external access.",
-      "type": "object",
       "properties": {
         "command": {
           "description": "Command to run ngrok.",
@@ -275,11 +274,10 @@
           ],
           "type": "string"
         }
-      }
+      },
+      "type": "object"
     },
     "publish": {
-      "description": "Configuration for publishing streams to external services.",
-      "type": "object",
       "additionalProperties": {
         "anyOf": [
           {
@@ -291,17 +289,18 @@
             "type": "string"
           },
           {
-            "type": "array",
             "items": {
               "type": "string"
-            }
+            },
+            "type": "array"
           }
         ]
-      }
+      },
+      "description": "Configuration for publishing streams to external services.",
+      "type": "object"
     },
     "rtmp": {
       "description": "Configuration for RTMP server.",
-      "type": "object",
       "properties": {
         "listen": {
           "$ref": "#/definitions/listen",
@@ -310,11 +309,11 @@
             ":1935"
           ]
         }
-      }
+      },
+      "type": "object"
     },
     "rtsp": {
       "description": "Configuration for RTSP server.",
-      "type": "object",
       "properties": {
         "default_query": {
           "default": "video&audio",
@@ -341,22 +340,21 @@
           ],
           "type": "string"
         }
-      }
+      },
+      "type": "object"
     },
     "srtp": {
       "description": "Configuration for SRTP server for HomeKit.",
-      "type": "object",
       "properties": {
         "listen": {
           "$ref": "#/definitions/listen",
           "default": ":8443",
           "description": "Specifies the address and port for SRTP connections."
         }
-      }
+      },
+      "type": "object"
     },
     "streams": {
-      "description": "Configuration for stream sources.",
-      "type": "object",
       "additionalProperties": {
         "anyOf": [
           {
@@ -382,18 +380,19 @@
             "type": "string"
           },
           {
-            "type": "array",
             "items": {
               "description": "Source URL or configuration for the stream.",
               "type": "string"
-            }
+            },
+            "type": "array"
           }
         ]
-      }
+      },
+      "description": "Configuration for stream sources.",
+      "type": "object"
     },
     "webrtc": {
       "description": "Configuration for WebRTC server.",
-      "type": "object",
       "properties": {
         "candidates": {
           "description": "List of additional host candidates for WebRTC connections.",
@@ -402,39 +401,37 @@
             "stun:8555",
             "home.duckdns.org:8555"
           ],
-          "type": "array",
           "items": {
             "$ref": "#/definitions/listen/anyOf/0"
-          }
+          },
+          "type": "array"
         },
         "filters": {
           "description": "Filters for auto discovery logic in WebRTC.",
-          "type": "object",
           "properties": {
             "candidates": {
               "description": "Keep only these candidates.",
-              "type": "array",
               "items": {
                 "type": "string"
-              }
+              },
+              "type": "array"
             },
             "interfaces": {
               "description": "Keep only these network interfaces.",
-              "type": "array",
               "items": {
                 "type": "string"
-              }
+              },
+              "type": "array"
             },
             "ips": {
               "description": "Keep only these IP addresses.",
-              "type": "array",
               "items": {
                 "type": "string"
-              }
+              },
+              "type": "array"
             },
             "networks": {
               "description": "Use only these network types.",
-              "type": "array",
               "items": {
                 "enum": [
                   "tcp4",
@@ -443,24 +440,24 @@
                   "udp6"
                 ],
                 "type": "string"
-              }
+              },
+              "type": "array"
             },
             "udp_ports": {
               "description": "Use only this range of UDP ports.",
-              "type": "array",
               "items": {
                 "type": "integer"
               },
+              "maxItems": 2,
               "minItems": 2,
-              "maxItems": 2
+              "type": "array"
             }
-          }
+          },
+          "type": "object"
         },
         "ice_servers": {
           "description": "List of STUN and TURN servers for WebRTC.",
-          "type": "array",
           "items": {
-            "type": "object",
             "properties": {
               "credential": {
                 "description": "Credential for TURN server authentication.",
@@ -468,21 +465,23 @@
               },
               "urls": {
                 "description": "URLs of the STUN or TURN servers.",
-                "type": "array",
                 "items": {
                   "examples": [
                     "stun:stun.l.google.com:19302",
                     "turn:123.123.123.123:3478"
                   ],
                   "type": "string"
-                }
+                },
+                "type": "array"
               },
               "username": {
                 "description": "Username for TURN server authentication.",
                 "type": "string"
               }
-            }
-          }
+            },
+            "type": "object"
+          },
+          "type": "array"
         },
         "listen": {
           "anyOf": [
@@ -498,16 +497,14 @@
           "default": ":8555/tcp",
           "description": "Specifies the address and port for WebRTC connections."
         }
-      }
+      },
+      "type": "object"
     },
     "webtorrent": {
       "description": "Configuration for WebTorrent integration.",
-      "type": "object",
       "properties": {
         "shares": {
-          "description": "Configuration for sharing torrents.",
           "additionalProperties": {
-            "type": "object",
             "properties": {
               "pwd": {
                 "description": "Password for the shared torrent.",
@@ -517,17 +514,20 @@
                 "description": "Source of the shared torrent.",
                 "type": "string"
               }
-            }
-          }
+            },
+            "type": "object"
+          },
+          "description": "Configuration for sharing torrents."
         },
         "trackers": {
           "description": "List of WebTorrent trackers.",
-          "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "type": "array"
         }
-      }
+      },
+      "type": "object"
     }
   },
   "title": "go2rtc",
