@@ -119,7 +119,7 @@ func Init() {
 	}
 
 	cfg.Mod = map[string]string{
-		"format": "color",
+		"format": "", // useless, but anyway
 		"level":  "info",
 		"output": "stdout", // TODO: change to stderr someday
 		"time":   zerolog.TimeFormatUnixMs,
