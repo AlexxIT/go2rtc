@@ -9,29 +9,58 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-var MemoryLog *circularBuffer
+var MemoryLog = newBuffer(16)
 
-func NewLogger(format string, level string) zerolog.Logger {
-	var writer io.Writer = os.Stdout
+func NewLogger(config map[string]string) zerolog.Logger {
+	var writer io.Writer
 
-	if format != "json" {
-		writer = zerolog.ConsoleWriter{
-			Out: writer, TimeFormat: "15:04:05.000", NoColor: (format == "text" || !shell.IsInteractive(os.Stdout.Fd())),
+	// support output only to memory
+	switch config["output"] {
+	case "stderr":
+		writer = os.Stderr
+	case "stdout":
+		writer = os.Stdout
+	}
+
+	timeFormat := config["time"]
+
+	if writer != nil {
+		switch format := config["format"]; format {
+		case "color", "text":
+			if timeFormat != "" {
+				writer = &zerolog.ConsoleWriter{
+					Out:        writer,
+					NoColor:    format == "text" || !shell.IsInteractive(os.Stdout.Fd()),
+					TimeFormat: "15:04:05.000",
+				}
+			} else {
+				writer = &zerolog.ConsoleWriter{
+					Out:     writer,
+					NoColor: format == "text" || !shell.IsInteractive(os.Stdout.Fd()),
+					PartsOrder: []string{
+						zerolog.LevelFieldName,
+						zerolog.CallerFieldName,
+						zerolog.MessageFieldName,
+					},
+				}
+			}
+		case "json": // none
 		}
+
+		writer = zerolog.MultiLevelWriter(writer, MemoryLog)
+	} else {
+		writer = MemoryLog
 	}
 
-	MemoryLog = newBuffer(16)
+	logger := zerolog.New(writer)
 
-	writer = zerolog.MultiLevelWriter(writer, MemoryLog)
-
-	zerolog.TimeFieldFormat = zerolog.TimeFormatUnixMs
-
-	lvl, err := zerolog.ParseLevel(level)
-	if err != nil || lvl == zerolog.NoLevel {
-		lvl = zerolog.InfoLevel
+	if timeFormat != "" {
+		zerolog.TimeFieldFormat = timeFormat
+		logger = logger.With().Timestamp().Logger()
 	}
 
-	return zerolog.New(writer).With().Timestamp().Logger().Level(lvl)
+	lvl, _ := zerolog.ParseLevel(config["level"])
+	return logger.Level(lvl)
 }
 
 func GetLogger(module string) zerolog.Logger {

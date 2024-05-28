@@ -19,15 +19,22 @@ import (
 func Init() {
 	var cfg struct {
 		Mod map[string]string `yaml:"ffmpeg"`
+		Log struct {
+			Level string `yaml:"ffmpeg"`
+		} `yaml:"log"`
 	}
 
 	cfg.Mod = defaults // will be overriden from yaml
+	cfg.Log.Level = "error"
 
 	app.LoadConfig(&cfg)
 
-	if app.GetLogger("exec").GetLevel() >= 0 {
-		defaults["global"] += " -v error"
+	// zerolog levels: trace debug         info warn    error fatal panic disabled
+	// FFmpeg  levels: trace debug verbose info warning error fatal panic quiet
+	if cfg.Log.Level == "warn" {
+		cfg.Log.Level = "warning"
 	}
+	defaults["global"] += " -v " + cfg.Log.Level
 
 	streams.RedirectFunc("ffmpeg", func(url string) (string, error) {
 		if _, err := Version(); err != nil {
