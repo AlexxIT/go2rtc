@@ -14,6 +14,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/ffmpeg"
+	"github.com/rs/zerolog"
 )
 
 func Init() {
@@ -28,6 +29,8 @@ func Init() {
 	cfg.Log.Level = "error"
 
 	app.LoadConfig(&cfg)
+
+	log = app.GetLogger("ffmpeg")
 
 	// zerolog levels: trace debug         info warn    error fatal panic disabled
 	// FFmpeg  levels: trace debug verbose info warning error fatal panic quiet
@@ -144,6 +147,8 @@ var defaults = map[string]string{
 	"h264/videotoolbox": "-c:v h264_videotoolbox -g 50 -bf 0 -profile:v high -level:v 4.1",
 	"h265/videotoolbox": "-c:v hevc_videotoolbox -g 50 -bf 0 -profile:v main -level:v 5.1",
 }
+
+var log zerolog.Logger
 
 // configTemplate - return template from config (defaults) if exist or return raw template
 func configTemplate(template string) string {

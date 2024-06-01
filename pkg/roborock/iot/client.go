@@ -6,12 +6,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/AlexxIT/go2rtc/pkg/mqtt"
-	"github.com/rs/zerolog/log"
 	"net"
 	"net/rpc"
 	"net/url"
 	"time"
+
+	"github.com/AlexxIT/go2rtc/pkg/mqtt"
 )
 
 type Codec struct {
@@ -56,7 +56,7 @@ func (c *Codec) WriteRequest(r *rpc.Request, v any) error {
 		return err
 	}
 
-	log.Printf("[roborock] send: %s", payload)
+	//log.Printf("[roborock] send: %s", payload)
 
 	payload = c.Encrypt(payload, ts, ts, ts)
 
@@ -86,7 +86,7 @@ func (c *Codec) ReadResponseHeader(r *rpc.Response) error {
 			continue
 		}
 
-		log.Printf("[roborock] recv %s", payload)
+		//log.Printf("[roborock] recv %s", payload)
 
 		// get content from response payload:
 		// {"t":1676871268,"dps":{"102":"{\"id\":315003,\"result\":[\"ok\"]}"}}
