@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
+	"github.com/AlexxIT/go2rtc/internal/ffmpeg/helpers"
 	"github.com/AlexxIT/go2rtc/pkg/ffmpeg"
 
 	"github.com/rs/zerolog/log"
@@ -154,6 +155,11 @@ func run(bin string, args string) bool {
 	err := exec.Command(bin, strings.Split(args, " ")...).Run()
 	log.Printf("%v %v", args, err)
 	return err == nil
+}
+
+// checkAndRun checks if the encoder is supported and runs the probe command.
+func checkAndRun(bin, encoder, probeCmd string) bool {
+	return helpers.IsEncoderSupported(encoder) && run(bin, probeCmd)
 }
 
 func runToString(bin string, args string) string {

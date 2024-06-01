@@ -6,7 +6,6 @@ import (
 	"runtime"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
-	"github.com/AlexxIT/go2rtc/internal/ffmpeg/helpers"
 )
 
 const (
@@ -22,111 +21,112 @@ const (
 )
 
 func ProbeAll(bin string) []*api.Source {
+	var probes []struct {
+		encoder string
+		cmd     string
+		video   string
+		engine  string
+	}
+
 	if runtime.GOARCH == "arm64" || runtime.GOARCH == "arm" {
-		return []*api.Source{
-			{
-				Name: runToString(bin, ProbeV4L2M2MH264),
-				URL:  "ffmpeg:...#video=h264#hardware=" + EngineV4L2M2M,
-			},
-			{
-				Name: runToString(bin, ProbeV4L2M2MH265),
-				URL:  "ffmpeg:...#video=h265#hardware=" + EngineV4L2M2M,
-			},
-			{
-				Name: runToString(bin, ProbeRKMPPH264),
-				URL:  "ffmpeg:...#video=h264#hardware=" + EngineRKMPP,
-			},
-			{
-				Name: runToString(bin, ProbeRKMPPH265),
-				URL:  "ffmpeg:...#video=h265#hardware=" + EngineRKMPP,
-			},
+		probes = []struct {
+			encoder string
+			cmd     string
+			video   string
+			engine  string
+		}{
+			{"h264_v4l2m2m", ProbeV4L2M2MH264, "h264", EngineV4L2M2M},
+			{"hevc_v4l2m2m", ProbeV4L2M2MH265, "h265", EngineV4L2M2M},
+			{"h264_rkmpp_encoder", ProbeRKMPPH264, "h264", EngineRKMPP},
+			{"hevc_rkmpp_encoder", ProbeRKMPPH265, "h265", EngineRKMPP},
+		}
+	} else {
+		probes = []struct {
+			encoder string
+			cmd     string
+			video   string
+			engine  string
+		}{
+			{"h264_vaapi", ProbeVAAPIH264, "h264", EngineVAAPI},
+			{"hevc_vaapi", ProbeVAAPIH265, "h265", EngineVAAPI},
+			{"mjpeg_vaapi", ProbeVAAPIJPEG, "mjpeg", EngineVAAPI},
+			{"h264_nvenc", ProbeCUDAH264, "h264", EngineCUDA},
+			{"hevc_nvenc", ProbeCUDAH265, "h265", EngineCUDA},
 		}
 	}
 
-	return []*api.Source{
-		{
-			Name: runToString(bin, ProbeVAAPIH264),
-			URL:  "ffmpeg:...#video=h264#hardware=" + EngineVAAPI,
-		},
-		{
-			Name: runToString(bin, ProbeVAAPIH265),
-			URL:  "ffmpeg:...#video=h265#hardware=" + EngineVAAPI,
-		},
-		{
-			Name: runToString(bin, ProbeVAAPIJPEG),
-			URL:  "ffmpeg:...#video=mjpeg#hardware=" + EngineVAAPI,
-		},
-		{
-			Name: runToString(bin, ProbeCUDAH264),
-			URL:  "ffmpeg:...#video=h264#hardware=" + EngineCUDA,
-		},
-		{
-			Name: runToString(bin, ProbeCUDAH265),
-			URL:  "ffmpeg:...#video=h265#hardware=" + EngineCUDA,
-		},
+	var sources []*api.Source
+	for _, probe := range probes {
+		sources = append(sources, &api.Source{
+			Name: runToString(bin, probe.cmd),
+			URL:  "ffmpeg:...#video=" + probe.video + "#hardware=" + probe.engine,
+		})
 	}
+	return sources
 }
 
 func ProbeHardware(bin, name string) string {
+	var probes []struct {
+		encoder string
+		cmd     string
+		engine  string
+	}
+
 	if runtime.GOARCH == "arm64" || runtime.GOARCH == "arm" {
 		switch name {
 		case "h264":
-			if helpers.IsEncoderSupported("h264_v4l2m2m") {
-				if run(bin, ProbeV4L2M2MH264) {
-					return EngineV4L2M2M
-				}
-			}
-			if helpers.IsEncoderSupported("h264_rkmpp_encoder") {
-				if run(bin, ProbeRKMPPH264) {
-					return EngineRKMPP
-				}
+			probes = []struct {
+				encoder string
+				cmd     string
+				engine  string
+			}{
+				{"h264_v4l2m2m", ProbeV4L2M2MH264, EngineV4L2M2M},
+				{"h264_rkmpp_encoder", ProbeRKMPPH264, EngineRKMPP},
 			}
 		case "h265":
-			if helpers.IsEncoderSupported("h265_v4l2m2m") {
-				if run(bin, ProbeV4L2M2MH265) {
-					return EngineV4L2M2M
-				}
-			}
-			if helpers.IsEncoderSupported("h265_rkmpp_encoder") {
-				if run(bin, ProbeRKMPPH265) {
-					return EngineRKMPP
-				}
+			probes = []struct {
+				encoder string
+				cmd     string
+				engine  string
+			}{
+				{"hevc_v4l2m2m", ProbeV4L2M2MH265, EngineV4L2M2M},
+				{"hevc_rkmpp_encoder", ProbeRKMPPH265, EngineRKMPP},
 			}
 		}
-
-		return EngineSoftware
+	} else {
+		switch name {
+		case "h264":
+			probes = []struct {
+				encoder string
+				cmd     string
+				engine  string
+			}{
+				{"h264_nvenc", ProbeCUDAH264, EngineCUDA},
+				{"h264_vaapi", ProbeVAAPIH264, EngineVAAPI},
+			}
+		case "h265":
+			probes = []struct {
+				encoder string
+				cmd     string
+				engine  string
+			}{
+				{"hevc_nvenc", ProbeCUDAH265, EngineCUDA},
+				{"hevc_vaapi", ProbeVAAPIH265, EngineVAAPI},
+			}
+		case "mjpeg":
+			probes = []struct {
+				encoder string
+				cmd     string
+				engine  string
+			}{
+				{"mjpeg_vaapi", ProbeVAAPIJPEG, EngineVAAPI},
+			}
+		}
 	}
 
-	switch name {
-	case "h264":
-		if helpers.IsEncoderSupported("h264_nvenc") {
-			if run(bin, ProbeCUDAH264) {
-				return EngineCUDA
-			}
-		}
-		if helpers.IsEncoderSupported("h264_vaapi") {
-			if run(bin, ProbeVAAPIH264) {
-				return EngineVAAPI
-			}
-		}
-
-	case "h265":
-		if helpers.IsEncoderSupported("hevc_nvenc") {
-			if run(bin, ProbeCUDAH265) {
-				return EngineCUDA
-			}
-		}
-		if helpers.IsEncoderSupported("h265_vaapi") {
-			if run(bin, ProbeVAAPIH265) {
-				return EngineVAAPI
-			}
-		}
-
-	case "mjpeg":
-		if helpers.IsEncoderSupported("mjpeg_vaapi") {
-			if run(bin, ProbeVAAPIJPEG) {
-				return EngineVAAPI
-			}
+	for _, probe := range probes {
+		if checkAndRun(bin, probe.encoder, probe.cmd) {
+			return probe.engine
 		}
 	}
 

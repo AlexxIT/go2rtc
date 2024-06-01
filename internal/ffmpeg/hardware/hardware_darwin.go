@@ -4,7 +4,6 @@ package hardware
 
 import (
 	"github.com/AlexxIT/go2rtc/internal/api"
-	"github.com/AlexxIT/go2rtc/internal/ffmpeg/helpers"
 )
 
 const (
@@ -13,34 +12,35 @@ const (
 )
 
 func ProbeAll(bin string) []*api.Source {
-	return []*api.Source{
-		{
-			Name: runToString(bin, ProbeVideoToolboxH264),
-			URL:  "ffmpeg:...#video=h264#hardware=" + EngineVideoToolbox,
-		},
-		{
-			Name: runToString(bin, ProbeVideoToolboxH265),
-			URL:  "ffmpeg:...#video=h265#hardware=" + EngineVideoToolbox,
-		},
+	probes := []struct {
+		encoder string
+		cmd     string
+		video   string
+	}{
+		{"h264_videotoolbox", ProbeVideoToolboxH264, "h264"},
+		{"hevc_videotoolbox", ProbeVideoToolboxH265, "h265"},
 	}
+
+	var sources []*api.Source
+	for _, probe := range probes {
+		sources = append(sources, &api.Source{
+			Name: runToString(bin, probe.cmd),
+			URL:  "ffmpeg:...#video=" + probe.video + "#hardware=" + EngineVideoToolbox,
+		})
+	}
+	return sources
 }
 
 func ProbeHardware(bin, name string) string {
 	switch name {
 	case "h264":
-		if helpers.IsEncoderSupported("h264_videotoolbox") {
-			if run(bin, ProbeVideoToolboxH264) {
-				return EngineVideoToolbox
-			}
+		if checkAndRun(bin, "h264_videotoolbox", ProbeVideoToolboxH264) {
+			return EngineVideoToolbox
 		}
-
 	case "h265":
-		if helpers.IsEncoderSupported("h265_videotoolbox") {
-			if run(bin, ProbeVideoToolboxH265) {
-				return EngineVideoToolbox
-			}
+		if checkAndRun(bin, "h265_videotoolbox", ProbeVideoToolboxH265) {
+			return EngineVideoToolbox
 		}
 	}
-
 	return EngineSoftware
 }
