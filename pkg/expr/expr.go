@@ -1,8 +1,10 @@
 package expr
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"io"
 	"net/http"
 	"regexp"
@@ -112,4 +114,38 @@ func Run(input string) (any, error) {
 	}
 
 	return expr.Run(program, nil)
+}
+
+func ProcessConfig(data []byte) ([]byte, error) {
+	r := regexp.MustCompile(`\${{(.+?)}}`)
+	return r.ReplaceAllFunc(data, func(match []byte) []byte {
+		exprStr := match[3 : len(match)-2] // Extract the expression without `${{` and `}}`.
+		result, err := evalExpr(string(exprStr))
+		if err != nil {
+			// log.Warn().Err(err).Msg("[app] eval expression")
+			return match
+		}
+
+		return []byte(result)
+	}), nil
+}
+
+func evalExpr(expression string) (string, error) {
+	result, err := expr.Eval(expression, nil)
+	if err != nil {
+		return "", err
+	}
+
+	// Use a template to ensure proper conversion to string.
+	var tpl bytes.Buffer
+	tmpl, err := template.New("expr").Parse("{{ . }}")
+	if err != nil {
+		return "", err
+	}
+	err = tmpl.Execute(&tpl, result)
+	if err != nil {
+		return "", err
+	}
+
+	return tpl.String(), nil
 }
