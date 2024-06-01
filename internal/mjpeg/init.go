@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
@@ -21,6 +22,24 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// CacheEntry represents a cached keyframe with its timestamp
+type CacheEntry struct {
+	frame     []byte
+	timestamp time.Time
+}
+
+// Global cache for keyframes with expiration
+var keyframeCache = struct {
+	sync.RWMutex
+	cache map[string]CacheEntry
+}{
+	cache: make(map[string]CacheEntry),
+}
+
+// Cache duration
+// TODO: Make it configurable
+var cacheDuration = 1 * time.Minute
+
 func Init() {
 	api.HandleFunc("api/frame.jpeg", handlerKeyframe)
 	api.HandleFunc("api/stream.mjpeg", handlerStream)
@@ -28,6 +47,8 @@ func Init() {
 	api.HandleFunc("api/stream.y4m", apiStreamY4M)
 
 	ws.HandleFunc("mjpeg", handlerWS)
+
+	go cleanupCache()
 }
 
 func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
@@ -35,6 +56,15 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 	stream := streams.Get(src)
 	if stream == nil {
 		http.Error(w, api.StreamNotFound, http.StatusNotFound)
+		return
+	}
+
+	keyframeCache.RLock()
+	cachedEntry, found := keyframeCache.cache[src]
+	keyframeCache.RUnlock()
+
+	if found && time.Since(cachedEntry.timestamp) < cacheDuration {
+		writeJPEGResponse(w, cachedEntry.frame)
 		return
 	}
 
@@ -66,6 +96,15 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 		b = mjpeg.FixJPEG(b)
 	}
 
+	// Cache the keyframe with timestamp
+	keyframeCache.Lock()
+	keyframeCache.cache[src] = CacheEntry{frame: b, timestamp: time.Now()}
+	keyframeCache.Unlock()
+
+	writeJPEGResponse(w, b)
+}
+
+func writeJPEGResponse(w http.ResponseWriter, b []byte) {
 	h := w.Header()
 	h.Set("Content-Type", "image/jpeg")
 	h.Set("Content-Length", strconv.Itoa(len(b)))
@@ -75,6 +114,19 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 
 	if _, err := w.Write(b); err != nil {
 		log.Error().Err(err).Caller().Send()
+	}
+}
+
+func cleanupCache() {
+	for {
+		time.Sleep(cacheDuration)
+		keyframeCache.Lock()
+		for src, entry := range keyframeCache.cache {
+			if time.Since(entry.timestamp) >= cacheDuration {
+				delete(keyframeCache.cache, src)
+			}
+		}
+		keyframeCache.Unlock()
 	}
 }
 
