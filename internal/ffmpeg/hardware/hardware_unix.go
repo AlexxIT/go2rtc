@@ -6,6 +6,7 @@ import (
 	"runtime"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
+	"github.com/AlexxIT/go2rtc/internal/ffmpeg/helpers"
 )
 
 const (
@@ -70,18 +71,26 @@ func ProbeHardware(bin, name string) string {
 	if runtime.GOARCH == "arm64" || runtime.GOARCH == "arm" {
 		switch name {
 		case "h264":
-			if run(bin, ProbeV4L2M2MH264) {
-				return EngineV4L2M2M
+			if helpers.IsEncoderSupported("h264_v4l2m2m") {
+				if run(bin, ProbeV4L2M2MH264) {
+					return EngineV4L2M2M
+				}
 			}
-			if run(bin, ProbeRKMPPH264) {
-				return EngineRKMPP
+			if helpers.IsEncoderSupported("h264_rkmpp_encoder") {
+				if run(bin, ProbeRKMPPH264) {
+					return EngineRKMPP
+				}
 			}
 		case "h265":
-			if run(bin, ProbeV4L2M2MH265) {
-				return EngineV4L2M2M
+			if helpers.IsEncoderSupported("h265_v4l2m2m") {
+				if run(bin, ProbeV4L2M2MH265) {
+					return EngineV4L2M2M
+				}
 			}
-			if run(bin, ProbeRKMPPH265) {
-				return EngineRKMPP
+			if helpers.IsEncoderSupported("h265_rkmpp_encoder") {
+				if run(bin, ProbeRKMPPH265) {
+					return EngineRKMPP
+				}
 			}
 		}
 
@@ -90,24 +99,34 @@ func ProbeHardware(bin, name string) string {
 
 	switch name {
 	case "h264":
-		if run(bin, ProbeCUDAH264) {
-			return EngineCUDA
+		if helpers.IsEncoderSupported("h264_nvenc") {
+			if run(bin, ProbeCUDAH264) {
+				return EngineCUDA
+			}
 		}
-		if run(bin, ProbeVAAPIH264) {
-			return EngineVAAPI
+		if helpers.IsEncoderSupported("h264_vaapi") {
+			if run(bin, ProbeVAAPIH264) {
+				return EngineVAAPI
+			}
 		}
 
 	case "h265":
-		if run(bin, ProbeCUDAH265) {
-			return EngineCUDA
+		if helpers.IsEncoderSupported("hevc_nvenc") {
+			if run(bin, ProbeCUDAH265) {
+				return EngineCUDA
+			}
 		}
-		if run(bin, ProbeVAAPIH265) {
-			return EngineVAAPI
+		if helpers.IsEncoderSupported("h265_vaapi") {
+			if run(bin, ProbeVAAPIH265) {
+				return EngineVAAPI
+			}
 		}
 
 	case "mjpeg":
-		if run(bin, ProbeVAAPIJPEG) {
-			return EngineVAAPI
+		if helpers.IsEncoderSupported("mjpeg_vaapi") {
+			if run(bin, ProbeVAAPIJPEG) {
+				return EngineVAAPI
+			}
 		}
 	}
 
