@@ -114,7 +114,7 @@ func (c *Client) Play() error {
 }
 
 func (c *Client) Talk() error {
-	format := `{"Name":"OPTalk","SessionID":"0x%08X","OPTalk":{"Action":"%s"}}` + "\x0A\x00"
+	format := `{"Name":"OPTalk","SessionID":"0x%08X","OPTalk":{"Action":"%s","AudioFormat":{"EncodeType":"G711_ALAW"}}}` + "\x0A\x00"
 
 	data := fmt.Sprintf(format, c.session, "Claim")
 	if _, err := c.WriteCmd(OPTalkClaim, []byte(data)); err != nil {

@@ -41,3 +41,12 @@ func TestADTS(t *testing.T) {
 
 	require.Equal(t, src[:len(dst)], dst)
 }
+
+func TestEncodeConfig(t *testing.T) {
+	conf := EncodeConfig(TypeAACLC, 48000, 1, false)
+	require.Equal(t, "1188", hex.EncodeToString(conf))
+	conf = EncodeConfig(TypeAACLC, 16000, 1, false)
+	require.Equal(t, "1408", hex.EncodeToString(conf))
+	conf = EncodeConfig(TypeAACLC, 8000, 1, false)
+	require.Equal(t, "1588", hex.EncodeToString(conf))
+}

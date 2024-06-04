@@ -492,7 +492,9 @@ export class VideoRTC extends HTMLElement {
 
         pc.addEventListener('connectionstatechange', () => {
             if (pc.connectionState === 'connected') {
-                const tracks = pc.getReceivers().map(receiver => receiver.track);
+                const tracks = pc.getTransceivers()
+                    .filter(tr => tr.currentDirection === 'recvonly') // skip inactive
+                    .map(tr => tr.receiver.track);
                 /** @type {HTMLVideoElement} */
                 const video2 = document.createElement('video');
                 video2.addEventListener('loadeddata', () => this.onpcvideo(video2), {once: true});

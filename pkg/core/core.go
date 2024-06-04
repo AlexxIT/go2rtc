@@ -18,6 +18,7 @@ const (
 	CodecVP9  = "VP9"
 	CodecAV1  = "AV1"
 	CodecJPEG = "JPEG" // payloadType: 26
+	CodecRAW  = "RAW"
 
 	CodecPCMU = "PCMU" // payloadType: 0
 	CodecPCMA = "PCMA" // payloadType: 8

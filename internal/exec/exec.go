@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"net/url"
 	"os"
 	"os/exec"
@@ -69,8 +68,9 @@ func execHandle(rawURL string) (core.Producer, error) {
 
 	args := shell.QuoteSplit(rawURL[5:]) // remove `exec:`
 	cmd := exec.Command(args[0], args[1:]...)
-	if log.Debug().Enabled() {
-		cmd.Stderr = os.Stderr
+	cmd.Stderr = &logWriter{
+		buf:   make([]byte, 512),
+		debug: log.Debug().Enabled(),
 	}
 
 	if path == "" {
@@ -90,6 +90,10 @@ func handlePipe(_ string, cmd *exec.Cmd, query url.Values) (core.Producer, error
 		return nil, err
 	}
 
+	log.Debug().Strs("args", cmd.Args).Msg("[exec] run pipe")
+
+	ts := time.Now()
+
 	if err = cmd.Start(); err != nil {
 		return nil, err
 	}
@@ -99,18 +103,12 @@ func handlePipe(_ string, cmd *exec.Cmd, query url.Values) (core.Producer, error
 		_ = r.Close()
 	}
 
-	return prod, err
+	log.Debug().Stringer("launch", time.Since(ts)).Msg("[exec] run pipe")
+
+	return prod, fmt.Errorf("exec/pipe: %w\n%s", err, cmd.Stderr)
 }
 
 func handleRTSP(url string, cmd *exec.Cmd, path string) (core.Producer, error) {
-	stderr := limitBuffer{buf: make([]byte, 512)}
-
-	if cmd.Stderr != nil {
-		cmd.Stderr = io.MultiWriter(cmd.Stderr, &stderr)
-	} else {
-		cmd.Stderr = &stderr
-	}
-
 	if log.Trace().Enabled() {
 		cmd.Stdout = os.Stdout
 	}
@@ -127,7 +125,7 @@ func handleRTSP(url string, cmd *exec.Cmd, path string) (core.Producer, error) {
 		waitersMu.Unlock()
 	}()
 
-	log.Debug().Str("url", url).Str("cmd", fmt.Sprintf("%s", strings.Join(cmd.Args, " "))).Msg("[exec] run")
+	log.Debug().Strs("args", cmd.Args).Msg("[exec] run rtsp")
 
 	ts := time.Now()
 
@@ -145,12 +143,12 @@ func handleRTSP(url string, cmd *exec.Cmd, path string) (core.Producer, error) {
 	case <-time.After(time.Second * 60):
 		_ = cmd.Process.Kill()
 		log.Error().Str("url", url).Msg("[exec] timeout")
-		return nil, errors.New("timeout")
+		return nil, errors.New("exec: timeout")
 	case <-done:
 		// limit message size
-		return nil, errors.New("exec: " + stderr.String())
+		return nil, fmt.Errorf("exec/rtsp\n%s", cmd.Stderr)
 	case prod := <-waiter:
-		log.Debug().Stringer("launch", time.Since(ts)).Msg("[exec] run")
+		log.Debug().Stringer("launch", time.Since(ts)).Msg("[exec] run rtsp")
 		return prod, nil
 	}
 }
@@ -163,21 +161,47 @@ var (
 	waitersMu sync.Mutex
 )
 
-type limitBuffer struct {
-	buf []byte
-	n   int
+type logWriter struct {
+	buf   []byte
+	debug bool
+	n     int
 }
 
-func (l *limitBuffer) String() string {
+func (l *logWriter) String() string {
 	if l.n == len(l.buf) {
 		return string(l.buf) + "..."
 	}
 	return string(l.buf[:l.n])
 }
 
-func (l *limitBuffer) Write(p []byte) (int, error) {
+func (l *logWriter) Write(p []byte) (n int, err error) {
 	if l.n < cap(l.buf) {
 		l.n += copy(l.buf[l.n:], p)
 	}
-	return len(p), nil
+	n = len(p)
+	if l.debug {
+		if p = trimSpace(p); p != nil {
+			log.Debug().Msgf("[exec] %s", p)
+		}
+	}
+	return
+}
+
+func trimSpace(b []byte) []byte {
+	start := 0
+	stop := len(b)
+	for ; start < stop; start++ {
+		if b[start] >= ' ' {
+			break // trim all ASCII before 0x20
+		}
+	}
+	for ; ; stop-- {
+		if stop == start {
+			return nil // skip empty output
+		}
+		if b[stop-1] > ' ' {
+			break // trim all ASCII before 0x21
+		}
+	}
+	return b[start:stop]
 }

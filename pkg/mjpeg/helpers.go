@@ -3,6 +3,10 @@ package mjpeg
 import (
 	"bytes"
 	"image/jpeg"
+
+	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/y4m"
+	"github.com/pion/rtp"
 )
 
 // FixJPEG - reencode JPEG if it has wrong header
@@ -32,4 +36,21 @@ func FixJPEG(b []byte) []byte {
 		return b
 	}
 	return buf.Bytes()
+}
+
+func Encoder(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
+	newImage := y4m.NewImage(codec.FmtpLine)
+
+	return func(packet *rtp.Packet) {
+		img := newImage(packet.Payload)
+
+		buf := bytes.NewBuffer(nil)
+		if err := jpeg.Encode(buf, img, nil); err != nil {
+			return
+		}
+
+		clone := *packet
+		clone.Payload = buf.Bytes()
+		handler(&clone)
+	}
 }

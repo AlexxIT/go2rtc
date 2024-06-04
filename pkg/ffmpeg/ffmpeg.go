@@ -6,6 +6,15 @@ import (
 	"strings"
 )
 
+// correlation of libavformat versions with ffmpeg versions
+const (
+	Version50 = "59. 16"
+	Version51 = "59. 27"
+	Version60 = "60.  3"
+	Version61 = "60. 16"
+	Version70 = "61.  1"
+)
+
 type Args struct {
 	Bin     string   // ffmpeg
 	Global  string   // -hide_banner -v error
@@ -13,6 +22,7 @@ type Args struct {
 	Codecs  []string // -c:v libx264 -g:v 30 -preset:v ultrafast -tune:v zerolatency
 	Filters []string // scale=1920:1080
 	Output  string   // -f rtsp {output}
+	Version string   // libavformat version, it's more reliable than the ffmpeg version
 
 	Video, Audio int // count of Video and Audio params
 }
@@ -52,6 +62,11 @@ func (a *Args) String() string {
 	}
 
 	b.WriteByte(' ')
+	// starting from FFmpeg 6.1 readrate=1 has default initial bust 0.5 sec
+	// it might make us miss the first couple seconds of the file
+	if strings.HasPrefix(a.Input, "-re ") && a.Version >= Version61 {
+		b.WriteString("-readrate_initial_burst 0.001 ")
+	}
 	b.WriteString(a.Input)
 
 	multimode := a.Video > 1 || a.Audio > 1
@@ -90,4 +105,19 @@ func (a *Args) String() string {
 	b.WriteString(a.Output)
 
 	return b.String()
+}
+
+func ParseVersion(b []byte) (ffmpeg string, libavformat string) {
+	if len(b) > 100 {
+		// ffmpeg version n7.0-30-g8b0fe91754-20240520 Copyright (c) 2000-2024 the FFmpeg developers
+		if i := bytes.IndexByte(b[15:], ' '); i > 0 {
+			ffmpeg = string(b[15 : 15+i])
+		}
+
+		// libavformat    60. 16.100 / 60. 16.100
+		if i := strings.Index(string(b), "libavformat"); i > 0 {
+			libavformat = string(b[i+15 : i+25])
+		}
+	}
+	return
 }

@@ -69,6 +69,8 @@ func DecodeConfig(b []byte) (objType, sampleFreqIdx, channels byte, sampleRate u
 	sampleFreqIdx = rd.ReadBits8(4)
 	if sampleFreqIdx == 0b1111 {
 		sampleRate = rd.ReadBits(24)
+	} else {
+		sampleRate = sampleRates[sampleFreqIdx]
 	}
 
 	channels = rd.ReadBits8(4)

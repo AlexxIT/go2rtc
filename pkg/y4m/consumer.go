@@ -1,6 +1,7 @@
-package mjpeg
+package y4m
 
 import (
+	"fmt"
 	"io"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -15,13 +16,12 @@ type Consumer struct {
 func NewConsumer() *Consumer {
 	return &Consumer{
 		core.SuperConsumer{
-			Type: "MJPEG passive consumer",
+			Type: "YUV4MPEG2 passive consumer",
 			Medias: []*core.Media{
 				{
 					Kind:      core.KindVideo,
 					Direction: core.DirectionSendonly,
 					Codecs: []*core.Codec{
-						{Name: core.CodecJPEG},
 						{Name: core.CodecRAW},
 					},
 				},
@@ -34,15 +34,22 @@ func NewConsumer() *Consumer {
 func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver) error {
 	sender := core.NewSender(media, track.Codec)
 	sender.Handler = func(packet *rtp.Packet) {
+		if n, err := c.wr.Write([]byte(frameHdr)); err == nil {
+			c.Send += n
+		}
 		if n, err := c.wr.Write(packet.Payload); err == nil {
 			c.Send += n
 		}
 	}
 
-	if track.Codec.IsRTP() {
-		sender.Handler = RTPDepay(sender.Handler)
-	} else if track.Codec.Name == core.CodecRAW {
-		sender.Handler = Encoder(track.Codec, sender.Handler)
+	hdr := fmt.Sprintf(
+		"YUV4MPEG2 W%s H%s C%s\n",
+		core.Between(track.Codec.FmtpLine, "width=", ";"),
+		core.Between(track.Codec.FmtpLine, "height=", ";"),
+		core.Between(track.Codec.FmtpLine, "colorspace=", ";"),
+	)
+	if _, err := c.wr.Write([]byte(hdr)); err != nil {
+		return err
 	}
 
 	sender.HandleRTP(track)

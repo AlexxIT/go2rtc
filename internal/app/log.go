@@ -4,33 +4,72 @@ import (
 	"io"
 	"os"
 
+	"github.com/mattn/go-isatty"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
-var MemoryLog *circularBuffer
+var MemoryLog = newBuffer(16)
 
-func NewLogger(format string, level string) zerolog.Logger {
-	var writer io.Writer = os.Stdout
+// NewLogger support:
+// - output: empty (only to memory), stderr, stdout
+// - format: empty (autodetect color support), color, json, text
+// - time:   empty (disable timestamp), UNIXMS, UNIXMICRO, UNIXNANO
+// - level:  disabled, trace, debug, info, warn, error...
+func NewLogger(config map[string]string) zerolog.Logger {
+	var writer io.Writer
 
-	if format != "json" {
-		writer = zerolog.ConsoleWriter{
-			Out: writer, TimeFormat: "15:04:05.000", NoColor: format == "text",
+	switch config["output"] {
+	case "stderr":
+		writer = os.Stderr
+	case "stdout":
+		writer = os.Stdout
+	}
+
+	timeFormat := config["time"]
+
+	if writer != nil {
+		if format := config["format"]; format != "json" {
+			console := &zerolog.ConsoleWriter{Out: writer}
+
+			switch format {
+			case "text":
+				console.NoColor = true
+			case "color":
+				console.NoColor = false // useless, but anyway
+			default:
+				// autodetection if output support color
+				// go-isatty - dependency for go-colorable - dependency for ConsoleWriter
+				console.NoColor = !isatty.IsTerminal(writer.(*os.File).Fd())
+			}
+
+			if timeFormat != "" {
+				console.TimeFormat = "15:04:05.000"
+			} else {
+				console.PartsOrder = []string{
+					zerolog.LevelFieldName,
+					zerolog.CallerFieldName,
+					zerolog.MessageFieldName,
+				}
+			}
+
+			writer = console
 		}
+
+		writer = zerolog.MultiLevelWriter(writer, MemoryLog)
+	} else {
+		writer = MemoryLog
 	}
 
-	MemoryLog = newBuffer(16)
+	logger := zerolog.New(writer)
 
-	writer = zerolog.MultiLevelWriter(writer, MemoryLog)
-
-	zerolog.TimeFieldFormat = zerolog.TimeFormatUnixMs
-
-	lvl, err := zerolog.ParseLevel(level)
-	if err != nil || lvl == zerolog.NoLevel {
-		lvl = zerolog.InfoLevel
+	if timeFormat != "" {
+		zerolog.TimeFieldFormat = timeFormat
+		logger = logger.With().Timestamp().Logger()
 	}
 
-	return zerolog.New(writer).With().Timestamp().Logger().Level(lvl)
+	lvl, _ := zerolog.ParseLevel(config["level"])
+	return logger.Level(lvl)
 }
 
 func GetLogger(module string) zerolog.Logger {

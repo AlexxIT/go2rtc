@@ -14,6 +14,8 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/magic/mjpeg"
 	"github.com/AlexxIT/go2rtc/pkg/mpegts"
 	"github.com/AlexxIT/go2rtc/pkg/multipart"
+	"github.com/AlexxIT/go2rtc/pkg/wav"
+	"github.com/AlexxIT/go2rtc/pkg/y4m"
 )
 
 func Open(r io.Reader) (core.Producer, error) {
@@ -25,8 +27,14 @@ func Open(r io.Reader) (core.Producer, error) {
 	}
 
 	switch {
-	case bytes.HasPrefix(b, []byte(annexb.StartCode)):
+	case string(b) == annexb.StartCode:
 		return bitstream.Open(rd)
+
+	case string(b) == wav.FourCC:
+		return wav.Open(rd)
+
+	case string(b) == y4m.FourCC:
+		return y4m.Open(rd)
 
 	case bytes.HasPrefix(b, []byte{0xFF, 0xD8}):
 		return mjpeg.Open(rd)
@@ -37,7 +45,7 @@ func Open(r io.Reader) (core.Producer, error) {
 	case bytes.HasPrefix(b, []byte("--")):
 		return multipart.Open(rd)
 
-	case b[0] == 0xFF && b[1]&0xF7 == 0xF1:
+	case b[0] == 0xFF && (b[1] == 0xF1 || b[1] == 0xF9):
 		return aac.Open(rd)
 
 	case b[0] == mpegts.SyncByte:

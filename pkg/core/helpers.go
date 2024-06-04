@@ -38,6 +38,13 @@ func RandString(size, base byte) string {
 	return string(b)
 }
 
+func Before(s, sep string) string {
+	if i := strings.Index(s, sep); i > 0 {
+		return s[:i]
+	}
+	return s
+}
+
 func Between(s, sub1, sub2 string) string {
 	i := strings.Index(s, sub1)
 	if i < 0 {

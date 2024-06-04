@@ -3,6 +3,7 @@ package ffmpeg
 import (
 	"testing"
 
+	"github.com/AlexxIT/go2rtc/pkg/ffmpeg"
 	"github.com/stretchr/testify/require"
 )
 
@@ -283,6 +284,26 @@ func TestDrawText(t *testing.T) {
 		{
 			source: "http:///example.com#video=h264#width=640#drawtext=fontsize=12#hardware=vaapi",
 			expect: `ffmpeg -hide_banner -hwaccel vaapi -hwaccel_output_format nv12 -hwaccel_flags allow_profile_mismatch -fflags nobuffer -flags low_delay -i http:///example.com -c:v h264_vaapi -g 50 -bf 0 -profile:v high -level:v 4.1 -sei:v 0 -an -vf "scale=640:-1,drawtext=fontsize=12:text='%{localtime\:%Y-%m-%d %X}',hwupload" -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			args := parseArgs(test.source)
+			require.Equal(t, test.expect, args.String())
+		})
+	}
+}
+
+func TestVersion(t *testing.T) {
+	verAV = ffmpeg.Version61
+	tests := []struct {
+		name   string
+		source string
+		expect string
+	}{
+		{
+			source: "/media/bbb.mp4",
+			expect: `ffmpeg -hide_banner -readrate_initial_burst 0.001 -re -i /media/bbb.mp4 -c copy -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`,
 		},
 	}
 	for _, test := range tests {

@@ -85,16 +85,21 @@
 
 <div>
     <h2>Play audio</h2>
-    <pre>example: ffmpeg:https://example.com/song.mp3#audio=pcma#input=file</pre>
-    <input id="play-url" type="text" placeholder="url">
+    <label><input type="radio" name="play" value="file" checked>file - play remote (https://example.com/song.mp3) or local (/media/song.mp3) file</label><br>
+    <label><input type="radio" name="play" value="live">live - play remote live stream (radio, etc.)</label><br>
+    <label><input type="radio" name="play" value="text">text - play Text To Speech (if your FFmpeg support this)</label><br>
+    <br>
+    <input id="play-url" type="text" placeholder="path / url / text">
     <a id="play-send" href="#">send</a> / cameras with two way audio support
 </div>
 <script>
     document.getElementById('play-send').addEventListener('click', ev => {
         ev.preventDefault();
-        const url = new URL('api/streams', location.href);
+        // action - file / live / text
+        const action = document.querySelector('input[name="play"]:checked').value;
+        const url = new URL('api/ffmpeg', location.href);
         url.searchParams.set('dst', src);
-        url.searchParams.set('src', document.getElementById('play-url').value);
+        url.searchParams.set(action, document.getElementById('play-url').value);
         fetch(url, {method: 'POST'});
     });
 </script>

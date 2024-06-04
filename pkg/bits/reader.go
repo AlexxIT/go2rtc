@@ -131,3 +131,7 @@ func (r *Reader) ReadSEGolomb() int32 {
 func (r *Reader) Left() []byte {
 	return r.buf[r.pos:]
 }
+
+func (r *Reader) Pos() (int, byte) {
+	return r.pos - 1, r.bits
+}

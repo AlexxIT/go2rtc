@@ -1,6 +1,7 @@
 package streams
 
 import (
+	"errors"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -49,9 +50,16 @@ func Get(name string) *Stream {
 
 var sanitize = regexp.MustCompile(`\s`)
 
-func New(name string, source string) *Stream {
-	// not allow creating dynamic streams with spaces in the source
+// Validate - not allow creating dynamic streams with spaces in the source
+func Validate(source string) error {
 	if sanitize.MatchString(source) {
+		return errors.New("streams: invalid dynamic source")
+	}
+	return nil
+}
+
+func New(name string, source string) *Stream {
+	if Validate(source) != nil {
 		return nil
 	}
 
@@ -203,13 +211,17 @@ func streamsHandler(w http.ResponseWriter, r *http.Request) {
 		// with dst - redirect source to dst
 		if dst := query.Get("dst"); dst != "" {
 			if stream := Get(dst); stream != nil {
-				if err := stream.Play(src); err != nil {
+				if err := Validate(src); err != nil {
+					http.Error(w, err.Error(), http.StatusBadRequest)
+				} else if err = stream.Play(src); err != nil {
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 				} else {
 					api.ResponseJSON(w, stream)
 				}
 			} else if stream = Get(src); stream != nil {
-				if err := stream.Publish(dst); err != nil {
+				if err := Validate(dst); err != nil {
+					http.Error(w, err.Error(), http.StatusBadRequest)
+				} else if err = stream.Publish(dst); err != nil {
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 				}
 			} else {
