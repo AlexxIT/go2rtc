@@ -2,6 +2,7 @@ package core
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -16,6 +17,10 @@ type Codec struct {
 	Channels    uint16 // 0, 1, 2
 	FmtpLine    string
 	PayloadType uint8
+}
+
+func (c *Codec) MarshalJSON() ([]byte, error) {
+	return json.Marshal(c.String())
 }
 
 func (c *Codec) String() string {
