@@ -14,6 +14,7 @@ go get -u
 go mod tidy
 go mod why github.com/pion/rtcp
 go list -deps .\cmd\go2rtc_rtsp\
+./goweight
 ```
 
 ## Dependencies
