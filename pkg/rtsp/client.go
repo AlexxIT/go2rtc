@@ -186,10 +186,20 @@ func (c *Conn) Announce() (err error) {
 		return err
 	}
 
-	res, err := c.Do(req)
+	_, err = c.Do(req)
+	return
+}
 
-	_ = res
+func (c *Conn) Record() (err error) {
+	req := &tcp.Request{
+		Method: MethodRecord,
+		URL:    c.URL,
+		Header: map[string][]string{
+			"Range": {"npt=0.000-"},
+		},
+	}
 
+	_, err = c.Do(req)
 	return
 }
 
