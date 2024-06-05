@@ -304,5 +304,8 @@ func (c *Conn) Close() error {
 	if c.mode == core.ModeActiveProducer {
 		_ = c.Teardown()
 	}
+	if c.OnClose != nil {
+		_ = c.OnClose()
+	}
 	return c.conn.Close()
 }

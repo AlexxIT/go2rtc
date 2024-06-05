@@ -24,6 +24,7 @@ type Conn struct {
 
 	Backchannel bool
 	Media       string
+	OnClose     func() error
 	PacketSize  uint16
 	SessionName string
 	Timeout     int
