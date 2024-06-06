@@ -31,7 +31,7 @@ func NewLogger(config map[string]string) zerolog.Logger {
 		}
 		file, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
-			log.Error().Msgf("failed to open log file %s: %v", filePath, err)
+			os.Stdout.WriteString("Error: Failed to open log file: " + err.Error() + ". Log output is set to stdout now.\n")
 			writer = os.Stdout
 		} else {
 			writer = file
