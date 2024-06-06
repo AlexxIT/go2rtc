@@ -24,6 +24,19 @@ func NewLogger(config map[string]string) zerolog.Logger {
 		writer = os.Stderr
 	case "stdout":
 		writer = os.Stdout
+	case "file":
+		filePath := config["file"]
+		if filePath == "" {
+			filePath = "go2rtc.log"
+		}
+		file, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			log.Error().Msgf("failed to open log file %s: %v", filePath, err)
+		}
+		defer file.Close()
+		writer = file
+	default:
+		writer = os.Stdout
 	}
 
 	timeFormat := config["time"]
