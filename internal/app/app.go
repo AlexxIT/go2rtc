@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"runtime"
 	"runtime/debug"
+	"syscall"
 )
 
 var (
@@ -45,20 +46,23 @@ func Init() {
 		os.Exit(0)
 	}
 
+	if os.Getppid() == 1 || syscall.Getppid() == 1 {
+		daemon = false
+	} else {
+		parent, err := os.FindProcess(os.Getppid())
+		if err != nil || parent.Pid < 1 {
+			daemon = false
+		}
+	}
+
 	if daemon {
 		if runtime.GOOS == "windows" {
 			fmt.Println("Daemon not supported on Windows")
 			os.Exit(1)
 		}
 
-		args := os.Args[1:]
-		for i, arg := range args {
-			if arg == "-daemon" || arg == "-d" {
-				args[i] = ""
-			}
-		}
 		// Re-run the program in background and exit
-		cmd := exec.Command(os.Args[0], args...)
+		cmd := exec.Command(os.Args[0], os.Args[1:]...)
 		if err := cmd.Start(); err != nil {
 			fmt.Println(err)
 			os.Exit(1)
