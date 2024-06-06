@@ -53,7 +53,7 @@ func Init() {
 
 		args := os.Args[1:]
 		for i, arg := range args {
-			if arg == "-daemon" {
+			if arg == "-daemon" || arg == "-d" {
 				args[i] = ""
 			}
 		}
