@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 	"unicode"
 
@@ -19,38 +18,70 @@ type Codec struct {
 	PayloadType uint8
 }
 
+// MarshalJSON - return FFprobe compatible output
 func (c *Codec) MarshalJSON() ([]byte, error) {
-	return json.Marshal(c.String())
-}
-
-func (c *Codec) String() string {
-	s := fmt.Sprintf("%d %s", c.PayloadType, c.Name)
-	if c.ClockRate != 0 && c.ClockRate != 90000 {
-		s = fmt.Sprintf("%s/%d", s, c.ClockRate)
+	info := map[string]any{}
+	if name := FFmpegCodecName(c.Name); name != "" {
+		info["codec_name"] = name
+		info["codec_type"] = c.Kind()
 	}
-	if c.Channels > 0 {
-		s = fmt.Sprintf("%s/%d", s, c.Channels)
-	}
-	return s
-}
-
-func (c *Codec) Text() string {
-	switch c.Name {
-	case CodecH264:
-		if profile := DecodeH264(c.FmtpLine); profile != "" {
-			return "H.264 " + profile
+	if c.Name == CodecH264 {
+		profile, level := DecodeH264(c.FmtpLine)
+		if profile != "" {
+			info["profile"] = profile
+			info["level"] = level
 		}
-		return c.Name
 	}
-
-	s := c.Name
 	if c.ClockRate != 0 && c.ClockRate != 90000 {
-		s += "/" + strconv.Itoa(int(c.ClockRate))
+		info["sample_rate"] = c.ClockRate
 	}
 	if c.Channels > 0 {
-		s += "/" + strconv.Itoa(int(c.Channels))
+		info["channels"] = c.Channels
 	}
-	return s
+	return json.Marshal(info)
+}
+
+func FFmpegCodecName(name string) string {
+	switch name {
+	case CodecH264:
+		return "h264"
+	case CodecH265:
+		return "h265"
+	case CodecJPEG:
+		return "mjpeg"
+	case CodecRAW:
+		return "rawvideo"
+	case CodecPCMA:
+		return "pcm_alaw"
+	case CodecPCMU:
+		return "pcm_mulaw"
+	case CodecPCM:
+		return "pcm_s16be"
+	case CodecPCML:
+		return "pcm_s16le"
+	case CodecAAC:
+		return "aac"
+	case CodecOpus:
+		return "opus"
+	case CodecVP8:
+		return "vp8"
+	case CodecVP9:
+		return "vp9"
+	case CodecAV1:
+		return "av1"
+	}
+	return ""
+}
+
+func (c *Codec) String() (s string) {
+	s = c.Name
+	if c.ClockRate != 0 && c.ClockRate != 90000 {
+		s += fmt.Sprintf("/%d", c.ClockRate)
+	}
+	if c.Channels > 0 {
+		s += fmt.Sprintf("/%d", c.Channels)
+	}
+	return
 }
 
 func (c *Codec) IsRTP() bool {
@@ -186,10 +217,9 @@ func UnmarshalCodec(md *sdp.MediaDescription, payloadType string) *Codec {
 	return c
 }
 
-func DecodeH264(fmtp string) string {
+func DecodeH264(fmtp string) (profile string, level byte) {
 	if ps := Between(fmtp, "sprop-parameter-sets=", ","); ps != "" {
 		if sps, _ := base64.StdEncoding.DecodeString(ps); len(sps) >= 4 {
-			var profile string
 			switch sps[1] {
 			case 0x42:
 				profile = "Baseline"
@@ -203,8 +233,8 @@ func DecodeH264(fmtp string) string {
 				profile = fmt.Sprintf("0x%02X", sps[1])
 			}
 
-			return fmt.Sprintf("%s %d.%d", profile, sps[3]/10, sps[3]%10)
+			level = sps[3]
 		}
 	}
-	return ""
+	return
 }
