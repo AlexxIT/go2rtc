@@ -1,6 +1,6 @@
 module github.com/AlexxIT/go2rtc
 
-go 1.21
+go 1.22
 
 require (
 	github.com/asticode/go-astits v1.13.0
