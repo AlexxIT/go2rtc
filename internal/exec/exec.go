@@ -101,11 +101,12 @@ func handlePipe(_ string, cmd *exec.Cmd, query url.Values) (core.Producer, error
 	prod, err := magic.Open(r)
 	if err != nil {
 		_ = r.Close()
+		return nil, fmt.Errorf("exec/pipe: %w\n%s", err, cmd.Stderr)
 	}
 
 	log.Debug().Stringer("launch", time.Since(ts)).Msg("[exec] run pipe")
 
-	return prod, fmt.Errorf("exec/pipe: %w\n%s", err, cmd.Stderr)
+	return prod, nil
 }
 
 func handleRTSP(url string, cmd *exec.Cmd, path string) (core.Producer, error) {
