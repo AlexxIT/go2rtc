@@ -28,6 +28,8 @@ type Client struct {
 	audioSession *srtp.Session
 
 	stream *camera.Stream
+
+	Bitrate int // in bits/s
 }
 
 func Dial(rawURL string, server *srtp.Server) (*Client, error) {
@@ -132,7 +134,7 @@ func (c *Client) Start() error {
 	c.audioSession = &srtp.Session{Local: c.srtpEndpoint()}
 
 	var err error
-	c.stream, err = camera.NewStream(c.hap, videoCodec, audioCodec, c.videoSession, c.audioSession)
+	c.stream, err = camera.NewStream(c.hap, videoCodec, audioCodec, c.videoSession, c.audioSession, c.Bitrate)
 	if err != nil {
 		return err
 	}

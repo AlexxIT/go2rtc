@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/rpc"
 	"net/url"
 	"strconv"
@@ -138,7 +137,7 @@ func (c *Client) Connect() error {
 	}
 
 	offer := pc.LocalDescription()
-	log.Printf("[roborock] offer\n%s", offer.SDP)
+	//log.Printf("[roborock] offer\n%s", offer.SDP)
 	if err = c.SendSDPtoRobot(offer); err != nil {
 		return err
 	}
@@ -151,7 +150,7 @@ func (c *Client) Connect() error {
 		time.Sleep(time.Second)
 
 		if desc, _ := c.GetDeviceSDP(); desc != nil {
-			log.Printf("[roborock] answer\n%s", desc.SDP)
+			//log.Printf("[roborock] answer\n%s", desc.SDP)
 			if err = c.conn.SetAnswer(desc.SDP); err != nil {
 				return err
 			}

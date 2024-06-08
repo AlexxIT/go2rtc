@@ -207,7 +207,7 @@ func (p *Producer) reconnect(workerID, retry int) {
 	for _, media := range conn.GetMedias() {
 		switch media.Direction {
 		case core.DirectionRecvonly:
-			for _, receiver := range p.receivers {
+			for i, receiver := range p.receivers {
 				codec := media.MatchCodec(receiver.Codec)
 				if codec == nil {
 					continue
@@ -219,6 +219,7 @@ func (p *Producer) reconnect(workerID, retry int) {
 				}
 
 				receiver.Replace(track)
+				p.receivers[i] = track
 				break
 			}
 
@@ -234,6 +235,9 @@ func (p *Producer) reconnect(workerID, retry int) {
 		}
 	}
 
+	// stop previous connection after moving tracks (fix ghost exec/ffmpeg)
+	_ = p.conn.Stop()
+	// swap connections
 	p.conn = conn
 
 	go p.worker(conn, workerID)

@@ -22,7 +22,7 @@ type Media struct {
 func (m *Media) String() string {
 	s := fmt.Sprintf("%s, %s", m.Kind, m.Direction)
 	for _, codec := range m.Codecs {
-		name := codec.Text()
+		name := codec.String()
 
 		if strings.Contains(s, name) {
 			continue

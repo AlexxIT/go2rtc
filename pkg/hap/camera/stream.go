@@ -15,7 +15,8 @@ type Stream struct {
 }
 
 func NewStream(
-	client *hap.Client, videoCodec *VideoCodec, audioCodec *AudioCodec, videoSession, audioSession *srtp.Session,
+	client *hap.Client, videoCodec *VideoCodec, audioCodec *AudioCodec,
+	videoSession, audioSession *srtp.Session, bitrate int,
 ) (*Stream, error) {
 	stream := &Stream{
 		id:     core.RandString(16, 0),
@@ -30,11 +31,17 @@ func NewStream(
 		return nil, err
 	}
 
+	if bitrate != 0 {
+		bitrate /= 1024 // convert bps to kbps
+	} else {
+		bitrate = 4096 // default kbps for general FullHD camera
+	}
+
 	videoCodec.RTPParams = []RTPParams{
 		{
 			PayloadType:  99,
 			SSRC:         videoSession.Local.SSRC,
-			MaxBitrate:   299,
+			MaxBitrate:   uint16(bitrate), // iPhone query 299Kbps, iPad/AppleTV query 802Kbps
 			RTCPInterval: 0.5,
 			MaxMTU:       []uint16{1378},
 		},
@@ -43,7 +50,7 @@ func NewStream(
 		{
 			PayloadType:  110,
 			SSRC:         audioSession.Local.SSRC,
-			MaxBitrate:   24,
+			MaxBitrate:   24, // any iDevice query 24Kbps (this is OK for 16KHz and 1 channel)
 			RTCPInterval: 5,
 
 			ComfortNoisePayloadType: []uint8{13},

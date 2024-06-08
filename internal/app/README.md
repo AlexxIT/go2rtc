@@ -1,6 +1,10 @@
 - By default go2rtc will search config file `go2rtc.yaml` in current work directory
-- go2rtc support multiple config files
-- go2rtc support inline config as `YAML`, `JSON` or `key=value` format from command line
+- go2rtc support multiple config files:
+  - `go2rtc -c config1.yaml -c config2.yaml -c config3.yaml` 
+- go2rtc support inline config as multiple formats from command line:
+  - **YAML**: `go2rtc -c '{log: {format: text}}'`
+  - **JSON**: `go2rtc -c '{"log":{"format":"text"}}'`
+  - **key=value**: `go2rtc -c log.format=text`
 - Every next config will overwrite previous (but only defined params)
 
 ```
@@ -21,14 +25,23 @@ Also go2rtc support templates for using environment variables in any part of con
 streams:
   camera1: rtsp://rtsp:${CAMERA_PASSWORD}@192.168.1.123/av_stream/ch0
 
-  ${LOGS:}  # empty default value
-
 rtsp:
   username: ${RTSP_USER:admin}   # "admin" if env "RTSP_USER" not set
   password: ${RTSP_PASS:secret}  # "secret" if env "RTSP_PASS" not set
 ```
 
+## JSON Schema
+
+Editors like [GoLand](https://www.jetbrains.com/go/) and [VS Code](https://code.visualstudio.com/) supports autocomplete and syntax validation.
+
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/AlexxIT/go2rtc/master/website/schema.json
+```
+
 ## Defaults
+
+- Default values may change in updates
+- FFmpeg module has many presets, they are not listed here because they may also change in updates
 
 ```yaml
 api:
@@ -38,7 +51,10 @@ ffmpeg:
   bin: "ffmpeg"
 
 log:
+  format: "color"
   level: "info"
+  output: "stdout"
+  time: "UNIXMS"
 
 rtsp:
   listen: ":8554"

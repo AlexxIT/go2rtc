@@ -5,7 +5,6 @@ import (
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/pion/rtp"
-	"github.com/rs/zerolog/log"
 )
 
 func Log(handler core.HandlerFunc) core.HandlerFunc {

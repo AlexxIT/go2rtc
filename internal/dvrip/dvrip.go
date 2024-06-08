@@ -12,7 +12,6 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/dvrip"
-	"github.com/rs/zerolog/log"
 )
 
 func Init() {
@@ -92,10 +91,7 @@ func sendBroadcasts(conn *net.UDPConn) {
 
 	for i := 0; i < 3; i++ {
 		time.Sleep(100 * time.Millisecond)
-
-		if _, err = conn.WriteToUDP(data, addr); err != nil {
-			log.Err(err).Caller().Send()
-		}
+		_, _ = conn.WriteToUDP(data, addr)
 	}
 }
 

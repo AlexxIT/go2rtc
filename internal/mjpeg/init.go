@@ -11,6 +11,7 @@ import (
 
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
+	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/ascii"
@@ -19,7 +20,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/mjpeg"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/AlexxIT/go2rtc/pkg/y4m"
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
 )
 
 // CacheEntry represents a cached keyframe with its timestamp
@@ -49,7 +50,10 @@ func Init() {
 	ws.HandleFunc("mjpeg", handlerWS)
 
 	go cleanupCache()
+	log = app.GetLogger("mjpeg")
 }
+
+var log zerolog.Logger
 
 func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 	src := r.URL.Query().Get("src")

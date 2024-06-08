@@ -3,7 +3,7 @@ package homekit
 import (
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"time"
 
