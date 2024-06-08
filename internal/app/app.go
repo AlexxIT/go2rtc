@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"runtime"
 	"runtime/debug"
-	"syscall"
 )
 
 var (
@@ -46,10 +45,11 @@ func Init() {
 		os.Exit(0)
 	}
 
-	if os.Getppid() == 1 || syscall.Getppid() == 1 {
+	ppid := os.Getppid()
+	if ppid == 1 {
 		daemon = false
 	} else {
-		parent, err := os.FindProcess(os.Getppid())
+		parent, err := os.FindProcess(ppid)
 		if err != nil || parent.Pid < 1 {
 			daemon = false
 		}
@@ -57,14 +57,14 @@ func Init() {
 
 	if daemon {
 		if runtime.GOOS == "windows" {
-			fmt.Println("Daemon not supported on Windows")
+			fmt.Println("Daemon mode is not supported on Windows")
 			os.Exit(1)
 		}
 
 		// Re-run the program in background and exit
 		cmd := exec.Command(os.Args[0], os.Args[1:]...)
 		if err := cmd.Start(); err != nil {
-			fmt.Println(err)
+			fmt.Println("Failed to start daemon:", err)
 			os.Exit(1)
 		}
 		fmt.Println("Running in daemon mode with PID:", cmd.Process.Pid)
