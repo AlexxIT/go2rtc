@@ -7,7 +7,6 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/aac"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
-	"github.com/rs/zerolog/log"
 )
 
 func apiStreamAAC(w http.ResponseWriter, r *http.Request) {
@@ -23,7 +22,6 @@ func apiStreamAAC(w http.ResponseWriter, r *http.Request) {
 	cons.UserAgent = r.UserAgent()
 
 	if err := stream.AddConsumer(cons); err != nil {
-		log.Error().Err(err).Caller().Send()
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

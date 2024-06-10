@@ -4,7 +4,7 @@
 # only debian 13 (trixie) has latest ffmpeg
 # https://packages.debian.org/trixie/ffmpeg
 ARG DEBIAN_VERSION="trixie-slim"
-ARG GO_VERSION="1.21-bookworm"
+ARG GO_VERSION="1.22-bookworm"
 ARG NGROK_VERSION="3"
 
 FROM debian:${DEBIAN_VERSION} AS base

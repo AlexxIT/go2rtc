@@ -6,30 +6,49 @@ import (
 
 	"github.com/mattn/go-isatty"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 var MemoryLog = newBuffer(16)
 
-// NewLogger support:
+func GetLogger(module string) zerolog.Logger {
+	if s, ok := modules[module]; ok {
+		lvl, err := zerolog.ParseLevel(s)
+		if err == nil {
+			return Logger.Level(lvl)
+		}
+		Logger.Warn().Err(err).Caller().Send()
+	}
+
+	return Logger
+}
+
+// initLogger support:
 // - output: empty (only to memory), stderr, stdout
 // - format: empty (autodetect color support), color, json, text
 // - time:   empty (disable timestamp), UNIXMS, UNIXMICRO, UNIXNANO
 // - level:  disabled, trace, debug, info, warn, error...
-func NewLogger(config map[string]string) zerolog.Logger {
+func initLogger() {
+	var cfg struct {
+		Mod map[string]string `yaml:"log"`
+	}
+
+	cfg.Mod = modules // defaults
+
+	LoadConfig(&cfg)
+
 	var writer io.Writer
 
-	switch config["output"] {
+	switch modules["output"] {
 	case "stderr":
 		writer = os.Stderr
 	case "stdout":
 		writer = os.Stdout
 	}
 
-	timeFormat := config["time"]
+	timeFormat := modules["time"]
 
 	if writer != nil {
-		if format := config["format"]; format != "json" {
+		if format := modules["format"]; format != "json" {
 			console := &zerolog.ConsoleWriter{Out: writer}
 
 			switch format {
@@ -61,31 +80,24 @@ func NewLogger(config map[string]string) zerolog.Logger {
 		writer = MemoryLog
 	}
 
-	logger := zerolog.New(writer)
+	lvl, _ := zerolog.ParseLevel(modules["level"])
+	Logger = zerolog.New(writer).Level(lvl)
 
 	if timeFormat != "" {
 		zerolog.TimeFieldFormat = timeFormat
-		logger = logger.With().Timestamp().Logger()
+		Logger = Logger.With().Timestamp().Logger()
 	}
-
-	lvl, _ := zerolog.ParseLevel(config["level"])
-	return logger.Level(lvl)
 }
 
-func GetLogger(module string) zerolog.Logger {
-	if s, ok := modules[module]; ok {
-		lvl, err := zerolog.ParseLevel(s)
-		if err == nil {
-			return log.Level(lvl)
-		}
-		log.Warn().Err(err).Caller().Send()
-	}
-
-	return log.Logger
-}
+var Logger zerolog.Logger
 
 // modules log levels
-var modules map[string]string
+var modules = map[string]string{
+	"format": "", // useless, but anyway
+	"level":  "info",
+	"output": "stdout", // TODO: change to stderr someday
+	"time":   zerolog.TimeFormatUnixMs,
+}
 
 const chunkSize = 1 << 16
 

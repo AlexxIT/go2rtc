@@ -101,11 +101,12 @@ func handlePipe(_ string, cmd *exec.Cmd, query url.Values) (core.Producer, error
 	prod, err := magic.Open(r)
 	if err != nil {
 		_ = r.Close()
+		return nil, fmt.Errorf("exec/pipe: %w\n%s", err, cmd.Stderr)
 	}
 
 	log.Debug().Stringer("launch", time.Since(ts)).Msg("[exec] run pipe")
 
-	return prod, fmt.Errorf("exec/pipe: %w\n%s", err, cmd.Stderr)
+	return prod, nil
 }
 
 func handleRTSP(url string, cmd *exec.Cmd, path string) (core.Producer, error) {
@@ -113,7 +114,7 @@ func handleRTSP(url string, cmd *exec.Cmd, path string) (core.Producer, error) {
 		cmd.Stdout = os.Stdout
 	}
 
-	waiter := make(chan core.Producer)
+	waiter := make(chan *pkg.Conn, 1)
 
 	waitersMu.Lock()
 	waiters[path] = waiter
@@ -149,6 +150,10 @@ func handleRTSP(url string, cmd *exec.Cmd, path string) (core.Producer, error) {
 		return nil, fmt.Errorf("exec/rtsp\n%s", cmd.Stderr)
 	case prod := <-waiter:
 		log.Debug().Stringer("launch", time.Since(ts)).Msg("[exec] run rtsp")
+		prod.OnClose = func() error {
+			log.Debug().Msgf("[exec] kill rtsp")
+			return errors.Join(cmd.Process.Kill(), cmd.Wait())
+		}
 		return prod, nil
 	}
 }
@@ -157,7 +162,7 @@ func handleRTSP(url string, cmd *exec.Cmd, path string) (core.Producer, error) {
 
 var (
 	log       zerolog.Logger
-	waiters   = map[string]chan core.Producer{}
+	waiters   = make(map[string]chan *pkg.Conn)
 	waitersMu sync.Mutex
 )
 

@@ -10,6 +10,7 @@ import (
 
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
+	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/ascii"
@@ -18,7 +19,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/mjpeg"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/AlexxIT/go2rtc/pkg/y4m"
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
 )
 
 func Init() {
@@ -28,7 +29,11 @@ func Init() {
 	api.HandleFunc("api/stream.y4m", apiStreamY4M)
 
 	ws.HandleFunc("mjpeg", handlerWS)
+
+	log = app.GetLogger("mjpeg")
 }
+
+var log zerolog.Logger
 
 func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 	src := r.URL.Query().Get("src")

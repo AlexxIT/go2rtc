@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"github.com/AlexxIT/go2rtc/pkg/ffmpeg"
-	"github.com/rs/zerolog/log"
 )
 
 var verMu sync.Mutex
