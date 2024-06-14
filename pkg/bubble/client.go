@@ -43,8 +43,12 @@ type Client struct {
 	recv int
 }
 
-func NewClient(url string) *Client {
-	return &Client{url: url}
+func Dial(rawURL string) (*Client, error) {
+	client := &Client{url: rawURL}
+	if err := client.Dial(); err != nil {
+		return nil, err
+	}
+	return client, nil
 }
 
 const (

@@ -45,14 +45,9 @@ func Init() {
 		return "", nil
 	})
 
-	streams.HandleFunc("hass", func(url string) (core.Producer, error) {
+	streams.HandleFunc("hass", func(source string) (core.Producer, error) {
 		// support hass://supervisor?entity_id=camera.driveway_doorbell
-		client, err := hass.NewClient(url)
-		if err != nil {
-			return nil, err
-		}
-
-		return client, nil
+		return hass.NewClient(source)
 	})
 
 	// load static entries from Hass config

@@ -46,8 +46,13 @@ type Client struct {
 	recv int
 }
 
-func NewClient(id string) *Client {
-	return &Client{ID: id}
+func Dial(source string) (*Client, error) {
+	id := strings.Replace(source[8:], "/", ":", 1)
+	client := &Client{ID: id}
+	if err := client.Dial(); err != nil {
+		return nil, err
+	}
+	return client, nil
 }
 
 func (c *Client) Dial() (err error) {

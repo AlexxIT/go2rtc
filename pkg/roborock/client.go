@@ -34,8 +34,15 @@ type Client struct {
 	backchannel bool
 }
 
-func NewClient(url string) *Client {
-	return &Client{url: url}
+func Dial(rawURL string) (*Client, error) {
+	client := &Client{url: rawURL}
+	if err := client.Dial(); err != nil {
+		return nil, err
+	}
+	if err := client.Connect(); err != nil {
+		return nil, err
+	}
+	return client, nil
 }
 
 func (c *Client) Dial() error {

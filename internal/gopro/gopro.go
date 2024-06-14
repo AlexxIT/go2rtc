@@ -10,13 +10,11 @@ import (
 )
 
 func Init() {
-	streams.HandleFunc("gopro", handleGoPro)
+	streams.HandleFunc("gopro", func(source string) (core.Producer, error) {
+		return gopro.Dial(source)
+	})
 
 	api.HandleFunc("api/gopro", apiGoPro)
-}
-
-func handleGoPro(rawURL string) (core.Producer, error) {
-	return gopro.Dial(rawURL)
 }
 
 func apiGoPro(w http.ResponseWriter, r *http.Request) {

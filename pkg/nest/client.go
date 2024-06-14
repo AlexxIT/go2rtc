@@ -14,7 +14,7 @@ type Client struct {
 	api  *API
 }
 
-func NewClient(rawURL string) (*Client, error) {
+func Dial(rawURL string) (*Client, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, err
