@@ -117,8 +117,8 @@ func asyncHandler(tr *ws.Transport, msg *ws.Message) error {
 	defer sendAnswer.Done(nil)
 
 	conn := webrtc.NewConn(pc)
-	conn.Desc = "WebRTC/WebSocket async"
 	conn.Mode = mode
+	conn.Protocol = "ws"
 	conn.UserAgent = tr.Request.UserAgent()
 	conn.Listen(func(msg any) {
 		switch msg := msg.(type) {
@@ -207,8 +207,9 @@ func ExchangeSDP(stream *streams.Stream, offer, desc, userAgent string) (answer 
 
 	// create new webrtc instance
 	conn := webrtc.NewConn(pc)
-	conn.Desc = desc
+	conn.FormatName = desc
 	conn.UserAgent = userAgent
+	conn.Protocol = "http"
 	conn.Listen(func(msg any) {
 		switch msg := msg.(type) {
 		case pion.PeerConnectionState:

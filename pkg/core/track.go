@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/json"
 	"errors"
 
 	"github.com/pion/rtp"
@@ -22,7 +23,7 @@ type Receiver struct {
 
 func NewReceiver(media *Media, codec *Codec) *Receiver {
 	r := &Receiver{
-		Node:  Node{Codec: codec},
+		Node:  Node{id: NewID(), Codec: codec},
 		Media: media,
 	}
 	r.Input = func(packet *Packet) {
@@ -91,7 +92,7 @@ func NewSender(media *Media, codec *Codec) *Sender {
 
 	buf := make(chan *Packet, bufSize)
 	s := &Sender{
-		Node:  Node{Codec: codec},
+		Node:  Node{id: NewID(), Codec: codec},
 		Media: media,
 		buf:   buf,
 	}
@@ -170,4 +171,44 @@ func (s *Sender) Close() {
 	}
 
 	s.Node.Close()
+}
+
+func (r *Receiver) MarshalJSON() ([]byte, error) {
+	v := struct {
+		ID      uint32   `json:"id"`
+		Codec   *Codec   `json:"codec"`
+		Childs  []uint32 `json:"childs,omitempty"`
+		Bytes   int      `json:"bytes,omitempty"`
+		Packets int      `json:"packets,omitempty"`
+	}{
+		ID:      r.Node.id,
+		Codec:   r.Node.Codec,
+		Bytes:   r.Bytes,
+		Packets: r.Packets,
+	}
+	for _, child := range r.childs {
+		v.Childs = append(v.Childs, child.id)
+	}
+	return json.Marshal(v)
+}
+
+func (s *Sender) MarshalJSON() ([]byte, error) {
+	v := struct {
+		ID      uint32 `json:"id"`
+		Codec   *Codec `json:"codec"`
+		Parent  uint32 `json:"parent,omitempty"`
+		Bytes   int    `json:"bytes,omitempty"`
+		Packets int    `json:"packets,omitempty"`
+		Drops   int    `json:"drops,omitempty"`
+	}{
+		ID:      s.Node.id,
+		Codec:   s.Node.Codec,
+		Bytes:   s.Bytes,
+		Packets: s.Packets,
+		Drops:   s.Drops,
+	}
+	if s.parent != nil {
+		v.Parent = s.parent.id
+	}
+	return json.Marshal(v)
 }

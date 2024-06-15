@@ -18,15 +18,6 @@ func (c *Conn) GetMedias() []*core.Media {
 }
 
 func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) (err error) {
-	core.Assert(media.Direction == core.DirectionSendonly)
-
-	for _, sender := range c.senders {
-		if sender.Codec == codec {
-			sender.HandleRTP(track)
-			return
-		}
-	}
-
 	var channel byte
 
 	switch c.mode {
@@ -47,12 +38,12 @@ func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiv
 		c.state = StateSetup
 
 	case core.ModePassiveConsumer:
-		channel = byte(len(c.senders)) * 2
+		channel = byte(len(c.Senders)) * 2
 
 		// for consumer is better to use original track codec
 		codec = track.Codec.Clone()
 		// generate new payload type, starting from 96
-		codec.PayloadType = byte(96 + len(c.senders))
+		codec.PayloadType = byte(96 + len(c.Senders))
 
 	default:
 		panic(core.Caller())
@@ -70,7 +61,7 @@ func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiv
 
 	sender.HandleRTP(track)
 
-	c.senders = append(c.senders, sender)
+	c.Senders = append(c.Senders, sender)
 	return nil
 }
 
@@ -99,7 +90,7 @@ func (c *Conn) packetWriter(codec *core.Codec, channel, payloadType uint8) core.
 		}
 		//log.Printf("[rtsp] channel:%2d write_size:%6d buffer_size:%6d", channel, n, len(buf))
 		if _, err := c.conn.Write(buf[:n]); err == nil {
-			c.send += n
+			c.Send += n
 		}
 		n = 0
 	}

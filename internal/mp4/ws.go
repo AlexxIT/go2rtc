@@ -8,7 +8,6 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/mp4"
-	"github.com/AlexxIT/go2rtc/pkg/tcp"
 )
 
 func handlerWSMSE(tr *ws.Transport, msg *ws.Message) error {
@@ -24,9 +23,8 @@ func handlerWSMSE(tr *ws.Transport, msg *ws.Message) error {
 	}
 
 	cons := mp4.NewConsumer(medias)
-	cons.Type = "MSE/WebSocket active consumer"
-	cons.RemoteAddr = tcp.RemoteAddr(tr.Request)
-	cons.UserAgent = tr.Request.UserAgent()
+	cons.FormatName = "mse/fmp4"
+	cons.WithRequest(tr.Request)
 
 	if err := stream.AddConsumer(cons); err != nil {
 		log.Debug().Err(err).Msg("[mp4] add consumer")
@@ -57,9 +55,7 @@ func handlerWSMP4(tr *ws.Transport, msg *ws.Message) error {
 	}
 
 	cons := mp4.NewKeyframe(medias)
-	cons.Type = "MP4/WebSocket active consumer"
-	cons.RemoteAddr = tcp.RemoteAddr(tr.Request)
-	cons.UserAgent = tr.Request.UserAgent()
+	cons.WithRequest(tr.Request)
 
 	if err := stream.AddConsumer(cons); err != nil {
 		log.Error().Err(err).Caller().Send()

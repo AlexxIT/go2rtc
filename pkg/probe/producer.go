@@ -8,17 +8,11 @@ import (
 )
 
 type Probe struct {
-	Type       string           `json:"type,omitempty"`
-	RemoteAddr string           `json:"remote_addr,omitempty"`
-	UserAgent  string           `json:"user_agent,omitempty"`
-	Medias     []*core.Media    `json:"medias,omitempty"`
-	Receivers  []*core.Receiver `json:"receivers,omitempty"`
-	Senders    []*core.Sender   `json:"senders,omitempty"`
+	core.Connection
 }
 
 func NewProbe(query url.Values) *Probe {
-	c := &Probe{Type: "probe"}
-	c.Medias = core.ParseQuery(query)
+	medias := core.ParseQuery(query)
 
 	for _, value := range query["microphone"] {
 		media := &core.Media{Kind: core.KindAudio, Direction: core.DirectionRecvonly}
@@ -32,10 +26,16 @@ func NewProbe(query url.Values) *Probe {
 			media.Codecs = append(media.Codecs, &core.Codec{Name: name})
 		}
 
-		c.Medias = append(c.Medias, media)
+		medias = append(medias, media)
 	}
 
-	return c
+	return &Probe{
+		Connection: core.Connection{
+			ID:         core.NewID(),
+			FormatName: "probe",
+			Medias:     medias,
+		},
+	}
 }
 
 func (p *Probe) GetMedias() []*core.Media {

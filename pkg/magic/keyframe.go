@@ -12,26 +12,32 @@ import (
 )
 
 type Keyframe struct {
-	core.SuperConsumer
+	core.Connection
 	wr *core.WriteBuffer
 }
 
+// Deprecated: should be rewritten
 func NewKeyframe() *Keyframe {
-	return &Keyframe{
-		core.SuperConsumer{
-			Medias: []*core.Media{
-				{
-					Kind:      core.KindVideo,
-					Direction: core.DirectionSendonly,
-					Codecs: []*core.Codec{
-						{Name: core.CodecJPEG},
-						{Name: core.CodecH264},
-						{Name: core.CodecH265},
-					},
-				},
+	medias := []*core.Media{
+		{
+			Kind:      core.KindVideo,
+			Direction: core.DirectionSendonly,
+			Codecs: []*core.Codec{
+				{Name: core.CodecJPEG},
+				{Name: core.CodecH264},
+				{Name: core.CodecH265},
 			},
 		},
-		core.NewWriteBuffer(nil),
+	}
+	wr := core.NewWriteBuffer(nil)
+	return &Keyframe{
+		Connection: core.Connection{
+			ID:         core.NewID(),
+			FormatName: "keyframe",
+			Medias:     medias,
+			Transport:  wr,
+		},
+		wr: wr,
 	}
 }
 
@@ -97,9 +103,4 @@ func (k *Keyframe) CodecName() string {
 
 func (k *Keyframe) WriteTo(wr io.Writer) (int64, error) {
 	return k.wr.WriteTo(wr)
-}
-
-func (k *Keyframe) Stop() error {
-	_ = k.SuperConsumer.Close()
-	return k.wr.Close()
 }

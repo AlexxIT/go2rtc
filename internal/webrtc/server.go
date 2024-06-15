@@ -100,11 +100,11 @@ func outputWebRTC(w http.ResponseWriter, r *http.Request) {
 
 	switch mediaType {
 	case "application/json":
-		desc = "WebRTC/JSON sync"
+		desc = "webrtc/json"
 	case MimeSDP:
-		desc = "WebRTC/WHEP sync"
+		desc = "webrtc/whep"
 	default:
-		desc = "WebRTC/HTTP sync"
+		desc = "webrtc/post"
 	}
 
 	answer, err := ExchangeSDP(stream, offer, desc, r.UserAgent())
@@ -168,8 +168,8 @@ func inputWebRTC(w http.ResponseWriter, r *http.Request) {
 
 	// create new webrtc instance
 	prod := webrtc.NewConn(pc)
-	prod.Desc = "WebRTC/WHIP sync"
 	prod.Mode = core.ModePassiveProducer
+	prod.Protocol = "http"
 	prod.UserAgent = r.UserAgent()
 
 	if err = prod.SetOffer(string(offer)); err != nil {

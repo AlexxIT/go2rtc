@@ -46,7 +46,7 @@ func FFmpegCodecName(name string) string {
 	case CodecH264:
 		return "h264"
 	case CodecH265:
-		return "h265"
+		return "hevc"
 	case CodecJPEG:
 		return "mjpeg"
 	case CodecRAW:

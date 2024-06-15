@@ -1,8 +1,7 @@
-package stdin
+package isapi
 
 import (
 	"encoding/json"
-	"errors"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/pion/rtp"
@@ -18,15 +17,13 @@ func (c *Client) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver,
 
 func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver) error {
 	if c.sender == nil {
-		stdin, err := c.cmd.StdinPipe()
-		if err != nil {
-			return err
-		}
-
 		c.sender = core.NewSender(media, track.Codec)
 		c.sender.Handler = func(packet *rtp.Packet) {
-			_, _ = stdin.Write(packet.Payload)
+			if c.conn == nil {
+				return
+			}
 			c.send += len(packet.Payload)
+			_, _ = c.conn.Write(packet.Payload)
 		}
 	}
 
@@ -35,24 +32,35 @@ func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver
 }
 
 func (c *Client) Start() (err error) {
-	return c.cmd.Run()
+	if err = c.Open(); err != nil {
+		return
+	}
+	return
 }
 
 func (c *Client) Stop() (err error) {
 	if c.sender != nil {
 		c.sender.Close()
 	}
-	if c.cmd.Process == nil {
-		return nil
+
+	if c.conn != nil {
+		_ = c.Close()
+		return c.conn.Close()
 	}
-	return errors.Join(c.cmd.Process.Kill(), c.cmd.Wait())
+
+	return nil
 }
 
 func (c *Client) MarshalJSON() ([]byte, error) {
-	info := &core.Info{
-		Type:   "Exec active consumer",
-		Medias: c.medias,
-		Send:   c.send,
+	info := &core.Connection{
+		ID:         core.ID(c),
+		FormatName: "isapi",
+		Protocol:   "http",
+		Medias:     c.medias,
+		Send:       c.send,
+	}
+	if c.conn != nil {
+		info.RemoteAddr = c.conn.RemoteAddr().String()
 	}
 	if c.sender != nil {
 		info.Senders = []*core.Sender{c.sender}

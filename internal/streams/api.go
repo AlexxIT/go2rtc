@@ -6,7 +6,6 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/pkg/probe"
-	"github.com/AlexxIT/go2rtc/pkg/tcp"
 )
 
 func apiStreams(w http.ResponseWriter, r *http.Request) {
@@ -30,8 +29,7 @@ func apiStreams(w http.ResponseWriter, r *http.Request) {
 
 		cons := probe.NewProbe(query)
 		if len(cons.Medias) != 0 {
-			cons.RemoteAddr = tcp.RemoteAddr(r)
-			cons.UserAgent = r.UserAgent()
+			cons.WithRequest(r)
 			if err := stream.AddConsumer(cons); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return

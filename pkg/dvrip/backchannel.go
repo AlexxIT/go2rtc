@@ -8,16 +8,16 @@ import (
 	"github.com/pion/rtp"
 )
 
-type Consumer struct {
-	core.SuperConsumer
+type Backchannel struct {
+	core.Connection
 	client *Client
 }
 
-func (c *Consumer) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
+func (c *Backchannel) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
 	return nil, core.ErrCantGetTrack
 }
 
-func (c *Consumer) Start() error {
+func (c *Backchannel) Start() error {
 	if err := c.client.conn.SetReadDeadline(time.Time{}); err != nil {
 		return err
 	}
@@ -30,12 +30,7 @@ func (c *Consumer) Start() error {
 	}
 }
 
-func (c *Consumer) Stop() error {
-	_ = c.SuperConsumer.Close()
-	return c.client.Close()
-}
-
-func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver) error {
+func (c *Backchannel) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver) error {
 	if err := c.client.Talk(); err != nil {
 		return err
 	}

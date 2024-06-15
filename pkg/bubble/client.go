@@ -22,6 +22,7 @@ import (
 	"github.com/pion/rtp"
 )
 
+// Deprecated: should be rewritten to core.Connection
 type Client struct {
 	core.Listener
 

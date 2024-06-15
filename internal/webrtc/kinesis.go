@@ -34,7 +34,7 @@ func (k kinesisResponse) String() string {
 	return fmt.Sprintf("type=%s, payload=%s", k.Type, k.Payload)
 }
 
-func kinesisClient(rawURL string, query url.Values, desc string) (core.Producer, error) {
+func kinesisClient(rawURL string, query url.Values, format string) (core.Producer, error) {
 	// 1. Connect to signalign server
 	conn, _, err := websocket.DefaultDialer.Dial(rawURL, nil)
 	if err != nil {
@@ -79,8 +79,10 @@ func kinesisClient(rawURL string, query url.Values, desc string) (core.Producer,
 	}
 
 	prod := webrtc.NewConn(pc)
-	prod.Desc = desc
+	prod.FormatName = format
 	prod.Mode = core.ModeActiveProducer
+	prod.Protocol = "ws"
+	prod.URL = rawURL
 	prod.Listen(func(msg any) {
 		switch msg := msg.(type) {
 		case *pion.ICECandidate:
@@ -216,5 +218,5 @@ func wyzeClient(rawURL string) (core.Producer, error) {
 		"ice_servers": []string{string(kvs.Servers)},
 	}
 
-	return kinesisClient(kvs.URL, query, "WebRTC/Wyze")
+	return kinesisClient(kvs.URL, query, "webrtc/wyze")
 }

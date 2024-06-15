@@ -41,7 +41,7 @@ func streamsHandler(rawURL string) (core.Producer, error) {
 				// https://aws.amazon.com/kinesis/video-streams/
 				// https://docs.aws.amazon.com/kinesisvideostreams-webrtc-dg/latest/devguide/what-is-kvswebrtc.html
 				// https://github.com/orgs/awslabs/repositories?q=kinesis+webrtc
-				return kinesisClient(rawURL, query, "WebRTC/Kinesis")
+				return kinesisClient(rawURL, query, "webrtc/kinesis")
 			} else if format == "openipc" {
 				return openIPCClient(rawURL, query)
 			} else {
@@ -86,8 +86,9 @@ func go2rtcClient(url string) (core.Producer, error) {
 	var connMu sync.Mutex
 
 	prod := webrtc.NewConn(pc)
-	prod.Desc = "WebRTC/WebSocket async"
 	prod.Mode = core.ModeActiveProducer
+	prod.Protocol = "ws"
+	prod.URL = url
 	prod.Listen(func(msg any) {
 		switch msg := msg.(type) {
 		case *pion.ICECandidate:
@@ -180,8 +181,9 @@ func whepClient(url string) (core.Producer, error) {
 	}
 
 	prod := webrtc.NewConn(pc)
-	prod.Desc = "WebRTC/WHEP sync"
 	prod.Mode = core.ModeActiveProducer
+	prod.Protocol = "http"
+	prod.URL = url
 
 	medias := []*core.Media{
 		{Kind: core.KindVideo, Direction: core.DirectionRecvonly},

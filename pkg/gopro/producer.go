@@ -8,11 +8,10 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/mpegts"
 )
 
-func Dial(rawURL string) (core.Producer, error) {
+func Dial(rawURL string) (*mpegts.Producer, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, err
@@ -32,7 +31,15 @@ func Dial(rawURL string) (core.Producer, error) {
 		return nil, err
 	}
 
-	return mpegts.Open(r)
+	prod, err := mpegts.Open(r)
+	if err != nil {
+		return nil, err
+	}
+
+	prod.FormatName = "gopro"
+	prod.RemoteAddr = u.Host
+
+	return prod, nil
 }
 
 type listener struct {

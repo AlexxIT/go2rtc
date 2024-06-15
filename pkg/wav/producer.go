@@ -54,22 +54,27 @@ func Open(r io.Reader) (*Producer, error) {
 		return nil, errors.New("waw: unsupported codec")
 	}
 
-	prod := &Producer{rd: rd, cl: r.(io.Closer)}
-	prod.Type = "WAV producer"
-	prod.Medias = []*core.Media{
+	medias := []*core.Media{
 		{
 			Kind:      core.KindAudio,
 			Direction: core.DirectionRecvonly,
 			Codecs:    []*core.Codec{codec},
 		},
 	}
-	return prod, nil
+	return &Producer{
+		Connection: core.Connection{
+			ID:         core.NewID(),
+			FormatName: "wav",
+			Medias:     medias,
+			Transport:  r,
+		},
+		rd: rd,
+	}, nil
 }
 
 type Producer struct {
-	core.SuperProducer
+	core.Connection
 	rd *bufio.Reader
-	cl io.Closer
 }
 
 func (c *Producer) Start() error {
@@ -104,11 +109,6 @@ func (c *Producer) Start() error {
 		seq++
 		ts += PacketSize
 	}
-}
-
-func (c *Producer) Stop() error {
-	_ = c.SuperProducer.Close()
-	return c.cl.Close()
 }
 
 func readChunk(r io.Reader) (chunkID string, data []byte, err error) {

@@ -10,7 +10,7 @@ import (
 func (c *Conn) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
 	core.Assert(media.Direction == core.DirectionRecvonly)
 
-	for _, track := range c.receivers {
+	for _, track := range c.Receivers {
 		if track.Codec == codec {
 			return track, nil
 		}
@@ -34,7 +34,7 @@ func (c *Conn) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, e
 
 	track := core.NewReceiver(media, codec)
 	track.ID = channel
-	c.receivers = append(c.receivers, track)
+	c.Receivers = append(c.Receivers, track)
 
 	return track, nil
 }
@@ -81,10 +81,10 @@ func (c *Conn) Start() (err error) {
 }
 
 func (c *Conn) Stop() (err error) {
-	for _, receiver := range c.receivers {
+	for _, receiver := range c.Receivers {
 		receiver.Close()
 	}
-	for _, sender := range c.senders {
+	for _, sender := range c.Senders {
 		sender.Close()
 	}
 
@@ -99,25 +99,7 @@ func (c *Conn) Stop() (err error) {
 }
 
 func (c *Conn) MarshalJSON() ([]byte, error) {
-	info := &core.Info{
-		Type:      "RTSP " + c.mode.String(),
-		SDP:       c.sdp,
-		UserAgent: c.UserAgent,
-		Medias:    c.Medias,
-		Receivers: c.receivers,
-		Senders:   c.senders,
-		Recv:      c.recv,
-		Send:      c.send,
-	}
-
-	if c.URL != nil {
-		info.URL = c.URL.String()
-	}
-	if c.conn != nil {
-		info.RemoteAddr = c.conn.RemoteAddr().String()
-	}
-
-	return json.Marshal(info)
+	return json.Marshal(c.Connection)
 }
 
 func (c *Conn) Reconnect() error {
@@ -135,12 +117,12 @@ func (c *Conn) Reconnect() error {
 	}
 
 	// restore previous medias
-	for _, receiver := range c.receivers {
+	for _, receiver := range c.Receivers {
 		if _, err := c.SetupMedia(receiver.Media); err != nil {
 			return err
 		}
 	}
-	for _, sender := range c.senders {
+	for _, sender := range c.Senders {
 		if _, err := c.SetupMedia(sender.Media); err != nil {
 			return err
 		}

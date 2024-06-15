@@ -8,26 +8,30 @@ import (
 )
 
 type Consumer struct {
-	core.SuperConsumer
+	core.Connection
 	wr *core.WriteBuffer
 }
 
 func NewConsumer() *Consumer {
-	return &Consumer{
-		core.SuperConsumer{
-			Type: "MJPEG passive consumer",
-			Medias: []*core.Media{
-				{
-					Kind:      core.KindVideo,
-					Direction: core.DirectionSendonly,
-					Codecs: []*core.Codec{
-						{Name: core.CodecJPEG},
-						{Name: core.CodecRAW},
-					},
-				},
+	medias := []*core.Media{
+		{
+			Kind:      core.KindVideo,
+			Direction: core.DirectionSendonly,
+			Codecs: []*core.Codec{
+				{Name: core.CodecJPEG},
+				{Name: core.CodecRAW},
 			},
 		},
-		core.NewWriteBuffer(nil),
+	}
+	wr := core.NewWriteBuffer(nil)
+	return &Consumer{
+		Connection: core.Connection{
+			ID:         core.NewID(),
+			FormatName: "mjpeg",
+			Medias:     medias,
+			Transport:  wr,
+		},
+		wr: wr,
 	}
 }
 
@@ -52,9 +56,4 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 
 func (c *Consumer) WriteTo(wr io.Writer) (int64, error) {
 	return c.wr.WriteTo(wr)
-}
-
-func (c *Consumer) Stop() error {
-	_ = c.SuperConsumer.Close()
-	return c.wr.Close()
 }

@@ -13,7 +13,7 @@ import (
 )
 
 type Producer struct {
-	core.SuperProducer
+	core.Connection
 	url    string
 	query  url.Values
 	ffmpeg core.Producer
@@ -31,7 +31,8 @@ func NewProducer(url string) (core.Producer, error) {
 		return nil, errors.New("ffmpeg: unsupported params: " + url[i:])
 	}
 
-	p.Type = "FFmpeg producer"
+	p.ID = core.NewID()
+	p.FormatName = "ffmpeg"
 	p.Medias = []*core.Media{
 		{
 			// we can support only audio, because don't know FmtpLine for H264 and PayloadType for MJPEG
@@ -81,7 +82,7 @@ func (p *Producer) Stop() error {
 
 func (p *Producer) MarshalJSON() ([]byte, error) {
 	if p.ffmpeg == nil {
-		return json.Marshal(p.SuperProducer)
+		return json.Marshal(p.Connection)
 	}
 	return json.Marshal(p.ffmpeg)
 }

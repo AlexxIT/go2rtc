@@ -6,7 +6,6 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/aac"
-	"github.com/AlexxIT/go2rtc/pkg/tcp"
 )
 
 func apiStreamAAC(w http.ResponseWriter, r *http.Request) {
@@ -18,8 +17,7 @@ func apiStreamAAC(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cons := aac.NewConsumer()
-	cons.RemoteAddr = tcp.RemoteAddr(r)
-	cons.UserAgent = r.UserAgent()
+	cons.WithRequest(r)
 
 	if err := stream.AddConsumer(cons); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

@@ -12,7 +12,6 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/flv"
 	"github.com/AlexxIT/go2rtc/pkg/rtmp"
-	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/rs/zerolog"
 )
 
@@ -128,11 +127,7 @@ func tcpHandle(netConn net.Conn) error {
 var log zerolog.Logger
 
 func streamsHandle(url string) (core.Producer, error) {
-	client, err := rtmp.DialPlay(url)
-	if err != nil {
-		return nil, err
-	}
-	return client, nil
+	return rtmp.DialPlay(url)
 }
 
 func streamsConsumerHandle(url string) (core.Consumer, func(), error) {
@@ -165,9 +160,7 @@ func outputFLV(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cons := flv.NewConsumer()
-	cons.Type = "HTTP-FLV consumer"
-	cons.RemoteAddr = tcp.RemoteAddr(r)
-	cons.UserAgent = r.UserAgent()
+	cons.WithRequest(r)
 
 	if err := stream.AddConsumer(cons); err != nil {
 		log.Error().Err(err).Caller().Send()

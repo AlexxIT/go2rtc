@@ -1,7 +1,6 @@
 package webrtc
 
 import (
-	"encoding/json"
 	"errors"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -12,13 +11,13 @@ import (
 )
 
 func (c *Conn) GetMedias() []*core.Media {
-	return WithResampling(c.medias)
+	return WithResampling(c.Medias)
 }
 
 func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
 	core.Assert(media.Direction == core.DirectionSendonly)
 
-	for _, sender := range c.senders {
+	for _, sender := range c.Senders {
 		if sender.Codec == codec {
 			sender.Bind(track)
 			return nil
@@ -42,7 +41,7 @@ func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiv
 
 	sender := core.NewSender(media, codec)
 	sender.Handler = func(packet *rtp.Packet) {
-		c.send += packet.MarshalSize()
+		c.Send += packet.MarshalSize()
 		//important to send with remote PayloadType
 		_ = localTrack.WriteRTP(payloadType, packet)
 	}
@@ -85,20 +84,6 @@ func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiv
 		sender.HandleRTP(track)
 	}
 
-	c.senders = append(c.senders, sender)
+	c.Senders = append(c.Senders, sender)
 	return nil
-}
-
-func (c *Conn) MarshalJSON() ([]byte, error) {
-	info := &core.Info{
-		Type:       c.Desc + " " + c.Mode.String(),
-		RemoteAddr: c.remote,
-		UserAgent:  c.UserAgent,
-		Medias:     c.medias,
-		Receivers:  c.receivers,
-		Senders:    c.senders,
-		Recv:       c.recv,
-		Send:       c.send,
-	}
-	return json.Marshal(info)
 }

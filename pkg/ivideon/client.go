@@ -26,6 +26,7 @@ const (
 	StateHandle
 )
 
+// Deprecated: should be rewritten to core.Connection
 type Client struct {
 	core.Listener
 

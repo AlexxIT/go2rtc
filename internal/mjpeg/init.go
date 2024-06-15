@@ -17,7 +17,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/magic"
 	"github.com/AlexxIT/go2rtc/pkg/mjpeg"
-	"github.com/AlexxIT/go2rtc/pkg/tcp"
+	"github.com/AlexxIT/go2rtc/pkg/mpjpeg"
 	"github.com/AlexxIT/go2rtc/pkg/y4m"
 	"github.com/rs/zerolog"
 )
@@ -44,8 +44,7 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cons := magic.NewKeyframe()
-	cons.RemoteAddr = tcp.RemoteAddr(r)
-	cons.UserAgent = r.UserAgent()
+	cons.WithRequest(r)
 
 	if err := stream.AddConsumer(cons); err != nil {
 		log.Error().Err(err).Caller().Send()
@@ -100,8 +99,7 @@ func outputMjpeg(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cons := mjpeg.NewConsumer()
-	cons.RemoteAddr = tcp.RemoteAddr(r)
-	cons.UserAgent = r.UserAgent()
+	cons.WithRequest(r)
 
 	if err := stream.AddConsumer(cons); err != nil {
 		log.Error().Err(err).Msg("[api.mjpeg] add consumer")
@@ -117,7 +115,7 @@ func outputMjpeg(w http.ResponseWriter, r *http.Request) {
 		wr := mjpeg.NewWriter(w)
 		_, _ = cons.WriteTo(wr)
 	} else {
-		cons.Type = "ASCII passive consumer "
+		cons.FormatName = "ascii"
 
 		query := r.URL.Query()
 		wr := ascii.NewWriter(w, query.Get("color"), query.Get("back"), query.Get("text"))
@@ -135,17 +133,16 @@ func inputMjpeg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res := &http.Response{Body: r.Body, Header: r.Header, Request: r}
-	res.Header.Set("Content-Type", "multipart/mixed;boundary=")
+	prod, _ := mpjpeg.Open(r.Body)
+	prod.WithRequest(r)
 
-	client := mjpeg.NewClient(res)
-	stream.AddProducer(client)
+	stream.AddProducer(prod)
 
-	if err := client.Start(); err != nil && err != io.EOF {
+	if err := prod.Start(); err != nil && err != io.EOF {
 		log.Warn().Err(err).Caller().Send()
 	}
 
-	stream.RemoveProducer(client)
+	stream.RemoveProducer(prod)
 }
 
 func handlerWS(tr *ws.Transport, _ *ws.Message) error {
@@ -155,8 +152,7 @@ func handlerWS(tr *ws.Transport, _ *ws.Message) error {
 	}
 
 	cons := mjpeg.NewConsumer()
-	cons.RemoteAddr = tcp.RemoteAddr(tr.Request)
-	cons.UserAgent = tr.Request.UserAgent()
+	cons.WithRequest(tr.Request)
 
 	if err := stream.AddConsumer(cons); err != nil {
 		log.Debug().Err(err).Msg("[mjpeg] add consumer")
@@ -183,8 +179,7 @@ func apiStreamY4M(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cons := y4m.NewConsumer()
-	cons.RemoteAddr = tcp.RemoteAddr(r)
-	cons.UserAgent = r.UserAgent()
+	cons.WithRequest(r)
 
 	if err := stream.AddConsumer(cons); err != nil {
 		log.Error().Err(err).Caller().Send()

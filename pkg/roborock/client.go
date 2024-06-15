@@ -18,6 +18,7 @@ import (
 	pion "github.com/pion/webrtc/v3"
 )
 
+// Deprecated: should be rewritten to core.Connection
 type Client struct {
 	core.Listener
 
@@ -110,8 +111,10 @@ func (c *Client) Connect() error {
 	var sendOffer sync.WaitGroup
 
 	c.conn = webrtc.NewConn(pc)
-	c.conn.Desc = "Roborock"
+	c.conn.FormatName = "roborock"
 	c.conn.Mode = core.ModeActiveProducer
+	c.conn.Protocol = "mqtt"
+	c.conn.URL = c.url
 	c.conn.Listen(func(msg any) {
 		switch msg := msg.(type) {
 		case *pion.ICECandidate:

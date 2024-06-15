@@ -92,7 +92,7 @@ func (m *Media) Equal(media *Media) bool {
 
 func GetKind(name string) string {
 	switch name {
-	case CodecH264, CodecH265, CodecVP8, CodecVP9, CodecAV1, CodecJPEG:
+	case CodecH264, CodecH265, CodecVP8, CodecVP9, CodecAV1, CodecJPEG, CodecRAW:
 		return KindVideo
 	case CodecPCMU, CodecPCMA, CodecAAC, CodecOpus, CodecG722, CodecMP3, CodecPCM, CodecPCML, CodecELD, CodecFLAC:
 		return KindAudio

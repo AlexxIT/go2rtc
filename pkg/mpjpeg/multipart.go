@@ -1,4 +1,4 @@
-package multipart
+package mpjpeg
 
 import (
 	"bufio"

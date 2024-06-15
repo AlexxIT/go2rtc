@@ -3,19 +3,21 @@ package webtorrent
 import (
 	"encoding/base64"
 	"fmt"
+	"strconv"
+	"time"
+
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	"github.com/gorilla/websocket"
 	pion "github.com/pion/webrtc/v3"
-	"strconv"
-	"time"
 )
 
 func NewClient(tracker, share, pwd string, pc *pion.PeerConnection) (*webrtc.Conn, error) {
 	// 1. Create WebRTC producer
 	prod := webrtc.NewConn(pc)
-	prod.Desc = "WebRTC/WebTorrent sync"
+	prod.FormatName = "webtorrent"
 	prod.Mode = core.ModeActiveProducer
+	prod.Protocol = "ws"
 
 	medias := []*core.Media{
 		{Kind: core.KindVideo, Direction: core.DirectionRecvonly},

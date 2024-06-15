@@ -42,7 +42,7 @@ func (c *Conn) SetOffer(offer string) (err error) {
 		}
 	}
 
-	c.medias = UnmarshalMedias(sd.MediaDescriptions)
+	c.Medias = UnmarshalMedias(sd.MediaDescriptions)
 
 	return
 }
@@ -57,7 +57,7 @@ func (c *Conn) GetAnswer() (answer string, err error) {
 	// disable transceivers if we don't have track, make direction=inactive
 transeivers:
 	for _, tr := range c.pc.GetTransceivers() {
-		for _, sender := range c.senders {
+		for _, sender := range c.Senders {
 			if sender.Media.ID == tr.Mid() {
 				continue transeivers
 			}

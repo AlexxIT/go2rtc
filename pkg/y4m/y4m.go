@@ -1,6 +1,7 @@
 package y4m
 
 import (
+	"bytes"
 	"image"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -9,6 +10,34 @@ import (
 const FourCC = "YUV4"
 
 const frameHdr = "FRAME\n"
+
+func ParseHeader(b []byte) (fmtp string) {
+	for b != nil {
+		// YUV4MPEG2 W1280 H720 F24:1 Ip A1:1 C420mpeg2 XYSCSS=420MPEG2
+		// https://manned.org/yuv4mpeg.5
+		// https://github.com/FFmpeg/FFmpeg/blob/master/libavformat/yuv4mpegenc.c
+		key := b[0]
+
+		var value string
+		if i := bytes.IndexByte(b, ' '); i > 0 {
+			value = string(b[1:i])
+			b = b[i+1:]
+		} else {
+			value = string(b[1:])
+			b = nil
+		}
+
+		switch key {
+		case 'W':
+			fmtp = "width=" + value
+		case 'H':
+			fmtp += ";height=" + value
+		case 'C':
+			fmtp += ";colorspace=" + value
+		}
+	}
+	return
+}
 
 func GetSize(fmtp string) int {
 	w := core.Atoi(core.Between(fmtp, "width=", ";"))
