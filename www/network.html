@@ -21,24 +21,69 @@
     </style>
 </head>
 <body>
-<script src="main.js"></script>
-<div id="network"></div>
-<script>
-    /* global vis */
-    window.addEventListener('load', async () => {
-        const url = new URL('api/streams.dot' + location.search, location.href);
-        const r = await fetch(url, {cache: 'no-cache'});
-        const data = vis.parseDOTNetwork(await r.text());
-        const options = {
-            edges: {
-                font: {align: 'middle'},
-                smooth: false,
-            },
-            nodes: {shape: 'box'},
-            physics: false,
-        };
-        new vis.Network(document.getElementById('network'), data, options);
-    });
-</script>
+    <script src="main.js"></script>
+    <div id="network"></div>
+    <script>
+        let network;
+        let nodes = new vis.DataSet();
+        let edges = new vis.DataSet();
+        /* global vis */
+        window.addEventListener('load', () => {
+            const url = new URL('api/streams.dot' + location.search, location.href);
+            const options = {
+                layout: {
+                    randomSeed: "0.4597730541017021:1718519934576"
+                },
+                edges: {
+                    font: { align: 'middle' },
+                    smooth: false,
+                },
+                nodes: { shape: 'box' },
+                physics: {
+                    enabled: false,
+                    stabilization: {
+                        enabled: false,
+                    }
+                },
+                autoResize: false,
+                locale: navigator.language.toLowerCase().split('-').slice(0, 2).join('-'),
+            };
+            const container = document.getElementById('network');
+
+
+            async function fetchDataAndUpdateNetwork() {
+                try {
+                    const response = await fetch(url, { cache: 'no-cache' });
+                    const dotData = await response.text();
+                    const data = vis.parseDOTNetwork(dotData);
+
+                    if (!network) {
+                        nodes = new vis.DataSet(data.nodes);
+                        edges = new vis.DataSet(data.edges);
+                        network = new vis.Network(container, { nodes, edges }, options);
+                        network.storePositions();
+                    } else {
+                        const positions = network.getPositions();
+
+                        network.setData(data)
+
+                        for (const nodeId in positions) {
+                            if (positions.hasOwnProperty(nodeId)) {
+                                network.moveNode(nodeId, positions[nodeId].x, positions[nodeId].y);
+                            }
+                        }
+                    }
+
+                } catch (error) {
+                    console.error('Error fetching or updating network data:', error);
+                }
+            }
+
+            fetchDataAndUpdateNetwork();
+
+            setInterval(fetchDataAndUpdateNetwork, 5000);
+        });
+    </script>
 </body>
+
 </html>

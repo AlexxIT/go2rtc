@@ -146,19 +146,20 @@ func (c *conn) host() (s string) {
 	return
 }
 
-func (c *conn) label() (s string) {
-	s = "format_name=" + c.FormatName
+func (c *conn) label() string {
+	var sb strings.Builder
+	sb.WriteString("format_name=" + c.FormatName)
 	if c.Protocol != "" {
-		s += "\nprotocol=" + c.Protocol
+		sb.WriteString("\nprotocol=" + c.Protocol)
 	}
 	if c.Source != "" {
-		s += "\nsource=" + c.Source
+		sb.WriteString("\nsource=" + c.Source)
 	}
 	if c.URL != "" {
-		s += "\nurl=" + c.URL
+		sb.WriteString("\nurl=" + c.URL)
 	}
 	if c.UserAgent != "" {
-		s += "\nuser_agent=" + c.UserAgent
+		sb.WriteString("\nuser_agent=" + c.UserAgent)
 	}
-	return
+	return sb.String()
 }
