@@ -65,6 +65,7 @@ func outputWebRTC(w http.ResponseWriter, r *http.Request) {
 	url := r.URL.Query().Get("src")
 	stream := streams.Get(url)
 	if stream == nil {
+		http.Error(w, api.StreamNotFound, http.StatusNotFound)
 		return
 	}
 

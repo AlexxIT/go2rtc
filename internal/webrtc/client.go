@@ -77,9 +77,14 @@ func go2rtcClient(url string) (core.Producer, error) {
 	// 2. Create PeerConnection
 	pc, err := PeerConnection(true)
 	if err != nil {
-		log.Error().Err(err).Caller().Send()
 		return nil, err
 	}
+
+	defer func() {
+		if err != nil {
+			_ = pc.Close()
+		}
+	}()
 
 	// waiter will wait PC error or WS error or nil (connection OK)
 	var connState core.Waiter
@@ -133,7 +138,8 @@ func go2rtcClient(url string) (core.Producer, error) {
 	}
 
 	if msg.Type != "webrtc/answer" {
-		return nil, errors.New("wrong answer: " + msg.Type)
+		err = errors.New("wrong answer: " + msg.String())
+		return nil, err
 	}
 
 	answer := msg.String()
