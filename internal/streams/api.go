@@ -101,3 +101,24 @@ func apiStreams(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 }
+
+func apiStreamsDOT(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+
+	dot := make([]byte, 0, 1024)
+	dot = append(dot, "digraph {\n"...)
+	if query.Has("src") {
+		for _, name := range query["src"] {
+			if stream := streams[name]; stream != nil {
+				dot = AppendDOT(dot, stream)
+			}
+		}
+	} else {
+		for _, stream := range streams {
+			dot = AppendDOT(dot, stream)
+		}
+	}
+	dot = append(dot, '}')
+
+	api.Response(w, dot, "text/vnd.graphviz")
+}

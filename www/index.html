@@ -139,7 +139,7 @@
                 const isChecked = checkboxStates[name] ? 'checked' : '';
                 tr.innerHTML =
                     `<td><label><input type="checkbox" name="${name}" ${isChecked}>${name}</label></td>` +
-                    `<td><a href="api/streams?src=${src}">${online} / info</a> / <a href="api/streams?src=${src}&video=all&audio=all&microphone">probe</a></td>` +
+                    `<td><a href="api/streams?src=${src}">${online} / info</a> / <a href="api/streams?src=${src}&video=all&audio=all&microphone">probe</a> / <a href="network.html?src=${src}">net</a></td>` +
                     `<td>${links}</td>`;
             }
 

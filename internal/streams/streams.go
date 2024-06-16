@@ -27,6 +27,7 @@ func Init() {
 	}
 
 	api.HandleFunc("api/streams", apiStreams)
+	api.HandleFunc("api/streams.dot", apiStreamsDOT)
 
 	if cfg.Publish == nil {
 		return
