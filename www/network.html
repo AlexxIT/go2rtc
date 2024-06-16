@@ -18,11 +18,15 @@
             height: 100%;
             width: 100%;
         }
+
+        #network {
+            flex-grow: 1;
+        }
     </style>
 </head>
 <body>
-    <script src="main.js"></script>
     <div id="network"></div>
+    <script src="main.js"></script>
     <script>
         let network;
         let nodes = new vis.DataSet();
@@ -65,7 +69,7 @@
                     } else {
                         const positions = network.getPositions();
 
-                        network.setData(data)
+                        network.setData(data);
 
                         for (const nodeId in positions) {
                             if (positions.hasOwnProperty(nodeId)) {
@@ -85,5 +89,4 @@
         });
     </script>
 </body>
-
 </html>
