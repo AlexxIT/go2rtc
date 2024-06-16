@@ -67,6 +67,13 @@ type node struct {
 
 var codecKeys = []string{"codec_name", "sample_rate", "channels", "profile", "level"}
 
+func (n *node) name() string {
+	if name, ok := n.Codec["codec_name"].(string); ok {
+		return name
+	}
+	return "unknown"
+}
+
 func (n *node) codec() []byte {
 	b := make([]byte, 0, 128)
 	for _, k := range codecKeys {
@@ -74,11 +81,14 @@ func (n *node) codec() []byte {
 			b = fmt.Appendf(b, "%s=%v\n", k, v)
 		}
 	}
-	return b[:len(b)-1]
+	if l := len(b); l > 0 {
+		return b[:l-1]
+	}
+	return b
 }
 
 func (n *node) appendDOT(dot []byte, group string) []byte {
-	dot = fmt.Appendf(dot, "%d [group=%s, label=%q, title=%q];\n", n.ID, group, n.Codec["codec_name"], n.codec())
+	dot = fmt.Appendf(dot, "%d [group=%s, label=%q, title=%q];\n", n.ID, group, n.name(), n.codec())
 	//for _, sink := range n.Childs {
 	//	dot = fmt.Appendf(dot, "%d -> %d;\n", n.ID, sink)
 	//}

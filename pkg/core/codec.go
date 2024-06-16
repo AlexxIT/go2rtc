@@ -69,8 +69,14 @@ func FFmpegCodecName(name string) string {
 		return "vp9"
 	case CodecAV1:
 		return "av1"
+	case CodecELD:
+		return "aac/eld"
+	case CodecFLAC:
+		return "flac"
+	case CodecMP3:
+		return "mp3"
 	}
-	return ""
+	return name
 }
 
 func (c *Codec) String() (s string) {
