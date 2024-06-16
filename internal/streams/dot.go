@@ -77,12 +77,17 @@ func (n *node) codec() []byte {
 	return b[:len(b)-1]
 }
 
-func (n *node) appendDOT(dot []byte, group string) []byte {
-	dot = fmt.Appendf(dot, "%d [group=%s, label=%q, title=%q];\n", n.ID, group, n.Codec["codec_name"], n.codec())
+func (n *node) appendDOT(dot []byte, group string) ([]byte, error) {
+	codecName, ok := n.Codec["codec_name"]
+	if !ok {
+		return nil, fmt.Errorf("codec_name not found in Codec map")
+	}
+
+	dot = fmt.Appendf(dot, "%d [group=%s, label=%q, title=%q];\n", n.ID, group, codecName, n.codec())
 	//for _, sink := range n.Childs {
 	//	dot = fmt.Appendf(dot, "%d -> %d;\n", n.ID, sink)
 	//}
-	return dot
+	return dot, nil
 }
 
 type conn struct {
@@ -111,7 +116,7 @@ func (c *conn) appendDOT(dot []byte, group string) []byte {
 
 	for _, recv := range c.Receivers {
 		dot = fmt.Appendf(dot, "%d -> %d [label=%q];\n", c.ID, recv.ID, humanBytes(recv.Bytes))
-		dot = recv.appendDOT(dot, "node")
+		dot, _ = recv.appendDOT(dot, "node") // TODO: handle error for debug purposes
 	}
 	for _, send := range c.Senders {
 		dot = fmt.Appendf(dot, "%d -> %d [label=%q];\n", send.Parent, c.ID, humanBytes(send.Bytes))
