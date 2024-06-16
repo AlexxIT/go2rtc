@@ -96,7 +96,7 @@ func (c *Connection) SetRemoteAddr(s string) {
 	if c.RemoteAddr == "" {
 		c.RemoteAddr = s
 	} else {
-		c.RemoteAddr += " forward " + c.RemoteAddr
+		c.RemoteAddr += " forwarded " + s
 	}
 }
 
