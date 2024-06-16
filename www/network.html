@@ -68,6 +68,8 @@
                         network.storePositions();
                     } else {
                         const positions = network.getPositions();
+                        const viewState = network.getViewPosition();
+                        const scale = network.getScale();
 
                         network.setData(data);
 
@@ -76,6 +78,8 @@
                                 network.moveNode(nodeId, positions[nodeId].x, positions[nodeId].y);
                             }
                         }
+
+                        network.moveTo({ position: viewState, scale: scale });
                     }
 
                 } catch (error) {
