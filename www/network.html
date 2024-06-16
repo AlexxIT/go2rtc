@@ -31,13 +31,11 @@
         let network;
         let nodes = new vis.DataSet();
         let edges = new vis.DataSet();
+        let seed = "";
         /* global vis */
         window.addEventListener('load', () => {
             const url = new URL('api/streams.dot' + location.search, location.href);
             const options = {
-                layout: {
-                    randomSeed: "0.4597730541017021:1718519934576"
-                },
                 edges: {
                     font: { align: 'middle' },
                     smooth: false,
@@ -66,16 +64,19 @@
                         edges = new vis.DataSet(data.edges);
                         network = new vis.Network(container, { nodes, edges }, options);
                         network.storePositions();
+                        seed = network.getSeed();
                     } else {
                         const positions = network.getPositions();
                         const viewState = network.getViewPosition();
                         const scale = network.getScale();
-
+                        network.setOptions({layout: {
+                            randomSeed: seed
+                        }})
                         network.setData(data);
 
                         for (const nodeId in positions) {
                             if (positions.hasOwnProperty(nodeId)) {
-                                network.moveNode(nodeId, positions[nodeId].x, positions[nodeId].y);
+                                network.moveNode(nodeId, Math.floor(positions[nodeId].x), Math.floor(positions[nodeId].y));
                             }
                         }
 
