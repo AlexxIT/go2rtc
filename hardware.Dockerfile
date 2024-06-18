@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:labs
+# syntax=docker/dockerfile:1.4
 
 # 0. Prepare images
 # only debian 13 (trixie) has latest ffmpeg
@@ -7,9 +7,9 @@ ARG DEBIAN_VERSION="trixie-slim"
 ARG GO_VERSION="1.22-bookworm"
 ARG NGROK_VERSION="3"
 
-FROM debian:${DEBIAN_VERSION} AS base
+FROM --platform=linux/amd64 debian:${DEBIAN_VERSION} AS base
 FROM golang:${GO_VERSION} AS go
-FROM ngrok/ngrok:${NGROK_VERSION} AS ngrok
+FROM --platform=linux/amd64 ngrok/ngrok:${NGROK_VERSION} AS ngrok
 
 
 # 1. Build go2rtc binary
@@ -29,7 +29,6 @@ RUN --mount=type=cache,target=/root/.cache/go-build go mod download
 
 COPY . .
 RUN --mount=type=cache,target=/root/.cache/go-build CGO_ENABLED=0 go build -ldflags "-s -w" -trimpath
-
 
 # 2. Collect all files
 FROM scratch AS rootfs
@@ -57,14 +56,11 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked --mount=type=cache,t
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY --link --from=rootfs / /
+COPY --chmod=755 entrypoint.sh /entrypoint.sh
 
-
-
-ENTRYPOINT ["/usr/bin/tini", "--"]
+ENTRYPOINT ["/usr/bin/tini", "--", "/entrypoint.sh"]
 VOLUME /config
 WORKDIR /config
 # https://github.com/NVIDIA/nvidia-docker/wiki/Installation-(Native-GPU-Support)
 ENV NVIDIA_VISIBLE_DEVICES all
 ENV NVIDIA_DRIVER_CAPABILITIES compute,video,utility
-
-CMD ["go2rtc", "-config", "/config/go2rtc.yaml"]
