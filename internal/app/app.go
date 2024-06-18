@@ -45,22 +45,16 @@ func Init() {
 		os.Exit(0)
 	}
 
-	if daemon {
+	if daemon && os.Getppid() != 1 {
 		if runtime.GOOS == "windows" {
-			fmt.Println("Daemon not supported on Windows")
+			fmt.Println("Daemon mode is not supported on Windows")
 			os.Exit(1)
 		}
 
-		args := os.Args[1:]
-		for i, arg := range args {
-			if arg == "-daemon" || arg == "-d" {
-				args[i] = ""
-			}
-		}
 		// Re-run the program in background and exit
-		cmd := exec.Command(os.Args[0], args...)
+		cmd := exec.Command(os.Args[0], os.Args[1:]...)
 		if err := cmd.Start(); err != nil {
-			fmt.Println(err)
+			fmt.Println("Failed to start daemon:", err)
 			os.Exit(1)
 		}
 		fmt.Println("Running in daemon mode with PID:", cmd.Process.Pid)
