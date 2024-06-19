@@ -35,7 +35,7 @@ func DialPlay(rawURL string) (*flv.Producer, error) {
 	return client.Producer()
 }
 
-func DialPublish(rawURL string) (io.Writer, error) {
+func DialPublish(rawURL string, cons *flv.Consumer) (io.Writer, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, err
@@ -54,6 +54,11 @@ func DialPublish(rawURL string) (io.Writer, error) {
 	if err = client.publish(); err != nil {
 		return nil, err
 	}
+
+	cons.FormatName = "rtmp"
+	cons.Protocol = "rtmp"
+	cons.RemoteAddr = conn.RemoteAddr().String()
+	cons.URL = rawURL
 
 	return client, nil
 }

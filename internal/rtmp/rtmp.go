@@ -133,7 +133,7 @@ func streamsHandle(url string) (core.Producer, error) {
 func streamsConsumerHandle(url string) (core.Consumer, func(), error) {
 	cons := flv.NewConsumer()
 	run := func() {
-		wr, err := rtmp.DialPublish(url)
+		wr, err := rtmp.DialPublish(url, cons)
 		if err != nil {
 			return
 		}
