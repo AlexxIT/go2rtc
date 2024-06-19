@@ -23,6 +23,7 @@ type HandlerFunc func(net.Conn) error
 type Server struct {
 	Pin           string
 	DeviceID      string
+	SetupID       string
 	DevicePrivate []byte
 
 	GetPair func(conn net.Conn, id string) []byte
@@ -45,7 +46,7 @@ func (s *Server) ServerPublic() []byte {
 func (s *Server) SetupHash() string {
 	// should be setup_id (random 4 alphanum) + device_id (mac address)
 	// but device_id is random, so OK
-	b := sha512.Sum512([]byte(s.DeviceID))
+	b := sha512.Sum512([]byte(s.SetupID[:4] + s.DeviceID))
 	return base64.StdEncoding.EncodeToString(b[:4])
 }
 
