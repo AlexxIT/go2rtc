@@ -149,7 +149,7 @@ func (p *Producer) start() {
 		return
 	}
 
-	log.Debug().Msgf("[streams] start producer url=%s", p.url)
+	log.Debug().Msgf("[streams] start producer url=%s", RedactPassword(p.url))
 
 	p.state = stateStart
 	p.workerID++
@@ -167,7 +167,7 @@ func (p *Producer) worker(conn core.Producer, workerID int) {
 			return
 		}
 
-		log.Warn().Err(err).Str("url", p.url).Caller().Send()
+		log.Warn().Err(err).Str("url", RedactPassword(p.url)).Caller().Send()
 	}
 
 	p.reconnect(workerID, 0)
@@ -178,11 +178,11 @@ func (p *Producer) reconnect(workerID, retry int) {
 	defer p.mu.Unlock()
 
 	if p.workerID != workerID {
-		log.Trace().Msgf("[streams] stop reconnect url=%s", p.url)
+		log.Trace().Msgf("[streams] stop reconnect url=%s", RedactPassword(p.url))
 		return
 	}
 
-	log.Debug().Msgf("[streams] retry=%d to url=%s", retry, p.url)
+	log.Debug().Msgf("[streams] retry=%d to url=%s", retry, RedactPassword(p.url))
 
 	conn, err := GetProducer(p.url)
 	if err != nil {
@@ -257,7 +257,7 @@ func (p *Producer) stop() {
 		p.workerID++
 	}
 
-	log.Debug().Msgf("[streams] stop producer url=%s", p.url)
+	log.Debug().Msgf("[streams] stop producer url=%s", RedactPassword(p.url))
 
 	if p.conn != nil {
 		_ = p.conn.Stop()

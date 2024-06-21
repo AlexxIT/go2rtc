@@ -119,7 +119,7 @@ func GetOrPatch(query url.Values) *Stream {
 
 	// check if name param provided
 	if name := query.Get("name"); name != "" {
-		log.Info().Msgf("[streams] create new stream url=%s", source)
+		log.Info().Msgf("[streams] create new stream url=%s", RedactPassword(source))
 
 		return Patch(name, source)
 	}
@@ -143,6 +143,8 @@ func Delete(id string) {
 	delete(streams, id)
 }
 
-var log zerolog.Logger
-var streams = map[string]*Stream{}
-var streamsMu sync.Mutex
+var (
+	log       zerolog.Logger
+	streams   = map[string]*Stream{}
+	streamsMu sync.Mutex
+)
