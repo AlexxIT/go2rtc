@@ -20,11 +20,3 @@ func ParseQuery(s string) url.Values {
 	}
 	return params
 }
-
-func RedactPassword(s string) string {
-	if u, err := url.Parse(s); err == nil {
-		return u.Redacted()
-	}
-
-	return s
-}

@@ -43,7 +43,7 @@ func streamOnvif(rawURL string) (core.Producer, error) {
 		return nil, err
 	}
 
-	log.Debug().Msgf("[onvif] new uri=%s", uri)
+	log.Debug().Msgf("[onvif] new uri=%s", streams.Redact(uri))
 
 	return streams.GetProducer(uri)
 }
@@ -134,12 +134,12 @@ func apiOnvif(w http.ResponseWriter, r *http.Request) {
 		for _, rawURL := range urls {
 			u, err := url.Parse(rawURL)
 			if err != nil {
-				log.Warn().Str("url", rawURL).Msg("[onvif] broken")
+				log.Warn().Str("url", streams.Redact(rawURL)).Msg("[onvif] broken")
 				continue
 			}
 
 			if u.Scheme != "http" {
-				log.Warn().Str("url", rawURL).Msg("[onvif] unsupported")
+				log.Warn().Str("url", streams.Redact(rawURL)).Msg("[onvif] unsupported")
 				continue
 			}
 
