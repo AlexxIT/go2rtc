@@ -126,6 +126,8 @@ Download binary for your OS from [latest release](https://github.com/AlexxIT/go2
 - `go2rtc_linux_mipsel` - Linux MIPS (ex. [Xiaomi Gateway 3](https://github.com/AlexxIT/XiaomiGateway3), [Wyze cameras](https://github.com/gtxaspec/wz_mini_hacks))
 - `go2rtc_mac_amd64.zip` - Mac Intel 64-bit
 - `go2rtc_mac_arm64.zip` - Mac ARM 64-bit
+- `go2rtc_freebsd_amd64.zip` - FreeBSD Intel 64-bit
+- `go2rtc_freebsd_arm64.zip` - FreeBSD ARM 64-bit
 
 Don't forget to fix the rights `chmod +x go2rtc_xxx_xxx` on Linux and Mac.
 
