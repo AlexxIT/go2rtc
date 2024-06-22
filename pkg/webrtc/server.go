@@ -42,7 +42,7 @@ func (c *Conn) SetOffer(offer string) (err error) {
 		}
 	}
 
-	c.medias = UnmarshalMedias(sd.MediaDescriptions)
+	c.Medias = UnmarshalMedias(sd.MediaDescriptions)
 
 	return
 }
@@ -57,7 +57,7 @@ func (c *Conn) GetAnswer() (answer string, err error) {
 	// disable transceivers if we don't have track, make direction=inactive
 transeivers:
 	for _, tr := range c.pc.GetTransceivers() {
-		for _, sender := range c.senders {
+		for _, sender := range c.Senders {
 			if sender.Media.ID == tr.Mid() {
 				continue transeivers
 			}
@@ -81,11 +81,42 @@ transeivers:
 	return c.pc.LocalDescription().SDP, nil
 }
 
-func (c *Conn) GetCompleteAnswer() (answer string, err error) {
-	if _, err = c.GetAnswer(); err != nil {
-		return
+// GetCompleteAnswer - get SDP answer with candidates inside
+func (c *Conn) GetCompleteAnswer(candidates []string, filter func(*webrtc.ICECandidate) bool) (string, error) {
+	var done = make(chan struct{})
+
+	c.pc.OnICECandidate(func(candidate *webrtc.ICECandidate) {
+		if candidate != nil {
+			if filter == nil || filter(candidate) {
+				candidates = append(candidates, candidate.ToJSON().Candidate)
+			}
+		} else {
+			done <- struct{}{}
+		}
+	})
+
+	answer, err := c.GetAnswer()
+	if err != nil {
+		return "", err
 	}
 
-	<-webrtc.GatheringCompletePromise(c.pc)
-	return c.pc.LocalDescription().SDP, nil
+	<-done
+
+	sd := &sdp.SessionDescription{}
+	if err = sd.Unmarshal([]byte(answer)); err != nil {
+		return "", err
+	}
+
+	md := sd.MediaDescriptions[0]
+
+	for _, candidate := range candidates {
+		md.WithPropertyAttribute(candidate)
+	}
+
+	b, err := sd.Marshal()
+	if err != nil {
+		return "", err
+	}
+
+	return string(b), nil
 }

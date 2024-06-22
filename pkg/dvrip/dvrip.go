@@ -8,26 +8,32 @@ func Dial(url string) (core.Producer, error) {
 		return nil, err
 	}
 
+	conn := core.Connection{
+		ID:         core.NewID(),
+		FormatName: "dvrip",
+		Protocol:   "tcp",
+		RemoteAddr: client.conn.RemoteAddr().String(),
+		Transport:  client.conn,
+	}
+
 	if client.stream != "" {
-		prod := &Producer{client: client}
-		prod.Type = "DVRIP active producer"
+		prod := &Producer{Connection: conn, client: client}
 		if err := prod.probe(); err != nil {
 			return nil, err
 		}
 		return prod, nil
 	} else {
-		cons := &Consumer{client: client}
-		cons.Type = "DVRIP active consumer"
-		cons.Medias = []*core.Media{
+		conn.Medias = []*core.Media{
 			{
 				Kind:      core.KindAudio,
 				Direction: core.DirectionSendonly,
 				Codecs: []*core.Codec{
+					// leave only one codec here for better compatibility with cameras
+					// https://github.com/AlexxIT/go2rtc/issues/1111
 					{Name: core.CodecPCMA, ClockRate: 8000, PayloadType: 8},
-					{Name: core.CodecPCMU, ClockRate: 8000, PayloadType: 0},
 				},
 			},
 		}
-		return cons, nil
+		return &Backchannel{Connection: conn, client: client}, nil
 	}
 }

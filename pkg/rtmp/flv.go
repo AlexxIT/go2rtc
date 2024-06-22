@@ -1,11 +1,10 @@
 package rtmp
 
 import (
-	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/flv"
 )
 
-func (c *Conn) Producer() (core.Producer, error) {
+func (c *Conn) Producer() (*flv.Producer, error) {
 	c.rdBuf = []byte{
 		'F', 'L', 'V', // signature
 		1,          // version
@@ -13,7 +12,17 @@ func (c *Conn) Producer() (core.Producer, error) {
 		0, 0, 0, 9, // header size
 	}
 
-	return flv.Open(c)
+	prod, err := flv.Open(c)
+	if err != nil {
+		return nil, err
+	}
+
+	prod.FormatName = "rtmp"
+	prod.Protocol = "rtmp"
+	prod.RemoteAddr = c.conn.RemoteAddr().String()
+	prod.URL = c.url
+
+	return prod, nil
 }
 
 // Read - convert RTMP to FLV format

@@ -22,7 +22,7 @@ type Media struct {
 func (m *Media) String() string {
 	s := fmt.Sprintf("%s, %s", m.Kind, m.Direction)
 	for _, codec := range m.Codecs {
-		name := codec.Text()
+		name := codec.String()
 
 		if strings.Contains(s, name) {
 			continue
@@ -92,7 +92,7 @@ func (m *Media) Equal(media *Media) bool {
 
 func GetKind(name string) string {
 	switch name {
-	case CodecH264, CodecH265, CodecVP8, CodecVP9, CodecAV1, CodecJPEG:
+	case CodecH264, CodecH265, CodecVP8, CodecVP9, CodecAV1, CodecJPEG, CodecRAW:
 		return KindVideo
 	case CodecPCMU, CodecPCMA, CodecAAC, CodecOpus, CodecG722, CodecMP3, CodecPCM, CodecPCML, CodecELD, CodecFLAC:
 		return KindAudio

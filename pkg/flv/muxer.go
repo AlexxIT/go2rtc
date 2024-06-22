@@ -54,6 +54,8 @@ func (m *Muxer) GetInit() []byte {
 			sps, pps := h264.GetParameterSet(codec.FmtpLine)
 			if len(sps) == 0 {
 				sps = []byte{0x67, 0x42, 0x00, 0x0a, 0xf8, 0x41, 0xa2}
+			} else {
+				h264.FixPixFmt(sps)
 			}
 			if len(pps) == 0 {
 				pps = []byte{0x68, 0xce, 0x38, 0x80}

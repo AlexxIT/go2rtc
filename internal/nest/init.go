@@ -10,17 +10,11 @@ import (
 )
 
 func Init() {
-	streams.HandleFunc("nest", streamNest)
+	streams.HandleFunc("nest", func(source string) (core.Producer, error) {
+		return nest.Dial(source)
+	})
 
 	api.HandleFunc("api/nest", apiNest)
-}
-
-func streamNest(url string) (core.Producer, error) {
-	client, err := nest.NewClient(url)
-	if err != nil {
-		return nil, err
-	}
-	return client, nil
 }
 
 func apiNest(w http.ResponseWriter, r *http.Request) {

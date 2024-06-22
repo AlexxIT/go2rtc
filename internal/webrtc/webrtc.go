@@ -20,6 +20,7 @@ func Init() {
 			Listen     string           `yaml:"listen"`
 			Candidates []string         `yaml:"candidates"`
 			IceServers []pion.ICEServer `yaml:"ice_servers"`
+			Filters    webrtc.Filters   `yaml:"filters"`
 		} `yaml:"webrtc"`
 	}
 
@@ -32,20 +33,15 @@ func Init() {
 
 	log = app.GetLogger("webrtc")
 
+	filters = cfg.Mod.Filters
+
 	address, network, _ := strings.Cut(cfg.Mod.Listen, "/")
-
-	var candidateHost []string
 	for _, candidate := range cfg.Mod.Candidates {
-		if strings.HasPrefix(candidate, "host:") {
-			candidateHost = append(candidateHost, candidate[5:])
-			continue
-		}
-
-		AddCandidate(candidate, network)
+		AddCandidate(network, candidate)
 	}
 
 	// create pionAPI with custom codecs list and custom network settings
-	serverAPI, err := webrtc.NewServerAPI(address, network, candidateHost)
+	serverAPI, err := webrtc.NewServerAPI(network, address, &filters)
 	if err != nil {
 		log.Error().Err(err).Caller().Send()
 		return
@@ -55,8 +51,7 @@ func Init() {
 	clientAPI := serverAPI
 
 	if address != "" {
-		log.Info().Str("addr", address).Msg("[webrtc] listen")
-
+		log.Info().Str("addr", cfg.Mod.Listen).Msg("[webrtc] listen")
 		clientAPI, _ = webrtc.NewAPI()
 	}
 
@@ -122,8 +117,8 @@ func asyncHandler(tr *ws.Transport, msg *ws.Message) error {
 	defer sendAnswer.Done(nil)
 
 	conn := webrtc.NewConn(pc)
-	conn.Desc = "WebRTC/WebSocket async"
 	conn.Mode = mode
+	conn.Protocol = "ws"
 	conn.UserAgent = tr.Request.UserAgent()
 	conn.Listen(func(msg any) {
 		switch msg := msg.(type) {
@@ -139,6 +134,9 @@ func asyncHandler(tr *ws.Transport, msg *ws.Message) error {
 			}
 
 		case *pion.ICECandidate:
+			if !FilterCandidate(msg) {
+				return
+			}
 			_ = sendAnswer.Wait()
 
 			s := msg.ToJSON().Candidate
@@ -209,8 +207,9 @@ func ExchangeSDP(stream *streams.Stream, offer, desc, userAgent string) (answer 
 
 	// create new webrtc instance
 	conn := webrtc.NewConn(pc)
-	conn.Desc = desc
+	conn.FormatName = desc
 	conn.UserAgent = userAgent
+	conn.Protocol = "http"
 	conn.Listen(func(msg any) {
 		switch msg := msg.(type) {
 		case pion.PeerConnectionState:
@@ -248,10 +247,7 @@ func ExchangeSDP(stream *streams.Stream, offer, desc, userAgent string) (answer 
 		stream.AddProducer(conn)
 	}
 
-	answer, err = conn.GetCompleteAnswer()
-	if err == nil {
-		answer, err = syncCanditates(answer)
-	}
+	answer, err = conn.GetCompleteAnswer(GetCandidates(), FilterCandidate)
 	log.Trace().Msgf("[webrtc] answer\n%s", answer)
 
 	if err != nil {

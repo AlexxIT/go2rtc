@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>go2rtc - Network</title>
+    <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            background-color: white;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        html, body, #network {
+            height: 100%;
+            width: 100%;
+        }
+
+        #network {
+            flex-grow: 1;
+        }
+    </style>
+</head>
+<body>
+<div id="network"></div>
+<script src="main.js"></script>
+<script>
+    /* global vis */
+    window.addEventListener('load', () => {
+        const url = new URL('api/streams.dot' + location.search, location.href);
+
+        const container = document.getElementById('network');
+        const options = {
+            edges: {
+                font: {align: 'middle'},
+                smooth: false,
+            },
+            nodes: {shape: 'box'},
+            physics: false,
+        };
+
+        let network;
+
+        async function update() {
+            try {
+                const response = await fetch(url, {cache: 'no-cache'});
+                const dotData = await response.text();
+                const data = vis.parseDOTNetwork(dotData);
+
+                if (!network) {
+                    network = new vis.Network(container, data, options);
+                    network.storePositions();
+                } else {
+                    const positions = network.getPositions();
+                    const viewPosition = network.getViewPosition();
+                    const scale = network.getScale();
+
+                    network.setData(data);
+
+                    for (const nodeId in positions) {
+                        network.moveNode(nodeId, positions[nodeId].x, positions[nodeId].y);
+                    }
+
+                    network.moveTo({position: viewPosition, scale: scale});
+                }
+            } catch (error) {
+                console.error('Error fetching or updating network data:', error);
+            }
+
+            setTimeout(update, 5000);
+        }
+
+        update();
+    });
+</script>
+</body>
+</html>

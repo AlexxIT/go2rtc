@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/rpc"
 	"net/url"
 	"strconv"
@@ -19,6 +18,7 @@ import (
 	pion "github.com/pion/webrtc/v3"
 )
 
+// Deprecated: should be rewritten to core.Connection
 type Client struct {
 	core.Listener
 
@@ -35,8 +35,15 @@ type Client struct {
 	backchannel bool
 }
 
-func NewClient(url string) *Client {
-	return &Client{url: url}
+func Dial(rawURL string) (*Client, error) {
+	client := &Client{url: rawURL}
+	if err := client.Dial(); err != nil {
+		return nil, err
+	}
+	if err := client.Connect(); err != nil {
+		return nil, err
+	}
+	return client, nil
 }
 
 func (c *Client) Dial() error {
@@ -104,8 +111,10 @@ func (c *Client) Connect() error {
 	var sendOffer sync.WaitGroup
 
 	c.conn = webrtc.NewConn(pc)
-	c.conn.Desc = "Roborock"
+	c.conn.FormatName = "roborock"
 	c.conn.Mode = core.ModeActiveProducer
+	c.conn.Protocol = "mqtt"
+	c.conn.URL = c.url
 	c.conn.Listen(func(msg any) {
 		switch msg := msg.(type) {
 		case *pion.ICECandidate:
@@ -138,7 +147,7 @@ func (c *Client) Connect() error {
 	}
 
 	offer := pc.LocalDescription()
-	log.Printf("[roborock] offer\n%s", offer.SDP)
+	//log.Printf("[roborock] offer\n%s", offer.SDP)
 	if err = c.SendSDPtoRobot(offer); err != nil {
 		return err
 	}
@@ -151,7 +160,7 @@ func (c *Client) Connect() error {
 		time.Sleep(time.Second)
 
 		if desc, _ := c.GetDeviceSDP(); desc != nil {
-			log.Printf("[roborock] answer\n%s", desc.SDP)
+			//log.Printf("[roborock] answer\n%s", desc.SDP)
 			if err = c.conn.SetAnswer(desc.SDP); err != nil {
 				return err
 			}

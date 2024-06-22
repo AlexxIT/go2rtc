@@ -6,6 +6,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
+// Deprecated: should be rewritten to core.Connection
 type Client struct {
 	cmd *exec.Cmd
 

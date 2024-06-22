@@ -1,0 +1,486 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "go2rtc",
+  "type": "object",
+  "additionalProperties": false,
+  "definitions": {
+    "listen": {
+      "type": "string",
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": ":[0-9]{1,5}$"
+        },
+        {
+          "type": "string",
+          "const": ""
+        }
+      ]
+    },
+    "log_level": {
+      "type": "string",
+      "enum": [
+        "trace",
+        "debug",
+        "info",
+        "warn",
+        "error"
+      ]
+    }
+  },
+  "properties": {
+    "api": {
+      "type": "object",
+      "properties": {
+        "listen": {
+          "default": ":1984",
+          "examples": [
+            "127.0.0.1:8080"
+          ],
+          "$ref": "#/definitions/listen"
+        },
+        "username": {
+          "type": "string",
+          "examples": [
+            "admin"
+          ]
+        },
+        "password": {
+          "type": "string"
+        },
+        "base_path": {
+          "type": "string",
+          "examples": [
+            "/go2rtc"
+          ]
+        },
+        "static_dir": {
+          "type": "string",
+          "examples": [
+            "/var/www"
+          ]
+        },
+        "origin": {
+          "type": "string",
+          "const": "*"
+        },
+        "tls_listen": {
+          "$ref": "#/definitions/listen"
+        },
+        "tls_cert": {
+          "type": "string",
+          "examples": [
+            "-----BEGIN CERTIFICATE-----",
+            "/ssl/fullchain.pem"
+          ]
+        },
+        "tls_key": {
+          "type": "string",
+          "examples": [
+            "-----BEGIN PRIVATE KEY-----",
+            "/ssl/privkey.pem"
+          ]
+        },
+        "unix_listen": {
+          "type": "string",
+          "examples": [
+            "/tmp/go2rtc.sock"
+          ]
+        }
+      }
+    },
+    "ffmpeg": {
+      "type": "object",
+      "properties": {
+        "bin": {
+          "type": "string",
+          "default": "ffmpeg"
+        }
+      },
+      "additionalProperties": {
+        "description": "FFmpeg template",
+        "type": "string"
+      }
+    },
+    "hass": {
+      "type": "object",
+      "properties": {
+        "config": {
+          "description": "Home Assistant config directory path",
+          "type": "string",
+          "examples": [
+            "/config"
+          ]
+        }
+      }
+    },
+    "homekit": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "pin": {
+            "type": "string",
+            "default": "19550224",
+            "pattern": "^[0-9]{8}$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "device_id": {
+            "type": "string"
+          },
+          "device_private": {
+            "type": "string"
+          },
+          "pairings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "log": {
+      "type": "object",
+      "properties": {
+        "format": {
+          "type": "string",
+          "default": "color",
+          "enum": [
+            "color",
+            "json",
+            "text"
+          ]
+        },
+        "level": {
+          "description": "Defaul log level",
+          "default": "info",
+          "$ref": "#/definitions/log_level"
+        },
+        "output": {
+          "type": "string",
+          "default": "stdout",
+          "enum": [
+            "",
+            "stdout",
+            "stderr"
+          ]
+        },
+        "time": {
+          "type": "string",
+          "default": "UNIXMS",
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "",
+                "UNIXMS",
+                "UNIXMICRO",
+                "UNIXNANO",
+                "2006-01-02T15:04:05Z07:00",
+                "2006-01-02T15:04:05.999999999Z07:00"
+              ]
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "api": {
+          "$ref": "#/definitions/log_level"
+        },
+        "echo": {
+          "$ref": "#/definitions/log_level"
+        },
+        "exec": {
+          "description": "Value `exec: debug` will print stderr",
+          "$ref": "#/definitions/log_level"
+        },
+        "expr": {
+          "$ref": "#/definitions/log_level"
+        },
+        "ffmpeg": {
+          "description": "Will only be displayed with `exec: debug` setting",
+          "default": "error",
+          "$ref": "#/definitions/log_level"
+        },
+        "hass": {
+          "$ref": "#/definitions/log_level"
+        },
+        "hls": {
+          "$ref": "#/definitions/log_level"
+        },
+        "homekit": {
+          "$ref": "#/definitions/log_level"
+        },
+        "mp4": {
+          "$ref": "#/definitions/log_level"
+        },
+        "ngrok": {
+          "$ref": "#/definitions/log_level"
+        },
+        "onvif": {
+          "$ref": "#/definitions/log_level"
+        },
+        "rtmp": {
+          "$ref": "#/definitions/log_level"
+        },
+        "rtsp": {
+          "$ref": "#/definitions/log_level"
+        },
+        "streams": {
+          "$ref": "#/definitions/log_level"
+        },
+        "webrtc": {
+          "$ref": "#/definitions/log_level"
+        },
+        "webtorrent": {
+          "$ref": "#/definitions/log_level"
+        }
+      }
+    },
+    "ngrok": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string",
+          "examples": [
+            "ngrok tcp 8555 --authtoken xxx",
+            "ngrok start --all --config ngrok.yaml"
+          ]
+        }
+      }
+    },
+    "publish": {
+      "type": "object",
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "string",
+            "examples": [
+              "rtmp://xxx.rtmp.youtube.com/live2/xxxx-xxxx-xxxx-xxxx-xxxx",
+              "rtmps://xxx-x.rtmp.t.me/s/xxxxxxxxxx:xxxxxxxxxxxxxxxxxxxxxx"
+            ]
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "rtmp": {
+      "type": "object",
+      "properties": {
+        "listen": {
+          "examples": [
+            ":1935"
+          ],
+          "$ref": "#/definitions/listen"
+        }
+      }
+    },
+    "rtsp": {
+      "type": "object",
+      "properties": {
+        "listen": {
+          "default": ":8554",
+          "$ref": "#/definitions/listen"
+        },
+        "username": {
+          "type": "string",
+          "examples": [
+            "admin"
+          ]
+        },
+        "password": {
+          "type": "string"
+        },
+        "default_query": {
+          "type": "string",
+          "default": "video&audio"
+        },
+        "pkt_size": {
+          "type": "integer"
+        }
+      }
+    },
+    "srtp": {
+      "description": "SRTP server for HomeKit",
+      "type": "object",
+      "properties": {
+        "listen": {
+          "default": ":8443",
+          "$ref": "#/definitions/listen"
+        }
+      }
+    },
+    "streams": {
+      "type": "object",
+      "additionalProperties": {
+        "title": "Stream",
+        "anyOf": [
+          {
+            "description": "Source",
+            "type": "string",
+            "examples": [
+              "rtsp://username:password@192.168.1.123/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif",
+              "rtsp://username:password@192.168.1.123/stream1",
+              "rtsp://username:password@192.168.1.123/h264Preview_01_main",
+              "rtmp://192.168.1.123/bcs/channel0_main.bcs?channel=0&stream=0&user=username&password=password",
+              "http://192.168.1.123/flv?port=1935&app=bcs&stream=channel0_main.bcs&user=username&password=password",
+              "http://username:password@192.168.1.123/cgi-bin/snapshot.cgi?channel=1",
+              "ffmpeg:media.mp4#video=h264#hadware#width=1920#height=1080#rotate=180#audio=copy",
+              "ffmpeg:virtual?video=testsrc&size=4K#video=h264#hardware#bitrate=50M",
+              "bubble://username:password@192.168.1.123:34567/bubble/live?ch=0&stream=0",
+              "dvrip://username:password@192.168.1.123:34567?channel=0&subtype=0",
+              "exec:ffmpeg -re -i media.mp4 -c copy -rtsp_transport tcp -f rtsp {output}",
+              "isapi://username:password@192.168.1.123:80/",
+              "kasa://username:password@192.168.1.123:19443/https/stream/mixed",
+              "onvif://username:password@192.168.1.123:80?subtype=0",
+              "tapo://password@192.168.1.123:8800?channel=0&subtype=0",
+              "webtorrent:?share=xxx&pwd=xxx"
+            ]
+          },
+          {
+            "type": "array",
+            "items": {
+              "description": "Source",
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "webrtc": {
+      "type": "object",
+      "properties": {
+        "listen": {
+          "default": ":8555/tcp",
+          "type": "string",
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": ":[0-9]{1,5}(/tcp|/udp)?$"
+            },
+            {
+              "type": "string",
+              "const": ""
+            }
+          ]
+        },
+        "candidates": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/listen/anyOf/0"
+          },
+          "examples": [
+            "216.58.210.174:8555",
+            "stun:8555",
+            "home.duckdns.org:8555"
+          ]
+        },
+        "ice_servers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "urls": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "examples": [
+                    "stun:stun.l.google.com:19302",
+                    "turn:123.123.123.123:3478"
+                  ]
+                }
+              },
+              "username": {
+                "type": "string"
+              },
+              "credential": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "filters": {
+          "type": "object",
+          "properties": {
+            "candidates": {
+              "description": "Keep only these candidates",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "interfaces": {
+              "description": "Keep only these interfaces",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "ips": {
+              "description": "Keep only these IP-addresses",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "networks": {
+              "description": "Use only these network types",
+              "type": "array",
+              "items": {
+                "enum": [
+                  "tcp4",
+                  "tcp6",
+                  "udp4",
+                  "udp6"
+                ],
+                "type": "string"
+              }
+            },
+            "udp_ports": {
+              "description": "Use only these UDP ports range [min, max]",
+              "type": "array",
+              "items": {
+                "type": "integer"
+              },
+              "maxItems": 2,
+              "minItems": 2
+            }
+          }
+        }
+      }
+    },
+    "webtorrent": {
+      "type": "object",
+      "properties": {
+        "trackers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "shares": {
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "pwd": {
+                "type": "string"
+              },
+              "src": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

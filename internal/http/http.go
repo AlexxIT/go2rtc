@@ -11,9 +11,9 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/hls"
+	"github.com/AlexxIT/go2rtc/pkg/image"
 	"github.com/AlexxIT/go2rtc/pkg/magic"
-	"github.com/AlexxIT/go2rtc/pkg/mjpeg"
-	"github.com/AlexxIT/go2rtc/pkg/multipart"
+	"github.com/AlexxIT/go2rtc/pkg/mpjpeg"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 )
 
@@ -45,6 +45,21 @@ func handleHTTP(rawURL string) (core.Producer, error) {
 		}
 	}
 
+	prod, err := do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	if info, ok := prod.(core.Info); ok {
+		info.SetProtocol("http")
+		info.SetRemoteAddr(req.URL.Host) // TODO: rewrite to net.Conn
+		info.SetURL(rawURL)
+	}
+
+	return prod, nil
+}
+
+func do(req *http.Request) (core.Producer, error) {
 	res, err := tcp.Do(req)
 	if err != nil {
 		return nil, err
@@ -66,14 +81,12 @@ func handleHTTP(rawURL string) (core.Producer, error) {
 	}
 
 	switch {
-	case ct == "image/jpeg":
-		return mjpeg.NewClient(res), nil
-
-	case ct == "multipart/x-mixed-replace":
-		return multipart.Open(res.Body)
-
 	case ct == "application/vnd.apple.mpegurl" || ext == "m3u8":
 		return hls.OpenURL(req.URL, res.Body)
+	case ct == "image/jpeg":
+		return image.Open(res)
+	case ct == "multipart/x-mixed-replace":
+		return mpjpeg.Open(res.Body)
 	}
 
 	return magic.Open(res.Body)

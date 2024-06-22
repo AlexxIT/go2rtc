@@ -8,7 +8,7 @@ import (
 func (c *Conn) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
 	core.Assert(media.Direction == core.DirectionRecvonly)
 
-	for _, track := range c.receivers {
+	for _, track := range c.Receivers {
 		if track.Codec == codec {
 			return track, nil
 		}
@@ -39,21 +39,11 @@ func (c *Conn) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, e
 	}
 
 	track := core.NewReceiver(media, codec)
-	c.receivers = append(c.receivers, track)
+	c.Receivers = append(c.Receivers, track)
 	return track, nil
 }
 
 func (c *Conn) Start() error {
 	c.closed.Wait()
 	return nil
-}
-
-func (c *Conn) Stop() error {
-	for _, receiver := range c.receivers {
-		receiver.Close()
-	}
-	for _, sender := range c.senders {
-		sender.Close()
-	}
-	return c.pc.Close()
 }

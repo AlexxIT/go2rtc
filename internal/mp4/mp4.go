@@ -1,6 +1,7 @@
 package mp4
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"strings"
@@ -12,7 +13,6 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/mp4"
-	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/rs/zerolog"
 )
 
@@ -99,9 +99,9 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 
 	medias := mp4.ParseQuery(r.URL.Query())
 	cons := mp4.NewConsumer(medias)
-	cons.Type = "MP4/HTTP active consumer"
-	cons.RemoteAddr = tcp.RemoteAddr(r)
-	cons.UserAgent = r.UserAgent()
+	cons.FormatName = "mp4"
+	cons.Protocol = "http"
+	cons.WithRequest(r)
 
 	if err := stream.AddConsumer(cons); err != nil {
 		log.Error().Err(err).Caller().Send()
@@ -127,20 +127,20 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 		header.Set("Content-Disposition", `attachment; filename="`+filename+`"`)
 	}
 
-	var duration *time.Timer
-	if s := query.Get("duration"); s != "" {
-		if i, _ := strconv.Atoi(s); i > 0 {
-			duration = time.AfterFunc(time.Second*time.Duration(i), func() {
-				_ = cons.Stop()
-			})
-		}
+	ctx := r.Context() // handle when the client drops the connection
+
+	if i := core.Atoi(query.Get("duration")); i > 0 {
+		timeout := time.Second * time.Duration(i)
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
 	}
+
+	go func() {
+		<-ctx.Done()
+		_ = cons.Stop()
+		stream.RemoveConsumer(cons)
+	}()
 
 	_, _ = cons.WriteTo(w)
-
-	stream.RemoveConsumer(cons)
-
-	if duration != nil {
-		duration.Stop()
-	}
 }

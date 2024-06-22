@@ -19,7 +19,7 @@ export class VideoRTC extends HTMLElement {
         super();
 
         this.DISCONNECT_TIMEOUT = 5000;
-        this.RECONNECT_TIMEOUT = 30000;
+        this.RECONNECT_TIMEOUT = 15000;
 
         this.CODECS = [
             'avc1.640029',      // H.264 high 4.1 (Chromecast 1st and 2nd Gen)
@@ -70,6 +70,7 @@ export class VideoRTC extends HTMLElement {
          * @type {RTCConfiguration}
          */
         this.pcConfig = {
+            bundlePolicy: 'max-bundle',
             iceServers: [{urls: 'stun:stun.l.google.com:19302'}],
             sdpSemantics: 'unified-plan',  // important for Chromecast 1
         };
@@ -246,6 +247,11 @@ export class VideoRTC extends HTMLElement {
         this.video.style.height = '100%';
 
         this.appendChild(this.video);
+
+        this.video.addEventListener('error', ev => {
+            console.warn(ev);
+            if (this.ws) this.ws.close(); // run reconnect for broken MSE stream
+        });
 
         // all Safari lies about supported audio codecs
         const m = window.navigator.userAgent.match(/Version\/(\d+).+Safari/);
@@ -486,7 +492,9 @@ export class VideoRTC extends HTMLElement {
 
         pc.addEventListener('connectionstatechange', () => {
             if (pc.connectionState === 'connected') {
-                const tracks = pc.getReceivers().map(receiver => receiver.track);
+                const tracks = pc.getTransceivers()
+                    .filter(tr => tr.currentDirection === 'recvonly') // skip inactive
+                    .map(tr => tr.receiver.track);
                 /** @type {HTMLVideoElement} */
                 const video2 = document.createElement('video');
                 video2.addEventListener('loadeddata', () => this.onpcvideo(video2), {once: true});

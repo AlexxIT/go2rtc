@@ -15,7 +15,7 @@ import (
 )
 
 type Producer struct {
-	core.SuperProducer
+	core.Connection
 
 	client *Client
 
@@ -90,10 +90,6 @@ func (c *Producer) Start() error {
 			println(fmt.Sprintf("dvrip: unknown packet type: %d", pType))
 		}
 	}
-}
-
-func (c *Producer) Stop() error {
-	return c.client.Close()
 }
 
 func (c *Producer) probe() error {

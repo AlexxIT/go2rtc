@@ -14,7 +14,7 @@ type Client struct {
 	api  *API
 }
 
-func NewClient(rawURL string) (*Client, error) {
+func Dial(rawURL string) (*Client, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, err
@@ -48,8 +48,10 @@ func NewClient(rawURL string) (*Client, error) {
 	}
 
 	conn := webrtc.NewConn(pc)
-	conn.Desc = "Nest"
+	conn.FormatName = "nest/webrtc"
 	conn.Mode = core.ModeActiveProducer
+	conn.Protocol = "http"
+	conn.URL = rawURL
 
 	// https://developers.google.com/nest/device-access/traits/device/camera-live-stream#generatewebrtcstream-request-fields
 	medias := []*core.Media{

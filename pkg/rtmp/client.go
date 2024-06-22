@@ -8,10 +8,11 @@ import (
 	"strings"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/flv"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 )
 
-func DialPlay(rawURL string) (core.Producer, error) {
+func DialPlay(rawURL string) (*flv.Producer, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, err
@@ -22,16 +23,16 @@ func DialPlay(rawURL string) (core.Producer, error) {
 		return nil, err
 	}
 
-	rtmpConn, err := NewClient(conn, u)
+	client, err := NewClient(conn, u)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = rtmpConn.play(); err != nil {
+	if err = client.play(); err != nil {
 		return nil, err
 	}
 
-	return rtmpConn.Producer()
+	return client.Producer()
 }
 
 func DialPublish(rawURL string) (io.Writer, error) {
@@ -65,7 +66,7 @@ func NewClient(conn net.Conn, u *url.URL) (*Conn, error) {
 		rd:   bufio.NewReaderSize(conn, core.BufferSize),
 		wr:   conn,
 
-		chunks: map[uint8]*header{},
+		chunks: map[uint8]*chunk{},
 
 		rdPacketSize: 128,
 		wrPacketSize: 4096, // OBS - 4096, Reolink - 4096

@@ -45,6 +45,13 @@
 [video4linux2,v4l2 @ 0x7f7de7c58bc0] Compressed:       mjpeg :          Motion-JPEG : 640x480 160x120 176x144 320x176 320x240 352x288 432x240 544x288 640x360 752x416 800x448 800x600 864x480 960x544 960x720 1024x576 1184x656 1280x720 1280x960
 ```
 
+## TTS
+
+```yaml
+streams:
+  tts: ffmpeg:#input=-readrate 1 -readrate_initial_burst 0.001 -f lavfi -i "flite=text='1 2 3 4 5 6 7 8 9 0'"#audio=pcma
+```
+
 ## Useful links
 
 - https://superuser.com/questions/564402/explanation-of-x264-tune

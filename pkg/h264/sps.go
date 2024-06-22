@@ -1,6 +1,10 @@
 package h264
 
-import "github.com/AlexxIT/go2rtc/pkg/bits"
+import (
+	"fmt"
+
+	"github.com/AlexxIT/go2rtc/pkg/bits"
+)
 
 // http://www.itu.int/rec/T-REC-H.264
 // https://webrtc.googlesource.com/src/+/refs/heads/main/common_video/h264/sps_parser.cc
@@ -226,6 +230,135 @@ func (s *SPS) scaling_list(r *bits.Reader, sizeOfScalingList int) {
 		}
 		if nextScale != 0 {
 			lastScale = nextScale
+		}
+	}
+}
+
+func (s *SPS) Profile() string {
+	switch s.profile_idc {
+	case 0x42:
+		return "Baseline"
+	case 0x4D:
+		return "Main"
+	case 0x58:
+		return "Extended"
+	case 0x64:
+		return "High"
+	}
+	return fmt.Sprintf("0x%02X", s.profile_idc)
+}
+
+func (s *SPS) PixFmt() string {
+	if s.bit_depth_luma_minus8 == 0 {
+		switch s.chroma_format_idc {
+		case 1:
+			if s.video_full_range_flag == 1 {
+				return "yuvj420p"
+			}
+			return "yuv420p"
+		case 2:
+			return "yuv422p"
+		case 3:
+			return "yuv444p"
+		}
+	}
+	return ""
+}
+
+func (s *SPS) String() string {
+	return fmt.Sprintf(
+		"%s %d.%d, %s, %dx%d",
+		s.Profile(), s.level_idc/10, s.level_idc%10, s.PixFmt(), s.Width(), s.Height(),
+	)
+}
+
+// FixPixFmt - change yuvj420p to yuv420p in SPS
+// same as "-c:v copy -bsf:v h264_metadata=video_full_range_flag=0"
+func FixPixFmt(sps []byte) {
+	r := bits.NewReader(sps)
+
+	_ = r.ReadByte()
+
+	profile := r.ReadByte()
+	_ = r.ReadByte()
+	_ = r.ReadByte()
+	_ = r.ReadUEGolomb()
+
+	switch profile {
+	case 100, 110, 122, 244, 44, 83, 86, 118, 128, 138, 139, 134, 135:
+		n := byte(8)
+
+		if r.ReadUEGolomb() == 3 {
+			_ = r.ReadBit()
+			n = 12
+		}
+
+		_ = r.ReadUEGolomb()
+		_ = r.ReadUEGolomb()
+		_ = r.ReadBit()
+
+		if r.ReadBit() != 0 {
+			for i := byte(0); i < n; i++ {
+				if r.ReadBit() != 0 {
+					return // skip
+				}
+			}
+		}
+	}
+
+	_ = r.ReadUEGolomb()
+
+	switch r.ReadUEGolomb() {
+	case 0:
+		_ = r.ReadUEGolomb()
+	case 1:
+		_ = r.ReadBit()
+		_ = r.ReadSEGolomb()
+		_ = r.ReadSEGolomb()
+
+		n := r.ReadUEGolomb()
+		for i := uint32(0); i < n; i++ {
+			_ = r.ReadSEGolomb()
+		}
+	}
+
+	_ = r.ReadUEGolomb()
+	_ = r.ReadBit()
+
+	_ = r.ReadUEGolomb()
+	_ = r.ReadUEGolomb()
+
+	if r.ReadBit() == 0 {
+		_ = r.ReadBit()
+	}
+
+	_ = r.ReadBit()
+
+	if r.ReadBit() != 0 {
+		_ = r.ReadUEGolomb()
+		_ = r.ReadUEGolomb()
+		_ = r.ReadUEGolomb()
+		_ = r.ReadUEGolomb()
+	}
+
+	if r.ReadBit() != 0 {
+		if r.ReadBit() != 0 {
+			if r.ReadByte() == 255 {
+				_ = r.ReadUint16()
+				_ = r.ReadUint16()
+			}
+		}
+
+		if r.ReadBit() != 0 {
+			_ = r.ReadBit()
+		}
+
+		if r.ReadBit() != 0 {
+			_ = r.ReadBits8(3)
+			if r.ReadBit() == 1 {
+				pos, bit := r.Pos()
+				sps[pos] &= ^byte(1 << bit)
+			}
 		}
 	}
 }

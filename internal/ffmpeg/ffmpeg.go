@@ -2,34 +2,57 @@ package ffmpeg
 
 import (
 	"net/url"
+	"slices"
 	"strings"
 
+	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg/device"
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg/hardware"
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg/virtual"
 	"github.com/AlexxIT/go2rtc/internal/rtsp"
 	"github.com/AlexxIT/go2rtc/internal/streams"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/ffmpeg"
+	"github.com/rs/zerolog"
 )
 
 func Init() {
 	var cfg struct {
 		Mod map[string]string `yaml:"ffmpeg"`
+		Log struct {
+			Level string `yaml:"ffmpeg"`
+		} `yaml:"log"`
 	}
 
 	cfg.Mod = defaults // will be overriden from yaml
+	cfg.Log.Level = "error"
 
 	app.LoadConfig(&cfg)
 
-	if app.GetLogger("exec").GetLevel() >= 0 {
-		defaults["global"] += " -v error"
+	log = app.GetLogger("ffmpeg")
+
+	// zerolog levels: trace debug         info warn    error fatal panic disabled
+	// FFmpeg  levels: trace debug verbose info warning error fatal panic quiet
+	if cfg.Log.Level == "warn" {
+		cfg.Log.Level = "warning"
 	}
+	defaults["global"] += " -v " + cfg.Log.Level
 
 	streams.RedirectFunc("ffmpeg", func(url string) (string, error) {
+		if _, err := Version(); err != nil {
+			return "", err
+		}
 		args := parseArgs(url[7:])
+		if slices.Contains(args.Codecs, "auto") {
+			return "", nil // force call streams.HandleFunc("ffmpeg")
+		}
 		return "exec:" + args.String(), nil
 	})
+
+	streams.HandleFunc("ffmpeg", NewProducer)
+
+	api.HandleFunc("api/ffmpeg", apiFFmpeg)
 
 	device.Init(defaults["bin"])
 	hardware.Init(defaults["bin"])
@@ -49,15 +72,24 @@ var defaults = map[string]string{
 	// output
 	"output":       "-user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}",
 	"output/mjpeg": "-f mjpeg -",
+	"output/raw":   "-f yuv4mpegpipe -",
+	"output/aac":   "-f adts -",
+	"output/wav":   "-f wav -",
 
 	// `-preset superfast` - we can't use ultrafast because it doesn't support `-profile main -level 4.1`
 	// `-tune zerolatency` - for minimal latency
 	// `-profile high -level 4.1` - most used streaming profile
 	// `-pix_fmt:v yuv420p` - important for Telegram
 	"h264":  "-c:v libx264 -g 50 -profile:v high -level:v 4.1 -preset:v superfast -tune:v zerolatency -pix_fmt:v yuv420p",
-	"h265":  "-c:v libx265 -g 50 -profile:v main -level:v 5.1 -preset:v superfast -tune:v zerolatency",
+	"h265":  "-c:v libx265 -g 50 -profile:v main -level:v 5.1 -preset:v superfast -tune:v zerolatency -pix_fmt:v yuv420p",
 	"mjpeg": "-c:v mjpeg",
 	//"mjpeg": "-c:v mjpeg -force_duplicated_matrix:v 1 -huffman:v 0 -pix_fmt:v yuvj420p",
+
+	"raw":         "-c:v rawvideo",
+	"raw/gray8":   "-c:v rawvideo -pix_fmt:v gray8",
+	"raw/yuv420p": "-c:v rawvideo -pix_fmt:v yuv420p",
+	"raw/yuv422p": "-c:v rawvideo -pix_fmt:v yuv422p",
+	"raw/yuv444p": "-c:v rawvideo -pix_fmt:v yuv444p",
 
 	// https://ffmpeg.org/ffmpeg-codecs.html#libopus-1
 	// https://github.com/pion/webrtc/issues/1514
@@ -116,6 +148,8 @@ var defaults = map[string]string{
 	"h265/videotoolbox": "-c:v hevc_videotoolbox -g 50 -bf 0 -profile:v main -level:v 5.1",
 }
 
+var log zerolog.Logger
+
 // configTemplate - return template from config (defaults) if exist or return raw template
 func configTemplate(template string) string {
 	if s := defaults[template]; s != "" {
@@ -140,9 +174,10 @@ func inputTemplate(name, s string, query url.Values) string {
 func parseArgs(s string) *ffmpeg.Args {
 	// init FFmpeg arguments
 	args := &ffmpeg.Args{
-		Bin:    defaults["bin"],
-		Global: defaults["global"],
-		Output: defaults["output"],
+		Bin:     defaults["bin"],
+		Global:  defaults["global"],
+		Output:  defaults["output"],
+		Version: verAV,
 	}
 
 	var query url.Values
@@ -188,16 +223,14 @@ func parseArgs(s string) *ffmpeg.Args {
 			s += "?video&audio"
 		}
 		args.Input = inputTemplate("rtsp", s, query)
-	} else if strings.HasPrefix(s, "device?") {
-		var err error
-		args.Input, err = device.GetInput(s)
-		if err != nil {
-			return nil
-		}
-	} else if strings.HasPrefix(s, "virtual?") {
-		var err error
-		if args.Input, err = virtual.GetInput(s[8:]); err != nil {
-			return nil
+	} else if i = strings.Index(s, "?"); i > 0 {
+		switch s[:i] {
+		case "device":
+			args.Input = device.GetInput(s[i+1:])
+		case "virtual":
+			args.Input = virtual.GetInput(s[i+1:])
+		case "tts":
+			args.Input = virtual.GetInputTTS(s[i+1:])
 		}
 	} else {
 		args.Input = inputTemplate("file", s, query)
@@ -280,6 +313,12 @@ func parseArgs(s string) *ffmpeg.Args {
 			}
 		}
 
+		if query["bitrate"] != nil {
+			// https://trac.ffmpeg.org/wiki/Limiting%20the%20output%20bitrate
+			b := query["bitrate"][0]
+			args.AddCodec("-b:v " + b + " -maxrate " + b + " -bufsize " + b)
+		}
+
 		// 4. Process audio codecs
 		if args.Audio > 0 {
 			for _, audio := range query["audio"] {
@@ -309,11 +348,27 @@ func parseArgs(s string) *ffmpeg.Args {
 		args.AddCodec("-an")
 	}
 
-	// transcoding to only mjpeg
-	if (args.Video == 1 && args.Audio == 0 && query.Get("video") == "mjpeg") ||
-		// no transcoding from mjpeg input
-		(args.Video == 0 && args.Audio == 0 && strings.Contains(args.Input, " mjpeg ")) {
-		args.Output = defaults["output/mjpeg"]
+	// change otput from RTSP to some other pipe format
+	switch {
+	case args.Video == 0 && args.Audio == 0:
+		// no transcoding from mjpeg input (ffmpeg device with support output as raw MJPEG)
+		if strings.Contains(args.Input, " mjpeg ") {
+			args.Output = defaults["output/mjpeg"]
+		}
+	case args.Video == 1 && args.Audio == 0:
+		switch core.Before(query.Get("video"), "/") {
+		case "mjpeg":
+			args.Output = defaults["output/mjpeg"]
+		case "raw":
+			args.Output = defaults["output/raw"]
+		}
+	case args.Video == 0 && args.Audio == 1:
+		switch core.Before(query.Get("audio"), "/") {
+		case "aac":
+			args.Output = defaults["output/aac"]
+		case "pcma", "pcmu", "pcml":
+			args.Output = defaults["output/wav"]
+		}
 	}
 
 	return args

@@ -2,7 +2,7 @@
 
 # 0. Prepare images
 ARG PYTHON_VERSION="3.11"
-ARG GO_VERSION="1.21"
+ARG GO_VERSION="1.22"
 ARG NGROK_VERSION="3"
 
 FROM python:${PYTHON_VERSION}-alpine AS base
@@ -19,6 +19,8 @@ ENV GOOS=${TARGETOS}
 ENV GOARCH=${TARGETARCH}
 
 WORKDIR /build
+
+RUN apk add git
 
 # Cache dependencies
 COPY go.mod go.sum ./

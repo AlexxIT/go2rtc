@@ -4,49 +4,100 @@ import (
 	"io"
 	"os"
 
+	"github.com/mattn/go-isatty"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
-var MemoryLog *circularBuffer
-
-func NewLogger(format string, level string) zerolog.Logger {
-	var writer io.Writer = os.Stdout
-
-	if format != "json" {
-		writer = zerolog.ConsoleWriter{
-			Out: writer, TimeFormat: "15:04:05.000", NoColor: format == "text",
-		}
-	}
-
-	MemoryLog = newBuffer(16)
-
-	writer = zerolog.MultiLevelWriter(writer, MemoryLog)
-
-	zerolog.TimeFieldFormat = zerolog.TimeFormatUnixMs
-
-	lvl, err := zerolog.ParseLevel(level)
-	if err != nil || lvl == zerolog.NoLevel {
-		lvl = zerolog.InfoLevel
-	}
-
-	return zerolog.New(writer).With().Timestamp().Logger().Level(lvl)
-}
+var MemoryLog = newBuffer(16)
 
 func GetLogger(module string) zerolog.Logger {
 	if s, ok := modules[module]; ok {
 		lvl, err := zerolog.ParseLevel(s)
 		if err == nil {
-			return log.Level(lvl)
+			return Logger.Level(lvl)
 		}
-		log.Warn().Err(err).Caller().Send()
+		Logger.Warn().Err(err).Caller().Send()
 	}
 
-	return log.Logger
+	return Logger
 }
 
+// initLogger support:
+// - output: empty (only to memory), stderr, stdout
+// - format: empty (autodetect color support), color, json, text
+// - time:   empty (disable timestamp), UNIXMS, UNIXMICRO, UNIXNANO
+// - level:  disabled, trace, debug, info, warn, error...
+func initLogger() {
+	var cfg struct {
+		Mod map[string]string `yaml:"log"`
+	}
+
+	cfg.Mod = modules // defaults
+
+	LoadConfig(&cfg)
+
+	var writer io.Writer
+
+	switch modules["output"] {
+	case "stderr":
+		writer = os.Stderr
+	case "stdout":
+		writer = os.Stdout
+	}
+
+	timeFormat := modules["time"]
+
+	if writer != nil {
+		if format := modules["format"]; format != "json" {
+			console := &zerolog.ConsoleWriter{Out: writer}
+
+			switch format {
+			case "text":
+				console.NoColor = true
+			case "color":
+				console.NoColor = false // useless, but anyway
+			default:
+				// autodetection if output support color
+				// go-isatty - dependency for go-colorable - dependency for ConsoleWriter
+				console.NoColor = !isatty.IsTerminal(writer.(*os.File).Fd())
+			}
+
+			if timeFormat != "" {
+				console.TimeFormat = "15:04:05.000"
+			} else {
+				console.PartsOrder = []string{
+					zerolog.LevelFieldName,
+					zerolog.CallerFieldName,
+					zerolog.MessageFieldName,
+				}
+			}
+
+			writer = console
+		}
+
+		writer = zerolog.MultiLevelWriter(writer, MemoryLog)
+	} else {
+		writer = MemoryLog
+	}
+
+	lvl, _ := zerolog.ParseLevel(modules["level"])
+	Logger = zerolog.New(writer).Level(lvl)
+
+	if timeFormat != "" {
+		zerolog.TimeFieldFormat = timeFormat
+		Logger = Logger.With().Timestamp().Logger()
+	}
+}
+
+var Logger zerolog.Logger
+
 // modules log levels
-var modules map[string]string
+var modules = map[string]string{
+	"format": "", // useless, but anyway
+	"level":  "info",
+	"output": "stdout", // TODO: change to stderr someday
+	"time":   zerolog.TimeFormatUnixMs,
+}
 
 const chunkSize = 1 << 16
 

@@ -88,6 +88,11 @@ func (s *Stream) RemoveProducer(prod core.Producer) {
 }
 
 func (s *Stream) stopProducers() {
+	if s.pending.Load() > 0 {
+		log.Trace().Msg("[streams] skip stop pending producer")
+		return
+	}
+
 	s.mu.Lock()
 producers:
 	for _, producer := range s.producers {
@@ -107,19 +112,12 @@ producers:
 }
 
 func (s *Stream) MarshalJSON() ([]byte, error) {
-	if !s.mu.TryLock() {
-		log.Warn().Msgf("[streams] json locked")
-		return json.Marshal(nil)
-	}
-
-	var info struct {
+	var info = struct {
 		Producers []*Producer     `json:"producers"`
 		Consumers []core.Consumer `json:"consumers"`
+	}{
+		Producers: s.producers,
+		Consumers: s.consumers,
 	}
-	info.Producers = s.producers
-	info.Consumers = s.consumers
-
-	s.mu.Unlock()
-
 	return json.Marshal(info)
 }

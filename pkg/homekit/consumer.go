@@ -3,7 +3,7 @@ package homekit
 import (
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"time"
 
@@ -16,7 +16,7 @@ import (
 )
 
 type Consumer struct {
-	core.SuperConsumer
+	core.Connection
 	conn net.Conn
 	srtp *srtp.Server
 
@@ -29,28 +29,31 @@ type Consumer struct {
 }
 
 func NewConsumer(conn net.Conn, server *srtp.Server) *Consumer {
-	return &Consumer{
-		SuperConsumer: core.SuperConsumer{
-			Type:       "HomeKit passive consumer",
-			RemoteAddr: conn.RemoteAddr().String(),
-			Medias: []*core.Media{
-				{
-					Kind:      core.KindVideo,
-					Direction: core.DirectionSendonly,
-					Codecs: []*core.Codec{
-						{Name: core.CodecH264},
-					},
-				},
-				{
-					Kind:      core.KindAudio,
-					Direction: core.DirectionSendonly,
-					Codecs: []*core.Codec{
-						{Name: core.CodecOpus},
-					},
-				},
+	medias := []*core.Media{
+		{
+			Kind:      core.KindVideo,
+			Direction: core.DirectionSendonly,
+			Codecs: []*core.Codec{
+				{Name: core.CodecH264},
 			},
 		},
-
+		{
+			Kind:      core.KindAudio,
+			Direction: core.DirectionSendonly,
+			Codecs: []*core.Codec{
+				{Name: core.CodecOpus},
+			},
+		},
+	}
+	return &Consumer{
+		Connection: core.Connection{
+			ID:         core.NewID(),
+			FormatName: "homekit",
+			Protocol:   "udp",
+			RemoteAddr: conn.RemoteAddr().String(),
+			Medias:     medias,
+			Transport:  conn,
+		},
 		conn: conn,
 		srtp: server,
 	}
@@ -175,11 +178,10 @@ func (c *Consumer) WriteTo(io.Writer) (int64, error) {
 }
 
 func (c *Consumer) Stop() error {
-	_ = c.SuperConsumer.Close()
 	if c.deadline != nil {
 		c.deadline.Reset(0)
 	}
-	return c.SuperConsumer.Close()
+	return c.Connection.Stop()
 }
 
 func (c *Consumer) srtpEndpoint() *srtp.Endpoint {

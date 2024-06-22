@@ -1,11 +1,9 @@
 package device
 
 import (
-	"errors"
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 	"sync"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
@@ -17,24 +15,15 @@ func Init(bin string) {
 	api.HandleFunc("api/ffmpeg/devices", apiDevices)
 }
 
-func GetInput(src string) (string, error) {
-	i := strings.IndexByte(src, '?')
-	if i < 0 {
-		return "", errors.New("empty query: " + src)
-	}
-
-	query, err := url.ParseQuery(src[i+1:])
+func GetInput(src string) string {
+	query, err := url.ParseQuery(src)
 	if err != nil {
-		return "", err
+		return ""
 	}
 
 	runonce.Do(initDevices)
 
-	if input := queryToInput(query); input != "" {
-		return input, nil
-	}
-
-	return "", errors.New("wrong query: " + src)
+	return queryToInput(query)
 }
 
 var Bin string

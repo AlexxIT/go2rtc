@@ -14,10 +14,16 @@ import (
 )
 
 func NewServer(conn net.Conn) *Conn {
-	c := new(Conn)
-	c.conn = conn
-	c.reader = bufio.NewReader(conn)
-	return c
+	return &Conn{
+		Connection: core.Connection{
+			ID:         core.NewID(),
+			FormatName: "rtsp",
+			Protocol:   "rtsp+tcp",
+			RemoteAddr: conn.RemoteAddr().String(),
+		},
+		conn:   conn,
+		reader: bufio.NewReader(conn),
+	}
 }
 
 func (c *Conn) Auth(username, password string) {
@@ -70,7 +76,7 @@ func (c *Conn) Accept() error {
 				return errors.New("wrong content type")
 			}
 
-			c.sdp = string(req.Body) // for info
+			c.SDP = string(req.Body) // for info
 
 			c.Medias, err = UnmarshalSDP(req.Body)
 			if err != nil {
@@ -81,7 +87,7 @@ func (c *Conn) Accept() error {
 			for i, media := range c.Medias {
 				track := core.NewReceiver(media, media.Codecs[0])
 				track.ID = byte(i * 2)
-				c.receivers = append(c.receivers, track)
+				c.Receivers = append(c.Receivers, track)
 			}
 
 			c.mode = core.ModePassiveProducer
@@ -96,7 +102,7 @@ func (c *Conn) Accept() error {
 			c.mode = core.ModePassiveConsumer
 			c.Fire(MethodDescribe)
 
-			if c.senders == nil {
+			if c.Senders == nil {
 				res := &tcp.Response{
 					Status:  "404 Not Found",
 					Request: req,
@@ -113,7 +119,7 @@ func (c *Conn) Accept() error {
 
 			// convert tracks to real output medias medias
 			var medias []*core.Media
-			for i, track := range c.senders {
+			for i, track := range c.Senders {
 				media := &core.Media{
 					Kind:      core.GetKind(track.Codec.Name),
 					Direction: core.DirectionRecvonly,
@@ -128,7 +134,7 @@ func (c *Conn) Accept() error {
 				return err
 			}
 
-			c.sdp = string(res.Body) // for info
+			c.SDP = string(res.Body) // for info
 
 			if err = c.WriteResponse(res); err != nil {
 				return err
@@ -146,7 +152,19 @@ func (c *Conn) Accept() error {
 			if strings.HasPrefix(tr, transport) {
 				c.session = core.RandString(8, 10)
 				c.state = StateSetup
-				res.Header.Set("Transport", tr[:len(transport)+3])
+
+				if c.mode == core.ModePassiveConsumer {
+					if i := reqTrackID(req); i >= 0 && i < len(c.Senders) {
+						// mark sender as SETUP
+						c.Senders[i].Media.ID = MethodSetup
+						tr = fmt.Sprintf("RTP/AVP/TCP;unicast;interleaved=%d-%d", i*2, i*2+1)
+						res.Header.Set("Transport", tr)
+					} else {
+						res.Status = "400 Bad Request"
+					}
+				} else {
+					res.Header.Set("Transport", tr[:len(transport)+3])
+				}
 			} else {
 				res.Status = "461 Unsupported transport"
 			}
@@ -156,6 +174,15 @@ func (c *Conn) Accept() error {
 			}
 
 		case MethodRecord, MethodPlay:
+			if c.mode == core.ModePassiveConsumer {
+				// stop unconfigured senders
+				for _, track := range c.Senders {
+					if track.Media.ID != MethodSetup {
+						track.Close()
+					}
+				}
+			}
+
 			res := &tcp.Response{Request: req}
 			err = c.WriteResponse(res)
 			c.playOK = true
@@ -171,4 +198,19 @@ func (c *Conn) Accept() error {
 			return fmt.Errorf("unsupported method: %s", req.Method)
 		}
 	}
+}
+
+func reqTrackID(req *tcp.Request) int {
+	var s string
+	if req.URL.RawQuery != "" {
+		s = req.URL.RawQuery
+	} else {
+		s = req.URL.Path
+	}
+	if i := strings.LastIndexByte(s, '='); i > 0 {
+		if i, err := strconv.Atoi(s[i+1:]); err == nil {
+			return i
+		}
+	}
+	return -1
 }

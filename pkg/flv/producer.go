@@ -15,18 +15,24 @@ import (
 )
 
 type Producer struct {
-	core.SuperProducer
+	core.Connection
 	rd *core.ReadBuffer
 
 	video, audio *core.Receiver
 }
 
 func Open(rd io.Reader) (*Producer, error) {
-	prod := &Producer{rd: core.NewReadBuffer(rd)}
+	prod := &Producer{
+		Connection: core.Connection{
+			ID:         core.NewID(),
+			FormatName: "flv",
+			Transport:  rd,
+		},
+		rd: core.NewReadBuffer(rd),
+	}
 	if err := prod.probe(); err != nil {
 		return nil, err
 	}
-	prod.Type = "FLV producer"
 	return prod, nil
 }
 
@@ -57,7 +63,7 @@ const (
 )
 
 func (c *Producer) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
-	receiver, _ := c.SuperProducer.GetTrack(media, codec)
+	receiver, _ := c.Connection.GetTrack(media, codec)
 	if media.Kind == core.KindVideo {
 		c.video = receiver
 	} else {
@@ -115,11 +121,6 @@ func (c *Producer) Start() error {
 			c.video.WriteRTP(pkt)
 		}
 	}
-}
-
-func (c *Producer) Stop() error {
-	_ = c.SuperProducer.Close()
-	return c.rd.Close()
 }
 
 func (c *Producer) probe() error {

@@ -8,11 +8,11 @@ import (
 )
 
 func Init() {
-	streams.HandleFunc("kasa", func(url string) (core.Producer, error) {
-		return kasa.Dial(url)
+	streams.HandleFunc("kasa", func(source string) (core.Producer, error) {
+		return kasa.Dial(source)
 	})
 
-	streams.HandleFunc("tapo", func(url string) (core.Producer, error) {
-		return tapo.Dial(url)
+	streams.HandleFunc("tapo", func(source string) (core.Producer, error) {
+		return tapo.Dial(source)
 	})
 }

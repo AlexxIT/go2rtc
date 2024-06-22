@@ -23,6 +23,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 )
 
+// Deprecated: should be rewritten to core.Connection
 type Client struct {
 	core.Listener
 

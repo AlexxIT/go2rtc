@@ -22,12 +22,11 @@ import (
 func Init() {
 	var cfg struct {
 		Mod map[string]struct {
-			Pin           string   `json:"pin"`
-			Name          string   `json:"name"`
-			DeviceID      string   `json:"device_id"`
-			DevicePrivate string   `json:"device_private"`
-			Pairings      []string `json:"pairings"`
-			//Listen        string   `json:"listen"`
+			Pin           string   `yaml:"pin"`
+			Name          string   `yaml:"name"`
+			DeviceID      string   `yaml:"device_id"`
+			DevicePrivate string   `yaml:"device_private"`
+			Pairings      []string `yaml:"pairings"`
 		} `yaml:"homekit"`
 	}
 	app.LoadConfig(&cfg)
@@ -134,12 +133,19 @@ func Init() {
 var log zerolog.Logger
 var servers map[string]*server
 
-func streamHandler(url string) (core.Producer, error) {
+func streamHandler(rawURL string) (core.Producer, error) {
 	if srtp.Server == nil {
 		return nil, errors.New("homekit: can't work without SRTP server")
 	}
 
-	return homekit.Dial(url, srtp.Server)
+	rawURL, rawQuery, _ := strings.Cut(rawURL, "#")
+	client, err := homekit.Dial(rawURL, srtp.Server)
+	if client != nil && rawQuery != "" {
+		query := streams.ParseQuery(rawQuery)
+		client.Bitrate = parseBitrate(query.Get("bitrate"))
+	}
+
+	return client, err
 }
 
 func hapPairSetup(w http.ResponseWriter, r *http.Request) {
@@ -199,4 +205,25 @@ func findHomeKitURL(stream *streams.Stream) string {
 	}
 
 	return ""
+}
+
+func parseBitrate(s string) int {
+	n := len(s)
+	if n == 0 {
+		return 0
+	}
+
+	var k int
+	switch n--; s[n] {
+	case 'K':
+		k = 1024
+		s = s[:n]
+	case 'M':
+		k = 1024 * 1024
+		s = s[:n]
+	default:
+		k = 1
+	}
+
+	return k * core.Atoi(s)
 }
