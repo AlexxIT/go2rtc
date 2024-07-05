@@ -15,6 +15,7 @@ import (
 type closer struct {
 	cmd   *exec.Cmd
 	query url.Values
+	done  chan error
 }
 
 func (c *closer) Close() (err error) {
@@ -35,5 +36,14 @@ func (c *closer) Close() (err error) {
 		defer timer.Stop() // stop timer if Wait ends before timeout
 	}
 
-	return errors.Join(err, c.cmd.Wait())
+	if c.done != nil {
+		select {
+		case doneErr := <-c.done:
+			err = errors.Join(err, doneErr)
+		}
+	} else {
+		err = errors.Join(err, c.cmd.Wait())
+	}
+
+	return err
 }

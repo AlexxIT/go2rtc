@@ -158,6 +158,8 @@ func handleRTSP(source string, cmd *exec.Cmd, cl io.Closer, path string) (core.P
 		done <- cmd.Wait()
 	}()
 
+	cl.(*closer).done = done
+
 	select {
 	case <-time.After(time.Minute):
 		log.Error().Str("source", source).Msg("[exec] timeout")
