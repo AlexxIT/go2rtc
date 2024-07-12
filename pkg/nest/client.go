@@ -17,7 +17,7 @@ type WebRTCClient struct {
 
 type RTSPClient struct {
 	conn *rtsp.Conn
-	api *API
+	api  *API
 }
 
 func Dial(rawURL string) (core.Producer, error) {
