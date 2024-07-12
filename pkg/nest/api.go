@@ -17,8 +17,14 @@ type API struct {
 
 	StreamProjectID string
 	StreamDeviceID  string
-	StreamSessionID string
 	StreamExpiresAt time.Time
+
+	// WebRTC
+	StreamSessionID string
+
+	// RTSP
+	StreamToken string
+	StreamExtensionToken string
 
 	extendTimer *time.Timer
 }
@@ -112,7 +118,14 @@ func (a *API) GetDevices(projectID string) (map[string]string, error) {
 			continue
 		}
 
-		if device.Traits.SdmDevicesTraitsCameraLiveStream.SupportedProtocols[0] != "WEB_RTC" {
+		supported := false
+		for _, protocol := range device.Traits.SdmDevicesTraitsCameraLiveStream.SupportedProtocols {
+			if (protocol == "WEB_RTC" || protocol == "RTSP") {
+				supported = true
+				break
+			}
+		}
+		if !supported {
 			continue
 		}
 
@@ -122,10 +135,42 @@ func (a *API) GetDevices(projectID string) (map[string]string, error) {
 		}
 
 		name := device.Traits.SdmDevicesTraitsInfo.CustomName
+		// Devices configured through the Nest app use the container/room name as opposed to the customName trait
+		if name == "" && len(device.ParentRelations) > 0 {
+			name = device.ParentRelations[0].DisplayName
+		}
 		devices[name] = device.Name[i+1:]
 	}
 
 	return devices, nil
+}
+
+func (a *API) GetDevice(projectID, deviceID string) (Device, error) {
+	uri := "https://smartdevicemanagement.googleapis.com/v1/enterprises/" + projectID + "/devices/" + deviceID
+	req, err := http.NewRequest("GET", uri, nil)
+	if err != nil {
+		return Device{}, err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+a.Token)
+
+	client := &http.Client{Timeout: time.Second * 5000}
+	res, err := client.Do(req)
+	if err != nil {
+		return Device{}, err
+	}
+
+	if res.StatusCode != 200 {
+		return Device{}, errors.New("nest: wrong status: " + res.Status)
+	}
+
+	var device Device
+
+	if err = json.NewDecoder(res.Body).Decode(&device); err != nil {
+		return Device{}, err
+	}
+
+	return device, nil
 }
 
 func (a *API) ExchangeSDP(projectID, deviceID, offer string) (string, error) {
@@ -186,11 +231,20 @@ func (a *API) ExtendStream() error {
 	var reqv struct {
 		Command string `json:"command"`
 		Params  struct {
-			MediaSessionID string `json:"mediaSessionId"`
+			MediaSessionID string `json:"mediaSessionId,omitempty"`
+			StreamExtensionToken string `json:"streamExtensionToken,omitempty"`
 		} `json:"params"`
 	}
-	reqv.Command = "sdm.devices.commands.CameraLiveStream.ExtendWebRtcStream"
-	reqv.Params.MediaSessionID = a.StreamSessionID
+
+	if a.StreamToken != "" {
+		// RTSP
+		reqv.Command = "sdm.devices.commands.CameraLiveStream.ExtendRtspStream"
+		reqv.Params.StreamExtensionToken = a.StreamExtensionToken
+	} else {
+		// WebRTC
+		reqv.Command = "sdm.devices.commands.CameraLiveStream.ExtendWebRtcStream"
+		reqv.Params.MediaSessionID = a.StreamSessionID
+	}
 
 	b, err := json.Marshal(reqv)
 	if err != nil {
@@ -220,6 +274,8 @@ func (a *API) ExtendStream() error {
 		Results struct {
 			ExpiresAt      time.Time `json:"expiresAt"`
 			MediaSessionID string    `json:"mediaSessionId"`
+			StreamExtensionToken string `json:"streamExtensionToken"`
+			StreamToken string `json:"streamToken"`
 		} `json:"results"`
 	}
 
@@ -229,6 +285,111 @@ func (a *API) ExtendStream() error {
 
 	a.StreamSessionID = resv.Results.MediaSessionID
 	a.StreamExpiresAt = resv.Results.ExpiresAt
+	a.StreamExtensionToken = resv.Results.StreamExtensionToken
+	a.StreamToken = resv.Results.StreamToken
+
+	return nil
+}
+
+func (a *API) GenerateRtspStream(projectID, deviceID string) (string, error) {
+	var reqv struct {
+		Command string `json:"command"`
+		Params  struct {} `json:"params"`
+	}
+	reqv.Command = "sdm.devices.commands.CameraLiveStream.GenerateRtspStream"
+
+	b, err := json.Marshal(reqv)
+	if err != nil {
+		return "", err
+	}
+
+	uri := "https://smartdevicemanagement.googleapis.com/v1/enterprises/" +
+		projectID + "/devices/" + deviceID + ":executeCommand"
+	req, err := http.NewRequest("POST", uri, bytes.NewReader(b))
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+a.Token)
+
+	client := &http.Client{Timeout: time.Second * 5000}
+	res, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+
+	if res.StatusCode != 200 {
+		return "", errors.New("nest: wrong status: " + res.Status)
+	}
+
+	var resv struct {
+		Results struct {
+			StreamURLs map[string]string `json:"streamUrls"`
+			StreamExtensionToken string `json:"streamExtensionToken"`
+			StreamToken string `json:"streamToken"`
+			ExpiresAt      time.Time `json:"expiresAt"`
+		} `json:"results"`
+	}
+
+	if err = json.NewDecoder(res.Body).Decode(&resv); err != nil {
+		return "", err
+	}
+
+	if _, ok := resv.Results.StreamURLs["rtspUrl"]; !ok {
+		return "", errors.New("nest: failed to generate rtsp url")
+	}
+
+	a.StreamProjectID = projectID
+	a.StreamDeviceID = deviceID
+	a.StreamToken = resv.Results.StreamToken
+	a.StreamExtensionToken = resv.Results.StreamExtensionToken
+	a.StreamExpiresAt = resv.Results.ExpiresAt
+
+	return resv.Results.StreamURLs["rtspUrl"], nil
+}
+
+func (a *API) StopRTSPStream() error {
+	if a.StreamProjectID == "" || a.StreamDeviceID == "" {
+		return errors.New("nest: tried to stop rtsp stream without a project or device ID")
+	}
+
+	var reqv struct {
+		Command string `json:"command"`
+		Params  struct {
+			StreamExtensionToken string `json:"streamExtensionToken"`
+		} `json:"params"`
+	}
+	reqv.Command = "sdm.devices.commands.CameraLiveStream.StopRtspStream"
+	reqv.Params.StreamExtensionToken = a.StreamExtensionToken
+
+	b, err := json.Marshal(reqv)
+	if err != nil {
+		return err
+	}
+
+	uri := "https://smartdevicemanagement.googleapis.com/v1/enterprises/" +
+		a.StreamProjectID + "/devices/" + a.StreamDeviceID + ":executeCommand"
+	req, err := http.NewRequest("POST", uri, bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+a.Token)
+
+	client := &http.Client{Timeout: time.Second * 5000}
+	res, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+
+	if res.StatusCode != 200 {
+		return errors.New("nest: wrong status: " + res.Status)
+	}
+
+	a.StreamProjectID = ""
+	a.StreamDeviceID = ""
+	a.StreamExtensionToken = ""
+	a.StreamToken = ""
 
 	return nil
 }
@@ -261,10 +422,10 @@ type Device struct {
 		//SdmDevicesTraitsCameraClipPreview struct {
 		//} `json:"sdm.devices.traits.CameraClipPreview"`
 	} `json:"traits"`
-	//ParentRelations []struct {
-	//	Parent      string `json:"parent"`
-	//	DisplayName string `json:"displayName"`
-	//} `json:"parentRelations"`
+	ParentRelations []struct {
+		Parent      string `json:"parent"`
+		DisplayName string `json:"displayName"`
+	} `json:"parentRelations"`
 }
 
 func (a *API) StartExtendStreamTimer() {
@@ -277,7 +438,6 @@ func (a *API) StartExtendStreamTimer() {
 		duration = time.Until(a.StreamExpiresAt.Add(-30 * time.Second))
 		a.extendTimer.Reset(duration)
 	})
-
 }
 
 func (a *API) StopExtendStreamTimer() {
