@@ -46,6 +46,25 @@ func Get(name string) *Stream {
 	return streams[name]
 }
 
+func GetFromSource(source string) []*Stream {
+    var foundStreams []*Stream
+
+    for _, stream := range streams {
+        for _, src := range stream.Sources() {
+            if src == source {
+                foundStreams = append(foundStreams, stream)
+                break
+            }
+        }
+    }
+
+	if len(foundStreams) == 0 {
+		return nil
+	}
+
+    return foundStreams
+}
+
 var sanitize = regexp.MustCompile(`\s`)
 
 // Validate - not allow creating dynamic streams with spaces in the source
@@ -56,53 +75,101 @@ func Validate(source string) error {
 	return nil
 }
 
-func New(name string, source string) *Stream {
-	if Validate(source) != nil {
+func New(name string, source any) *Stream {
+	switch source := source.(type) {
+	case string:
+		if Validate(source) != nil {
+			return nil
+		}
+
+		stream := NewStream(source)
+		streams[name] = stream
+
+		return stream
+
+	case []string:
+		for _, s := range source {
+			if Validate(s) != nil {
+				return nil
+			}
+		}
+
+		stream := NewStream(source)
+		streams[name] = stream
+
+		return stream
+
+	case nil:
+		stream := NewStream(nil)
+		streams[name] = stream
+
+		return stream
+
+	default:
 		return nil
 	}
-
-	stream := NewStream(source)
-	streams[name] = stream
-	return stream
 }
 
-func Patch(name string, source string) *Stream {
-	streamsMu.Lock()
-	defer streamsMu.Unlock()
+func Patch(name string, sources ...string) *Stream {
+    streamsMu.Lock()
+    defer streamsMu.Unlock()
 
-	// check if source links to some stream name from go2rtc
-	if u, err := url.Parse(source); err == nil && u.Scheme == "rtsp" && len(u.Path) > 1 {
-		rtspName := u.Path[1:]
-		if stream, ok := streams[rtspName]; ok {
-			if streams[name] != stream {
-				// link (alias) streams[name] to streams[rtspName]
-				streams[name] = stream
-			}
-			return stream
-		}
+	if len(sources) == 0 {
+		return New(name, nil)
 	}
 
-	if stream, ok := streams[source]; ok {
-		if name != source {
-			// link (alias) streams[name] to streams[source]
-			streams[name] = stream
-		}
-		return stream
-	}
+    var stream *Stream
 
-	// check if src has supported scheme
-	if !HasProducer(source) {
-		return nil
-	}
+    for _, source := range sources {
+        // check if source links to some stream name from go2rtc
+        if u, err := url.Parse(source); err == nil && u.Scheme == "rtsp" && len(u.Path) > 1 {
+            rtspName := u.Path[1:]
+            if s, ok := streams[rtspName]; ok {
+                if stream == nil {
+                    stream = s
+                } else if stream != s {
+                    // link (alias) streams[name] to streams[rtspName]
+                    streams[name] = s
+                    return s
+                }
+            }
+        }
 
-	// check an existing stream with this name
-	if stream, ok := streams[name]; ok {
-		stream.SetSource(source)
-		return stream
-	}
+        if s, ok := streams[source]; ok {
+            if stream == nil {
+                stream = s
+            } else if stream != s {
+                // link (alias) streams[name] to streams[source]
+                streams[name] = s
+                return s
+            }
+        }
 
-	// create new stream with this name
-	return New(name, source)
+        // check if src has supported scheme
+        if !HasProducer(source) {
+            return nil
+        }
+    }
+
+    // check an existing stream with this name
+    if s, ok := streams[name]; ok {
+        if stream == nil {
+            stream = s
+        }
+        if len(sources) == 1 {
+            stream.SetSource(sources[0])
+        } else {
+            stream.SetSources(sources)
+        }
+        return stream
+    }
+
+    // create new stream with this name
+    if len(sources) == 1 {
+        return New(name, sources[0])
+    }
+
+    return New(name, sources)
 }
 
 func GetOrPatch(query url.Values) *Stream {

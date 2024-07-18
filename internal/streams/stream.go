@@ -21,6 +21,12 @@ func NewStream(source any) *Stream {
 		return &Stream{
 			producers: []*Producer{NewProducer(source)},
 		}
+	case []string:
+        s := new(Stream)
+        for _, src := range source {
+            s.producers = append(s.producers, NewProducer(src))
+        }
+        return s
 	case []any:
 		s := new(Stream)
 		for _, src := range source {
@@ -49,9 +55,31 @@ func (s *Stream) Sources() (sources []string) {
 }
 
 func (s *Stream) SetSource(source string) {
+	if len(s.producers) == 0 {
+		s.producers = append(s.producers, NewProducer(source))
+		return
+	}
+
 	for _, prod := range s.producers {
 		prod.SetSource(source)
 	}
+}
+
+func (s *Stream) SetSources(sources []string) {
+    for _, source := range sources {
+        found := false
+
+        for _, prod := range s.producers {
+            if prod.url == source {
+                found = true
+                break
+            }
+        }
+
+        if !found {
+            s.producers = append(s.producers, NewProducer(source))
+        }
+    }
 }
 
 func (s *Stream) RemoveConsumer(cons core.Consumer) {
