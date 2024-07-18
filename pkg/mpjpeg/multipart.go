@@ -18,15 +18,21 @@ func Next(rd *bufio.Reader) (http.Header, []byte, error) {
 			return nil, nil, err
 		}
 
-		if strings.HasPrefix(s, "--") {
-			break
-		}
-
 		if s == "\r\n" {
 			continue
 		}
 
-		return nil, nil, errors.New("multipart: wrong boundary: " + s)
+		if !strings.HasPrefix(s, "--") {
+			return nil, nil, errors.New("multipart: wrong boundary: " + s)
+		}
+
+		// Foscam G2 has a awful implementation of MJPEG
+		// https://github.com/AlexxIT/go2rtc/issues/1258
+		if b, _ := rd.Peek(2); string(b) == "--" {
+			continue
+		}
+
+		break
 	}
 
 	tp := textproto.NewReader(rd)
@@ -49,8 +55,6 @@ func Next(rd *bufio.Reader) (http.Header, []byte, error) {
 	if _, err = io.ReadFull(rd, buf); err != nil {
 		return nil, nil, err
 	}
-
-	_, _ = rd.Discard(2) // skip "\r\n"
 
 	return http.Header(header), buf, nil
 }
