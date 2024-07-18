@@ -13,6 +13,20 @@ servers:
 
 components:
   parameters:
+    stream_name_path:
+      name: name
+      in: path
+      description: Source stream name
+      required: true
+      schema: { type: string }
+      example: camera1
+    stream_src:
+      name: src
+      in: path
+      description: Stream source
+      required: true
+      schema: { type: string }
+      example: "rtsp://user:pass@10.0.0.1/stream1"
     stream_src_path:
       name: src
       in: path
@@ -169,29 +183,44 @@ paths:
       parameters:
         - name: src
           in: query
-          description: Stream source (URI)
+          description: Stream source(s) (URI). Multiple sources can be specified.
           required: true
-          schema: { type: string }
-          example: "rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0"
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+          example:
+            [
+              "rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0",
+              "rtsp://user:pass@10.0.0.1/stream1",
+            ]
         - name: name
           in: query
           description: Stream name
-          required: false
+          required: true
           schema: { type: string }
           example: camera1
-      responses:
-            default:
-              description: Default response
     patch:
       summary: Update stream source
       tags: [ Streams list ]
       parameters:
         - name: src
           in: query
-          description: Stream source (URI)
-          required: true
-          schema: { type: string }
-          example: "rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0"
+          description: Stream source(s) (URI). Multiple sources can be specified.
+          required: false
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+          example:
+            [
+              "rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0",
+              "rtsp://user:pass@10.0.0.1/stream1",
+            ]
         - name: name
           in: query
           description: Stream name
@@ -237,18 +266,40 @@ paths:
 
 
 
-  /api/streams?src={src}:
+  /api/streams?name={name}:
     get:
-      summary: Get stream info in JSON format
+      summary: Get stream info by name in JSON format
       tags: [ Consume stream ]
       parameters:
-        - $ref: "#/components/parameters/stream_src_path"
+        - $ref: "#/components/parameters/stream_name_path"
       responses:
         "200":
           description: ""
           content:
             application/json:
               example: { producers: [ { url: "rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0" } ], consumers: [ ] }
+
+  /api/streams?src={src}:
+    get:
+      summary: Get all streams info by source in JSON format
+      tags: [ Consume stream ]
+      parameters:
+        - $ref: "#/components/parameters/stream_src"
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              example:
+                [
+                  {
+                    producers: [ { url: "rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0" } ], consumers: [ ]
+                  },
+                  {
+                    producers: [{ url: "rtsp://user:pass@10.0.0.1/stream1" }],
+                    consumers: [],
+                  },
+                ]
 
   /api/webrtc?src={src}:
     post:
