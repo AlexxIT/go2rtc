@@ -254,7 +254,7 @@ paths:
 
   /api/streams?src={src}:
     get:
-      summary: Get all streams info by source in JSON format
+      summary: Get stream info in JSON format
       tags: [ Consume stream ]
       parameters:
         - $ref: "#/components/parameters/stream_src_path"
@@ -263,16 +263,7 @@ paths:
           description: ""
           content:
             application/json:
-              example:
-                [
-                  {
-                    producers: [ { url: "rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0" } ], consumers: [ ]
-                  },
-                  {
-                    producers: [{ url: "rtsp://user:pass@10.0.0.1/stream1" }],
-                    consumers: [],
-                  },
-                ]
+              example: { producers: [ { url: "rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0" } ], consumers: [ ] }
 
   /api/webrtc?src={src}:
     post:
