@@ -58,28 +58,28 @@ func (s *Stream) SetSource(source string) {
 	if len(s.producers) == 0 {
 		s.producers = append(s.producers, NewProducer(source))
 		return
-	}
-
-	for _, prod := range s.producers {
-		prod.SetSource(source)
+	} else {
+		for _, prod := range s.producers {
+			prod.SetSource(source)
+		}
 	}
 }
 
-func (s *Stream) SetSources(sources []string) {
-    for _, source := range sources {
-        found := false
+func (s *Stream) SetSources(source []string) {
+	for _, src := range source {
+		found := false
 
-        for _, prod := range s.producers {
-            if prod.url == source {
-                found = true
-                break
-            }
-        }
+		for _, prod := range s.producers {
+			if prod.url == src {
+				found = true
+				break
+			}
+		}
 
-        if !found {
-            s.producers = append(s.producers, NewProducer(source))
-        }
-    }
+		if !found {
+			s.producers = append(s.producers, NewProducer(src))
+		}
+	}
 }
 
 func (s *Stream) RemoveConsumer(cons core.Consumer) {

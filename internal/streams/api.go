@@ -20,22 +20,13 @@ func apiStreams(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case "GET":
-		var streams []*Stream
-	
-		if name != "" {
-			if stream := Get(name); stream != nil {
-				streams = append(streams, stream)
-			}
-		} else if len(srcs) != 0 {
-			for _, src := range srcs {
-				foundStreams := GetFromSource(src)
-				streams = append(streams, foundStreams...)
-			}
-		} else {
-			http.Error(w, "Query 'name' or 'src' is required", http.StatusBadRequest)
+		if len(srcs) == 0 {
+			http.Error(w, "Query 'src' is required", http.StatusBadRequest)
+			return
 		}
-	
-		if len(streams) == 0 {
+
+		stream := Get(srcs[0])
+		if stream == nil {
 			http.Error(w, "", http.StatusNotFound)
 			return
 		}
@@ -43,28 +34,16 @@ func apiStreams(w http.ResponseWriter, r *http.Request) {
 		cons := probe.NewProbe(query)
 		if len(cons.Medias) != 0 {
 			cons.WithRequest(r)
-			for _, stream := range streams {
-				if err := stream.AddConsumer(cons); err != nil {
-					http.Error(w, err.Error(), http.StatusInternalServerError)
-					return
-				}
+			if err := stream.AddConsumer(cons); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
 			}
-	
-			if len(streams) == 1 {
-				api.ResponseJSON(w, streams[0])
-			} else {
-				api.ResponsePrettyJSON(w, streams)
-			}
-	
-			for _, stream := range streams {
-				stream.RemoveConsumer(cons)
-			}
+
+			api.ResponsePrettyJSON(w, stream)
+
+			stream.RemoveConsumer(cons)
 		} else {
-			if len(streams) == 1 {
-				api.ResponseJSON(w, streams[0])
-			} else {
-				api.ResponsePrettyJSON(w, streams)
-			}
+			api.ResponsePrettyJSON(w, streams[srcs[0]])
 		}
 
 	case "PUT":
@@ -109,13 +88,8 @@ func apiStreams(w http.ResponseWriter, r *http.Request) {
 		}
 
 	case "POST":
-		if len(srcs) == 1 {
+		if len(srcs) == 0 {
 			http.Error(w, "Query 'src' is required", http.StatusBadRequest)
-			return
-		}
-
-		if len(srcs) > 1 {
-			http.Error(w, "Only one 'src' is allowed", http.StatusBadRequest)
 			return
 		}
 

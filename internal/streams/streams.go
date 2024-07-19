@@ -165,10 +165,6 @@ func Patch(name string, sources ...string) *Stream {
     }
 
     // create new stream with this name
-    if len(sources) == 1 {
-        return New(name, sources[0])
-    }
-
     return New(name, sources)
 }
 

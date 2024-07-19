@@ -13,20 +13,6 @@ servers:
 
 components:
   parameters:
-    stream_name_path:
-      name: name
-      in: path
-      description: Source stream name
-      required: true
-      schema: { type: string }
-      example: camera1
-    stream_src:
-      name: src
-      in: path
-      description: Stream source
-      required: true
-      schema: { type: string }
-      example: "rtsp://user:pass@10.0.0.1/stream1"
     stream_src_path:
       name: src
       in: path
@@ -184,7 +170,7 @@ paths:
         - name: src
           in: query
           description: Stream source(s) (URI). Multiple sources can be specified.
-          required: true
+          required: false
           schema:
             type: array
             items:
@@ -234,7 +220,7 @@ paths:
       summary: Delete stream
       tags: [ Streams list ]
       parameters:
-        - name: src
+        - name: name
           in: query
           description: Stream name
           required: true
@@ -266,25 +252,12 @@ paths:
 
 
 
-  /api/streams?name={name}:
-    get:
-      summary: Get stream info by name in JSON format
-      tags: [ Consume stream ]
-      parameters:
-        - $ref: "#/components/parameters/stream_name_path"
-      responses:
-        "200":
-          description: ""
-          content:
-            application/json:
-              example: { producers: [ { url: "rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0" } ], consumers: [ ] }
-
   /api/streams?src={src}:
     get:
       summary: Get all streams info by source in JSON format
       tags: [ Consume stream ]
       parameters:
-        - $ref: "#/components/parameters/stream_src"
+        - $ref: "#/components/parameters/stream_src_path"
       responses:
         "200":
           description: ""
