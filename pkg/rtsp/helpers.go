@@ -38,8 +38,14 @@ func UnmarshalSDP(rawSDP []byte) ([]*core.Media, error) {
 
 		// Fix invalid media type (errSDPInvalidValue) caused by
 		// some TP-LINK IP camera, e.g. TL-IPC44GW
-		m := regexp.MustCompile("m=application/[^ ]+")
-		rawSDP = m.ReplaceAll(rawSDP, []byte("m=application"))
+		m := regexp.MustCompile("m=[^ ]+ ")
+		for _, i := range m.FindAll(rawSDP, -1) {
+			switch string(i[2 : len(i)-1]) {
+			case "audio", "video", "application":
+			default:
+				rawSDP = bytes.Replace(rawSDP, i, []byte("m=application "), 1)
+			}
+		}
 
 		if err == io.EOF {
 			rawSDP = append(rawSDP, '\n')

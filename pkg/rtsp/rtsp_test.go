@@ -161,6 +161,48 @@ a=control:trackID=2
 	assert.Equal(t, "recvonly", medias[1].Direction)
 }
 
+func TestBugSDP6(t *testing.T) {
+	// https://github.com/AlexxIT/go2rtc/issues/1278
+	s := `v=0
+o=- 3730506281693 1 IN IP4 172.20.0.215
+s=IP camera Live streaming
+i=stream1
+t=0 0
+a=tool:LIVE555 Streaming Media v2014.02.04
+a=type:broadcast
+a=control:*
+a=range:npt=0-
+a=x-qt-text-nam:IP camera Live streaming
+a=x-qt-text-inf:stream1
+m=video 0 RTP/AVP 26
+c=IN IP4 172.20.0.215
+b=AS:1500
+a=x-bufferdelay:0.55000
+a=x-dimensions:1280,960
+a=control:track1
+m=audio 0 RTP/AVP 0
+c=IN IP4 172.20.0.215
+b=AS:64
+a=x-bufferdelay:0.55000
+a=control:track2
+m=application 0 RTP/AVP 107
+c=IN IP4 172.20.0.215
+b=AS:1
+a=x-bufferdelay:0.55000
+a=rtpmap:107 vnd.onvif.metadata/90000/500
+a=control:track4
+m=vana 0 RTP/AVP 108
+c=IN IP4 172.20.0.215
+b=AS:1
+a=x-bufferdelay:0.55000
+a=rtpmap:108 video.analysis/90000/500
+a=control:track5
+`
+	medias, err := UnmarshalSDP([]byte(s))
+	assert.Nil(t, err)
+	assert.Len(t, medias, 4)
+}
+
 func TestHikvisionPCM(t *testing.T) {
 	s := `v=0
 o=- 1721969533379665 1721969533379665 IN IP4 192.168.1.12
