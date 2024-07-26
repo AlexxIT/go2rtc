@@ -2,21 +2,24 @@ package mjpeg
 
 // RFC 2435. Appendix A
 
-var jpeg_luma_quantizer = []byte{
-	16, 11, 10, 16, 24, 40, 51, 61,
-	12, 12, 14, 19, 26, 58, 60, 55,
-	14, 13, 16, 24, 40, 57, 69, 56,
-	14, 17, 22, 29, 51, 87, 80, 62,
-	18, 22, 37, 56, 68, 109, 103, 77,
-	24, 35, 55, 64, 81, 104, 113, 92,
-	49, 64, 78, 87, 103, 121, 120, 101,
-	72, 92, 95, 98, 112, 100, 103, 99,
+// don't know why two tables are not respect RFC
+// https://github.com/FFmpeg/FFmpeg/blob/master/libavformat/rtpdec_jpeg.c
+
+var jpeg_luma_quantizer = [64]byte{
+	16, 11, 12, 14, 12, 10, 16, 14,
+	13, 14, 18, 17, 16, 19, 24, 40,
+	26, 24, 22, 22, 24, 49, 35, 37,
+	29, 40, 58, 51, 61, 60, 57, 51,
+	56, 55, 64, 72, 92, 78, 64, 68,
+	87, 69, 55, 56, 80, 109, 81, 87,
+	95, 98, 103, 104, 103, 62, 77, 113,
+	121, 112, 100, 120, 92, 101, 103, 99,
 }
-var jpeg_chroma_quantizer = []byte{
-	17, 18, 24, 47, 99, 99, 99, 99,
-	18, 21, 26, 66, 99, 99, 99, 99,
-	24, 26, 56, 99, 99, 99, 99, 99,
-	47, 66, 99, 99, 99, 99, 99, 99,
+var jpeg_chroma_quantizer = [64]byte{
+	17, 18, 18, 24, 21, 24, 47, 26,
+	26, 47, 99, 66, 56, 66, 99, 99,
+	99, 99, 99, 99, 99, 99, 99, 99,
+	99, 99, 99, 99, 99, 99, 99, 99,
 	99, 99, 99, 99, 99, 99, 99, 99,
 	99, 99, 99, 99, 99, 99, 99, 99,
 	99, 99, 99, 99, 99, 99, 99, 99,
@@ -37,7 +40,7 @@ func MakeTables(q byte) (lqt, cqt []byte) {
 
 	if q < 50 {
 		factor = 5000 / factor
-	} else if q > 99 {
+	} else {
 		factor = 200 - factor*2
 	}
 
@@ -140,22 +143,35 @@ var chm_ac_symbols = []byte{
 
 func MakeHeaders(p []byte, t byte, w, h uint16, lqt, cqt []byte) []byte {
 	// Appendix A from https://www.rfc-editor.org/rfc/rfc2435
-	p = append(p, 0xFF, 0xD8)
+	p = append(p, 0xFF,
+		0xD8, // SOI
+	)
 
 	p = MakeQuantHeader(p, lqt, 0)
 	p = MakeQuantHeader(p, cqt, 1)
 
 	if t == 0 {
-		t = 0x21
+		t = 0x21 // hsamp = 2, vsamp = 1
 	} else {
-		t = 0x22
+		t = 0x22 // hsamp = 2, vsamp = 2
 	}
 
-	p = append(p,
-		0xFF, 0xC0, 0, 17, 8,
+	p = append(p, 0xFF,
+		0xC0,  // SOF
+		0, 17, // size
+		8, // bits per component
 		byte(h>>8), byte(h&0xFF),
 		byte(w>>8), byte(w&0xFF),
-		3, 0, t, 0, 1, 0x11, 1, 2, 0x11, 1,
+		3, // number of components
+		0, // comp 0
+		t,
+		0,    // quant table 0
+		1,    // comp 1
+		0x11, // hsamp = 1, vsamp = 1
+		1,    // quant table 1
+		2,    // comp 2
+		0x11, // hsamp = 1, vsamp = 1
+		1,    // quant table 1
 	)
 
 	p = MakeHuffmanHeader(p, lum_dc_codelens, lum_dc_symbols, 0, 0)
@@ -163,7 +179,20 @@ func MakeHeaders(p []byte, t byte, w, h uint16, lqt, cqt []byte) []byte {
 	p = MakeHuffmanHeader(p, chm_dc_codelens, chm_dc_symbols, 1, 0)
 	p = MakeHuffmanHeader(p, chm_ac_codelens, chm_ac_symbols, 1, 1)
 
-	return append(p, 0xFF, 0xDA, 0, 12, 3, 0, 0, 1, 0x11, 2, 0x11, 0, 63, 0)
+	return append(p, 0xFF,
+		0xDA,  // SOS
+		0, 12, // size
+		3,    // 3 components
+		0,    // comp 0
+		0,    // huffman table 0
+		1,    // comp 1
+		0x11, // huffman table 1
+		2,    // comp 2
+		0x11, // huffman table 1
+		0,    // first DCT coeff
+		63,   // last DCT coeff
+		0,    // sucessive approx
+	)
 }
 
 func MakeQuantHeader(p []byte, qt []byte, tableNo byte) []byte {
