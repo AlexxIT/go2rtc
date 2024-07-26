@@ -3,6 +3,7 @@ package rtsp
 import (
 	"testing"
 
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -158,4 +159,35 @@ a=control:trackID=2
 	assert.Len(t, medias, 2)
 	assert.Equal(t, "recvonly", medias[0].Direction)
 	assert.Equal(t, "recvonly", medias[1].Direction)
+}
+
+func TestHikvisionPCM(t *testing.T) {
+	s := `v=0
+o=- 1721969533379665 1721969533379665 IN IP4 192.168.1.12
+s=Media Presentation
+e=NONE
+b=AS:5100
+t=0 0
+a=control:rtsp://192.168.1.12:554/Streaming/channels/101/
+m=video 0 RTP/AVP 96
+c=IN IP4 0.0.0.0
+b=AS:5000
+a=recvonly
+a=x-dimensions:3200,1800
+a=control:rtsp://192.168.1.12:554/Streaming/channels/101/trackID=1
+a=rtpmap:96 H264/90000
+a=fmtp:96 profile-level-id=420029; packetization-mode=1; sprop-parameter-sets=Z2QAM6wVFKAyAOP5f/AAEAAWyAAAH0AAB1MAIA==,aO48sA==
+m=audio 0 RTP/AVP 11
+c=IN IP4 0.0.0.0
+b=AS:50
+a=recvonly
+a=control:rtsp://192.168.1.12:554/Streaming/channels/101/trackID=2
+a=rtpmap:11 PCM/48000
+a=Media_header:MEDIAINFO=494D4B4801030000040000010170011080BB0000007D000000000000000000000000000000000000;
+a=appversion:1.0
+`
+	medias, err := UnmarshalSDP([]byte(s))
+	assert.Nil(t, err)
+	assert.Len(t, medias, 2)
+	assert.Equal(t, core.CodecPCML, medias[1].Codecs[0].Name)
 }

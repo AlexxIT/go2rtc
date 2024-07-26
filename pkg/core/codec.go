@@ -157,7 +157,12 @@ func UnmarshalCodec(md *sdp.MediaDescription, payloadType string) *Codec {
 		}
 	}
 
-	if c.Name == "" {
+	switch c.Name {
+	case "PCM":
+		// https://www.reddit.com/r/Hikvision/comments/17elxex/comment/k642g2r/
+		// check pkg/rtsp/rtsp_test.go TestHikvisionPCM
+		c.Name = CodecPCML
+	case "":
 		// https://en.wikipedia.org/wiki/RTP_payload_formats
 		switch payloadType {
 		case "0":
