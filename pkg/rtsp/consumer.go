@@ -162,6 +162,8 @@ func (c *Conn) packetWriter(codec *core.Codec, channel, payloadType uint8) core.
 		case core.CodecJPEG:
 			handlerFunc = mjpeg.RTPPay(handlerFunc)
 		}
+	} else if codec.Name == core.CodecPCML {
+		handlerFunc = pcm.LittleToBig(handlerFunc)
 	} else if c.PacketSize != 0 {
 		switch codec.Name {
 		case core.CodecH264:
