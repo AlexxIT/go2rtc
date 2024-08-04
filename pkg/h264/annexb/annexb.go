@@ -11,64 +11,60 @@ const startAUD = StartCode + "\x09\xF0"
 const startAUDstart = startAUD + StartCode
 
 // EncodeToAVCC
-// will change original slice data!
-// safeAppend should be used if original slice has useful data after end (part of other slice)
 //
 // FFmpeg MPEG-TS: 00000001 AUD 00000001 SPS 00000001 PPS 000001 IFrame
 // FFmpeg H264:    00000001 SPS 00000001 PPS 000001 IFrame 00000001 PFrame
-func EncodeToAVCC(b []byte, safeAppend bool) []byte {
-	const minSize = len(StartCode) + 1
-
-	// 1. Check frist "start code"
-	if len(b) < len(startAUDstart) || string(b[:len(StartCode)]) != StartCode {
-		return nil
-	}
-
-	// 2. Skip Access unit delimiter (AUD) from FFmpeg
-	if string(b[:len(startAUDstart)]) == startAUDstart {
-		b = b[6:]
-	}
-
+// Reolink:        000001 AUD 000001 VPS 00000001 SPS 00000001 PPS 00000001 IDR 00000001 IDR
+func EncodeToAVCC(annexb []byte) (avc []byte) {
 	var start int
 
-	for i, n := minSize, len(b)-minSize; i < n; {
-		// 3. Check "start code" (first 2 bytes)
-		if b[i] != 0 || b[i+1] != 0 {
-			i++
-			continue
-		}
+	avc = make([]byte, 0, len(annexb)+4) // init memory with little overhead
 
-		// 4. Check "start code" (3 bytes size or 4 bytes size)
-		if b[i+2] == 1 {
-			if safeAppend {
-				// protect original slice from "damage"
-				b = bytes.Clone(b)
-				safeAppend = false
+	for i := 0; ; i++ {
+		var offset int
+
+		if i+3 < len(annexb) {
+			// search next separator
+			if annexb[i] == 0 && annexb[i+1] == 0 {
+				if annexb[i+2] == 1 {
+					offset = 3 // 00 00 01
+				} else if annexb[i+2] == 0 && annexb[i+3] == 1 {
+					offset = 4 // 00 00 00 01
+				} else {
+					continue
+				}
+			} else {
+				continue
 			}
-
-			// convert start code from 3 bytes to 4 bytes
-			b = append(b, 0)
-			copy(b[i+1:], b[i:])
-			n++
-		} else if b[i+2] != 0 || b[i+3] != 1 {
-			i++
-			continue
+		} else {
+			i = len(annexb) // move i to data end
 		}
 
-		// 5. Set size for previous AU
-		size := uint32(i - start - len(StartCode))
-		binary.BigEndian.PutUint32(b[start:], size)
+		if start != 0 {
+			size := uint32(i - start)
+			avc = binary.BigEndian.AppendUint32(avc, size)
+			avc = append(avc, annexb[start:i]...)
+		}
 
-		start = i
+		// sometimes FFmpeg put separator at the end
+		if i += offset; i == len(annexb) {
+			break
+		}
 
-		i += minSize
+		if isAUD(annexb[i]) {
+			start = 0 // skip this NALU
+		} else {
+			start = i // save this position
+		}
 	}
 
-	// 6. Set size for last AU
-	size := uint32(len(b) - start - len(StartCode))
-	binary.BigEndian.PutUint32(b[start:], size)
+	return
+}
 
-	return b
+func isAUD(b byte) bool {
+	const h264 = 9
+	const h265 = 35 << 1
+	return b&0b0001_1111 == h264 || b&0b0111_1110 == h265
 }
 
 func DecodeAVCC(b []byte, safeClone bool) []byte {
