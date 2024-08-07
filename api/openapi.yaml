@@ -169,29 +169,44 @@ paths:
       parameters:
         - name: src
           in: query
-          description: Stream source (URI)
-          required: true
-          schema: { type: string }
-          example: "rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0"
+          description: Stream source(s) (URI). Multiple sources can be specified.
+          required: false
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+          example:
+            [
+              "rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0",
+              "rtsp://user:pass@10.0.0.1/stream1",
+            ]
         - name: name
           in: query
           description: Stream name
-          required: false
+          required: true
           schema: { type: string }
           example: camera1
-      responses:
-            default:
-              description: Default response
     patch:
       summary: Update stream source
       tags: [ Streams list ]
       parameters:
         - name: src
           in: query
-          description: Stream source (URI)
-          required: true
-          schema: { type: string }
-          example: "rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0"
+          description: Stream source(s) (URI). Multiple sources can be specified.
+          required: false
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+          example:
+            [
+              "rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0",
+              "rtsp://user:pass@10.0.0.1/stream1",
+            ]
         - name: name
           in: query
           description: Stream name
@@ -205,7 +220,7 @@ paths:
       summary: Delete stream
       tags: [ Streams list ]
       parameters:
-        - name: src
+        - name: name
           in: query
           description: Stream name
           required: true
