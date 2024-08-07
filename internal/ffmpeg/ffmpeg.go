@@ -2,6 +2,7 @@ package ffmpeg
 
 import (
 	"net/url"
+	"os/exec"
 	"slices"
 	"strings"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg/device"
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg/hardware"
+	"github.com/AlexxIT/go2rtc/internal/ffmpeg/helpers"
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg/virtual"
 	"github.com/AlexxIT/go2rtc/internal/rtsp"
 	"github.com/AlexxIT/go2rtc/internal/streams"
@@ -49,6 +51,11 @@ func Init() {
 		}
 		return "exec:" + args.String(), nil
 	})
+
+	cmd := exec.Command(defaults["bin"], "-encoders")
+
+	b, _ := cmd.Output()
+	helpers.Encoders = helpers.ParseFFmpegEncoders(string(b))
 
 	streams.HandleFunc("ffmpeg", NewProducer)
 
