@@ -177,8 +177,8 @@ func importConfig(config string) error {
 			continue
 		}
 
-		log.Debug().Str("url", "hass:"+entrie.Title).Msg("[hass] load config")
-		//streams.Get("hass:" + entrie.Title)
+		log.Debug().Str("url", "hass:"+streams.Redact(entrie.Title)).Msg("[hass] load config")
+		// streams.Get("hass:" + entrie.Title)
 	}
 
 	return nil
@@ -208,6 +208,8 @@ func importWebRTC(token string) error {
 	return nil
 }
 
-var entities = map[string]string{}
-var log zerolog.Logger
-var once sync.Once
+var (
+	entities = map[string]string{}
+	log      zerolog.Logger
+	once     sync.Once
+)
