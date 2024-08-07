@@ -53,6 +53,8 @@ func NewAPI(clientID, clientSecret, refreshToken string) (*API, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer res.Body.Close()
+
 	if res.StatusCode != 200 {
 		return nil, errors.New("nest: wrong status: " + res.Status)
 	}
@@ -92,6 +94,7 @@ func (a *API) GetDevices(projectID string) (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer res.Body.Close()
 
 	if res.StatusCode != 200 {
 		return nil, errors.New("nest: wrong status: " + res.Status)
@@ -157,6 +160,7 @@ func (a *API) ExchangeSDP(projectID, deviceID, offer string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	defer res.Body.Close()
 
 	if res.StatusCode != 200 {
 		return "", errors.New("nest: wrong status: " + res.Status)
@@ -211,6 +215,7 @@ func (a *API) ExtendStream() error {
 	if err != nil {
 		return err
 	}
+	defer res.Body.Close()
 
 	if res.StatusCode != 200 {
 		return errors.New("nest: wrong status: " + res.Status)
