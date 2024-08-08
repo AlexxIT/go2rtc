@@ -26,6 +26,7 @@ func Init() {
 			Name          string   `yaml:"name"`
 			DeviceID      string   `yaml:"device_id"`
 			DevicePrivate string   `yaml:"device_private"`
+			SetupID       string   `yaml:"setup_id"`
 			Pairings      []string `yaml:"pairings"`
 		} `yaml:"homekit"`
 	}
@@ -36,6 +37,7 @@ func Init() {
 	streams.HandleFunc("homekit", streamHandler)
 
 	api.HandleFunc("api/homekit", apiHandler)
+	api.HandleFunc("api/homekit/pairing", apiPairingHandler)
 
 	if cfg.Mod == nil {
 		return
@@ -62,6 +64,7 @@ func Init() {
 		}
 
 		deviceID := calcDeviceID(conf.DeviceID, id) // random MAC-address
+		setupID := (conf.SetupID + "HMXS")[:4] // default setup ID
 		name := calcName(conf.Name, deviceID)
 
 		srv := &server{
@@ -73,6 +76,7 @@ func Init() {
 		srv.hap = &hap.Server{
 			Pin:           pin,
 			DeviceID:      deviceID,
+			SetupID:       setupID,
 			DevicePrivate: calcDevicePrivate(conf.DevicePrivate, id),
 			GetPair:       srv.GetPair,
 			AddPair:       srv.AddPair,
@@ -128,6 +132,7 @@ func Init() {
 			log.Error().Err(err).Caller().Send()
 		}
 	}()
+	discovery()
 }
 
 var log zerolog.Logger
