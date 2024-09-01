@@ -1,15 +1,18 @@
 @ECHO OFF
 
+@SET GOTOOLCHAIN=
 @SET GOOS=windows
 @SET GOARCH=amd64
 @SET FILENAME=go2rtc_win64.zip
 go build -ldflags "-s -w" -trimpath && 7z a -mx9 -sdel %FILENAME% go2rtc.exe
 
+@SET GOTOOLCHAIN=go1.20.14
 @SET GOOS=windows
 @SET GOARCH=386
 @SET FILENAME=go2rtc_win32.zip
 go build -ldflags "-s -w" -trimpath && 7z a -mx9 -sdel %FILENAME% go2rtc.exe
 
+@SET GOTOOLCHAIN=
 @SET GOOS=windows
 @SET GOARCH=arm64
 @SET FILENAME=go2rtc_win_arm64.zip
@@ -47,11 +50,13 @@ go build -ldflags "-s -w" -trimpath -o %FILENAME% && upx %FILENAME%
 @SET FILENAME=go2rtc_linux_mipsel
 go build -ldflags "-s -w" -trimpath -o %FILENAME% && upx %FILENAME%
 
+@SET GOTOOLCHAIN=go1.20.14
 @SET GOOS=darwin
 @SET GOARCH=amd64
 @SET FILENAME=go2rtc_mac_amd64.zip
 go build -ldflags "-s -w" -trimpath && 7z a -mx9 -sdel %FILENAME% go2rtc
 
+@SET GOTOOLCHAIN=
 @SET GOOS=darwin
 @SET GOARCH=arm64
 @SET FILENAME=go2rtc_mac_arm64.zip

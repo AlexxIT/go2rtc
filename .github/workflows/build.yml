@@ -29,7 +29,7 @@ jobs:
         with: { name: go2rtc_win64, path: go2rtc.exe }
 
       - name: Build go2rtc_win32
-        env: { GOOS: windows, GOARCH: 386 }
+        env: { GOOS: windows, GOARCH: 386, GOTOOLCHAIN: go1.20.14 }
         run: go build -ldflags "-s -w" -trimpath
       - name: Upload go2rtc_win32
         uses: actions/upload-artifact@v4
@@ -85,7 +85,7 @@ jobs:
         with: { name: go2rtc_linux_mipsel, path: go2rtc }
 
       - name: Build go2rtc_mac_amd64
-        env: { GOOS: darwin, GOARCH: amd64 }
+        env: { GOOS: darwin, GOARCH: amd64, GOTOOLCHAIN: go1.20.14 }
         run: go build -ldflags "-s -w" -trimpath
       - name: Upload go2rtc_mac_amd64
         uses: actions/upload-artifact@v4

@@ -2,7 +2,6 @@ package ffmpeg
 
 import (
 	"net/url"
-	"slices"
 	"strings"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
@@ -44,7 +43,7 @@ func Init() {
 			return "", err
 		}
 		args := parseArgs(url[7:])
-		if slices.Contains(args.Codecs, "auto") {
+		if core.Contains(args.Codecs, "auto") {
 			return "", nil // force call streams.HandleFunc("ffmpeg")
 		}
 		return "exec:" + args.String(), nil

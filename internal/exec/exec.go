@@ -10,7 +10,6 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
-	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -230,7 +229,7 @@ func trimSpace(b []byte) []byte {
 func setRemoteInfo(info core.Info, source string, args []string) {
 	info.SetSource(source)
 
-	if i := slices.Index(args, "-i"); i > 0 && i < len(args)-1 {
+	if i := core.Index(args, "-i"); i > 0 && i < len(args)-1 {
 		rawURL := args[i+1]
 		if u, err := url.Parse(rawURL); err == nil && u.Host != "" {
 			info.SetRemoteAddr(u.Host)

@@ -1,3 +1,11 @@
+## Versions
+
+[Go 1.20](https://go.dev/doc/go1.20) is last version with support Windows 7 and macOS 10.13.
+Go 1.21 support only Windows 10 and macOS 10.15.
+
+So we will set `go 1.20` (minimum version) inside `go.mod` file. And will use env `GOTOOLCHAIN=go1.20.14` for building
+`win32` and `mac_amd64` binaries. All other binaries will use latest go version.
+
 ## Build
 
 - UPX-3.96 pack broken bin for `linux_mipsel`
