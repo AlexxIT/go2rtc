@@ -23,18 +23,18 @@ var netListen func(network, address string) (net.Listener, error)
 func Init() {
 	var cfg struct {
 		Mod struct {
-			Listen            string        `yaml:"listen"`
-			ProxyProto        bool          `yaml:"proxy_proto"`
-			ProxyProtoTimeout time.Duration `yaml:"proxy_proto_timeout_millis"`
-			Username          string        `yaml:"username"`
-			Password          string        `yaml:"password"`
-			BasePath          string        `yaml:"base_path"`
-			StaticDir         string        `yaml:"static_dir"`
-			Origin            string        `yaml:"origin"`
-			TLSListen         string        `yaml:"tls_listen"`
-			TLSCert           string        `yaml:"tls_cert"`
-			TLSKey            string        `yaml:"tls_key"`
-			UnixListen        string        `yaml:"unix_listen"`
+			Listen                   string        `yaml:"listen"`
+			ProxyProtocol            bool          `yaml:"proxy_protocol"`
+			ProxyProtocolReadTimeout time.Duration `yaml:"proxy_protocol_read_timeout"`
+			Username                 string        `yaml:"username"`
+			Password                 string        `yaml:"password"`
+			BasePath                 string        `yaml:"base_path"`
+			StaticDir                string        `yaml:"static_dir"`
+			Origin                   string        `yaml:"origin"`
+			TLSListen                string        `yaml:"tls_listen"`
+			TLSCert                  string        `yaml:"tls_cert"`
+			TLSKey                   string        `yaml:"tls_key"`
+			UnixListen               string        `yaml:"unix_listen"`
 		} `yaml:"api"`
 	}
 
@@ -73,7 +73,7 @@ func Init() {
 		Handler = middlewareLog(Handler) // 1st
 	}
 
-	if cfg.Mod.ProxyProto {
+	if cfg.Mod.ProxyProtocol {
 		netListen = func(network, address string) (net.Listener, error) {
 			ln, err := net.Listen(network, address)
 			if err != nil {
@@ -81,8 +81,8 @@ func Init() {
 			}
 
 			proxyReadTimeout := 200 * time.Millisecond
-			if cfg.Mod.ProxyProtoTimeout > 0 {
-				proxyReadTimeout = cfg.Mod.ProxyProtoTimeout
+			if cfg.Mod.ProxyProtocolReadTimeout > 0 {
+				proxyReadTimeout = cfg.Mod.ProxyProtocolReadTimeout
 			}
 			return &proxyproto.Listener{
 				Listener:          ln,
