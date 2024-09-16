@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"github.com/pires/go-proxyproto"
 	"net"
 	"net/http"
 	"os"
@@ -17,19 +18,23 @@ import (
 	"github.com/rs/zerolog"
 )
 
+var netListen func(network, address string) (net.Listener, error)
+
 func Init() {
 	var cfg struct {
 		Mod struct {
-			Listen     string `yaml:"listen"`
-			Username   string `yaml:"username"`
-			Password   string `yaml:"password"`
-			BasePath   string `yaml:"base_path"`
-			StaticDir  string `yaml:"static_dir"`
-			Origin     string `yaml:"origin"`
-			TLSListen  string `yaml:"tls_listen"`
-			TLSCert    string `yaml:"tls_cert"`
-			TLSKey     string `yaml:"tls_key"`
-			UnixListen string `yaml:"unix_listen"`
+			Listen            string        `yaml:"listen"`
+			ProxyProto        bool          `yaml:"proxy_proto"`
+			ProxyProtoTimeout time.Duration `yaml:"proxy_proto_timeout_millis"`
+			Username          string        `yaml:"username"`
+			Password          string        `yaml:"password"`
+			BasePath          string        `yaml:"base_path"`
+			StaticDir         string        `yaml:"static_dir"`
+			Origin            string        `yaml:"origin"`
+			TLSListen         string        `yaml:"tls_listen"`
+			TLSCert           string        `yaml:"tls_cert"`
+			TLSKey            string        `yaml:"tls_key"`
+			UnixListen        string        `yaml:"unix_listen"`
 		} `yaml:"api"`
 	}
 
@@ -68,6 +73,26 @@ func Init() {
 		Handler = middlewareLog(Handler) // 1st
 	}
 
+	if cfg.Mod.ProxyProto {
+		netListen = func(network, address string) (net.Listener, error) {
+			ln, err := net.Listen(network, address)
+			if err != nil {
+				return nil, err
+			}
+
+			proxyReadTimeout := 200 * time.Millisecond
+			if cfg.Mod.ProxyProtoTimeout > 0 {
+				proxyReadTimeout = cfg.Mod.ProxyProtoTimeout
+			}
+			return &proxyproto.Listener{
+				Listener:          ln,
+				ReadHeaderTimeout: proxyReadTimeout,
+			}, nil
+		}
+	} else {
+		netListen = net.Listen
+	}
+
 	if cfg.Mod.Listen != "" {
 		go listen("tcp", cfg.Mod.Listen)
 	}
@@ -84,7 +109,7 @@ func Init() {
 }
 
 func listen(network, address string) {
-	ln, err := net.Listen(network, address)
+	ln, err := netListen(network, address)
 	if err != nil {
 		log.Error().Err(err).Msg("[api] listen")
 		return
@@ -120,7 +145,7 @@ func tlsListen(network, address, certFile, keyFile string) {
 		return
 	}
 
-	ln, err := net.Listen(network, address)
+	ln, err := netListen(network, address)
 	if err != nil {
 		log.Error().Err(err).Msg("[api] tls listen")
 		return

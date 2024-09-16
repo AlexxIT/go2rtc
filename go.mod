@@ -16,6 +16,7 @@ require (
 	github.com/pion/srtp/v2 v2.0.18
 	github.com/pion/stun v0.6.1
 	github.com/pion/webrtc/v3 v3.2.40
+	github.com/pires/go-proxyproto v0.7.0
 	github.com/rs/zerolog v1.33.0
 	github.com/sigurn/crc16 v0.0.0-20240131213347-83fcde1e29d1
 	github.com/sigurn/crc8 v0.0.0-20220107193325-2243fe600f9f

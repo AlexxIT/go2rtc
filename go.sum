@@ -80,6 +80,8 @@ github.com/pion/webrtc/v3 v3.2.39 h1:Lf2SIMGdE3M9VNm48KpoX5pR8SJ6TsMnktzOkc/oB0o
 github.com/pion/webrtc/v3 v3.2.39/go.mod h1:AQ8p56OLbm3MjhYovYdgPuyX6oc+JcKx/HFoCGFcYzA=
 github.com/pion/webrtc/v3 v3.2.40 h1:Wtfi6AZMQg+624cvCXUuSmrKWepSB7zfgYDOYqsSOVU=
 github.com/pion/webrtc/v3 v3.2.40/go.mod h1:M1RAe3TNTD1tzyvqHrbVODfwdPGSXOUo/OgpoGGJqFY=
+github.com/pires/go-proxyproto v0.7.0 h1:IukmRewDQFWC7kfnb66CSomk2q/seBuilHBYFwyq0Hs=
+github.com/pires/go-proxyproto v0.7.0/go.mod h1:Vz/1JPY/OACxWGQNIRY2BeyDmpoaWmEP40O9LbuiFR4=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pkg/profile v1.4.0/go.mod h1:NWz/XGvpEW1FyYQ7fCx4dqYBLlfTcE+A9FLAkNKqjFE=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
