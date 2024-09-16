@@ -61,6 +61,9 @@ func New(name string, source string) *Stream {
 		return nil
 	}
 
+	streamsMu.Lock()
+	defer streamsMu.Unlock()
+
 	stream := NewStream(source)
 	streams[name] = stream
 	return stream
