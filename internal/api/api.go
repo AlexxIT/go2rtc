@@ -79,8 +79,7 @@ func Init() {
 			if err != nil {
 				return nil, err
 			}
-
-			proxyReadTimeout := 200 * time.Millisecond
+			proxyReadTimeout := proxyproto.DefaultReadHeaderTimeout
 			if cfg.Mod.ProxyProtocolReadTimeout > 0 {
 				proxyReadTimeout = cfg.Mod.ProxyProtocolReadTimeout
 			}
