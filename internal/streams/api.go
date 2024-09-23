@@ -10,23 +10,27 @@ import (
 
 func apiStreams(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
-	src := query.Get("src")
+	srcs := query["src"]
+	name := query.Get("name")
 
-	// without source - return all streams list
-	if src == "" && r.Method != "POST" {
+	if name == "" && len(srcs) == 0 {
 		api.ResponseJSON(w, streams)
 		return
 	}
 
-	// Not sure about all this API. Should be rewrited...
 	switch r.Method {
 	case "GET":
-		stream := Get(src)
+		if len(srcs) == 0 {
+			http.Error(w, "Query 'src' is required", http.StatusBadRequest)
+			return
+		}
+
+		stream := Get(srcs[0])
 		if stream == nil {
 			http.Error(w, "", http.StatusNotFound)
 			return
 		}
-
+	
 		cons := probe.NewProbe(query)
 		if len(cons.Medias) != 0 {
 			cons.WithRequest(r)
@@ -39,48 +43,67 @@ func apiStreams(w http.ResponseWriter, r *http.Request) {
 
 			stream.RemoveConsumer(cons)
 		} else {
-			api.ResponsePrettyJSON(w, streams[src])
+			api.ResponsePrettyJSON(w, streams[srcs[0]])
 		}
 
 	case "PUT":
-		name := query.Get("name")
 		if name == "" {
-			name = src
+			http.Error(w, "Query 'name' is required", http.StatusBadRequest)
+			return
 		}
 
-		if New(name, src) == nil {
+		if streams[name] != nil {
+			http.Error(w, "Stream already exists", http.StatusConflict)
+			return
+		}
+
+		if New(name, srcs) == nil {
 			http.Error(w, "", http.StatusBadRequest)
 			return
 		}
 
-		if err := app.PatchConfig(name, src, "streams"); err != nil {
+		if err := app.PatchConfig(name, srcs, "streams"); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		}
 
 	case "PATCH":
-		name := query.Get("name")
 		if name == "" {
-			http.Error(w, "", http.StatusBadRequest)
+			http.Error(w, "Query 'name' is required", http.StatusBadRequest)
+			return
+		}
+
+		if streams[name] == nil {
+			http.Error(w, "", http.StatusNotFound)
 			return
 		}
 
 		// support {input} templates: https://github.com/AlexxIT/go2rtc#module-hass
-		if Patch(name, src) == nil {
+		if Patch(name, srcs...) == nil {
 			http.Error(w, "", http.StatusBadRequest)
+			return
+		}
+
+		if err := app.PatchConfig(name, srcs, "streams"); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
 		}
 
 	case "POST":
+		if len(srcs) == 0 {
+			http.Error(w, "Query 'src' is required", http.StatusBadRequest)
+			return
+		}
+
 		// with dst - redirect source to dst
 		if dst := query.Get("dst"); dst != "" {
 			if stream := Get(dst); stream != nil {
-				if err := Validate(src); err != nil {
+				if err := Validate(srcs[0]); err != nil {
 					http.Error(w, err.Error(), http.StatusBadRequest)
-				} else if err = stream.Play(src); err != nil {
+				} else if err = stream.Play(srcs[0]); err != nil {
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 				} else {
 					api.ResponseJSON(w, stream)
 				}
-			} else if stream = Get(src); stream != nil {
+			} else if stream = Get(srcs[0]); stream != nil {
 				if err := Validate(dst); err != nil {
 					http.Error(w, err.Error(), http.StatusBadRequest)
 				} else if err = stream.Publish(dst); err != nil {
@@ -94,9 +117,19 @@ func apiStreams(w http.ResponseWriter, r *http.Request) {
 		}
 
 	case "DELETE":
-		delete(streams, src)
+		if name == "" {
+			http.Error(w, "Query 'name' is required", http.StatusBadRequest)
+			return
+		}
 
-		if err := app.PatchConfig(src, nil, "streams"); err != nil {
+		if streams[name] == nil {
+			http.Error(w, "", http.StatusNotFound)
+			return
+		}
+
+		delete(streams, name)
+
+		if err := app.PatchConfig(name, nil, "streams"); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		}
 	}
