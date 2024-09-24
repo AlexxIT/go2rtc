@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"strconv"
 	"strings"
@@ -30,6 +31,7 @@ func Init() {
 			TLSCert    string `yaml:"tls_cert"`
 			TLSKey     string `yaml:"tls_key"`
 			UnixListen string `yaml:"unix_listen"`
+			Pprof      bool   `yaml:"pprof"`
 		} `yaml:"api"`
 	}
 
@@ -43,6 +45,9 @@ func Init() {
 		return
 	}
 
+	// overwrite default mux with new mux to avoid pprof auto registering
+	http.DefaultServeMux = http.NewServeMux()
+
 	basePath = cfg.Mod.BasePath
 	log = app.GetLogger("api")
 
@@ -53,6 +58,14 @@ func Init() {
 	HandleFunc("api/exit", exitHandler)
 	HandleFunc("api/restart", restartHandler)
 	HandleFunc("api/log", logHandler)
+
+	if cfg.Mod.Pprof {
+		HandleFunc("/debug/pprof/", pprof.Index)
+		HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+		HandleFunc("/debug/pprof/profile", pprof.Profile)
+		HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+		HandleFunc("/debug/pprof/trace", pprof.Trace)
+	}
 
 	Handler = http.DefaultServeMux // 4th
 
