@@ -62,7 +62,10 @@ func New(name string, source string) *Stream {
 	}
 
 	stream := NewStream(source)
+
+	streamsMu.Lock()
 	streams[name] = stream
+	streamsMu.Unlock()
 	return stream
 }
 
