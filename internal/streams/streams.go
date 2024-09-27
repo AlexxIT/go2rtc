@@ -64,9 +64,8 @@ func New(name string, source string) *Stream {
 	stream := NewStream(source)
 
 	streamsMu.Lock()
-	defer streamsMu.Unlock()
-
 	streams[name] = stream
+	streamsMu.Unlock()
 	return stream
 }
 
