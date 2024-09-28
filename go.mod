@@ -3,9 +3,9 @@ module github.com/AlexxIT/go2rtc
 go 1.20
 
 require (
-	github.com/asticode/go-astits v1.13.0
 	github.com/expr-lang/expr v1.16.9
 	github.com/gorilla/websocket v1.5.1
+	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
 	github.com/mattn/go-isatty v0.0.20
 	github.com/miekg/dns v1.1.59
 	github.com/pion/ice/v2 v2.3.24
@@ -26,7 +26,6 @@ require (
 )
 
 require (
-	github.com/asticode/go-astikit v0.30.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/kr/pretty v0.2.1 // indirect
