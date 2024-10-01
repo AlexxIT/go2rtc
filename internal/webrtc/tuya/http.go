@@ -12,7 +12,6 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-// Rest 向开放平台发送HTTP请求，返回开放平台回复的payload给上层
 func Rest(method string, url string, body io.Reader) (res []byte, err error) {
 	client := &http.Client{
 		Timeout: time.Second * 5,

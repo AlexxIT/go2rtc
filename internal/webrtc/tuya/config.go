@@ -25,8 +25,8 @@ var App = APPConfig{
 
 func LoadConfig(rawURL string, query url.Values) {
 	App.OpenAPIURL = rawURL
-	App.ClientID = query.Get("ClientID")
-	App.Secret = query.Get("Secret")
-	App.UID = query.Get("UID")
-	App.DeviceID = query.Get("DeviceID")
+	App.ClientID = query.Get("client_id")
+	App.Secret = query.Get("client_secret")
+	App.UID = query.Get("uid")
+	App.DeviceID = query.Get("device_id")
 }
