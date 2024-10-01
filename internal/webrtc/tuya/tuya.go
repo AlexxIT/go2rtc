@@ -67,9 +67,16 @@ func TuyaClient(rawURL string, query url.Values) (core.Producer, error) {
 	if err := StartMqtt(
 		func(answerFrame AnswerFrame) {
 			// 7. Get answer
-			role := pion.ICERoleControlled
-			pc.ForceIceRole = &role
-			err = prod.SetAnswer(answerFrame.Sdp)
+
+			// HACK TO force ICERoleControlled - for some reason Tuya wants to control ICE
+			desc := pion.SessionDescription{
+				Type: pion.SDPTypePranswer,
+				SDP:  answerFrame.Sdp,
+			}
+			if err = pc.SetRemoteDescription(desc); err != nil {
+				return
+			}
+			prod.SetAnswer(answerFrame.Sdp)
 			if err != nil {
 				log.Printf("tuya: Failed to set answer %s", err.Error())
 			}

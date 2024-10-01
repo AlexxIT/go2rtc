@@ -691,8 +691,6 @@ Supports [Tuya IPC cameras](https://developer.tuya.com/en/docs/iot/webrtc?id=Kac
 
 URL should be `https://openapi.tuyaeu.com` or other one ([see Tuya docs](https://developer.tuya.com/en/docs/iot/api-request?id=Ka4a8uuo1j4t4#title-1-Endpoints)) depending on your region.
 
-CURRENTLY REQUIRES PATCHED (PION)[https://github.com/pion/webrtc] (EXTERNAL DEPENDENCY CODE) TO WORK!
-
 
 ```yaml
 streams:

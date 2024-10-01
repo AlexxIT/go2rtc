@@ -2,9 +2,11 @@ package webrtc
 
 import (
 	"net"
+	"os"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/pion/interceptor"
+	"github.com/pion/logging"
 	"github.com/pion/webrtc/v3"
 )
 
@@ -40,6 +42,13 @@ func NewServerAPI(network, address string, filters *Filters) (*webrtc.API, error
 	}
 
 	s := webrtc.SettingEngine{}
+
+	factory := logging.DefaultLoggerFactory{}
+	factory.DefaultLogLevel = logging.LogLevelDebug
+	factory.ScopeLevels = make(map[string]logging.LogLevel)
+	factory.Writer = os.Stdout
+
+	s.LoggerFactory = &factory
 
 	// fix https://github.com/pion/webrtc/pull/2407
 	s.SetDTLSInsecureSkipHelloVerify(true)

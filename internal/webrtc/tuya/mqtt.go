@@ -132,7 +132,7 @@ func sendOffer(sessionID string, sdp string) {
 	}{
 		Mode:       "webrtc",
 		Sdp:        sdp,
-		StreamType: 1,
+		StreamType: 0, //  1,  TRYING!!!
 		Auth:       auth,
 	}
 
