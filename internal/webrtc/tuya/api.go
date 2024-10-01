@@ -12,7 +12,6 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-// GetMotoIDAndAuth 根据用户id和设备id从开放平台获取信令服务moto的id、webRTC认证需要的授权码
 func GetMotoIDAndAuth() (motoID, auth, iceServers string, err error) {
 	url := fmt.Sprintf("%s/v1.0/users/%s/devices/%s/webrtc-configs", App.OpenAPIURL, App.UID, App.DeviceID)
 
@@ -79,7 +78,6 @@ func GetMotoIDAndAuth() (motoID, auth, iceServers string, err error) {
 	return
 }
 
-// LoadHubConfig 从开放平台获取mqtt连接信息
 func LoadHubConfig() (config *OpenIoTHubConfig, err error) {
 	body, err := getOpenIoTHubConfig()
 	if err != nil {

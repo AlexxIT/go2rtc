@@ -125,10 +125,10 @@ func Disconnect() {
 
 func sendOffer(sessionID string, sdp string) {
 	offerFrame := struct {
-		Mode       string `json:"mode"`        // offer的模式，默认为webrtc
-		Sdp        string `json:"sdp"`         // 浏览器生成的offer
-		StreamType uint32 `json:"stream_type"` // 码流类型，默认为1
-		Auth       string `json:"auth"`        // webRTC认证需要的授权码，从开放平台获取
+		Mode       string `json:"mode"`
+		Sdp        string `json:"sdp"`
+		StreamType uint32 `json:"stream_type"`
+		Auth       string `json:"auth"`
 	}{
 		Mode:       "webrtc",
 		Sdp:        sdp,
@@ -165,8 +165,8 @@ func sendOffer(sessionID string, sdp string) {
 
 func sendCandidate(sessionID string, candidate string) {
 	candidateFrame := struct {
-		Mode      string `json:"mode"`      // candidate的模式，默认为webrtc
-		Candidate string `json:"candidate"` // 候选地址，a=candidate:1922393870 1 UDP 2130706431 192.168.1.171 51532 typ host
+		Mode      string `json:"mode"`
+		Candidate string `json:"candidate"`
 	}{
 		Mode:      "webrtc",
 		Candidate: candidate,
