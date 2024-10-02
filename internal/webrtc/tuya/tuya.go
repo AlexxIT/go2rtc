@@ -59,7 +59,7 @@ func TuyaClient(rawURL string, query url.Values) (core.Producer, error) {
 
 	// 3. Create Peer Connection
 
-	api, err := webrtc.NewAPI()
+	api, err := webrtc.NewAPIWithLogs()
 	if err != nil {
 		return nil, err
 	}
@@ -124,6 +124,7 @@ func TuyaClient(rawURL string, query url.Values) (core.Producer, error) {
 		case pion.PeerConnectionState:
 			switch msg {
 			case pion.PeerConnectionStateConnecting:
+				break
 			case pion.PeerConnectionStateConnected:
 				tc.connected.Done(nil)
 			default:
