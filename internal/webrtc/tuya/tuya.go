@@ -135,7 +135,7 @@ func TuyaClient(rawURL string, query url.Values) (core.Producer, error) {
 
 	// Order is important here, if audio comes after video, tuya sends broken SDP
 	medias := []*core.Media{
-		{Kind: core.KindAudio, Direction: core.DirectionRecvonly},
+		{Kind: core.KindAudio, Direction: core.DirectionSendRecv},
 		{Kind: core.KindVideo, Direction: core.DirectionRecvonly},
 	}
 

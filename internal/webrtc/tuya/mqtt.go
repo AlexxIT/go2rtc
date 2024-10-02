@@ -104,7 +104,7 @@ func (t *tuyaSession) sendOffer(sessionID string, sdp string) {
 	}{
 		Mode:       "webrtc",
 		Sdp:        sdp,
-		StreamType: 0, //  1,  TRYING!!!
+		StreamType: 2, //  1,  TRYING!!!
 		Auth:       t.mqtt.auth,
 	}
 
