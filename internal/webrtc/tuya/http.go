@@ -48,7 +48,7 @@ func Rest(method string, url string, body io.Reader) (res []byte, err error) {
 
 	res, err = io.ReadAll(response.Body)
 	if err != nil {
-		log.Printf("read http response fail", err.Error())
+		log.Printf("read http response fail: %s", err.Error())
 
 		return
 	}
@@ -92,7 +92,7 @@ func RestToken(method string, url string, body io.Reader) (res []byte, err error
 
 	res, err = io.ReadAll(response.Body)
 	if err != nil {
-		log.Printf("read http response fail", err.Error())
+		log.Printf("read http response fail: %s", err.Error())
 
 		return
 	}
@@ -103,7 +103,7 @@ func RestToken(method string, url string, body io.Reader) (res []byte, err error
 func InitToken() (err error) {
 	var url = fmt.Sprintf("%s/v1.0/token?grant_type=1", App.OpenAPIURL)
 
-	body, err := Rest("GET", url, nil)
+	body, err := RestToken("GET", url, nil)
 	if err != nil {
 		log.Printf("GET token fail: %s, body: %s", err.Error(), string((body)))
 
@@ -112,7 +112,7 @@ func InitToken() (err error) {
 
 	err = syncToConfig(body)
 	if err != nil {
-		log.Printf("sync OpenAPI ressponse to config fail: %s", err.Error())
+		log.Printf("sync OpenAPI response to config fail: %s", err.Error())
 
 		return
 	}
