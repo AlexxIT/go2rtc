@@ -6,124 +6,96 @@ import (
 	"strings"
 	"time"
 
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
-var (
-	client mqtt.Client
-
-	motoID string
-	auth   string
-
-	iceServers string
-
+type TuyaMqtt struct {
+	client         mqtt.Client
+	motoID         string
+	auth           string
+	iceServers     string
 	publishTopic   string
 	subscribeTopic string
-)
+	MQTTUID        string
 
-func StartMqtt(
-	handleAnswerFrame func(answerFrame AnswerFrame),
-	handleCandidateFrame func(candidateFrame CandidateFrame),
-) (err error) {
-	motoID, auth, iceServers, err = GetMotoIDAndAuth()
+	mqttReady core.Waiter
+
+	handleAnswerFrame    func(answerFrame AnswerFrame)
+	handleCandidateFrame func(candidateFrame CandidateFrame)
+}
+
+func (t *tuyaSession) StartMqtt() (err error) {
+	t.mqtt.motoID, t.mqtt.auth, t.mqtt.iceServers, err = t.GetMotoIDAndAuth()
 	if err != nil {
-		log.Printf("allocate motoID fail: %s", err.Error())
-
+		log.Printf("GetMotoIDAndAuth fail: %s", err.Error())
+		t.mqtt.mqttReady.Done(err)
 		return
 	}
 
-	log.Printf("motoID: %s", motoID)
-	log.Printf("auth: %s", auth)
-	log.Printf("iceServers: %s", iceServers)
-
-	hubConfig, err := LoadHubConfig()
+	hubConfig, err := t.GetHubConfig()
 	if err != nil {
-		log.Printf("loadConfig fail: %s", err.Error())
-
+		log.Printf("GetHubConfig fail: %s", err.Error())
+		t.mqtt.mqttReady.Done(err)
 		return
 	}
 
-	log.Printf("hubConfig: %+v", *hubConfig)
+	t.mqtt.publishTopic = hubConfig.SinkTopic.IPC
+	t.mqtt.subscribeTopic = hubConfig.SourceSink.IPC
 
-	publishTopic = hubConfig.SinkTopic.IPC
-	subscribeTopic = hubConfig.SourceSink.IPC
+	t.mqtt.publishTopic = strings.Replace(t.mqtt.publishTopic, "moto_id", t.mqtt.motoID, 1)
+	t.mqtt.publishTopic = strings.Replace(t.mqtt.publishTopic, "{device_id}", t.config.DeviceID, 1)
 
-	publishTopic = strings.Replace(publishTopic, "moto_id", motoID, 1)
-	publishTopic = strings.Replace(publishTopic, "{device_id}", App.DeviceID, 1)
+	log.Printf("publish topic: %s", t.mqtt.publishTopic)
+	log.Printf("subscribe topic: %s", t.mqtt.subscribeTopic)
 
-	log.Printf("publish topic: %s", publishTopic)
-	log.Printf("subscribe topic: %s", subscribeTopic)
-
-	parts := strings.Split(subscribeTopic, "/")
-	App.MQTTUID = parts[3]
+	parts := strings.Split(t.mqtt.subscribeTopic, "/")
+	t.mqtt.MQTTUID = parts[3]
 
 	opts := mqtt.NewClientOptions().AddBroker(hubConfig.Url).
 		SetClientID(hubConfig.ClientID).
 		SetUsername(hubConfig.Username).
 		SetPassword(hubConfig.Password).
 		SetOnConnectHandler((func(c mqtt.Client) {
-			onConnect(c, handleAnswerFrame, handleCandidateFrame)
+			t.mqttOnConnect(c)
 		})).
 		SetConnectTimeout(10 * time.Second)
 
-	client = mqtt.NewClient(opts)
-	if token := client.Connect(); token.Wait() && token.Error() != nil {
+	t.mqtt.client = mqtt.NewClient(opts)
+	if token := t.mqtt.client.Connect(); token.Wait() && token.Error() != nil {
 		log.Printf("create mqtt client fail: %s", token.Error().Error())
 
 		err = token.Error()
+		t.mqtt.mqttReady.Done(err)
 		return
 	}
 
 	return
 }
 
-func FetchWebRTCConfigs() (err error) {
-	_, _, iceServers, err = GetMotoIDAndAuth()
-	if err != nil {
-		log.Printf("get webrtc configs fail: %s", err.Error())
-
-		return err
-	}
-
-	log.Printf("iceServers: %s", iceServers)
-
-	return nil
-}
-
-func IceServers() string {
-	return iceServers
-}
-
-func onConnect(client mqtt.Client,
-	handleAnswerFrame func(answerFrame AnswerFrame),
-	handleCandidateFrame func(candidateFrame CandidateFrame),
-) {
+func (t *tuyaSession) mqttOnConnect(client mqtt.Client) {
 	options := client.OptionsReader()
 
 	log.Printf("%s connect to mqtt success", options.ClientID())
 
-	if token := client.Subscribe(subscribeTopic, 1, func(c mqtt.Client, m mqtt.Message) {
-		consume(c, m, handleAnswerFrame, handleCandidateFrame)
+	if token := client.Subscribe(t.mqtt.subscribeTopic, 1, func(c mqtt.Client, m mqtt.Message) {
+		t.mqttConsume(m)
 	}); token.Wait() && token.Error() != nil {
-		log.Printf("subcribe fail: %s, topic: %s", token.Error().Error(), subscribeTopic)
-
+		log.Printf("subcribe fail: %s, topic: %s", token.Error().Error(), t.mqtt.subscribeTopic)
+		t.mqtt.mqttReady.Done(token.Error())
 		return
 	}
+
+	t.mqtt.mqttReady.Done(nil)
 
 	log.Print("subscribe mqtt topic success")
 }
 
-func Unsubscribe() {
-	if token := client.Unsubscribe(subscribeTopic); token.Wait() && token.Error() != nil {
-		log.Printf("unsubscribe fail: %s, topic: %s", token.Error().Error(), subscribeTopic)
-	}
+func (t *tuyaSession) StopMqtt() {
+	t.mqtt.client.Disconnect(1000)
 }
 
-func Disconnect() {
-	client.Disconnect(1000)
-}
-
-func sendOffer(sessionID string, sdp string) {
+func (t *tuyaSession) sendOffer(sessionID string, sdp string) {
 	offerFrame := struct {
 		Mode       string `json:"mode"`
 		Sdp        string `json:"sdp"`
@@ -133,7 +105,7 @@ func sendOffer(sessionID string, sdp string) {
 		Mode:       "webrtc",
 		Sdp:        sdp,
 		StreamType: 0, //  1,  TRYING!!!
-		Auth:       auth,
+		Auth:       t.mqtt.auth,
 	}
 
 	offerMqtt := &MqttMessage{
@@ -143,11 +115,11 @@ func sendOffer(sessionID string, sdp string) {
 		Data: MqttFrame{
 			Header: MqttFrameHeader{
 				Type:      "offer",
-				From:      App.MQTTUID,
-				To:        App.DeviceID,
+				From:      t.mqtt.MQTTUID,
+				To:        t.config.DeviceID,
 				SubDevID:  "",
 				SessionID: sessionID,
-				MotoID:    motoID,
+				MotoID:    t.mqtt.motoID,
 			},
 			Message: offerFrame,
 		},
@@ -160,10 +132,10 @@ func sendOffer(sessionID string, sdp string) {
 		return
 	}
 
-	publish(sendBytes)
+	t.mqttPublish(sendBytes)
 }
 
-func sendCandidate(sessionID string, candidate string) {
+func (t *tuyaSession) sendCandidate(sessionID string, candidate string) {
 	candidateFrame := struct {
 		Mode      string `json:"mode"`
 		Candidate string `json:"candidate"`
@@ -179,11 +151,11 @@ func sendCandidate(sessionID string, candidate string) {
 		Data: MqttFrame{
 			Header: MqttFrameHeader{
 				Type:      "candidate",
-				From:      App.MQTTUID,
-				To:        App.DeviceID,
+				From:      t.mqtt.MQTTUID,
+				To:        t.config.DeviceID,
 				SubDevID:  "",
 				SessionID: sessionID,
-				MotoID:    motoID,
+				MotoID:    t.mqtt.motoID,
 			},
 			Message: candidateFrame,
 		},
@@ -196,21 +168,19 @@ func sendCandidate(sessionID string, candidate string) {
 		return
 	}
 
-	publish(sendBytes)
+	t.mqttPublish(sendBytes)
 }
 
 // 发布mqtt消息
-func publish(payload []byte) {
-	token := client.Publish(publishTopic, 1, false, payload)
+func (t *tuyaSession) mqttPublish(payload []byte) {
+	token := t.mqtt.client.Publish(t.mqtt.publishTopic, 1, false, payload)
 	if token.Error() != nil {
 		log.Printf("mqtt publish fail: %s, topic: %s", token.Error().Error(),
-			publishTopic)
+			t.mqtt.publishTopic)
 	}
 }
 
-func consume(client mqtt.Client, msg mqtt.Message,
-	handleAnswerFrame func(answerFrame AnswerFrame),
-	handleCandidateFrame func(candidateFrame CandidateFrame)) {
+func (t *tuyaSession) mqttConsume(msg mqtt.Message) {
 	tmp := struct {
 		Protocol int    `json:"protocol"`
 		Pv       string `json:"pv"`
@@ -243,23 +213,21 @@ func consume(client mqtt.Client, msg mqtt.Message,
 		rmqtt.Data.Header.From,
 		rmqtt.Data.Header.To)
 
-	dispatch(rmqtt, handleAnswerFrame, handleCandidateFrame)
+	t.mqttDispatch(rmqtt)
 }
 
 // 分发从mqtt服务器接受到的消息
-func dispatch(msg *MqttMessage,
-	handleAnswerFrame func(answerFrame AnswerFrame),
-	handleCandidateFrame func(candidateFrame CandidateFrame)) {
+func (t *tuyaSession) mqttDispatch(msg *MqttMessage) {
 
 	switch msg.Data.Header.Type {
 	case "answer":
-		handleAnswer(msg, handleAnswerFrame)
+		t.mqttHandleAnswer(msg)
 	case "candidate":
-		handleCandidate(msg, handleCandidateFrame)
+		t.mqttHandleCandidate(msg)
 	}
 }
 
-func handleAnswer(msg *MqttMessage, handleAnswerFrame func(answerFrame AnswerFrame)) {
+func (t *tuyaSession) mqttHandleAnswer(msg *MqttMessage) {
 	frame, ok := msg.Data.Message.(json.RawMessage)
 	if !ok {
 		log.Printf("convert interface{} to []byte fail, session: %s", msg.Data.Header.SessionID)
@@ -271,21 +239,20 @@ func handleAnswer(msg *MqttMessage, handleAnswerFrame func(answerFrame AnswerFra
 
 	if err := json.Unmarshal(frame, &answerFrame); err != nil {
 		log.Printf("unmarshal mqtt answer frame fail: %s, session: %s, frame: %s",
+			err.Error(),
 			msg.Data.Header.SessionID,
 			string(msg.Data.Message.([]byte)))
 
 		return
 	}
 
-	handleAnswerFrame(answerFrame)
-
+	t.mqtt.handleAnswerFrame(answerFrame)
 }
 
-func handleCandidate(msg *MqttMessage, handleCandidateFrame func(candidateFrame CandidateFrame)) {
+func (t *tuyaSession) mqttHandleCandidate(msg *MqttMessage) {
 	frame, ok := msg.Data.Message.(json.RawMessage)
 	if !ok {
 		log.Printf("convert interface{} to []byte fail, session: %s", msg.Data.Header.SessionID)
-
 		return
 	}
 
@@ -293,15 +260,15 @@ func handleCandidate(msg *MqttMessage, handleCandidateFrame func(candidateFrame 
 
 	if err := json.Unmarshal(frame, &candidateFrame); err != nil {
 		log.Printf("unmarshal mqtt candidate frame fail: %s, session: %s, frame: %s",
+			err.Error(),
 			msg.Data.Header.SessionID,
 			string(msg.Data.Message.([]byte)))
-
 		return
 	}
 
-	// candidate from device start with "a=", end with "\r\n", which are not needed by Chrome webRTC
+	// candidate from device start with "a=", end with "\r\n", which are not needed by Pion webRTC
 	candidateFrame.Candidate = strings.TrimPrefix(candidateFrame.Candidate, "a=")
 	candidateFrame.Candidate = strings.TrimSuffix(candidateFrame.Candidate, "\r\n")
 
-	handleCandidateFrame(candidateFrame)
+	t.mqtt.handleCandidateFrame(candidateFrame)
 }

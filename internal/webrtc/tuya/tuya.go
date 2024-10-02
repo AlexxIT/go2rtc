@@ -5,30 +5,59 @@ import (
 	"log"
 	"net/url"
 	"regexp"
-	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	pion "github.com/pion/webrtc/v3"
 )
 
-func TuyaClient(rawURL string, query url.Values) (core.Producer, error) {
-	// 1. Load config
-	LoadConfig(rawURL, query)
+type TuyaConfig struct {
+	// Set by user
+	OpenAPIURL string
+	ClientID   string
+	Secret     string
+	UID        string
+	DeviceID   string
 
-	// 2. Get tuya auth token
-	if err := InitToken(); err != nil {
+	// Set by code
+	MQTTUID string
+}
+
+type tuyaSession struct {
+	config          TuyaConfig
+	httpAccessToken string
+	sessionId       string
+	mqtt            TuyaMqtt
+	offerSent       core.Waiter
+	connected       core.Waiter
+}
+
+func MakeTuyaSession(rawURL string, query url.Values) *tuyaSession {
+	tc := &tuyaSession{}
+	tc.sessionId = core.RandString(6, 62)
+	tc.config.OpenAPIURL = rawURL
+	tc.config.ClientID = query.Get("client_id")
+	tc.config.Secret = query.Get("client_secret")
+	tc.config.UID = query.Get("uid")
+	tc.config.DeviceID = query.Get("device_id")
+	return tc
+}
+
+func TuyaClient(rawURL string, query url.Values) (core.Producer, error) {
+	tc := MakeTuyaSession(rawURL, query)
+
+	// 1. Get Tuya Auth token
+	if err := tc.Authorize(); err != nil {
 		return nil, err
 	}
 
-	// 3. Get ICE servers from tuya
-
-	_, _, iceServers, err := GetMotoIDAndAuth()
+	// 2. Get iceServers
+	_, _, iceServers, err := tc.GetMotoIDAndAuth()
 	if err != nil {
 		return nil, err
 	}
 
-	// 4. Create Peer Connection
+	// 3. Create Peer Connection
 
 	api, err := webrtc.NewAPI()
 	if err != nil {
@@ -44,83 +73,72 @@ func TuyaClient(rawURL string, query url.Values) (core.Producer, error) {
 
 	pc, err := api.NewPeerConnection(conf)
 
-	// protect from sending ICE candidate before Offer
-	var sendOfferWait core.Waiter
-
-	// waiter will wait PC error or WS error or nil (connection OK)
-	var connState core.Waiter
-
-	// Tuya session id
-	sessionId := core.RandString(6, 62)
-
-	if err != nil {
-		return nil, err
-	}
-
 	prod := webrtc.NewConn(pc)
 	prod.FormatName = "webrtc/tuya"
 	prod.Mode = core.ModeActiveProducer
 	prod.Protocol = "ws"
 	prod.URL = rawURL
 
-	// 5. Open Mqtt connection for SDP and candidate exchange
-	if err := StartMqtt(
-		func(answerFrame AnswerFrame) {
-			// 7. Get answer
+	// 4. Open Mqtt connection to device
 
-			// HACK TO force ICERoleControlled - for some reason Tuya wants to control ICE
-			desc := pion.SessionDescription{
-				Type: pion.SDPTypePranswer,
-				SDP:  answerFrame.Sdp,
-			}
-			if err = pc.SetRemoteDescription(desc); err != nil {
-				return
-			}
-			prod.SetAnswer(answerFrame.Sdp)
-			if err != nil {
-				log.Printf("tuya: Failed to set answer %s", err.Error())
-			}
-		},
-		func(candidateFrame CandidateFrame) {
-			// 8. Continue to receiving candidates
-			if candidateFrame.Candidate != "" {
-				prod.AddCandidate(candidateFrame.Candidate)
-				if err != nil {
-					log.Printf("tuya: Failed to add candidate %s", err.Error())
-				}
-			}
-		},
-	); err != nil {
+	if err := tc.StartMqtt(); err != nil {
 		return nil, err
 	}
 
-	// TODO: use core.Waiter to wait for mqtt ready
-	time.Sleep(2 * time.Second)
+	if err := tc.mqtt.mqttReady.Wait(); err != nil {
+		return nil, err
+	}
+
+	tc.mqtt.handleAnswerFrame = func(answerFrame AnswerFrame) {
+		// 6. Get answer
+
+		// HACK TO force ICERoleControlled - for some reason Tuya wants to control ICE
+		desc := pion.SessionDescription{
+			Type: pion.SDPTypePranswer,
+			SDP:  answerFrame.Sdp,
+		}
+		if err = pc.SetRemoteDescription(desc); err != nil {
+			return
+		}
+		prod.SetAnswer(answerFrame.Sdp)
+		if err != nil {
+			log.Printf("tuya: Failed to set answer %s", err.Error())
+		}
+	}
+	tc.mqtt.handleCandidateFrame = func(candidateFrame CandidateFrame) {
+		// 7. Continue to receiving candidates
+		if candidateFrame.Candidate != "" {
+			prod.AddCandidate(candidateFrame.Candidate)
+			if err != nil {
+				log.Printf("tuya: Failed to add candidate %s", err.Error())
+			}
+		}
+	}
 
 	prod.Listen(func(msg any) {
 		switch msg := msg.(type) {
 		case *pion.ICECandidate:
-			_ = sendOfferWait.Wait()
-			sendCandidate(sessionId, "a="+msg.ToJSON().Candidate)
+			_ = tc.offerSent.Wait()
+			tc.sendCandidate(tc.sessionId, "a="+msg.ToJSON().Candidate)
 
 		case pion.PeerConnectionState:
 			switch msg {
 			case pion.PeerConnectionStateConnecting:
 			case pion.PeerConnectionStateConnected:
-				connState.Done(nil)
+				tc.connected.Done(nil)
 			default:
-				connState.Done(errors.New("webrtc: " + msg.String()))
+				tc.connected.Done(errors.New("webrtc: " + msg.String()))
 			}
 		}
 	})
 
 	// Order is important here, if audio comes after video, tuya sends broken SDP
 	medias := []*core.Media{
-		{Kind: core.KindAudio, Direction: core.DirectionSendRecv},
+		{Kind: core.KindAudio, Direction: core.DirectionRecvonly},
 		{Kind: core.KindVideo, Direction: core.DirectionRecvonly},
 	}
 
-	// 6. Create offer
+	// 5. Create and send offer
 	offer, err := prod.CreateOffer(medias)
 	if err != nil {
 		return nil, err
@@ -130,12 +148,15 @@ func TuyaClient(rawURL string, query url.Values) (core.Producer, error) {
 	re := regexp.MustCompile(`\r\na=extmap[^\r\n]*`)
 	offer = re.ReplaceAllString(offer, "")
 
-	sendOffer(sessionId, offer)
-	sendOfferWait.Done(nil)
+	tc.sendOffer(tc.sessionId, offer)
+	tc.offerSent.Done(nil)
 
-	if err = connState.Wait(); err != nil {
+	// Final: Wait for connection
+	if err = tc.connected.Wait(); err != nil {
 		return nil, err
 	}
+
+	tc.StopMqtt()
 
 	return prod, nil
 }
