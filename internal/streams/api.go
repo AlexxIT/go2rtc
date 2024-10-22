@@ -1,6 +1,7 @@
 package streams
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
@@ -8,13 +9,18 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/probe"
 )
 
+func returnAllStreams(w http.ResponseWriter) {
+	api.ResponseJSON(w, streams)
+}
+
 func apiStreams(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	src := query.Get("src")
 
 	// without source - return all streams list
-	if src == "" && r.Method != "POST" {
-		api.ResponseJSON(w, streams)
+	// PUT checks first body for sources
+	if src == "" && r.Method != "POST" && r.Method != "PUT" {
+		returnAllStreams(w)
 		return
 	}
 
@@ -47,13 +53,31 @@ func apiStreams(w http.ResponseWriter, r *http.Request) {
 		if name == "" {
 			name = src
 		}
+		var sources []string
+		if src != "" {
+			sources = []string{src}
+		} else if r.Header.Get("Content-Type") == "application/json" {
+			var data struct {
+				Sources []string `json:"sources"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+				log.Error().Err(err).Caller().Send()
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			sources = data.Sources
+		} else {
+			// without source(s) - return all streams list
+			returnAllStreams(w)
+			return
+		}
 
-		if New(name, src) == nil {
+		if New(name, sources) == nil {
 			http.Error(w, "", http.StatusBadRequest)
 			return
 		}
 
-		if err := app.PatchConfig(name, src, "streams"); err != nil {
+		if err := app.PatchConfig(name, sources, "streams"); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		}
 
