@@ -5,6 +5,7 @@ go 1.20
 require (
 	github.com/asticode/go-astits v1.13.0
 	github.com/expr-lang/expr v1.16.9
+	github.com/go-viper/mapstructure/v2 v2.2.1
 	github.com/gorilla/websocket v1.5.1
 	github.com/mattn/go-isatty v0.0.20
 	github.com/miekg/dns v1.1.59

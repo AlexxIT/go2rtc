@@ -10,6 +10,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
+	"github.com/go-viper/mapstructure/v2"
 	pion "github.com/pion/webrtc/v3"
 	"github.com/rs/zerolog"
 )
@@ -60,12 +61,20 @@ func Init() {
 		SDPSemantics: pion.SDPSemanticsUnifiedPlanWithFallback,
 	}
 
-	PeerConnection = func(active bool) (*pion.PeerConnection, error) {
+	PeerConnectionWithIceServers = func(active bool, servers []pion.ICEServer) (*pion.PeerConnection, error) {
+		conf := pionConf
+		if len(servers) > 0 {
+			conf = pion.Configuration{
+				ICEServers:   append(cfg.Mod.IceServers, servers...),
+				SDPSemantics: pion.SDPSemanticsUnifiedPlanWithFallback,
+			}
+		}
+
 		// active - client, passive - server
 		if active {
-			return clientAPI.NewPeerConnection(pionConf)
+			return clientAPI.NewPeerConnection(conf)
 		} else {
-			return serverAPI.NewPeerConnection(pionConf)
+			return serverAPI.NewPeerConnection(conf)
 		}
 	}
 
@@ -83,7 +92,11 @@ func Init() {
 
 var log zerolog.Logger
 
-var PeerConnection func(active bool) (*pion.PeerConnection, error)
+var PeerConnectionWithIceServers func(active bool, servers []pion.ICEServer) (*pion.PeerConnection, error)
+
+func PeerConnection(active bool) (*pion.PeerConnection, error) {
+	return PeerConnectionWithIceServers(active, nil)
+}
 
 func asyncHandler(tr *ws.Transport, msg *ws.Message) error {
 	var stream *streams.Stream
@@ -104,17 +117,41 @@ func asyncHandler(tr *ws.Transport, msg *ws.Message) error {
 		return errors.New(api.StreamNotFound)
 	}
 
-	// create new PeerConnection instance
-	pc, err := PeerConnection(false)
-	if err != nil {
-		log.Error().Err(err).Caller().Send()
-		return err
-	}
-
 	var sendAnswer core.Waiter
 
 	// protect from blocking on errors
 	defer sendAnswer.Done(nil)
+
+	// V2 - json/object exchange, V1 - raw SDP exchange
+	apiV2 := msg.Type == "webrtc"
+
+	// 1. SetOffer, so we can get remote client codecs
+	var offer string
+	var pc *pion.PeerConnection
+	var pc_err error
+	if apiV2 {
+		var result struct {
+			Sdp        string           `mapstructure:"sdp"`
+			ICEServers []pion.ICEServer `mapstructure:",omitempty"`
+		}
+
+		err := mapstructure.Decode(msg.Value, &result)
+		if err != nil {
+			panic(err)
+		}
+		offer = result.Sdp
+		pc, pc_err = PeerConnectionWithIceServers(false, result.ICEServers)
+	} else {
+		offer = msg.String()
+		pc, pc_err = PeerConnection(false)
+	}
+
+	log.Trace().Msgf("[webrtc] offer:\n%s", offer)
+
+	if pc_err != nil {
+		log.Error().Err(pc_err).Caller().Send()
+		return pc_err
+	}
 
 	conn := webrtc.NewConn(pc)
 	conn.Mode = mode
@@ -145,20 +182,7 @@ func asyncHandler(tr *ws.Transport, msg *ws.Message) error {
 		}
 	})
 
-	// V2 - json/object exchange, V1 - raw SDP exchange
-	apiV2 := msg.Type == "webrtc"
-
-	// 1. SetOffer, so we can get remote client codecs
-	var offer string
-	if apiV2 {
-		offer = msg.GetString("sdp")
-	} else {
-		offer = msg.String()
-	}
-
-	log.Trace().Msgf("[webrtc] offer:\n%s", offer)
-
-	if err = conn.SetOffer(offer); err != nil {
+	if err := conn.SetOffer(offer); err != nil {
 		log.Warn().Err(err).Caller().Send()
 		return err
 	}
@@ -166,7 +190,7 @@ func asyncHandler(tr *ws.Transport, msg *ws.Message) error {
 	switch mode {
 	case core.ModePassiveConsumer:
 		// 2. AddConsumer, so we get new tracks
-		if err = stream.AddConsumer(conn); err != nil {
+		if err := stream.AddConsumer(conn); err != nil {
 			log.Debug().Err(err).Msg("[webrtc] add consumer")
 			_ = conn.Close()
 			return err
