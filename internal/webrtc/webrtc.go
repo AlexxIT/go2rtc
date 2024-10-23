@@ -132,7 +132,7 @@ func asyncHandler(tr *ws.Transport, msg *ws.Message) error {
 	if apiV2 {
 		var result struct {
 			Sdp        string           `mapstructure:"sdp"`
-			ICEServers []pion.ICEServer `mapstructure:",omitempty"`
+			ICEServers []pion.ICEServer `mapstructure:"iceServers,omitempty"`
 		}
 
 		err := mapstructure.Decode(msg.Value, &result)
