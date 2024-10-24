@@ -195,13 +195,13 @@ func _TestParseArgsHwV4l2m2m(t *testing.T) {
 func TestParseArgsHwRKMPP(t *testing.T) {
 	// [HTTP-MJPEG] video will be transcoded to H264
 	args := parseArgs("http://example.com#video=h264#hardware=rkmpp")
-	require.Equal(t, `ffmpeg -hide_banner -fflags nobuffer -flags low_delay -i http://example.com -c:v h264_rkmpp_encoder -g 50 -bf 0 -profile:v high -level:v 4.1 -an -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
+	require.Equal(t, `ffmpeg -hide_banner -hwaccel rkmpp -hwaccel_output_format drm_prime -afbc rga -fflags nobuffer -flags low_delay -i http://example.com -c:v h264_rkmpp -g 50 -bf 0 -profile:v high -level:v 4.1 -an -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
 
 	args = parseArgs("http://example.com#video=h264#rotate=180#hardware=rkmpp")
-	require.Equal(t, `ffmpeg -hide_banner -fflags nobuffer -flags low_delay -i http://example.com -c:v h264_rkmpp_encoder -g 50 -bf 0 -profile:v high -level:v 4.1 -an -vf "transpose=1,transpose=1" -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
+	require.Equal(t, `ffmpeg -hide_banner -hwaccel rkmpp -hwaccel_output_format drm_prime -afbc rga -fflags nobuffer -flags low_delay -i http://example.com -c:v h264_rkmpp -g 50 -bf 0 -profile:v high -level:v 4.1 -an -vf "transpose=1,transpose=1" -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
 
 	args = parseArgs("http://example.com#video=h264#height=320#hardware=rkmpp")
-	require.Equal(t, `ffmpeg -hide_banner -fflags nobuffer -flags low_delay -i http://example.com -c:v h264_rkmpp_encoder -g 50 -bf 0 -profile:v high -level:v 4.1 -height 320 -an -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
+	require.Equal(t, `ffmpeg -hide_banner -hwaccel rkmpp -hwaccel_output_format drm_prime -afbc rga -fflags nobuffer -flags low_delay -i http://example.com -c:v h264_rkmpp -g 50 -bf 0 -profile:v high -level:v 4.1 -an -vf "scale_rkrga=-1:320:force_original_aspect_ratio=0" -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
 }
 
 func _TestParseArgsHwCuda(t *testing.T) {
