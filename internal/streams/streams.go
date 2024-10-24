@@ -56,12 +56,14 @@ func Validate(source string) error {
 	return nil
 }
 
-func New(name string, source string) *Stream {
-	if Validate(source) != nil {
-		return nil
+func New(name string, sources ...string) *Stream {
+	for _, source := range sources {
+		if Validate(source) != nil {
+			return nil
+		}
 	}
 
-	stream := NewStream(source)
+	stream := NewStream(sources)
 
 	streamsMu.Lock()
 	streams[name] = stream

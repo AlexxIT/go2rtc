@@ -21,6 +21,12 @@ func NewStream(source any) *Stream {
 		return &Stream{
 			producers: []*Producer{NewProducer(source)},
 		}
+	case []string:
+		s := new(Stream)
+		for _, str := range source {
+			s.producers = append(s.producers, NewProducer(str))
+		}
+		return s
 	case []any:
 		s := new(Stream)
 		for _, src := range source {
