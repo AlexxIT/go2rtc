@@ -3,18 +3,24 @@ package ascii
 import (
 	"bytes"
 	"fmt"
+	"image"
 	"image/jpeg"
 	"io"
+	"math"
 	"net/http"
+	"strconv"
 	"unicode/utf8"
 )
 
-func NewWriter(w io.Writer, foreground, background, text string) io.Writer {
+func NewWriter(w io.Writer, foreground, background, text, width, height string) io.Writer {
 	// once clear screen
 	_, _ = w.Write([]byte(csiClear))
 
 	// every frame - move to home
 	a := &writer{wr: w, buf: []byte(csiHome)}
+
+	a.width, _ = strconv.Atoi(width)
+	a.height, _ = strconv.Atoi(height)
 
 	// https://en.wikipedia.org/wiki/ANSI_escape_code
 	switch foreground {
@@ -23,7 +29,6 @@ func NewWriter(w io.Writer, foreground, background, text string) io.Writer {
 		a.color = func(r, g, b uint8) {
 			idx := xterm256color(r, g, b, 8)
 			a.appendEsc(fmt.Sprintf("\033[%dm", 30+idx))
-
 		}
 	case "256":
 		a.color = func(r, g, b uint8) {
@@ -92,12 +97,14 @@ func NewWriter(w io.Writer, foreground, background, text string) io.Writer {
 }
 
 type writer struct {
-	wr    io.Writer
-	buf   []byte
-	pre   int
-	esc   string
-	color func(r, g, b uint8)
-	text  func(r, g, b uint32)
+	wr     io.Writer
+	buf    []byte
+	pre    int
+	esc    string
+	color  func(r, g, b uint8)
+	text   func(r, g, b uint32)
+	width  int
+	height int
 }
 
 // https://stackoverflow.com/questions/37774983/clearing-the-screen-by-printing-a-character
@@ -106,6 +113,9 @@ const csiHome = "\033[H"
 
 func (a *writer) Write(p []byte) (n int, err error) {
 	img, err := jpeg.Decode(bytes.NewReader(p))
+	if a.width > 0 || a.height > 0 {
+		img = resizeImage(img, a.width, a.height)
+	}
 	if err != nil {
 		return 0, err
 	}
@@ -163,6 +173,58 @@ func xterm256color(r, g, b uint8, n int) (index uint8) {
 		}
 	}
 	return
+}
+
+// resizeImage resizes the given image to the specified new width and height.
+// If either newWidth or newHeight is set to 0, the function calculates the missing dimension
+// to maintain the aspect ratio of the original image.
+//
+// Parameters:
+//   - img: The source image to be resized.
+//   - newWidth: The desired width of the resized image. If set to 0, it will be calculated based on newHeight.
+//   - newHeight: The desired height of the resized image. If set to 0, it will be calculated based on newWidth.
+//
+// Returns:
+//   - A new image.Image object that is the resized version of the input image.
+//
+// Example usage:
+//
+//	resizedImg := resizeImage(originalImg, 200, 0) // Resizes to a width of 200 while maintaining aspect ratio.
+func resizeImage(img image.Image, newWidth, newHeight int) image.Image {
+	bounds := img.Bounds()
+	width, height := bounds.Max.X, bounds.Max.Y
+
+	// Calculate missing dimension if necessary
+	if newWidth == 0 && newHeight == 0 {
+		return img // No resizing needed
+	} else if newWidth == 0 {
+		newWidth = int(math.Round(float64(width) * (float64(newHeight) / float64(height))))
+	} else if newHeight == 0 {
+		newHeight = int(math.Round(float64(height) * (float64(newWidth) / float64(width))))
+	}
+
+	newImg := image.NewRGBA(image.Rect(0, 0, newWidth, newHeight))
+
+	xRatio := float64(width) / float64(newWidth)
+	yRatio := float64(height) / float64(newHeight)
+
+	for y := 0; y < newHeight; y++ {
+		for x := 0; x < newWidth; x++ {
+			srcX := int(xRatio * float64(x))
+			srcY := int(yRatio * float64(y))
+
+			if srcX >= width {
+				srcX = width - 1
+			}
+			if srcY >= height {
+				srcY = height - 1
+			}
+
+			newColor := img.At(srcX, srcY)
+			newImg.Set(x, y, newColor)
+		}
+	}
+	return newImg
 }
 
 // sqDiff - just like from image/color/color.go
