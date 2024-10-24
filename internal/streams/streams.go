@@ -56,7 +56,7 @@ func Validate(source string) error {
 	return nil
 }
 
-func New(name string, sources []string) *Stream {
+func New(name string, sources ...string) *Stream {
 	for _, source := range sources {
 		if Validate(source) != nil {
 			return nil
@@ -107,7 +107,7 @@ func Patch(name string, source string) *Stream {
 	}
 
 	// create new stream with this name
-	return New(name, []string{source})
+	return New(name, source)
 }
 
 func GetOrPatch(query url.Values) *Stream {

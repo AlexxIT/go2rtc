@@ -101,7 +101,7 @@ func apiPair(id, url string) error {
 		return err
 	}
 
-	streams.New(id, []string{conn.URL()})
+	streams.New(id, conn.URL())
 
 	return app.PatchConfig(id, conn.URL(), "streams")
 }
