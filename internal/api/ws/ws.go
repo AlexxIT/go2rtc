@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/url"
@@ -36,22 +37,16 @@ var log zerolog.Logger
 type Message struct {
 	Type  string `json:"type"`
 	Value any    `json:"value,omitempty"`
+	Raw   []byte `json:"-"`
 }
 
-func (m *Message) String() string {
-	if s, ok := m.Value.(string); ok {
-		return s
-	}
-	return ""
+func (m *Message) String() (value string) {
+	_ = json.Unmarshal(m.Raw, &value)
+	return
 }
 
-func (m *Message) GetString(key string) string {
-	if v, ok := m.Value.(map[string]any); ok {
-		if s, ok := v[key].(string); ok {
-			return s
-		}
-	}
-	return ""
+func (m *Message) Unmarshal(v any) error {
+	return json.Unmarshal(m.Raw, v)
 }
 
 type WSHandler func(tr *Transport, msg *Message) error
@@ -118,14 +113,19 @@ func apiWS(w http.ResponseWriter, r *http.Request) {
 	})
 
 	for {
-		msg := new(Message)
-		if err = ws.ReadJSON(msg); err != nil {
+		var raw struct {
+			Type  string          `json:"type"`
+			Value json.RawMessage `json:"value"`
+		}
+		if err = ws.ReadJSON(&raw); err != nil {
 			if !websocket.IsCloseError(err, websocket.CloseNoStatusReceived) {
 				log.Trace().Err(err).Caller().Send()
 			}
 			_ = ws.Close()
 			break
 		}
+
+		msg := &Message{Type: raw.Type, Raw: raw.Value}
 
 		log.Trace().Str("type", msg.Type).Msg("[api] ws msg")
 
