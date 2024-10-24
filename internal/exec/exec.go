@@ -102,7 +102,7 @@ func handlePipe(source string, cmd *exec.Cmd, cl io.Closer) (core.Producer, erro
 		cl,
 	}
 
-	log.Debug().Strs("args", cmd.Args).Msg("[exec] run pipe")
+	log.Debug().Strs("args", streams.RedactSlice(cmd.Args)).Msg("[exec] run pipe")
 
 	ts := time.Now()
 
@@ -143,7 +143,7 @@ func handleRTSP(source string, cmd *exec.Cmd, cl io.Closer, path string) (core.P
 		waitersMu.Unlock()
 	}()
 
-	log.Debug().Strs("args", cmd.Args).Msg("[exec] run rtsp")
+	log.Debug().Strs("args", streams.RedactSlice(cmd.Args)).Msg("[exec] run rtsp")
 
 	ts := time.Now()
 
