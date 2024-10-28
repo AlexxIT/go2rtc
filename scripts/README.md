@@ -40,6 +40,7 @@ go list -deps .\cmd\go2rtc_rtsp\
   - github.com/sigurn/crc8
 - github.com/pion/ice/v2
   - github.com/google/uuid
+  - github.com/wlynxg/anet
 - github.com/rs/zerolog
   - github.com/mattn/go-colorable
   - github.com/mattn/go-isatty
