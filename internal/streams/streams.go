@@ -100,6 +100,10 @@ func Patch(name string, source string) *Stream {
 		return nil
 	}
 
+	if Validate(source) != nil {
+		return nil
+	}
+
 	// check an existing stream with this name
 	if stream, ok := streams[name]; ok {
 		stream.SetSource(source)
@@ -107,7 +111,9 @@ func Patch(name string, source string) *Stream {
 	}
 
 	// create new stream with this name
-	return New(name, source)
+	stream := NewStream(source)
+	streams[name] = stream
+	return stream
 }
 
 func GetOrPatch(query url.Values) *Stream {
