@@ -37,16 +37,21 @@ var log zerolog.Logger
 type Message struct {
 	Type  string `json:"type"`
 	Value any    `json:"value,omitempty"`
-	Raw   []byte `json:"-"`
 }
 
 func (m *Message) String() (value string) {
-	_ = json.Unmarshal(m.Raw, &value)
+	if s, ok := m.Value.(string); ok {
+		return s
+	}
 	return
 }
 
 func (m *Message) Unmarshal(v any) error {
-	return json.Unmarshal(m.Raw, v)
+	b, err := json.Marshal(m.Value)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(b, v)
 }
 
 type WSHandler func(tr *Transport, msg *Message) error
@@ -113,19 +118,14 @@ func apiWS(w http.ResponseWriter, r *http.Request) {
 	})
 
 	for {
-		var raw struct {
-			Type  string          `json:"type"`
-			Value json.RawMessage `json:"value"`
-		}
-		if err = ws.ReadJSON(&raw); err != nil {
+		msg := new(Message)
+		if err = ws.ReadJSON(msg); err != nil {
 			if !websocket.IsCloseError(err, websocket.CloseNoStatusReceived) {
 				log.Trace().Err(err).Caller().Send()
 			}
 			_ = ws.Close()
 			break
 		}
-
-		msg := &Message{Type: raw.Type, Raw: raw.Value}
 
 		log.Trace().Str("type", msg.Type).Msg("[api] ws msg")
 
