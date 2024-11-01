@@ -30,6 +30,9 @@ func UnmarshalSDP(rawSDP []byte) ([]*core.Media, error) {
 		// fix multiple `s=` https://github.com/AlexxIT/WebRTC/issues/417
 		rawSDP = regexp.MustCompile("\ns=[^\n]+").ReplaceAll(rawSDP, nil)
 
+		// fix broken `c=` https://github.com/AlexxIT/go2rtc/issues/1426
+		rawSDP = regexp.MustCompile("\nc=[^\n]+").ReplaceAll(rawSDP, nil)
+
 		// fix SDP header for some cameras
 		if i := bytes.Index(rawSDP, []byte("\nm=")); i > 0 {
 			rawSDP = append([]byte(sdpHeader), rawSDP[i:]...)

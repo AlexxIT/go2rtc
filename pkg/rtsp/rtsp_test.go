@@ -203,6 +203,40 @@ a=control:track5
 	assert.Len(t, medias, 4)
 }
 
+func TestBugSDP7(t *testing.T) {
+	// https://github.com/AlexxIT/go2rtc/issues/1426
+	s := `v=0
+o=- 1001 1 IN
+s=VCP IPC Realtime stream
+m=video 0 RTP/AVP 105
+c=IN
+a=control:rtsp://1.0.1.113/media/video2/video
+a=rtpmap:105 H264/90000
+a=fmtp:105 profile-level-id=640016; packetization-mode=1; sprop-parameter-sets=Z2QAFqw7UFAX/LCAAAH0AABOIEI=,aOqPLA==
+a=recvonly
+m=audio 0 RTP/AVP 0
+c=IN
+a=fmtp:0 RTCP=0
+a=control:rtsp://1.0.1.113/media/video2/audio1
+a=recvonly
+m=audio 0 RTP/AVP 0
+c=IN
+a=control:rtsp://1.0.1.113/media/video2/backchannel
+a=rtpmap:0 PCMA/8000
+a=rtpmap:0 PCMU/8000
+a=sendonly
+m=application 0 RTP/AVP 107
+c=IN
+a=control:rtsp://1.0.1.113/media/video2/metadata
+a=rtpmap:107 vnd.onvif.metadata/90000
+a=fmtp:107 DecoderTag=h3c-v3 RTCP=0
+a=recvonly
+`
+	medias, err := UnmarshalSDP([]byte(s))
+	assert.Nil(t, err)
+	assert.Len(t, medias, 4)
+}
+
 func TestHikvisionPCM(t *testing.T) {
 	s := `v=0
 o=- 1721969533379665 1721969533379665 IN IP4 192.168.1.12
