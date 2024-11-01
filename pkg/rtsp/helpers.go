@@ -28,8 +28,7 @@ func UnmarshalSDP(rawSDP []byte) ([]*core.Media, error) {
 	sd := &sdp.SessionDescription{}
 	if err := sd.Unmarshal(rawSDP); err != nil {
 		// fix multiple `s=` https://github.com/AlexxIT/WebRTC/issues/417
-		re, _ := regexp.Compile("\ns=[^\n]+")
-		rawSDP = re.ReplaceAll(rawSDP, nil)
+		rawSDP = regexp.MustCompile("\ns=[^\n]+").ReplaceAll(rawSDP, nil)
 
 		// fix SDP header for some cameras
 		if i := bytes.Index(rawSDP, []byte("\nm=")); i > 0 {
@@ -38,12 +37,11 @@ func UnmarshalSDP(rawSDP []byte) ([]*core.Media, error) {
 
 		// Fix invalid media type (errSDPInvalidValue) caused by
 		// some TP-LINK IP camera, e.g. TL-IPC44GW
-		m := regexp.MustCompile("m=[^ ]+ ")
-		for _, i := range m.FindAll(rawSDP, -1) {
-			switch string(i[2 : len(i)-1]) {
+		for _, b := range regexp.MustCompile("m=[^ ]+ ").FindAll(rawSDP, -1) {
+			switch string(b[2 : len(b)-1]) {
 			case "audio", "video", "application":
 			default:
-				rawSDP = bytes.Replace(rawSDP, i, []byte("m=application "), 1)
+				rawSDP = bytes.Replace(rawSDP, b, []byte("m=application "), 1)
 			}
 		}
 
