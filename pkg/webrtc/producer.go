@@ -47,3 +47,13 @@ func (c *Conn) Start() error {
 	c.closed.Wait()
 	return nil
 }
+
+func (c *Conn) Stop() error {
+	for _, receiver := range c.Receivers {
+		receiver.Close()
+	}
+	for _, sender := range c.Senders {
+		sender.Close()
+	}
+	return c.pc.Close()
+}
