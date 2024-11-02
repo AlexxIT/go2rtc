@@ -29,6 +29,7 @@ func NewConn(pc *webrtc.PeerConnection) *Conn {
 		Connection: core.Connection{
 			ID:         core.NewID(),
 			FormatName: "webrtc",
+			Transport:  pc,
 		},
 		pc: pc,
 	}
