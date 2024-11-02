@@ -189,14 +189,19 @@ func unmarshalStruct(b []byte, value reflect.Value) error {
 		return nil // End of payload, nothing left to process
 	}
 
-	t := b[0]       // Type
-	l := int(b[1])  // Length
-	v := b[2 : 2+l] // Value (can be empty if l == 0)
-
-	// Move the cursor past the current TLV item
-	remainder := b[2+l:]
+	t := b[0]            // Type
+	l := int(b[1])       // Length
+	v := b[2 : 2+l]      // Value (can be empty if l == 0)
+	remainder := b[2+l:] // Move cursor to the next TLV item
 	tag := strconv.Itoa(int(t))
 	valueField, ok := getStructField(value, tag)
+
+	// Accumulate fragments if the value length is 255
+	for l == 255 && len(remainder) >= 2 && remainder[0] == t {
+		l = int(remainder[1])
+		v = append(v, remainder[2:2+l]...)
+		remainder = remainder[2+l:]
+	}
 
 	if ok {
 		if err := unmarshalValue(v, valueField); err != nil {
