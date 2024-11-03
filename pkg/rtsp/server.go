@@ -139,6 +139,16 @@ func (c *Conn) Accept() error {
 				medias = append(medias, media)
 			}
 
+			for i, track := range c.Receivers {
+				media := &core.Media{
+					Kind:      core.GetKind(track.Codec.Name),
+					Direction: core.DirectionSendonly,
+					Codecs:    []*core.Codec{track.Codec},
+					ID:        "trackID=" + strconv.Itoa(i+len(c.Senders)),
+				}
+				medias = append(medias, media)
+			}
+
 			res.Body, err = core.MarshalSDP(c.SessionName, medias)
 			if err != nil {
 				return err
