@@ -129,6 +129,16 @@ func (c *Conn) Accept() error {
 				medias = append(medias, media)
 			}
 
+			for i, track := range c.Receivers {
+				media := &core.Media{
+					Kind:      core.GetKind(track.Codec.Name),
+					Direction: core.DirectionSendonly,
+					Codecs:    []*core.Codec{track.Codec},
+					ID:        "trackID=" + strconv.Itoa(i+len(c.Senders)),
+				}
+				medias = append(medias, media)
+			}
+
 			res.Body, err = core.MarshalSDP(c.SessionName, medias)
 			if err != nil {
 				return err
@@ -154,11 +164,20 @@ func (c *Conn) Accept() error {
 				c.state = StateSetup
 
 				if c.mode == core.ModePassiveConsumer {
-					if i := reqTrackID(req); i >= 0 && i < len(c.Senders) {
-						// mark sender as SETUP
-						c.Senders[i].Media.ID = MethodSetup
-						tr = fmt.Sprintf("RTP/AVP/TCP;unicast;interleaved=%d-%d", i*2, i*2+1)
-						res.Header.Set("Transport", tr)
+					trackID := reqTrackID(req)
+
+					if trackID >= 0 {
+						if trackID < len(c.Senders) {
+							c.Senders[trackID].Media.ID = MethodSetup
+							tr = fmt.Sprintf("RTP/AVP/TCP;unicast;interleaved=%d-%d", trackID*2, trackID*2+1)
+							res.Header.Set("Transport", tr)
+						} else if trackID >= len(c.Senders) && trackID < len(c.Senders)+len(c.Receivers) {
+							c.Receivers[trackID-len(c.Senders)].Media.ID = MethodSetup
+							tr = fmt.Sprintf("RTP/AVP/TCP;unicast;interleaved=%d-%d", trackID*2, trackID*2+1)
+							res.Header.Set("Transport", tr)
+						} else {
+							res.Status = "400 Bad Request"
+						}
 					} else {
 						res.Status = "400 Bad Request"
 					}
