@@ -58,7 +58,7 @@ func humanBytes(i int) string {
 type node struct {
 	ID     uint32         `json:"id"`
 	Codec  map[string]any `json:"codec"`
-	Parent uint32         `json:"parent"`
+	Parents []uint32         `json:"parents"`
 	Childs []uint32       `json:"childs"`
 	Bytes  int            `json:"bytes"`
 	//Packets uint32         `json:"packets"`
@@ -124,9 +124,11 @@ func (c *conn) appendDOT(dot []byte, group string) []byte {
 		dot = recv.appendDOT(dot, "node")
 	}
 	for _, send := range c.Senders {
-		dot = fmt.Appendf(dot, "%d -> %d [label=%q];\n", send.Parent, c.ID, humanBytes(send.Bytes))
-		//dot = fmt.Appendf(dot, "%d -> %d [label=%q];\n", send.ID, c.ID, humanBytes(send.Bytes))
-		//dot = send.appendDOT(dot, "node")
+		for _, parentID := range send.Parents {
+			dot = fmt.Appendf(dot, "%d -> %d [label=%q];\n", parentID, c.ID, humanBytes(send.Bytes))
+			//dot = fmt.Appendf(dot, "%d -> %d [label=%q];\n", send.ID, c.ID, humanBytes(send.Bytes))
+			//dot = send.appendDOT(dot, "node")
+		}
 	}
 	return dot
 }

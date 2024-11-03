@@ -29,7 +29,7 @@ type Node struct {
 
 	id     uint32
 	childs []*Node
-	parent *Node
+	parents []*Node
 
 	mu sync.Mutex
 }
@@ -44,7 +44,24 @@ func (n *Node) AppendChild(child *Node) {
 	n.childs = append(n.childs, child)
 	n.mu.Unlock()
 
-	child.parent = n
+	child.mu.Lock()
+	if child.parents == nil {
+		child.parents = []*Node{n}
+	} else {
+		child.parents = append(child.parents, n)
+	}
+	child.mu.Unlock()
+}
+
+func (n *Node) RemoveParent(parent *Node) {
+	n.mu.Lock()
+	for i, p := range n.parents {
+		if p == parent {
+			n.parents = append(n.parents[:i], n.parents[i+1:]...)
+			break
+		}
+	}
+	n.mu.Unlock()
 }
 
 func (n *Node) RemoveChild(child *Node) {
@@ -59,30 +76,47 @@ func (n *Node) RemoveChild(child *Node) {
 }
 
 func (n *Node) Close() {
-	if parent := n.parent; parent != nil {
-		parent.RemoveChild(n)
+    n.mu.Lock()
+    if parents := n.parents; parents != nil {
+        parentsCopy := make([]*Node, len(parents))
+        copy(parentsCopy, parents)
+        n.mu.Unlock()
 
-		if len(parent.childs) == 0 {
-			parent.Close()
-		}
-	} else {
-		for _, childs := range n.childs {
-			childs.Close()
-		}
-	}
+        for _, parent := range parentsCopy {
+            parent.RemoveChild(n)
+        }
+    } else {
+        childsCopy := make([]*Node, len(n.childs))
+        copy(childsCopy, n.childs)
+        n.mu.Unlock()
+
+        for _, child := range childsCopy {
+            child.RemoveParent(n)
+            if len(child.parents) == 0 {
+                child.Close()
+            }
+        }
+    }
+
+    n.mu.Lock()
+    n.childs = nil
+    n.parents = nil
+    n.mu.Unlock()
 }
 
 func MoveNode(dst, src *Node) {
-	src.mu.Lock()
-	childs := src.childs
-	src.childs = nil
-	src.mu.Unlock()
+    src.mu.Lock()
+    childs := make([]*Node, len(src.childs))
+    copy(childs, src.childs)
+    src.childs = nil
+    src.mu.Unlock()
 
-	dst.mu.Lock()
-	dst.childs = childs
-	dst.mu.Unlock()
+    dst.mu.Lock()
+    dst.childs = childs
+    dst.mu.Unlock()
 
-	for _, child := range childs {
-		child.parent = dst
-	}
+    for _, child := range childs {
+        child.RemoveParent(src)
+        child.AppendChild(dst)
+    }
 }

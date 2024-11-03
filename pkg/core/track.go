@@ -196,7 +196,7 @@ func (s *Sender) MarshalJSON() ([]byte, error) {
 	v := struct {
 		ID      uint32 `json:"id"`
 		Codec   *Codec `json:"codec"`
-		Parent  uint32 `json:"parent,omitempty"`
+		Parents  []*uint32 `json:"parents,omitempty"`
 		Bytes   int    `json:"bytes,omitempty"`
 		Packets int    `json:"packets,omitempty"`
 		Drops   int    `json:"drops,omitempty"`
@@ -207,8 +207,10 @@ func (s *Sender) MarshalJSON() ([]byte, error) {
 		Packets: s.Packets,
 		Drops:   s.Drops,
 	}
-	if s.parent != nil {
-		v.Parent = s.parent.id
+	if s.parents != nil {
+		for _, parent := range s.parents {
+			v.Parents = append(v.Parents, &parent.id)
+		}
 	}
 	return json.Marshal(v)
 }
