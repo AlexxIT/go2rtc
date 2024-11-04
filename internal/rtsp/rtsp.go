@@ -14,14 +14,20 @@ import (
 	"github.com/rs/zerolog"
 )
 
+type StreamAuthConfig struct {
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+}
+
 func Init() {
 	var conf struct {
 		Mod struct {
-			Listen       string `yaml:"listen" json:"listen"`
-			Username     string `yaml:"username" json:"-"`
-			Password     string `yaml:"password" json:"-"`
-			DefaultQuery string `yaml:"default_query" json:"default_query"`
-			PacketSize   uint16 `yaml:"pkt_size" json:"pkt_size,omitempty"`
+			Listen       string                      `yaml:"listen" json:"listen"`
+			Username     string                      `yaml:"username" json:"-"`
+			Password     string                      `yaml:"password" json:"-"`
+			DefaultQuery string                      `yaml:"default_query" json:"default_query"`
+			PacketSize   uint16                      `yaml:"pkt_size" json:"pkt_size,omitempty"`
+			Streams      map[string]StreamAuthConfig `yaml:"streams" json:"streams"`
 		} `yaml:"rtsp"`
 	}
 
@@ -69,8 +75,16 @@ func Init() {
 			c := rtsp.NewServer(conn)
 			c.PacketSize = conf.Mod.PacketSize
 			// skip check auth for localhost
-			if conf.Mod.Username != "" && !conn.RemoteAddr().(*net.TCPAddr).IP.IsLoopback() {
-				c.Auth(conf.Mod.Username, conf.Mod.Password)
+			if !conn.RemoteAddr().(*net.TCPAddr).IP.IsLoopback() {
+				if conf.Mod.Username != "" {
+					c.Auth(conf.Mod.Username, conf.Mod.Password)
+				}
+				// adding external auth
+				for streamName, authConfig := range conf.Mod.Streams {
+					if authConfig.Username != "" {
+						c.AuthStreams(authConfig.Username, authConfig.Password, streamName)
+					}
+				}
 			}
 			go tcpHandler(c)
 		}

@@ -874,6 +874,18 @@ By default go2rtc provide RTSP-stream with only one first video and only one fir
 
 Read more about [codecs filters](#codecs-filters).
 
+#### Individual authentication data for streams
+
+For each stream, you can specify separate authentication credentials to control access to the video stream:
+
+```yaml
+rtsp:
+  streams:
+    camera: # Name of the stream
+      username: "stream_login"    # Optional: Login for camera access
+      password: "stream_password" # Optional: Password for camera access
+```
+
 ### Module: RTMP
 
 *[New in v1.8.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.8.0)*

@@ -36,6 +36,7 @@ type Conn struct {
 	// internal
 
 	auth      *tcp.Auth
+	authList  map[string]*tcp.Auth
 	conn      net.Conn
 	keepalive int
 	mode      core.Mode

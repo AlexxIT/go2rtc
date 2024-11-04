@@ -21,14 +21,28 @@ func NewServer(conn net.Conn) *Conn {
 			Protocol:   "rtsp+tcp",
 			RemoteAddr: conn.RemoteAddr().String(),
 		},
-		conn:   conn,
-		reader: bufio.NewReader(conn),
+		conn:     conn,
+		authList: map[string]*tcp.Auth{},
+		reader:   bufio.NewReader(conn),
 	}
 }
 
 func (c *Conn) Auth(username, password string) {
 	info := url.UserPassword(username, password)
 	c.auth = tcp.NewAuth(info)
+}
+
+func (c *Conn) AuthStreams(username, password, name string) {
+	info := url.UserPassword(username, password)
+	c.authList[name] = tcp.NewAuth(info)
+}
+
+func (c *Conn) AuthValidate(streamName string, req *tcp.Request) bool {
+	if auth, exists := c.authList[streamName]; exists {
+		return auth.Validate(req)
+	}
+
+	return c.auth.Validate(req)
 }
 
 func (c *Conn) Accept() error {
@@ -45,7 +59,7 @@ func (c *Conn) Accept() error {
 
 		c.Fire(req)
 
-		if !c.auth.Validate(req) {
+		if !c.AuthValidate(c.URL.Path[1:], req) {
 			res := &tcp.Response{
 				Status:  "401 Unauthorized",
 				Header:  map[string][]string{"Www-Authenticate": {`Basic realm="go2rtc"`}},
