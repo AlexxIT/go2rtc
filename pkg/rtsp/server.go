@@ -59,7 +59,7 @@ func (c *Conn) Accept() error {
 
 		c.Fire(req)
 
-		if !c.AuthValidate(c.URL.Path[1:], req) {
+		if c.URL.Path == "" || !c.AuthValidate(c.URL.Path[1:], req) {
 			res := &tcp.Response{
 				Status:  "401 Unauthorized",
 				Header:  map[string][]string{"Www-Authenticate": {`Basic realm="go2rtc"`}},
