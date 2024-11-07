@@ -22,7 +22,7 @@ func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
 
 	producers:
 		for prodN, prod := range s.producers {
-			if prodErrors[prodN] != nil {
+			if prodErrors[prodN] != nil || prod.state == stateFailed {
 				log.Trace().Msgf("[streams] skip cons=%d prod=%d", consN, prodN)
 				continue
 			}

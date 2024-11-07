@@ -19,6 +19,7 @@ const (
 	stateStart
 	stateExternal
 	stateInternal
+	stateFailed
 )
 
 type Producer struct {
@@ -61,6 +62,7 @@ func (p *Producer) Dial() error {
 	if p.state == stateNone {
 		conn, err := GetProducer(p.url)
 		if err != nil {
+			p.state = stateFailed
 			return err
 		}
 
@@ -85,6 +87,10 @@ func (p *Producer) GetMedias() []*core.Media {
 func (p *Producer) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
+	if p.state == stateFailed {
+		return nil, errors.New("get track from failed state")
+	}
 
 	if p.state == stateNone {
 		return nil, errors.New("get track from none state")
@@ -113,6 +119,10 @@ func (p *Producer) GetTrack(media *core.Media, codec *core.Codec) (*core.Receive
 func (p *Producer) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
+	if p.state == stateFailed {
+		return errors.New("get track from failed state")
+	}
 
 	if p.state == stateNone {
 		return errors.New("add track from none state")
@@ -249,6 +259,10 @@ func (p *Producer) stop() {
 	switch p.state {
 	case stateExternal:
 		log.Trace().Msgf("[streams] skip stop external producer")
+		return
+	case stateFailed:
+		log.Trace().Msgf("[streams] skip stop failed producer")
+		p.state = stateNone
 		return
 	case stateNone:
 		log.Trace().Msgf("[streams] skip stop none producer")
