@@ -54,54 +54,98 @@ func (n *Node) AppendChild(child *Node) {
 }
 
 func (n *Node) RemoveParent(parent *Node) {
-	n.mu.Lock()
-	for i, p := range n.parents {
-		if p == parent {
-			n.parents = append(n.parents[:i], n.parents[i+1:]...)
-			break
-		}
-	}
-	n.mu.Unlock()
+    if parent == nil {
+        return
+    }
+
+    n.mu.Lock()
+    defer n.mu.Unlock()
+
+    for i, p := range n.parents {
+        if p == parent {
+            n.parents = append(n.parents[:i], n.parents[i+1:]...)
+            break
+        }
+    }
 }
 
 func (n *Node) RemoveChild(child *Node) {
-	n.mu.Lock()
-	for i, ch := range n.childs {
-		if ch == child {
-			n.childs = append(n.childs[:i], n.childs[i+1:]...)
-			break
-		}
-	}
-	n.mu.Unlock()
+    if child == nil {
+        return
+    }
+
+    n.mu.Lock()
+    defer n.mu.Unlock()
+
+    for i, ch := range n.childs {
+        if ch == child {
+            n.childs = append(n.childs[:i], n.childs[i+1:]...)
+            break
+        }
+    }
 }
 
 func (n *Node) Close() {
     n.mu.Lock()
-    if parents := n.parents; parents != nil {
-        parentsCopy := make([]*Node, len(parents))
-        copy(parentsCopy, parents)
+    
+    // Early return if already closed
+    if n.childs == nil && n.parents == nil {
         n.mu.Unlock()
-
-        for _, parent := range parentsCopy {
-            parent.RemoveChild(n)
-        }
-    } else {
-        childsCopy := make([]*Node, len(n.childs))
-        copy(childsCopy, n.childs)
-        n.mu.Unlock()
-
-        for _, child := range childsCopy {
-            child.RemoveParent(n)
-            if len(child.parents) == 0 {
-                child.Close()
-            }
-        }
+        return
     }
 
-    n.mu.Lock()
+    // Take snapshots of current relationships
+    var childsCopy []*Node
+    var parentsCopy []*Node
+    
+    if n.childs != nil {
+        childsCopy = make([]*Node, len(n.childs))
+        copy(childsCopy, n.childs)
+    }
+    
+    if n.parents != nil {
+        parentsCopy = make([]*Node, len(n.parents))
+        copy(parentsCopy, n.parents)
+    }
+
+    // Clear relationships immediately to prevent cycles
     n.childs = nil
     n.parents = nil
     n.mu.Unlock()
+
+    // Handle parent cleanup
+    for _, parent := range parentsCopy {
+        parent.mu.Lock()
+        for i, child := range parent.childs {
+            if child == n {
+                parent.childs = append(parent.childs[:i], parent.childs[i+1:]...)
+                break
+            }
+        }
+        parent.mu.Unlock()
+    }
+
+    // Handle child cleanup
+    for _, child := range childsCopy {
+        child.mu.Lock()
+        var needsClose bool
+        
+        // Remove this node from child's parents
+        for i, parent := range child.parents {
+            if parent == n {
+                child.parents = append(child.parents[:i], child.parents[i+1:]...)
+                // If child has no more parents, it should be closed
+                needsClose = len(child.parents) == 0
+                break
+            }
+        }
+        child.mu.Unlock()
+
+        // Close child if it has no more parents
+        if needsClose {
+            child.Close()
+        }
+    }
 }
 
 func MoveNode(dst, src *Node) {
