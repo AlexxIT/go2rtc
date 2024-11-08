@@ -169,10 +169,6 @@ func (c *Client) Start() error {
 		}
 	}
 
-	if c.audioSession.OnReadRTP != nil {
-		c.audioSession.OnReadRTP = timekeeper(c.audioSession.OnReadRTP)
-	}
-
 	<-deadline.C
 
 	return nil
@@ -224,32 +220,5 @@ func (c *Client) srtpEndpoint() *srtp.Endpoint {
 		MasterKey:  []byte(core.RandString(16, 0)),
 		MasterSalt: []byte(core.RandString(14, 0)),
 		SSRC:       rand.Uint32(),
-	}
-}
-
-func timekeeper(handler core.HandlerFunc) core.HandlerFunc {
-	const sampleRate = 16000
-	const sampleSize = 480
-
-	var send time.Duration
-	var firstTime time.Time
-
-	return func(packet *rtp.Packet) {
-		now := time.Now()
-
-		if send != 0 {
-			elapsed := now.Sub(firstTime) * sampleRate / time.Second
-			if send+sampleSize > elapsed {
-				return // drop overflow frame
-			}
-		} else {
-			firstTime = now
-		}
-
-		send += sampleSize
-
-		packet.Timestamp = uint32(send)
-
-		handler(packet)
 	}
 }
