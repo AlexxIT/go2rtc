@@ -121,7 +121,7 @@ func (p *Producer) AddTrack(media *core.Media, codec *core.Codec, track *core.Re
 	defer p.mu.Unlock()
 
 	if p.state == stateFailed {
-		return errors.New("get track from failed state")
+		return errors.New("add track from failed state")
 	}
 
 	if p.state == stateNone {
