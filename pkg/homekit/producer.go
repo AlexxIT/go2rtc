@@ -102,7 +102,7 @@ func (c *Client) GetMedias() []*core.Media {
 
 	c.Medias = []*core.Media{
 		videoToMedia(c.videoConfig.Codecs),
-		audioToMedia(c.audioConfig.Codecs),
+		audioToMedia(c.audioConfig.Codecs, core.DirectionRecvonly),
 		{
 			Kind:      core.KindVideo,
 			Direction: core.DirectionRecvonly,
@@ -116,7 +116,47 @@ func (c *Client) GetMedias() []*core.Media {
 		},
 	}
 
+	if acc.GetService(camera.TypeSpeaker) != nil {
+		c.Medias = append(c.Medias,
+			audioToMedia(c.audioConfig.Codecs, core.DirectionSendonly),
+			&core.Media{
+				Kind:      core.KindAudio,
+				Direction: core.DirectionSendonly,
+				Codecs: []*core.Codec{
+					{
+						Name:      core.CodecOpus,
+						ClockRate: 48000,
+						Channels:  2,
+					},
+				},
+			},
+		)
+	}
+
 	return c.Medias
+}
+
+func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
+	switch codec.Name {
+	case core.CodecOpus:
+		sender := core.NewSender(media, track.Codec)
+
+		sender.Handler = func(packet *rtp.Packet) {
+			if c.audioSession != nil {
+				packet.PayloadType = 110
+				packet.SSRC = c.audioSession.Local.SSRC
+
+				if n, err := c.audioSession.WriteRTP(packet); err == nil {
+					c.Send += n
+				}
+			}
+		}
+
+		sender.HandleRTP(track)
+		c.Senders = append(c.Senders, sender)
+	}
+
+	return nil
 }
 
 func (c *Client) Start() error {
