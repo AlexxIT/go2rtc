@@ -131,13 +131,13 @@ func (s *Sender) WithParent(parent *Receiver) *Sender {
 }
 
 func (s *Sender) Start() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.buf == nil || s.done != nil {
-		return
-	}
-	s.done = make(chan struct{})
+    s.mu.Lock()
+    if s.buf == nil || s.done != nil {
+        s.mu.Unlock()
+        return
+    }
+    s.done = make(chan struct{})
+    s.mu.Unlock()
 
 	go func() {
 		for packet := range s.buf {
