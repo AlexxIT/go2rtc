@@ -188,6 +188,9 @@ func tcpHandler(conn *rtsp.Conn) {
 				conn.PacketSize = uint16(core.Atoi(s))
 			}
 
+			// will help to protect looping requests to same source
+			conn.Connection.Source = query.Get("source")
+
 			if err := stream.AddConsumer(conn); err != nil {
 				log.Warn().Err(err).Str("stream", name).Msg("[rtsp]")
 				return

@@ -22,6 +22,12 @@ func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
 
 	producers:
 		for prodN, prod := range s.producers {
+			// check for loop request, ex. `camera1: ffmpeg:camera1`
+			if info, ok := cons.(core.Info); ok && prod.url == info.GetSource() {
+				log.Trace().Msgf("[streams] skip cons=%d prod=%d", consN, prodN)
+				continue
+			}
+
 			if prodErrors[prodN] != nil {
 				log.Trace().Msgf("[streams] skip cons=%d prod=%d", consN, prodN)
 				continue
