@@ -143,9 +143,6 @@ func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Rece
 
 		sender.Handler = func(packet *rtp.Packet) {
 			if c.audioSession != nil {
-				packet.PayloadType = 110
-				packet.SSRC = c.audioSession.Local.SSRC
-
 				if n, err := c.audioSession.WriteRTP(packet); err == nil {
 					c.Send += n
 				}
@@ -185,6 +182,12 @@ func (c *Client) Start() error {
 
 	c.srtp.AddSession(c.videoSession)
 	c.srtp.AddSession(c.audioSession)
+
+	c.videoSession.PayloadType = videoCodec.RTPParams[0].PayloadType
+	c.videoSession.RTCPInterval = toDuration(videoCodec.RTPParams[0].RTCPInterval)
+
+	c.audioSession.PayloadType = audioCodec.RTPParams[0].PayloadType
+	c.audioSession.RTCPInterval = toDuration(audioCodec.RTPParams[0].RTCPInterval)
 
 	deadline := time.NewTimer(core.ConnDeadline)
 

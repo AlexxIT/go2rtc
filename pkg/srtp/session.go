@@ -83,10 +83,10 @@ func (s *Session) WriteRTP(packet *rtp.Packet) (int, error) {
 		Header: rtp.Header{
 			Version:        2,
 			Marker:         packet.Marker,
-			PayloadType:    packet.PayloadType,
+			PayloadType:    s.PayloadType,
 			SequenceNumber: packet.SequenceNumber,
 			Timestamp:      packet.Timestamp,
-			SSRC:           packet.SSRC,
+			SSRC:           s.Local.SSRC,
 		},
 		Payload: packet.Payload,
 	}
