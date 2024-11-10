@@ -170,7 +170,7 @@ Available modules:
 - [api](#module-api) - HTTP API (important for WebRTC support)
 - [rtsp](#module-rtsp) - RTSP Server (important for FFmpeg support)
 - [webrtc](#module-webrtc) - WebRTC Server
-- [mp4](#module-mp4) - MSE, MP4 stream and MP4 shapshot Server
+- [mp4](#module-mp4) - MSE, MP4 stream and MP4 snapshot Server
 - [hls](#module-hls) - HLS TS or fMP4 stream Server
 - [mjpeg](#module-mjpeg) - MJPEG Server
 - [ffmpeg](#source-ffmpeg) - FFmpeg integration
