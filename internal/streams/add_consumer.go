@@ -1,6 +1,7 @@
 package streams
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -124,7 +125,7 @@ func formatError(consMedias, prodMedias []*core.Media, prodErrors []error) error
 	}
 
 	if len(text) != 0 {
-		return &ErrorWithErrorCode{MultipleErrorCode, "streams: " + text}
+		return errors.New("streams: " + text)
 	}
 
 	// 2. Return "codecs not matched"
@@ -147,11 +148,11 @@ func formatError(consMedias, prodMedias []*core.Media, prodErrors []error) error
 			}
 		}
 
-		return &ErrorWithErrorCode{CodecNotMatchedErrorCode, "streams: codecs not matched: " + prod + " => " + cons}
+		return errors.New("streams: codecs not matched: " + prod + " => " + cons)
 	}
 
 	// 3. Return unknown error
-	return &ErrorWithErrorCode{UnknownErrorCode, "streams: unknown error"}
+	return errors.New("streams: unknown error")
 }
 
 func appendString(s, elem string) string {
@@ -162,25 +163,4 @@ func appendString(s, elem string) string {
 		return elem
 	}
 	return s + ", " + elem
-}
-
-type ErrorCode string
-
-const (
-	CodecNotMatchedErrorCode ErrorCode = "codecNotMatched"
-	MultipleErrorCode        ErrorCode = "multiple"
-	UnknownErrorCode         ErrorCode = "unknown"
-)
-
-type ErrorWithErrorCode struct {
-	code    ErrorCode
-	message string
-}
-
-func (e *ErrorWithErrorCode) Error() string {
-	return e.message
-}
-
-func (e *ErrorWithErrorCode) Code() string {
-	return string(e.code)
 }
