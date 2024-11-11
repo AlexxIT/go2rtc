@@ -1,7 +1,6 @@
 package streams
 
 import (
-	"errors"
 	"strings"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -125,19 +124,34 @@ func formatError(consMedias, prodMedias []*core.Media, prodErrors []error) error
 	}
 
 	if len(text) != 0 {
-		return errors.New("streams: " + text)
+		return &ErrorWithErrorCode{MultipleErrorCode, "streams: " + text}
 	}
 
 	// 2. Return "codecs not matched"
 	if prodMedias != nil {
-		return &CodecNotMatchedError{
-			producerMedias: prodMedias,
-			consumerMedias: consMedias,
+		var prod, cons string
+
+		for _, media := range prodMedias {
+			if media.Direction == core.DirectionRecvonly {
+				for _, codec := range media.Codecs {
+					prod = appendString(prod, codec.PrintName())
+				}
+			}
 		}
+
+		for _, media := range consMedias {
+			if media.Direction == core.DirectionSendonly {
+				for _, codec := range media.Codecs {
+					cons = appendString(cons, codec.PrintName())
+				}
+			}
+		}
+
+		return &ErrorWithErrorCode{CodecNotMatchedErrorCode, "streams: codecs not matched: " + prod + " => " + cons}
 	}
 
 	// 3. Return unknown error
-	return errors.New("streams: unknown error")
+	return &ErrorWithErrorCode{UnknownErrorCode, "streams: unknown error"}
 }
 
 func appendString(s, elem string) string {
@@ -150,29 +164,23 @@ func appendString(s, elem string) string {
 	return s + ", " + elem
 }
 
-type CodecNotMatchedError struct {
-	producerMedias []*core.Media
-	consumerMedias []*core.Media
+type ErrorCode string
+
+const (
+	CodecNotMatchedErrorCode ErrorCode = "codecNotMatched"
+	MultipleErrorCode        ErrorCode = "multiple"
+	UnknownErrorCode         ErrorCode = "unknown"
+)
+
+type ErrorWithErrorCode struct {
+	code    ErrorCode
+	message string
 }
 
-func (e *CodecNotMatchedError) Error() string {
-	var prod, cons string
+func (e *ErrorWithErrorCode) Error() string {
+	return e.message
+}
 
-	for _, media := range e.producerMedias {
-		if media.Direction == core.DirectionRecvonly {
-			for _, codec := range media.Codecs {
-				prod = appendString(prod, codec.PrintName())
-			}
-		}
-	}
-
-	for _, media := range e.consumerMedias {
-		if media.Direction == core.DirectionSendonly {
-			for _, codec := range media.Codecs {
-				cons = appendString(cons, codec.PrintName())
-			}
-		}
-	}
-
-	return "streams: codecs not matched: " + prod + " => " + cons
+func (e *ErrorWithErrorCode) Code() string {
+	return string(e.code)
 }
