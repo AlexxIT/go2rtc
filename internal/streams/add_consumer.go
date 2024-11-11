@@ -135,7 +135,7 @@ func formatError(consMedias, prodMedias []*core.Media, prodErrors []error) error
 		for _, media := range prodMedias {
 			if media.Direction == core.DirectionRecvonly {
 				for _, codec := range media.Codecs {
-					prod = appendString(prod, codec.PrintName())
+					prod = appendString(prod, media.Kind+":"+codec.PrintName())
 				}
 			}
 		}
@@ -143,7 +143,7 @@ func formatError(consMedias, prodMedias []*core.Media, prodErrors []error) error
 		for _, media := range consMedias {
 			if media.Direction == core.DirectionSendonly {
 				for _, codec := range media.Codecs {
-					cons = appendString(cons, codec.PrintName())
+					cons = appendString(cons, media.Kind+":"+codec.PrintName())
 				}
 			}
 		}
