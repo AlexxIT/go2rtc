@@ -30,6 +30,8 @@ type Client struct {
 
 	stream *camera.Stream
 
+	Width   int
+	Height  int
 	Bitrate int // in bits/s
 }
 
@@ -175,7 +177,7 @@ func (c *Client) Start() error {
 	c.audioSession = &srtp.Session{Local: c.srtpEndpoint()}
 
 	var err error
-	c.stream, err = camera.NewStream(c.hap, videoCodec, audioCodec, c.videoSession, c.audioSession, c.Bitrate)
+	c.stream, err = camera.NewStream(c.hap, videoCodec, audioCodec, c.videoSession, c.audioSession, c.Bitrate, c.Width, c.Height)
 	if err != nil {
 		return err
 	}
