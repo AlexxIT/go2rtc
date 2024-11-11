@@ -130,15 +130,12 @@ func formatError(consMedias, prodMedias []*core.Media, prodErrors []error) error
 
 	// 2. Return "codecs not matched"
 	if prodMedias != nil {
-		var prod, cons map[string]string = make(map[string]string), make(map[string]string)
+		var prod, cons string
 
 		for _, media := range prodMedias {
 			if media.Direction == core.DirectionRecvonly {
 				for _, codec := range media.Codecs {
-					if _, ok := prod[codec.Name]; !ok {
-						prod[media.Kind] = ""
-					}
-					prod[media.Kind] = appendString(prod[media.Kind], codec.PrintName())
+					prod = appendString(prod, media.Kind+":"+codec.PrintName())
 				}
 			}
 		}
@@ -146,27 +143,16 @@ func formatError(consMedias, prodMedias []*core.Media, prodErrors []error) error
 		for _, media := range consMedias {
 			if media.Direction == core.DirectionSendonly {
 				for _, codec := range media.Codecs {
-					if _, ok := cons[codec.Name]; !ok {
-						cons[media.Kind] = ""
-					}
-					cons[media.Kind] = appendString(cons[media.Kind], codec.PrintName())
+					cons = appendString(cons, media.Kind+":"+codec.PrintName())
 				}
 			}
 		}
 
-		return errors.New("streams: codecs not matched: " + mapToString(prod) + " => " + mapToString(cons))
+		return errors.New("streams: codecs not matched: " + prod + " => " + cons)
 	}
 
 	// 3. Return unknown error
 	return errors.New("streams: unknown error")
-}
-
-func mapToString(m map[string]string) string {
-	var s string
-	for k, v := range m {
-		s = appendString(s, "("+k+": "+v+")")
-	}
-	return s
 }
 
 func appendString(s, elem string) string {
