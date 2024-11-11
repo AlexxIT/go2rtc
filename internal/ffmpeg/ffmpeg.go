@@ -223,6 +223,9 @@ func parseArgs(s string) *ffmpeg.Args {
 			s += "?video&audio"
 		}
 		s += "&source=ffmpeg:" + url.QueryEscape(source)
+		for _, v := range query["query"] {
+			s += "&" + v
+		}
 		args.Input = inputTemplate("rtsp", s, query)
 	} else if i = strings.Index(s, "?"); i > 0 {
 		switch s[:i] {

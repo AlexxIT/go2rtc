@@ -147,6 +147,7 @@ func tcpHandler(conn *rtsp.Conn) {
 	var closer func()
 
 	trace := log.Trace().Enabled()
+	level := zerolog.WarnLevel
 
 	conn.Listen(func(msg any) {
 		if trace {
@@ -188,11 +189,18 @@ func tcpHandler(conn *rtsp.Conn) {
 				conn.PacketSize = uint16(core.Atoi(s))
 			}
 
+			// param name like ffmpeg style https://ffmpeg.org/ffmpeg-protocols.html
+			if s := query.Get("log_level"); s != "" {
+				if lvl, err := zerolog.ParseLevel(s); err == nil {
+					level = lvl
+				}
+			}
+
 			// will help to protect looping requests to same source
 			conn.Connection.Source = query.Get("source")
 
 			if err := stream.AddConsumer(conn); err != nil {
-				log.Warn().Err(err).Str("stream", name).Msg("[rtsp]")
+				log.WithLevel(level).Err(err).Str("stream", name).Msg("[rtsp]")
 				return
 			}
 
@@ -230,7 +238,7 @@ func tcpHandler(conn *rtsp.Conn) {
 
 	if err := conn.Accept(); err != nil {
 		if err != io.EOF {
-			log.Warn().Err(err).Caller().Send()
+			log.WithLevel(level).Err(err).Caller().Send()
 		}
 		if closer != nil {
 			closer()
