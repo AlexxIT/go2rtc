@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
@@ -143,6 +144,18 @@ func streamHandler(rawURL string) (core.Producer, error) {
 	if client != nil && rawQuery != "" {
 		query := streams.ParseQuery(rawQuery)
 		client.Bitrate = parseBitrate(query.Get("bitrate"))
+
+		if widthStr := query.Get("width"); widthStr != "" {
+			if width, err := strconv.Atoi(widthStr); err == nil {
+				client.Width = width
+			}
+		}
+
+		if heightStr := query.Get("height"); heightStr != "" {
+			if height, err := strconv.Atoi(heightStr); err == nil {
+				client.Height = height
+			}
+		}
 	}
 
 	return client, err
