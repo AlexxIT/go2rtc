@@ -192,7 +192,14 @@ func tcpHandler(conn *rtsp.Conn) {
 			conn.Connection.Source = query.Get("source")
 
 			if err := stream.AddConsumer(conn); err != nil {
-				log.Warn().Err(err).Str("stream", name).Msg("[rtsp]")
+				logEvent := log.Warn()
+
+				if _, ok := err.(*streams.CodecNotMatchedError); ok && strings.HasPrefix(query.Get("source"), "ffmpeg") {
+					// lower codec not matched error for ffmpeg to debug
+					logEvent = log.Debug()
+				}
+
+				logEvent.Err(err).Str("stream", name).Msg("[rtsp]")
 				return
 			}
 

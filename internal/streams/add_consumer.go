@@ -130,25 +130,10 @@ func formatError(consMedias, prodMedias []*core.Media, prodErrors []error) error
 
 	// 2. Return "codecs not matched"
 	if prodMedias != nil {
-		var prod, cons string
-
-		for _, media := range prodMedias {
-			if media.Direction == core.DirectionRecvonly {
-				for _, codec := range media.Codecs {
-					prod = appendString(prod, codec.PrintName())
-				}
-			}
+		return &CodecNotMatchedError{
+			producerMedias: prodMedias,
+			consumerMedias: consMedias,
 		}
-
-		for _, media := range consMedias {
-			if media.Direction == core.DirectionSendonly {
-				for _, codec := range media.Codecs {
-					cons = appendString(cons, codec.PrintName())
-				}
-			}
-		}
-
-		return errors.New("streams: codecs not matched: " + prod + " => " + cons)
 	}
 
 	// 3. Return unknown error
@@ -163,4 +148,31 @@ func appendString(s, elem string) string {
 		return elem
 	}
 	return s + ", " + elem
+}
+
+type CodecNotMatchedError struct {
+	producerMedias []*core.Media
+	consumerMedias []*core.Media
+}
+
+func (e *CodecNotMatchedError) Error() string {
+	var prod, cons string
+
+	for _, media := range e.producerMedias {
+		if media.Direction == core.DirectionRecvonly {
+			for _, codec := range media.Codecs {
+				prod = appendString(prod, codec.PrintName())
+			}
+		}
+	}
+
+	for _, media := range e.consumerMedias {
+		if media.Direction == core.DirectionSendonly {
+			for _, codec := range media.Codecs {
+				cons = appendString(cons, codec.PrintName())
+			}
+		}
+	}
+
+	return "streams: codecs not matched: " + prod + " => " + cons
 }
