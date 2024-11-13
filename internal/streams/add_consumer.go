@@ -22,7 +22,13 @@ func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
 
 	producers:
 		for prodN, prod := range s.producers {
-			if prodErrors[prodN] != nil || prod.state == stateFailed {
+			// check for loop request, ex. `camera1: ffmpeg:camera1`
+			if info, ok := cons.(core.Info); ok && prod.url == info.GetSource() {
+				log.Trace().Msgf("[streams] skip cons=%d prod=%d", consN, prodN)
+				continue
+			}
+
+			if prodErrors[prodN] != nil {
 				log.Trace().Msgf("[streams] skip cons=%d prod=%d", consN, prodN)
 				continue
 			}
@@ -129,7 +135,7 @@ func formatError(consMedias, prodMedias []*core.Media, prodErrors []error) error
 		for _, media := range prodMedias {
 			if media.Direction == core.DirectionRecvonly {
 				for _, codec := range media.Codecs {
-					prod = appendString(prod, codec.PrintName())
+					prod = appendString(prod, media.Kind+":"+codec.PrintName())
 				}
 			}
 		}
@@ -137,7 +143,7 @@ func formatError(consMedias, prodMedias []*core.Media, prodErrors []error) error
 		for _, media := range consMedias {
 			if media.Direction == core.DirectionSendonly {
 				for _, codec := range media.Codecs {
-					cons = appendString(cons, codec.PrintName())
+					cons = appendString(cons, media.Kind+":"+codec.PrintName())
 				}
 			}
 		}

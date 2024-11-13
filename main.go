@@ -36,7 +36,7 @@ import (
 )
 
 func main() {
-	app.Version = "1.9.6"
+	app.Version = "1.9.7"
 
 	// 1. Core modules: app, api/ws, streams
 

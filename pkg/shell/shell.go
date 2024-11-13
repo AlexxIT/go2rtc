@@ -3,6 +3,7 @@ package shell
 import (
 	"os"
 	"os/signal"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"syscall"
@@ -49,6 +50,13 @@ func ReplaceEnvVars(text string) string {
 		if i := strings.IndexByte(key, ':'); i > 0 {
 			key, def = key[:i], key[i+1:]
 			dok = true
+		}
+
+		if dir, vok := os.LookupEnv("CREDENTIALS_DIRECTORY"); vok {
+			value, err := os.ReadFile(filepath.Join(dir, key))
+			if err == nil {
+				return strings.TrimSpace(string(value))
+			}
 		}
 
 		if value, vok := os.LookupEnv(key); vok {
