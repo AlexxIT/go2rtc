@@ -6,6 +6,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/bubble"
 	"github.com/AlexxIT/go2rtc/internal/debug"
+	"github.com/AlexxIT/go2rtc/internal/doorbird"
 	"github.com/AlexxIT/go2rtc/internal/dvrip"
 	"github.com/AlexxIT/go2rtc/internal/echo"
 	"github.com/AlexxIT/go2rtc/internal/exec"
@@ -82,6 +83,7 @@ func main() {
 	bubble.Init()   // bubble source
 	expr.Init()     // expr source
 	gopro.Init()    // gopro source
+	doorbird.Init() // doorbird source
 
 	// 6. Helper modules
 

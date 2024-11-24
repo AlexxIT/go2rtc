@@ -14,6 +14,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/image"
 	"github.com/AlexxIT/go2rtc/pkg/magic"
 	"github.com/AlexxIT/go2rtc/pkg/mpjpeg"
+	"github.com/AlexxIT/go2rtc/pkg/pcm"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 )
 
@@ -87,6 +88,9 @@ func do(req *http.Request) (core.Producer, error) {
 		return image.Open(res)
 	case ct == "multipart/x-mixed-replace":
 		return mpjpeg.Open(res.Body)
+	//https://www.iana.org/assignments/media-types/audio/basic
+	case ct == "audio/basic":
+		return pcm.Open(res.Body)
 	}
 
 	return magic.Open(res.Body)
