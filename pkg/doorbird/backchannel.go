@@ -25,7 +25,7 @@ func Dial(rawURL string) (*Client, error) {
 	user := u.User.Username()
 	pass, _ := u.User.Password()
 
-	rawURL = fmt.Sprintf("http://%s/bha-api/audio-transmit.cgi?http-user=%s&&http-password=%s", u.Host, user, pass)
+	rawURL = fmt.Sprintf("http://%s/bha-api/audio-transmit.cgi?http-user=%s&http-password=%s", u.Host, user, pass)
 
 	req, err := http.NewRequest("POST", rawURL, nil)
 	if err != nil {
