@@ -231,7 +231,7 @@ func (c *Client) Handle() error {
 				Header: rtp.Header{
 					Timestamp: core.Now90000(),
 				},
-				Payload: annexb.EncodeToAVCC(b[6:], false),
+				Payload: annexb.EncodeToAVCC(b[6:]),
 			}
 			c.videoTrack.WriteRTP(pkt)
 		} else {

@@ -48,12 +48,12 @@ func apiStreams(w http.ResponseWriter, r *http.Request) {
 			name = src
 		}
 
-		if New(name, src) == nil {
+		if New(name, query["src"]...) == nil {
 			http.Error(w, "", http.StatusBadRequest)
 			return
 		}
 
-		if err := app.PatchConfig(name, src, "streams"); err != nil {
+		if err := app.PatchConfig(name, query["src"], "streams"); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		}
 

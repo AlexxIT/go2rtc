@@ -124,9 +124,13 @@ func MarshalSDP(name string, medias []*Media) ([]byte, error) {
 
 		codec := media.Codecs[0]
 
-		name := codec.Name
-		if name == CodecELD {
+		switch codec.Name {
+		case CodecELD:
 			name = CodecAAC
+		case CodecPCML:
+			name = CodecPCM // beacuse we using pcm.LittleToBig for RTSP server
+		default:
+			name = codec.Name
 		}
 
 		md := &sdp.MediaDescription{

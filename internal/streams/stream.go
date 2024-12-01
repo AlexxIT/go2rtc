@@ -21,6 +21,12 @@ func NewStream(source any) *Stream {
 		return &Stream{
 			producers: []*Producer{NewProducer(source)},
 		}
+	case []string:
+		s := new(Stream)
+		for _, str := range source {
+			s.producers = append(s.producers, NewProducer(str))
+		}
+		return s
 	case []any:
 		s := new(Stream)
 		for _, src := range source {
@@ -70,7 +76,7 @@ func (s *Stream) RemoveConsumer(cons core.Consumer) {
 }
 
 func (s *Stream) AddProducer(prod core.Producer) {
-	producer := &Producer{conn: prod, state: stateExternal}
+	producer := &Producer{conn: prod, state: stateExternal, url: "external"}
 	s.mu.Lock()
 	s.producers = append(s.producers, producer)
 	s.mu.Unlock()

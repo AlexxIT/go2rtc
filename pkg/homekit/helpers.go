@@ -2,7 +2,6 @@ package homekit
 
 import (
 	"encoding/hex"
-	"slices"
 
 	"github.com/AlexxIT/go2rtc/pkg/aac"
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -22,8 +21,8 @@ func videoToMedia(codecs []camera.VideoCodec) *core.Media {
 	for _, codec := range codecs {
 		for _, param := range codec.CodecParams {
 			// get best profile and level
-			profileID := slices.Max(param.ProfileID)
-			level := slices.Max(param.Level)
+			profileID := core.Max(param.ProfileID)
+			level := core.Max(param.Level)
 			profile := videoProfiles[profileID] + videoLevels[level]
 			mediaCodec := &core.Codec{
 				Name:      videoCodecs[codec.CodecType],

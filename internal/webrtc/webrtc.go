@@ -40,15 +40,17 @@ func Init() {
 		AddCandidate(network, candidate)
 	}
 
+	var err error
+
 	// create pionAPI with custom codecs list and custom network settings
-	serverAPI, err := webrtc.NewServerAPI(network, address, &filters)
+	serverAPI, err = webrtc.NewServerAPI(network, address, &filters)
 	if err != nil {
 		log.Error().Err(err).Caller().Send()
 		return
 	}
 
 	// use same API for WebRTC server and client if no address
-	clientAPI := serverAPI
+	clientAPI = serverAPI
 
 	if address != "" {
 		log.Info().Str("addr", cfg.Mod.Listen).Msg("[webrtc] listen")
@@ -81,11 +83,13 @@ func Init() {
 	streams.HandleFunc("webrtc", streamsHandler)
 }
 
+var serverAPI, clientAPI *pion.API
+
 var log zerolog.Logger
 
 var PeerConnection func(active bool) (*pion.PeerConnection, error)
 
-func asyncHandler(tr *ws.Transport, msg *ws.Message) error {
+func asyncHandler(tr *ws.Transport, msg *ws.Message) (err error) {
 	var stream *streams.Stream
 	var mode core.Mode
 
@@ -104,8 +108,30 @@ func asyncHandler(tr *ws.Transport, msg *ws.Message) error {
 		return errors.New(api.StreamNotFound)
 	}
 
+	var offer struct {
+		Type       string           `json:"type"`
+		SDP        string           `json:"sdp"`
+		ICEServers []pion.ICEServer `json:"ice_servers"`
+	}
+
+	// V2 - json/object exchange, V1 - raw SDP exchange
+	apiV2 := msg.Type == "webrtc"
+
+	if apiV2 {
+		if err = msg.Unmarshal(&offer); err != nil {
+			return err
+		}
+	} else {
+		offer.SDP = msg.String()
+	}
+
 	// create new PeerConnection instance
-	pc, err := PeerConnection(false)
+	var pc *pion.PeerConnection
+	if offer.ICEServers == nil {
+		pc, err = PeerConnection(false)
+	} else {
+		pc, err = serverAPI.NewPeerConnection(pion.Configuration{ICEServers: offer.ICEServers})
+	}
 	if err != nil {
 		log.Error().Err(err).Caller().Send()
 		return err
@@ -145,20 +171,10 @@ func asyncHandler(tr *ws.Transport, msg *ws.Message) error {
 		}
 	})
 
-	// V2 - json/object exchange, V1 - raw SDP exchange
-	apiV2 := msg.Type == "webrtc"
+	log.Trace().Msgf("[webrtc] offer:\n%s", offer.SDP)
 
 	// 1. SetOffer, so we can get remote client codecs
-	var offer string
-	if apiV2 {
-		offer = msg.GetString("sdp")
-	} else {
-		offer = msg.String()
-	}
-
-	log.Trace().Msgf("[webrtc] offer:\n%s", offer)
-
-	if err = conn.SetOffer(offer); err != nil {
+	if err = conn.SetOffer(offer.SDP); err != nil {
 		log.Warn().Err(err).Caller().Send()
 		return err
 	}

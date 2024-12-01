@@ -115,8 +115,8 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
 
 Download binary for your OS from [latest release](https://github.com/AlexxIT/go2rtc/releases/):
 
-- `go2rtc_win64.zip` - Windows 64-bit
-- `go2rtc_win32.zip` - Windows 32-bit
+- `go2rtc_win64.zip` - Windows 10+ 64-bit
+- `go2rtc_win32.zip` - Windows 7+ 32-bit
 - `go2rtc_win_arm64.zip` - Windows ARM 64-bit
 - `go2rtc_linux_amd64` - Linux 64-bit
 - `go2rtc_linux_i386` - Linux 32-bit
@@ -124,8 +124,8 @@ Download binary for your OS from [latest release](https://github.com/AlexxIT/go2
 - `go2rtc_linux_arm` - Linux ARM 32-bit (ex. Raspberry 32-bit OS)
 - `go2rtc_linux_armv6` - Linux ARMv6 (for old Raspberry 1 and Zero)
 - `go2rtc_linux_mipsel` - Linux MIPS (ex. [Xiaomi Gateway 3](https://github.com/AlexxIT/XiaomiGateway3), [Wyze cameras](https://github.com/gtxaspec/wz_mini_hacks))
-- `go2rtc_mac_amd64.zip` - Mac Intel 64-bit
-- `go2rtc_mac_arm64.zip` - Mac ARM 64-bit
+- `go2rtc_mac_amd64.zip` - macOS 10.13+ Intel 64-bit
+- `go2rtc_mac_arm64.zip` - macOS ARM 64-bit
 - `go2rtc_freebsd_amd64.zip` - FreeBSD Intel 64-bit
 - `go2rtc_freebsd_arm64.zip` - FreeBSD ARM 64-bit
 
@@ -172,7 +172,7 @@ Available modules:
 - [api](#module-api) - HTTP API (important for WebRTC support)
 - [rtsp](#module-rtsp) - RTSP Server (important for FFmpeg support)
 - [webrtc](#module-webrtc) - WebRTC Server
-- [mp4](#module-mp4) - MSE, MP4 stream and MP4 shapshot Server
+- [mp4](#module-mp4) - MSE, MP4 stream and MP4 snapshot Server
 - [hls](#module-hls) - HLS TS or fMP4 stream Server
 - [mjpeg](#module-mjpeg) - MJPEG Server
 - [ffmpeg](#source-ffmpeg) - FFmpeg integration
@@ -650,10 +650,11 @@ This source type support Roborock vacuums with cameras. Known working models:
 
 - Roborock S6 MaxV - only video (the vacuum has no microphone)
 - Roborock S7 MaxV - video and two way audio
+- Roborock Qrevo MaxV - video and two way audio
 
-Source support load Roborock credentials from Home Assistant [custom integration](https://github.com/humbertogontijo/homeassistant-roborock). Otherwise, you need to log in to your Roborock account (MiHome account is not supported). Go to: go2rtc WebUI > Add webpage. Copy `roborock://...` source for your vacuum and paste it to `go2rtc.yaml` config.
+Source support load Roborock credentials from Home Assistant [custom integration](https://github.com/humbertogontijo/homeassistant-roborock) or the [core integration](https://www.home-assistant.io/integrations/roborock). Otherwise, you need to log in to your Roborock account (MiHome account is not supported). Go to: go2rtc WebUI > Add webpage. Copy `roborock://...` source for your vacuum and paste it to `go2rtc.yaml` config.
 
-If you have graphic pin for your vacuum - add it as numeric pin (lines: 123, 456, 678) to the end of the roborock-link.
+If you have graphic pin for your vacuum - add it as numeric pin (lines: 123, 456, 789) to the end of the roborock-link.
 
 #### Source: WebRTC
 
