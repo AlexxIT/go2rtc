@@ -3,7 +3,6 @@ package doorbird
 import (
 	"fmt"
 	"net"
-	"net/http"
 	"net/url"
 	"time"
 
@@ -25,19 +24,6 @@ func Dial(rawURL string) (*Client, error) {
 	user := u.User.Username()
 	pass, _ := u.User.Password()
 
-	rawURL = fmt.Sprintf("http://%s/bha-api/audio-transmit.cgi?http-user=%s&http-password=%s", u.Host, user, pass)
-
-	req, err := http.NewRequest("POST", rawURL, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header = http.Header{
-		"Content-Type":   []string{"audio/basic"},
-		"Content-Length": []string{"9999999"},
-		"Connection":     []string{"Keep-Alive"},
-		"Cache-Control":  []string{"no-cache"},
-	}
-
 	if u.Port() == "" {
 		u.Host += ":80"
 	}
@@ -47,8 +33,15 @@ func Dial(rawURL string) (*Client, error) {
 		return nil, err
 	}
 
+	s := fmt.Sprintf("POST /bha-api/audio-transmit.cgi?http-user=%s&http-password=%s HTTP/1.0\r\n", user, pass) +
+		"Content-Type: audio/basic\r\n" +
+		"Content-Length: 9999999\r\n" +
+		"Connection: Keep-Alive\r\n" +
+		"Cache-Control: no-cache\r\n" +
+		"\r\n"
+
 	_ = conn.SetWriteDeadline(time.Now().Add(core.ConnDeadline))
-	if err = req.Write(conn); err != nil {
+	if _, err = conn.Write([]byte(s)); err != nil {
 		return nil, err
 	}
 
