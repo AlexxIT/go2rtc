@@ -61,3 +61,13 @@ go build -ldflags "-s -w" -trimpath && 7z a -mx9 -sdel %FILENAME% go2rtc
 @SET GOARCH=arm64
 @SET FILENAME=go2rtc_mac_arm64.zip
 go build -ldflags "-s -w" -trimpath && 7z a -mx9 -sdel %FILENAME% go2rtc
+
+@SET GOOS=freebsd
+@SET GOARCH=amd64
+@SET FILENAME=go2rtc_freebsd_amd64.zip
+go build -ldflags "-s -w" -trimpath && 7z a -mx9 -sdel %FILENAME% go2rtc
+
+@SET GOOS=freebsd
+@SET GOARCH=arm64
+@SET FILENAME=go2rtc_freebsd_arm64.zip
+go build -ldflags "-s -w" -trimpath && 7z a -mx9 -sdel %FILENAME% go2rtc
