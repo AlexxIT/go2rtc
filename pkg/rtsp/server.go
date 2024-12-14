@@ -159,7 +159,7 @@ func (c *Conn) Accept() error {
 			}
 
 			const transport = "RTP/AVP/TCP;unicast;interleaved="
-			if strings.HasPrefix(tr, transport) {
+			if tr = core.Between(tr, "interleaved=", ";"); tr != "" {
 				c.session = core.RandString(8, 10)
 				c.state = StateSetup
 
@@ -169,12 +169,12 @@ func (c *Conn) Accept() error {
 					if trackID >= 0 {
 						if trackID < len(c.Senders) {
 							c.Senders[trackID].Media.ID = MethodSetup
-							tr = fmt.Sprintf("RTP/AVP/TCP;unicast;interleaved=%d-%d", trackID*2, trackID*2+1)
-							res.Header.Set("Transport", tr)
+							tr = fmt.Sprintf("%d-%d", trackID*2, trackID*2+1)
+							res.Header.Set("Transport", transport+tr)
 						} else if trackID >= len(c.Senders) && trackID < len(c.Senders)+len(c.Receivers) {
 							c.Receivers[trackID-len(c.Senders)].Media.ID = MethodSetup
-							tr = fmt.Sprintf("RTP/AVP/TCP;unicast;interleaved=%d-%d", trackID*2, trackID*2+1)
-							res.Header.Set("Transport", tr)
+							tr = fmt.Sprintf("%d-%d", trackID*2, trackID*2+1)
+							res.Header.Set("Transport", transport+tr)
 						} else {
 							res.Status = "400 Bad Request"
 						}
@@ -182,7 +182,7 @@ func (c *Conn) Accept() error {
 						res.Status = "400 Bad Request"
 					}
 				} else {
-					res.Header.Set("Transport", tr[:len(transport)+3])
+					res.Header.Set("Transport", transport+tr)
 				}
 			} else {
 				res.Status = "461 Unsupported transport"
