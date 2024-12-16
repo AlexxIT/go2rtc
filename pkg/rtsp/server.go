@@ -148,25 +148,30 @@ func (c *Conn) Accept() error {
 				Request: req,
 			}
 
-			const transport = "RTP/AVP/TCP;unicast;interleaved="
-			if tr = core.Between(tr, "interleaved=", ";"); tr != "" {
-				c.session = core.RandString(8, 10)
-				c.state = StateSetup
+			const transport = "RTP/AVP/TCP;unicast"
 
-				if c.mode == core.ModePassiveConsumer {
-					if i := reqTrackID(req); i >= 0 && i < len(c.Senders) {
-						// mark sender as SETUP
-						c.Senders[i].Media.ID = MethodSetup
-						tr = fmt.Sprintf("%d-%d", i*2, i*2+1)
-						res.Header.Set("Transport", transport+tr)
+			c.session = core.RandString(8, 10)
+			c.state = StateSetup
+			
+			if c.mode == core.ModePassiveConsumer {
+				if i := reqTrackID(req); i >= 0 && i < len(c.Senders) {
+					// mark sender as SETUP
+					c.Senders[i].Media.ID = MethodSetup
+					interleaved := fmt.Sprintf("%d-%d", i*2, i*2+1)
+			
+					// Check if transport already contains the 'interleaved' parameter
+					if strings.Contains(transport, "interleaved=") {
+						// If so, just update the interleaved value
+						res.Header.Set("Transport", strings.Replace(transport, "interleaved=[^;]*", "interleaved="+interleaved, 1))
 					} else {
-						res.Status = "400 Bad Request"
+						// Otherwise, append the interleaved parameter
+						res.Header.Set("Transport", transport+";interleaved="+interleaved)
 					}
 				} else {
-					res.Header.Set("Transport", transport+tr)
+					res.Status = "400 Bad Request"
 				}
 			} else {
-				res.Status = "461 Unsupported transport"
+				res.Header.Set("Transport", tr)
 			}
 
 			if err = c.WriteResponse(res); err != nil {
