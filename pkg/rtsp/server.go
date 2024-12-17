@@ -177,7 +177,7 @@ func (c *Conn) Accept() error {
 				} else {
 					res.Header.Set("Transport", tr)
 				}
-			else {
+			} else {
 				res.Status = "461 Unsupported transport"
 			}
 
