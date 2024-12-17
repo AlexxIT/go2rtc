@@ -156,7 +156,7 @@ func (c *Conn) Accept() error {
 
 				c.session = core.RandString(8, 10)
 				c.state = StateSetup
-			
+
 				if c.mode == core.ModePassiveConsumer {
 					if i := reqTrackID(req); i >= 0 && i < len(c.Senders) {
 						// mark sender as SETUP
