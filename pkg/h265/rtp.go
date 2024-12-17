@@ -55,6 +55,7 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 			case 1: // end
 				buf = append(buf, data[3:]...)
 				binary.BigEndian.PutUint32(buf[nuStart:], uint32(len(buf)-nuStart-4))
+				nuStart = 0 // set 0 on end
 			case 3: // wrong RFC 7798 realisation from OpenIPC project
 				// A non-fragmented NAL unit MUST NOT be transmitted in one FU; i.e.,
 				// the Start bit and End bit must not both be set to 1 in the same FU
