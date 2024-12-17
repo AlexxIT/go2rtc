@@ -148,11 +148,9 @@ func (c *Conn) Accept() error {
 				Request: req,
 			}
 
-			const transport = "RTP/AVP/TCP;unicast"
-
-			// Test if client requests unicast with TCP transport, otherwise return 461 Transport not supported
+			// Test if client requests TCP transport, otherwise return 461 Transport not supported
 			// This allows smart clients who initially requested UDP to fall back on TCP transport.
-			if strings.HasPrefix(tr, transport) {
+			if strings.HasPrefix(tr, "RTP/AVP/TCP") {
 
 				c.session = core.RandString(8, 10)
 				c.state = StateSetup
@@ -163,13 +161,13 @@ func (c *Conn) Accept() error {
 						c.Senders[i].Media.ID = MethodSetup
 						interleaved := fmt.Sprintf("%d-%d", i*2, i*2+1)
 				
-						// Check if transport already contains the 'interleaved' parameter
-						if strings.Contains(transport, "interleaved=") {
+						// Check if tr already contains the 'interleaved' parameter
+						if strings.Contains(tr, "interleaved=") {
 							// If so, just update the interleaved value
-							res.Header.Set("Transport", strings.Replace(transport, "interleaved=[^;]*", "interleaved="+interleaved, 1))
+							res.Header.Set("Transport", strings.Replace(tr, "interleaved=[^;]*", "interleaved="+interleaved, 1))
 						} else {
 							// Otherwise, append the interleaved parameter
-							res.Header.Set("Transport", transport+";interleaved="+interleaved)
+							res.Header.Set("Transport", tr+";interleaved="+interleaved)
 						}
 					} else {
 						res.Status = "400 Bad Request"
