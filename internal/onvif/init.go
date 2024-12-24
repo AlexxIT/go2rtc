@@ -70,6 +70,10 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 		// important for Hass: Media section
 		res = onvif.GetCapabilitiesResponse(r.Host)
 
+	case onvif.ActionGetServices:
+		// important for Unifi: Media section
+		res = onvif.GetServicesResponse(r.Host)
+
 	case onvif.ActionGetSystemDateAndTime:
 		// important for Hass
 		res = onvif.GetSystemDateAndTimeResponse()
@@ -95,7 +99,12 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 
 	case onvif.ActionGetProfiles:
 		// important for Hass: H264 codec, width, height
+		// important for Unifi: framerate, bitrate, quality
 		res = onvif.GetProfilesResponse(streams.GetAll())
+
+	case onvif.ActionGetVideoSources:
+		// important for Unifi: framerate, resolution
+		res = onvif.GetVideoSourcesResponse(streams.GetAll())
 
 	case onvif.ActionGetStreamUri:
 		host, _, err := net.SplitHostPort(r.Host)
@@ -106,6 +115,10 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 
 		uri := "rtsp://" + host + ":" + rtsp.Port + "/" + onvif.FindTagValue(b, "ProfileToken")
 		res = onvif.GetStreamUriResponse(uri)
+
+	case onvif.ActionGetSnapshotUri:
+		uri := "http://" + r.Host + "/api/frame.jpeg?src=" + onvif.FindTagValue(b, "ProfileToken")
+		res = onvif.GetSnapshotUriResponse(uri)
 
 	default:
 		http.Error(w, "unsupported action", http.StatusBadRequest)
