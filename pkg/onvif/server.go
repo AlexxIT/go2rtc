@@ -208,11 +208,8 @@ func GetProfilesResponse(names []string) string {
                     </trt:Resolution>
 					<trt:RateControl>
                         <trt:FrameRateLimit>29.97003</trt:FrameRateLimit>
-                        <trt:EncodingInterval>1</trt:EncodingInterval>
                         <trt:BitrateLimit>5000</trt:BitrateLimit>
                     </trt:RateControl>
-					<trt:Quality>4</trt:Quality>
-                    <trt:SessionTimeout>PT1000S</trt:SessionTimeout>
 				</trt:VideoEncoderConfiguration>
                 <trt:VideoSourceConfiguration token="` + strconv.Itoa(i) + `">
                     <trt:Name>` + name + `</trt:Name>
@@ -241,7 +238,6 @@ func GetVideoSourcesResponse(names []string) string {
 	for i, _ := range names {
 		buf.WriteString(`
 			<trt:VideoSources token="` + strconv.Itoa(i) + `">
-				<trt:Framerate>29.97003</trt:Framerate>
                 <trt:Resolution>
                     <trt:Width>1920</trt:Width>
                     <trt:Height>1080</trt:Height>
