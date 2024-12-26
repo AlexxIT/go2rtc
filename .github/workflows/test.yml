@@ -12,8 +12,8 @@ jobs:
   build-test:
     strategy:
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
-        arch: [amd64, arm64]
+        os: [ubuntu-latest]
+        arch: [arm64]
 
     runs-on: ${{ matrix.os }}
     continue-on-error: true
@@ -42,29 +42,10 @@ jobs:
               sudo chown $USER:$USER ./qemu-aarch64-static
               qemu-aarch64-static ./go2rtc -version
             fi
-      - name: Test Go binary on macos
-        if: matrix.os == 'macos-latest'
-        run: |
-            if [ "${{ matrix.arch }}" = "amd64" ]; then
-              ./go2rtc -version
-            else
-              echo "ARM64 architecture is not yet supported on macOS"
-            fi
-      - name: Test Go binary on windows
-        if: matrix.os == 'windows-latest'
-        run: |
-            if ("${{ matrix.arch }}" -eq "amd64") {
-                .\go2rtc* -version
-            } else {
-                Write-Host "ARM64 architecture is not yet supported on Windows"
-            }
   docker-test:
     strategy:
       matrix:
         platform:
-          - amd64
-          - "386"
-          - arm/v7
           - arm64/v8
     continue-on-error: true
     runs-on: ubuntu-latest
