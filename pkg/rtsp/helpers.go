@@ -70,8 +70,15 @@ func UnmarshalSDP(rawSDP []byte) ([]*core.Media, error) {
 		// Check buggy SDP with fmtp for H264 on another track
 		// https://github.com/AlexxIT/WebRTC/issues/419
 		for _, codec := range media.Codecs {
-			if codec.Name == core.CodecH264 && codec.FmtpLine == "" {
-				codec.FmtpLine = findFmtpLine(codec.PayloadType, sd.MediaDescriptions)
+			switch codec.Name {
+			case core.CodecH264:
+				if codec.FmtpLine == "" {
+					codec.FmtpLine = findFmtpLine(codec.PayloadType, sd.MediaDescriptions)
+				}
+			case core.CodecOpus:
+				// fix OPUS for some cameras https://datatracker.ietf.org/doc/html/rfc7587
+				codec.ClockRate = 48000
+				codec.Channels = 2
 			}
 		}
 
