@@ -71,7 +71,6 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 		res = onvif.GetCapabilitiesResponse(r.Host)
 
 	case onvif.ActionGetServices:
-		// important for Unifi: Media section
 		res = onvif.GetServicesResponse(r.Host)
 
 	case onvif.ActionGetSystemDateAndTime:
@@ -99,11 +98,9 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 
 	case onvif.ActionGetProfiles:
 		// important for Hass: H264 codec, width, height
-		// important for Unifi: framerate, bitrate, quality
 		res = onvif.GetProfilesResponse(streams.GetAll())
 
 	case onvif.ActionGetVideoSources:
-		// important for Unifi: framerate, resolution
 		res = onvif.GetVideoSourcesResponse(streams.GetAll())
 
 	case onvif.ActionGetStreamUri:
