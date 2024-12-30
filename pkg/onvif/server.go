@@ -46,23 +46,23 @@ func GetRequestAction(b []byte) string {
 func GetCapabilitiesResponse(host string) string {
 	return `<?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope">
-	<s:Body>
-		<tds:GetCapabilitiesResponse xmlns:tds="http://www.onvif.org/ver10/device/wsdl">
-			<tds:Capabilities xmlns:tt="http://www.onvif.org/ver10/schema">
-				<tt:Device>
-					<tt:XAddr>http://` + host + `/onvif/device_service</tt:XAddr>
-				</tt:Device>
-				<tt:Media>
-					<tt:XAddr>http://` + host + `/onvif/media_service</tt:XAddr>
-					<tt:StreamingCapabilities>
-						<tt:RTPMulticast>false</tt:RTPMulticast>
-						<tt:RTP_TCP>false</tt:RTP_TCP>
-						<tt:RTP_RTSP_TCP>true</tt:RTP_RTSP_TCP>
-					</tt:StreamingCapabilities>
-				</tt:Media>
-			</tds:Capabilities>
-		</tds:GetCapabilitiesResponse>
-	</s:Body>
+    <s:Body>
+        <tds:GetCapabilitiesResponse xmlns:tds="http://www.onvif.org/ver10/device/wsdl">
+            <tds:Capabilities xmlns:tt="http://www.onvif.org/ver10/schema">
+                <tt:Device>
+                    <tt:XAddr>http://` + host + `/onvif/device_service</tt:XAddr>
+                </tt:Device>
+                <tt:Media>
+                    <tt:XAddr>http://` + host + `/onvif/media_service</tt:XAddr>
+                    <tt:StreamingCapabilities>
+                        <tt:RTPMulticast>false</tt:RTPMulticast>
+                        <tt:RTP_TCP>false</tt:RTP_TCP>
+                        <tt:RTP_RTSP_TCP>true</tt:RTP_RTSP_TCP>
+                    </tt:StreamingCapabilities>
+                </tt:Media>
+            </tds:Capabilities>
+        </tds:GetCapabilitiesResponse>
+    </s:Body>
 </s:Envelope>`
 }
 
@@ -197,31 +197,29 @@ func GetProfilesResponse(names []string) string {
 
 	for i, name := range names {
 		buf.WriteString(`
-			<trt:Profiles token="` + name + `" fixed="true">
-				<trt:Name>` + name + `</trt:Name>
-				<trt:VideoEncoderConfiguration token="` + strconv.Itoa(i) + `">
+            <trt:Profiles token="` + name + `" fixed="true">
+                <trt:Name>` + name + `</trt:Name>
+                <trt:VideoEncoderConfiguration token="` + strconv.Itoa(i) + `">
                     <trt:Name>` + name + `</trt:Name>
-					<trt:Encoding>H264</trt:Encoding>
-					<trt:Resolution>
-						<trt:Width>1920</trt:Width>
+                    <trt:Encoding>H264</trt:Encoding>
+                    <trt:Resolution>
+                        <trt:Width>1920</trt:Width>
                         <trt:Height>1080</trt:Height>
                     </trt:Resolution>
-					<trt:RateControl>
-                        <trt:FrameRateLimit>29.97003</trt:FrameRateLimit>
-                        <trt:BitrateLimit>5000</trt:BitrateLimit>
+                    <trt:RateControl>
                     </trt:RateControl>
-				</trt:VideoEncoderConfiguration>
+                </trt:VideoEncoderConfiguration>
                 <trt:VideoSourceConfiguration token="` + strconv.Itoa(i) + `">
                     <trt:Name>` + name + `</trt:Name>
                     <trt:SourceToken>` + strconv.Itoa(i) + `</trt:SourceToken>
                     <trt:Bounds x="0" y="0" width="1920" height="1080"></trt:Bounds>
                 </trt:VideoSourceConfiguration>
-			</trt:Profiles>`)
+            </trt:Profiles>`)
 	}
 
 	buf.WriteString(`
-		</trt:GetProfilesResponse>
-	</s:Body>
+        </trt:GetProfilesResponse>
+    </s:Body>
 </s:Envelope>`)
 
 	return buf.String()
@@ -233,11 +231,11 @@ func GetVideoSourcesResponse(names []string) string {
 	buf.WriteString(`<?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope">
     <s:Body>
-        <trt:GetVideoSourcesResponse xmlns:trt="http://www.onvif.org/ver10/media/wsdl">`)
+            <trt:GetVideoSourcesResponse xmlns:trt="http://www.onvif.org/ver10/media/wsdl">`)
 
 	for i, _ := range names {
 		buf.WriteString(`
-			<trt:VideoSources token="` + strconv.Itoa(i) + `">
+            <trt:VideoSources token="` + strconv.Itoa(i) + `">
                 <trt:Resolution>
                     <trt:Width>1920</trt:Width>
                     <trt:Height>1080</trt:Height>
@@ -246,8 +244,8 @@ func GetVideoSourcesResponse(names []string) string {
 	}
 
 	buf.WriteString(`
-		</trt:GetVideoSourcesResponse >
-	</s:Body>
+        </trt:GetVideoSourcesResponse >
+    </s:Body>
 </s:Envelope>`)
 
 	return buf.String()
