@@ -3,7 +3,6 @@ package core
 import (
 	"encoding/json"
 	"errors"
-
 	"github.com/pion/rtp"
 )
 
@@ -71,8 +70,9 @@ type Sender struct {
 	Packets int `json:"packets,omitempty"`
 	Drops   int `json:"drops,omitempty"`
 
-	buf  chan *Packet
-	done chan struct{}
+	buf      chan *Packet
+	done     chan struct{}
+	isClosed bool
 }
 
 func NewSender(media *Media, codec *Codec) *Sender {
@@ -99,6 +99,11 @@ func NewSender(media *Media, codec *Codec) *Sender {
 	s.Input = func(packet *Packet) {
 		// writing to nil chan - OK, writing to closed chan - panic
 		s.mu.Lock()
+		if s.isClosed {
+			s.Drops++
+			s.mu.Unlock()
+			return
+		}
 		select {
 		case s.buf <- packet:
 			s.Bytes += len(packet.Payload)
@@ -165,10 +170,13 @@ func (s *Sender) State() string {
 
 func (s *Sender) Close() {
 	// close buffer if exists
-	if buf := s.buf; buf != nil {
+	s.mu.Lock()
+	if buf := s.buf; buf != nil && !s.isClosed {
+		s.isClosed = true
 		s.buf = nil
 		defer close(buf)
 	}
+	s.mu.Unlock()
 
 	s.Node.Close()
 }
