@@ -76,7 +76,7 @@ func (s *Stream) RemoveConsumer(cons core.Consumer) {
 }
 
 func (s *Stream) AddProducer(prod core.Producer) {
-	producer := &Producer{conn: prod, state: stateExternal}
+	producer := &Producer{conn: prod, state: stateExternal, url: "external"}
 	s.mu.Lock()
 	s.producers = append(s.producers, producer)
 	s.mu.Unlock()

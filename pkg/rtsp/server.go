@@ -149,7 +149,7 @@ func (c *Conn) Accept() error {
 			}
 
 			const transport = "RTP/AVP/TCP;unicast;interleaved="
-			if strings.HasPrefix(tr, transport) {
+			if tr = core.Between(tr, "interleaved=", ";"); tr != "" {
 				c.session = core.RandString(8, 10)
 				c.state = StateSetup
 
@@ -157,13 +157,13 @@ func (c *Conn) Accept() error {
 					if i := reqTrackID(req); i >= 0 && i < len(c.Senders) {
 						// mark sender as SETUP
 						c.Senders[i].Media.ID = MethodSetup
-						tr = fmt.Sprintf("RTP/AVP/TCP;unicast;interleaved=%d-%d", i*2, i*2+1)
-						res.Header.Set("Transport", tr)
+						tr = fmt.Sprintf("%d-%d", i*2, i*2+1)
+						res.Header.Set("Transport", transport+tr)
 					} else {
 						res.Status = "400 Bad Request"
 					}
 				} else {
-					res.Header.Set("Transport", tr[:len(transport)+3])
+					res.Header.Set("Transport", transport+tr)
 				}
 			} else {
 				res.Status = "461 Unsupported transport"

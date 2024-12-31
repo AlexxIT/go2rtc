@@ -103,7 +103,7 @@ func (s *Stream) Play(source string) error {
 }
 
 func (s *Stream) AddInternalProducer(conn core.Producer) {
-	producer := &Producer{conn: conn, state: stateInternal}
+	producer := &Producer{conn: conn, state: stateInternal, url: "internal"}
 	s.mu.Lock()
 	s.producers = append(s.producers, producer)
 	s.mu.Unlock()

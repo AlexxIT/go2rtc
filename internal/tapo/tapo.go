@@ -15,4 +15,8 @@ func Init() {
 	streams.HandleFunc("tapo", func(source string) (core.Producer, error) {
 		return tapo.Dial(source)
 	})
+
+	streams.HandleFunc("vigi", func(source string) (core.Producer, error) {
+		return tapo.Dial(source)
+	})
 }
