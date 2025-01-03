@@ -13,6 +13,8 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 )
 
+var FailedAuth = errors.New("failed authentication")
+
 func NewServer(conn net.Conn) *Conn {
 	return &Conn{
 		Connection: core.Connection{
@@ -54,7 +56,13 @@ func (c *Conn) Accept() error {
 			if err = c.WriteResponse(res); err != nil {
 				return err
 			}
-			continue
+			if req.Header.Get("Authorization") != "" {
+				// eliminate false positive: ffmpeg sends first request without
+				// authorization header even if the user provides credentials
+				return FailedAuth
+			} else {
+				continue
+			}
 		}
 
 		// Receiver: OPTIONS > DESCRIBE > SETUP... > PLAY > TEARDOWN
