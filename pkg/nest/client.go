@@ -3,18 +3,25 @@ package nest
 import (
 	"errors"
 	"net/url"
+	"strings"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/rtsp"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	pion "github.com/pion/webrtc/v3"
 )
 
-type Client struct {
+type WebRTCClient struct {
 	conn *webrtc.Conn
 	api  *API
 }
 
-func Dial(rawURL string) (*Client, error) {
+type RTSPClient struct {
+	conn *rtsp.Conn
+	api  *API
+}
+
+func Dial(rawURL string) (core.Producer, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, err
@@ -26,6 +33,12 @@ func Dial(rawURL string) (*Client, error) {
 	refreshToken := query.Get("refresh_token")
 	projectID := query.Get("project_id")
 	deviceID := query.Get("device_id")
+	protocols := strings.Split(query.Get("protocols"), ",")
+
+	// Default to WEB_RTC for backwards compataiility
+	if len(protocols) == 0 {
+		protocols = append(protocols, "WEB_RTC")
+	}
 
 	if cliendID == "" || cliendSecret == "" || refreshToken == "" || projectID == "" || deviceID == "" {
 		return nil, errors.New("nest: wrong query")
@@ -36,6 +49,45 @@ func Dial(rawURL string) (*Client, error) {
 		return nil, err
 	}
 
+	// Pick the first supported protocol in order of priority (WEB_RTC, RTSP)
+	for _, proto := range protocols {
+		if proto == "WEB_RTC" {
+			return rtcConn(nestAPI, rawURL, projectID, deviceID)
+		} else if proto == "RTSP" {
+			return rtspConn(nestAPI, rawURL, projectID, deviceID)
+		}
+	}
+
+	return nil, errors.New("nest: unsupported camera")
+}
+
+func (c *WebRTCClient) GetMedias() []*core.Media {
+	return c.conn.GetMedias()
+}
+
+func (c *WebRTCClient) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
+	return c.conn.GetTrack(media, codec)
+}
+
+func (c *WebRTCClient) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
+	return c.conn.AddTrack(media, codec, track)
+}
+
+func (c *WebRTCClient) Start() error {
+	c.api.StartExtendStreamTimer()
+	return c.conn.Start()
+}
+
+func (c *WebRTCClient) Stop() error {
+	c.api.StopExtendStreamTimer()
+	return c.conn.Stop()
+}
+
+func (c *WebRTCClient) MarshalJSON() ([]byte, error) {
+	return c.conn.MarshalJSON()
+}
+
+func rtcConn(nestAPI *API, rawURL, projectID, deviceID string) (*WebRTCClient, error) {
 	rtcAPI, err := webrtc.NewAPI()
 	if err != nil {
 		return nil, err
@@ -77,31 +129,46 @@ func Dial(rawURL string) (*Client, error) {
 		return nil, err
 	}
 
-	return &Client{conn: conn, api: nestAPI}, nil
+	return &WebRTCClient{conn: conn, api: nestAPI}, nil
 }
 
-func (c *Client) GetMedias() []*core.Media {
-	return c.conn.GetMedias()
+func rtspConn(nestAPI *API, rawURL, projectID, deviceID string) (*RTSPClient, error) {
+	rtspURL, err := nestAPI.GenerateRtspStream(projectID, deviceID)
+	if err != nil {
+		return nil, err
+	}
+
+	rtspClient := rtsp.NewClient(rtspURL)
+	if err := rtspClient.Dial(); err != nil {
+		return nil, err
+	}
+	if err := rtspClient.Describe(); err != nil {
+		return nil, err
+	}
+
+	return &RTSPClient{conn: rtspClient, api: nestAPI}, nil
 }
 
-func (c *Client) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
+func (c *RTSPClient) GetMedias() []*core.Media {
+	result := c.conn.GetMedias()
+	return result
+}
+
+func (c *RTSPClient) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
 	return c.conn.GetTrack(media, codec)
 }
 
-func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
-	return c.conn.AddTrack(media, codec, track)
-}
-
-func (c *Client) Start() error {
+func (c *RTSPClient) Start() error {
 	c.api.StartExtendStreamTimer()
 	return c.conn.Start()
 }
 
-func (c *Client) Stop() error {
+func (c *RTSPClient) Stop() error {
+	c.api.StopRTSPStream()
 	c.api.StopExtendStreamTimer()
 	return c.conn.Stop()
 }
 
-func (c *Client) MarshalJSON() ([]byte, error) {
+func (c *RTSPClient) MarshalJSON() ([]byte, error) {
 	return c.conn.MarshalJSON()
 }
