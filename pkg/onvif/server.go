@@ -172,6 +172,7 @@ func appendProfile(e *Envelope, tag, name string) {
 		<tt:Name>VEC</tt:Name>
 		<tt:Encoding>H264</tt:Encoding>
 		<tt:Resolution><tt:Width>1920</tt:Width><tt:Height>1080</tt:Height></tt:Resolution>
+		<trt:RateControl></trt:RateControl>
 	</tt:VideoEncoderConfiguration>
 </trt:`, tag, `>
 `)
