@@ -65,6 +65,12 @@ func Open(rawURL string) (*Producer, error) {
 		return nil, err
 	}
 
+	if fps := core.Atoi(query.Get("framerate")); fps > 0 {
+		if err = dev.SetParam(uint32(fps)); err != nil {
+			return nil, err
+		}
+	}
+
 	medias := []*core.Media{
 		{
 			Kind:      core.KindVideo,
