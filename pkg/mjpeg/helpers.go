@@ -52,11 +52,18 @@ func FixJPEG(b []byte) []byte {
 	return buf.Bytes()
 }
 
-func Encoder(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
+// Encoder convert YUV frame to Img.
+// Support skipping empty frames, for example if USB cam needs time to start.
+func Encoder(codec *core.Codec, skipEmpty int, handler core.HandlerFunc) core.HandlerFunc {
 	newImage := y4m.NewImage(codec.FmtpLine)
 
 	return func(packet *rtp.Packet) {
 		img := newImage(packet.Payload)
+
+		if skipEmpty != 0 && y4m.HasSameColor(img) {
+			skipEmpty--
+			return
+		}
 
 		buf := bytes.NewBuffer(nil)
 		if err := jpeg.Encode(buf, img, nil); err != nil {
