@@ -66,8 +66,8 @@ func (d *Device) ListFormats() ([]uint32, error) {
 	return items, nil
 }
 
-func (d *Device) ListSizes(pixFmt uint32) ([]uint32, error) {
-	var items []uint32
+func (d *Device) ListSizes(pixFmt uint32) ([][2]uint32, error) {
+	var items [][2]uint32
 
 	for i := uint32(0); ; i++ {
 		fs := v4l2_frmsizeenum{
@@ -85,7 +85,7 @@ func (d *Device) ListSizes(pixFmt uint32) ([]uint32, error) {
 			continue
 		}
 
-		items = append(items, fs.discrete.width, fs.discrete.height)
+		items = append(items, [2]uint32{fs.discrete.width, fs.discrete.height})
 	}
 
 	return items, nil

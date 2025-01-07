@@ -58,9 +58,9 @@ func apiV4L2(w http.ResponseWriter, r *http.Request) {
 
 			if source.Name != "" {
 				sizes, _ := dev.ListSizes(fourCC)
-				for i := 0; i < len(sizes); i += 2 {
-					size := fmt.Sprintf("%dx%d", sizes[i], sizes[i+1])
-					if i > 0 {
+				for _, wh := range sizes {
+					size := fmt.Sprintf("%dx%d", wh[0], wh[1])
+					if source.Info != "" {
 						source.Info += " " + size
 					} else {
 						source.Info = size
