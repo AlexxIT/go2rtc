@@ -44,36 +44,46 @@ func apiV4L2(w http.ResponseWriter, r *http.Request) {
 
 		formats, _ := dev.ListFormats()
 		for _, fourCC := range formats {
-			source := &api.Source{}
+			name, ffmpeg := findFormat(fourCC)
+			source := &api.Source{Name: name}
 
-			for _, format := range device.Formats {
-				if format.FourCC == fourCC {
-					source.Name = format.Name
-					source.URL = "v4l2:device?video=" + path + "&input_format=" + format.FFmpeg + "&video_size="
-					break
+			sizes, _ := dev.ListSizes(fourCC)
+			for _, wh := range sizes {
+				if source.Info != "" {
+					source.Info += " "
 				}
-			}
 
-			if source.Name != "" {
-				sizes, _ := dev.ListSizes(fourCC)
-				for _, wh := range sizes {
-					size := fmt.Sprintf("%dx%d", wh[0], wh[1])
-					if source.Info != "" {
-						source.Info += " " + size
-					} else {
-						source.Info = size
-						source.URL += size
+				source.Info += fmt.Sprintf("%dx%d", wh[0], wh[1])
+
+				frameRates, _ := dev.ListFrameRates(fourCC, wh[0], wh[1])
+				for _, fr := range frameRates {
+					source.Info += fmt.Sprintf("@%d", fr)
+
+					if source.URL == "" && ffmpeg != "" {
+						source.URL = fmt.Sprintf(
+							"v4l2:device?video=%s&input_format=%s&video_size=%dx%d&framerate=%d",
+							path, ffmpeg, wh[0], wh[1], fr,
+						)
 					}
 				}
-			} else {
-				source.Name = string(binary.LittleEndian.AppendUint32(nil, fourCC))
 			}
 
-			sources = append(sources, source)
+			if source.Info != "" {
+				sources = append(sources, source)
+			}
 		}
 
 		_ = dev.Close()
 	}
 
 	api.ResponseSources(w, sources)
+}
+
+func findFormat(fourCC uint32) (name, ffmpeg string) {
+	for _, format := range device.Formats {
+		if format.FourCC == fourCC {
+			return format.Name, format.FFmpeg
+		}
+	}
+	return string(binary.LittleEndian.AppendUint32(nil, fourCC)), ""
 }
