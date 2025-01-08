@@ -1,19 +1,17 @@
-//go:build amd64 || arm64
-
 package device
 
 const (
-	VIDIOC_QUERYCAP = 0x80685600
+	VIDIOC_QUERYCAP = 0x40685600
 	VIDIOC_ENUM_FMT = 0xc0405602
-	VIDIOC_G_FMT    = 0xc0d05604
-	VIDIOC_S_FMT    = 0xc0d05605
+	VIDIOC_G_FMT    = 0xc0cc5604
+	VIDIOC_S_FMT    = 0xc0cc5605
 	VIDIOC_REQBUFS  = 0xc0145608
-	VIDIOC_QUERYBUF = 0xc0585609
+	VIDIOC_QUERYBUF = 0xc0505609
 
-	VIDIOC_QBUF      = 0xc058560f
-	VIDIOC_DQBUF     = 0xc0585611
-	VIDIOC_STREAMON  = 0x40045612
-	VIDIOC_STREAMOFF = 0x40045613
+	VIDIOC_QBUF      = 0xc050560f
+	VIDIOC_DQBUF     = 0xc0505611
+	VIDIOC_STREAMON  = 0x80045612
+	VIDIOC_STREAMOFF = 0x80045613
 	VIDIOC_G_PARM    = 0xc0cc5615
 	VIDIOC_S_PARM    = 0xc0cc5616
 
@@ -40,10 +38,10 @@ type v4l2_capability struct { // size 104
 	reserved     [3]uint32 // offset 92, size 12
 }
 
-type v4l2_format struct { // size 208
+type v4l2_format struct { // size 204
 	typ uint32          // offset 0, size 4
-	_   [4]byte         // align
-	pix v4l2_pix_format // offset 8, size 48
+	_   [0]byte         // align
+	pix v4l2_pix_format // offset 4, size 48
 	_   [152]byte       // filler
 }
 
@@ -91,7 +89,7 @@ type v4l2_requestbuffers struct { // size 20
 	reserved     [3]uint8 // offset 17, size 3
 }
 
-type v4l2_buffer struct { // size 88
+type v4l2_buffer struct { // size 80
 	index     uint32        // offset 0, size 4
 	typ       uint32        // offset 4, size 4
 	bytesused uint32        // offset 8, size 4
@@ -102,9 +100,9 @@ type v4l2_buffer struct { // size 88
 	sequence  uint32        // offset 56, size 4
 	memory    uint32        // offset 60, size 4
 	offset    uint32        // offset 64, size 4
-	_         [4]byte       // align
-	length    uint32        // offset 72, size 4
-	_         [12]byte      // filler
+	_         [0]byte       // align
+	length    uint32        // offset 68, size 4
+	_         [8]byte       // filler
 }
 
 type v4l2_timecode struct { // size 16

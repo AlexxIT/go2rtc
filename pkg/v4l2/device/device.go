@@ -121,7 +121,7 @@ func (d *Device) ListFrameRates(pixFmt, width, height uint32) ([]uint32, error) 
 func (d *Device) SetFormat(width, height, pixFmt uint32) error {
 	f := v4l2_format{
 		typ: V4L2_BUF_TYPE_VIDEO_CAPTURE,
-		fmt: v4l2_pix_format{
+		pix: v4l2_pix_format{
 			width:       width,
 			height:      height,
 			pixelformat: pixFmt,

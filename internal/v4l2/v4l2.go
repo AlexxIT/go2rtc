@@ -1,4 +1,4 @@
-//go:build !(linux && (386 || arm || amd64 || arm64))
+//go:build !linux
 
 package v4l2
 
