@@ -7,8 +7,8 @@
 #define printstruct(str) printf("type %s struct { // size %lu\n", #str, sizeof(struct str))
 #define printmember(str, mem, typ) printf("\t%s %s // offset %lu, size %lu\n", #mem == "type" ? "typ" : #mem, typ, offsetof(struct str, mem), sizeof((struct str){0}.mem))
 #define printunimem(str, uni, mem, typ) printf("\t%s %s // offset %lu, size %lu\n", #mem, typ, offsetof(struct str, uni.mem), sizeof((struct str){0}.uni.mem))
-#define printalign1(str, mem2, mem1, siz1) printf("\t_ [%lu]byte // align\n", offsetof(struct str, mem2) - offsetof(struct str, mem1) - siz1)
-#define printfiller(str, mem1, siz1) printf("\t_ [%lu]byte // filler\n", sizeof(struct str) - offsetof(struct str, mem1) - siz1)
+#define printalign1(str, mem2, mem1) printf("\t_ [%lu]byte // align\n", offsetof(struct str, mem2) - offsetof(struct str, mem1) - sizeof((struct str){0}.mem1))
+#define printfiller(str, mem) printf("\t_ [%lu]byte // filler\n", sizeof(struct str) - offsetof(struct str, mem) - sizeof((struct str){0}.mem))
 
 int main() {
 	printf("const (\n");
@@ -51,9 +51,9 @@ int main() {
 
 	printstruct(v4l2_format);
 	printmember(v4l2_format, type, "uint32");
-	printalign1(v4l2_format, fmt, type, 4);
+	printalign1(v4l2_format, fmt, type);
 	printunimem(v4l2_format, fmt, pix, "v4l2_pix_format");
-	printfiller(v4l2_format, fmt, sizeof(struct v4l2_pix_format));
+	printfiller(v4l2_format, fmt.pix);
 	printf("}\n\n");
 
 	printstruct(v4l2_pix_format);
@@ -74,7 +74,7 @@ int main() {
 	printstruct(v4l2_streamparm);
 	printmember(v4l2_streamparm, type, "uint32");
 	printunimem(v4l2_streamparm, parm, capture, "v4l2_captureparm");
-	printfiller(v4l2_streamparm, parm, sizeof(struct v4l2_captureparm));
+	printfiller(v4l2_streamparm, parm.capture);
 	printf("}\n\n");
 
 	printstruct(v4l2_captureparm);
@@ -106,14 +106,14 @@ int main() {
 	printmember(v4l2_buffer, bytesused, "uint32");
 	printmember(v4l2_buffer, flags, "uint32");
 	printmember(v4l2_buffer, field, "uint32");
-	printalign1(v4l2_buffer, timecode, field, 4);
+	printalign1(v4l2_buffer, timecode, field);
 	printmember(v4l2_buffer, timecode, "v4l2_timecode");
 	printmember(v4l2_buffer, sequence, "uint32");
 	printmember(v4l2_buffer, memory, "uint32");
 	printunimem(v4l2_buffer, m, offset, "uint32");
-	printalign1(v4l2_buffer, length, m, 4);
+	printalign1(v4l2_buffer, length, m.offset);
 	printmember(v4l2_buffer, length, "uint32");
-	printfiller(v4l2_buffer, length, 4);
+	printfiller(v4l2_buffer, length);
 	printf("}\n\n");
 
 	printstruct(v4l2_timecode);
@@ -141,7 +141,7 @@ int main() {
 	printmember(v4l2_frmsizeenum, pixel_format, "uint32");
 	printmember(v4l2_frmsizeenum, type, "uint32");
 	printmember(v4l2_frmsizeenum, discrete, "v4l2_frmsize_discrete");
-	printfiller(v4l2_frmsizeenum, discrete, sizeof(struct v4l2_frmsize_discrete));
+	printfiller(v4l2_frmsizeenum, discrete);
 	printf("}\n\n");
 
 	printstruct(v4l2_frmsize_discrete);
@@ -156,7 +156,7 @@ int main() {
 	printmember(v4l2_frmivalenum, height, "uint32");
 	printmember(v4l2_frmivalenum, type, "uint32");
 	printmember(v4l2_frmivalenum, discrete, "v4l2_fract");
-	printfiller(v4l2_frmivalenum, discrete, sizeof(struct v4l2_fract));
+	printfiller(v4l2_frmivalenum, discrete);
 	printf("}\n\n");
 
 	return 0;
