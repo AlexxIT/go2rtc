@@ -6,10 +6,10 @@ const (
 	VIDIOC_G_FMT    = 0xc0cc5604
 	VIDIOC_S_FMT    = 0xc0cc5605
 	VIDIOC_REQBUFS  = 0xc0145608
-	VIDIOC_QUERYBUF = 0xc0505609
+	VIDIOC_QUERYBUF = 0xc0445609
 
-	VIDIOC_QBUF      = 0xc050560f
-	VIDIOC_DQBUF     = 0xc0505611
+	VIDIOC_QBUF      = 0xc044560f
+	VIDIOC_DQBUF     = 0xc0445611
 	VIDIOC_STREAMON  = 0x80045612
 	VIDIOC_STREAMOFF = 0x80045613
 	VIDIOC_G_PARM    = 0xc0cc5615
@@ -89,19 +89,19 @@ type v4l2_requestbuffers struct { // size 20
 	reserved     [3]uint8 // offset 17, size 3
 }
 
-type v4l2_buffer struct { // size 80
+type v4l2_buffer struct { // size 68
 	index     uint32        // offset 0, size 4
 	typ       uint32        // offset 4, size 4
 	bytesused uint32        // offset 8, size 4
 	flags     uint32        // offset 12, size 4
 	field     uint32        // offset 16, size 4
-	_         [20]byte      // align
-	timecode  v4l2_timecode // offset 40, size 16
-	sequence  uint32        // offset 56, size 4
-	memory    uint32        // offset 60, size 4
-	offset    uint32        // offset 64, size 4
+	_         [8]byte       // align
+	timecode  v4l2_timecode // offset 28, size 16
+	sequence  uint32        // offset 44, size 4
+	memory    uint32        // offset 48, size 4
+	offset    uint32        // offset 52, size 4
 	_         [0]byte       // align
-	length    uint32        // offset 68, size 4
+	length    uint32        // offset 56, size 4
 	_         [8]byte       // filler
 }
 
