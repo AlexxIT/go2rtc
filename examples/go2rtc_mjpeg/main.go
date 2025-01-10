@@ -2,7 +2,9 @@ package main
 
 import (
 	"github.com/AlexxIT/go2rtc/internal/api"
+	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"github.com/AlexxIT/go2rtc/internal/app"
+	"github.com/AlexxIT/go2rtc/internal/ffmpeg"
 	"github.com/AlexxIT/go2rtc/internal/mjpeg"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/internal/v4l2"
@@ -14,6 +16,9 @@ func main() {
 	streams.Init()
 
 	api.Init()
+	ws.Init()
+
+	ffmpeg.Init()
 	mjpeg.Init()
 	v4l2.Init()
 
