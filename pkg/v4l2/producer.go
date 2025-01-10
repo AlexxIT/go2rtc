@@ -93,10 +93,10 @@ func (c *Producer) Start() error {
 		return err
 	}
 
-	cositedYUV := c.Medias[0].Codecs[0].Name == core.CodecRAW
+	planarYUV := c.Medias[0].Codecs[0].Name == core.CodecRAW
 
 	for {
-		buf, err := c.dev.Capture(cositedYUV)
+		buf, err := c.dev.Capture(planarYUV)
 		if err != nil {
 			return err
 		}

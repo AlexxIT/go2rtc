@@ -16,7 +16,7 @@ var Formats = []Format{
 	{V4L2_PIX_FMT_MJPEG, "Motion-JPEG", "mjpeg"},
 }
 
-// YUYV2YUV convert [Y0 Cb Y1 Cr] to cosited [Y0Y1... Cb... Cr...]
+// YUYV2YUV convert packed YUV to planar YUV
 func YUYV2YUV(dst, src []byte) {
 	n := len(src)
 	i0 := 0

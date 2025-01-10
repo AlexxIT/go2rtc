@@ -196,7 +196,7 @@ func (d *Device) StreamOff() (err error) {
 	return ioctl(d.fd, VIDIOC_REQBUFS, unsafe.Pointer(&rb))
 }
 
-func (d *Device) Capture(cositedYUV bool) ([]byte, error) {
+func (d *Device) Capture(planarYUV bool) ([]byte, error) {
 	dec := v4l2_buffer{
 		typ:    V4L2_BUF_TYPE_VIDEO_CAPTURE,
 		memory: V4L2_MEMORY_MMAP,
@@ -206,7 +206,7 @@ func (d *Device) Capture(cositedYUV bool) ([]byte, error) {
 	}
 
 	buf := make([]byte, dec.bytesused)
-	if cositedYUV {
+	if planarYUV {
 		YUYV2YUV(buf, d.bufs[dec.index][:dec.bytesused])
 	} else {
 		copy(buf, d.bufs[dec.index][:dec.bytesused])
