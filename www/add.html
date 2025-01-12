@@ -292,6 +292,18 @@
 </script>
 
 
+<button id="v4l2">V4L2 (USB)</button>
+<div class="module">
+    <table id="v4l2-table"></table>
+</div>
+<script>
+    document.getElementById('v4l2').addEventListener('click', async ev => {
+        ev.target.nextElementSibling.style.display = 'block';
+        await getSources('v4l2-table', 'api/v4l2');
+    });
+</script>
+
+
 <button id="webtorrent">WebTorrent Shares</button>
 <div class="module">
     <table id="webtorrent-table"></table>

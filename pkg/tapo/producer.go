@@ -77,7 +77,7 @@ func (c *Client) Stop() error {
 func (c *Client) MarshalJSON() ([]byte, error) {
 	info := &core.Connection{
 		ID:         core.ID(c),
-		FormatName: "tapo",
+		FormatName: c.url.Scheme,
 		Protocol:   "http",
 		Medias:     c.medias,
 		Recv:       c.recv,

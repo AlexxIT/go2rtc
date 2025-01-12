@@ -24,6 +24,7 @@ func NewKeyframe() *Keyframe {
 			Direction: core.DirectionSendonly,
 			Codecs: []*core.Codec{
 				{Name: core.CodecJPEG},
+				{Name: core.CodecRAW},
 				{Name: core.CodecH264},
 				{Name: core.CodecH265},
 			},
@@ -87,6 +88,15 @@ func (k *Keyframe) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 		if track.Codec.IsRTP() {
 			sender.Handler = mjpeg.RTPDepay(sender.Handler)
 		}
+
+	case core.CodecRAW:
+		sender.Handler = func(packet *rtp.Packet) {
+			if n, err := k.wr.Write(packet.Payload); err == nil {
+				k.Send += n
+			}
+		}
+
+		sender.Handler = mjpeg.Encoder(track.Codec, 5, sender.Handler)
 	}
 
 	sender.HandleRTP(track)

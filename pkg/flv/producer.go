@@ -140,23 +140,29 @@ func (c *Producer) probe() error {
 	// 1. Empty video/audio flag
 	// 2. MedaData without stereo key for AAC
 	// 3. Audio header after Video keyframe tag
-	waitType := []byte{TagData}
-	timeout := time.Now().Add(core.ProbeTimeout)
 
-	for len(waitType) != 0 && time.Now().Before(timeout) {
+	// OpenIPC camera sends:
+	// 1. Empty video/audio flag
+	// 2. No MetaData packet
+	// 3. Sends a video packet in more than 3 seconds
+	waitVideo := true
+	waitAudio := true
+	timeout := time.Now().Add(time.Second * 5)
+
+	for (waitVideo || waitAudio) && time.Now().Before(timeout) {
 		pkt, err := c.readPacket()
 		if err != nil {
 			return err
 		}
 
-		if i := bytes.IndexByte(waitType, pkt.PayloadType); i < 0 {
-			continue
-		} else {
-			waitType = append(waitType[:i], waitType[i+1:]...)
-		}
+		//log.Printf("%d %0.20s", pkt.PayloadType, pkt.Payload)
 
 		switch pkt.PayloadType {
 		case TagAudio:
+			if !waitAudio {
+				continue
+			}
+
 			_ = pkt.Payload[1] // bounds
 
 			codecID := pkt.Payload[0] >> 4 // SoundFormat
@@ -179,8 +185,13 @@ func (c *Producer) probe() error {
 				Codecs:    []*core.Codec{codec},
 			}
 			c.Medias = append(c.Medias, media)
+			waitAudio = false
 
 		case TagVideo:
+			if !waitVideo {
+				continue
+			}
+
 			var codec *core.Codec
 
 			if isExHeader(pkt.Payload) {
@@ -213,19 +224,20 @@ func (c *Producer) probe() error {
 				Codecs:    []*core.Codec{codec},
 			}
 			c.Medias = append(c.Medias, media)
+			waitVideo = false
 
 		case TagData:
 			if !bytes.Contains(pkt.Payload, []byte("onMetaData")) {
-				waitType = append(waitType, TagData)
+				continue
 			}
 			// Dahua cameras doesn't send videocodecid
-			if bytes.Contains(pkt.Payload, []byte("videocodecid")) ||
-				bytes.Contains(pkt.Payload, []byte("width")) ||
-				bytes.Contains(pkt.Payload, []byte("framerate")) {
-				waitType = append(waitType, TagVideo)
+			if !bytes.Contains(pkt.Payload, []byte("videocodecid")) &&
+				!bytes.Contains(pkt.Payload, []byte("width")) &&
+				!bytes.Contains(pkt.Payload, []byte("framerate")) {
+				waitVideo = false
 			}
-			if bytes.Contains(pkt.Payload, []byte("audiocodecid")) {
-				waitType = append(waitType, TagAudio)
+			if !bytes.Contains(pkt.Payload, []byte("audiocodecid")) {
+				waitAudio = false
 			}
 		}
 	}

@@ -123,3 +123,27 @@ func NewImage(fmtp string) func(frame []byte) image.Image {
 
 	return nil
 }
+
+// HasSameColor checks if all pixels has same color
+func HasSameColor(img image.Image) bool {
+	var pix []byte
+
+	switch img := img.(type) {
+	case *image.Gray:
+		pix = img.Pix
+	case *image.YCbCr:
+		pix = img.Y
+	}
+
+	if len(pix) == 0 {
+		return false
+	}
+
+	i0 := pix[0]
+	for _, i := range pix {
+		if i != i0 {
+			return false
+		}
+	}
+	return true
+}
