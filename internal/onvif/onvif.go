@@ -55,49 +55,65 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	action := onvif.GetRequestAction(b)
-	if action == "" {
+	operation := onvif.GetRequestAction(b)
+	if operation == "" {
 		http.Error(w, "malformed request body", http.StatusBadRequest)
 		return
 	}
 
-	log.Trace().Msgf("[onvif] %s", action)
+	log.Trace().Msgf("[onvif] server request %s %s:\n%s", r.Method, r.RequestURI, b)
 
-	var res string
+	switch operation {
+	case onvif.DeviceGetNetworkInterfaces, // important for Hass
+		onvif.DeviceGetSystemDateAndTime, // important for Hass
+		onvif.DeviceGetDiscoveryMode,
+		onvif.DeviceGetDNS,
+		onvif.DeviceGetHostname,
+		onvif.DeviceGetNetworkDefaultGateway,
+		onvif.DeviceGetNetworkProtocols,
+		onvif.DeviceGetNTP,
+		onvif.DeviceGetScopes:
+		b = onvif.StaticResponse(operation)
 
-	switch action {
-	case onvif.ActionGetCapabilities:
+	case onvif.DeviceGetCapabilities:
 		// important for Hass: Media section
-		res = onvif.GetCapabilitiesResponse(r.Host)
+		b = onvif.GetCapabilitiesResponse(r.Host)
 
-	case onvif.ActionGetSystemDateAndTime:
-		// important for Hass
-		res = onvif.GetSystemDateAndTimeResponse()
+	case onvif.DeviceGetServices:
+		b = onvif.GetServicesResponse(r.Host)
 
-	case onvif.ActionGetNetworkInterfaces:
-		// important for Hass: none
-		res = onvif.GetNetworkInterfacesResponse()
-
-	case onvif.ActionGetDeviceInformation:
+	case onvif.DeviceGetDeviceInformation:
 		// important for Hass: SerialNumber (unique server ID)
-		res = onvif.GetDeviceInformationResponse("", "go2rtc", app.Version, r.Host)
+		b = onvif.GetDeviceInformationResponse("", "go2rtc", app.Version, r.Host)
 
-	case onvif.ActionGetServiceCapabilities:
+	case onvif.ServiceGetServiceCapabilities:
 		// important for Hass
-		res = onvif.GetServiceCapabilitiesResponse()
+		// TODO: check path links to media
+		b = onvif.GetMediaServiceCapabilitiesResponse()
 
-	case onvif.ActionSystemReboot:
-		res = onvif.SystemRebootResponse()
+	case onvif.DeviceSystemReboot:
+		b = onvif.StaticResponse(operation)
 
 		time.AfterFunc(time.Second, func() {
 			os.Exit(0)
 		})
 
-	case onvif.ActionGetProfiles:
-		// important for Hass: H264 codec, width, height
-		res = onvif.GetProfilesResponse(streams.GetAll())
+	case onvif.MediaGetVideoSources:
+		b = onvif.GetVideoSourcesResponse(streams.GetAll())
 
-	case onvif.ActionGetStreamUri:
+	case onvif.MediaGetProfiles:
+		// important for Hass: H264 codec, width, height
+		b = onvif.GetProfilesResponse(streams.GetAll())
+
+	case onvif.MediaGetProfile:
+		token := onvif.FindTagValue(b, "ProfileToken")
+		b = onvif.GetProfileResponse(token)
+
+	case onvif.MediaGetVideoSourceConfiguration:
+		token := onvif.FindTagValue(b, "ConfigurationToken")
+		b = onvif.GetVideoSourceConfigurationResponse(token)
+
+	case onvif.MediaGetStreamUri:
 		host, _, err := net.SplitHostPort(r.Host)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -105,16 +121,22 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 		}
 
 		uri := "rtsp://" + host + ":" + rtsp.Port + "/" + onvif.FindTagValue(b, "ProfileToken")
-		res = onvif.GetStreamUriResponse(uri)
+		b = onvif.GetStreamUriResponse(uri)
+
+	case onvif.MediaGetSnapshotUri:
+		uri := "http://" + r.Host + "/api/frame.jpeg?src=" + onvif.FindTagValue(b, "ProfileToken")
+		b = onvif.GetSnapshotUriResponse(uri)
 
 	default:
-		http.Error(w, "unsupported action", http.StatusBadRequest)
+		http.Error(w, "unsupported operation", http.StatusBadRequest)
 		log.Debug().Msgf("[onvif] unsupported request:\n%s", b)
 		return
 	}
 
+	log.Trace().Msgf("[onvif] server response:\n%s", b)
+
 	w.Header().Set("Content-Type", "application/soap+xml; charset=utf-8")
-	if _, err = w.Write([]byte(res)); err != nil {
+	if _, err = w.Write(b); err != nil {
 		log.Error().Err(err).Caller().Send()
 	}
 }
@@ -160,7 +182,7 @@ func apiOnvif(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if l := log.Trace(); l.Enabled() {
-			b, _ := client.GetProfiles()
+			b, _ := client.MediaRequest(onvif.MediaGetProfiles)
 			l.Msgf("[onvif] src=%s profiles:\n%s", src, b)
 		}
 

@@ -143,9 +143,7 @@ var chm_ac_symbols = []byte{
 
 func MakeHeaders(p []byte, t byte, w, h uint16, lqt, cqt []byte) []byte {
 	// Appendix A from https://www.rfc-editor.org/rfc/rfc2435
-	p = append(p, 0xFF,
-		0xD8, // SOI
-	)
+	p = append(p, 0xFF, markerSOI)
 
 	p = MakeQuantHeader(p, lqt, 0)
 	p = MakeQuantHeader(p, cqt, 1)
@@ -156,8 +154,7 @@ func MakeHeaders(p []byte, t byte, w, h uint16, lqt, cqt []byte) []byte {
 		t = 0x22 // hsamp = 2, vsamp = 2
 	}
 
-	p = append(p, 0xFF,
-		0xC0,  // SOF
+	p = append(p, 0xFF, markerSOF,
 		0, 17, // size
 		8, // bits per component
 		byte(h>>8), byte(h&0xFF),
@@ -174,13 +171,9 @@ func MakeHeaders(p []byte, t byte, w, h uint16, lqt, cqt []byte) []byte {
 		1,    // quant table 1
 	)
 
-	p = MakeHuffmanHeader(p, lum_dc_codelens, lum_dc_symbols, 0, 0)
-	p = MakeHuffmanHeader(p, lum_ac_codelens, lum_ac_symbols, 0, 1)
-	p = MakeHuffmanHeader(p, chm_dc_codelens, chm_dc_symbols, 1, 0)
-	p = MakeHuffmanHeader(p, chm_ac_codelens, chm_ac_symbols, 1, 1)
+	p = MakeHuffmanHeaders(p)
 
-	return append(p, 0xFF,
-		0xDA,  // SOS
+	return append(p, 0xFF, markerSOS,
 		0, 12, // size
 		3,    // 3 components
 		0,    // comp 0
@@ -196,16 +189,23 @@ func MakeHeaders(p []byte, t byte, w, h uint16, lqt, cqt []byte) []byte {
 }
 
 func MakeQuantHeader(p []byte, qt []byte, tableNo byte) []byte {
-	p = append(p, 0xFF, 0xDB, 0, 67, tableNo)
+	p = append(p, 0xFF, markerDQT, 0, 67, tableNo)
 	return append(p, qt...)
 }
 
 func MakeHuffmanHeader(p, codelens, symbols []byte, tableNo, tableClass byte) []byte {
-	p = append(p,
-		0xFF, 0xC4, 0,
-		byte(3+len(codelens)+len(symbols)),
+	p = append(p, 0xFF, markerDHT,
+		0, byte(3+len(codelens)+len(symbols)), // size
 		(tableClass<<4)|tableNo,
 	)
 	p = append(p, codelens...)
 	return append(p, symbols...)
+}
+
+func MakeHuffmanHeaders(p []byte) []byte {
+	p = MakeHuffmanHeader(p, lum_dc_codelens, lum_dc_symbols, 0, 0)
+	p = MakeHuffmanHeader(p, lum_ac_codelens, lum_ac_symbols, 0, 1)
+	p = MakeHuffmanHeader(p, chm_dc_codelens, chm_dc_symbols, 1, 0)
+	p = MakeHuffmanHeader(p, chm_ac_codelens, chm_ac_symbols, 1, 1)
+	return p
 }
