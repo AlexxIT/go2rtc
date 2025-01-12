@@ -141,6 +141,10 @@ func MarshalSDP(name string, medias []*Media) ([]byte, error) {
 		}
 		md.WithCodec(codec.PayloadType, name, codec.ClockRate, codec.Channels, codec.FmtpLine)
 
+		if media.Direction != "" {
+			md.WithPropertyAttribute(media.Direction)
+		}
+
 		if media.ID != "" {
 			md.WithValueAttribute("control", media.ID)
 		}
