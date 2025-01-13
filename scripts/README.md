@@ -21,8 +21,8 @@ So we will set `go 1.20` (minimum version) inside `go.mod` file. And will use en
 go get -u
 go mod tidy
 go mod why github.com/pion/rtcp
-go list -deps .\cmd\go2rtc_rtsp\
-./goweight
+go list -deps .\examples\go2rtc_rtsp\
+go run github.com/paralin/goweight@latest .
 ```
 
 ## Dependencies
