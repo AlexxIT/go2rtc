@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -12,7 +13,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	pion "github.com/pion/webrtc/v3"
-	"github.com/rs/zerolog/log"
 )
 
 type Client struct {
@@ -22,6 +22,7 @@ type Client struct {
 	camera   	*CameraData
 	dialogID 	string
 	sessionID 	string 
+	wsMutex     sync.Mutex
 	done      	chan struct{}
 }
 
@@ -120,10 +121,6 @@ func Dial(rawURL string) (*Client, error) {
 		return nil, fmt.Errorf("ring: invalid refresh token encoding: %w", err)
 	}
 
-	println("Connecting to Ring WebSocket")
-	println("Refresh Token: ", refreshToken)
-	println("Device ID: ", deviceID)
-
 	// Initialize Ring API client
 	ringAPI, err := NewRingRestClient(RefreshTokenAuth{RefreshToken: refreshToken}, nil)
 	if err != nil {
@@ -153,14 +150,9 @@ func Dial(rawURL string) (*Client, error) {
 		return nil, err
 	}
 
-	println("WebSocket Ticket: ", ticket.Ticket)
-	println("WebSocket ResponseTimestamp: ", ticket.ResponseTimestamp)
-
 	// Create WebSocket connection
 	wsURL := fmt.Sprintf("wss://api.prod.signalling.ring.devices.a2z.com/ws?api_version=4.0&auth_type=ring_solutions&client_id=ring_site-%s&token=%s",
 		uuid.NewString(), url.QueryEscape(ticket.Ticket))
-
-	println("WebSocket URL: ", wsURL)
 
 	ws, _, err := websocket.DefaultDialer.Dial(wsURL, map[string][]string{
 		"User-Agent": {"android:com.ringapp"},
@@ -169,11 +161,7 @@ func Dial(rawURL string) (*Client, error) {
 		return nil, err
 	}
 
-	println("WebSocket handshake completed successfully")
-
 	// 3. Create Peer Connection
-	println("Creating Peer Connection")
-
 	conf := pion.Configuration{
 		ICEServers: []pion.ICEServer{
 			{URLs: []string{
@@ -193,19 +181,15 @@ func Dial(rawURL string) (*Client, error) {
 
 	api, err := webrtc.NewAPI()
 	if err != nil {
-		println("Failed to create WebRTC API")
 		ws.Close()
 		return nil, err
 	}
 
 	pc, err := api.NewPeerConnection(conf)
 	if err != nil {
-		println("Failed to create Peer Connection")
 		ws.Close()
 		return nil, err
 	}
-
-	println("Peer Connection created")
 
 	// protect from sending ICE candidate before Offer
 	var sendOffer core.Waiter
@@ -292,13 +276,9 @@ func Dial(rawURL string) (*Client, error) {
 	// 4. Create offer
 	offer, err := prod.CreateOffer(medias)
 	if err != nil {
-		println("Failed to create offer")
 		client.Stop()
 		return nil, err
 	}
-
-	println("Offer created")
-	println(offer)
 
 	// 5. Send offer
 	offerPayload := map[string]interface{}{
@@ -310,7 +290,6 @@ func Dial(rawURL string) (*Client, error) {
 	}
 
 	if err = client.sendSessionMessage("live_view", offerPayload); err != nil {
-		println("Failed to send live_view message")
 		client.Stop()
 		return nil, err
 	}
@@ -329,7 +308,6 @@ func Dial(rawURL string) (*Client, error) {
 			case <-ticker.C:
 				if pc.ConnectionState() == pion.PeerConnectionStateConnected {
 					if err := client.sendSessionMessage("ping", nil); err != nil {
-						println("Failed to send ping:", err)
 						return
 					}
 				}
@@ -358,43 +336,30 @@ func Dial(rawURL string) (*Client, error) {
 					default:
 					}
 
-					if websocket.IsCloseError(err, websocket.CloseNormalClosure) {
-						println("WebSocket closed normally")
-					} else {
-						println("Failed to read JSON message:", err)
-						client.Stop()
-					}
+					client.Stop()
 					return
 				}
 
-				body, _ := json.Marshal(res.Body)
-				bodyStr := string(body)
-
-				println("Received message:", res.Method)
-				println("Message body:", bodyStr)
-
-				// check if "doorbot_id" is present and matches the camera ID
+				// check if "doorbot_id" is present
 				if _, ok := res.Body["doorbot_id"]; !ok {
-					println("Received message without doorbot_id")
 					continue
 				}
 				
+				// check if the message is from the correct doorbot
 				doorbotID := res.Body["doorbot_id"].(float64)
 				if doorbotID != float64(client.camera.ID) {
-					println("Received message from unknown doorbot:", doorbotID)
 					continue
 				}
 
+				// check if the message is from the correct session
 				if res.Method == "session_created" || res.Method == "session_started" {
 					if _, ok := res.Body["session_id"]; ok && client.sessionID == "" {
 						client.sessionID = res.Body["session_id"].(string)
-						println("Session established:", client.sessionID)
 					}
 				}
 
 				if _, ok := res.Body["session_id"]; ok {
 					if res.Body["session_id"].(string) != client.sessionID {
-						println("Received message with wrong session ID")
 						continue
 					}
 				}
@@ -406,17 +371,14 @@ func Dial(rawURL string) (*Client, error) {
 					// 6. Get answer
 					var msg AnswerMessage
 					if err = json.Unmarshal(rawMsg, &msg); err != nil {
-						println("Failed to parse SDP message:", err)
 						client.Stop()
 						return
 					}
 					if err = prod.SetAnswer(msg.Body.SDP); err != nil {
-						println("Failed to set answer:", err)
 						client.Stop()
 						return
 					}
 					if err = client.activateSession(); err != nil {
-						println("Failed to activate session:", err)
 						client.Stop()
 						return
 					}
@@ -425,15 +387,12 @@ func Dial(rawURL string) (*Client, error) {
 					// 7. Continue to receiving candidates
 					var msg IceCandidateMessage
 					if err = json.Unmarshal(rawMsg, &msg); err != nil {
-						println("Failed to parse ICE message:", err)
-						client.Stop()
-						return
+						break
 					}
 
 					// check for empty ICE candidate
 					if msg.Body.Ice == "" {
-						println("Received empty ICE candidate")
-						continue
+						break
 					}
 
 					if err = prod.AddCandidate(msg.Body.Ice); err != nil {
@@ -461,8 +420,6 @@ func Dial(rawURL string) (*Client, error) {
 }
 
 func (c *Client) activateSession() error {
-	println("Activating session")
-
 	if err := c.sendSessionMessage("activate_session", nil); err != nil {
 		return err
 	}
@@ -476,12 +433,13 @@ func (c *Client) activateSession() error {
 		return err
 	}
 
-	println("Session activated")
-
 	return nil
 }
 
 func (c *Client) sendSessionMessage(method string, body map[string]interface{}) error {
+	c.wsMutex.Lock()
+    defer c.wsMutex.Unlock()
+
 	if body == nil {
 		body = make(map[string]interface{})
 	}
@@ -497,10 +455,7 @@ func (c *Client) sendSessionMessage(method string, body map[string]interface{}) 
 		"body":      body,
 	}
 
-	println("Sending session message:", method)
-
 	if err := c.ws.WriteJSON(msg); err != nil {
-		log.Error().Err(err).Msg("Failed to send JSON message")
 		return err
 	}
 
@@ -508,28 +463,27 @@ func (c *Client) sendSessionMessage(method string, body map[string]interface{}) 
 }
 
 func (c *Client) GetMedias() []*core.Media {
-	println("Getting medias")
 	return c.prod.GetMedias()
 }
 
 func (c *Client) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
-	println("Getting track")
 	return c.prod.GetTrack(media, codec)
 }
 
 func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
-    // Enable speaker
-	speakerPayload := map[string]interface{}{
-		"stealth_mode": false,
+	if media.Kind == core.KindAudio {
+		// Enable speaker
+		speakerPayload := map[string]interface{}{
+			"stealth_mode": false,
+		}
+
+		_ = c.sendSessionMessage("camera_options", speakerPayload);
 	}
 
-	_ = c.sendSessionMessage("camera_options", speakerPayload);
-	
     return c.prod.AddTrack(media, codec, track)
 }
 
 func (c *Client) Start() error {
-	println("Starting client")
 	return c.prod.Start()
 }
 
@@ -538,7 +492,6 @@ func (c *Client) Stop() error {
 	case <-c.done:
 		return nil
 	default:
-		println("Stopping client")
 		close(c.done)
 	}
 
