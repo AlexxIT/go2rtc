@@ -220,7 +220,16 @@
 
 <button id="ring">Ring</button>
 <div class="module">
-    <form id="ring-form" style="margin-bottom: 10px">
+    <form id="ring-credentials-form" style="margin-bottom: 10px">
+        <input type="email" name="email" placeholder="email">
+        <input type="password" name="password" placeholder="password">
+        <div id="tfa-field" style="display: none">
+            <input type="text" name="code" placeholder="2FA code">
+            <div id="tfa-prompt"></div>
+        </div>
+        <input type="submit" value="Login">
+    </form>
+    <form id="ring-token-form" style="margin-bottom: 10px">
         <input type="text" name="refresh_token" placeholder="refresh_token">
         <input type="submit" value="Login">
     </form>
@@ -231,15 +240,32 @@
         ev.target.nextElementSibling.style.display = 'block';
     });
 
-    document.getElementById('ring-form').addEventListener('submit', async ev => {
+    async function handleRingAuth(ev) {
         ev.preventDefault();
-
         const query = new URLSearchParams(new FormData(ev.target));
         const url = new URL('api/ring?' + query.toString(), location.href);
 
         const r = await fetch(url, {cache: 'no-cache'});
-        await getSources('ring-table', r);
-    });
+        const data = await r.json();
+        
+        if (data.needs_2fa) {
+            document.getElementById('tfa-field').style.display = 'block';
+            document.getElementById('tfa-prompt').textContent = data.prompt || 'Enter 2FA code';
+            return;
+        }
+
+        if (!r.ok) {
+            const table = document.getElementById('ring-table');
+            table.innerText = data.error || 'Unknown error';
+            return;
+        }
+
+        const table = document.getElementById('ring-table');
+        drawTable(table, data);
+    }
+
+    document.getElementById('ring-credentials-form').addEventListener('submit', handleRingAuth);
+    document.getElementById('ring-token-form').addEventListener('submit', handleRingAuth);
 </script>
 
 <button id="gopro">GoPro</button>
