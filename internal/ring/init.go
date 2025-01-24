@@ -84,9 +84,17 @@ func apiRing(w http.ResponseWriter, r *http.Request) {
     var items []*api.Source
     for _, camera := range devices.AllCameras {
         cleanQuery.Set("device_id", camera.DeviceID)
+
+        // Stream source
         items = append(items, &api.Source{
             Name: camera.Description,
             URL:  "ring:?" + cleanQuery.Encode(),
+        })
+
+        // Snapshot source
+        items = append(items, &api.Source{
+            Name: camera.Description + " Snapshot",
+            URL:  "ring:?" + cleanQuery.Encode() + "&snapshot",
         })
     }
 
