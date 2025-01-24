@@ -35,7 +35,7 @@
     function drawTable(table, data) {
         const cols = ['id', 'name', 'info', 'url', 'location'];
         const th = (row) => cols.reduce((html, k) => k in row ? `${html}<th>${k}</th>` : html, '<tr>') + '</tr>';
-        const td = (row) => cols.reduce((html, k) => k in row ? `${html}<td>${row[k]}</td>` : html, '<tr>') + '</tr>';
+        const td = (row) => cols.reduce((html, k) => k in row ? `${html}<td style="word-break: break-word;white-space: normal;">${row[k]}</td>` : html, '<tr>') + '</tr>';
 
         const thead = th(data.sources[0]);
         const tbody = data.sources.reduce((html, source) => `${html}${td(source)}`, '');
@@ -218,6 +218,29 @@
     });
 </script>
 
+<button id="ring">Ring</button>
+<div class="module">
+    <form id="ring-form" style="margin-bottom: 10px">
+        <input type="text" name="refresh_token" placeholder="refresh_token">
+        <input type="submit" value="Login">
+    </form>
+    <table id="ring-table"></table>
+</div>
+<script>
+    document.getElementById('ring').addEventListener('click', async ev => {
+        ev.target.nextElementSibling.style.display = 'block';
+    });
+
+    document.getElementById('ring-form').addEventListener('submit', async ev => {
+        ev.preventDefault();
+
+        const query = new URLSearchParams(new FormData(ev.target));
+        const url = new URL('api/ring?' + query.toString(), location.href);
+
+        const r = await fetch(url, {cache: 'no-cache'});
+        await getSources('ring-table', r);
+    });
+</script>
 
 <button id="gopro">GoPro</button>
 <div class="module">
