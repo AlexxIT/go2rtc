@@ -16,9 +16,9 @@ import (
 )
 
 type Client struct {
-	conn     	*webrtc.Conn
-	ws       	*websocket.Conn
 	api      	*RingRestClient
+	ws       	*websocket.Conn
+	prod     	*webrtc.Conn
 	camera   	*CameraData
 	dialogID 	string
 	sessionID 	string 
@@ -162,7 +162,7 @@ func Dial(rawURL string) (*Client, error) {
 
 	println("WebSocket URL: ", wsURL)
 
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, map[string][]string{
+	ws, _, err := websocket.DefaultDialer.Dial(wsURL, map[string][]string{
 		"User-Agent": {"android:com.ringapp"},
 	})
 	if err != nil {
@@ -194,14 +194,14 @@ func Dial(rawURL string) (*Client, error) {
 	api, err := webrtc.NewAPI()
 	if err != nil {
 		println("Failed to create WebRTC API")
-		conn.Close()
+		ws.Close()
 		return nil, err
 	}
 
 	pc, err := api.NewPeerConnection(conf)
 	if err != nil {
 		println("Failed to create Peer Connection")
-		conn.Close()
+		ws.Close()
 		return nil, err
 	}
 
@@ -223,11 +223,11 @@ func Dial(rawURL string) (*Client, error) {
 	prod.URL = rawURL
 
 	client := &Client{
-		ws:       conn,
 		api:      ringAPI,
+		ws:       ws,
+		prod:     prod,
 		camera:   camera,
 		dialogID: uuid.NewString(),
-		conn:     prod,
 		done:     make(chan struct{}),
 	}
 
@@ -351,7 +351,7 @@ func Dial(rawURL string) (*Client, error) {
 				return
 			default:
 				var res BaseMessage
-				if err = conn.ReadJSON(&res); err != nil {
+				if err = ws.ReadJSON(&res); err != nil {
 					select {
 					case <-client.done:
 						return
@@ -509,22 +509,28 @@ func (c *Client) sendSessionMessage(method string, body map[string]interface{}) 
 
 func (c *Client) GetMedias() []*core.Media {
 	println("Getting medias")
-	return c.conn.GetMedias()
+	return c.prod.GetMedias()
 }
 
 func (c *Client) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
 	println("Getting track")
-	return c.conn.GetTrack(media, codec)
+	return c.prod.GetTrack(media, codec)
 }
 
 func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
-	println("Adding track")
-	return c.conn.AddTrack(media, codec, track)
+    // Enable speaker
+	speakerPayload := map[string]interface{}{
+		"stealth_mode": false,
+	}
+
+	_ = c.sendSessionMessage("camera_options", speakerPayload);
+	
+    return c.prod.AddTrack(media, codec, track)
 }
 
 func (c *Client) Start() error {
 	println("Starting client")
-	return c.conn.Start()
+	return c.prod.Start()
 }
 
 func (c *Client) Stop() error {
@@ -536,9 +542,9 @@ func (c *Client) Stop() error {
 		close(c.done)
 	}
 
-	if c.conn != nil {
-		_ = c.conn.Stop()
-		c.conn = nil
+	if c.prod != nil {
+		_ = c.prod.Stop()
+		c.prod = nil
 	}
 
 	if c.ws != nil {
@@ -558,5 +564,5 @@ func (c *Client) Stop() error {
 }
 
 func (c *Client) MarshalJSON() ([]byte, error) {
-	return c.conn.MarshalJSON()
+	return c.prod.MarshalJSON()
 }
