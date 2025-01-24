@@ -238,6 +238,11 @@ func Dial(rawURL string) (*Client, error) {
 
 			iceCandidate := msg.ToJSON()
 
+			// skip empty ICE candidates
+			if iceCandidate.Candidate == "" {
+				return
+			}
+
 			icePayload := map[string]interface{}{
 				"ice": iceCandidate.Candidate,
 				"mlineindex": iceCandidate.SDPMLineIndex,
@@ -423,6 +428,12 @@ func Dial(rawURL string) (*Client, error) {
 						println("Failed to parse ICE message:", err)
 						client.Stop()
 						return
+					}
+
+					// check for empty ICE candidate
+					if msg.Body.Ice == "" {
+						println("Received empty ICE candidate")
+						continue
 					}
 
 					if err = prod.AddCandidate(msg.Body.Ice); err != nil {
