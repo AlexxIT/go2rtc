@@ -141,7 +141,7 @@ func (c *Producer) probe() error {
 	// 2. MedaData without stereo key for AAC
 	// 3. Audio header after Video keyframe tag
 
-	// OpenIPC camera sends:
+	// OpenIPC camera (on old firmwares) sends:
 	// 1. Empty video/audio flag
 	// 2. No MetaData packet
 	// 3. Sends a video packet in more than 3 seconds

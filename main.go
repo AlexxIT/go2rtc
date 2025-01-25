@@ -25,6 +25,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/nest"
 	"github.com/AlexxIT/go2rtc/internal/ngrok"
 	"github.com/AlexxIT/go2rtc/internal/onvif"
+	"github.com/AlexxIT/go2rtc/internal/ring"
 	"github.com/AlexxIT/go2rtc/internal/roborock"
 	"github.com/AlexxIT/go2rtc/internal/rtmp"
 	"github.com/AlexxIT/go2rtc/internal/rtsp"
@@ -80,6 +81,7 @@ func main() {
 	mpegts.Init()   // mpegts passive source
 	roborock.Init() // roborock source
 	homekit.Init()  // homekit source
+	ring.Init()	 	// ring source
 	nest.Init()     // nest source
 	bubble.Init()   // bubble source
 	expr.Init()     // expr source
