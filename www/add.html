@@ -247,7 +247,7 @@
 
         const r = await fetch(url, {cache: 'no-cache'});
         const data = await r.json();
-        
+
         if (data.needs_2fa) {
             document.getElementById('tfa-field').style.display = 'block';
             document.getElementById('tfa-prompt').textContent = data.prompt || 'Enter 2FA code';

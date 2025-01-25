@@ -19,8 +19,8 @@ type RefreshTokenAuth struct {
 }
 
 type EmailAuth struct {
-    Email    string
-    Password string
+	Email    string
+	Password string
 }
 
 // AuthConfig represents the decoded refresh token data
@@ -31,38 +31,38 @@ type AuthConfig struct {
 
 // AuthTokenResponse represents the response from the authentication endpoint
 type AuthTokenResponse struct {
-    AccessToken		string `json:"access_token"`
-    ExpiresIn		int    `json:"expires_in"`
-    RefreshToken 	string `json:"refresh_token"`
-    Scope       	string `json:"scope"`     // Always "client"
-    TokenType   	string `json:"token_type"` // Always "Bearer"
+	AccessToken  string `json:"access_token"`
+	ExpiresIn    int    `json:"expires_in"`
+	RefreshToken string `json:"refresh_token"`
+	Scope        string `json:"scope"`      // Always "client"
+	TokenType    string `json:"token_type"` // Always "Bearer"
 }
 
 type Auth2faResponse struct {
-    Error            string `json:"error"`
-    ErrorDescription string `json:"error_description"`
-    TSVState        string `json:"tsv_state"`
-    Phone           string `json:"phone"`
-    NextTimeInSecs  int    `json:"next_time_in_secs"`
+	Error            string `json:"error"`
+	ErrorDescription string `json:"error_description"`
+	TSVState         string `json:"tsv_state"`
+	Phone            string `json:"phone"`
+	NextTimeInSecs   int    `json:"next_time_in_secs"`
 }
 
 // SocketTicketRequest represents the request to get a socket ticket
 type SocketTicketResponse struct {
-	Ticket 				string 	`json:"ticket"`
-	ResponseTimestamp 	int64 	`json:"response_timestamp"`
+	Ticket            string `json:"ticket"`
+	ResponseTimestamp int64  `json:"response_timestamp"`
 }
 
 // RingRestClient handles authentication and requests to Ring API
 type RingRestClient struct {
-    httpClient     *http.Client
-    authConfig     *AuthConfig
-    hardwareID     string
-    authToken      *AuthTokenResponse
-    Using2FA       bool
-    PromptFor2FA   string
-    RefreshToken   string
-    auth           interface{}      // EmailAuth or RefreshTokenAuth
-    onTokenRefresh func(string)
+	httpClient     *http.Client
+	authConfig     *AuthConfig
+	hardwareID     string
+	authToken      *AuthTokenResponse
+	Using2FA       bool
+	PromptFor2FA   string
+	RefreshToken   string
+	auth           interface{} // EmailAuth or RefreshTokenAuth
+	onTokenRefresh func(string)
 }
 
 // CameraKind represents the different types of Ring cameras
@@ -70,11 +70,11 @@ type CameraKind string
 
 // CameraData contains common fields for all camera types
 type CameraData struct {
-	ID          float64	`json:"id"`
-	Description string 	`json:"description"`
-	DeviceID    string 	`json:"device_id"`
-	Kind        string 	`json:"kind"`
-	LocationID  string 	`json:"location_id"`
+	ID          float64 `json:"id"`
+	Description string  `json:"description"`
+	DeviceID    string  `json:"device_id"`
+	Kind        string  `json:"kind"`
+	LocationID  string  `json:"location_id"`
 }
 
 // RingDeviceType represents different types of Ring devices
@@ -82,12 +82,12 @@ type RingDeviceType string
 
 // RingDevicesResponse represents the response from the Ring API
 type RingDevicesResponse struct {
-	Doorbots           []CameraData              `json:"doorbots"`
-	AuthorizedDoorbots []CameraData              `json:"authorized_doorbots"`
-	StickupCams        []CameraData              `json:"stickup_cams"`
-	AllCameras         []CameraData              `json:"all_cameras"`
-	Chimes             []CameraData              `json:"chimes"`
-	Other              []map[string]interface{}  `json:"other"`
+	Doorbots           []CameraData             `json:"doorbots"`
+	AuthorizedDoorbots []CameraData             `json:"authorized_doorbots"`
+	StickupCams        []CameraData             `json:"stickup_cams"`
+	AllCameras         []CameraData             `json:"all_cameras"`
+	Chimes             []CameraData             `json:"chimes"`
+	Other              []map[string]interface{} `json:"other"`
 }
 
 const (
@@ -131,48 +131,48 @@ const (
 )
 
 const (
-	clientAPIBaseURL    = "https://api.ring.com/clients_api/"
-	deviceAPIBaseURL    = "https://api.ring.com/devices/v1/"
-	commandsAPIBaseURL  = "https://api.ring.com/commands/v1/"
-	appAPIBaseURL       = "https://prd-api-us.prd.rings.solutions/api/v1/"
-	oauthURL           	= "https://oauth.ring.com/oauth/token"
-	apiVersion         	= 11
-	defaultTimeout     	= 20 * time.Second
-	maxRetries        	= 3
+	clientAPIBaseURL   = "https://api.ring.com/clients_api/"
+	deviceAPIBaseURL   = "https://api.ring.com/devices/v1/"
+	commandsAPIBaseURL = "https://api.ring.com/commands/v1/"
+	appAPIBaseURL      = "https://prd-api-us.prd.rings.solutions/api/v1/"
+	oauthURL           = "https://oauth.ring.com/oauth/token"
+	apiVersion         = 11
+	defaultTimeout     = 20 * time.Second
+	maxRetries         = 3
 )
 
 // NewRingRestClient creates a new Ring client instance
 func NewRingRestClient(auth interface{}, onTokenRefresh func(string)) (*RingRestClient, error) {
-    client := &RingRestClient{
-        httpClient:     &http.Client{Timeout: defaultTimeout},
-        onTokenRefresh: onTokenRefresh,
-        hardwareID:     generateHardwareID(),
-        auth:           auth,
-    }
+	client := &RingRestClient{
+		httpClient:     &http.Client{Timeout: defaultTimeout},
+		onTokenRefresh: onTokenRefresh,
+		hardwareID:     generateHardwareID(),
+		auth:           auth,
+	}
 
-    switch a := auth.(type) {
-    case RefreshTokenAuth:
-        if a.RefreshToken == "" {
-            return nil, fmt.Errorf("refresh token is required")
-        }
-        
+	switch a := auth.(type) {
+	case RefreshTokenAuth:
+		if a.RefreshToken == "" {
+			return nil, fmt.Errorf("refresh token is required")
+		}
+
 		config, err := parseAuthConfig(a.RefreshToken)
-        if err != nil {
-            return nil, fmt.Errorf("failed to parse refresh token: %w", err)
-        }
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse refresh token: %w", err)
+		}
 
 		client.authConfig = config
-        client.hardwareID = config.HID
+		client.hardwareID = config.HID
 		client.RefreshToken = a.RefreshToken
-    case EmailAuth:
-        if a.Email == "" || a.Password == "" {
-            return nil, fmt.Errorf("email and password are required")
-        }
-    default:
-        return nil, fmt.Errorf("invalid auth type")
-    }
+	case EmailAuth:
+		if a.Email == "" || a.Password == "" {
+			return nil, fmt.Errorf("email and password are required")
+		}
+	default:
+		return nil, fmt.Errorf("invalid auth type")
+	}
 
-    return client, nil
+	return client, nil
 }
 
 // Request makes an authenticated request to the Ring API
@@ -207,7 +207,7 @@ func (c *RingRestClient) Request(method, url string, body interface{}) ([]byte, 
 	// Make request with retries
 	var resp *http.Response
 	var responseBody []byte
-	
+
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		resp, err = c.httpClient.Do(req)
 		if err != nil {
@@ -318,104 +318,104 @@ func (c *RingRestClient) ensureAuth() error {
 
 // getAuth makes an authentication request to the Ring API
 func (c *RingRestClient) GetAuth(twoFactorAuthCode string) (*AuthTokenResponse, error) {
-    var grantData map[string]string
+	var grantData map[string]string
 
-    if c.authConfig != nil && twoFactorAuthCode == "" {
-        grantData = map[string]string{
-            "grant_type":    "refresh_token",
-            "refresh_token": c.authConfig.RT,
-        }
-    } else {
-        authEmail, ok := c.auth.(EmailAuth)
-        if !ok {
-            return nil, fmt.Errorf("invalid auth type for email authentication")
-        }
-        grantData = map[string]string{
-            "grant_type": "password",
-            "username":   authEmail.Email,
-            "password":   authEmail.Password,
-        }
-    }
+	if c.authConfig != nil && twoFactorAuthCode == "" {
+		grantData = map[string]string{
+			"grant_type":    "refresh_token",
+			"refresh_token": c.authConfig.RT,
+		}
+	} else {
+		authEmail, ok := c.auth.(EmailAuth)
+		if !ok {
+			return nil, fmt.Errorf("invalid auth type for email authentication")
+		}
+		grantData = map[string]string{
+			"grant_type": "password",
+			"username":   authEmail.Email,
+			"password":   authEmail.Password,
+		}
+	}
 
-    grantData["client_id"] = "ring_official_android"
-    grantData["scope"] = "client"
+	grantData["client_id"] = "ring_official_android"
+	grantData["scope"] = "client"
 
-    body, err := json.Marshal(grantData)
-    if err != nil {
-        return nil, fmt.Errorf("failed to marshal auth request: %w", err)
-    }
+	body, err := json.Marshal(grantData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal auth request: %w", err)
+	}
 
-    req, err := http.NewRequest("POST", oauthURL, bytes.NewReader(body))
-    if err != nil {
-        return nil, err
-    }
+	req, err := http.NewRequest("POST", oauthURL, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
 
-    req.Header.Set("Content-Type", "application/json")
-    req.Header.Set("Accept", "application/json")
-    req.Header.Set("hardware_id", c.hardwareID)
-    req.Header.Set("User-Agent", "android:com.ringapp")
-    req.Header.Set("2fa-support", "true")
-    if twoFactorAuthCode != "" {
-        req.Header.Set("2fa-code", twoFactorAuthCode)
-    }
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("hardware_id", c.hardwareID)
+	req.Header.Set("User-Agent", "android:com.ringapp")
+	req.Header.Set("2fa-support", "true")
+	if twoFactorAuthCode != "" {
+		req.Header.Set("2fa-code", twoFactorAuthCode)
+	}
 
-    resp, err := c.httpClient.Do(req)
-    if err != nil {
-        return nil, err
-    }
-    defer resp.Body.Close()
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
 
-    // Handle 2FA Responses
-    if resp.StatusCode == http.StatusPreconditionFailed || 
-       (resp.StatusCode == http.StatusBadRequest && strings.Contains(resp.Header.Get("WWW-Authenticate"), "Verification Code")) {
-        
-        var tfaResp Auth2faResponse
-        if err := json.NewDecoder(resp.Body).Decode(&tfaResp); err != nil {
-            return nil, err
-        }
+	// Handle 2FA Responses
+	if resp.StatusCode == http.StatusPreconditionFailed ||
+		(resp.StatusCode == http.StatusBadRequest && strings.Contains(resp.Header.Get("WWW-Authenticate"), "Verification Code")) {
 
-        c.Using2FA = true
-        if resp.StatusCode == http.StatusBadRequest {
-            c.PromptFor2FA = "Invalid 2fa code entered. Please try again."
-            return nil, fmt.Errorf("invalid 2FA code")
-        }
+		var tfaResp Auth2faResponse
+		if err := json.NewDecoder(resp.Body).Decode(&tfaResp); err != nil {
+			return nil, err
+		}
 
-        if tfaResp.TSVState != "" {
-            prompt := "from your authenticator app"
-            if tfaResp.TSVState != "totp" {
-                prompt = fmt.Sprintf("sent to %s via %s", tfaResp.Phone, tfaResp.TSVState)
-            }
-            c.PromptFor2FA = fmt.Sprintf("Please enter the code %s", prompt)
-        } else {
-            c.PromptFor2FA = "Please enter the code sent to your text/email"
-        }
+		c.Using2FA = true
+		if resp.StatusCode == http.StatusBadRequest {
+			c.PromptFor2FA = "Invalid 2fa code entered. Please try again."
+			return nil, fmt.Errorf("invalid 2FA code")
+		}
 
-        return nil, fmt.Errorf("2FA required")
-    }
+		if tfaResp.TSVState != "" {
+			prompt := "from your authenticator app"
+			if tfaResp.TSVState != "totp" {
+				prompt = fmt.Sprintf("sent to %s via %s", tfaResp.Phone, tfaResp.TSVState)
+			}
+			c.PromptFor2FA = fmt.Sprintf("Please enter the code %s", prompt)
+		} else {
+			c.PromptFor2FA = "Please enter the code sent to your text/email"
+		}
 
-    // Handle errors
-    if resp.StatusCode != http.StatusOK {
-        body, _ := io.ReadAll(resp.Body)
-        return nil, fmt.Errorf("auth request failed with status %d: %s", resp.StatusCode, string(body))
-    }
+		return nil, fmt.Errorf("2FA required")
+	}
 
-    var authResp AuthTokenResponse
-    if err := json.NewDecoder(resp.Body).Decode(&authResp); err != nil {
-        return nil, fmt.Errorf("failed to decode auth response: %w", err)
-    }
+	// Handle errors
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("auth request failed with status %d: %s", resp.StatusCode, string(body))
+	}
 
-    c.authToken = &authResp
-    c.authConfig = &AuthConfig{
-        RT:  authResp.RefreshToken,
-        HID: c.hardwareID,
-    }
+	var authResp AuthTokenResponse
+	if err := json.NewDecoder(resp.Body).Decode(&authResp); err != nil {
+		return nil, fmt.Errorf("failed to decode auth response: %w", err)
+	}
 
-    c.RefreshToken = encodeAuthConfig(c.authConfig)
-    if c.onTokenRefresh != nil {
-        c.onTokenRefresh(c.RefreshToken)
-    }
+	c.authToken = &authResp
+	c.authConfig = &AuthConfig{
+		RT:  authResp.RefreshToken,
+		HID: c.hardwareID,
+	}
 
-    return c.authToken, nil
+	c.RefreshToken = encodeAuthConfig(c.authConfig)
+	if c.onTokenRefresh != nil {
+		c.onTokenRefresh(c.RefreshToken)
+	}
+
+	return c.authToken, nil
 }
 
 // Helper functions for auth config encoding/decoding
