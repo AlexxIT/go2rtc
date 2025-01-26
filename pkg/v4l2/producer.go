@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/h264/annexb"
 	"github.com/AlexxIT/go2rtc/pkg/v4l2/device"
 	"github.com/pion/rtp"
 )
@@ -46,17 +47,29 @@ func Open(rawURL string) (*Producer, error) {
 	}
 
 	switch query.Get("input_format") {
-	case "mjpeg":
-		codec.Name = core.CodecJPEG
-		pixFmt = device.V4L2_PIX_FMT_MJPEG
 	case "yuyv422":
 		if codec.FmtpLine == "" {
 			return nil, errors.New("v4l2: invalid video_size")
 		}
-
 		codec.Name = core.CodecRAW
 		codec.FmtpLine += ";colorspace=422"
 		pixFmt = device.V4L2_PIX_FMT_YUYV
+	case "nv12":
+		if codec.FmtpLine == "" {
+			return nil, errors.New("v4l2: invalid video_size")
+		}
+		codec.Name = core.CodecRAW
+		codec.FmtpLine += ";colorspace=420mpeg2" // maybe 420jpeg
+		pixFmt = device.V4L2_PIX_FMT_NV12
+	case "mjpeg":
+		codec.Name = core.CodecJPEG
+		pixFmt = device.V4L2_PIX_FMT_MJPEG
+	case "h264":
+		codec.Name = core.CodecH264
+		pixFmt = device.V4L2_PIX_FMT_H264
+	case "hevc":
+		codec.Name = core.CodecH265
+		pixFmt = device.V4L2_PIX_FMT_HEVC
 	default:
 		return nil, errors.New("v4l2: invalid input_format")
 	}
@@ -93,10 +106,14 @@ func (c *Producer) Start() error {
 		return err
 	}
 
-	planarYUV := c.Medias[0].Codecs[0].Name == core.CodecRAW
+	var bitstream bool
+	switch c.Medias[0].Codecs[0].Name {
+	case core.CodecH264, core.CodecH265:
+		bitstream = true
+	}
 
 	for {
-		buf, err := c.dev.Capture(planarYUV)
+		buf, err := c.dev.Capture()
 		if err != nil {
 			return err
 		}
@@ -105,6 +122,10 @@ func (c *Producer) Start() error {
 
 		if len(c.Receivers) == 0 {
 			continue
+		}
+
+		if bitstream {
+			buf = annexb.EncodeToAVCC(buf)
 		}
 
 		pkt := &rtp.Packet{
