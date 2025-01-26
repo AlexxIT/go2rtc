@@ -83,3 +83,15 @@ func TestDahua(t *testing.T) {
 	n := naluTypes(b)
 	require.Equal(t, []byte{0x40, 0x42, 0x44, 0x26}, n)
 }
+
+func TestUSB(t *testing.T) {
+	s := "00 00 00 01 67 4D 00 1F 8D 8D 40 28 02 DD 37 01 01 01 40 00 01 C2 00 00 57 E4 01 00 00 00 01 68 EE 3C 80 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 65 88 80 00"
+	b := EncodeToAVCC(decode(s))
+	n := naluTypes(b)
+	require.Equal(t, []byte{0x67, 0x68, 0x65}, n)
+
+	s = "00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 41 9A 00 4C"
+	b = EncodeToAVCC(decode(s))
+	n = naluTypes(b)
+	require.Equal(t, []byte{0x41}, n)
+}
