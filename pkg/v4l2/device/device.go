@@ -11,8 +11,9 @@ import (
 )
 
 type Device struct {
-	fd   int
-	bufs [][]byte
+	fd     int
+	bufs   [][]byte
+	pixFmt uint32
 }
 
 func Open(path string) (*Device, error) {
@@ -119,6 +120,8 @@ func (d *Device) ListFrameRates(pixFmt, width, height uint32) ([]uint32, error) 
 }
 
 func (d *Device) SetFormat(width, height, pixFmt uint32) error {
+	d.pixFmt = pixFmt
+
 	f := v4l2_format{
 		typ: V4L2_BUF_TYPE_VIDEO_CAPTURE,
 		pix: v4l2_pix_format{
@@ -196,7 +199,7 @@ func (d *Device) StreamOff() (err error) {
 	return ioctl(d.fd, VIDIOC_REQBUFS, unsafe.Pointer(&rb))
 }
 
-func (d *Device) Capture(planarYUV bool) ([]byte, error) {
+func (d *Device) Capture() ([]byte, error) {
 	dec := v4l2_buffer{
 		typ:    V4L2_BUF_TYPE_VIDEO_CAPTURE,
 		memory: V4L2_MEMORY_MMAP,
@@ -205,11 +208,16 @@ func (d *Device) Capture(planarYUV bool) ([]byte, error) {
 		return nil, err
 	}
 
-	buf := make([]byte, dec.bytesused)
-	if planarYUV {
-		YUYV2YUV(buf, d.bufs[dec.index][:dec.bytesused])
-	} else {
-		copy(buf, d.bufs[dec.index][:dec.bytesused])
+	src := d.bufs[dec.index][:dec.bytesused]
+	dst := make([]byte, dec.bytesused)
+
+	switch d.pixFmt {
+	case V4L2_PIX_FMT_YUYV:
+		YUYVtoYUV(dst, src)
+	case V4L2_PIX_FMT_NV12:
+		NV12toYUV(dst, src)
+	default:
+		copy(dst, d.bufs[dec.index][:dec.bytesused])
 	}
 
 	enc := v4l2_buffer{
@@ -221,7 +229,7 @@ func (d *Device) Capture(planarYUV bool) ([]byte, error) {
 		return nil, err
 	}
 
-	return buf, nil
+	return dst, nil
 }
 
 func (d *Device) Close() error {
