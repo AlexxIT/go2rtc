@@ -25,19 +25,21 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/nest"
 	"github.com/AlexxIT/go2rtc/internal/ngrok"
 	"github.com/AlexxIT/go2rtc/internal/onvif"
+	"github.com/AlexxIT/go2rtc/internal/ring"
 	"github.com/AlexxIT/go2rtc/internal/roborock"
 	"github.com/AlexxIT/go2rtc/internal/rtmp"
 	"github.com/AlexxIT/go2rtc/internal/rtsp"
 	"github.com/AlexxIT/go2rtc/internal/srtp"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/internal/tapo"
+	"github.com/AlexxIT/go2rtc/internal/v4l2"
 	"github.com/AlexxIT/go2rtc/internal/webrtc"
 	"github.com/AlexxIT/go2rtc/internal/webtorrent"
 	"github.com/AlexxIT/go2rtc/pkg/shell"
 )
 
 func main() {
-	app.Version = "1.9.7"
+	app.Version = "1.9.8"
 
 	// 1. Core modules: app, api/ws, streams
 
@@ -79,11 +81,13 @@ func main() {
 	mpegts.Init()   // mpegts passive source
 	roborock.Init() // roborock source
 	homekit.Init()  // homekit source
+	ring.Init()	 	// ring source
 	nest.Init()     // nest source
 	bubble.Init()   // bubble source
 	expr.Init()     // expr source
 	gopro.Init()    // gopro source
 	doorbird.Init() // doorbird source
+	v4l2.Init()     // v4l2 source
 
 	// 6. Helper modules
 

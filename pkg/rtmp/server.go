@@ -117,10 +117,6 @@ func (c *Conn) acceptCommand(b []byte) error {
 			}
 		}
 
-		if c.App == "" {
-			return fmt.Errorf("rtmp: read command %x", b)
-		}
-
 		payload := amf.EncodeItems(
 			"_result", tID,
 			map[string]any{"fmsVer": "FMS/3,0,1,123"},
@@ -129,8 +125,15 @@ func (c *Conn) acceptCommand(b []byte) error {
 		return c.writeMessage(3, TypeCommand, 0, payload)
 
 	case CommandReleaseStream:
+		// if app is empty - will use key as app
+		if c.App == "" && len(items) == 4 {
+			c.App, _ = items[3].(string)
+		}
+
 		payload := amf.EncodeItems("_result", tID, nil)
 		return c.writeMessage(3, TypeCommand, 0, payload)
+
+	case CommandFCPublish: // no response
 
 	case CommandCreateStream:
 		payload := amf.EncodeItems("_result", tID, nil, 1)
@@ -139,8 +142,6 @@ func (c *Conn) acceptCommand(b []byte) error {
 	case CommandPublish, CommandPlay: // response later
 		c.Intent = cmd
 		c.streamID = 1
-
-	case CommandFCPublish: // no response
 
 	default:
 		println("rtmp: unknown command: " + cmd)
