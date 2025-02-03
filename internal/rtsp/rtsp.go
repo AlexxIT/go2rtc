@@ -237,7 +237,9 @@ func tcpHandler(conn *rtsp.Conn) {
 	})
 
 	if err := conn.Accept(); err != nil {
-		if err != io.EOF {
+		if err == rtsp.FailedAuth {
+			log.Warn().Str("remote_addr", conn.Connection.RemoteAddr).Msg("[rtsp] failed authentication")
+		} else if err != io.EOF {
 			log.WithLevel(level).Err(err).Caller().Send()
 		}
 		if closer != nil {
