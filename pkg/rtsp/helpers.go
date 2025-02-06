@@ -75,6 +75,23 @@ func UnmarshalSDP(rawSDP []byte) ([]*core.Media, error) {
 				if codec.FmtpLine == "" {
 					codec.FmtpLine = findFmtpLine(codec.PayloadType, sd.MediaDescriptions)
 				}
+			case core.CodecH265:
+				if codec.FmtpLine != "" {
+					// All three parameters are needed for a valid fmtp line. If we're missing one
+					// then discard the entire line. The bitstream should contain the data in NAL units
+					//
+					// Some camera brands (notable Hikvision) don't include the vps property, rendering the entire
+					// line invalid, because the sps property references the non-existent vps proper. This invalid
+					// data will cause FFmpeg to crash with a `Could not write header (incorrect codec parameters ?): Invalid data found when processing input`
+					// error when attempting to repackage the HEVC stream into outgoing RTSP stream. Removing the
+					// fmtp line forces FFmpeg to rely on the bitstream directly, fixing this issue.
+					valid := strings.Contains(codec.FmtpLine, "sprop-vps=")
+					valid = valid && strings.Contains(codec.FmtpLine, "sprop-sps=")
+					valid = valid && strings.Contains(codec.FmtpLine, "sprop-pps=")
+					if !valid {
+						codec.FmtpLine = ""
+					}
+				}
 			case core.CodecOpus:
 				// fix OPUS for some cameras https://datatracker.ietf.org/doc/html/rfc7587
 				codec.ClockRate = 48000
