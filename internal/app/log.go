@@ -1,8 +1,10 @@
 package app
 
 import (
+	"errors"
 	"io"
 	"os"
+	"sync"
 
 	"github.com/mattn/go-isatty"
 	"github.com/rs/zerolog"
@@ -104,6 +106,7 @@ const chunkSize = 1 << 16
 type circularBuffer struct {
 	chunks [][]byte
 	r, w   int
+	mu     sync.Mutex
 }
 
 func newBuffer(chunks int) *circularBuffer {
@@ -114,20 +117,28 @@ func newBuffer(chunks int) *circularBuffer {
 }
 
 func (b *circularBuffer) Write(p []byte) (n int, err error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	n = len(p)
+	if n == 0 {
+		return 0, nil
+	}
+
+	if len(b.chunks) == 0 {
+		b.chunks = append(b.chunks, make([]byte, 0, chunkSize))
+	}
 
 	// check if chunk has size
 	if len(b.chunks[b.w])+n > chunkSize {
 		// increase write chunk index
-		if b.w++; b.w == cap(b.chunks) {
+		b.w++
+		if b.w == cap(b.chunks) {
 			b.w = 0
 		}
 		// check overflow
 		if b.r == b.w {
-			// increase read chunk index
-			if b.r++; b.r == cap(b.chunks) {
-				b.r = 0
-			}
+			return 0, errors.New("circularBuffer overflow, cannot write without overwriting unread data")
 		}
 		// check if current chunk exists
 		if b.w == len(b.chunks) {
@@ -140,7 +151,7 @@ func (b *circularBuffer) Write(p []byte) (n int, err error) {
 	}
 
 	b.chunks[b.w] = append(b.chunks[b.w], p...)
-	return
+	return n, nil
 }
 
 func (b *circularBuffer) WriteTo(w io.Writer) (n int64, err error) {
@@ -161,8 +172,39 @@ func (b *circularBuffer) WriteTo(w io.Writer) (n int64, err error) {
 	return
 }
 
-func (b *circularBuffer) Reset() {
-	b.chunks[0] = b.chunks[0][:0]
+func (b *circularBuffer) Reset() error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	for i := range b.chunks {
+		b.chunks[i] = b.chunks[i][:0]
+	}
+
 	b.r = 0
 	b.w = 0
+
+	return nil
+}
+
+// Bytes concatenates all chunks into a single byte slice.
+func (b *circularBuffer) Bytes() []byte {
+	var totalLen int
+	for _, chunk := range b.chunks {
+		totalLen += len(chunk)
+	}
+	result := make([]byte, 0, totalLen)
+
+	for i := b.r; ; {
+		result = append(result, b.chunks[i]...)
+
+		if i == b.w {
+			break
+		}
+
+		i++
+		if i == len(b.chunks) {
+			i = 0
+		}
+	}
+	return result
 }
