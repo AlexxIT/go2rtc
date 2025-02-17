@@ -77,18 +77,11 @@ func UnmarshalSDP(rawSDP []byte) ([]*core.Media, error) {
 				}
 			case core.CodecH265:
 				if codec.FmtpLine != "" {
-					// All three parameters are needed for a valid fmtp line. If we're missing one
-					// then discard the entire line. The bitstream should contain the data in NAL units
-					//
-					// Some camera brands (notable Hikvision) don't include the vps property, rendering the entire
-					// line invalid, because the sps property references the non-existent vps proper. This invalid
-					// data will cause FFmpeg to crash with a `Could not write header (incorrect codec parameters ?): Invalid data found when processing input`
-					// error when attempting to repackage the HEVC stream into outgoing RTSP stream. Removing the
-					// fmtp line forces FFmpeg to rely on the bitstream directly, fixing this issue.
-					valid := strings.Contains(codec.FmtpLine, "sprop-vps=")
-					valid = valid && strings.Contains(codec.FmtpLine, "sprop-sps=")
-					valid = valid && strings.Contains(codec.FmtpLine, "sprop-pps=")
-					if !valid {
+					// all three parameters are needed for a valid fmtp line
+					// https://github.com/AlexxIT/go2rtc/pull/1588
+					if !strings.Contains(codec.FmtpLine, "sprop-vps=") ||
+						!strings.Contains(codec.FmtpLine, "sprop-sps=") ||
+						!strings.Contains(codec.FmtpLine, "sprop-pps=") {
 						codec.FmtpLine = ""
 					}
 				}
