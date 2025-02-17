@@ -20,6 +20,7 @@ func NewSnapshotProducer(client *RingRestClient, camera *CameraData) *SnapshotPr
 			ID:         core.NewID(),
 			FormatName: "ring/snapshot",
 			Protocol:   "https",
+			RemoteAddr: "app-snaps.ring.com",
 			Medias: []*core.Media{
 				{
 					Kind:      core.KindVideo,
@@ -43,7 +44,7 @@ func (p *SnapshotProducer) Start() error {
 	// Fetch snapshot
 	response, err := p.client.Request("GET", fmt.Sprintf("https://app-snaps.ring.com/snapshots/next/%d", int(p.camera.ID)), nil)
 	if err != nil {
-		return fmt.Errorf("failed to get snapshot: %w", err)
+		return err
 	}
 
 	pkt := &rtp.Packet{
@@ -51,10 +52,7 @@ func (p *SnapshotProducer) Start() error {
 		Payload: response,
 	}
 
-	// Send to all receivers
-	for _, receiver := range p.Receivers {
-		receiver.WriteRTP(pkt)
-	}
+	p.Receivers[0].WriteRTP(pkt)
 
 	return nil
 }
