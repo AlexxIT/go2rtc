@@ -881,7 +881,7 @@ Read more about [codecs filters](#codecs-filters).
 
 You can get any stream as RTMP-stream: `rtmp://192.168.1.123/{stream_name}`. Only H264/AAC codecs supported right now.
 
-[Incoming stream](#incoming-sources) in RTMP-format tested only with [OBS Studio](https://obsproject.com/) and Dahua camera. Different FFmpeg versions has differnt problems with this format. 
+[Incoming stream](#incoming-sources) in RTMP-format tested only with [OBS Studio](https://obsproject.com/) and Dahua camera. Different FFmpeg versions has different problems with this format. 
 
 ```yaml
 rtmp:
