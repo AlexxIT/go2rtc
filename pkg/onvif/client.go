@@ -3,9 +3,10 @@ package onvif
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"html"
 	"io"
-	"net/http"
+	"net"
 	"net/url"
 	"regexp"
 	"strings"
@@ -37,13 +38,22 @@ func NewClient(rawURL string) (*Client, error) {
 		client.deviceURL = baseURL + u.Path
 	}
 
+    // Set default media URL before trying to get capabilities
+    client.mediaURL = baseURL + "/onvif/media_service"
+    client.imaginURL = baseURL + "/onvif/imaging_service"
+
 	b, err := client.DeviceRequest(DeviceGetCapabilities)
 	if err != nil {
 		return nil, err
 	}
 
-	client.mediaURL = FindTagValue(b, "Media.+?XAddr")
-	client.imaginURL = FindTagValue(b, "Imaging.+?XAddr")
+    // Update URLs if found in capabilities
+    if mediaAddr := FindTagValue(b, "Media.+?XAddr"); mediaAddr != "" {
+        client.mediaURL = mediaAddr
+    }
+    if imagingAddr := FindTagValue(b, "Imaging.+?XAddr"); imagingAddr != "" {
+        client.imaginURL = imagingAddr
+    }
 
 	return client, nil
 }
@@ -172,26 +182,70 @@ func (c *Client) MediaRequest(operation string) ([]byte, error) {
 	return c.Request(c.mediaURL, operation)
 }
 
-func (c *Client) Request(url, body string) ([]byte, error) {
-	if url == "" {
+func (c *Client) Request(rawUrl, body string) ([]byte, error) {
+	if rawUrl == "" {
 		return nil, errors.New("onvif: unsupported service")
 	}
 
 	e := NewEnvelopeWithUser(c.url.User)
 	e.Append(body)
 
-	client := &http.Client{Timeout: time.Second * 5000}
-	res, err := client.Post(url, `application/soap+xml;charset=utf-8`, bytes.NewReader(e.Bytes()))
+	u, err := url.Parse(rawUrl)
 	if err != nil {
 		return nil, err
 	}
 
-	// need to close body with eny response status
-	b, err := io.ReadAll(res.Body)
-
-	if err == nil && res.StatusCode != http.StatusOK {
-		err = errors.New("onvif: " + res.Status + " for " + url)
+	// Ensure we have a port
+	host := u.Host
+	if !strings.Contains(host, ":") {
+		host = host + ":80"
 	}
 
-	return b, err
+	// Connect with timeout
+	conn, err := net.DialTimeout("tcp", host, 5*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	// Send request
+	httpReq := fmt.Sprintf("POST %s HTTP/1.1\r\n"+
+		"Host: %s\r\n"+
+		"Content-Type: application/soap+xml;charset=utf-8\r\n"+
+		"Content-Length: %d\r\n"+
+		"Connection: close\r\n"+
+		"\r\n%s", u.Path, u.Host, len(e.Bytes()), e.Bytes())
+
+	if _, err = conn.Write([]byte(httpReq)); err != nil {
+		return nil, err
+	}
+
+	// Read full response first
+	var fullResponse []byte
+	buf := make([]byte, 4096)
+	for {
+		n, err := conn.Read(buf)
+		if n > 0 {
+			fullResponse = append(fullResponse, buf[:n]...)
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Look for XML in complete response
+	if idx := bytes.Index(fullResponse, []byte("<?xml")); idx >= 0 {
+		return fullResponse[idx:], nil
+	}
+
+	// No XML found - might be an error response
+	if idx := bytes.Index(fullResponse, []byte("\r\n\r\n")); idx >= 0 {
+		// Return body after headers
+		return fullResponse[idx+4:], nil
+	}
+
+	return fullResponse, nil
 }
