@@ -19,18 +19,29 @@ func (c *Conn) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, e
 	c.stateMu.Lock()
 	defer c.stateMu.Unlock()
 
-	if c.state == StatePlay {
-		if err := c.Reconnect(); err != nil {
+	var channel byte
+
+	switch c.mode {
+	case core.ModeActiveProducer:
+		if c.state == StatePlay {
+			if err := c.Reconnect(); err != nil {
+				return nil, err
+			}
+		}
+
+		var err error
+		channel, err = c.SetupMedia(media)
+		if err != nil {
 			return nil, err
 		}
-	}
 
-	channel, err := c.SetupMedia(media)
-	if err != nil {
-		return nil, err
+		c.state = StateSetup
+	case core.ModePassiveConsumer:
+		// Backchannel
+		channel = byte(len(c.Senders)) * 2
+	default:
+		return nil, errors.New("rtsp: wrong mode for GetTrack")
 	}
-
-	c.state = StateSetup
 
 	track := core.NewReceiver(media, codec)
 	track.ID = channel
