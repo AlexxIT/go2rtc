@@ -8,7 +8,6 @@ import (
 
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/streams"
-	"github.com/AlexxIT/go2rtc/pkg/aac"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/rtsp"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
@@ -186,11 +185,11 @@ func tcpHandler(conn *rtsp.Conn) {
 				}
 			}
 
-            if query.Get("backchannel") == "1" {
-                conn.Medias = append(conn.Medias, &core.Media{
-                    Kind:      core.KindAudio,
-                    Direction: core.DirectionRecvonly,
-                    Codecs: []*core.Codec{
+			if query.Get("backchannel") == "1" {
+				conn.Medias = append(conn.Medias, &core.Media{
+					Kind:      core.KindAudio,
+					Direction: core.DirectionRecvonly,
+					Codecs: []*core.Codec{
 						{Name: core.CodecOpus, ClockRate: 48000, Channels: 2},
 						{Name: core.CodecPCM, ClockRate: 16000},
 						{Name: core.CodecPCMA, ClockRate: 16000},
@@ -198,10 +197,9 @@ func tcpHandler(conn *rtsp.Conn) {
 						{Name: core.CodecPCM, ClockRate: 8000},
 						{Name: core.CodecPCMA, ClockRate: 8000},
 						{Name: core.CodecPCMU, ClockRate: 8000},
-						{Name: core.CodecAAC, ClockRate: 16000, FmtpLine: aac.FMTP + "1408"},
-                    },
-                })
-            }
+					},
+				})
+			}
 
 			if s := query.Get("pkt_size"); s != "" {
 				conn.PacketSize = uint16(core.Atoi(s))

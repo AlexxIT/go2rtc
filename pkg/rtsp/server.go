@@ -164,20 +164,14 @@ func (c *Conn) Accept() error {
 				c.state = StateSetup
 
 				if c.mode == core.ModePassiveConsumer {
-					trackID := reqTrackID(req)
-
-					if trackID >= 0 {
-						if trackID < len(c.Senders) {
-							c.Senders[trackID].Media.ID = MethodSetup
-							tr = fmt.Sprintf("%d-%d", trackID*2, trackID*2+1)
-							res.Header.Set("Transport", transport+tr)
-						} else if trackID >= len(c.Senders) && trackID < len(c.Senders)+len(c.Receivers) {
-							c.Receivers[trackID-len(c.Senders)].Media.ID = MethodSetup
-							tr = fmt.Sprintf("%d-%d", trackID*2, trackID*2+1)
-							res.Header.Set("Transport", transport+tr)
+					if i := reqTrackID(req); i >= 0 && i < len(c.Senders)+len(c.Receivers) {
+						if i < len(c.Senders) {
+							c.Senders[i].Media.ID = MethodSetup
 						} else {
-							res.Status = "400 Bad Request"
+							c.Receivers[i-len(c.Senders)].Media.ID = MethodSetup
 						}
+						tr = fmt.Sprintf("%d-%d", i*2, i*2+1)
+						res.Header.Set("Transport", transport+tr)
 					} else {
 						res.Status = "400 Bad Request"
 					}
