@@ -1,6 +1,7 @@
 package rtsp
 
 import (
+	"errors"
 	"io"
 	"net"
 	"net/url"
@@ -237,7 +238,7 @@ func tcpHandler(conn *rtsp.Conn) {
 	})
 
 	if err := conn.Accept(); err != nil {
-		if err == rtsp.FailedAuth {
+		if errors.Is(err, rtsp.FailedAuth) {
 			log.Warn().Str("remote_addr", conn.Connection.RemoteAddr).Msg("[rtsp] failed authentication")
 		} else if err != io.EOF {
 			log.WithLevel(level).Err(err).Caller().Send()

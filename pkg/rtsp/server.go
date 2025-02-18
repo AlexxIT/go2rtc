@@ -47,7 +47,7 @@ func (c *Conn) Accept() error {
 
 		c.Fire(req)
 
-		if !c.auth.Validate(req) {
+		if valid, empty := c.auth.Validate(req); !valid {
 			res := &tcp.Response{
 				Status:  "401 Unauthorized",
 				Header:  map[string][]string{"Www-Authenticate": {`Basic realm="go2rtc"`}},
@@ -56,13 +56,12 @@ func (c *Conn) Accept() error {
 			if err = c.WriteResponse(res); err != nil {
 				return err
 			}
-			if req.Header.Get("Authorization") != "" {
+			if empty {
 				// eliminate false positive: ffmpeg sends first request without
 				// authorization header even if the user provides credentials
-				return FailedAuth
-			} else {
 				continue
 			}
+			return FailedAuth
 		}
 
 		// Receiver: OPTIONS > DESCRIBE > SETUP... > PLAY > TEARDOWN
