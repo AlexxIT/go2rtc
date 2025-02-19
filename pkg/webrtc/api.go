@@ -2,11 +2,9 @@ package webrtc
 
 import (
 	"net"
-	"os"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/pion/interceptor"
-	"github.com/pion/logging"
 	"github.com/pion/webrtc/v3"
 )
 
@@ -16,10 +14,6 @@ const ReceiveMTU = 1472
 
 func NewAPI() (*webrtc.API, error) {
 	return NewServerAPI("", "", nil)
-}
-
-func NewAPIWithLogs() (*webrtc.API, error) {
-	return NewServerAPIWithLogs("", "", nil)
 }
 
 type Filters struct {
@@ -46,103 +40,6 @@ func NewServerAPI(network, address string, filters *Filters) (*webrtc.API, error
 	}
 
 	s := webrtc.SettingEngine{}
-
-	// fix https://github.com/pion/webrtc/pull/2407
-	s.SetDTLSInsecureSkipHelloVerify(true)
-
-	if filters != nil && filters.Interfaces != nil {
-		s.SetIncludeLoopbackCandidate(true)
-		s.SetInterfaceFilter(func(name string) bool {
-			return core.Contains(filters.Interfaces, name)
-		})
-	} else {
-		// disable listen on Hassio docker interfaces
-		s.SetInterfaceFilter(func(name string) bool {
-			return name != "hassio" && name != "docker0"
-		})
-	}
-
-	if filters != nil && filters.IPs != nil {
-		s.SetIncludeLoopbackCandidate(true)
-		s.SetIPFilter(func(ip net.IP) bool {
-			return core.Contains(filters.IPs, ip.String())
-		})
-	}
-
-	if filters != nil && filters.Networks != nil {
-		var networkTypes []webrtc.NetworkType
-		for _, s := range filters.Networks {
-			if networkType, err := webrtc.NewNetworkType(s); err == nil {
-				networkTypes = append(networkTypes, networkType)
-			}
-		}
-		s.SetNetworkTypes(networkTypes)
-	} else {
-		s.SetNetworkTypes([]webrtc.NetworkType{
-			webrtc.NetworkTypeUDP4, webrtc.NetworkTypeUDP6,
-			webrtc.NetworkTypeTCP4, webrtc.NetworkTypeTCP6,
-		})
-	}
-
-	if filters != nil && len(filters.UDPPorts) == 2 {
-		_ = s.SetEphemeralUDPPortRange(filters.UDPPorts[0], filters.UDPPorts[1])
-	}
-
-	//if len(hosts) != 0 {
-	//	// support only: host, srflx
-	//	if candidateType, err := webrtc.NewICECandidateType(hosts[0]); err == nil {
-	//		s.SetNAT1To1IPs(hosts[1:], candidateType)
-	//	} else {
-	//		s.SetNAT1To1IPs(hosts, 0) // 0 = host
-	//	}
-	//}
-
-	if address != "" {
-		if network == "" || network == "tcp" {
-			if ln, err := net.Listen("tcp", address); err == nil {
-				tcpMux := webrtc.NewICETCPMux(nil, ln, 8)
-				s.SetICETCPMux(tcpMux)
-			}
-		}
-
-		if network == "" || network == "udp" {
-			if ln, err := net.ListenPacket("udp", address); err == nil {
-				udpMux := webrtc.NewICEUDPMux(nil, ln)
-				s.SetICEUDPMux(udpMux)
-			}
-		}
-	}
-
-	return webrtc.NewAPI(
-		webrtc.WithMediaEngine(m),
-		webrtc.WithInterceptorRegistry(i),
-		webrtc.WithSettingEngine(s),
-	), nil
-}
-
-func NewServerAPIWithLogs(network, address string, filters *Filters) (*webrtc.API, error) {
-	// for debug logs add to env: `PION_LOG_DEBUG=all`
-	m := &webrtc.MediaEngine{}
-	//if err := m.RegisterDefaultCodecs(); err != nil {
-	//	return nil, err
-	//}
-	if err := RegisterDefaultCodecs(m); err != nil {
-		return nil, err
-	}
-
-	i := &interceptor.Registry{}
-	if err := webrtc.RegisterDefaultInterceptors(m, i); err != nil {
-		return nil, err
-	}
-
-	s := webrtc.SettingEngine{}
-
-	factory := logging.DefaultLoggerFactory{}
-	factory.DefaultLogLevel = logging.LogLevelDebug
-	factory.ScopeLevels = make(map[string]logging.LogLevel)
-	factory.Writer = os.Stdout
-
-	s.LoggerFactory = &factory
 
 	// fix https://github.com/pion/webrtc/pull/2407
 	s.SetDTLSInsecureSkipHelloVerify(true)

@@ -59,7 +59,7 @@ func TuyaClient(rawURL string, query url.Values) (core.Producer, error) {
 
 	// 3. Create Peer Connection
 
-	api, err := webrtc.NewAPIWithLogs()
+	api, err := webrtc.NewAPI()
 	if err != nil {
 		return nil, err
 	}
