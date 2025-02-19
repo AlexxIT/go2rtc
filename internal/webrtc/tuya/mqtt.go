@@ -171,7 +171,6 @@ func (t *tuyaSession) sendCandidate(sessionID string, candidate string) {
 	t.mqttPublish(sendBytes)
 }
 
-// 发布mqtt消息
 func (t *tuyaSession) mqttPublish(payload []byte) {
 	token := t.mqtt.client.Publish(t.mqtt.publishTopic, 1, false, payload)
 	if token.Error() != nil {
@@ -216,7 +215,6 @@ func (t *tuyaSession) mqttConsume(msg mqtt.Message) {
 	t.mqttDispatch(rmqtt)
 }
 
-// 分发从mqtt服务器接受到的消息
 func (t *tuyaSession) mqttDispatch(msg *MqttMessage) {
 
 	switch msg.Data.Header.Type {
