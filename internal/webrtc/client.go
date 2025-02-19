@@ -12,6 +12,7 @@ import (
 
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"github.com/AlexxIT/go2rtc/internal/streams"
+	"github.com/AlexxIT/go2rtc/internal/webrtc/tuya"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	"github.com/gorilla/websocket"
@@ -54,6 +55,8 @@ func streamsHandler(rawURL string) (core.Producer, error) {
 			} else if format == "wyze" {
 				// https://github.com/mrlt8/docker-wyze-bridge
 				return wyzeClient(rawURL)
+			} else if format == "tuya" {
+				return tuya.TuyaClient(rawURL, query)
 			} else {
 				return whepClient(rawURL)
 			}

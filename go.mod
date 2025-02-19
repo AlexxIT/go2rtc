@@ -3,8 +3,9 @@ module github.com/AlexxIT/go2rtc
 go 1.20
 
 require (
-	github.com/asticode/go-astits v1.13.0
+	github.com/eclipse/paho.mqtt.golang v1.5.0
 	github.com/expr-lang/expr v1.16.9
+	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/mattn/go-isatty v0.0.20
 	github.com/miekg/dns v1.1.62
@@ -21,14 +22,13 @@ require (
 	github.com/sigurn/crc8 v0.0.0-20220107193325-2243fe600f9f
 	github.com/stretchr/testify v1.10.0
 	github.com/tadglines/go-pkgs v0.0.0-20210623144937-b983b20f54f9
+	github.com/tidwall/gjson v1.17.3
 	golang.org/x/crypto v0.31.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
-	github.com/asticode/go-astikit v0.45.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/pion/datachannel v1.5.10 // indirect
@@ -41,6 +41,8 @@ require (
 	github.com/pion/transport/v3 v3.0.7 // indirect
 	github.com/pion/turn/v2 v2.1.6 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/tidwall/match v1.1.1 // indirect
+	github.com/tidwall/pretty v1.2.0 // indirect
 	github.com/wlynxg/anet v0.0.5 // indirect
 	golang.org/x/mod v0.20.0 // indirect
 	golang.org/x/net v0.33.0 // indirect
