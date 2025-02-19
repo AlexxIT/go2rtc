@@ -57,8 +57,13 @@
                     const positions = network.getPositions();
                     const viewPosition = network.getViewPosition();
                     const scale = network.getScale();
+                    const selectedNodes = network.getSelectedNodes();
+                    const selectedEdges = network.getSelectedEdges();
 
                     network.setData(data);
+
+                    network.selectNodes(selectedNodes);
+                    network.selectEdges(selectedEdges);
 
                     for (const nodeId in positions) {
                         network.moveNode(nodeId, positions[nodeId].x, positions[nodeId].y);
