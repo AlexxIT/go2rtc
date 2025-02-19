@@ -687,10 +687,10 @@ Supports [Tuya IPC cameras](https://developer.tuya.com/en/docs/iot/webrtc?id=Kac
 - `format`          Set to `tuya` to use Tuya
 - `client_id`       Tuya Cloud Project Access ID/Client ID
 - `client_secret`   Tuya Cloud Project Access Secret/Client Secret
-- `uid`             Tuya linked app UID (referet to [Tuya Procedure step 3](https://developer.tuya.com/en/docs/iot/webrtc?id=Kacsd4x2hl0se#title-4-Prerequisites) for more info)
-- `device_id`       Tuya device ID (you can retreive if from Cloud Project devices page)
+- `uid`             Tuya linked app UID (refer to the [Tuya Procedure step 3](https://developer.tuya.com/en/docs/iot/webrtc?id=Kacsd4x2hl0se#title-4-Prerequisites) for more info)
+- `device_id`       Tuya device ID (you can retrieve it from the Tuya Cloud Project Devices page)
 
-URL should be `https://openapi.tuyaeu.com` or other one ([see Tuya docs](https://developer.tuya.com/en/docs/iot/api-request?id=Ka4a8uuo1j4t4#title-1-Endpoints)) depending on your region.
+URL should be `https://openapi.tuyaeu.com` or another one ([see Tuya docs](https://developer.tuya.com/en/docs/iot/api-request?id=Ka4a8uuo1j4t4#title-1-Endpoints)) depending on your region.
 
 
 ```yaml
