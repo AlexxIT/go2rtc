@@ -56,12 +56,14 @@ func Validate(source string) error {
 	return nil
 }
 
-func New(name string, source string) *Stream {
-	if Validate(source) != nil {
-		return nil
+func New(name string, sources ...string) *Stream {
+	for _, source := range sources {
+		if Validate(source) != nil {
+			return nil
+		}
 	}
 
-	stream := NewStream(source)
+	stream := NewStream(sources)
 
 	streamsMu.Lock()
 	streams[name] = stream
@@ -98,6 +100,10 @@ func Patch(name string, source string) *Stream {
 		return nil
 	}
 
+	if Validate(source) != nil {
+		return nil
+	}
+
 	// check an existing stream with this name
 	if stream, ok := streams[name]; ok {
 		stream.SetSource(source)
@@ -105,7 +111,9 @@ func Patch(name string, source string) *Stream {
 	}
 
 	// create new stream with this name
-	return New(name, source)
+	stream := NewStream(source)
+	streams[name] = stream
+	return stream
 }
 
 func GetOrPatch(query url.Values) *Stream {

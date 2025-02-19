@@ -170,7 +170,7 @@ Available modules:
 - [api](#module-api) - HTTP API (important for WebRTC support)
 - [rtsp](#module-rtsp) - RTSP Server (important for FFmpeg support)
 - [webrtc](#module-webrtc) - WebRTC Server
-- [mp4](#module-mp4) - MSE, MP4 stream and MP4 shapshot Server
+- [mp4](#module-mp4) - MSE, MP4 stream and MP4 snapshot Server
 - [hls](#module-hls) - HLS TS or fMP4 stream Server
 - [mjpeg](#module-mjpeg) - MJPEG Server
 - [ffmpeg](#source-ffmpeg) - FFmpeg integration
@@ -648,10 +648,11 @@ This source type support Roborock vacuums with cameras. Known working models:
 
 - Roborock S6 MaxV - only video (the vacuum has no microphone)
 - Roborock S7 MaxV - video and two way audio
+- Roborock Qrevo MaxV - video and two way audio
 
-Source support load Roborock credentials from Home Assistant [custom integration](https://github.com/humbertogontijo/homeassistant-roborock). Otherwise, you need to log in to your Roborock account (MiHome account is not supported). Go to: go2rtc WebUI > Add webpage. Copy `roborock://...` source for your vacuum and paste it to `go2rtc.yaml` config.
+Source support load Roborock credentials from Home Assistant [custom integration](https://github.com/humbertogontijo/homeassistant-roborock) or the [core integration](https://www.home-assistant.io/integrations/roborock). Otherwise, you need to log in to your Roborock account (MiHome account is not supported). Go to: go2rtc WebUI > Add webpage. Copy `roborock://...` source for your vacuum and paste it to `go2rtc.yaml` config.
 
-If you have graphic pin for your vacuum - add it as numeric pin (lines: 123, 456, 678) to the end of the roborock-link.
+If you have graphic pin for your vacuum - add it as numeric pin (lines: 123, 456, 789) to the end of the roborock-link.
 
 #### Source: WebRTC
 
@@ -894,7 +895,7 @@ Read more about [codecs filters](#codecs-filters).
 
 You can get any stream as RTMP-stream: `rtmp://192.168.1.123/{stream_name}`. Only H264/AAC codecs supported right now.
 
-[Incoming stream](#incoming-sources) in RTMP-format tested only with [OBS Studio](https://obsproject.com/) and Dahua camera. Different FFmpeg versions has differnt problems with this format. 
+[Incoming stream](#incoming-sources) in RTMP-format tested only with [OBS Studio](https://obsproject.com/) and Dahua camera. Different FFmpeg versions has different problems with this format. 
 
 ```yaml
 rtmp:

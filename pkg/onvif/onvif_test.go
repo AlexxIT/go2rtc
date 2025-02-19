@@ -84,6 +84,34 @@ func TestGetStreamUri(t *testing.T) {
 </SOAP-ENV:Envelope>`,
 			url: "rtsp://192.168.5.53:8090/profile1=r",
 		},
+		{
+			name: "go2rtc 1.9.4",
+			xml: `<?xml version="1.0" encoding="utf-8"?><s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope">
+    <s:Body>
+        <trt:GetStreamUriResponse xmlns:trt="http://www.onvif.org/ver10/media/wsdl">
+            <trt:MediaUri>
+                <tt:Uri xmlns:tt="http://www.onvif.org/ver10/schema">rtsp://192.168.1.123:8554/rtsp-dahua1</tt:Uri>
+            </trt:MediaUri>
+        </trt:GetStreamUriResponse>
+    </s:Body>
+</s:Envelope>`,
+			url: "rtsp://192.168.1.123:8554/rtsp-dahua1",
+		},
+		{
+			name: "go2rtc 1.9.8",
+			xml: `<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope" xmlns:tds="http://www.onvif.org/ver10/device/wsdl" xmlns:trt="http://www.onvif.org/ver10/media/wsdl" xmlns:tt="http://www.onvif.org/ver10/schema">
+    <s:Body>
+        <trt:GetStreamUriResponse>
+            <trt:MediaUri>
+                <tt:Uri>rtsp://192.168.1.123:8554/rtsp-dahua2</tt:Uri>
+            </trt:MediaUri>
+        </trt:GetStreamUriResponse>
+    </s:Body>
+</s:Envelope>
+`,
+			url: "rtsp://192.168.1.123:8554/rtsp-dahua2",
+		},
 	}
 
 	for _, test := range tests {

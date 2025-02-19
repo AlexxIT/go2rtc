@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/url"
@@ -38,20 +39,19 @@ type Message struct {
 	Value any    `json:"value,omitempty"`
 }
 
-func (m *Message) String() string {
+func (m *Message) String() (value string) {
 	if s, ok := m.Value.(string); ok {
 		return s
 	}
-	return ""
+	return
 }
 
-func (m *Message) GetString(key string) string {
-	if v, ok := m.Value.(map[string]any); ok {
-		if s, ok := v[key].(string); ok {
-			return s
-		}
+func (m *Message) Unmarshal(v any) error {
+	b, err := json.Marshal(m.Value)
+	if err != nil {
+		return err
 	}
-	return ""
+	return json.Unmarshal(b, v)
 }
 
 type WSHandler func(tr *Transport, msg *Message) error

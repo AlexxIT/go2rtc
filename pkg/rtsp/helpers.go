@@ -28,8 +28,10 @@ func UnmarshalSDP(rawSDP []byte) ([]*core.Media, error) {
 	sd := &sdp.SessionDescription{}
 	if err := sd.Unmarshal(rawSDP); err != nil {
 		// fix multiple `s=` https://github.com/AlexxIT/WebRTC/issues/417
-		re, _ := regexp.Compile("\ns=[^\n]+")
-		rawSDP = re.ReplaceAll(rawSDP, nil)
+		rawSDP = regexp.MustCompile("\ns=[^\n]+").ReplaceAll(rawSDP, nil)
+
+		// fix broken `c=` https://github.com/AlexxIT/go2rtc/issues/1426
+		rawSDP = regexp.MustCompile("\nc=[^\n]+").ReplaceAll(rawSDP, nil)
 
 		// fix SDP header for some cameras
 		if i := bytes.Index(rawSDP, []byte("\nm=")); i > 0 {
@@ -38,12 +40,11 @@ func UnmarshalSDP(rawSDP []byte) ([]*core.Media, error) {
 
 		// Fix invalid media type (errSDPInvalidValue) caused by
 		// some TP-LINK IP camera, e.g. TL-IPC44GW
-		m := regexp.MustCompile("m=[^ ]+ ")
-		for _, i := range m.FindAll(rawSDP, -1) {
-			switch string(i[2 : len(i)-1]) {
+		for _, b := range regexp.MustCompile("m=[^ ]+ ").FindAll(rawSDP, -1) {
+			switch string(b[2 : len(b)-1]) {
 			case "audio", "video", "application":
 			default:
-				rawSDP = bytes.Replace(rawSDP, i, []byte("m=application "), 1)
+				rawSDP = bytes.Replace(rawSDP, b, []byte("m=application "), 1)
 			}
 		}
 
@@ -69,8 +70,25 @@ func UnmarshalSDP(rawSDP []byte) ([]*core.Media, error) {
 		// Check buggy SDP with fmtp for H264 on another track
 		// https://github.com/AlexxIT/WebRTC/issues/419
 		for _, codec := range media.Codecs {
-			if codec.Name == core.CodecH264 && codec.FmtpLine == "" {
-				codec.FmtpLine = findFmtpLine(codec.PayloadType, sd.MediaDescriptions)
+			switch codec.Name {
+			case core.CodecH264:
+				if codec.FmtpLine == "" {
+					codec.FmtpLine = findFmtpLine(codec.PayloadType, sd.MediaDescriptions)
+				}
+			case core.CodecH265:
+				if codec.FmtpLine != "" {
+					// all three parameters are needed for a valid fmtp line
+					// https://github.com/AlexxIT/go2rtc/pull/1588
+					if !strings.Contains(codec.FmtpLine, "sprop-vps=") ||
+						!strings.Contains(codec.FmtpLine, "sprop-sps=") ||
+						!strings.Contains(codec.FmtpLine, "sprop-pps=") {
+						codec.FmtpLine = ""
+					}
+				}
+			case core.CodecOpus:
+				// fix OPUS for some cameras https://datatracker.ietf.org/doc/html/rfc7587
+				codec.ClockRate = 48000
+				codec.Channels = 2
 			}
 		}
 
