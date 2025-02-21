@@ -131,13 +131,13 @@ func (s *Sender) WithParent(parent *Receiver) *Sender {
 }
 
 func (s *Sender) Start() {
-    s.mu.Lock()
-    if s.buf == nil || s.done != nil {
-        s.mu.Unlock()
-        return
-    }
-    s.done = make(chan struct{})
-    s.mu.Unlock()
+	s.mu.Lock()
+	if s.buf == nil || s.done != nil {
+		s.mu.Unlock()
+		return
+	}
+	s.done = make(chan struct{})
+	s.mu.Unlock()
 
 	go func() {
 		for packet := range s.buf {
@@ -194,12 +194,12 @@ func (r *Receiver) MarshalJSON() ([]byte, error) {
 
 func (s *Sender) MarshalJSON() ([]byte, error) {
 	v := struct {
-		ID      uint32 `json:"id"`
-		Codec   *Codec `json:"codec"`
-		Parents  []*uint32 `json:"parents,omitempty"`
-		Bytes   int    `json:"bytes,omitempty"`
-		Packets int    `json:"packets,omitempty"`
-		Drops   int    `json:"drops,omitempty"`
+		ID      uint32    `json:"id"`
+		Codec   *Codec    `json:"codec"`
+		Parents []*uint32 `json:"parents,omitempty"`
+		Bytes   int       `json:"bytes,omitempty"`
+		Packets int       `json:"packets,omitempty"`
+		Drops   int       `json:"drops,omitempty"`
 	}{
 		ID:      s.Node.id,
 		Codec:   s.Node.Codec,
@@ -207,10 +207,8 @@ func (s *Sender) MarshalJSON() ([]byte, error) {
 		Packets: s.Packets,
 		Drops:   s.Drops,
 	}
-	if s.parents != nil {
-		for _, parent := range s.parents {
-			v.Parents = append(v.Parents, &parent.id)
-		}
+	for _, parent := range s.parents {
+		v.Parents = append(v.Parents, &parent.id)
 	}
 	return json.Marshal(v)
 }

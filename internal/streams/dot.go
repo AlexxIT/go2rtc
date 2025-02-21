@@ -56,11 +56,11 @@ func humanBytes(i int) string {
 }
 
 type node struct {
-	ID     uint32         `json:"id"`
-	Codec  map[string]any `json:"codec"`
-	Parents []uint32         `json:"parents"`
-	Childs []uint32       `json:"childs"`
-	Bytes  int            `json:"bytes"`
+	ID      uint32         `json:"id"`
+	Codec   map[string]any `json:"codec"`
+	Parents []uint32       `json:"parents"`
+	Childs  []uint32       `json:"childs"`
+	Bytes   int            `json:"bytes"`
 	//Packets uint32         `json:"packets"`
 	//Drops   uint32         `json:"drops"`
 }
