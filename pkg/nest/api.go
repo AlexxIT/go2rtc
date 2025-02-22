@@ -120,18 +120,8 @@ func (a *API) GetDevices(projectID string) ([]DeviceInfo, error) {
 	devices := make([]DeviceInfo, 0, len(resv.Devices))
 
 	for _, device := range resv.Devices {
+		// only RTSP and WEB_RTC available (both supported)
 		if len(device.Traits.SdmDevicesTraitsCameraLiveStream.SupportedProtocols) == 0 {
-			continue
-		}
-
-		supported := false
-		for _, protocol := range device.Traits.SdmDevicesTraitsCameraLiveStream.SupportedProtocols {
-			if protocol == "WEB_RTC" || protocol == "RTSP" {
-				supported = true
-				break
-			}
-		}
-		if !supported {
 			continue
 		}
 
@@ -146,7 +136,11 @@ func (a *API) GetDevices(projectID string) ([]DeviceInfo, error) {
 			name = device.ParentRelations[0].DisplayName
 		}
 
-		devices = append(devices, DeviceInfo{Name: name, DeviceID: device.Name[i+1:], Protocols: device.Traits.SdmDevicesTraitsCameraLiveStream.SupportedProtocols})
+		devices = append(devices, DeviceInfo{
+			Name:      name,
+			DeviceID:  device.Name[i+1:],
+			Protocols: device.Traits.SdmDevicesTraitsCameraLiveStream.SupportedProtocols,
+		})
 	}
 
 	return devices, nil
