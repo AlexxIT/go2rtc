@@ -1,5 +1,33 @@
 package tuya
 
+import "encoding/json"
+
+type BaseHttpResponse struct {
+	Success bool            `json:"success"`
+	Result  json.RawMessage `json:"result"`
+}
+
+type AuthorizeResponse struct {
+	AccessToken string `json:"access_token"`
+}
+
+type P2PConfig struct {
+	Tokens []Token `json:"ices"`
+}
+
+type GetWebrtcConfigsResponse struct {
+	MotoId    string    `json:"moto_id"`
+	Auth      string    `json:"auth"`
+	P2PConfig P2PConfig `json:"p2p_config"`
+}
+
+type Token struct {
+	Urls       string `json:"urls"`
+	Username   string `json:"username"`
+	Credential string `json:"credential"`
+	TTL        int    `json:"ttl"`
+}
+
 type OpenIoTHubConfig struct {
 	Url      string `json:"url"`       // MQTT connection address
 	ClientID string `json:"client_id"` // MQTT connection client_id
@@ -25,19 +53,4 @@ type OpenIoTHubConfigRequest struct {
 	UniqueID string `json:"unique_id"` // Connection identifier, used to separate different connections, generated on client.
 	LinkType string `json:"link_type"` // Connection type, currently only supports MQTT
 	Topics   string `json:"topics"`    // Subscribed MQTT topic, this sample only focuses on the IPC topic
-}
-
-// Token ICE Token from OpenAPI
-type Token struct {
-	Urls       string `json:"urls"`
-	Username   string `json:"username"`
-	Credential string `json:"credential"`
-	TTL        int    `json:"ttl"`
-}
-
-// WebToken ICE Token to Chrome
-type WebToken struct {
-	Urls       string `json:"urls,omitempty"`
-	Username   string `json:"username,omitempty"`
-	Credential string `json:"credential,omitempty"`
 }

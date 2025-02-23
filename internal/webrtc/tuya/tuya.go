@@ -2,13 +2,14 @@ package tuya
 
 import (
 	"errors"
-	"log"
 	"net/url"
-	"regexp"
+	"strconv"
 
+	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	pion "github.com/pion/webrtc/v3"
+	"github.com/rs/zerolog"
 )
 
 type TuyaConfig struct {
@@ -43,7 +44,11 @@ func MakeTuyaSession(rawURL string, query url.Values) *tuyaSession {
 	return tc
 }
 
+var log zerolog.Logger
+
 func TuyaClient(rawURL string, query url.Values) (core.Producer, error) {
+	log = app.GetLogger("tuya")
+
 	tc := MakeTuyaSession(rawURL, query)
 
 	// 1. Get Tuya Auth token
@@ -51,9 +56,13 @@ func TuyaClient(rawURL string, query url.Values) (core.Producer, error) {
 		return nil, err
 	}
 
-	// 2. Get iceServers
-	_, _, iceServers, err := tc.GetMotoIDAndAuth()
-	if err != nil {
+	// 2. Open Mqtt connection to device
+
+	if err := tc.StartMqtt(); err != nil {
+		return nil, err
+	}
+
+	if err := tc.mqtt.mqttReady.Wait(); err != nil {
 		return nil, err
 	}
 
@@ -66,7 +75,7 @@ func TuyaClient(rawURL string, query url.Values) (core.Producer, error) {
 
 	conf := pion.Configuration{}
 
-	conf.ICEServers, err = webrtc.UnmarshalICEServers([]byte(iceServers))
+	conf.ICEServers, err = webrtc.UnmarshalICEServers([]byte(tc.mqtt.iceServers))
 	if err != nil {
 		return nil, err
 	}
@@ -79,18 +88,8 @@ func TuyaClient(rawURL string, query url.Values) (core.Producer, error) {
 	prod.Protocol = "ws"
 	prod.URL = rawURL
 
-	// 4. Open Mqtt connection to device
-
-	if err := tc.StartMqtt(); err != nil {
-		return nil, err
-	}
-
-	if err := tc.mqtt.mqttReady.Wait(); err != nil {
-		return nil, err
-	}
-
 	tc.mqtt.handleAnswerFrame = func(answerFrame AnswerFrame) {
-		// 6. Get answer
+		// 5. Get answer
 
 		// HACK TO force ICERoleControlled - for some reason Tuya wants to control ICE
 		desc := pion.SessionDescription{
@@ -102,15 +101,15 @@ func TuyaClient(rawURL string, query url.Values) (core.Producer, error) {
 		}
 		prod.SetAnswer(answerFrame.Sdp)
 		if err != nil {
-			log.Printf("tuya: Failed to set answer %s", err.Error())
+			log.Error().Msgf("Failed to set answer %s", err.Error())
 		}
 	}
 	tc.mqtt.handleCandidateFrame = func(candidateFrame CandidateFrame) {
-		// 7. Continue to receiving candidates
+		// 6. Continue to receiving candidates
 		if candidateFrame.Candidate != "" {
 			prod.AddCandidate(candidateFrame.Candidate)
 			if err != nil {
-				log.Printf("tuya: Failed to add candidate %s", err.Error())
+				log.Error().Msgf("Failed to add candidate %s", err.Error())
 			}
 		}
 	}
@@ -119,7 +118,7 @@ func TuyaClient(rawURL string, query url.Values) (core.Producer, error) {
 		switch msg := msg.(type) {
 		case *pion.ICECandidate:
 			_ = tc.offerSent.Wait()
-			tc.sendCandidate(tc.sessionId, "a="+msg.ToJSON().Candidate)
+			tc.sendCandidate("a=" + msg.ToJSON().Candidate)
 
 		case pion.PeerConnectionState:
 			switch msg {
@@ -135,26 +134,39 @@ func TuyaClient(rawURL string, query url.Values) (core.Producer, error) {
 
 	// Order is important here, if audio comes after video, tuya sends broken SDP
 	medias := []*core.Media{
-		{Kind: core.KindAudio, Direction: core.DirectionSendRecv},
+		{Kind: core.KindAudio, Direction: core.DirectionRecvonly},
 		{Kind: core.KindVideo, Direction: core.DirectionRecvonly},
 	}
 
-	// 5. Create and send offer
+	// 4. Create and send offer
 	offer, err := prod.CreateOffer(medias)
 	if err != nil {
 		return nil, err
 	}
 
-	// shorter sdp, remove a=extmap... line, device ONLY allow 8KB json payload
-	re := regexp.MustCompile(`\r\na=extmap[^\r\n]*`)
-	offer = re.ReplaceAllString(offer, "")
-
-	tc.sendOffer(tc.sessionId, offer)
+	tc.sendOffer(offer)
 	tc.offerSent.Done(nil)
 
 	// Final: Wait for connection
 	if err = tc.connected.Wait(); err != nil {
 		return nil, err
+	}
+
+	if query.Has("resolution_id") {
+		value, err := strconv.Atoi(query.Get("resolution_id"))
+		if err != nil {
+			log.Error().Msgf("tuya: Failed to parse resolution_id, %s", err.Error())
+			return nil, err
+		}
+		trySetResolution := 0
+		for !tc.mqtt.resolutionSet && trySetResolution < 5 {
+			trySetResolution++
+			tc.sendResolution(value)
+			tc.mqtt.resolutionResult.Wait()
+		}
+		if !tc.mqtt.resolutionSet {
+			log.Warn().Msg("Failed to set resolution after 5 retries")
+		}
 	}
 
 	tc.StopMqtt()

@@ -4,17 +4,13 @@ import (
 	"bytes"
 	"crypto/md5"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/tidwall/gjson"
 )
 
 func (t *tuyaSession) makeHttpSign(ts int64) string {
@@ -25,135 +21,102 @@ func (t *tuyaSession) makeHttpSign(ts int64) string {
 	return res
 }
 
-func (t *tuyaSession) httpRequest(method string, path string, body io.Reader) (res []byte, err error) {
+func (t *tuyaSession) httpRequest(method string, path string, payload interface{}, response interface{}) (err error) {
+
 	client := &http.Client{
 		Timeout: time.Second * 5,
 	}
 
 	url := fmt.Sprintf("%s%s", t.config.OpenAPIURL, path)
 
+	var body io.Reader
+	if payload != nil {
+		payloadBytes, err := json.Marshal(payload)
+		if err != nil {
+			return fmt.Errorf("httpRequest: marshal payload: %w", err)
+		}
+		body = bytes.NewReader(payloadBytes)
+	}
+
 	request, err := http.NewRequest(method, url, body)
 	if err != nil {
-		log.Printf("create http request fail: %s", err.Error())
-
-		return
+		return fmt.Errorf("httpRequest: create request: %w", err)
 	}
 
 	ts := time.Now().UnixNano() / 1000000
 	sign := t.makeHttpSign(ts)
 
-	// TODO: do we need all this headers?
-
 	request.Header.Set("Accept", "*")
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Access-Control-Allow-Origin", "*")
-	request.Header.Set("Access-Control-Allow-Methods", "*")
-	request.Header.Set("Access-Control-Allow-Headers", "*")
-	request.Header.Set("mode", "no-cors")
 	request.Header.Set("client_id", t.config.ClientID)
 	request.Header.Set("access_token", t.httpAccessToken)
 	request.Header.Set("sign", sign)
 	request.Header.Set("t", strconv.FormatInt(ts, 10))
 
-	response, err := client.Do(request)
+	rawResponse, err := client.Do(request)
 	if err != nil {
-		log.Printf("http request fail: %s", err.Error())
-
-		return
+		return fmt.Errorf("httpRequest: do request: %w", err)
 	}
-	defer response.Body.Close()
+	defer rawResponse.Body.Close()
 
-	res, err = io.ReadAll(response.Body)
-	if err != nil {
-		log.Printf("read http response fail: %s", err.Error())
-
-		return
+	if rawResponse.StatusCode != http.StatusOK {
+		return fmt.Errorf("httpRequest: HTTP status %d", rawResponse.StatusCode)
 	}
 
-	return
+	responseBody, err := io.ReadAll(rawResponse.Body)
+	if err != nil {
+		return fmt.Errorf("httpRequest: read response: %w", err)
+	}
+
+	baseResponse := BaseHttpResponse{}
+	if err := json.Unmarshal(responseBody, &baseResponse); err != nil {
+		return fmt.Errorf("httpRequest: unmarshal base response: %w", err)
+	}
+
+	if !baseResponse.Success {
+		return fmt.Errorf("httpRequest: Tuya API error: %s", string(responseBody))
+	}
+
+	if err := json.Unmarshal(baseResponse.Result, response); err != nil {
+		return fmt.Errorf("httpRequest: unmarshal result: %w", err)
+	}
+
+	return nil
 }
 
 func (t *tuyaSession) Authorize() (err error) {
 	t.httpAccessToken = "" // Clear all access token if present
 
-	body, err := t.httpRequest("GET", "/v1.0/token?grant_type=1", nil)
+	resp := AuthorizeResponse{}
+	err = t.httpRequest("GET", "/v1.0/token?grant_type=1", nil, &resp)
 	if err != nil {
-		log.Printf("sync OpenAPI ressponse to config fail: %s", err.Error())
-		return
+		return err
 	}
 
-	accessTokenValue := gjson.GetBytes(body, "result.access_token")
-	if !accessTokenValue.Exists() {
-		log.Printf("access_token not exits in body: %s", string(body))
-		return errors.New("access_token not exist")
-	}
+	t.httpAccessToken = resp.AccessToken
 
-	t.httpAccessToken = accessTokenValue.String()
-
-	return
+	return nil
 }
 
 func (t *tuyaSession) GetMotoIDAndAuth() (motoID, auth, iceServers string, err error) {
 	path := fmt.Sprintf("/v1.0/users/%s/devices/%s/webrtc-configs", t.config.UID, t.config.DeviceID)
 
-	body, err := t.httpRequest("GET", path, nil)
-	if err != nil {
-		log.Printf("GET webrtc-configs fail: %s, body: %s", err.Error(), string((body)))
+	resp := GetWebrtcConfigsResponse{}
 
+	err = t.httpRequest("GET", path, nil, &resp)
+
+	if err != nil {
 		return
 	}
 
-	motoIDValue := gjson.GetBytes(body, "result.moto_id")
-	if !motoIDValue.Exists() {
-		log.Printf("moto_id not exist in webrtc-configs, body: %s", string(body))
-
-		return "", "", "", errors.New("moto_id not exist")
-	}
-
-	authValue := gjson.GetBytes(body, "result.auth")
-	if !authValue.Exists() {
-		log.Printf("auth not exist in webrtc-configs, body: %s", string(body))
-
-		return "", "", "", errors.New("auth not exist")
-	}
-
-	iceServersValue := gjson.GetBytes(body, "result.p2p_config.ices")
-	if !iceServersValue.Exists() {
-		log.Printf("iceServers not exist in webrtc-configs, body: %s", string(body))
-
-		return "", "", "", errors.New("p2p_config.ices not exist")
-	}
-
-	var tokens []Token
-	err = json.Unmarshal([]byte(iceServersValue.String()), &tokens)
+	iceServersBytes, err := json.Marshal(&resp.P2PConfig.Tokens)
 	if err != nil {
-		log.Printf("unmarshal to tokens fail: %s", err.Error())
+		log.Error().Msgf("marshal token to web tokens fail: %s", err.Error())
 		return "", "", "", err
 	}
 
-	ices := make([]WebToken, 0)
-	for _, token := range tokens {
-		if strings.HasPrefix(token.Urls, "stun") {
-			ices = append(ices, WebToken{
-				Urls: token.Urls,
-			})
-		} else if strings.HasPrefix(token.Urls, "turn") {
-			ices = append(ices, WebToken{
-				Urls:       token.Urls,
-				Username:   token.Username,
-				Credential: token.Credential,
-			})
-		}
-	}
-
-	iceServersBytes, err := json.Marshal(&ices)
-	if err != nil {
-		log.Printf("marshal token to web tokens fail: %s", err.Error())
-		return "", "", "", err
-	}
-
-	motoID = motoIDValue.String()
-	auth = authValue.String()
+	auth = resp.Auth
+	motoID = resp.MotoId
 	iceServers = string(iceServersBytes)
 
 	return
@@ -167,30 +130,9 @@ func (t *tuyaSession) GetHubConfig() (config *OpenIoTHubConfig, err error) {
 		Topics:   "ipc",
 	}
 
-	payload, err := json.Marshal(request)
+	err = t.httpRequest("POST", "/v2.0/open-iot-hub/access/config", &request, &config)
 	if err != nil {
-		log.Printf("marshal OpenIoTHubConfig Request fail: %s", err.Error())
 		return nil, err
-	}
-
-	body, err := t.httpRequest("POST", "/v2.0/open-iot-hub/access/config", bytes.NewReader(payload))
-
-	if err != nil {
-		log.Printf("get OpenIoTHub config from http fail: %s", err.Error())
-		return
-	}
-
-	if !gjson.GetBytes(body, "success").Bool() {
-		log.Printf("request OpenIoTHub Config fail, body: %s", string(body))
-		return nil, errors.New("request hub config fail")
-	}
-
-	config = &OpenIoTHubConfig{}
-
-	err = json.Unmarshal([]byte(gjson.GetBytes(body, "result").String()), config)
-	if err != nil {
-		log.Printf("unmarshal OpenIoTHub config to object fail: %s, body: %s", err.Error(), string(body))
-		return
 	}
 
 	return
