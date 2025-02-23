@@ -2,7 +2,6 @@ package stdin
 
 import (
 	"encoding/json"
-	"errors"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/pion/rtp"
@@ -42,10 +41,7 @@ func (c *Client) Stop() (err error) {
 	if c.sender != nil {
 		c.sender.Close()
 	}
-	if c.cmd.Process == nil {
-		return nil
-	}
-	return errors.Join(c.cmd.Process.Kill(), c.cmd.Wait())
+	return c.cmd.Close()
 }
 
 func (c *Client) MarshalJSON() ([]byte, error) {

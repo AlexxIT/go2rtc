@@ -1,21 +1,20 @@
 package stdin
 
 import (
-	"os/exec"
-
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/shell"
 )
 
 // Deprecated: should be rewritten to core.Connection
 type Client struct {
-	cmd *exec.Cmd
+	cmd *shell.Command
 
 	medias []*core.Media
 	sender *core.Sender
 	send   int
 }
 
-func NewClient(cmd *exec.Cmd) (*Client, error) {
+func NewClient(cmd *shell.Command) (*Client, error) {
 	c := &Client{
 		cmd: cmd,
 		medias: []*core.Media{
