@@ -152,6 +152,7 @@ func TuyaClient(rawURL string, query url.Values) (core.Producer, error) {
 		return nil, err
 	}
 
+	// Set resolution via MQTT command if set
 	if query.Has("resolution_id") {
 		value, err := strconv.Atoi(query.Get("resolution_id"))
 		if err != nil {
