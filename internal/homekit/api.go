@@ -112,7 +112,7 @@ func apiUnpair(id string) error {
 		return errors.New(api.StreamNotFound)
 	}
 
-	rawURL := findHomeKitURL(stream)
+	rawURL := findHomeKitURL(stream.Sources())
 	if rawURL == "" {
 		return errors.New("not homekit source")
 	}
@@ -128,10 +128,10 @@ func apiUnpair(id string) error {
 
 func findHomeKitURLs() map[string]*url.URL {
 	urls := map[string]*url.URL{}
-	for id, stream := range streams.Streams() {
-		if rawURL := findHomeKitURL(stream); rawURL != "" {
+	for name, sources := range streams.GetAllSources() {
+		if rawURL := findHomeKitURL(sources); rawURL != "" {
 			if u, err := url.Parse(rawURL); err == nil {
-				urls[id] = u
+				urls[name] = u
 			}
 		}
 	}
