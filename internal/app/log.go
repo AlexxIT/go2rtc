@@ -3,6 +3,7 @@ package app
 import (
 	"io"
 	"os"
+	"strings"
 
 	"github.com/mattn/go-isatty"
 	"github.com/rs/zerolog"
@@ -38,11 +39,17 @@ func initLogger() {
 
 	var writer io.Writer
 
-	switch modules["output"] {
+	switch output, path, _ := strings.Cut(modules["output"], ":"); output {
 	case "stderr":
 		writer = os.Stderr
 	case "stdout":
 		writer = os.Stdout
+	case "file":
+		if path == "" {
+			path = "go2rtc.log"
+		}
+		// if fail - only MemoryLog will be available
+		writer, _ = os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	}
 
 	timeFormat := modules["time"]
