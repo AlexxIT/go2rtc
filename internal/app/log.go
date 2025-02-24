@@ -3,6 +3,7 @@ package app
 import (
 	"io"
 	"os"
+	"strings"
 
 	"github.com/mattn/go-isatty"
 	"github.com/rs/zerolog"
@@ -19,25 +20,17 @@ var MemoryLog = newBuffer(16)
 func NewLogger(config map[string]string) zerolog.Logger {
 	var writer io.Writer
 
-	switch config["output"] {
+	switch output, path, _ := strings.Cut(config["output"], ":"); output {
 	case "stderr":
 		writer = os.Stderr
 	case "stdout":
 		writer = os.Stdout
 	case "file":
-		filePath := config["file"]
-		if filePath == "" {
-			filePath = "go2rtc.log"
+		if path == "" {
+			path = "go2rtc.log"
 		}
-		file, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-		if err != nil {
-			os.Stdout.WriteString("Error: Failed to open log file: " + err.Error() + ". Log output is set to stdout now.\n")
-			writer = os.Stdout
-		} else {
-			writer = file
-		}
-	default:
-		writer = os.Stdout
+		// if fail - only MemoryLog will be available
+		writer, _ = os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	}
 
 	timeFormat := config["time"]

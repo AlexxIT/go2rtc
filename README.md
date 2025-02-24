@@ -1213,7 +1213,6 @@ log:
   rtsp: warn
   streams: error
   webrtc: fatal
-  output: stdout # Available output options are: stdout, stderr, or a file path.   
 ```
 
 ## Security
