@@ -3,6 +3,7 @@ package core
 import (
 	"encoding/json"
 	"errors"
+
 	"github.com/pion/rtp"
 )
 
@@ -70,9 +71,8 @@ type Sender struct {
 	Packets int `json:"packets,omitempty"`
 	Drops   int `json:"drops,omitempty"`
 
-	buf      chan *Packet
-	done     chan struct{}
-	isClosed bool
+	buf  chan *Packet
+	done chan struct{}
 }
 
 func NewSender(media *Media, codec *Codec) *Sender {
@@ -99,11 +99,6 @@ func NewSender(media *Media, codec *Codec) *Sender {
 	s.Input = func(packet *Packet) {
 		// writing to nil chan - OK, writing to closed chan - panic
 		s.mu.Lock()
-		if s.isClosed {
-			s.Drops++
-			s.mu.Unlock()
-			return
-		}
 		select {
 		case s.buf <- packet:
 			s.Bytes += len(packet.Payload)
@@ -145,6 +140,7 @@ func (s *Sender) Start() {
 	s.done = make(chan struct{})
 
 	go func() {
+		// for range on nil chan is OK
 		for packet := range s.buf {
 			s.Output(packet)
 		}
@@ -153,7 +149,7 @@ func (s *Sender) Start() {
 }
 
 func (s *Sender) Wait() {
-	if done := s.done; s.done != nil {
+	if done := s.done; done != nil {
 		<-done
 	}
 }
@@ -171,10 +167,9 @@ func (s *Sender) State() string {
 func (s *Sender) Close() {
 	// close buffer if exists
 	s.mu.Lock()
-	if buf := s.buf; buf != nil && !s.isClosed {
-		s.isClosed = true
-		s.buf = nil
-		defer close(buf)
+	if s.buf != nil {
+		close(s.buf) // exit from for range loop
+		s.buf = nil  // prevent writing to closed chan
 	}
 	s.mu.Unlock()
 
