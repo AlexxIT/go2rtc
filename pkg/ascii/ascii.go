@@ -8,19 +8,21 @@ import (
 	"io"
 	"math"
 	"net/http"
-	"strconv"
 	"unicode/utf8"
 )
 
-func NewWriter(w io.Writer, foreground, background, text, width, height string) io.Writer {
+func NewWriter(w io.Writer, foreground, background, text string, width, height int) io.Writer {
 	// once clear screen
 	_, _ = w.Write([]byte(csiClear))
 
 	// every frame - move to home
 	a := &writer{wr: w, buf: []byte(csiHome)}
 
-	a.width, _ = strconv.Atoi(width)
-	a.height, _ = strconv.Atoi(height)
+	if width > 0 || height > 0 {
+		a.trans = func(img image.Image) image.Image {
+			return resizeImage(img, width, height)
+		}
+	}
 
 	// https://en.wikipedia.org/wiki/ANSI_escape_code
 	switch foreground {
@@ -97,14 +99,13 @@ func NewWriter(w io.Writer, foreground, background, text, width, height string) 
 }
 
 type writer struct {
-	wr     io.Writer
-	buf    []byte
-	pre    int
-	esc    string
-	color  func(r, g, b uint8)
-	text   func(r, g, b uint32)
-	width  int
-	height int
+	wr    io.Writer
+	buf   []byte
+	pre   int
+	esc   string
+	color func(r, g, b uint8)
+	text  func(r, g, b uint32)
+	trans func(image.Image) image.Image
 }
 
 // https://stackoverflow.com/questions/37774983/clearing-the-screen-by-printing-a-character
@@ -113,11 +114,12 @@ const csiHome = "\033[H"
 
 func (a *writer) Write(p []byte) (n int, err error) {
 	img, err := jpeg.Decode(bytes.NewReader(p))
-	if a.width > 0 || a.height > 0 {
-		img = resizeImage(img, a.width, a.height)
-	}
 	if err != nil {
 		return 0, err
+	}
+
+	if a.trans != nil {
+		img = a.trans(img)
 	}
 
 	a.buf = a.buf[:a.pre] // restore prefix
@@ -191,13 +193,15 @@ func xterm256color(r, g, b uint8, n int) (index uint8) {
 //
 //	resizedImg := resizeImage(originalImg, 200, 0) // Resizes to a width of 200 while maintaining aspect ratio.
 func resizeImage(img image.Image, newWidth, newHeight int) image.Image {
+	if newWidth == 0 && newHeight == 0 {
+		return img
+	}
+
 	bounds := img.Bounds()
 	width, height := bounds.Max.X, bounds.Max.Y
 
 	// Calculate missing dimension if necessary
-	if newWidth == 0 && newHeight == 0 {
-		return img // No resizing needed
-	} else if newWidth == 0 {
+	if newWidth == 0 {
 		newWidth = int(math.Round(float64(width) * (float64(newHeight) / float64(height))))
 	} else if newHeight == 0 {
 		newHeight = int(math.Round(float64(height) * (float64(newWidth) / float64(width))))
@@ -224,6 +228,7 @@ func resizeImage(img image.Image, newWidth, newHeight int) image.Image {
 			newImg.Set(x, y, newColor)
 		}
 	}
+
 	return newImg
 }
 

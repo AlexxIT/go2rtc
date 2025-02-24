@@ -120,7 +120,10 @@ func outputMjpeg(w http.ResponseWriter, r *http.Request) {
 		cons.Type = "ASCII passive consumer "
 
 		query := r.URL.Query()
-		wr := ascii.NewWriter(w, query.Get("color"), query.Get("back"), query.Get("text"), query.Get("width"), query.Get("height"))
+		wr := ascii.NewWriter(w,
+			query.Get("color"), query.Get("back"), query.Get("text"),
+			core.Atoi(query.Get("width")), core.Atoi(query.Get("height")),
+		)
 		_, _ = cons.WriteTo(wr)
 	}
 
