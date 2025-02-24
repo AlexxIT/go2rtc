@@ -10,9 +10,8 @@ import (
 )
 
 type Producer struct {
-	core.SuperProducer
+	core.Connection
 	rd *bufio.Reader
-	cl io.Closer
 }
 
 func Open(r io.Reader) (*Producer, error) {
@@ -23,18 +22,22 @@ func Open(r io.Reader) (*Producer, error) {
 		return nil, err
 	}
 
-	codec := ADTSToCodec(b)
-
-	prod := &Producer{rd: rd, cl: r.(io.Closer)}
-	prod.Type = "ADTS producer"
-	prod.Medias = []*core.Media{
+	medias := []*core.Media{
 		{
 			Kind:      core.KindAudio,
 			Direction: core.DirectionRecvonly,
-			Codecs:    []*core.Codec{codec},
+			Codecs:    []*core.Codec{ADTSToCodec(b)},
 		},
 	}
-	return prod, nil
+	return &Producer{
+		Connection: core.Connection{
+			ID:         core.NewID(),
+			FormatName: "adts",
+			Medias:     medias,
+			Transport:  r,
+		},
+		rd: rd,
+	}, nil
 }
 
 func (c *Producer) Start() error {
@@ -65,9 +68,4 @@ func (c *Producer) Start() error {
 		}
 		c.Receivers[0].WriteRTP(pkt)
 	}
-}
-
-func (c *Producer) Stop() error {
-	_ = c.SuperProducer.Close()
-	return c.cl.Close()
 }

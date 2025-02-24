@@ -9,14 +9,17 @@ import (
 )
 
 type Consumer struct {
-	core.SuperConsumer
+	core.Connection
 	wr *core.WriteBuffer
 }
 
 func NewConsumer() *Consumer {
+	wr := core.NewWriteBuffer(nil)
 	return &Consumer{
-		core.SuperConsumer{
-			Type: "YUV4MPEG2 passive consumer",
+		core.Connection{
+			ID:         core.NewID(),
+			Transport:  wr,
+			FormatName: "yuv4mpegpipe",
 			Medias: []*core.Media{
 				{
 					Kind:      core.KindVideo,
@@ -27,7 +30,7 @@ func NewConsumer() *Consumer {
 				},
 			},
 		},
-		core.NewWriteBuffer(nil),
+		wr,
 	}
 }
 
@@ -59,9 +62,4 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 
 func (c *Consumer) WriteTo(wr io.Writer) (int64, error) {
 	return c.wr.WriteTo(wr)
-}
-
-func (c *Consumer) Stop() error {
-	_ = c.SuperConsumer.Close()
-	return c.wr.Close()
 }

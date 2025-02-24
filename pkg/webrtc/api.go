@@ -2,8 +2,8 @@ package webrtc
 
 import (
 	"net"
-	"slices"
 
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/pion/interceptor"
 	"github.com/pion/webrtc/v3"
 )
@@ -47,7 +47,7 @@ func NewServerAPI(network, address string, filters *Filters) (*webrtc.API, error
 	if filters != nil && filters.Interfaces != nil {
 		s.SetIncludeLoopbackCandidate(true)
 		s.SetInterfaceFilter(func(name string) bool {
-			return slices.Contains(filters.Interfaces, name)
+			return core.Contains(filters.Interfaces, name)
 		})
 	} else {
 		// disable listen on Hassio docker interfaces
@@ -59,7 +59,7 @@ func NewServerAPI(network, address string, filters *Filters) (*webrtc.API, error
 	if filters != nil && filters.IPs != nil {
 		s.SetIncludeLoopbackCandidate(true)
 		s.SetIPFilter(func(ip net.IP) bool {
-			return slices.Contains(filters.IPs, ip.String())
+			return core.Contains(filters.IPs, ip.String())
 		})
 	}
 

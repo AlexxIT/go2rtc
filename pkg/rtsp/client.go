@@ -20,7 +20,13 @@ import (
 var Timeout = time.Second * 5
 
 func NewClient(uri string) *Conn {
-	return &Conn{uri: uri}
+	return &Conn{
+		Connection: core.Connection{
+			ID:         core.NewID(),
+			FormatName: "rtsp",
+		},
+		uri: uri,
+	}
 }
 
 func (c *Conn) Dial() (err error) {
@@ -36,8 +42,10 @@ func (c *Conn) Dial() (err error) {
 			timeout = time.Second * time.Duration(c.Timeout)
 		}
 		conn, err = tcp.Dial(c.URL, timeout)
+		c.Protocol = "rtsp+tcp"
 	} else {
 		conn, err = websocket.Dial(c.Transport)
+		c.Protocol = "ws"
 	}
 	if err != nil {
 		return
@@ -52,6 +60,10 @@ func (c *Conn) Dial() (err error) {
 	c.session = ""
 	c.sequence = 0
 	c.state = StateConn
+
+	c.Connection.RemoteAddr = conn.RemoteAddr().String()
+	c.Connection.Transport = conn
+	c.Connection.URL = c.uri
 
 	return nil
 }
@@ -143,7 +155,7 @@ func (c *Conn) Describe() error {
 		}
 	}
 
-	c.sdp = string(res.Body) // for info
+	c.SDP = string(res.Body) // for info
 
 	medias, err := UnmarshalSDP(res.Body)
 	if err != nil {
@@ -186,10 +198,20 @@ func (c *Conn) Announce() (err error) {
 		return err
 	}
 
-	res, err := c.Do(req)
+	_, err = c.Do(req)
+	return
+}
 
-	_ = res
+func (c *Conn) Record() (err error) {
+	req := &tcp.Request{
+		Method: MethodRecord,
+		URL:    c.URL,
+		Header: map[string][]string{
+			"Range": {"npt=0.000-"},
+		},
+	}
 
+	_, err = c.Do(req)
 	return
 }
 
@@ -303,6 +325,9 @@ func (c *Conn) Teardown() (err error) {
 func (c *Conn) Close() error {
 	if c.mode == core.ModeActiveProducer {
 		_ = c.Teardown()
+	}
+	if c.OnClose != nil {
+		_ = c.OnClose()
 	}
 	return c.conn.Close()
 }

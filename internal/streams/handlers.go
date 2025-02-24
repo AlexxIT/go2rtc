@@ -7,7 +7,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
-type Handler func(url string) (core.Producer, error)
+type Handler func(source string) (core.Producer, error)
 
 var handlers = map[string]Handler{}
 

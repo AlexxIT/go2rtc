@@ -15,7 +15,7 @@ import (
 )
 
 type Producer struct {
-	core.SuperProducer
+	core.Connection
 
 	client *Client
 
@@ -53,7 +53,7 @@ func (c *Producer) Start() error {
 
 			packet := &rtp.Packet{
 				Header:  rtp.Header{Timestamp: c.videoTS},
-				Payload: annexb.EncodeToAVCC(payload, false),
+				Payload: annexb.EncodeToAVCC(payload),
 			}
 
 			//log.Printf("[AVC] %v, len: %d, ts: %10d", h265.Types(payload), len(payload), packet.Timestamp)
@@ -90,10 +90,6 @@ func (c *Producer) Start() error {
 			println(fmt.Sprintf("dvrip: unknown packet type: %d", pType))
 		}
 	}
-}
-
-func (c *Producer) Stop() error {
-	return c.client.Close()
 }
 
 func (c *Producer) probe() error {
@@ -150,7 +146,7 @@ func (c *Producer) probe() error {
 			c.videoTS = binary.LittleEndian.Uint32(ts)
 			c.videoDT = 90000 / uint32(fps)
 
-			payload := annexb.EncodeToAVCC(b[16:], false)
+			payload := annexb.EncodeToAVCC(b[16:])
 			c.addVideoTrack(b[4], payload)
 
 		case 0xFA: // audio

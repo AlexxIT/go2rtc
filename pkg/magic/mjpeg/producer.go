@@ -9,14 +9,12 @@ import (
 )
 
 type Producer struct {
-	core.SuperProducer
+	core.Connection
 	rd *core.ReadBuffer
 }
 
 func Open(rd io.Reader) (*Producer, error) {
-	prod := &Producer{rd: core.NewReadBuffer(rd)}
-	prod.Type = "MJPEG producer"
-	prod.Medias = []*core.Media{
+	medias := []*core.Media{
 		{
 			Kind:      core.KindVideo,
 			Direction: core.DirectionRecvonly,
@@ -29,7 +27,15 @@ func Open(rd io.Reader) (*Producer, error) {
 			},
 		},
 	}
-	return prod, nil
+	return &Producer{
+		Connection: core.Connection{
+			ID:         core.NewID(),
+			FormatName: "mjpeg",
+			Medias:     medias,
+			Transport:  rd,
+		},
+		rd: core.NewReadBuffer(rd),
+	}, nil
 }
 
 func (c *Producer) Start() error {
@@ -69,9 +75,4 @@ func (c *Producer) Start() error {
 
 		buf = buf[i:]
 	}
-}
-
-func (c *Producer) Stop() error {
-	_ = c.SuperProducer.Close()
-	return c.rd.Close()
 }

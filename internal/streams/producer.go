@@ -132,11 +132,10 @@ func (p *Producer) AddTrack(media *core.Media, codec *core.Codec, track *core.Re
 }
 
 func (p *Producer) MarshalJSON() ([]byte, error) {
-	if p.conn != nil {
-		return json.Marshal(p.conn)
+	if conn := p.conn; conn != nil {
+		return json.Marshal(conn)
 	}
-
-	info := core.Info{URL: p.url}
+	info := map[string]string{"url": p.url}
 	return json.Marshal(info)
 }
 
@@ -207,7 +206,7 @@ func (p *Producer) reconnect(workerID, retry int) {
 	for _, media := range conn.GetMedias() {
 		switch media.Direction {
 		case core.DirectionRecvonly:
-			for _, receiver := range p.receivers {
+			for i, receiver := range p.receivers {
 				codec := media.MatchCodec(receiver.Codec)
 				if codec == nil {
 					continue
@@ -219,6 +218,7 @@ func (p *Producer) reconnect(workerID, retry int) {
 				}
 
 				receiver.Replace(track)
+				p.receivers[i] = track
 				break
 			}
 
@@ -234,6 +234,9 @@ func (p *Producer) reconnect(workerID, retry int) {
 		}
 	}
 
+	// stop previous connection after moving tracks (fix ghost exec/ffmpeg)
+	_ = p.conn.Stop()
+	// swap connections
 	p.conn = conn
 
 	go p.worker(conn, workerID)

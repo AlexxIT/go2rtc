@@ -13,7 +13,7 @@ import (
 )
 
 type Producer struct {
-	core.SuperProducer
+	core.Connection
 	rd *core.ReadBuffer
 }
 
@@ -25,29 +25,38 @@ func Open(r io.Reader) (*Producer, error) {
 		return nil, err
 	}
 
-	buf = annexb.EncodeToAVCC(buf, false) // won't break original buffer
+	buf = annexb.EncodeToAVCC(buf) // won't break original buffer
 
 	var codec *core.Codec
+	var format string
 
 	switch {
 	case h264.NALUType(buf) == h264.NALUTypeSPS:
 		codec = h264.AVCCToCodec(buf)
+		format = "h264"
 	case h265.NALUType(buf) == h265.NALUTypeVPS:
 		codec = h265.AVCCToCodec(buf)
+		format = "hevc"
 	default:
 		return nil, errors.New("bitstream: unsupported header: " + hex.EncodeToString(buf[:8]))
 	}
 
-	prod := &Producer{rd: rd}
-	prod.Type = "Bitstream producer"
-	prod.Medias = []*core.Media{
+	medias := []*core.Media{
 		{
 			Kind:      core.KindVideo,
 			Direction: core.DirectionRecvonly,
 			Codecs:    []*core.Codec{codec},
 		},
 	}
-	return prod, nil
+	return &Producer{
+		Connection: core.Connection{
+			ID:         core.NewID(),
+			FormatName: format,
+			Medias:     medias,
+			Transport:  r,
+		},
+		rd: rd,
+	}, nil
 }
 
 func (c *Producer) Start() error {
@@ -73,7 +82,7 @@ func (c *Producer) Start() error {
 			if len(c.Receivers) > 0 {
 				pkt := &rtp.Packet{
 					Header:  rtp.Header{Timestamp: core.Now90000()},
-					Payload: annexb.EncodeToAVCC(buf[:i], true),
+					Payload: annexb.EncodeToAVCC(buf[:i]),
 				}
 				c.Receivers[0].WriteRTP(pkt)
 
@@ -83,9 +92,4 @@ func (c *Producer) Start() error {
 			buf = buf[i:]
 		}
 	}
-}
-
-func (c *Producer) Stop() error {
-	_ = c.SuperProducer.Close()
-	return c.rd.Close()
 }

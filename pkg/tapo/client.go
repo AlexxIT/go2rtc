@@ -23,10 +23,11 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 )
 
+// Deprecated: should be rewritten to core.Connection
 type Client struct {
 	core.Listener
 
-	url string
+	url *url.URL
 
 	medias    []*core.Media
 	receivers []*core.Receiver
@@ -51,17 +52,15 @@ type cbcMode interface {
 	SetIV([]byte)
 }
 
-func Dial(url string) (*Client, error) {
-	var err error
-	c := &Client{url: url}
-	if c.conn1, err = c.newConn(); err != nil {
-		return nil, err
-	}
-	return c, nil
-}
-
-func (c *Client) newConn() (net.Conn, error) {
-	u, err := url.Parse(c.url)
+// Dial support different urls:
+//   - tapo://{cloud-password}@192.168.1.123 - auth to Tapo cameras
+//     with cloud password (autodetect hash method)
+//   - tapo://admin:{hashed-cloud-password}@192.168.1.123 - auth to Tapo cameras
+//     with pre-hashed cloud password
+//   - vigi://admin:{password}@192.168.1.123 - auth to Vigi cameras with password
+//     for admin account (other not supported)
+func Dial(rawURL string) (*Client, error) {
+	u, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, err
 	}
@@ -70,21 +69,31 @@ func (c *Client) newConn() (net.Conn, error) {
 		u.Host += ":8800"
 	}
 
-	req, err := http.NewRequest("POST", "http://"+u.Host+"/stream", nil)
+	c := &Client{url: u}
+	if c.conn1, err = c.newConn(); err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+func (c *Client) newConn() (net.Conn, error) {
+	req, err := http.NewRequest("POST", "http://"+c.url.Host+"/stream", nil)
 	if err != nil {
 		return nil, err
 	}
 
-	query := u.Query()
+	query := c.url.Query()
 
 	if deviceId := query.Get("deviceId"); deviceId != "" {
 		req.URL.RawQuery = "deviceId=" + deviceId
 	}
 
-	req.URL.User = u.User
 	req.Header.Set("Content-Type", "multipart/mixed; boundary=--client-stream-boundary--")
 
-	conn, res, err := dial(req)
+	username := c.url.User.Username()
+	password, _ := c.url.User.Password()
+
+	conn, res, err := dial(req, c.url.Scheme, username, password)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +103,7 @@ func (c *Client) newConn() (net.Conn, error) {
 	}
 
 	if c.decrypt == nil {
-		c.newDectypter(res)
+		c.newDectypter(res, c.url.Scheme, username, password)
 	}
 
 	channel := query.Get("channel")
@@ -118,14 +127,18 @@ func (c *Client) newConn() (net.Conn, error) {
 	return conn, nil
 }
 
-func (c *Client) newDectypter(res *http.Response) {
-	username := res.Request.URL.User.Username()
-	password, _ := res.Request.URL.User.Password()
+func (c *Client) newDectypter(res *http.Response, brand, username, password string) {
+	exchange := res.Header.Get("Key-Exchange")
+	nonce := core.Between(exchange, `nonce="`, `"`)
 
-	// extract nonce from response
-	// cipher="AES_128_CBC" username="admin" padding="PKCS7_16" algorithm="MD5" nonce="***"
-	nonce := res.Header.Get("Key-Exchange")
-	nonce = core.Between(nonce, `nonce="`, `"`)
+	if brand == "tapo" && password == "" {
+		if strings.Contains(exchange, `encrypt_type="3"`) {
+			password = fmt.Sprintf("%32X", sha256.Sum256([]byte(username)))
+		} else {
+			password = fmt.Sprintf("%16X", md5.Sum([]byte(username)))
+		}
+		username = "admin"
+	}
 
 	key := md5.Sum([]byte(nonce + ":" + password))
 	iv := md5.Sum([]byte(username + ":" + nonce))
@@ -262,15 +275,11 @@ func (c *Client) Request(conn net.Conn, body []byte) (string, error) {
 	}
 }
 
-func dial(req *http.Request) (net.Conn, *http.Response, error) {
+func dial(req *http.Request, brand, username, password string) (net.Conn, *http.Response, error) {
 	conn, err := net.DialTimeout("tcp", req.URL.Host, core.ConnDialTimeout)
 	if err != nil {
 		return nil, nil, err
 	}
-
-	username := req.URL.User.Username()
-	password, _ := req.URL.User.Password()
-	req.URL.User = nil
 
 	if err = req.Write(conn); err != nil {
 		return nil, nil, err
@@ -282,6 +291,7 @@ func dial(req *http.Request) (net.Conn, *http.Response, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	_, _ = io.Copy(io.Discard, res.Body) // discard leftovers
 	_ = res.Body.Close() // ignore response body
 
 	auth := res.Header.Get("WWW-Authenticate")
@@ -290,7 +300,7 @@ func dial(req *http.Request) (net.Conn, *http.Response, error) {
 		return nil, nil, fmt.Errorf("Expected StatusCode to be %d, received %d", http.StatusUnauthorized, res.StatusCode)
 	}
 
-	if password == "" {
+	if brand == "tapo" && password == "" {
 		// support cloud password in place of username
 		if strings.Contains(auth, `encrypt_type="3"`) {
 			password = fmt.Sprintf("%32X", sha256.Sum256([]byte(username)))
@@ -298,6 +308,8 @@ func dial(req *http.Request) (net.Conn, *http.Response, error) {
 			password = fmt.Sprintf("%16X", md5.Sum([]byte(username)))
 		}
 		username = "admin"
+	} else if brand == "vigi" && username == "admin" {
+		password = securityEncode(password)
 	}
 
 	realm := tcp.Between(auth, `realm="`, `"`)
@@ -330,7 +342,39 @@ func dial(req *http.Request) (net.Conn, *http.Response, error) {
 		return nil, nil, err
 	}
 
-	req.URL.User = url.UserPassword(username, password)
-
 	return conn, res, nil
+}
+
+const (
+	keyShort = "RDpbLfCPsJZ7fiv"
+	keyLong  = "yLwVl0zKqws7LgKPRQ84Mdt708T1qQ3Ha7xv3H7NyU84p21BriUWBU43odz3iP4rBL3cD02KZciXTysVXiV8ngg6vL48rPJyAUw0HurW20xqxv9aYb4M9wK1Ae0wlro510qXeU07kV57fQMc8L6aLgMLwygtc0F10a0Dg70TOoouyFhdysuRMO51yY5ZlOZZLEal1h0t9YQW0Ko7oBwmCAHoic4HYbUyVeU3sfQ1xtXcPcf1aT303wAQhv66qzW"
+)
+
+func securityEncode(s string) string {
+	size := len(s)
+
+	var n int // max
+	if size > len(keyShort) {
+		n = size
+	} else {
+		n = len(keyShort)
+	}
+
+	b := make([]byte, n)
+
+	for i := 0; i < n; i++ {
+		c1 := 187
+		c2 := 187
+		if i >= size {
+			c1 = int(keyShort[i])
+		} else if i >= len(keyShort) {
+			c2 = int(s[i])
+		} else {
+			c1 = int(keyShort[i])
+			c2 = int(s[i])
+		}
+		b[i] = keyLong[(c1^c2)%len(keyLong)]
+	}
+
+	return string(b)
 }

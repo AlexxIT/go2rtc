@@ -71,7 +71,7 @@ func (c *Conn) SetAnswer(answer string) (err error) {
 		return
 	}
 
-	c.medias = UnmarshalMedias(sd.MediaDescriptions)
+	c.Medias = UnmarshalMedias(sd.MediaDescriptions)
 
 	return nil
 }

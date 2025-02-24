@@ -2,7 +2,6 @@ package y4m
 
 import (
 	"bufio"
-	"bytes"
 	"errors"
 	"io"
 
@@ -19,41 +18,13 @@ func Open(r io.Reader) (*Producer, error) {
 
 	b = b[:len(b)-1] // remove \n
 
-	sdp := string(b)
-	var fmtp string
-
-	for b != nil {
-		// YUV4MPEG2 W1280 H720 F24:1 Ip A1:1 C420mpeg2 XYSCSS=420MPEG2
-		// https://manned.org/yuv4mpeg.5
-		// https://github.com/FFmpeg/FFmpeg/blob/master/libavformat/yuv4mpegenc.c
-		key := b[0]
-		var value string
-		if i := bytes.IndexByte(b, ' '); i > 0 {
-			value = string(b[1:i])
-			b = b[i+1:]
-		} else {
-			value = string(b[1:])
-			b = nil
-		}
-
-		switch key {
-		case 'W':
-			fmtp = "width=" + value
-		case 'H':
-			fmtp += ";height=" + value
-		case 'C':
-			fmtp += ";colorspace=" + value
-		}
-	}
+	fmtp := ParseHeader(b)
 
 	if GetSize(fmtp) == 0 {
-		return nil, errors.New("y4m: unsupported format: " + sdp)
+		return nil, errors.New("y4m: unsupported format: " + string(b))
 	}
 
-	prod := &Producer{rd: rd, cl: r.(io.Closer)}
-	prod.Type = "YUV4MPEG2 producer"
-	prod.SDP = sdp
-	prod.Medias = []*core.Media{
+	medias := []*core.Media{
 		{
 			Kind:      core.KindVideo,
 			Direction: core.DirectionRecvonly,
@@ -67,14 +38,21 @@ func Open(r io.Reader) (*Producer, error) {
 			},
 		},
 	}
-
-	return prod, nil
+	return &Producer{
+		Connection: core.Connection{
+			ID:         core.NewID(),
+			FormatName: "yuv4mpegpipe",
+			Medias:     medias,
+			SDP:        string(b),
+			Transport:  r,
+		},
+		rd: rd,
+	}, nil
 }
 
 type Producer struct {
-	core.SuperProducer
+	core.Connection
 	rd *bufio.Reader
-	cl io.Closer
 }
 
 func (c *Producer) Start() error {
@@ -102,9 +80,4 @@ func (c *Producer) Start() error {
 		}
 		c.Receivers[0].WriteRTP(pkt)
 	}
-}
-
-func (c *Producer) Stop() error {
-	_ = c.SuperProducer.Close()
-	return c.cl.Close()
 }

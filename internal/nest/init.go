@@ -2,6 +2,7 @@ package nest
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/streams"
@@ -10,17 +11,11 @@ import (
 )
 
 func Init() {
-	streams.HandleFunc("nest", streamNest)
+	streams.HandleFunc("nest", func(source string) (core.Producer, error) {
+		return nest.Dial(source)
+	})
 
 	api.HandleFunc("api/nest", apiNest)
-}
-
-func streamNest(url string) (core.Producer, error) {
-	client, err := nest.NewClient(url)
-	if err != nil {
-		return nil, err
-	}
-	return client, nil
 }
 
 func apiNest(w http.ResponseWriter, r *http.Request) {
@@ -44,11 +39,12 @@ func apiNest(w http.ResponseWriter, r *http.Request) {
 
 	var items []*api.Source
 
-	for name, deviceID := range devices {
-		query.Set("device_id", deviceID)
+	for _, device := range devices {
+		query.Set("device_id", device.DeviceID)
+		query.Set("protocols", strings.Join(device.Protocols, ","))
 
 		items = append(items, &api.Source{
-			Name: name, URL: "nest:?" + query.Encode(),
+			Name: device.Name, URL: "nest:?" + query.Encode(),
 		})
 	}
 

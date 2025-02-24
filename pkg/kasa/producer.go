@@ -12,13 +12,13 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h264/annexb"
-	"github.com/AlexxIT/go2rtc/pkg/multipart"
+	"github.com/AlexxIT/go2rtc/pkg/mpjpeg"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/pion/rtp"
 )
 
 type Producer struct {
-	core.SuperProducer
+	core.Connection
 	rd *core.ReadBuffer
 
 	reader *bufio.Reader
@@ -65,11 +65,18 @@ func Dial(url string) (*Producer, error) {
 		rd.Reader = httputil.NewChunkedReader(buf)
 	}
 
-	prod := &Producer{rd: core.NewReadBuffer(rd)}
+	prod := &Producer{
+		Connection: core.Connection{
+			ID:         core.NewID(),
+			FormatName: "kasa",
+			Protocol:   "http",
+			Transport:  rd,
+		},
+		rd: core.NewReadBuffer(rd),
+	}
 	if err = prod.probe(); err != nil {
 		return nil, err
 	}
-	prod.Type = "Kasa producer"
 	return prod, nil
 }
 
@@ -90,7 +97,7 @@ func (c *Producer) Start() error {
 	}
 
 	for {
-		header, body, err := multipart.Next(c.reader)
+		header, body, err := mpjpeg.Next(c.reader)
 		if err != nil {
 			return err
 		}
@@ -106,7 +113,7 @@ func (c *Producer) Start() error {
 					Header: rtp.Header{
 						Timestamp: uint32(ts * 90000),
 					},
-					Payload: annexb.EncodeToAVCC(body, false),
+					Payload: annexb.EncodeToAVCC(body),
 				}
 				video.WriteRTP(pkt)
 			}
@@ -128,11 +135,6 @@ func (c *Producer) Start() error {
 	}
 }
 
-func (c *Producer) Stop() error {
-	_ = c.SuperProducer.Close()
-	return c.rd.Close()
-}
-
 const (
 	MimeVideo = "video/x-h264"
 	MimeG711U = "audio/g711u"
@@ -151,7 +153,7 @@ func (c *Producer) probe() error {
 	timeout := time.Now().Add(core.ProbeTimeout)
 
 	for (waitVideo || waitAudio) && time.Now().Before(timeout) {
-		header, body, err := multipart.Next(c.reader)
+		header, body, err := mpjpeg.Next(c.reader)
 		if err != nil {
 			return err
 		}
@@ -166,7 +168,7 @@ func (c *Producer) probe() error {
 			}
 			waitVideo = false
 
-			body = annexb.EncodeToAVCC(body, false)
+			body = annexb.EncodeToAVCC(body)
 			codec := h264.AVCCToCodec(body)
 			media = &core.Media{
 				Kind:      core.KindVideo,

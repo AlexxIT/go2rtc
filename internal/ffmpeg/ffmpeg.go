@@ -2,7 +2,6 @@ package ffmpeg
 
 import (
 	"net/url"
-	"slices"
 	"strings"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
@@ -14,6 +13,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/ffmpeg"
+	"github.com/rs/zerolog"
 )
 
 func Init() {
@@ -29,6 +29,8 @@ func Init() {
 
 	app.LoadConfig(&cfg)
 
+	log = app.GetLogger("ffmpeg")
+
 	// zerolog levels: trace debug         info warn    error fatal panic disabled
 	// FFmpeg  levels: trace debug verbose info warning error fatal panic quiet
 	if cfg.Log.Level == "warn" {
@@ -41,7 +43,7 @@ func Init() {
 			return "", err
 		}
 		args := parseArgs(url[7:])
-		if slices.Contains(args.Codecs, "auto") {
+		if core.Contains(args.Codecs, "auto") {
 			return "", nil // force call streams.HandleFunc("ffmpeg")
 		}
 		return "exec:" + args.String(), nil
@@ -145,6 +147,8 @@ var defaults = map[string]string{
 	"h265/videotoolbox": "-c:v hevc_videotoolbox -g 50 -bf 0 -profile:v main -level:v 5.1",
 }
 
+var log zerolog.Logger
+
 // configTemplate - return template from config (defaults) if exist or return raw template
 func configTemplate(template string) string {
 	if s := defaults[template]; s != "" {
@@ -175,6 +179,7 @@ func parseArgs(s string) *ffmpeg.Args {
 		Version: verAV,
 	}
 
+	var source = s
 	var query url.Values
 	if i := strings.IndexByte(s, '#'); i >= 0 {
 		query = streams.ParseQuery(s[i+1:])
@@ -216,6 +221,10 @@ func parseArgs(s string) *ffmpeg.Args {
 			s += "?audio"
 		default:
 			s += "?video&audio"
+		}
+		s += "&source=ffmpeg:" + url.QueryEscape(source)
+		for _, v := range query["query"] {
+			s += "&" + v
 		}
 		args.Input = inputTemplate("rtsp", s, query)
 	} else if i = strings.Index(s, "?"); i > 0 {
