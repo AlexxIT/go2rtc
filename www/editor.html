@@ -1,10 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <title>go2rtc - File Editor</title>
     <meta name="viewport" content="width=device-width, user-scalable=yes, initial-scale=1, maximum-scale=1">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
-    <script src="https://unpkg.com/ace-builds@1.33.1/src-min/ace.js"></script>
+    <script src="https://unpkg.com/@skrashevich/monaco-yaml-prebuilt@1.1.5/dist/monaco-editor.bundle.js"></script>
     <style>
         body {
             font-family: Arial, Helvetica, sans-serif;
@@ -15,56 +16,379 @@
             flex-direction: column;
         }
 
-        html, body, #config {
+        html,
+        body,
+        #config {
             width: 100%;
             height: 100%;
         }
+
+        #config {
+            flex: 1;
+        }
     </style>
 </head>
+
 <body>
-<script src="main.js"></script>
-<div>
-    <button id="save">Save & Restart</button>
-</div>
-<br>
-<div id="config"></div>
-<script>
-    let dump;
+    <script src="main.js"></script>
+    <div>
+        <button id="save">Save & Restart</button>
+    </div>
+    <br>
+    <div id="config"></div>
+    <script>
+        let dump;
+        let editor;
 
-    ace.config.set('basePath', 'https://unpkg.com/ace-builds@1.33.1/src-min/');
-    const editor = ace.edit('config', {
-        mode: 'ace/mode/yaml',
-    });
+        // Load Monaco Editor
+        const yamlModelUri = monaco.Uri.parse('a://b/foo.yaml');
 
-    document.getElementById('save').addEventListener('click', async () => {
-        let r = await fetch('api/config', {cache: 'no-cache'});
-        if (r.ok && dump !== await r.text()) {
-            alert('Config was changed from another place. Refresh the page and make changes again');
-            return;
-        }
+        monacoYaml.configureMonacoYaml(monaco, {
+            validate: true,
+            schemas: [{
+                uri: "https://alexxit.github.io/go2rtc/config-schema.json", // Arbitrary schema identifier
+                fileMatch: ["*"],
+                schema: {
+                    "type": "object",
+                    "properties": {
+                        "streams": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string",
+                                    "description": "Stream source URL with optional parameters",
+                                    "examples": [
+                                        "rtsp://admin:password@192.168.1.123:554/cam/realmonitor?channel=1&subtype=0",
+                                        "ffmpeg:input.mp4#video=h264#hardware"
+                                    ]
+                                }
+                            }
+                        },
+                        "api": {
+                            "type": "object",
+                            "properties": {
+                                "listen": {
+                                    "type": "string",
+                                    "description": "HTTP API port (default: :1984)",
+                                    "default": ":1984",
+                                    "examples": [
+                                        ":1984",
+                                        "0.0.0.0:8080"
+                                    ]
+                                },
+                                "username": {
+                                    "type": "string",
+                                    "description": "Basic auth username for WebUI",
+                                    "examples": ["admin", "user"]
+                                },
+                                "password": {
+                                    "type": "string",
+                                    "description": "Basic auth password for WebUI",
+                                    "examples": ["password", "secret"]
+                                },
+                                "base_path": {
+                                    "type": "string",
+                                    "description": "API prefix for serving on a suburl (e.g., /rtc/api)",
+                                    "default": "",
+                                    "examples": ["/api", "/rtc/api"]
+                                },
+                                "static_dir": {
+                                    "type": "string",
+                                    "description": "Folder for static files (custom web interface)",
+                                    "default": "",
+                                    "examples": ["/var/www", "/usr/local/share/static"]
+                                },
+                                "origin": {
+                                    "type": "string",
+                                    "description": "Allow CORS requests (only * supported)",
+                                    "default": "",
+                                    "examples": ["*", "https://example.com"]
+                                },
+                                "tls_listen": {
+                                    "type": "string",
+                                    "description": "Enable HTTPS server",
+                                    "examples": [":8443"]
+                                },
+                                "tls_cert": {
+                                    "type": "string",
+                                    "description": "PEM-encoded fullchain certificate for HTTPS",
+                                    "examples": ["/etc/ssl/certs/fullchain.pem"]
+                                },
+                                "tls_key": {
+                                    "type": "string",
+                                    "description": "PEM-encoded private key for HTTPS",
+                                    "examples": ["/etc/ssl/private/privkey.pem"]
+                                },
+                                "unix_listen": {
+                                    "type": "string",
+                                    "description": "Unix socket listener for API",
+                                    "examples": ["/var/run/go2rtc.sock"]
+                                }
+                            }
+                        },
+                        "rtsp": {
+                            "type": "object",
+                            "properties": {
+                                "listen": {
+                                    "type": "string",
+                                    "description": "RTSP Server TCP port (default: 8554)",
+                                    "default": ":8554",
+                                    "examples": [":8554", "0.0.0.0:8554"]
+                                },
+                                "username": {
+                                    "type": "string",
+                                    "description": "RTSP username",
+                                    "examples": ["admin", "user"]
+                                },
+                                "password": {
+                                    "type": "string",
+                                    "description": "RTSP password",
+                                    "examples": ["password", "secret"]
+                                },
+                                "default_query": {
+                                    "type": "string",
+                                    "description": "Default codecs filters (e.g., video&audio)",
+                                    "default": "video&audio",
+                                    "examples": ["video&audio", "video"]
+                                }
+                            }
+                        },
+                        "rtmp": {
+                            "type": "object",
+                            "properties": {
+                                "listen": {
+                                    "type": "string",
+                                    "description": "RTMP Server TCP port",
+                                    "examples": [":1935", "0.0.0.0:1935"]
+                                }
+                            }
+                        },
+                        "webrtc": {
+                            "type": "object",
+                            "properties": {
+                                "listen": {
+                                    "type": "string",
+                                    "description": "WebRTC TCP/UDP port (default: 8555)",
+                                    "default": ":8555/tcp",
+                                    "examples": [":8555/tcp", ":8555"]
+                                },
+                                "candidates": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string",
+                                        "description": "External IP address and port (e.g., 216.58.210.174:8555)",
+                                        "examples": [
+                                            "216.58.210.174:8555",
+                                            "stun:8555",
+                                            "home.duckdns.org:8555"
+                                        ]
+                                    }
+                                },
+                                "ice_servers": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "urls": {
+                                                "type": "array",
+                                                "items": {
+                                                    "type": "string",
+                                                    "examples": [
+                                                        "stun:stun.l.google.com:19302",
+                                                        "turn:123.123.123.123:3478"
+                                                    ]
+                                                },
+                                                "description": "STUN/TURN server URLs"
+                                            },
+                                            "username": {
+                                                "type": "string",
+                                                "description": "TURN server username",
+                                                "examples": ["your_user"]
+                                            },
+                                            "credential": {
+                                                "type": "string",
+                                                "description": "TURN server credential",
+                                                "examples": ["your_pass"]
+                                            }
+                                        }
+                                    },
+                                    "default": [
+                                        {
+                                            "urls": ["stun:stun.l.google.com:19302"]
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        "homekit": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "object",
+                                "properties": {
+                                    "pin": {
+                                        "type": "string",
+                                        "description": "Custom PIN for HomeKit",
+                                        "examples": ["031-45-154"]
+                                    },
+                                    "name": {
+                                        "type": "string",
+                                        "description": "Custom camera name",
+                                        "examples": ["Front Door Camera"]
+                                    },
+                                    "device_id": {
+                                        "type": "string",
+                                        "description": "Custom device ID",
+                                        "examples": ["device-1234"]
+                                    },
+                                    "device_private": {
+                                        "type": "string",
+                                        "description": "Custom private key",
+                                        "examples": ["-----BEGIN PRIVATE KEY----- ..."]
+                                    }
+                                }
+                            }
+                        },
+                        "webtorrent": {
+                            "type": "object",
+                            "properties": {
+                                "shares": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "type": "object",
+                                        "properties": {
+                                            "pwd": {
+                                                "type": "string",
+                                                "description": "Share password",
+                                                "examples": ["sharepassword"]
+                                            },
+                                            "src": {
+                                                "type": "string",
+                                                "description": "Stream name from streams section",
+                                                "examples": ["camera1"]
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "ngrok": {
+                            "type": "object",
+                            "properties": {
+                                "command": {
+                                    "type": "string",
+                                    "description": "ngrok command to start the tunnel",
+                                    "examples": [
+                                        "ngrok tcp 192.168.1.123:554 --authtoken yourauthtoken",
+                                        "ngrok http 8080 --authtoken yourauthtoken"
+                                    ]
+                                }
+                            }
+                        },
+                        "ffmpeg": {
+                            "type": "object",
+                            "properties": {
+                                "bin": {
+                                    "type": "string",
+                                    "description": "Path to ffmpeg binary",
+                                    "default": "ffmpeg",
+                                    "examples": ["/usr/bin/ffmpeg"]
+                                }
+                            }
+                        },
+                        "hass": {
+                            "type": "object",
+                            "properties": {
+                                "config": {
+                                    "type": "string",
+                                    "description": "Home Assistant config directory",
+                                    "default": "",
+                                    "examples": ["/config"]
+                                }
+                            }
+                        },
+                        "publish": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string",
+                                    "description": "RTMP/RTMPS URL for streaming",
+                                    "examples": [
+                                        "rtmp://a.rtmp.youtube.com/live2/your_stream_key",
+                                        "rtmps://live-api-s.facebook.com:443/rtmp/your_stream_key"
+                                    ]
+                                }
+                            }
+                        },
+                        "log": {
+                            "type": "object",
+                            "properties": {
+                                "level": {
+                                    "type": "string",
+                                    "enum": ["trace", "debug", "info", "warn", "error"],
+                                    "default": "info",
+                                    "description": "Log level (e.g., debug, info, warn, error)."
+                                },
+                                "path": {
+                                    "type": "string",
+                                    "description": "Path to log file",
+                                    "examples": ["/var/log/go2rtc.log"]
+                                },
+                                "format": {
+                                    "type": "string",
+                                    "enum": ["json", "text"],
+                                    "default": "",
+                                    "description": "Log format (e.g., JSON, text).",
+                                    "examples": ["json", "text"]
+                                }
+                            }
+                        }
+                    },
+                    "additionalProperties": true,
+                    "required": ["streams"]
+                }
 
-        r = await fetch('api/config', {method: 'POST', body: editor.getValue()});
-        if (r.ok) {
-            alert('OK');
-            await fetch('api/restart', {method: 'POST'});
-        } else {
-            alert(await r.text());
-        }
-    });
+            }]
+        });
+        editor = monaco.editor.create(document.getElementById('config'), {
+            language: 'yaml',
+            tabSize: 2,
+            theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'vs-dark' : 'vs-light',
+            model: monaco.editor.createModel('', 'yaml', yamlModelUri),
+        });
 
-    window.addEventListener('load', async () => {
-        const r = await fetch('api/config', {cache: 'no-cache'});
-        if (r.status === 410) {
-            alert('Config file is not set');
-        } else if (r.status === 404) {
-            editor.setValue(''); // config file not exist
-        } else if (r.ok) {
-            dump = await r.text();
-            editor.setValue(dump);
-        } else {
-            alert(`Unknown error: ${r.statusText} (${r.status})`);
-        }
-    });
-</script>
+        window.addEventListener('load', async () => {
+            const r = await fetch('api/config', { cache: 'no-cache' });
+            if (r.status === 410) {
+                alert('Config file is not set');
+            } else if (r.status === 404) {
+                editor.setValue(''); // config file not exist
+            } else if (r.ok) {
+                dump = await r.text();
+                editor.setValue(dump);
+            } else {
+                alert(`Unknown error: ${r.statusText} (${r.status})`);
+            }
+        });
+
+        document.getElementById('save').addEventListener('click', async () => {
+            let r = await fetch('api/config', { cache: 'no-cache' });
+            if (r.ok && dump !== await r.text()) {
+                alert('Config was changed from another place. Refresh the page and make changes again');
+                return;
+            }
+
+            r = await fetch('api/config', { method: 'POST', body: editor.getValue() });
+            if (r.ok) {
+                alert('OK');
+                await fetch('api/restart', { method: 'POST' });
+            } else {
+                alert(await r.text());
+            }
+        });
+
+    </script>
 </body>
+
 </html>
