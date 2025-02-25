@@ -118,8 +118,8 @@ func Init() {
 		servers[host] = srv
 	}
 
-	api.HandleFunc(hap.PathPairSetup, hapPairSetup)
-	api.HandleFunc(hap.PathPairVerify, hapPairVerify)
+	api.HandleFunc(hap.PathPairSetup, hapHandler)
+	api.HandleFunc(hap.PathPairVerify, hapHandler)
 
 	log.Trace().Msgf("[homekit] mdns: %s", entries)
 
@@ -148,32 +148,19 @@ func streamHandler(rawURL string) (core.Producer, error) {
 	return client, err
 }
 
-func hapPairSetup(w http.ResponseWriter, r *http.Request) {
-	srv, ok := servers[r.Host]
-	if !ok {
-		log.Error().Msg("[homekit] unknown host: " + r.Host)
-		return
+func resolve(host string) *server {
+	if len(servers) == 1 {
+		for _, srv := range servers {
+			return srv
+		}
 	}
-
-	conn, rw, err := w.(http.Hijacker).Hijack()
-	if err != nil {
-		return
+	if srv, ok := servers[host]; ok {
+		return srv
 	}
-
-	defer conn.Close()
-
-	if err = srv.hap.PairSetup(r, rw, conn); err != nil {
-		log.Error().Err(err).Caller().Send()
-	}
+	return nil
 }
 
-func hapPairVerify(w http.ResponseWriter, r *http.Request) {
-	srv, ok := servers[r.Host]
-	if !ok {
-		log.Error().Msg("[homekit] unknown host: " + r.Host)
-		return
-	}
-
+func hapHandler(w http.ResponseWriter, r *http.Request) {
 	conn, rw, err := w.(http.Hijacker).Hijack()
 	if err != nil {
 		return
@@ -181,7 +168,24 @@ func hapPairVerify(w http.ResponseWriter, r *http.Request) {
 
 	defer conn.Close()
 
-	if err = srv.hap.PairVerify(r, rw, conn); err != nil && err != io.EOF {
+	// Can support multiple HomeKit cameras on single port ONLY for Apple devices.
+	// Doesn't support Home Assistant and any other open source projects
+	// because they don't send the host header in requests.
+	srv := resolve(r.Host)
+	if srv == nil {
+		log.Error().Msg("[homekit] unknown host: " + r.Host)
+		_ = hap.WriteBackoff(rw)
+		return
+	}
+
+	switch r.RequestURI {
+	case hap.PathPairSetup:
+		err = srv.hap.PairSetup(r, rw, conn)
+	case hap.PathPairVerify:
+		err = srv.hap.PairVerify(r, rw, conn)
+	}
+
+	if err != nil && err != io.EOF {
 		log.Error().Err(err).Caller().Send()
 	}
 }
