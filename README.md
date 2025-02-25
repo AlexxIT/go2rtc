@@ -682,16 +682,23 @@ Supports connection to [Wyze](https://www.wyze.com/) cameras, using WebRTC proto
 
 Supports [Amazon Kinesis Video Streams](https://aws.amazon.com/kinesis/video-streams/), using WebRTC protocol. You need to specify signalling WebSocket URL with all credentials in query params, `client_id` and `ice_servers` list in [JSON format](https://developer.mozilla.org/en-US/docs/Web/API/RTCIceServer).
 
+**xtend_tuya**
+
+Supports [Home Assistant eXtended Tuya](https://github.com/azerty9971/xtend_tuya), using WebRTC WHEP protocol. You need to specify the base URL of your Home Assistant instance, the device ID, the channel (low, high or an integer) and the auth_token that you generate in HA in your user profile (long term access token)
+Documentation is available at https://github.com/azerty9971/xtend_tuya/blob/main/docs/configure_go2rtc.md
+
 ```yaml
 streams:
-  webrtc-whep:    webrtc:http://192.168.1.123:1984/api/webrtc?src=camera1
-  webrtc-go2rtc:  webrtc:ws://192.168.1.123:1984/api/ws?src=camera1
-  webrtc-openipc: webrtc:ws://192.168.1.123/webrtc_ws#format=openipc#ice_servers=[{"urls":"stun:stun.kinesisvideo.eu-north-1.amazonaws.com:443"}]
-  webrtc-wyze:    webrtc:http://192.168.1.123:5000/signaling/camera1?kvs#format=wyze
-  webrtc-kinesis: webrtc:wss://...amazonaws.com/?...#format=kinesis#client_id=...#ice_servers=[{...},{...}]
+  webrtc-whep:       webrtc:http://192.168.1.123:1984/api/webrtc?src=camera1
+  webrtc-go2rtc:     webrtc:ws://192.168.1.123:1984/api/ws?src=camera1
+  webrtc-openipc:    webrtc:ws://192.168.1.123/webrtc_ws#format=openipc#ice_servers=[{"urls":"stun:stun.kinesisvideo.eu-north-1.amazonaws.com:443"}]
+  webrtc-wyze:       webrtc:http://192.168.1.123:5000/signaling/camera1?kvs#format=wyze
+  webrtc-kinesis:    webrtc:wss://...amazonaws.com/?...#format=kinesis#client_id=...#ice_servers=[{...},{...}]
+  webrtc-xtend_tuya: webrtc:http://...ip_or_host_of_ha#format=xtend_tuya#device_id=...#channel=high#auth_token=...
 ```
 
 **PS.** For `kinesis` sources you can use [echo](#source-echo) to get connection params using `bash`/`python` or any other script language.
+**PS2** For `xtend_tuya` the high quality stream is not yet retrieved, the low quality stream is returned instead, this will be fixed soon in xtend_tuya
 
 #### Source: WebTorrent
 
