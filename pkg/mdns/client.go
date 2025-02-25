@@ -13,7 +13,10 @@ import (
 	"github.com/miekg/dns" // awesome library for parsing mDNS records
 )
 
-const ServiceHAP = "_hap._tcp.local." // HomeKit Accessory Protocol
+const (
+	ServiceDNSSD = "_services._dns-sd._udp.local."
+	ServiceHAP   = "_hap._tcp.local." // HomeKit Accessory Protocol
+)
 
 type ServiceEntry struct {
 	Name string            `json:"name,omitempty"`
@@ -153,6 +156,7 @@ type Browser struct {
 	Service string
 
 	Addr  net.Addr
+	Nets  []*net.IPNet
 	Recv  net.PacketConn
 	Sends []net.PacketConn
 
@@ -165,7 +169,7 @@ type Browser struct {
 // Receiver will get multicast responses on senders requests.
 func (b *Browser) ListenMulticastUDP() error {
 	// 1. Collect IPv4 interfaces
-	ip4s, err := InterfacesIP4()
+	nets, err := IPNets()
 	if err != nil {
 		return err
 	}
@@ -182,11 +186,12 @@ func (b *Browser) ListenMulticastUDP() error {
 
 	ctx := context.Background()
 
-	for _, ip4 := range ip4s {
-		conn, err := lc1.ListenPacket(ctx, "udp4", ip4.String()+":5353") // same port important
+	for _, ipn := range nets {
+		conn, err := lc1.ListenPacket(ctx, "udp4", ipn.IP.String()+":5353") // same port important
 		if err != nil {
 			continue
 		}
+		b.Nets = append(b.Nets, ipn)
 		b.Sends = append(b.Sends, conn)
 	}
 
@@ -365,35 +370,39 @@ func NewServiceEntries(msg *dns.Msg, ip net.IP) (entries []*ServiceEntry) {
 	return
 }
 
-func InterfacesIP4() ([]net.IP, error) {
+// Common docker addresses (class B):
+// https://en.wikipedia.org/wiki/Private_network
+// - docker0 172.17.0.1/16
+// - br-xxxx 172.18.0.1/16
+// - hassio  172.30.32.1/23
+var docker = net.IPNet{
+	IP:   []byte{172, 16, 0, 0},
+	Mask: []byte{255, 240, 0, 0},
+}
+
+func IPNets() ([]*net.IPNet, error) {
 	intfs, err := net.Interfaces()
 	if err != nil {
 		return nil, err
 	}
 
-	var ips []net.IP
+	var nets []*net.IPNet
 
-loop:
 	for _, intf := range intfs {
 		if intf.Flags&net.FlagUp == 0 || intf.Flags&net.FlagLoopback != 0 {
 			continue
 		}
 
-		addrs, err := intf.Addrs()
-		if err != nil {
-			continue
-		}
-
+		addrs, _ := intf.Addrs()
 		for _, addr := range addrs {
 			switch v := addr.(type) {
 			case *net.IPNet:
-				if ip := v.IP.To4(); ip != nil {
-					ips = append(ips, ip)
-					continue loop
+				if ip := v.IP.To4(); ip != nil && !docker.Contains(ip) {
+					nets = append(nets, v)
 				}
 			}
 		}
 	}
 
-	return ips, nil
+	return nets, nil
 }
