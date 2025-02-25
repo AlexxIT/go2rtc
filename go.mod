@@ -3,8 +3,9 @@ module github.com/AlexxIT/go2rtc
 go 1.20
 
 require (
-	github.com/asticode/go-astits v1.13.0
+	github.com/eclipse/paho.mqtt.golang v1.5.0
 	github.com/expr-lang/expr v1.16.9
+	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/mattn/go-isatty v0.0.20
 	github.com/miekg/dns v1.1.62
@@ -26,9 +27,7 @@ require (
 )
 
 require (
-	github.com/asticode/go-astikit v0.45.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/pion/datachannel v1.5.10 // indirect

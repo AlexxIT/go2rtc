@@ -682,6 +682,20 @@ Supports connection to [Wyze](https://www.wyze.com/) cameras, using WebRTC proto
 
 Supports [Amazon Kinesis Video Streams](https://aws.amazon.com/kinesis/video-streams/), using WebRTC protocol. You need to specify signalling WebSocket URL with all credentials in query params, `client_id` and `ice_servers` list in [JSON format](https://developer.mozilla.org/en-US/docs/Web/API/RTCIceServer).
 
+
+**tuya**
+
+Supports [Tuya IPC cameras](https://developer.tuya.com/en/docs/iot/webrtc?id=Kacsd4x2hl0se), using WebRTC protocol. To enable, you need to specify following in query parameters:
+- `format`          Set to `tuya` to use Tuya
+- `client_id`       Tuya Cloud Project Access ID/Client ID
+- `client_secret`   Tuya Cloud Project Access Secret/Client Secret
+- `uid`             Tuya linked app UID (refer to the [Tuya Procedure step 3](https://developer.tuya.com/en/docs/iot/webrtc?id=Kacsd4x2hl0se#title-4-Prerequisites) for more info)
+- `device_id`       Tuya device ID (you can retrieve it from the Tuya Cloud Project Devices page)
+- `resolution_id`   Tuya Resoluion ID (either 0 (HD) or 1 (SD), not all devices support it), This parameter is optional
+
+URL should be `https://openapi.tuyaeu.com` or another one ([see Tuya docs](https://developer.tuya.com/en/docs/iot/api-request?id=Ka4a8uuo1j4t4#title-1-Endpoints)) depending on your region.
+
+
 ```yaml
 streams:
   webrtc-whep:    webrtc:http://192.168.1.123:1984/api/webrtc?src=camera1
@@ -689,6 +703,7 @@ streams:
   webrtc-openipc: webrtc:ws://192.168.1.123/webrtc_ws#format=openipc#ice_servers=[{"urls":"stun:stun.kinesisvideo.eu-north-1.amazonaws.com:443"}]
   webrtc-wyze:    webrtc:http://192.168.1.123:5000/signaling/camera1?kvs#format=wyze
   webrtc-kinesis: webrtc:wss://...amazonaws.com/?...#format=kinesis#client_id=...#ice_servers=[{...},{...}]
+  webrtc-tuya:    webrtc:https://openapi.tuyaeu.com#format=tuya#client_id=...#client_secret=...#uid=...#device_id=...#resolution_id=0
 ```
 
 **PS.** For `kinesis` sources you can use [echo](#source-echo) to get connection params using `bash`/`python` or any other script language.
