@@ -11,7 +11,9 @@ If an external connection via STUN is used:
 
 - Uses [UDP hole punching](https://en.wikipedia.org/wiki/UDP_hole_punching) technology to bypass NAT even if you not open your server to the World
 - For about 20% of users, the techology will not work because of the [Symmetric NAT](https://tomchen.github.io/symmetric-nat-test/)
-- UDP is not suitable for transmitting 2K and 4K high bitrate video over open networks because of the high loss rate
+- UDP is not suitable for transmitting 2K and 4K high bitrate video over open networks because of the high loss rate:
+  - https://habr.com/ru/companies/flashphoner/articles/480006/
+  - https://www.youtube.com/watch?v=FXVg2ckuKfs
 
 ## Default config
 
