@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/AlexxIT/go2rtc/pkg/net2"
 	"github.com/miekg/dns" // awesome library for parsing mDNS records
 )
 
@@ -370,16 +371,6 @@ func NewServiceEntries(msg *dns.Msg, ip net.IP) (entries []*ServiceEntry) {
 	return
 }
 
-// Common docker addresses (class B):
-// https://en.wikipedia.org/wiki/Private_network
-// - docker0 172.17.0.1/16
-// - br-xxxx 172.18.0.1/16
-// - hassio  172.30.32.1/23
-var docker = net.IPNet{
-	IP:   []byte{172, 16, 0, 0},
-	Mask: []byte{255, 240, 0, 0},
-}
-
 func IPNets() ([]*net.IPNet, error) {
 	intfs, err := net.Interfaces()
 	if err != nil {
@@ -397,7 +388,7 @@ func IPNets() ([]*net.IPNet, error) {
 		for _, addr := range addrs {
 			switch v := addr.(type) {
 			case *net.IPNet:
-				if ip := v.IP.To4(); ip != nil && !docker.Contains(ip) {
+				if ip := v.IP.To4(); ip != nil && !net2.Docker.Contains(ip) {
 					nets = append(nets, v)
 				}
 			}

@@ -4,6 +4,8 @@ import (
 	"net"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/net2"
+	"github.com/pion/ice/v2"
 	"github.com/pion/interceptor"
 	"github.com/pion/webrtc/v3"
 )
@@ -44,39 +46,44 @@ func NewServerAPI(network, address string, filters *Filters) (*webrtc.API, error
 	// fix https://github.com/pion/webrtc/pull/2407
 	s.SetDTLSInsecureSkipHelloVerify(true)
 
+	var interfaceFilter func(name string) bool
 	if filters != nil && filters.Interfaces != nil {
-		s.SetIncludeLoopbackCandidate(true)
-		s.SetInterfaceFilter(func(name string) bool {
+		interfaceFilter = func(name string) bool {
 			return core.Contains(filters.Interfaces, name)
-		})
+		}
 	} else {
-		// disable listen on Hassio docker interfaces
-		s.SetInterfaceFilter(func(name string) bool {
-			return name != "hassio" && name != "docker0"
-		})
+		// default interfaces - all, except loopback
 	}
+	s.SetInterfaceFilter(interfaceFilter)
 
+	var ipFilter func(ip net.IP) bool
 	if filters != nil && filters.IPs != nil {
-		s.SetIncludeLoopbackCandidate(true)
-		s.SetIPFilter(func(ip net.IP) bool {
+		ipFilter = func(ip net.IP) bool {
 			return core.Contains(filters.IPs, ip.String())
-		})
+		}
+	} else {
+		// default ips - all, except loopback and docker
+		ipFilter = func(ip net.IP) bool {
+			return !net2.Docker.Contains(ip)
+		}
 	}
+	s.SetIPFilter(ipFilter)
 
+	var networkTypes []webrtc.NetworkType
 	if filters != nil && filters.Networks != nil {
-		var networkTypes []webrtc.NetworkType
 		for _, s := range filters.Networks {
 			if networkType, err := webrtc.NewNetworkType(s); err == nil {
 				networkTypes = append(networkTypes, networkType)
 			}
 		}
-		s.SetNetworkTypes(networkTypes)
 	} else {
-		s.SetNetworkTypes([]webrtc.NetworkType{
+		// default network types - all
+		networkTypes = []webrtc.NetworkType{
 			webrtc.NetworkTypeUDP4, webrtc.NetworkTypeUDP6,
 			webrtc.NetworkTypeTCP4, webrtc.NetworkTypeTCP6,
-		})
+		}
 	}
+	s.SetNetworkTypes(networkTypes)
 
 	if filters != nil && len(filters.UDPPorts) == 2 {
 		_ = s.SetEphemeralUDPPortRange(filters.UDPPorts[0], filters.UDPPorts[1])
@@ -100,10 +107,24 @@ func NewServerAPI(network, address string, filters *Filters) (*webrtc.API, error
 		}
 
 		if network == "" || network == "udp" {
-			if ln, err := net.ListenPacket("udp", address); err == nil {
-				udpMux := webrtc.NewICEUDPMux(nil, ln)
-				s.SetICEUDPMux(udpMux)
+			// UDPMuxDefault should not listening on unspecified address, use NewMultiUDPMuxFromPort instead
+			var udpMux ice.UDPMux
+			if port := net2.ParseUnspecifiedPort(address); port != 0 {
+				var networks []ice.NetworkType
+				for _, ntype := range networkTypes {
+					networks = append(networks, ice.NetworkType(ntype))
+				}
+
+				udpMux, _ = ice.NewMultiUDPMuxFromPort(
+					port,
+					ice.UDPMuxFromPortWithInterfaceFilter(interfaceFilter),
+					ice.UDPMuxFromPortWithIPFilter(ipFilter),
+					ice.UDPMuxFromPortWithNetworks(networks...),
+				)
+			} else if ln, err := net.ListenPacket("udp", address); err == nil {
+				udpMux = ice.NewUDPMuxDefault(ice.UDPMuxParams{UDPConn: ln})
 			}
+			s.SetICEUDPMux(udpMux)
 		}
 	}
 
