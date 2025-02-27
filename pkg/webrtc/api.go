@@ -4,7 +4,7 @@ import (
 	"net"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/net2"
+	"github.com/AlexxIT/go2rtc/pkg/xnet"
 	"github.com/pion/ice/v2"
 	"github.com/pion/interceptor"
 	"github.com/pion/webrtc/v3"
@@ -20,6 +20,7 @@ func NewAPI() (*webrtc.API, error) {
 
 type Filters struct {
 	Candidates []string `yaml:"candidates"`
+	Loopback   bool     `yaml:"loopback"`
 	Interfaces []string `yaml:"interfaces"`
 	IPs        []string `yaml:"ips"`
 	Networks   []string `yaml:"networks"`
@@ -46,6 +47,10 @@ func NewServerAPI(network, address string, filters *Filters) (*webrtc.API, error
 	// fix https://github.com/pion/webrtc/pull/2407
 	s.SetDTLSInsecureSkipHelloVerify(true)
 
+	if filters != nil && filters.Loopback {
+		s.SetIncludeLoopbackCandidate(true)
+	}
+
 	var interfaceFilter func(name string) bool
 	if filters != nil && filters.Interfaces != nil {
 		interfaceFilter = func(name string) bool {
@@ -62,9 +67,14 @@ func NewServerAPI(network, address string, filters *Filters) (*webrtc.API, error
 			return core.Contains(filters.IPs, ip.String())
 		}
 	} else {
-		// default ips - all, except loopback and docker
+		// try filter all Docker-like interfaces
 		ipFilter = func(ip net.IP) bool {
-			return !net2.Docker.Contains(ip)
+			return !xnet.Docker.Contains(ip)
+		}
+		// if there are no such interfaces - disable the filter
+		// the user will need to enable port forwarding
+		if nets, _ := xnet.IPNets(ipFilter); len(nets) == 0 {
+			ipFilter = nil
 		}
 	}
 	s.SetIPFilter(ipFilter)
@@ -109,7 +119,7 @@ func NewServerAPI(network, address string, filters *Filters) (*webrtc.API, error
 		if network == "" || network == "udp" {
 			// UDPMuxDefault should not listening on unspecified address, use NewMultiUDPMuxFromPort instead
 			var udpMux ice.UDPMux
-			if port := net2.ParseUnspecifiedPort(address); port != 0 {
+			if port := xnet.ParseUnspecifiedPort(address); port != 0 {
 				var networks []ice.NetworkType
 				for _, ntype := range networkTypes {
 					networks = append(networks, ice.NetworkType(ntype))

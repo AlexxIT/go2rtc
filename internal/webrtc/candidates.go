@@ -7,6 +7,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
+	"github.com/AlexxIT/go2rtc/pkg/xnet"
 	pion "github.com/pion/webrtc/v3"
 )
 
@@ -70,6 +71,11 @@ func GetCandidates() (candidates []string) {
 // FilterCandidate return true if candidate passed the check
 func FilterCandidate(candidate *pion.ICECandidate) bool {
 	if candidate == nil {
+		return false
+	}
+
+	// remove any Docker-like IP from candidates
+	if ip := net.ParseIP(candidate.Address); ip != nil && xnet.Docker.Contains(ip) {
 		return false
 	}
 

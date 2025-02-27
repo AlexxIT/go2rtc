@@ -1,4 +1,4 @@
-package net2
+package xnet
 
 import (
 	"net"
@@ -29,4 +29,36 @@ func ParseUnspecifiedPort(address string) int {
 
 	i, _ := strconv.Atoi(port)
 	return i
+}
+
+func IPNets(ipFilter func(ip net.IP) bool) ([]*net.IPNet, error) {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil, err
+	}
+
+	var nets []*net.IPNet
+
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+
+		addrs, _ := iface.Addrs() // range on nil slice is OK
+		for _, addr := range addrs {
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip := v.IP.To4()
+				if ip == nil {
+					continue
+				}
+				if ipFilter != nil && !ipFilter(ip) {
+					continue
+				}
+				nets = append(nets, v)
+			}
+		}
+	}
+
+	return nets, nil
 }

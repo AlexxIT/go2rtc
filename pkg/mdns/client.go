@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/AlexxIT/go2rtc/pkg/net2"
+	"github.com/AlexxIT/go2rtc/pkg/xnet"
 	"github.com/miekg/dns" // awesome library for parsing mDNS records
 )
 
@@ -170,7 +170,9 @@ type Browser struct {
 // Receiver will get multicast responses on senders requests.
 func (b *Browser) ListenMulticastUDP() error {
 	// 1. Collect IPv4 interfaces
-	nets, err := IPNets()
+	nets, err := xnet.IPNets(func(ip net.IP) bool {
+		return !xnet.Docker.Contains(ip)
+	})
 	if err != nil {
 		return err
 	}
@@ -369,31 +371,4 @@ func NewServiceEntries(msg *dns.Msg, ip net.IP) (entries []*ServiceEntry) {
 	}
 
 	return
-}
-
-func IPNets() ([]*net.IPNet, error) {
-	intfs, err := net.Interfaces()
-	if err != nil {
-		return nil, err
-	}
-
-	var nets []*net.IPNet
-
-	for _, intf := range intfs {
-		if intf.Flags&net.FlagUp == 0 || intf.Flags&net.FlagLoopback != 0 {
-			continue
-		}
-
-		addrs, _ := intf.Addrs()
-		for _, addr := range addrs {
-			switch v := addr.(type) {
-			case *net.IPNet:
-				if ip := v.IP.To4(); ip != nil && !net2.Docker.Contains(ip) {
-					nets = append(nets, v)
-				}
-			}
-		}
-	}
-
-	return nets, nil
 }
