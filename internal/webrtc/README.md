@@ -19,7 +19,7 @@ If an external connection via STUN is used:
 
 ```yaml
 webrtc:
-  listen: ":8555/tcp"
+  listen: ":8555"
   ice_servers:
     - urls: [ "stun:stun.l.google.com:19302" ]
 ```
@@ -31,7 +31,7 @@ webrtc:
 ```yaml
 webrtc:
   # fix local TCP or UDP or both ports for WebRTC media
-  listen: ":8555/tcp"        # address of your local server
+  listen: ":8555"            # address of your local server
 
   # add additional host candidates manually
   # order is important, the first will have a higher priority
@@ -55,17 +55,20 @@ webrtc:
     # including candidates from the `listen` option
     # use `candidates: []` to remove all auto discovery candidates
     candidates: [ 192.168.1.123 ]
+    
+    # enable localhost candidates
+    loopback: true
 
     # list of network types to be used for connection
     # including candidates from the `listen` option
     networks: [ udp4, udp6, tcp4, tcp6 ]
 
     # list of interfaces to be used for connection
-    # not related to the `listen` option
+    # including interfaces from unspecified `listen` option (empty host)
     interfaces: [ eno1 ]
 
     # list of host IP-addresses to be used for connection
-    # not related to the `listen` option
+    # including IPs from unspecified `listen` option (empty host)
     ips: [ 192.168.1.123 ]
 
     # range for random UDP ports [min, max] to be used for connection
@@ -73,13 +76,15 @@ webrtc:
     udp_ports: [ 50000, 50100 ]
 ```
 
-By default go2rtc uses **fixed TCP** port and multiple **random UDP** ports for each WebRTC connection - `listen: ":8555/tcp"`.
+By default go2rtc uses **fixed TCP** port and **fixed UDP** ports for each **direct** WebRTC connection - `listen: ":8555"`.
 
-You can set **fixed TCP** and **fixed UDP** port for all connections - `listen: ":8555"`. This may has lower performance, but it's your choice. 
+You can set **fixed TCP** and **random UDP** port for all connections - `listen: ":8555/tcp"`.
 
 Don't know why, but you can disable TCP port and leave only random UDP ports - `listen: ""`.
 
 ## Config filters
+
+**Importan!** By default go2rtc exclude all Docker-like candidates (`172.16.0.0/12`). This can not be disabled.
 
 Filters allow you to exclude unnecessary candidates. Extra candidates don't make your connection worse or better. But the wrong filter settings can break everything. Skip this setting if you don't understand it.
 
@@ -99,8 +104,6 @@ For example, go2rtc inside closed docker container (ex. [Frigate](https://frigat
 webrtc:
   listen: ":8555"                   # use fixed TCP and UDP ports
   candidates: [ 192.168.1.2:8555 ]  # add manual host candidate (use docker port forwarding)
-  filters:
-    candidates: []                  # skip all internal docker candidates
 ```
 
 ## Userful links
