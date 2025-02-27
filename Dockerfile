@@ -2,7 +2,7 @@
 
 # 0. Prepare images
 ARG PYTHON_VERSION="3.11"
-ARG GO_VERSION="1.22"
+ARG GO_VERSION="1.24"
 
 
 # 1. Download ngrok binary (for support arm/v6)
