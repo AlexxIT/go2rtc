@@ -6,6 +6,12 @@ Go 1.21 support only Windows 10 and macOS 10.15.
 So we will set `go 1.20` (minimum version) inside `go.mod` file. And will use env `GOTOOLCHAIN=go1.20.14` for building
 `win32` and `mac_amd64` binaries. All other binaries will use latest go version.
 
+```
+golang.org/x/crypto v0.33.0
+golang.org/x/mod v0.20.0 // indirect
+golang.org/x/tools v0.24.0 // indirect
+```
+
 ## Build
 
 - UPX-3.96 pack broken bin for `linux_mipsel`
