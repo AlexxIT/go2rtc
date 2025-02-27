@@ -352,7 +352,7 @@ streams:
   mjpeg: ffmpeg:http://185.97.122.128/cgi-bin/faststream.jpg#video=h264
 
   # [RTSP] video with rotation, should be transcoded, so select H264
-  rotate: ffmpeg:rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0#video=h264#rotate=90
+  rotate: ffmpeg:rtsp://12345678@192.168.1.123/av_stream/ch0#video=h264#rotate=90
 ```
 
 All trascoding formats has [built-in templates](https://github.com/AlexxIT/go2rtc/blob/master/internal/ffmpeg/ffmpeg.go): `h264`, `h265`, `opus`, `pcmu`, `pcmu/16000`, `pcmu/48000`, `pcma`, `pcma/16000`, `pcma/48000`, `aac`, `aac/16000`.
