@@ -132,12 +132,12 @@ func (s *Sender) WithParent(parent *Receiver) *Sender {
 
 func (s *Sender) Start() {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if s.buf == nil || s.done != nil {
+		s.mu.Unlock()
 		return
 	}
 	s.done = make(chan struct{})
+	s.mu.Unlock()
 
 	go func() {
 		// for range on nil chan is OK
@@ -197,12 +197,12 @@ func (r *Receiver) MarshalJSON() ([]byte, error) {
 
 func (s *Sender) MarshalJSON() ([]byte, error) {
 	v := struct {
-		ID      uint32 `json:"id"`
-		Codec   *Codec `json:"codec"`
-		Parent  uint32 `json:"parent,omitempty"`
-		Bytes   int    `json:"bytes,omitempty"`
-		Packets int    `json:"packets,omitempty"`
-		Drops   int    `json:"drops,omitempty"`
+		ID      uint32    `json:"id"`
+		Codec   *Codec    `json:"codec"`
+		Parents []*uint32 `json:"parents,omitempty"`
+		Bytes   int       `json:"bytes,omitempty"`
+		Packets int       `json:"packets,omitempty"`
+		Drops   int       `json:"drops,omitempty"`
 	}{
 		ID:      s.Node.id,
 		Codec:   s.Node.Codec,
@@ -210,8 +210,8 @@ func (s *Sender) MarshalJSON() ([]byte, error) {
 		Packets: s.Packets,
 		Drops:   s.Drops,
 	}
-	if s.parent != nil {
-		v.Parent = s.parent.id
+	for _, parent := range s.parents {
+		v.Parents = append(v.Parents, &parent.id)
 	}
 	return json.Marshal(v)
 }
