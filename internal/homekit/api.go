@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"strconv"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/app"
@@ -136,4 +137,57 @@ func findHomeKitURLs() map[string]*url.URL {
 		}
 	}
 	return urls
+}
+
+type PairingInfo struct {
+	Name         string     `yaml:"name"`
+	DeviceID     string     `yaml:"device_id"`
+	Pin          string     `yaml:"pin"`
+	Status       string     `yaml:"status"`
+	SetupURI     string     `yaml:"setup_uri"`
+}
+
+func getPairingInfo(host string, s *server) PairingInfo {
+	// for QR-Code
+	category, _ := strconv.ParseInt(hap.CategoryCamera, 10, 64)
+	pin, _ := strconv.ParseInt(strings.Replace(s.hap.Pin, "-", "", -1), 10, 64)
+	payload := "00000000" + strconv.FormatInt(category << 31 + 1 << 28 + pin, 36)
+	uri := strings.ToUpper("X-HM://" + payload[len(payload)-9:] + s.hap.SetupID[:4])
+	status := "unpaired"
+	if len(s.pairings) > 0 {
+		status = "paired"
+	}
+	return PairingInfo {
+		Name: s.mdns.Name ,
+		DeviceID: s.hap.DeviceID,
+		SetupURI: uri,
+		Pin: s.hap.Pin,
+		Status: status,
+	}
+}
+
+func apiPairingHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		pairingInfo := map[string]PairingInfo{}
+		for host, s := range servers {
+			pairingInfo[s.stream] = getPairingInfo(host, s)
+		}
+		api.ResponseJSON(w, pairingInfo)
+
+	case "DELETE":
+		query := r.URL.Query()
+		name := query.Get("name")
+		stream := query.Get("stream")
+		device_id := query.Get("device_id")
+		for _, s := range servers {
+			if name == s.mdns.Name || stream == s.stream || device_id == s.hap.DeviceID {
+				s.pairings = nil
+				s.UpdateStatus()
+				s.PatchConfig()
+				break;
+			}
+		}
+		discovery()
+	}
 }
