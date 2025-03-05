@@ -34,7 +34,12 @@ func (k kinesisResponse) String() string {
 	return fmt.Sprintf("type=%s, payload=%s", k.Type, k.Payload)
 }
 
-func kinesisClient(rawURL string, query url.Values, format string) (core.Producer, error) {
+type kinesisClientOpts struct {
+	SessionDescriptionModifier func(*pion.SessionDescription) ([]byte, error)
+	MediaModifier              func() ([]*core.Media, error)
+}
+
+func kinesisClient(rawURL string, query url.Values, format string, opts *kinesisClientOpts) (core.Producer, error) {
 	// 1. Connect to signalign server
 	conn, _, err := websocket.DefaultDialer.Dial(rawURL, nil)
 	if err != nil {
@@ -112,6 +117,12 @@ func kinesisClient(rawURL string, query url.Values, format string) (core.Produce
 		{Kind: core.KindVideo, Direction: core.DirectionRecvonly},
 		{Kind: core.KindAudio, Direction: core.DirectionRecvonly},
 	}
+	if opts.MediaModifier != nil {
+		medias, err = opts.MediaModifier()
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	// 4. Create offer
 	offer, err := prod.CreateOffer(medias)
@@ -121,10 +132,15 @@ func kinesisClient(rawURL string, query url.Values, format string) (core.Produce
 
 	// 5. Send offer
 	req.Action = "SDP_OFFER"
-	req.Payload, _ = json.Marshal(pion.SessionDescription{
+	sessionDescription := pion.SessionDescription{
 		Type: pion.SDPTypeOffer,
 		SDP:  offer,
-	})
+	}
+	if opts.SessionDescriptionModifier != nil {
+		req.Payload, _ = opts.SessionDescriptionModifier(&sessionDescription)
+	} else {
+		req.Payload, _ = json.Marshal(sessionDescription)
+	}
 	if err = conn.WriteJSON(req); err != nil {
 		return nil, err
 	}
@@ -218,5 +234,5 @@ func wyzeClient(rawURL string) (core.Producer, error) {
 		"ice_servers": []string{string(kvs.Servers)},
 	}
 
-	return kinesisClient(kvs.URL, query, "webrtc/wyze")
+	return kinesisClient(kvs.URL, query, "webrtc/wyze", &kinesisClientOpts{})
 }
