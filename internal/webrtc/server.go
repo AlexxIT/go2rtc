@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"net/url"
+	urlParser "net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -64,8 +64,8 @@ func syncHandler(w http.ResponseWriter, r *http.Request) {
 // 2. application/sdp - receive/response SDP via WebRTC-HTTP Egress Protocol (WHEP)
 // 3. other - receive/response raw SDP
 func outputWebRTC(w http.ResponseWriter, r *http.Request) {
-	uri := r.URL.Query().Get("src")
-	stream := streams.Get(uri)
+	url := r.URL.Query().Get("src")
+	stream := streams.Get(url)
 	if stream == nil {
 		http.Error(w, api.StreamNotFound, http.StatusNotFound)
 		return
@@ -96,7 +96,7 @@ func outputWebRTC(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		values, err := url.ParseQuery(string(body))
+		values, err := urlParser.ParseQuery(string(body))
 		if err != nil {
 			log.Error().Err(err).Caller().Send()
 			http.Error(w, err.Error(), http.StatusBadRequest)
