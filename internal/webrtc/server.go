@@ -1,9 +1,11 @@
 package webrtc
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -62,8 +64,8 @@ func syncHandler(w http.ResponseWriter, r *http.Request) {
 // 2. application/sdp - receive/response SDP via WebRTC-HTTP Egress Protocol (WHEP)
 // 3. other - receive/response raw SDP
 func outputWebRTC(w http.ResponseWriter, r *http.Request) {
-	url := r.URL.Query().Get("src")
-	stream := streams.Get(url)
+	uri := r.URL.Query().Get("src")
+	stream := streams.Get(uri)
 	if stream == nil {
 		http.Error(w, api.StreamNotFound, http.StatusNotFound)
 		return
@@ -86,6 +88,28 @@ func outputWebRTC(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		offer = desc.SDP
+
+	case "application/x-www-form-urlencoded":
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			log.Error().Err(err).Caller().Send()
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		values, err := url.ParseQuery(string(body))
+		if err != nil {
+			log.Error().Err(err).Caller().Send()
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		encodedOffer := values.Get("data")
+		decodedOffer, err := base64.StdEncoding.DecodeString(encodedOffer)
+		if err != nil {
+			log.Error().Err(err).Caller().Send()
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		offer = string(decodedOffer)
 
 	default:
 		body, err := io.ReadAll(r.Body)
@@ -123,6 +147,11 @@ func outputWebRTC(w http.ResponseWriter, r *http.Request) {
 			Type: pion.SDPTypeAnswer, SDP: answer,
 		}
 		err = json.NewEncoder(w).Encode(v)
+
+	case "application/x-www-form-urlencoded":
+		w.Header().Set("Content-Type", mediaType)
+		encodedAnswer := base64.StdEncoding.EncodeToString([]byte(answer))
+		_, err = w.Write([]byte(encodedAnswer))
 
 	case MimeSDP:
 		w.Header().Set("Content-Type", mediaType)
