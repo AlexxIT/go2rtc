@@ -103,7 +103,7 @@ func apiPair(id, url string) error {
 
 	streams.New(id, conn.URL())
 
-	return app.PatchConfig(id, conn.URL(), "streams")
+	return app.PatchConfig([]string{"streams", id}, conn.URL())
 }
 
 func apiUnpair(id string) error {
@@ -123,7 +123,7 @@ func apiUnpair(id string) error {
 
 	streams.Delete(id)
 
-	return app.PatchConfig(id, nil, "streams")
+	return app.PatchConfig([]string{"streams", id}, nil)
 }
 
 func findHomeKitURLs() map[string]*url.URL {

@@ -222,7 +222,7 @@ func (s *server) DelPair(conn net.Conn, id string) {
 }
 
 func (s *server) PatchConfig() {
-	if err := app.PatchConfig("pairings", s.pairings, "homekit", s.stream); err != nil {
+	if err := app.PatchConfig([]string{"homekit", s.stream, "pairings"}, s.pairings); err != nil {
 		log.Error().Err(err).Msgf(
 			"[homekit] can't save %s pairings=%v", s.stream, s.pairings,
 		)
