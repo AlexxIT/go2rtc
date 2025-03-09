@@ -81,7 +81,7 @@ func main() {
 	mpegts.Init()   // mpegts passive source
 	roborock.Init() // roborock source
 	homekit.Init()  // homekit source
-	ring.Init()	 	// ring source
+	ring.Init()     // ring source
 	nest.Init()     // nest source
 	bubble.Init()   // bubble source
 	expr.Init()     // expr source
