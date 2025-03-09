@@ -203,6 +203,7 @@ func (s *server) AddPair(conn net.Conn, id string, public []byte, permissions by
 		s.UpdateStatus()
 		s.PatchConfig()
 	}
+	discovery()
 }
 
 func (s *server) DelPair(conn net.Conn, id string) {
@@ -214,11 +215,16 @@ func (s *server) DelPair(conn net.Conn, id string) {
 			continue
 		}
 
-		s.pairings = append(s.pairings[:i], s.pairings[i+1:]...)
+		if strings.Contains(pairing, "permissions=1") {
+			s.pairings = nil
+		} else {
+			s.pairings = append(s.pairings[:i], s.pairings[i+1:]...)
+		}
 		s.UpdateStatus()
 		s.PatchConfig()
 		break
 	}
+	discovery()
 }
 
 func (s *server) PatchConfig() {
