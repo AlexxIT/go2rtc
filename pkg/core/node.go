@@ -27,9 +27,9 @@ type Node struct {
 	Input  HandlerFunc
 	Output HandlerFunc
 
-	id     uint32
-	childs []*Node
-	parent *Node
+	id      uint32
+	childs  []*Node
+	parents []*Node
 
 	mu sync.Mutex
 }
@@ -44,30 +44,41 @@ func (n *Node) AppendChild(child *Node) {
 	n.childs = append(n.childs, child)
 	n.mu.Unlock()
 
-	child.parent = n
+	child.mu.Lock()
+	child.parents = append(child.parents, n)
+	child.mu.Unlock()
 }
 
 func (n *Node) RemoveChild(child *Node) {
 	n.mu.Lock()
-	for i, ch := range n.childs {
-		if ch == child {
-			n.childs = append(n.childs[:i], n.childs[i+1:]...)
-			break
-		}
+	if i := Index(n.childs, child); i != -1 {
+		n.childs = append(n.childs[:i], n.childs[i+1:]...)
 	}
 	n.mu.Unlock()
+
+	child.mu.Lock()
+	if i := Index(child.parents, n); i != -1 {
+		child.parents = append(child.parents[:i], child.parents[i+1:]...)
+	}
+	child.mu.Unlock()
 }
 
 func (n *Node) Close() {
-	if parent := n.parent; parent != nil {
-		parent.RemoveChild(n)
+	n.mu.Lock()
+	if n.parents != nil && len(n.parents) > 0 {
+		parents := n.parents
+		n.mu.Unlock()
 
-		if len(parent.childs) == 0 {
-			parent.Close()
+		for _, parent := range parents {
+			parent.RemoveChild(n)
 		}
 	} else {
-		for _, childs := range n.childs {
-			childs.Close()
+		childs := n.childs
+		n.childs = nil
+		n.mu.Unlock()
+
+		for _, child := range childs {
+			child.Close()
 		}
 	}
 }
@@ -83,6 +94,11 @@ func MoveNode(dst, src *Node) {
 	dst.mu.Unlock()
 
 	for _, child := range childs {
-		child.parent = dst
+		child.mu.Lock()
+		if i := Index(child.parents, dst); i != -1 {
+			child.parents = append(child.parents[:i], child.parents[i+1:]...)
+		}
+		child.parents = append(child.parents, dst)
+		child.mu.Unlock()
 	}
 }
