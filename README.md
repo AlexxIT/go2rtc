@@ -682,13 +682,18 @@ Supports connection to [Wyze](https://www.wyze.com/) cameras, using WebRTC proto
 
 Supports [Amazon Kinesis Video Streams](https://aws.amazon.com/kinesis/video-streams/), using WebRTC protocol. You need to specify signalling WebSocket URL with all credentials in query params, `client_id` and `ice_servers` list in [JSON format](https://developer.mozilla.org/en-US/docs/Web/API/RTCIceServer).
 
+**switchbot**
+
+Support connection to [SwitchBot](https://us.switch-bot.com/) cameras that are based on Kinesis Video Streams. Specifically, this includes [Pan/Tilt Cam Plus 2K](https://us.switch-bot.com/pages/switchbot-pan-tilt-cam-plus-2k) and [Pan/Tilt Cam Plus 3K](https://us.switch-bot.com/pages/switchbot-pan-tilt-cam-plus-3k). `Outdoor Spotlight Cam 1080P`, `Outdoor Spotlight Cam 2K`, `Pan/Tilt Cam`, `Pan/Tilt Cam 2K`, `Indoor Cam` are based on Tuya, so this feature is not available.
+
 ```yaml
 streams:
-  webrtc-whep:    webrtc:http://192.168.1.123:1984/api/webrtc?src=camera1
-  webrtc-go2rtc:  webrtc:ws://192.168.1.123:1984/api/ws?src=camera1
-  webrtc-openipc: webrtc:ws://192.168.1.123/webrtc_ws#format=openipc#ice_servers=[{"urls":"stun:stun.kinesisvideo.eu-north-1.amazonaws.com:443"}]
-  webrtc-wyze:    webrtc:http://192.168.1.123:5000/signaling/camera1?kvs#format=wyze
-  webrtc-kinesis: webrtc:wss://...amazonaws.com/?...#format=kinesis#client_id=...#ice_servers=[{...},{...}]
+  webrtc-whep:      webrtc:http://192.168.1.123:1984/api/webrtc?src=camera1
+  webrtc-go2rtc:    webrtc:ws://192.168.1.123:1984/api/ws?src=camera1
+  webrtc-openipc:   webrtc:ws://192.168.1.123/webrtc_ws#format=openipc#ice_servers=[{"urls":"stun:stun.kinesisvideo.eu-north-1.amazonaws.com:443"}]
+  webrtc-wyze:      webrtc:http://192.168.1.123:5000/signaling/camera1?kvs#format=wyze
+  webrtc-kinesis:   webrtc:wss://...amazonaws.com/?...#format=kinesis#client_id=...#ice_servers=[{...},{...}]
+  webrtc-switchbot: webrtc:wss://...amazonaws.com/?...#format=switchbot#resolution=hd#client_id=...#ice_servers=[{...},{...}]
 ```
 
 **PS.** For `kinesis` sources you can use [echo](#source-echo) to get connection params using `bash`/`python` or any other script language.

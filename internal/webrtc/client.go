@@ -41,9 +41,11 @@ func streamsHandler(rawURL string) (core.Producer, error) {
 				// https://aws.amazon.com/kinesis/video-streams/
 				// https://docs.aws.amazon.com/kinesisvideostreams-webrtc-dg/latest/devguide/what-is-kvswebrtc.html
 				// https://github.com/orgs/awslabs/repositories?q=kinesis+webrtc
-				return kinesisClient(rawURL, query, "webrtc/kinesis")
+				return kinesisClient(rawURL, query, "webrtc/kinesis", nil)
 			} else if format == "openipc" {
 				return openIPCClient(rawURL, query)
+			} else if format == "switchbot" {
+				return switchbotClient(rawURL, query)
 			} else {
 				return go2rtcClient(rawURL)
 			}
