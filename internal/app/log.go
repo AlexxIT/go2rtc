@@ -3,12 +3,14 @@ package app
 import (
 	"io"
 	"os"
+	"strings"
+	"sync"
 
 	"github.com/mattn/go-isatty"
 	"github.com/rs/zerolog"
 )
 
-var MemoryLog = newBuffer(16)
+var MemoryLog = newBuffer()
 
 func GetLogger(module string) zerolog.Logger {
 	if s, ok := modules[module]; ok {
@@ -38,11 +40,17 @@ func initLogger() {
 
 	var writer io.Writer
 
-	switch modules["output"] {
+	switch output, path, _ := strings.Cut(modules["output"], ":"); output {
 	case "stderr":
 		writer = os.Stderr
 	case "stdout":
 		writer = os.Stdout
+	case "file":
+		if path == "" {
+			path = "go2rtc.log"
+		}
+		// if fail - only MemoryLog will be available
+		writer, _ = os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	}
 
 	timeFormat := modules["time"]
@@ -99,15 +107,19 @@ var modules = map[string]string{
 	"time":   zerolog.TimeFormatUnixMs,
 }
 
-const chunkSize = 1 << 16
+const (
+	chunkCount = 16
+	chunkSize  = 1 << 16
+)
 
 type circularBuffer struct {
 	chunks [][]byte
 	r, w   int
+	mu     sync.Mutex
 }
 
-func newBuffer(chunks int) *circularBuffer {
-	b := &circularBuffer{chunks: make([][]byte, 0, chunks)}
+func newBuffer() *circularBuffer {
+	b := &circularBuffer{chunks: make([][]byte, 0, chunkCount)}
 	// create first chunk
 	b.chunks = append(b.chunks, make([]byte, 0, chunkSize))
 	return b
@@ -116,16 +128,17 @@ func newBuffer(chunks int) *circularBuffer {
 func (b *circularBuffer) Write(p []byte) (n int, err error) {
 	n = len(p)
 
+	b.mu.Lock()
 	// check if chunk has size
 	if len(b.chunks[b.w])+n > chunkSize {
 		// increase write chunk index
-		if b.w++; b.w == cap(b.chunks) {
+		if b.w++; b.w == chunkCount {
 			b.w = 0
 		}
 		// check overflow
 		if b.r == b.w {
 			// increase read chunk index
-			if b.r++; b.r == cap(b.chunks) {
+			if b.r++; b.r == chunkCount {
 				b.r = 0
 			}
 		}
@@ -140,29 +153,34 @@ func (b *circularBuffer) Write(p []byte) (n int, err error) {
 	}
 
 	b.chunks[b.w] = append(b.chunks[b.w], p...)
+	b.mu.Unlock()
 	return
 }
 
 func (b *circularBuffer) WriteTo(w io.Writer) (n int64, err error) {
-	for i := b.r; ; {
-		var nn int
-		if nn, err = w.Write(b.chunks[i]); err != nil {
-			return
-		}
-		n += int64(nn)
+	buf := make([]byte, 0, chunkCount*chunkSize)
 
+	// use temp buffer inside mutex because w.Write can take some time
+	b.mu.Lock()
+	for i := b.r; ; {
+		buf = append(buf, b.chunks[i]...)
 		if i == b.w {
 			break
 		}
-		if i++; i == cap(b.chunks) {
+		if i++; i == chunkCount {
 			i = 0
 		}
 	}
-	return
+	b.mu.Unlock()
+
+	nn, err := w.Write(buf)
+	return int64(nn), err
 }
 
 func (b *circularBuffer) Reset() {
+	b.mu.Lock()
 	b.chunks[0] = b.chunks[0][:0]
 	b.r = 0
 	b.w = 0
+	b.mu.Unlock()
 }

@@ -1,3 +1,10 @@
+## Tests
+
+- go2rtc rtmp client => Reolink
+- go2rtc rtmp server <= Dahua
+- go2rtc rtmp publish => YouTube
+- go2rtc rtmp publish => Telegram
+
 ## Logs
 
 ```

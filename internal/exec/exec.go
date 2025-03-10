@@ -9,9 +9,9 @@ import (
 	"io"
 	"net/url"
 	"os"
-	"os/exec"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/app"
@@ -49,7 +49,7 @@ func Init() {
 	log = app.GetLogger("exec")
 }
 
-func execHandle(rawURL string) (core.Producer, error) {
+func execHandle(rawURL string) (prod core.Producer, err error) {
 	rawURL, rawQuery, _ := strings.Cut(rawURL, "#")
 	query := streams.ParseQuery(rawQuery)
 
@@ -67,39 +67,55 @@ func execHandle(rawURL string) (core.Producer, error) {
 		rawURL = rawURL[:i] + "rtsp://127.0.0.1:" + rtsp.Port + path + rawURL[i+8:]
 	}
 
-	args := shell.QuoteSplit(rawURL[5:]) // remove `exec:`
-	cmd := exec.Command(args[0], args[1:]...)
+	cmd := shell.NewCommand(rawURL[5:]) // remove `exec:`
 	cmd.Stderr = &logWriter{
 		buf:   make([]byte, 512),
 		debug: log.Debug().Enabled(),
+	}
+
+	if s := query.Get("killsignal"); s != "" {
+		sig := syscall.Signal(core.Atoi(s))
+		cmd.Cancel = func() error {
+			log.Debug().Msgf("[exec] kill with signal=%d", sig)
+			return cmd.Process.Signal(sig)
+		}
+	}
+
+	if s := query.Get("killtimeout"); s != "" {
+		cmd.WaitDelay = time.Duration(core.Atoi(s)) * time.Second
 	}
 
 	if query.Get("backchannel") == "1" {
 		return stdin.NewClient(cmd)
 	}
 
-	cl := &closer{cmd: cmd, query: query}
-
 	if path == "" {
-		return handlePipe(rawURL, cmd, cl)
+		prod, err = handlePipe(rawURL, cmd)
+	} else {
+		prod, err = handleRTSP(rawURL, cmd, path)
 	}
 
-	return handleRTSP(rawURL, cmd, cl, path)
+	if err != nil {
+		_ = cmd.Close()
+	}
+
+	return
 }
 
-func handlePipe(source string, cmd *exec.Cmd, cl io.Closer) (core.Producer, error) {
+func handlePipe(source string, cmd *shell.Command) (core.Producer, error) {
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
 	}
 
-	rc := struct {
+	rd := struct {
 		io.Reader
 		io.Closer
 	}{
 		// add buffer for pipe reader to reduce syscall
 		bufio.NewReaderSize(stdout, core.BufferSize),
-		cl,
+		// stop cmd on close pipe call
+		cmd,
 	}
 
 	log.Debug().Strs("args", cmd.Args).Msg("[exec] run pipe")
@@ -110,9 +126,8 @@ func handlePipe(source string, cmd *exec.Cmd, cl io.Closer) (core.Producer, erro
 		return nil, err
 	}
 
-	prod, err := magic.Open(rc)
+	prod, err := magic.Open(rd)
 	if err != nil {
-		_ = rc.Close()
 		return nil, fmt.Errorf("exec/pipe: %w\n%s", err, cmd.Stderr)
 	}
 
@@ -126,7 +141,7 @@ func handlePipe(source string, cmd *exec.Cmd, cl io.Closer) (core.Producer, erro
 	return prod, nil
 }
 
-func handleRTSP(source string, cmd *exec.Cmd, cl io.Closer, path string) (core.Producer, error) {
+func handleRTSP(source string, cmd *shell.Command, path string) (core.Producer, error) {
 	if log.Trace().Enabled() {
 		cmd.Stdout = os.Stdout
 	}
@@ -152,23 +167,22 @@ func handleRTSP(source string, cmd *exec.Cmd, cl io.Closer, path string) (core.P
 		return nil, err
 	}
 
-	done := make(chan error, 1)
-	go func() {
-		done <- cmd.Wait()
-	}()
+	timeout := time.NewTimer(30 * time.Second)
+	defer timeout.Stop()
 
 	select {
-	case <-time.After(time.Minute):
+	case <-timeout.C:
+		// haven't received data from app in timeout
 		log.Error().Str("source", source).Msg("[exec] timeout")
-		_ = cl.Close()
 		return nil, errors.New("exec: timeout")
-	case <-done:
-		// limit message size
+	case <-cmd.Done():
+		// app fail before we receive any data
 		return nil, fmt.Errorf("exec/rtsp\n%s", cmd.Stderr)
 	case prod := <-waiter:
+		// app started successfully
 		log.Debug().Stringer("launch", time.Since(ts)).Msg("[exec] run rtsp")
 		setRemoteInfo(prod, source, cmd.Args)
-		prod.OnClose = cl.Close
+		prod.OnClose = cmd.Close
 		return prod, nil
 	}
 }

@@ -2,11 +2,20 @@ package camera
 
 import (
 	"encoding/base64"
+	"strings"
 	"testing"
 
 	"github.com/AlexxIT/go2rtc/pkg/hap"
 	"github.com/stretchr/testify/require"
 )
+
+func TestNilCharacter(t *testing.T) {
+	var res SetupEndpoints
+	char := &hap.Character{}
+	err := char.ReadTLV8(&res)
+	require.NotNil(t, err)
+	require.NotNil(t, strings.Contains(err.Error(), "can't read value"))
+}
 
 type testTLV8 struct {
 	name    string

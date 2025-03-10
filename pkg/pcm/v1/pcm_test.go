@@ -1,9 +1,10 @@
 package v1
 
 import (
+	"testing"
+
 	v2 "github.com/AlexxIT/go2rtc/pkg/pcm"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestPCMUtoPCM(t *testing.T) {
