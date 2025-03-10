@@ -1,7 +1,7 @@
 #!/bin/sh
 
 check_command() {
-    if ! command -v $1 &> /dev/null
+    if ! command -v "$1" > /dev/null
     then
         echo "Error: $1 could not be found. Please install it."
         exit 1
