@@ -17,6 +17,8 @@ check_command upx
 
 set -x
 
+export CGO_ENABLED=0
+
 # Windows amd64
 export GOOS=windows
 export GOARCH=amd64
