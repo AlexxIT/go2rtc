@@ -30,7 +30,7 @@ go build -ldflags "-s -w" -trimpath
 export GOOS=windows
 export GOARCH=386
 FILENAME="go2rtc_win32.zip"
-go build -ldflags "-s -w" -trimpath
+GOTOOLCHAIN=go1.20.14 go build -ldflags "-s -w" -trimpath
 7z a -mx9 -bso0 -sdel $FILENAME go2rtc.exe
 
 # Windows arm64
@@ -88,7 +88,7 @@ upx --lzma --force-overwrite -q --no-progress $FILENAME
 export GOOS=darwin
 export GOARCH=amd64
 FILENAME="go2rtc_mac_amd64.zip"
-go build -ldflags "-s -w" -trimpath
+GOTOOLCHAIN=go1.20.14 go build -ldflags "-s -w" -trimpath
 7z a -mx9 -bso0 -sdel $FILENAME go2rtc
 
 # Darwin arm64
