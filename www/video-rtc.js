@@ -673,8 +673,8 @@ export class VideoRTC extends HTMLElement {
             }
             
             return videoCodecs.some(codec => 
-            codec.mimeType.toLowerCase().includes('h265') || 
-            codec.mimeType.toLowerCase().includes('hevc')
+                codec.mimeType.toLowerCase().includes('h265') || 
+                codec.mimeType.toLowerCase().includes('hevc')
             );
         } catch {
             return false;
