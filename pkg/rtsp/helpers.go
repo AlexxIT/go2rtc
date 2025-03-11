@@ -75,6 +75,16 @@ func UnmarshalSDP(rawSDP []byte) ([]*core.Media, error) {
 				if codec.FmtpLine == "" {
 					codec.FmtpLine = findFmtpLine(codec.PayloadType, sd.MediaDescriptions)
 				}
+			case core.CodecH265:
+				if codec.FmtpLine != "" {
+					// all three parameters are needed for a valid fmtp line
+					// https://github.com/AlexxIT/go2rtc/pull/1588
+					if !strings.Contains(codec.FmtpLine, "sprop-vps=") ||
+						!strings.Contains(codec.FmtpLine, "sprop-sps=") ||
+						!strings.Contains(codec.FmtpLine, "sprop-pps=") {
+						codec.FmtpLine = ""
+					}
+				}
 			case core.CodecOpus:
 				// fix OPUS for some cameras https://datatracker.ietf.org/doc/html/rfc7587
 				codec.ClockRate = 48000
@@ -107,6 +117,7 @@ func findFmtpLine(payloadType uint8, descriptions []*sdp.MediaDescription) strin
 // 1. Content-Base: rtsp://::ffff:192.168.1.123/onvif/profile.1/
 // 2. Content-Base: rtsp://rtsp://turret2-cam.lan:554/stream1/
 func urlParse(rawURL string) (*url.URL, error) {
+	// fix https://github.com/AlexxIT/go2rtc/issues/830
 	if strings.HasPrefix(rawURL, "rtsp://rtsp://") {
 		rawURL = rawURL[7:]
 	}

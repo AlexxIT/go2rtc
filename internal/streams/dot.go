@@ -173,5 +173,6 @@ func (c *conn) label() string {
 	if c.UserAgent != "" {
 		sb.WriteString("\nuser_agent=" + c.UserAgent)
 	}
-	return sb.String()
+	// escape quotes https://github.com/AlexxIT/go2rtc/issues/1603
+	return strings.ReplaceAll(sb.String(), `"`, `'`)
 }

@@ -46,7 +46,7 @@ func (c *Conn) Close() error {
 	return c.conn.Close()
 }
 
-func (c *Conn) readResponse(transID float64) ([]any, error) {
+func (c *Conn) readResponse(wait func(items []any) bool) ([]any, error) {
 	for {
 		msgType, _, b, err := c.readMessage()
 		if err != nil {
@@ -59,7 +59,7 @@ func (c *Conn) readResponse(transID float64) ([]any, error) {
 			c.rdPacketSize = binary.BigEndian.Uint32(b)
 		case TypeCommand:
 			items, _ := amf.NewReader(b).ReadItems()
-			if len(items) >= 3 && (items[1] == transID || items[1] == float64(0)) {
+			if wait(items) {
 				return items, nil
 			}
 		}
@@ -250,7 +250,9 @@ func (c *Conn) writeConnect() error {
 		return err
 	}
 
-	v, err := c.readResponse(1)
+	v, err := c.readResponse(func(items []any) bool {
+		return len(items) >= 3 && items[0] == "_result" && items[1] == float64(1)
+	})
 	if err != nil {
 		return err
 	}
@@ -280,7 +282,9 @@ func (c *Conn) writeCreateStream() error {
 		return err
 	}
 
-	v, err := c.readResponse(4)
+	v, err := c.readResponse(func(items []any) bool {
+		return len(items) >= 3 && items[0] == "_result" && items[1] == float64(4)
+	})
 	if err != nil {
 		return err
 	}
@@ -301,7 +305,10 @@ func (c *Conn) writePublish() error {
 		return err
 	}
 
-	v, err := c.readResponse(5)
+	// YouTube can response with "onBWDone 0"
+	v, err := c.readResponse(func(items []any) bool {
+		return len(items) >= 3 && items[0] == "onStatus"
+	})
 	if err != nil {
 		return nil
 	}
@@ -321,7 +328,9 @@ func (c *Conn) writePlay() error {
 	}
 
 	// Reolink response with ID=0, other software respose with ID=5
-	v, err := c.readResponse(5)
+	v, err := c.readResponse(func(items []any) bool {
+		return len(items) >= 3 && items[0] == "onStatus"
+	})
 	if err != nil {
 		return nil
 	}

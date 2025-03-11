@@ -5,10 +5,11 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"errors"
-	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"net"
 	"net/http"
 	"strings"
+
+	"github.com/AlexxIT/go2rtc/pkg/tcp"
 )
 
 func Dial(address string) (net.Conn, error) {

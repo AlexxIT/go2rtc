@@ -53,7 +53,7 @@ func apiStreams(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if err := app.PatchConfig(name, query["src"], "streams"); err != nil {
+		if err := app.PatchConfig([]string{"streams", name}, query["src"]); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		}
 
@@ -96,7 +96,7 @@ func apiStreams(w http.ResponseWriter, r *http.Request) {
 	case "DELETE":
 		delete(streams, src)
 
-		if err := app.PatchConfig(src, nil, "streams"); err != nil {
+		if err := app.PatchConfig([]string{"streams", src}, nil); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		}
 	}

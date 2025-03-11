@@ -39,7 +39,7 @@ import (
 )
 
 func main() {
-	app.Version = "1.9.8"
+	app.Version = "1.9.9"
 
 	// 1. Core modules: app, api/ws, streams
 
@@ -81,7 +81,7 @@ func main() {
 	mpegts.Init()   // mpegts passive source
 	roborock.Init() // roborock source
 	homekit.Init()  // homekit source
-	ring.Init()	 	// ring source
+	ring.Init()     // ring source
 	nest.Init()     // nest source
 	bubble.Init()   // bubble source
 	expr.Init()     // expr source

@@ -80,3 +80,15 @@ export GOOS=darwin
 export GOARCH=arm64
 FILENAME="go2rtc_mac_arm64.zip"
 go build -ldflags "-s -w" -trimpath && 7z a -mx9 -bso0 -sdel $FILENAME go2rtc
+
+# FreeBSD amd64
+export GOOS=freebsd
+export GOARCH=amd64
+FILENAME="go2rtc_freebsd_amd64.zip"
+go build -ldflags "-s -w" -trimpath && 7z a -mx9 -bso0 -sdel $FILENAME go2rtc
+
+# FreeBSD arm64
+export GOOS=freebsd
+export GOARCH=arm64
+FILENAME="go2rtc_freebsd_arm64.zip"
+go build -ldflags "-s -w" -trimpath && 7z a -mx9 -bso0 -sdel $FILENAME go2rtc

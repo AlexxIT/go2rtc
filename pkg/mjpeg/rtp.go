@@ -3,10 +3,11 @@ package mjpeg
 import (
 	"bytes"
 	"encoding/binary"
-	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/pion/rtp"
 	"image"
 	"image/jpeg"
+
+	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/pion/rtp"
 )
 
 func RTPDepay(handlerFunc core.HandlerFunc) core.HandlerFunc {

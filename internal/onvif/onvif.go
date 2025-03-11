@@ -72,7 +72,11 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 		onvif.DeviceGetNetworkDefaultGateway,
 		onvif.DeviceGetNetworkProtocols,
 		onvif.DeviceGetNTP,
-		onvif.DeviceGetScopes:
+		onvif.DeviceGetScopes,
+		onvif.MediaGetVideoEncoderConfigurations,
+		onvif.MediaGetAudioEncoderConfigurations,
+		onvif.MediaGetAudioSources,
+		onvif.MediaGetAudioSourceConfigurations:
 		b = onvif.StaticResponse(operation)
 
 	case onvif.DeviceGetCapabilities:
@@ -99,15 +103,19 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 		})
 
 	case onvif.MediaGetVideoSources:
-		b = onvif.GetVideoSourcesResponse(streams.GetAll())
+		b = onvif.GetVideoSourcesResponse(streams.GetAllNames())
 
 	case onvif.MediaGetProfiles:
 		// important for Hass: H264 codec, width, height
-		b = onvif.GetProfilesResponse(streams.GetAll())
+		b = onvif.GetProfilesResponse(streams.GetAllNames())
 
 	case onvif.MediaGetProfile:
 		token := onvif.FindTagValue(b, "ProfileToken")
 		b = onvif.GetProfileResponse(token)
+
+	case onvif.MediaGetVideoSourceConfigurations:
+		// important for Happytime Onvif Client
+		b = onvif.GetVideoSourceConfigurationsResponse(streams.GetAllNames())
 
 	case onvif.MediaGetVideoSourceConfiguration:
 		token := onvif.FindTagValue(b, "ConfigurationToken")
@@ -129,6 +137,7 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 
 	default:
 		http.Error(w, "unsupported operation", http.StatusBadRequest)
+		log.Warn().Msgf("[onvif] unsupported operation: %s", operation)
 		log.Debug().Msgf("[onvif] unsupported request:\n%s", b)
 		return
 	}

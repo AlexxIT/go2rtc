@@ -2,9 +2,10 @@ package webtorrent
 
 import (
 	"fmt"
+	"net/http"
+
 	"github.com/AlexxIT/go2rtc/pkg/webtorrent"
 	"github.com/gorilla/websocket"
-	"net/http"
 )
 
 var upgrader *websocket.Upgrader

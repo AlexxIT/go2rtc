@@ -1,6 +1,7 @@
 package webrtc
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -62,8 +63,8 @@ func syncHandler(w http.ResponseWriter, r *http.Request) {
 // 2. application/sdp - receive/response SDP via WebRTC-HTTP Egress Protocol (WHEP)
 // 3. other - receive/response raw SDP
 func outputWebRTC(w http.ResponseWriter, r *http.Request) {
-	url := r.URL.Query().Get("src")
-	stream := streams.Get(url)
+	u := r.URL.Query().Get("src")
+	stream := streams.Get(u)
 	if stream == nil {
 		http.Error(w, api.StreamNotFound, http.StatusNotFound)
 		return
@@ -86,6 +87,21 @@ func outputWebRTC(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		offer = desc.SDP
+
+	case "application/x-www-form-urlencoded":
+		if err := r.ParseForm(); err != nil {
+			log.Error().Err(err).Caller().Send()
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		offerB64 := r.Form.Get("data")
+		b, err := base64.StdEncoding.DecodeString(offerB64)
+		if err != nil {
+			log.Error().Err(err).Caller().Send()
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		offer = string(b)
 
 	default:
 		body, err := io.ReadAll(r.Body)
@@ -123,6 +139,11 @@ func outputWebRTC(w http.ResponseWriter, r *http.Request) {
 			Type: pion.SDPTypeAnswer, SDP: answer,
 		}
 		err = json.NewEncoder(w).Encode(v)
+
+	case "application/x-www-form-urlencoded":
+		w.Header().Set("Content-Type", mediaType)
+		answerB64 := base64.StdEncoding.EncodeToString([]byte(answer))
+		_, err = w.Write([]byte(answerB64))
 
 	case MimeSDP:
 		w.Header().Set("Content-Type", mediaType)

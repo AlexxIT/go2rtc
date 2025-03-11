@@ -2,7 +2,7 @@
 
 # 0. Prepare images
 ARG PYTHON_VERSION="3.11"
-ARG GO_VERSION="1.22"
+ARG GO_VERSION="1.24"
 
 
 # 1. Download ngrok binary (for support arm/v6)
@@ -42,7 +42,7 @@ FROM python:${PYTHON_VERSION}-alpine AS base
 # and other common tools for the echo source.
 # alsa-plugins-pulse for ALSA support (+0MB)
 # font-droid for FFmpeg drawtext filter (+2MB)
-RUN apk add --no-cache tini ffmpeg bash curl jq alsa-plugins-pulse font-droid
+RUN apk add --no-cache tini ffmpeg ffplay bash curl jq alsa-plugins-pulse font-droid
 
 # Hardware Acceleration for Intel CPU (+50MB)
 ARG TARGETARCH
