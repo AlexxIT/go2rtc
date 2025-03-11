@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-	"net"
 	"net/url"
 	"os"
 
@@ -41,7 +40,13 @@ func main() {
 		onvif.DeviceGetSystemDateAndTime,
 		onvif.DeviceSystemReboot:
 		b, err = client.DeviceRequest(operation)
-	case onvif.MediaGetProfiles, onvif.MediaGetVideoSources:
+	case onvif.MediaGetProfiles,
+		onvif.MediaGetVideoEncoderConfigurations,
+		onvif.MediaGetVideoSources,
+		onvif.MediaGetVideoSourceConfigurations,
+		onvif.MediaGetAudioEncoderConfigurations,
+		onvif.MediaGetAudioSources,
+		onvif.MediaGetAudioSourceConfigurations:
 		b, err = client.MediaRequest(operation)
 	case onvif.MediaGetProfile:
 		b, err = client.GetProfile(token)
@@ -64,9 +69,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	host, _, _ := net.SplitHostPort(u.Host)
-
-	if err = os.WriteFile(host+"_"+operation+".xml", b, 0644); err != nil {
+	if err = os.WriteFile(u.Hostname()+"_"+operation+".xml", b, 0644); err != nil {
 		log.Printf("%s\n", err)
 	}
 }

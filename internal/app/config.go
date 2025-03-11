@@ -18,7 +18,7 @@ func LoadConfig(v any) {
 	}
 }
 
-func PatchConfig(key string, value any, path ...string) error {
+func PatchConfig(path []string, value any) error {
 	if ConfigPath == "" {
 		return errors.New("config file disabled")
 	}
@@ -26,7 +26,7 @@ func PatchConfig(key string, value any, path ...string) error {
 	// empty config is OK
 	b, _ := os.ReadFile(ConfigPath)
 
-	b, err := yaml.Patch(b, key, value, path...)
+	b, err := yaml.Patch(b, path, value)
 	if err != nil {
 		return err
 	}

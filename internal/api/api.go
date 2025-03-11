@@ -69,6 +69,8 @@ func Init() {
 	}
 
 	if cfg.Mod.Listen != "" {
+		_, port, _ := net.SplitHostPort(cfg.Mod.Listen)
+		Port, _ = strconv.Atoi(port)
 		go listen("tcp", cfg.Mod.Listen)
 	}
 
@@ -91,10 +93,6 @@ func listen(network, address string) {
 	}
 
 	log.Info().Str("addr", address).Msg("[api] listen")
-
-	if network == "tcp" {
-		Port = ln.Addr().(*net.TCPAddr).Port
-	}
 
 	server := http.Server{
 		Handler:           Handler,

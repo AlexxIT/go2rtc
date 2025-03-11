@@ -291,6 +291,7 @@ func dial(req *http.Request, brand, username, password string) (net.Conn, *http.
 	if err != nil {
 		return nil, nil, err
 	}
+	_, _ = io.Copy(io.Discard, res.Body) // discard leftovers
 	_ = res.Body.Close() // ignore response body
 
 	auth := res.Header.Get("WWW-Authenticate")

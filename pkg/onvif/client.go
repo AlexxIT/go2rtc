@@ -169,9 +169,12 @@ func (c *Client) GetServiceCapabilities() ([]byte, error) {
 }
 
 func (c *Client) DeviceRequest(operation string) ([]byte, error) {
-	if operation == DeviceGetServices {
+	switch operation {
+	case DeviceGetServices:
 		operation = `<tds:GetServices><tds:IncludeCapability>true</tds:IncludeCapability></tds:GetServices>`
-	} else {
+	case DeviceGetCapabilities:
+		operation = `<tds:GetCapabilities><tds:Category>All</tds:Category></tds:GetCapabilities>`
+	default:
 		operation = `<tds:` + operation + `/>`
 	}
 	return c.Request(c.deviceURL, operation)

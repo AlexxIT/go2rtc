@@ -140,6 +140,7 @@ func (s *Sender) Start() {
 	s.done = make(chan struct{})
 
 	go func() {
+		// for range on nil chan is OK
 		for packet := range s.buf {
 			s.Output(packet)
 		}
@@ -148,7 +149,7 @@ func (s *Sender) Start() {
 }
 
 func (s *Sender) Wait() {
-	if done := s.done; s.done != nil {
+	if done := s.done; done != nil {
 		<-done
 	}
 }
@@ -165,10 +166,12 @@ func (s *Sender) State() string {
 
 func (s *Sender) Close() {
 	// close buffer if exists
-	if buf := s.buf; buf != nil {
-		s.buf = nil
-		defer close(buf)
+	s.mu.Lock()
+	if s.buf != nil {
+		close(s.buf) // exit from for range loop
+		s.buf = nil  // prevent writing to closed chan
 	}
+	s.mu.Unlock()
 
 	s.Node.Close()
 }

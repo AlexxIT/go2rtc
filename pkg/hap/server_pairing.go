@@ -235,3 +235,18 @@ func WriteResponse(w *bufio.Writer, statusCode int, contentType string, body []b
 	}
 	return w.Flush()
 }
+
+func WriteBackoff(rw *bufio.ReadWriter) error {
+	plainM2 := struct {
+		State byte `tlv8:"6"`
+		Error byte `tlv8:"7"`
+	}{
+		State: StateM2,
+		Error: 3, // BackoffError
+	}
+	body, err := tlv8.Marshal(plainM2)
+	if err != nil {
+		return err
+	}
+	return WriteResponse(rw.Writer, http.StatusOK, MimeTLV8, body)
+}

@@ -3,6 +3,7 @@ package hap
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 
@@ -126,11 +127,17 @@ func (c *Character) Write(v any) (err error) {
 
 // ReadTLV8 value to right struct
 func (c *Character) ReadTLV8(v any) (err error) {
-	return tlv8.UnmarshalBase64(c.Value.(string), v)
+	if s, ok := c.Value.(string); ok {
+		return tlv8.UnmarshalBase64(s, v)
+	}
+	return fmt.Errorf("hap: can't read value: %v", v)
 }
 
-func (c *Character) ReadBool() bool {
-	return c.Value.(bool)
+func (c *Character) ReadBool() (bool, error) {
+	if v, ok := c.Value.(bool); ok {
+		return v, nil
+	}
+	return false, fmt.Errorf("hap: can't read value: %v", c.Value)
 }
 
 func (c *Character) String() string {

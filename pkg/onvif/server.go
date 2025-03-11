@@ -179,16 +179,33 @@ func appendProfile(e *Envelope, tag, name string) {
 `)
 }
 
+func GetVideoSourceConfigurationsResponse(names []string) []byte {
+	e := NewEnvelope()
+	e.Append(`<trt:GetVideoSourceConfigurationsResponse>
+`)
+	for _, name := range names {
+		appendProfile(e, "Configurations", name)
+	}
+	e.Append(`</trt:GetVideoSourceConfigurationsResponse>`)
+	return e.Bytes()
+}
+
 func GetVideoSourceConfigurationResponse(name string) []byte {
 	e := NewEnvelope()
 	e.Append(`<trt:GetVideoSourceConfigurationResponse>
-	<trt:Configuration token="`, name, `">
-		<tt:Name>VSC</tt:Name>
-		<tt:SourceToken>`, name, `</tt:SourceToken>
-		<tt:Bounds x="0" y="0" width="1920" height="1080"></tt:Bounds>
-	</trt:Configuration>
-</trt:GetVideoSourceConfigurationResponse>`)
+`)
+	appendVideoSourceConfiguration(e, "Configuration", name)
+	e.Append(`</trt:GetVideoSourceConfigurationResponse>`)
 	return e.Bytes()
+}
+
+func appendVideoSourceConfiguration(e *Envelope, tag, name string) {
+	e.Append(`<trt:`, tag, ` token="`, name, `" fixed="true">
+	<tt:Name>VSC</tt:Name>
+	<tt:SourceToken>`, name, `</tt:SourceToken>
+	<tt:Bounds x="0" y="0" width="1920" height="1080"></tt:Bounds>
+</trt:`, tag, `>
+`)
 }
 
 func GetVideoSourcesResponse(names []string) []byte {
@@ -226,11 +243,7 @@ func StaticResponse(operation string) []byte {
 
 	e := NewEnvelope()
 	e.Append(responses[operation])
-	b := e.Bytes()
-	if operation == DeviceGetNetworkInterfaces {
-		println()
-	}
-	return b
+	return e.Bytes()
 }
 
 var responses = map[string]string{
@@ -249,4 +262,17 @@ var responses = map[string]string{
 	<tds:Scopes><tt:ScopeDef>Fixed</tt:ScopeDef><tt:ScopeItem>onvif://www.onvif.org/Profile/Streaming</tt:ScopeItem></tds:Scopes>
 	<tds:Scopes><tt:ScopeDef>Fixed</tt:ScopeDef><tt:ScopeItem>onvif://www.onvif.org/type/Network_Video_Transmitter</tt:ScopeItem></tds:Scopes>
 </tds:GetScopesResponse>`,
+
+	MediaGetVideoEncoderConfigurations: `<trt:GetVideoEncoderConfigurationsResponse>
+	<tt:VideoEncoderConfiguration token="vec">
+		<tt:Name>VEC</tt:Name>
+		<tt:Encoding>H264</tt:Encoding>
+		<tt:Resolution><tt:Width>1920</tt:Width><tt:Height>1080</tt:Height></tt:Resolution>
+		<tt:RateControl />
+	</tt:VideoEncoderConfiguration>
+</trt:GetVideoEncoderConfigurationsResponse>`,
+
+	MediaGetAudioEncoderConfigurations: `<trt:GetAudioEncoderConfigurationsResponse />`,
+	MediaGetAudioSources:               `<trt:GetAudioSourcesResponse />`,
+	MediaGetAudioSourceConfigurations:  `<trt:GetAudioSourceConfigurationsResponse />`,
 }

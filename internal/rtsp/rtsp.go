@@ -1,6 +1,7 @@
 package rtsp
 
 import (
+	"errors"
 	"io"
 	"net"
 	"net/url"
@@ -185,6 +186,22 @@ func tcpHandler(conn *rtsp.Conn) {
 				}
 			}
 
+			if query.Get("backchannel") == "1" {
+				conn.Medias = append(conn.Medias, &core.Media{
+					Kind:      core.KindAudio,
+					Direction: core.DirectionRecvonly,
+					Codecs: []*core.Codec{
+						{Name: core.CodecOpus, ClockRate: 48000, Channels: 2},
+						{Name: core.CodecPCM, ClockRate: 16000},
+						{Name: core.CodecPCMA, ClockRate: 16000},
+						{Name: core.CodecPCMU, ClockRate: 16000},
+						{Name: core.CodecPCM, ClockRate: 8000},
+						{Name: core.CodecPCMA, ClockRate: 8000},
+						{Name: core.CodecPCMU, ClockRate: 8000},
+					},
+				})
+			}
+
 			if s := query.Get("pkt_size"); s != "" {
 				conn.PacketSize = uint16(core.Atoi(s))
 			}
@@ -237,7 +254,9 @@ func tcpHandler(conn *rtsp.Conn) {
 	})
 
 	if err := conn.Accept(); err != nil {
-		if err != io.EOF {
+		if errors.Is(err, rtsp.FailedAuth) {
+			log.Warn().Str("remote_addr", conn.Connection.RemoteAddr).Msg("[rtsp] failed authentication")
+		} else if err != io.EOF {
 			log.WithLevel(level).Err(err).Caller().Send()
 		}
 		if closer != nil {

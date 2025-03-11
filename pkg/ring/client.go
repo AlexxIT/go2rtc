@@ -514,7 +514,6 @@ func (c *Client) Stop() error {
 
 	if c.prod != nil {
 		_ = c.prod.Stop()
-		c.prod = nil
 	}
 
 	if c.ws != nil {
@@ -537,6 +536,6 @@ func (c *Client) MarshalJSON() ([]byte, error) {
 	if webrtcProd, ok := c.prod.(*webrtc.Conn); ok {
 		return webrtcProd.MarshalJSON()
 	}
-
-	return nil, errors.New("ring: can't marshal")
+	
+	return json.Marshal(c.prod)
 }
