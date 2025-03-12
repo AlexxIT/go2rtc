@@ -54,7 +54,7 @@ var chars = map[string]string{
 	"21C": "Third Party Camera Active",
 	"21D": "Camera Operating Mode Indicator",
 	"11B": "Night Vision",
-	"129": "Supported Data Stream Transport Configuration",
+	//"129": "Supported Data Stream Transport Configuration",
 	"37":  "Version",
 	"131": "Setup Data Stream Transport",
 	"130": "Supported Data Stream Transport Configuration",

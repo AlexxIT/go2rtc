@@ -142,12 +142,13 @@ func appendValue(b []byte, tag byte, value reflect.Value) ([]byte, error) {
 	return nil, errors.New("tlv8: not implemented: " + value.Kind().String())
 }
 
-func UnmarshalBase64(s string, v any) error {
+func UnmarshalBase64(in any, out any) error {
+	s, _ := in.(string) // protect from in == nil
 	data, err := base64.StdEncoding.DecodeString(s)
 	if err != nil {
 		return err
 	}
-	return Unmarshal(data, v)
+	return Unmarshal(data, out)
 }
 
 func UnmarshalReader(r io.Reader, v any) error {

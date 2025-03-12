@@ -87,7 +87,7 @@ func (s *server) SetCharacteristic(conn net.Conn, aid uint8, iid uint64, value a
 	switch char.Type {
 	case camera.TypeSetupEndpoints:
 		var offer camera.SetupEndpoints
-		if err := tlv8.UnmarshalBase64(value.(string), &offer); err != nil {
+		if err := tlv8.UnmarshalBase64(value, &offer); err != nil {
 			return
 		}
 
@@ -96,7 +96,7 @@ func (s *server) SetCharacteristic(conn net.Conn, aid uint8, iid uint64, value a
 
 	case camera.TypeSelectedStreamConfiguration:
 		var conf camera.SelectedStreamConfig
-		if err := tlv8.UnmarshalBase64(value.(string), &conf); err != nil {
+		if err := tlv8.UnmarshalBase64(value, &conf); err != nil {
 			return
 		}
 
