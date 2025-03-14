@@ -29,15 +29,6 @@ func Init() {
 	app.LoadConfig(&cfg)
 	OnvifCameras = cfg.OnvifCameras
 
-	// Debug print
-	data, err := json.MarshalIndent(OnvifCameras, "", "  ")
-	if err != nil {
-		fmt.Println("Error marshalling JSON:", err)
-	} else {
-		fmt.Println("Loaded ONVIF cameras configuration:")
-		fmt.Println(string(data))
-	}
-
 	sort.Slice(OnvifCameras, func(i, j int) bool {
 		return OnvifCameras[i].ID < OnvifCameras[j].ID
 	})
