@@ -176,6 +176,7 @@ Available modules:
 - [mp4](#module-mp4) - MSE, MP4 stream and MP4 snapshot Server
 - [hls](#module-hls) - HLS TS or fMP4 stream Server
 - [mjpeg](#module-mjpeg) - MJPEG Server
+- [onvif](#module-onvif) - ONVIF server
 - [ffmpeg](#source-ffmpeg) - FFmpeg integration
 - [ngrok](#module-ngrok) - ngrok integration (external access for private network)
 - [hass](#module-hass) - Home Assistant integration
@@ -587,7 +588,7 @@ Support import camera links from [Home Assistant](https://www.home-assistant.io/
 
 - [Generic Camera](https://www.home-assistant.io/integrations/generic/), setup via GUI
 - [HomeKit Camera](https://www.home-assistant.io/integrations/homekit_controller/)
-- [ONVIF](https://www.home-assistant.io/integrations/onvif/)
+- [ONVIF](https://www.home-assistant.io/integrations/onvif/) via [Module: ONVIF](#module-onvif)
 - [Roborock](https://github.com/humbertogontijo/homeassistant-roborock) vacuums with camera
 
 ```yaml
