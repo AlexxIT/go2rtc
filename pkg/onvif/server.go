@@ -197,7 +197,7 @@ func appendProfile(e *Envelope, tag string, profile OnvifProfile) {
         return
     }
 
-    // Pierwszy stream jako główny
+    // get first stream as main stream
     firstStream := profile.Streams[0]
     firstName, firstWidth, firstHeight, _ := ParseStream(firstStream)
 
