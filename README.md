@@ -86,6 +86,7 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
   * [Module: MP4](#module-mp4)
   * [Module: HLS](#module-hls)
   * [Module: MJPEG](#module-mjpeg)
+  * [Module: ONVIF](#module-onvif)
   * [Module: Log](#module-log)
 * [Security](#security)
 * [Codecs filters](#codecs-filters)
@@ -1207,6 +1208,46 @@ API examples:
 **PS.** This module also supports streaming to the server console (terminal) in the **animated ASCII art** format ([read more](https://github.com/AlexxIT/go2rtc/blob/master/internal/mjpeg/README.md)):
 
 [![](https://img.youtube.com/vi/sHj_3h_sX7M/mqdefault.jpg)](https://www.youtube.com/watch?v=sHj_3h_sX7M)
+
+### Module: ONVIF
+
+This module provides an **ONVIF server** that allows go2rtc to act as an ONVIF-compatible device, making it easier to integrate cameras with ONVIF-supported software like Dahua NVRs or Home Assistant.
+
+With ONVIF support, go2rtc can:
+- Expose configured streams as ONVIF profiles.
+- Provide additional ONVIF functionalities like `GetOSDs` to show camera name in Dahua NVR.
+- Maintain a **consistent camera order** to prevent issues with NVRs that rely on `GetProfilesResponse` for identification.
+
+**Example Configuration**
+
+```yaml
+onvif:
+  - name: Camera 1
+    main_stream: camera1
+    sub_stream: camera1_lq
+  - name: Camera 2
+    main_stream: camera2
+    sub_stream: camera2_lq
+
+streams:
+  camera1:
+    - rtsp://admin:admin@192.168.1.1/cam/realmonitor?channel=1&subtype=0&unicast=true
+  camera1_lq:
+    - ffmpeg:camera1#video=h264#height=360
+  camera2:
+    - rtsp://admin:admin@192.168.1.2/cam/realmonitor?channel=1&subtype=0&unicast=true
+  camera2_lq:
+    - ffmpeg:camera2#video=h264#height=360
+```
+
+**Example Dahua NVR configuration:**
+- **Channel**: <camera channel on NVR>
+- **Manufacturer**: ONVIF
+- **IP Address**: <go2rtc IP>
+- **RTSP Port**: Self-adaptive
+- **HTTP Port**: <go2rtc http api port, eg. 1984>
+- **Username / Password**: Currently auth is not supported by go2rtc
+- **Remote CH No.**: <camera index from onvif array, counting from 1>
 
 ### Module: Log
 
