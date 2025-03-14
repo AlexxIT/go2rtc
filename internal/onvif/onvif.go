@@ -18,15 +18,17 @@ import (
 	"github.com/rs/zerolog"
 )
 
-var OnvifCameras []onvif.OnvifCamera
+var OnvifProfiles []onvif.OnvifProfile
 
 func Init() {
 	var cfg struct {
-		OnvifCameras []onvif.OnvifCamera `yaml:"onvif"`
+		Onvif struct {
+			OnvifProfiles []onvif.OnvifProfile `yaml:"profiles"`
+		} `yaml:"onvif"`
 	}
 
 	app.LoadConfig(&cfg)
-	OnvifCameras = cfg.OnvifCameras
+	OnvifProfiles = cfg.Onvif.OnvifProfiles
 
 	log = app.GetLogger("onvif")
 
@@ -42,25 +44,28 @@ func Init() {
 var log zerolog.Logger
 
 func GetConfiguredStreams() []string {
-	if len(OnvifCameras) == 0 {
+	if len(OnvifProfiles) == 0 {
 		return streams.GetAllNames()
 	}
 
 	var streamsList []string
-	for _, cam := range OnvifCameras {
-		streamsList = append(streamsList, cam.MainStream)
-		if cam.SubStream != "" {
-			streamsList = append(streamsList, cam.SubStream)
+	for _, profile := range OnvifProfiles {
+		for _, stream := range profile.Streams {
+			name, _, _, _ := onvif.ParseStream(stream)
+			streamsList = append(streamsList, name)
 		}
 	}
 
 	return streamsList
 }
 
-func GetCameraNameByMainStream(mainStream string) string {
-	for _, cam := range OnvifCameras {
-		if cam.MainStream == mainStream || cam.SubStream == mainStream {
-			return cam.Name
+func GetCameraNameByStream(streamName string) string {
+	for _, profile := range OnvifProfiles {
+		for _, stream := range profile.Streams {
+			name, _, _, _ := onvif.ParseStream(stream)
+			if name == streamName {
+				return profile.Name
+			}
 		}
 	}
 	return "Unknown Camera"
@@ -122,7 +127,7 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 
 	case onvif.DeviceGetOSDs:
 		token := onvif.FindTagValue(b, "ConfigurationToken")
-		b = onvif.GetOSDsResponse(token, GetCameraNameByMainStream(token))
+		b = onvif.GetOSDsResponse(token, GetCameraNameByStream(token))
 
 	case onvif.DeviceGetOSDOptions:
 		b = onvif.GetOSDOptionsResponse()
@@ -148,19 +153,23 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 
 	case onvif.MediaGetProfiles:
 		// important for Hass: H264 codec, width, height
-		b = onvif.GetProfilesResponse(OnvifCameras)
+		b = onvif.GetProfilesResponse(OnvifProfiles)
 
 	case onvif.MediaGetProfile:
 		token := onvif.FindTagValue(b, "ProfileToken")
-		for _, cam := range OnvifCameras {
-			if(cam.MainStream == token || cam.SubStream == token){
-				b = onvif.GetProfileResponse(cam)
+		for _, profile := range OnvifProfiles {
+			for _, stream := range profile.Streams {
+				name, _, _, _ := onvif.ParseStream(stream)
+				if name == token {
+					b = onvif.GetProfileResponse(profile)
+					break
+				}
 			}
 		}
 
 	case onvif.MediaGetVideoSourceConfigurations:
 		// important for Happytime Onvif Client
-		b = onvif.GetVideoSourceConfigurationsResponse(OnvifCameras)
+		b = onvif.GetVideoSourceConfigurationsResponse(OnvifProfiles)
 
 	case onvif.MediaGetVideoSourceConfiguration:
 		token := onvif.FindTagValue(b, "ConfigurationToken")

@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"regexp"
 	"time"
+    "strconv"
+    "strings"
 )
 
-type OnvifCamera struct {
-    Name       string `yaml:"name"`
-    MainStream string `yaml:"main_stream"`
-    SubStream  string `yaml:"sub_stream,omitempty"`
+type OnvifProfile struct {
+    Name    string   `yaml:"name"`
+    Streams []string `yaml:"streams"`
 }
 
 const ServiceGetServiceCapabilities = "GetServiceCapabilities"
@@ -148,18 +149,18 @@ func GetMediaServiceCapabilitiesResponse() []byte {
 	return e.Bytes()
 }
 
-func GetProfilesResponse(OnvifCameras []OnvifCamera) []byte {
+func GetProfilesResponse(OnvifProfiles []OnvifProfile) []byte {
 	e := NewEnvelope()
 	e.Append(`<trt:GetProfilesResponse>
 `)
-	for _, cam := range OnvifCameras {
+	for _, cam := range OnvifProfiles {
 		appendProfile(e, "Profiles", cam)
 	}
 	e.Append(`</trt:GetProfilesResponse>`)
 	return e.Bytes()
 }
 
-func GetProfileResponse(cam OnvifCamera) []byte {
+func GetProfileResponse(cam OnvifProfile) []byte {
 	e := NewEnvelope()
 	e.Append(`<trt:GetProfileResponse>
 `)
@@ -168,47 +169,64 @@ func GetProfileResponse(cam OnvifCamera) []byte {
 	return e.Bytes()
 }
 
-func appendProfile(e *Envelope, tag string, cam OnvifCamera) {
-	e.Append(`<trt:`, tag, ` token="`, cam.MainStream, `" fixed="true">
-	<tt:Name>`, cam.MainStream, `</tt:Name>
-	<tt:VideoSourceConfiguration token="`, cam.MainStream, `">
-		<tt:Name>VSC</tt:Name>
-		<tt:SourceToken>`, cam.MainStream, `</tt:SourceToken>
-		<tt:Bounds x="0" y="0" width="1920" height="1080"></tt:Bounds>
-	</tt:VideoSourceConfiguration>
-	<tt:VideoEncoderConfiguration token="`, cam.MainStream, `">
-		<tt:Name>MainStream</tt:Name>
-		<tt:Encoding>H264</tt:Encoding>
-		<tt:Resolution><tt:Width>1920</tt:Width><tt:Height>1080</tt:Height></tt:Resolution>
-		<tt:RateControl />
-	</tt:VideoEncoderConfiguration>
-</trt:`, tag, `>
-`)
+// Parsing stream name to: name, width, height, codec
+func ParseStream(stream string) (string, int, int, string) {
+    parts := strings.Split(stream, "#")
+    name := parts[0]
+    width, height := 1920, 1080 // default resolution
+    codec := "H264" // default codec
 
-	if cam.SubStream != "" {
-		e.Append(`<trt:`, tag, ` token="`, cam.SubStream, `" fixed="true">
-		<tt:Name>`, cam.SubStream, `</tt:Name>
-		<tt:VideoSourceConfiguration token="`, cam.MainStream, `">
-			<tt:Name>VSC</tt:Name>
-			<tt:SourceToken>`, cam.MainStream, `</tt:SourceToken>
-			<tt:Bounds x="0" y="0" width="640" height="360"></tt:Bounds>
-		</tt:VideoSourceConfiguration>
-		<tt:VideoEncoderConfiguration token="`, cam.SubStream, `">
-			<tt:Name>SubStream</tt:Name>
-			<tt:Encoding>H264</tt:Encoding>
-			<tt:Resolution><tt:Width>640</tt:Width><tt:Height>360</tt:Height></tt:Resolution>
-			<tt:RateControl />
-		</tt:VideoEncoderConfiguration>
-	</trt:`, tag, `>
-`)
-	}
+    resRegex := regexp.MustCompile(`res=(\d+)x(\d+)`)
+    codecRegex := regexp.MustCompile(`codec=([a-zA-Z0-9]+)`)
+
+    for _, part := range parts[1:] {
+        if matches := resRegex.FindStringSubmatch(part); len(matches) == 3 {
+            width, _ = strconv.Atoi(matches[1])
+            height, _ = strconv.Atoi(matches[2])
+        }
+        if matches := codecRegex.FindStringSubmatch(part); len(matches) == 2 {
+            codec = matches[1]
+        }
+    }
+
+    return name, width, height, codec
 }
 
-func GetVideoSourceConfigurationsResponse(OnvifCameras []OnvifCamera) []byte {
+func appendProfile(e *Envelope, tag string, profile OnvifProfile) {
+    if len(profile.Streams) == 0 {
+        return
+    }
+
+    // Pierwszy stream jako główny
+    firstStream := profile.Streams[0]
+    firstName, firstWidth, firstHeight, _ := ParseStream(firstStream)
+
+    for _, stream := range profile.Streams {
+        streamName, width, height, codec := ParseStream(stream)
+
+        e.Append(`<trt:`, tag, ` token="`, streamName, `" fixed="true">
+        <tt:Name>`, streamName, `</tt:Name>
+        <tt:VideoSourceConfiguration token="`, firstName, `">
+            <tt:Name>VSC</tt:Name>
+            <tt:SourceToken>`, firstName, `</tt:SourceToken>
+            <tt:Bounds x="0" y="0" width="`, strconv.Itoa(firstWidth), `" height="`, strconv.Itoa(firstHeight), `"></tt:Bounds>
+        </tt:VideoSourceConfiguration>
+        <tt:VideoEncoderConfiguration token="`, streamName, `">
+            <tt:Name>SubStream</tt:Name>
+            <tt:Encoding>`, codec, `</tt:Encoding>
+            <tt:Resolution><tt:Width>`, strconv.Itoa(width), `</tt:Width><tt:Height>`, strconv.Itoa(height), `</tt:Height></tt:Resolution>
+            <tt:RateControl />
+        </tt:VideoEncoderConfiguration>
+        </trt:`, tag, `>
+        `)
+    }
+}
+
+func GetVideoSourceConfigurationsResponse(OnvifProfiles []OnvifProfile) []byte {
 	e := NewEnvelope()
 	e.Append(`<trt:GetVideoSourceConfigurationsResponse>
 `)
-	for _, cam := range OnvifCameras {
+	for _, cam := range OnvifProfiles {
 		appendProfile(e, "Configurations", cam)
 	}
 	e.Append(`</trt:GetVideoSourceConfigurationsResponse>`)
