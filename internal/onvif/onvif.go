@@ -30,7 +30,7 @@ func Init() {
 	OnvifCameras = cfg.OnvifCameras
 
 	sort.Slice(OnvifCameras, func(i, j int) bool {
-		return OnvifCameras[i].ID < OnvifCameras[j].ID
+		return OnvifCameras[i].Index < OnvifCameras[j].Index
 	})
 
 	log = app.GetLogger("onvif")

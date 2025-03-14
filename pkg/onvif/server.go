@@ -7,7 +7,7 @@ import (
 )
 
 type OnvifCamera struct {
-    ID         int    `yaml:"id"`
+    Index      int    `yaml:"index"`
     Name       string `yaml:"name"`
     MainStream string `yaml:"main_stream"`
     SubStream  string `yaml:"sub_stream,omitempty"`
