@@ -1224,9 +1224,9 @@ With ONVIF support, go2rtc can:
 ```yaml
 onvif:
   profiles:
-    - name: Camera 1
+    - name: Camera 1  
       streams:
-        - camera1#res=1920x1080
+        - camera1#codec=H265
         - camera1_lq#res=1270x720#codec=H265
     - name: Camera 2
       streams:
@@ -1237,7 +1237,7 @@ streams:
   camera1:
     - rtsp://admin:admin@192.168.1.1/cam/realmonitor?channel=1&subtype=0&unicast=true
   camera1_lq:
-    - ffmpeg:camera1#video=h265#height=360
+    - ffmpeg:camera1#video=h265#height=720
   camera2:
     - rtsp://admin:admin@192.168.1.2/cam/realmonitor?channel=1&subtype=0&unicast=true
   camera2_lq:
