@@ -45,7 +45,7 @@ func parseQuery(query url.Values) *ffmpeg.Args {
 
 	var width = -1
 	var height = -1
-	var r, hw string
+	var r, hw, quality string
 
 	for k, v := range query {
 		switch k {
@@ -57,6 +57,8 @@ func parseQuery(query url.Values) *ffmpeg.Args {
 			r = v[0]
 		case "hardware", "hw":
 			hw = v[0]
+		case "quality":
+			quality = v[0]
 		}
 	}
 
@@ -77,6 +79,10 @@ func parseQuery(query url.Values) *ffmpeg.Args {
 
 	if hw != "" {
 		hardware.MakeHardware(args, hw, defaults)
+	}
+
+	if quality != "" {
+		args.Codecs = append(args.Codecs, fmt.Sprintf("-q:v %s", quality))
 	}
 
 	return args
