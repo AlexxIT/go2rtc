@@ -588,7 +588,7 @@ Support import camera links from [Home Assistant](https://www.home-assistant.io/
 
 - [Generic Camera](https://www.home-assistant.io/integrations/generic/), setup via GUI
 - [HomeKit Camera](https://www.home-assistant.io/integrations/homekit_controller/)
-- [ONVIF](https://www.home-assistant.io/integrations/onvif/) via [Module: ONVIF](#module-onvif)
+- [ONVIF](https://www.home-assistant.io/integrations/onvif/)
 - [Roborock](https://github.com/humbertogontijo/homeassistant-roborock) vacuums with camera
 
 ```yaml
@@ -1114,7 +1114,7 @@ You have several options on how to add a camera to Home Assistant:
 2. Camera [any source](#module-streams) => [go2rtc config](#configuration) => [Generic Camera](https://www.home-assistant.io/integrations/generic/)
    - Install any [go2rtc](#fast-start)
    - Add your stream to [go2rtc config](#configuration)
-   - Hass > Settings > Integrations > Add Integration > [ONVIF](https://my.home-assistant.io/redirect/config_flow_start/?domain=onvif) > Host: `127.0.0.1`, Port: `1984`
+   - Hass > Settings > Integrations > Add Integration > [ONVIF](https://my.home-assistant.io/redirect/config_flow_start/?domain=onvif) > Host: `127.0.0.1`, Port: `1984` (using [Module: ONVIF](#module-onvif))
    - Hass > Settings > Integrations > Add Integration > [Generic Camera](https://my.home-assistant.io/redirect/config_flow_start/?domain=generic) > Stream Source URL: `rtsp://127.0.0.1:8554/camera1` (change to your stream name, leave everything else as is)
 
 You have several options on how to watch the stream from the cameras in Home Assistant:
