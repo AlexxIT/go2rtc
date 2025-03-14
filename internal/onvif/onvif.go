@@ -166,8 +166,6 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 
 	case onvif.MediaGetProfile:
 		token := onvif.FindTagValue(b, "ProfileToken")
-		fmt.Println("MediaGetProfile:")
-		fmt.Println(string(token))
 		for _, cam := range OnvifCameras {
 			if(cam.MainStream == token || cam.SubStream == token){
 				b = onvif.GetProfileResponse(cam)
