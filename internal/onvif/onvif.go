@@ -8,7 +8,6 @@ import (
 	"os"
 	"strconv"
 	"time"
-	"sort"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/app"
@@ -28,10 +27,6 @@ func Init() {
 
 	app.LoadConfig(&cfg)
 	OnvifCameras = cfg.OnvifCameras
-
-	sort.Slice(OnvifCameras, func(i, j int) bool {
-		return OnvifCameras[i].Index < OnvifCameras[j].Index
-	})
 
 	log = app.GetLogger("onvif")
 
