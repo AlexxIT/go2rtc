@@ -6,6 +6,13 @@ import (
 	"time"
 )
 
+type OnvifCamera struct {
+    ID         int    `yaml:"id"`
+    Name       string `yaml:"name"`
+    MainStream string `yaml:"main_stream"`
+    SubStream  string `yaml:"sub_stream,omitempty"`
+}
+
 const ServiceGetServiceCapabilities = "GetServiceCapabilities"
 
 const (
@@ -18,6 +25,8 @@ const (
 	DeviceGetNetworkInterfaces     = "GetNetworkInterfaces"
 	DeviceGetNetworkProtocols      = "GetNetworkProtocols"
 	DeviceGetNTP                   = "GetNTP"
+	DeviceGetOSDs                  = "GetOSDs"
+	DeviceGetOSDOptions            = "GetOSDOptions"
 	DeviceGetScopes                = "GetScopes"
 	DeviceGetServices              = "GetServices"
 	DeviceGetSystemDateAndTime     = "GetSystemDateAndTime"
@@ -140,51 +149,68 @@ func GetMediaServiceCapabilitiesResponse() []byte {
 	return e.Bytes()
 }
 
-func GetProfilesResponse(names []string) []byte {
+func GetProfilesResponse(OnvifCameras []OnvifCamera) []byte {
 	e := NewEnvelope()
 	e.Append(`<trt:GetProfilesResponse>
 `)
-	for _, name := range names {
-		appendProfile(e, "Profiles", name)
+	for _, cam := range OnvifCameras {
+		appendProfile(e, "Profiles", cam)
 	}
 	e.Append(`</trt:GetProfilesResponse>`)
 	return e.Bytes()
 }
 
-func GetProfileResponse(name string) []byte {
+func GetProfileResponse(cam OnvifCamera) []byte {
 	e := NewEnvelope()
 	e.Append(`<trt:GetProfileResponse>
 `)
-	appendProfile(e, "Profile", name)
+	appendProfile(e, "Profile", cam)
 	e.Append(`</trt:GetProfileResponse>`)
 	return e.Bytes()
 }
 
-func appendProfile(e *Envelope, tag, name string) {
-	// empty `RateControl` important for UniFi Protect
-	e.Append(`<trt:`, tag, ` token="`, name, `" fixed="true">
-	<tt:Name>`, name, `</tt:Name>
-	<tt:VideoSourceConfiguration token="`, name, `">
+func appendProfile(e *Envelope, tag string, cam OnvifCamera) {
+	e.Append(`<trt:`, tag, ` token="`, cam.MainStream, `" fixed="true">
+	<tt:Name>`, cam.MainStream, `</tt:Name>
+	<tt:VideoSourceConfiguration token="`, cam.MainStream, `">
 		<tt:Name>VSC</tt:Name>
-		<tt:SourceToken>`, name, `</tt:SourceToken>
+		<tt:SourceToken>`, cam.MainStream, `</tt:SourceToken>
 		<tt:Bounds x="0" y="0" width="1920" height="1080"></tt:Bounds>
 	</tt:VideoSourceConfiguration>
-	<tt:VideoEncoderConfiguration token="vec">
-		<tt:Name>VEC</tt:Name>
+	<tt:VideoEncoderConfiguration token="`, cam.MainStream, `">
+		<tt:Name>MainStream</tt:Name>
 		<tt:Encoding>H264</tt:Encoding>
 		<tt:Resolution><tt:Width>1920</tt:Width><tt:Height>1080</tt:Height></tt:Resolution>
 		<tt:RateControl />
 	</tt:VideoEncoderConfiguration>
 </trt:`, tag, `>
 `)
+
+	if cam.SubStream != "" {
+		e.Append(`<trt:`, tag, ` token="`, cam.SubStream, `" fixed="true">
+		<tt:Name>`, cam.SubStream, `</tt:Name>
+		<tt:VideoSourceConfiguration token="`, cam.MainStream, `">
+			<tt:Name>VSC</tt:Name>
+			<tt:SourceToken>`, cam.MainStream, `</tt:SourceToken>
+			<tt:Bounds x="0" y="0" width="640" height="360"></tt:Bounds>
+		</tt:VideoSourceConfiguration>
+		<tt:VideoEncoderConfiguration token="`, cam.SubStream, `">
+			<tt:Name>SubStream</tt:Name>
+			<tt:Encoding>H264</tt:Encoding>
+			<tt:Resolution><tt:Width>640</tt:Width><tt:Height>360</tt:Height></tt:Resolution>
+			<tt:RateControl />
+		</tt:VideoEncoderConfiguration>
+	</trt:`, tag, `>
+`)
+	}
 }
 
-func GetVideoSourceConfigurationsResponse(names []string) []byte {
+func GetVideoSourceConfigurationsResponse(OnvifCameras []OnvifCamera) []byte {
 	e := NewEnvelope()
 	e.Append(`<trt:GetVideoSourceConfigurationsResponse>
 `)
-	for _, name := range names {
-		appendProfile(e, "Configurations", name)
+	for _, cam := range OnvifCameras {
+		appendProfile(e, "Configurations", cam)
 	}
 	e.Append(`</trt:GetVideoSourceConfigurationsResponse>`)
 	return e.Bytes()
@@ -232,6 +258,40 @@ func GetStreamUriResponse(uri string) []byte {
 func GetSnapshotUriResponse(uri string) []byte {
 	e := NewEnvelope()
 	e.Append(`<trt:GetSnapshotUriResponse><trt:MediaUri><tt:Uri>`, uri, `</tt:Uri></trt:MediaUri></trt:GetSnapshotUriResponse>`)
+	return e.Bytes()
+}
+
+func GetOSDOptionsResponse() []byte {
+	e := NewEnvelope()
+	e.Append(`<trt:GetOSDOptionsResponse>
+	<trt:OSDOptions>
+		<tt:MaximumNumberOfOSDs Total="1" Image="0" PlainText="1" Date="0" Time="0" DateAndTime="0"/>
+		<tt:Type>Text</tt:Type>
+		<tt:PositionOption>Custom</tt:PositionOption>
+		<tt:TextOption>
+			<tt:Type>Plain</tt:Type>
+		</tt:TextOption>
+	</trt:OSDOptions>
+</trt:GetOSDOptionsResponse>`)
+	return e.Bytes()
+}
+
+func GetOSDsResponse(configurationToken string, cameraName string) []byte {
+	e := NewEnvelope()
+	e.Append(`<trt:GetOSDsResponse>
+	<trt:OSDs token="OSD00000">
+		<tt:VideoSourceConfigurationToken>`, configurationToken, `</tt:VideoSourceConfigurationToken>
+		<tt:Type>Text</tt:Type>
+		<tt:Position>
+			<tt:Type>Custom</tt:Type>
+			<tt:Pos x="0" y="0"/>
+		</tt:Position>
+		<tt:TextString>
+			<tt:Type>Plain</tt:Type>
+			<tt:PlainText>`, cameraName, `</tt:PlainText>
+		</tt:TextString>
+	</trt:OSDs>
+</trt:GetOSDsResponse>`)
 	return e.Bytes()
 }
 

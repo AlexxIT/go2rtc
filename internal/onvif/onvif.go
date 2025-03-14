@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"time"
+	"sort"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/app"
@@ -18,7 +19,29 @@ import (
 	"github.com/rs/zerolog"
 )
 
+var OnvifCameras []onvif.OnvifCamera
+
 func Init() {
+	var cfg struct {
+		OnvifCameras []onvif.OnvifCamera `yaml:"onvif"`
+	}
+
+	app.LoadConfig(&cfg)
+	OnvifCameras = cfg.OnvifCameras
+
+	// Debug print
+	data, err := json.MarshalIndent(OnvifCameras, "", "  ")
+	if err != nil {
+		fmt.Println("Error marshalling JSON:", err)
+	} else {
+		fmt.Println("Loaded ONVIF cameras configuration:")
+		fmt.Println(string(data))
+	}
+
+	sort.Slice(OnvifCameras, func(i, j int) bool {
+		return OnvifCameras[i].ID < OnvifCameras[j].ID
+	})
+
 	log = app.GetLogger("onvif")
 
 	streams.HandleFunc("onvif", streamOnvif)
@@ -31,6 +54,31 @@ func Init() {
 }
 
 var log zerolog.Logger
+
+func GetConfiguredStreams() []string {
+	if len(OnvifCameras) == 0 {
+		return streams.GetAllNames()
+	}
+
+	var streamsList []string
+	for _, cam := range OnvifCameras {
+		streamsList = append(streamsList, cam.MainStream)
+		if cam.SubStream != "" {
+			streamsList = append(streamsList, cam.SubStream)
+		}
+	}
+
+	return streamsList
+}
+
+func GetCameraNameByMainStream(mainStream string) string {
+	for _, cam := range OnvifCameras {
+		if cam.MainStream == mainStream || cam.SubStream == mainStream {
+			return cam.Name
+		}
+	}
+	return "Unknown Camera"
+}
 
 func streamOnvif(rawURL string) (core.Producer, error) {
 	client, err := onvif.NewClient(rawURL)
@@ -86,6 +134,13 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 	case onvif.DeviceGetServices:
 		b = onvif.GetServicesResponse(r.Host)
 
+	case onvif.DeviceGetOSDs:
+		token := onvif.FindTagValue(b, "ConfigurationToken")
+		b = onvif.GetOSDsResponse(token, GetCameraNameByMainStream(token))
+
+	case onvif.DeviceGetOSDOptions:
+		b = onvif.GetOSDOptionsResponse()
+
 	case onvif.DeviceGetDeviceInformation:
 		// important for Hass: SerialNumber (unique server ID)
 		b = onvif.GetDeviceInformationResponse("", "go2rtc", app.Version, r.Host)
@@ -103,19 +158,25 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 		})
 
 	case onvif.MediaGetVideoSources:
-		b = onvif.GetVideoSourcesResponse(streams.GetAllNames())
+		b = onvif.GetVideoSourcesResponse(GetConfiguredStreams())
 
 	case onvif.MediaGetProfiles:
 		// important for Hass: H264 codec, width, height
-		b = onvif.GetProfilesResponse(streams.GetAllNames())
+		b = onvif.GetProfilesResponse(OnvifCameras)
 
 	case onvif.MediaGetProfile:
 		token := onvif.FindTagValue(b, "ProfileToken")
-		b = onvif.GetProfileResponse(token)
+		fmt.Println("MediaGetProfile:")
+		fmt.Println(string(token))
+		for _, cam := range OnvifCameras {
+			if(cam.MainStream == token || cam.SubStream == token){
+				b = onvif.GetProfileResponse(cam)
+			}
+		}
 
 	case onvif.MediaGetVideoSourceConfigurations:
 		// important for Happytime Onvif Client
-		b = onvif.GetVideoSourceConfigurationsResponse(streams.GetAllNames())
+		b = onvif.GetVideoSourceConfigurationsResponse(OnvifCameras)
 
 	case onvif.MediaGetVideoSourceConfiguration:
 		token := onvif.FindTagValue(b, "ConfigurationToken")
