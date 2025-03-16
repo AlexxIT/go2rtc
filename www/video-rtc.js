@@ -583,7 +583,10 @@ export class VideoRTC extends HTMLElement {
             if (stream.getVideoTracks().length > 0) rtcPriority += 0x220;
             if (stream.getAudioTracks().length > 0) rtcPriority += 0x102;
 
-            if (this.mseCodecs.indexOf('hvc1.') >= 0 && !VideoRTC.isH265Supported()) msePriority += 0x230;
+            if (this.mseCodecs.indexOf('hvc1.')) {
+                if (VideoRTC.isH265Supported()) rtcPriority += 0x230;
+                else msePriority += 0x230;
+            }
             if (this.mseCodecs.indexOf('avc1.') >= 0) msePriority += 0x210;
             if (this.mseCodecs.indexOf('mp4a.') >= 0) msePriority += 0x101;
 
