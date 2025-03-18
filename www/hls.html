@@ -21,8 +21,7 @@
 <video id="video" autoplay controls playsinline muted></video>
 <script>
     // http://192.168.1.123:1984/hls.html?src=demo&mp4
-    // const url = new URL('api/stream.m3u8' + location.search, location.href);
-    const url = 'http://192.168.10.5:1984/api/stream.m3u8?src=rtsp-dahua2&mp4';
+    const url = new URL('api/stream.m3u8' + location.search, location.href);
 
     const video = document.getElementById('video');
     if (Hls.isSupported()) {
