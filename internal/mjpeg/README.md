@@ -26,6 +26,10 @@ streams:
   - example: `40` (black), `47` (white), `48;5;226` (yellow)
 - `text` - character set, values: empty, one char, `block`, list of chars (in order of brightness)
   - example: `%20` (space), `block` (keyword for block elements), `ox` (two chars)
+- `width` - the width of the output in characters, value: any positive integer
+  - example: `100`
+- `height` - the height of the output in characters, value: any positive integer
+  - example: `40`
 
 **Examples**
 
@@ -35,4 +39,6 @@ streams:
 % curl "http://192.168.1.123:1984/api/stream.ascii?src=gamazda&back=256&text=%20"
 % curl "http://192.168.1.123:1984/api/stream.ascii?src=gamazda&back=8&text=%20%20"
 % curl "http://192.168.1.123:1984/api/stream.ascii?src=gamazda&text=helloworld"
+% curl "http://192.168.1.123:1984/api/stream.ascii?src=gamazda&width=100&height=40"
+% curl "http://192.168.1.123:1984/api/stream.ascii?src=gamazda&color=256&width=80&height=20"
 ```
