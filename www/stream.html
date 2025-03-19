@@ -25,10 +25,16 @@
             align-content: flex-start;
             align-items: flex-start;
         }
+
+        .stream-container {
+            position: relative;
+            flex: 1 0 320px;
+        }
     </style>
 </head>
 <body>
 <script type="module" src="./video-stream.js"></script>
+<script type="module" src="./ptz-controls.js"></script>
 <script type="module">
     const params = new URLSearchParams(location.search);
 
@@ -52,13 +58,26 @@
     const width = '1 0 ' + (params.get('width') || '320px');
 
     for (let i = 0; i < streams.length; i++) {
+        const container = document.createElement('div');
+        container.className = 'stream-container';
+        container.style.flex = width;
+
         /** @type {VideoStream} */
         const video = document.createElement('video-stream');
         video.background = background;
         video.mode = modes[i] || video.mode;
-        video.style.flex = width;
         video.src = new URL('api/ws?src=' + encodeURIComponent(streams[i]), location.href);
-        document.body.appendChild(video);
+        container.appendChild(video);
+
+        console.log(streams[i]);
+        // Add PTZ controls for ONVIF/PTZ cameras
+        if (streams[i].toLowerCase().includes('_ptz')) {
+            const ptzControls = document.createElement('ptz-controls');
+            ptzControls.setAttribute('source', streams[i]);
+            container.appendChild(ptzControls);
+        }
+
+        document.body.appendChild(container);
     }
 </script>
 </body>
