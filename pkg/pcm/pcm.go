@@ -198,3 +198,80 @@ func RepackG711(zeroTS bool, handler core.HandlerFunc) core.HandlerFunc {
 		handler(pkt)
 	}
 }
+
+func Convert(in, out *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
+	if in.Name == out.Name && in.Channels == out.Channels && in.ClockRate == out.ClockRate {
+		return handler
+	}
+
+	switch {
+	case in.Name == core.CodecPCML && in.Channels <= 1 &&
+		out.Name == core.CodecPCML && out.Channels == 2:
+		return func(pkt *core.Packet) {
+			n := len(pkt.Payload)
+			payload := make([]byte, 2*n)
+			for i, j := 0, 0; i < n; {
+				hi := pkt.Payload[i]
+				i++
+				lo := pkt.Payload[i]
+				i++
+				payload[j] = hi
+				j++
+				payload[j] = lo
+				j++
+				payload[j] = hi
+				j++
+				payload[j] = lo
+				j++
+			}
+			pkt.Payload = payload
+			handler(pkt)
+		}
+
+	case in.Name == core.CodecPCM && in.Channels <= 1 &&
+		out.Name == core.CodecPCML && out.Channels == 2:
+		return func(pkt *core.Packet) {
+			n := len(pkt.Payload)
+			payload := make([]byte, 2*n)
+			for i, j := 0, 0; i < n; {
+				hi := pkt.Payload[i]
+				i++
+				lo := pkt.Payload[i]
+				i++
+				payload[j] = lo
+				j++
+				payload[j] = hi
+				j++
+				payload[j] = lo
+				j++
+				payload[j] = hi
+				j++
+			}
+			pkt.Payload = payload
+			handler(pkt)
+		}
+
+	case in.Name == core.CodecPCMA && in.Channels <= 1 &&
+		out.Name == core.CodecPCML && out.Channels == 2:
+		return func(pkt *core.Packet) {
+			payload := make([]byte, 4*len(pkt.Payload))
+			var i int
+			for _, b := range pkt.Payload {
+				s16 := PCMAtoPCM(b)
+				hi := byte(s16 >> 8)
+				lo := byte(s16)
+				payload[i] = hi
+				i++
+				payload[i] = lo
+				i++
+				payload[i] = hi
+				i++
+				payload[i] = lo
+				i++
+			}
+			pkt.Payload = payload
+			handler(pkt)
+		}
+	}
+	return nil
+}
