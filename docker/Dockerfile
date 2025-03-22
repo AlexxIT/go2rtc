@@ -5,16 +5,7 @@ ARG PYTHON_VERSION="3.11"
 ARG GO_VERSION="1.24"
 
 
-# 1. Download ngrok binary (for support arm/v6)
-FROM alpine AS ngrok
-ARG TARGETARCH
-ARG TARGETOS
-
-ADD https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-${TARGETOS}-${TARGETARCH}.tgz /
-RUN tar -xzf /ngrok-v3-stable-${TARGETOS}-${TARGETARCH}.tgz -C /bin
-
-
-# 2. Build go2rtc binary
+# 1. Build go2rtc binary
 FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine AS build
 ARG TARGETPLATFORM
 ARG TARGETOS
@@ -35,7 +26,7 @@ COPY . .
 RUN --mount=type=cache,target=/root/.cache/go-build CGO_ENABLED=0 go build -ldflags "-s -w" -trimpath
 
 
-# 3. Final image
+# 2. Final image
 FROM python:${PYTHON_VERSION}-alpine AS base
 
 # Install ffmpeg, tini (for signal handling),
@@ -55,7 +46,6 @@ RUN if [ "${TARGETARCH}" = "amd64" ]; then apk add --no-cache libva-intel-driver
 # RUN libva-vdpau-driver mesa-vdpau-gallium (+150MB total)
 
 COPY --from=build /build/go2rtc /usr/local/bin/
-COPY --from=ngrok /bin/ngrok /usr/local/bin/
 
 ENTRYPOINT ["/sbin/tini", "--"]
 VOLUME /config
