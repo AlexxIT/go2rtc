@@ -79,6 +79,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
+          file: docker/Dockerfile
           platforms: linux/${{ matrix.platform }}
           push: false
           load: true
@@ -92,7 +93,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: hardware.Dockerfile
+          file: docker/hardware.Dockerfile
           platforms: linux/amd64
           push: false
           load: true
