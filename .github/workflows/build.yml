@@ -156,6 +156,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
+          file: docker/Dockerfile
           platforms: |
             linux/amd64
             linux/386
@@ -215,7 +216,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: hardware.Dockerfile
+          file: docker/hardware.Dockerfile
           platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta-hw.outputs.tags }}
