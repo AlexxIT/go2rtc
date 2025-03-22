@@ -127,12 +127,33 @@ func MakeHardware(args *ffmpeg.Args, engine string, defaults map[string]string) 
 
 		case EngineRKMPP:
 			args.Codecs[i] = defaults[name+"/"+engine]
-			args.Input = "-hwaccel rkmpp -hwaccel_output_format drm_prime -afbc rga " + args.Input
 
-			for j, filter := range args.Filters {
-				if strings.HasPrefix(filter, "scale=") {
-					args.Filters[j] = "scale_rkrga=" + filter[6:] + ":force_original_aspect_ratio=0"
+			if !args.HasFilters("drawtext=") {
+				args.Input = "-hwaccel rkmpp -hwaccel_output_format drm_prime -afbc rga " + args.Input
+
+				for i, filter := range args.Filters {
+					if strings.HasPrefix(filter, "scale=") {
+						args.Filters[i] = "scale_rkrga=" + filter[6:] + ":force_original_aspect_ratio=0"
+					}
+					if strings.HasPrefix(filter, "transpose=") {
+						if filter == "transpose=1,transpose=1" { // 180 degrees half-turn
+							args.Filters[i] = "vpp_rkrga=transpose=4" // reversal
+						} else {
+							args.Filters[i] = "vpp_rkrga=transpose=" + filter[10:]
+						}
+					}
 				}
+
+				if len(args.Filters) > 0 {
+					// fix if input doesn't support hwaccel, do nothing when support
+					// insert as first filter before hardware scale and transpose
+					args.InsertFilter("format=drm_prime|nv12,hwupload")
+				}
+			} else {
+				// enable software pixel for drawtext, scale and transpose
+				args.Input = "-hwaccel rkmpp -hwaccel_output_format nv12 -afbc rga " + args.Input
+
+				args.AddFilter("hwupload")
 			}
 		}
 	}
