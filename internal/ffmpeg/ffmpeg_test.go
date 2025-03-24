@@ -251,15 +251,33 @@ func _TestParseArgsHwV4l2m2m(t *testing.T) {
 }
 
 func TestParseArgsHwRKMPP(t *testing.T) {
-	// [HTTP-MJPEG] video will be transcoded to H264
-	args := parseArgs("http://example.com#video=h264#hardware=rkmpp")
-	require.Equal(t, `ffmpeg -hide_banner -fflags nobuffer -flags low_delay -i http://example.com -c:v h264_rkmpp_encoder -g 50 -bf 0 -profile:v high -level:v 4.1 -an -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
-
-	args = parseArgs("http://example.com#video=h264#rotate=180#hardware=rkmpp")
-	require.Equal(t, `ffmpeg -hide_banner -fflags nobuffer -flags low_delay -i http://example.com -c:v h264_rkmpp_encoder -g 50 -bf 0 -profile:v high -level:v 4.1 -an -vf "transpose=1,transpose=1" -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
-
-	args = parseArgs("http://example.com#video=h264#height=320#hardware=rkmpp")
-	require.Equal(t, `ffmpeg -hide_banner -fflags nobuffer -flags low_delay -i http://example.com -c:v h264_rkmpp_encoder -g 50 -bf 0 -profile:v high -level:v 4.1 -height 320 -an -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`, args.String())
+	tests := []struct {
+		name   string
+		source string
+		expect string
+	}{
+		{
+			name:   "[FILE] transcoding to H264",
+			source: "bbb.mp4#video=h264#hardware=rkmpp",
+			expect: `ffmpeg -hide_banner -hwaccel rkmpp -hwaccel_output_format drm_prime -afbc rga -re -i bbb.mp4 -c:v h264_rkmpp -g 50 -bf 0 -profile:v high -level:v 4.1 -an -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`,
+		},
+		{
+			name:   "[FILE] transcoding with rotation",
+			source: "bbb.mp4#video=h264#rotate=180#hardware=rkmpp",
+			expect: `ffmpeg -hide_banner -hwaccel rkmpp -hwaccel_output_format drm_prime -afbc rga -re -i bbb.mp4 -c:v h264_rkmpp -g 50 -bf 0 -profile:v high -level:v 4.1 -an -vf "format=drm_prime|nv12,hwupload,vpp_rkrga=transpose=4" -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`,
+		},
+		{
+			name:   "[FILE] transcoding with scaling",
+			source: "bbb.mp4#video=h264#height=320#hardware=rkmpp",
+			expect: `ffmpeg -hide_banner -hwaccel rkmpp -hwaccel_output_format drm_prime -afbc rga -re -i bbb.mp4 -c:v h264_rkmpp -g 50 -bf 0 -profile:v high -level:v 4.1 -an -vf "format=drm_prime|nv12,hwupload,scale_rkrga=-1:320:force_original_aspect_ratio=0" -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			args := parseArgs(test.source)
+			require.Equal(t, test.expect, args.String())
+		})
+	}
 }
 
 func _TestParseArgsHwCuda(t *testing.T) {

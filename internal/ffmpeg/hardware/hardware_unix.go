@@ -11,8 +11,9 @@ import (
 const (
 	ProbeV4L2M2MH264 = "-f lavfi -i testsrc2 -t 1 -c h264_v4l2m2m -f null -"
 	ProbeV4L2M2MH265 = "-f lavfi -i testsrc2 -t 1 -c hevc_v4l2m2m -f null -"
-	ProbeRKMPPH264   = "-f lavfi -i testsrc2 -t 1 -c h264_rkmpp_encoder -f null -"
-	ProbeRKMPPH265   = "-f lavfi -i testsrc2 -t 1 -c hevc_rkmpp_encoder -f null -"
+	ProbeRKMPPH264   = "-f lavfi -i testsrc2 -t 1 -c h264_rkmpp -f null -"
+	ProbeRKMPPH265   = "-f lavfi -i testsrc2 -t 1 -c hevc_rkmpp -f null -"
+	ProbeRKMPPJPEG   = "-f lavfi -i testsrc2 -t 1 -c mjpeg_rkmpp -f null -"
 	ProbeVAAPIH264   = "-init_hw_device vaapi -f lavfi -i testsrc2 -t 1 -vf format=nv12,hwupload -c h264_vaapi -f null -"
 	ProbeVAAPIH265   = "-init_hw_device vaapi -f lavfi -i testsrc2 -t 1 -vf format=nv12,hwupload -c hevc_vaapi -f null -"
 	ProbeVAAPIJPEG   = "-init_hw_device vaapi -f lavfi -i testsrc2 -t 1 -vf format=nv12,hwupload -c mjpeg_vaapi -f null -"
@@ -38,6 +39,10 @@ func ProbeAll(bin string) []*api.Source {
 			{
 				Name: runToString(bin, ProbeRKMPPH265),
 				URL:  "ffmpeg:...#video=h265#hardware=" + EngineRKMPP,
+			},
+			{
+				Name: runToString(bin, ProbeRKMPPJPEG),
+				URL:  "ffmpeg:...#video=mjpeg#hardware=" + EngineRKMPP,
 			},
 		}
 	}
@@ -81,6 +86,10 @@ func ProbeHardware(bin, name string) string {
 				return EngineV4L2M2M
 			}
 			if run(bin, ProbeRKMPPH265) {
+				return EngineRKMPP
+			}
+		case "mjpeg":
+			if run(bin, ProbeRKMPPJPEG) {
 				return EngineRKMPP
 			}
 		}
