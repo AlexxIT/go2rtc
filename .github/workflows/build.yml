@@ -237,7 +237,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            ${{ github.repository }}
+            jcsoftware/go2rtc_onvif_ptz
             ghcr.io/${{ github.repository }}
           flavor: |
             suffix=-rockchip,onlatest=true
