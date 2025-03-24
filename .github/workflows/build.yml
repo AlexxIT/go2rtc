@@ -5,8 +5,9 @@ on:
   push:
     branches:
       - 'master'
+      - 'j*'
     tags:
-      - 'v*'
+      - 'b*'
 
 jobs:
   build-binaries:
@@ -124,7 +125,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            ${{ github.repository }}
+            jcsoftware/go2rtc_onvif_ptz
             ghcr.io/${{ github.repository }}
           tags: |
             type=ref,event=branch
@@ -181,7 +182,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            ${{ github.repository }}
+            jcsoftware/go2rtc_onvif_ptz
             ghcr.io/${{ github.repository }}
           flavor: |
             suffix=-hardware,onlatest=true
@@ -203,7 +204,7 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      
+
       - name: Login to GitHub Container Registry
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
