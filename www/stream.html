@@ -71,7 +71,7 @@
 
         console.log(streams[i]);
         // Add PTZ controls for ONVIF/PTZ cameras
-        if (streams[i].toLowerCase().includes('_ptz')) {
+        if (streams[i].toLowerCase().endsWith('_ptz')) {
             const ptzControls = document.createElement('ptz-controls');
             ptzControls.setAttribute('source', streams[i]);
             container.appendChild(ptzControls);
