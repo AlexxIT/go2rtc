@@ -44,7 +44,7 @@ func apiAlsa(w http.ResponseWriter, r *http.Request) {
 		info, err := dev.Info()
 		if err == nil {
 			formats := formatsToString(dev.ListFormats())
-			r1, r2 := dev.RangeSampleRates()
+			r1, r2 := dev.RangeRates()
 			c1, c2 := dev.RangeChannels()
 			source := &api.Source{
 				Name: info.ID + " / " + info.Name + " / " + info.SubName,

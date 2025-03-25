@@ -1,6 +1,7 @@
 package alsa
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 
@@ -26,6 +27,11 @@ func Open(rawURL string) (core.Producer, error) {
 		return nil, err
 	}
 
+	if !dev.CheckFormat(device.SNDRV_PCM_FORMAT_S16_LE) {
+		_ = dev.Close()
+		return nil, errors.New("alsa: format S16LE not supported")
+	}
+
 	switch path[len(path)-1] {
 	case 'p': // playback
 		return newPlayback(dev)
@@ -34,6 +40,5 @@ func Open(rawURL string) (core.Producer, error) {
 	}
 
 	_ = dev.Close()
-
 	return nil, fmt.Errorf("alsa: unknown path: %s", path)
 }

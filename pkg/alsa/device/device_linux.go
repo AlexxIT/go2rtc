@@ -75,13 +75,21 @@ func (d *Device) Info() (*Info, error) {
 	}, nil
 }
 
+func (d *Device) CheckFormat(format byte) bool {
+	return d.checkMask(SNDRV_PCM_HW_PARAM_FORMAT, uint32(format))
+}
+
 func (d *Device) ListFormats() (formats []byte) {
 	for i := byte(0); i <= 28; i++ {
-		if d.checkMask(SNDRV_PCM_HW_PARAM_FORMAT, uint32(i)) {
+		if d.CheckFormat(i) {
 			formats = append(formats, i)
 		}
 	}
 	return
+}
+
+func (d *Device) RangeRates() (uint32, uint32) {
+	return d.getInterval(SNDRV_PCM_HW_PARAM_RATE)
 }
 
 func (d *Device) RangeChannels() (byte, byte) {
@@ -89,15 +97,33 @@ func (d *Device) RangeChannels() (byte, byte) {
 	return byte(minCh), byte(maxCh)
 }
 
-func (d *Device) RangeSampleRates() (uint32, uint32) {
-	return d.getInterval(SNDRV_PCM_HW_PARAM_RATE)
+func (d *Device) GetRateNear(rate uint32) uint32 {
+	r1, r2 := d.RangeRates()
+	if rate < r1 {
+		return r1
+	}
+	if rate > r2 {
+		return r2
+	}
+	return rate
+}
+
+func (d *Device) GetChannelsNear(channels byte) byte {
+	c1, c2 := d.RangeChannels()
+	if channels < c1 {
+		return c1
+	}
+	if channels > c2 {
+		return c2
+	}
+	return channels
 }
 
 const bufferSize = 4096
 
-func (d *Device) SetHWParams(format byte, sampleRate uint32, channels byte) error {
+func (d *Device) SetHWParams(format byte, rate uint32, channels byte) error {
 	d.setInterval(SNDRV_PCM_HW_PARAM_CHANNELS, uint32(channels))
-	d.setInterval(SNDRV_PCM_HW_PARAM_RATE, sampleRate)
+	d.setInterval(SNDRV_PCM_HW_PARAM_RATE, rate)
 	d.setMask(SNDRV_PCM_HW_PARAM_FORMAT, uint32(format))
 	//d.setMask(SNDRV_PCM_HW_PARAM_SUBFORMAT, 0)
 

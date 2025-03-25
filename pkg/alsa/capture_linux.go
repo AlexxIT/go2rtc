@@ -3,6 +3,7 @@ package alsa
 import (
 	"github.com/AlexxIT/go2rtc/pkg/alsa/device"
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/pcm"
 	"github.com/pion/rtp"
 )
 
@@ -33,19 +34,25 @@ func newCapture(dev *device.Device) (*Capture, error) {
 	}, nil
 }
 
-// readBufferSize - 20ms * 2 bytes per sample * 16000 frames per second * 2 channels / 1000ms per second
-const readBufferSize = 20 * 2 * 16000 * 2 / 1000
-
-// bytesPerFrame - 2 bytes per sample * 2 channels
-const bytesPerFrame = 2 * 2
-
 func (c *Capture) Start() error {
-	if err := c.dev.SetHWParams(device.SNDRV_PCM_FORMAT_S16_LE, 16000, 2); err != nil {
+	dst := c.Medias[0].Codecs[0]
+	src := &core.Codec{
+		Name:      dst.Name,
+		ClockRate: c.dev.GetRateNear(dst.ClockRate),
+		Channels:  c.dev.GetChannelsNear(dst.Channels),
+	}
+
+	if err := c.dev.SetHWParams(device.SNDRV_PCM_FORMAT_S16_LE, src.ClockRate, src.Channels); err != nil {
 		return err
 	}
 
+	transcode := transcodeFunc(dst, src)
+	frameBytes := int(pcm.BytesPerFrame(src))
+
 	var ts uint32
 
+	// readBufferSize for 20ms interval
+	readBufferSize := 20 * frameBytes * int(src.ClockRate) / 1000
 	b := make([]byte, readBufferSize)
 	for {
 		n, err := c.dev.Read(b)
@@ -65,25 +72,19 @@ func (c *Capture) Start() error {
 				Marker:    true,
 				Timestamp: ts,
 			},
-			Payload: stereoToMono(b[:n]),
+			Payload: transcode(b[:n]),
 		}
 		c.Receivers[0].WriteRTP(pkt)
 
-		ts += uint32(n / bytesPerFrame)
+		ts += uint32(n / frameBytes)
 	}
 }
 
-func stereoToMono(stereo []byte) (mono []byte) {
-	n := len(stereo)
-	mono = make([]byte, n/2)
-	var i, j int
-	for i < n {
-		mono[j] = stereo[i]
-		j++
-		i++
-		mono[j] = stereo[i]
-		j++
-		i += 3
+func transcodeFunc(dst, src *core.Codec) func([]byte) []byte {
+	if dst.ClockRate == src.ClockRate && dst.Channels == src.Channels {
+		return func(b []byte) []byte {
+			return b
+		}
 	}
-	return
+	return pcm.Transcode(dst, src)
 }

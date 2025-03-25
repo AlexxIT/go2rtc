@@ -43,20 +43,10 @@ func (p *Playback) GetTrack(media *core.Media, codec *core.Codec) (*core.Receive
 
 func (p *Playback) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
 	src := track.Codec
-
-	// support probe
-	if src.Name == core.CodecAny {
-		src = &core.Codec{
-			Name:      core.CodecPCML,
-			ClockRate: 16000,
-			Channels:  2,
-		}
-	}
-
 	dst := &core.Codec{
 		Name:      core.CodecPCML,
-		ClockRate: src.ClockRate,
-		Channels:  2,
+		ClockRate: p.dev.GetRateNear(src.ClockRate),
+		Channels:  p.dev.GetChannelsNear(src.Channels),
 	}
 	sender := core.NewSender(media, dst)
 
@@ -74,7 +64,7 @@ func (p *Playback) AddTrack(media *core.Media, codec *core.Codec, track *core.Re
 	// - Formats: S16_LE, S32_LE
 	// - ClockRates: 8000 - 192000
 	// - Channels: 2 - 10
-	err := p.dev.SetHWParams(device.SNDRV_PCM_FORMAT_S16_LE, dst.ClockRate, 2)
+	err := p.dev.SetHWParams(device.SNDRV_PCM_FORMAT_S16_LE, dst.ClockRate, byte(dst.Channels))
 	if err != nil {
 		return err
 	}
