@@ -73,7 +73,7 @@ func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiv
 				codec.Name = core.CodecPCMA
 			}
 			codec.ClockRate = 8000
-			sender.Handler = pcm.ResampleToG711(track.Codec, 8000, sender.Handler)
+			sender.Handler = pcm.TranscodeHandler(codec, track.Codec, sender.Handler)
 		}
 	}
 

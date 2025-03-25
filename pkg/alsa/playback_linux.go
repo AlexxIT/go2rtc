@@ -42,23 +42,23 @@ func (p *Playback) GetTrack(media *core.Media, codec *core.Codec) (*core.Receive
 }
 
 func (p *Playback) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
-	in := track.Codec
+	src := track.Codec
 
 	// support probe
-	if in.Name == core.CodecAny {
-		in = &core.Codec{
+	if src.Name == core.CodecAny {
+		src = &core.Codec{
 			Name:      core.CodecPCML,
 			ClockRate: 16000,
 			Channels:  2,
 		}
 	}
 
-	out := &core.Codec{
+	dst := &core.Codec{
 		Name:      core.CodecPCML,
-		ClockRate: in.ClockRate,
+		ClockRate: src.ClockRate,
 		Channels:  2,
 	}
-	sender := core.NewSender(media, out)
+	sender := core.NewSender(media, dst)
 
 	sender.Handler = func(pkt *rtp.Packet) {
 		if n, err := p.dev.Write(pkt.Payload); err == nil {
@@ -66,15 +66,15 @@ func (p *Playback) AddTrack(media *core.Media, codec *core.Codec, track *core.Re
 		}
 	}
 
-	if sender.Handler = pcm.Convert(in, out, sender.Handler); sender.Handler == nil {
-		return fmt.Errorf("alsa: can't convert %s to %s", in, out)
+	if sender.Handler = pcm.TranscodeHandler(dst, src, sender.Handler); sender.Handler == nil {
+		return fmt.Errorf("alsa: can't convert %s to %s", src, dst)
 	}
 
 	// typical card support:
 	// - Formats: S16_LE, S32_LE
 	// - ClockRates: 8000 - 192000
 	// - Channels: 2 - 10
-	err := p.dev.SetHWParams(device.SNDRV_PCM_FORMAT_S16_LE, out.ClockRate, 2)
+	err := p.dev.SetHWParams(device.SNDRV_PCM_FORMAT_S16_LE, dst.ClockRate, 2)
 	if err != nil {
 		return err
 	}
