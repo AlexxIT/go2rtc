@@ -45,7 +45,7 @@ func Open(r io.Reader) (*Producer, error) {
 				codec.Name = core.CodecPCMU
 			}
 
-			codec.Channels = uint16(data[2])
+			codec.Channels = data[2]
 			codec.ClockRate = binary.LittleEndian.Uint32(data[4:])
 		}
 	}
