@@ -16,11 +16,19 @@ func (c *Client) PTZRequest(operation string, params ...string) ([]byte, error) 
 		if len(params) < 4 {
 			return nil, nil
 		}
-		// 				<tt:Zoom x="` + params[3] + `"/>
+
+		//PanTilt velocity
+		velocity := `<tt:PanTilt x="` + params[1] + `" y="` + params[2] + `"/>`
+
+		// Add Zoom velocity only if camera supports zoom
+		if c.hasZoom {
+			velocity += `<tt:Zoom x="` + params[3] + `"/>`
+		}
+
 		body = `<tptz:ContinuousMove xmlns:tptz="http://www.onvif.org/ver20/ptz/wsdl">
 			<tptz:ProfileToken>` + params[0] + `</tptz:ProfileToken>
 			<tptz:Velocity>
-				<tt:PanTilt x="` + params[1] + `" y="` + params[2] + `"/>
+				` + velocity + `
 			</tptz:Velocity>
 		</tptz:ContinuousMove>`
 	case PTZStop:
