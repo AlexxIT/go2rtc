@@ -22,6 +22,8 @@ type Client struct {
 	mediaURL  string
 	imaginURL string
 	ptzURL    string
+
+	hasZoom bool
 }
 
 func NewClient(rawURL string) (*Client, error) {
@@ -108,6 +110,8 @@ func (c *Client) GetProfilesTokens() ([]string, error) {
 		return nil, err
 	}
 
+	c.hasZoom = FindTagValue(b, "ZoomLimits.+?URI") != ""
+
 	var tokens []string
 
 	re := regexp.MustCompile(`Profiles.+?token="([^"]+)`)
@@ -186,7 +190,8 @@ func (c *Client) Request(url, body string) ([]byte, error) {
 	e := NewEnvelopeWithUser(c.url.User)
 	e.Append(body)
 
-	fmt.Printf("urlptz: %s, body: %s\n", url, e.Bytes())
+	//TODO: use log
+	fmt.Printf("url: %s, body: %s\n", url, e.Bytes())
 
 	client := &http.Client{Timeout: time.Second * 5000}
 	res, err := client.Post(url, `application/soap+xml;charset=utf-8`, bytes.NewReader(e.Bytes()))
@@ -201,7 +206,7 @@ func (c *Client) Request(url, body string) ([]byte, error) {
 		err = errors.New("onvif: " + res.Status + " for " + url)
 	}
 
-	fmt.Printf("urlptz: %s, resp: %s\n", url, b)
+	fmt.Printf("url: %s, resp: %s\n", url, b)
 
 	return b, err
 }

@@ -11,7 +11,8 @@ class PTZControls extends HTMLElement {
   }
 
   render() {
-    this.shadowRoot.innerHTML = `
+    //Version 1 UI dev
+    const templateDevUI = `
     <style>
         :host {
             display: block;
@@ -77,6 +78,8 @@ class PTZControls extends HTMLElement {
         button[data-dir="left"] { grid-column: 1; grid-row: 2; }
         button[data-dir="right"] { grid-column: 3; grid-row: 2; }
         button[data-dir="down"] { grid-column: 2; grid-row: 3; }
+        button[data-dir="zoom-in"] { grid-column: 3; grid-row: 1; }
+        button[data-dir="zoom-out"] { grid-column: 1; grid-row: 3; }
     </style>
     <button class="toggle-button">${defaultIcon}</button>
     <div class="controls">
@@ -84,14 +87,243 @@ class PTZControls extends HTMLElement {
         <button data-dir="left">←</button>
         <button data-dir="right">→</button>
         <button data-dir="down">↓</button>
+        <button data-dir="zoom-in">+</button>
+        <button data-dir="zoom-out">−</button>
     </div>
     `;
+
+    //Version 2 v0.dev UI :-o
+    const templateV0devUI = `
+        <style>
+        :host {
+            display: block;
+            position: absolute;
+            bottom: 40px;
+            right: 5px;
+            z-index: 1000;
+        }
+
+        .toggle-button {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            width: 30px;
+            height: 30px;
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            z-index: 1001;
+            transition: opacity 0.3s;
+        }
+        .toggle-button:hover {
+            background: rgba(0, 0, 0, 0.8);
+        }
+
+        .camera-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+
+        .camera-feed {
+            width: 100%;
+            height: calc(100% - 50px);
+            background-color: #222;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .controls {
+            position: absolute;
+            bottom: 30px;
+            right: 20px;
+            width: 100px;
+            height: 100px;
+            background-color: rgba(255, 255, 255, 0.7);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            visibility: hidden;
+        }
+        .controls.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .ptz-center {
+            width: 30px;
+            height: 30px;
+            background-color: #f00;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        .ptz-arrow {
+            position: absolute;
+            width: 0;
+            height: 0;
+            border-style: solid;
+            cursor: pointer;
+        }
+
+        .ptz-up {
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-width: 0 10px 10px 10px;
+            border-color: transparent transparent #666 transparent;
+        }
+
+        .ptz-right {
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            border-width: 10px 0 10px 10px;
+            border-color: transparent transparent transparent #666;
+        }
+
+        .ptz-down {
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-width: 10px 10px 0 10px;
+            border-color: #666 transparent transparent transparent;
+        }
+
+        .ptz-left {
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            border-width: 10px 10px 10px 0;
+            border-color: transparent #666 transparent transparent;
+        }
+
+        .zoom-controls {
+            position: absolute;
+            bottom: 25px;
+            right: 130px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            visibility: hidden;
+        }
+        .zoom-controls.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .zoom-button {
+            width: 50px;
+            height: 50px;
+            background-color: rgba(255, 255, 255, 0.7);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .zoom-icon {
+            position: relative;
+            width: 20px;
+            height: 20px;
+        }
+
+        .zoom-in .zoom-icon::before,
+        .zoom-in .zoom-icon::after {
+            content: '';
+            position: absolute;
+            background-color: #333;
+        }
+
+        .zoom-in .zoom-icon::before {
+            width: 12px;
+            height: 2px;
+            top: 9px;
+            left: 4px;
+        }
+
+        .zoom-in .zoom-icon::after {
+            width: 2px;
+            height: 12px;
+            top: 4px;
+            left: 9px;
+        }
+
+        .zoom-out .zoom-icon::before {
+            content: '';
+            position: absolute;
+            background-color: #333;
+            width: 12px;
+            height: 2px;
+            top: 9px;
+            left: 4px;
+        }
+
+        .zoom-label {
+            color: #666;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+
+        .nav-bar {
+            display: flex;
+            height: 50px;
+            background-color: #000;
+            border-top: 1px solid #333;
+        }
+
+        .nav-item {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #fff;
+            text-decoration: none;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .nav-item.active {
+            color: #fff;
+            border-bottom: 2px solid #fff;
+        }
+    </style>
+
+    <button class="toggle-button">${defaultIcon}</button>
+    <div class="controls">
+        <div class="ptz-arrow ptz-up" data-dir="up"></div>
+        <div class="ptz-arrow ptz-right" data-dir="right"></div>
+        <div class="ptz-arrow ptz-down" data-dir="down"></div>
+        <div class="ptz-arrow ptz-left" data-dir="left"></div>
+        <div class="ptz-center"></div>
+    </div>
+    <div class="zoom-controls">
+        <div class="zoom-button zoom-in" data-dir="zoom-in">
+            <div class="zoom-icon"></div>
+        </div>
+        <div class="zoom-button zoom-out" data-dir="zoom-out">
+            <div class="zoom-icon"></div>
+        </div>
+    </div>
+    `;
+
+    this.shadowRoot.innerHTML = templateV0devUI;
   }
 
   setupControls() {
     // Toggle button setup
     const toggleButton = this.shadowRoot.querySelector(".toggle-button");
     const controlsPanel = this.shadowRoot.querySelector(".controls");
+    const zoomControlsPanel = this.shadowRoot.querySelector(".zoom-controls");
 
     toggleButton.addEventListener("click", () => {
       this.controlsVisible = !this.controlsVisible;
@@ -99,22 +331,29 @@ class PTZControls extends HTMLElement {
 
       if (this.controlsVisible) {
         controlsPanel.classList.add("visible");
+        zoomControlsPanel.classList.add("visible");
         this.resetHideTimeout();
       } else {
         controlsPanel.classList.remove("visible");
+        zoomControlsPanel.classList.remove("visible");
         this.clearHideTimeout();
       }
     });
 
     // Direction buttons setup
-    const buttons = this.shadowRoot.querySelectorAll(".controls button");
-    buttons.forEach((button) => {
+    const buttons = this.shadowRoot.querySelectorAll(".controls div");
+    const zoomButtons = this.shadowRoot.querySelectorAll(".zoom-controls div");
+
+    // Helper function to setup button event handlers
+    const setupButtonHandlers = (button) => {
       let isPressed = false;
 
       const handleMove = () => {
         if (!isPressed) return;
 
         const dir = button.dataset.dir;
+
+        if (!dir) return;
 
         let pan = 0,
           tilt = 0,
@@ -133,6 +372,25 @@ class PTZControls extends HTMLElement {
           case "right":
             pan = 0.5;
             break;
+          case "zoom-in":
+            zoomSpeed = 0.5;
+            break;
+          case "zoom-out":
+            zoomSpeed = -0.5;
+            break;
+        }
+
+        console.log("PTZ Move", pan, tilt, zoomSpeed, dir, button);
+
+        // Only provide visual feedback for pan/tilt movements
+        if (pan !== 0 || tilt !== 0) {
+          const center = this.shadowRoot.querySelector(".ptz-center");
+          center.style.backgroundColor = "#a00";
+        } else if (zoomSpeed !== 0) {
+          const btZoom = this.shadowRoot.querySelector(`.${dir}`);
+          if (btZoom !== null) {
+            btZoom.style.backgroundColor = "#ddd";
+          }
         }
 
         this.sendCommand("move", pan, tilt, zoomSpeed);
@@ -147,6 +405,12 @@ class PTZControls extends HTMLElement {
       button.addEventListener("mouseup", () => {
         isPressed = false;
         this.sendCommand("stop");
+        const center = this.shadowRoot.querySelector(".ptz-center");
+        center.style.backgroundColor = "#f00";
+        const buttonIn = this.shadowRoot.querySelector(`.zoom-in`);
+        buttonIn.style.backgroundColor = "rgba(255, 255, 255, 0.7)";
+        const buttonOut = this.shadowRoot.querySelector(`.zoom-out`);
+        buttonOut.style.backgroundColor = "rgba(255, 255, 255, 0.7)";
         this.resetHideTimeout();
       });
 
@@ -170,17 +434,35 @@ class PTZControls extends HTMLElement {
         e.preventDefault();
         isPressed = false;
         this.sendCommand("stop");
+        const center = this.shadowRoot.querySelector(".ptz-center");
+        center.style.backgroundColor = "#f00";
+        const buttonIn = this.shadowRoot.querySelector(`.zoom-in`);
+        buttonIn.style.backgroundColor = "rgba(255, 255, 255, 0.7)";
+        const buttonOut = this.shadowRoot.querySelector(`.zoom-out`);
+        buttonOut.style.backgroundColor = "rgba(255, 255, 255, 0.7)";
         this.resetHideTimeout();
       });
-    });
+    };
+
+    // Apply event handlers to all buttons
+    buttons.forEach(setupButtonHandlers);
+    zoomButtons.forEach(setupButtonHandlers);
 
     // Auto-hide on mouse movement outside the controls
     controlsPanel.addEventListener("mousemove", () => {
       this.resetHideTimeout();
     });
 
+    zoomControlsPanel.addEventListener("mousemove", () => {
+      this.resetHideTimeout();
+    });
+
     // Reset hide timeout when hovering over the controls
     controlsPanel.addEventListener("mouseenter", () => {
+      this.resetHideTimeout();
+    });
+
+    zoomControlsPanel.addEventListener("mouseenter", () => {
       this.resetHideTimeout();
     });
   }
@@ -189,11 +471,13 @@ class PTZControls extends HTMLElement {
     this.clearHideTimeout();
     this.hideTimeout = setTimeout(() => {
       const controlsPanel = this.shadowRoot.querySelector(".controls");
+      const zoomControlsPanel = this.shadowRoot.querySelector(".zoom-controls");
       const toggleButton = this.shadowRoot.querySelector(".toggle-button");
       controlsPanel.classList.remove("visible");
+      zoomControlsPanel.classList.remove("visible");
       toggleButton.innerHTML = defaultIcon;
       this.controlsVisible = false;
-    }, 5000);
+    }, 8000);
   }
 
   clearHideTimeout() {
