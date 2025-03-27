@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -91,5 +90,14 @@ func TestDecodeSPS2(t *testing.T) {
 	require.Nil(t, err)
 
 	sps := DecodeSPS(b)
-	assert.Nil(t, sps) // broken SPS?
+	require.Equal(t, uint16(928), sps.Width())
+	require.Equal(t, uint16(576), sps.Height())
+
+	s = "Z2QAHq2EAQwgCGEAQwgCGEAQwgCEO1BQF/yzcBAQFAAAD6AAAXcCEA==" // unknown
+	b, err = base64.StdEncoding.DecodeString(s)
+	require.Nil(t, err)
+
+	sps = DecodeSPS(b)
+	require.Equal(t, uint16(640), sps.Width())
+	require.Equal(t, uint16(360), sps.Height())
 }
