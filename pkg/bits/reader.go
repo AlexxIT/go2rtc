@@ -122,9 +122,9 @@ func (r *Reader) ReadUEGolomb() uint32 {
 // ReadSEGolomb - ReadSignedExponentialGolomb
 func (r *Reader) ReadSEGolomb() int32 {
 	if b := r.ReadUEGolomb(); b%2 == 0 {
-		return -int32(b >> 1)
+		return -int32(b / 2)
 	} else {
-		return int32(b >> 1)
+		return int32((b + 1) / 2)
 	}
 }
 
