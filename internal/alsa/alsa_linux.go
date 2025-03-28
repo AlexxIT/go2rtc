@@ -47,9 +47,12 @@ func apiAlsa(w http.ResponseWriter, r *http.Request) {
 			r1, r2 := dev.RangeRates()
 			c1, c2 := dev.RangeChannels()
 			source := &api.Source{
-				Name: info.ID + " / " + info.Name + " / " + info.SubName,
+				Name: info.ID,
 				Info: fmt.Sprintf("Formats: %s, Rates: %d-%d, Channels: %d-%d", formats, r1, r2, c1, c2),
 				URL:  "alsa:device?audio=" + path,
+			}
+			if !strings.Contains(source.Name, info.Name) {
+				source.Name += ", " + info.Name
 			}
 			sources = append(sources, source)
 		}
