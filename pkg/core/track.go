@@ -139,13 +139,13 @@ func (s *Sender) Start() {
 	}
 	s.done = make(chan struct{})
 
-	go func() {
-		// for range on nil chan is OK
-		for packet := range s.buf {
+	// pass buf directly so that it's impossible for buf to be nil
+	go func(buf chan *Packet) {
+		for packet := range buf {
 			s.Output(packet)
 		}
 		close(s.done)
-	}()
+	}(s.buf)
 }
 
 func (s *Sender) Wait() {
