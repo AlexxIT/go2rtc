@@ -9,6 +9,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/doorbird"
 	"github.com/AlexxIT/go2rtc/internal/dvrip"
 	"github.com/AlexxIT/go2rtc/internal/echo"
+	"github.com/AlexxIT/go2rtc/internal/eseecloud"
 	"github.com/AlexxIT/go2rtc/internal/exec"
 	"github.com/AlexxIT/go2rtc/internal/expr"
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg"
@@ -90,6 +91,7 @@ func main() {
 	doorbird.Init() // doorbird source
 	v4l2.Init()     // v4l2 source
 	flussonic.Init()
+	eseecloud.Init()
 
 	// 6. Helper modules
 
