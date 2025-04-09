@@ -8,7 +8,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	"github.com/AlexxIT/go2rtc/pkg/xnet"
-	pion "github.com/pion/webrtc/v3"
+	pion "github.com/pion/webrtc/v4"
 )
 
 type Address struct {
