@@ -3,7 +3,7 @@ package webrtc
 import (
 	"testing"
 
-	"github.com/pion/webrtc/v3"
+	"github.com/pion/webrtc/v4"
 	"github.com/stretchr/testify/require"
 )
 

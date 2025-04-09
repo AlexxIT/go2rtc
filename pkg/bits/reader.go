@@ -89,6 +89,12 @@ func (r *Reader) ReadBits64(n byte) (res uint64) {
 	return
 }
 
+func (r *Reader) ReadFloat32() float64 {
+	i := r.ReadUint16()
+	f := r.ReadUint16()
+	return float64(i) + float64(f)/65536
+}
+
 func (r *Reader) ReadBytes(n int) (b []byte) {
 	if r.bits == 0 {
 		if r.pos+n > len(r.buf) {
