@@ -12,7 +12,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	pion "github.com/pion/webrtc/v3"
+	pion "github.com/pion/webrtc/v4"
 )
 
 type Client struct {
@@ -536,6 +536,6 @@ func (c *Client) MarshalJSON() ([]byte, error) {
 	if webrtcProd, ok := c.prod.(*webrtc.Conn); ok {
 		return webrtcProd.MarshalJSON()
 	}
-	
+
 	return json.Marshal(c.prod)
 }

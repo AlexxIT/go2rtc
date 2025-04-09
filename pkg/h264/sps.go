@@ -88,6 +88,8 @@ func (s *SPS) Height() uint16 {
 }
 
 func DecodeSPS(sps []byte) *SPS {
+	// https://developer.ridgerun.com/wiki/index.php/H264_Analysis_Tools
+	// ffmpeg -i file.h264 -c copy -bsf:v trace_headers -f null -
 	r := bits.NewReader(sps)
 
 	hdr := r.ReadByte()

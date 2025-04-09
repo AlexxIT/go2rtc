@@ -11,10 +11,10 @@ import (
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/pion/ice/v2"
+	"github.com/pion/ice/v4"
 	"github.com/pion/sdp/v3"
-	"github.com/pion/stun"
-	"github.com/pion/webrtc/v3"
+	"github.com/pion/stun/v3"
+	"github.com/pion/webrtc/v4"
 )
 
 func UnmarshalMedias(descriptions []*sdp.MediaDescription) (medias []*core.Media) {

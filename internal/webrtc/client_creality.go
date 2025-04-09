@@ -10,6 +10,7 @@ import (
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
+	"github.com/pion/sdp/v3"
 )
 
 // https://github.com/AlexxIT/go2rtc/issues/1600
@@ -27,7 +28,6 @@ func crealityClient(url string) (core.Producer, error) {
 
 	medias := []*core.Media{
 		{Kind: core.KindVideo, Direction: core.DirectionRecvonly},
-		{Kind: core.KindAudio, Direction: core.DirectionRecvonly},
 	}
 
 	// TODO: return webrtc.SessionDescription
@@ -35,6 +35,8 @@ func crealityClient(url string) (core.Producer, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	log.Trace().Msgf("[webrtc] offer:\n%s", offer)
 
 	body, err := offerToB64(offer)
 	if err != nil {
@@ -58,6 +60,12 @@ func crealityClient(url string) (core.Producer, error) {
 
 	answer, err := answerFromB64(res.Body)
 	if err != nil {
+		return nil, err
+	}
+
+	log.Trace().Msgf("[webrtc] answer:\n%s", answer)
+
+	if answer, err = fixCrealitySDP(answer); err != nil {
 		return nil, err
 	}
 
@@ -107,4 +115,38 @@ func answerFromB64(r io.Reader) (string, error) {
 
 	// string "v=0..."
 	return v["sdp"], nil
+}
+
+func fixCrealitySDP(value string) (string, error) {
+	var sd sdp.SessionDescription
+	if err := sd.UnmarshalString(value); err != nil {
+		return "", err
+	}
+
+	md := sd.MediaDescriptions[0]
+
+	// important to skip first codec, because second codec will be used
+	skip := md.MediaName.Formats[0]
+	md.MediaName.Formats = md.MediaName.Formats[1:]
+
+	attrs := make([]sdp.Attribute, 0, len(md.Attributes))
+	for _, attr := range md.Attributes {
+		switch attr.Key {
+		case "fmtp", "rtpmap":
+			// important to skip fmtp with x-google, because this is second fmtp for same codec
+			// and pion library will fail parsing this SDP
+			if strings.HasPrefix(attr.Value, skip) || strings.Contains(attr.Value, "x-google") {
+				continue
+			}
+		}
+		attrs = append(attrs, attr)
+	}
+
+	md.Attributes = attrs
+
+	b, err := sd.Marshal()
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
 }

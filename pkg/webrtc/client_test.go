@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/pion/webrtc/v3"
+	"github.com/pion/webrtc/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

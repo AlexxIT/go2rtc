@@ -8,7 +8,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/rtsp"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
-	pion "github.com/pion/webrtc/v3"
+	pion "github.com/pion/webrtc/v4"
 )
 
 type WebRTCClient struct {

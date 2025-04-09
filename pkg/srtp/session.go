@@ -6,7 +6,7 @@ import (
 
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
-	"github.com/pion/srtp/v2"
+	"github.com/pion/srtp/v3"
 )
 
 type Session struct {
