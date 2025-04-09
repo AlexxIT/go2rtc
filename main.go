@@ -9,9 +9,11 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/doorbird"
 	"github.com/AlexxIT/go2rtc/internal/dvrip"
 	"github.com/AlexxIT/go2rtc/internal/echo"
+	"github.com/AlexxIT/go2rtc/internal/eseecloud"
 	"github.com/AlexxIT/go2rtc/internal/exec"
 	"github.com/AlexxIT/go2rtc/internal/expr"
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg"
+	"github.com/AlexxIT/go2rtc/internal/flussonic"
 	"github.com/AlexxIT/go2rtc/internal/gopro"
 	"github.com/AlexxIT/go2rtc/internal/hass"
 	"github.com/AlexxIT/go2rtc/internal/hls"
@@ -88,6 +90,8 @@ func main() {
 	gopro.Init()    // gopro source
 	doorbird.Init() // doorbird source
 	v4l2.Init()     // v4l2 source
+	flussonic.Init()
+	eseecloud.Init()
 
 	// 6. Helper modules
 
