@@ -38,6 +38,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/v4l2"
 	"github.com/AlexxIT/go2rtc/internal/webrtc"
 	"github.com/AlexxIT/go2rtc/internal/webtorrent"
+	"github.com/AlexxIT/go2rtc/internal/wyoming"
 	"github.com/AlexxIT/go2rtc/pkg/shell"
 )
 
@@ -69,6 +70,7 @@ func main() {
 	hass.Init()       // hass source, Hass API server
 	onvif.Init()      // onvif source, ONVIF API server
 	webtorrent.Init() // webtorrent source, WebTorrent module
+	wyoming.Init()
 
 	// 5. Other sources
 
