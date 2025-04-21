@@ -277,7 +277,7 @@ func ParseCodecString(s string) *Codec {
 		codec.ClockRate = uint32(Atoi(ss[1]))
 	}
 	if len(ss) >= 3 {
-		codec.Channels = uint16(Atoi(ss[1]))
+		codec.Channels = uint8(Atoi(ss[1]))
 	}
 
 	return &codec

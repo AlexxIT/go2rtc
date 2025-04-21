@@ -185,3 +185,23 @@ func Transcode(dst, src *core.Codec) func([]byte) []byte {
 		return writer(samples)
 	}
 }
+
+func ConsumerCodecs() []*core.Codec {
+	return []*core.Codec{
+		{Name: core.CodecPCML},
+		{Name: core.CodecPCM},
+		{Name: core.CodecPCMA},
+		{Name: core.CodecPCMU},
+	}
+}
+
+func ProducerCodecs() []*core.Codec {
+	return []*core.Codec{
+		{Name: core.CodecPCML, ClockRate: 16000},
+		{Name: core.CodecPCM, ClockRate: 16000},
+		{Name: core.CodecPCML, ClockRate: 8000},
+		{Name: core.CodecPCM, ClockRate: 8000},
+		{Name: core.CodecPCMA, ClockRate: 8000},
+		{Name: core.CodecPCMU, ClockRate: 8000},
+	}
+}
