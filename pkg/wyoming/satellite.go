@@ -142,9 +142,6 @@ func (s *satellite) pause() {
 
 	s.state = stateUnavailable
 	if s.mic != nil {
-		if s.mic.onClose != nil {
-			s.mic.onClose()
-		}
 		_ = s.mic.Stop()
 		s.mic = nil
 	}
@@ -294,6 +291,13 @@ func (c *micConsumer) AddTrack(media *core.Media, codec *core.Codec, track *core
 	sender.HandleRTP(track)
 	c.Senders = append(c.Senders, sender)
 	return nil
+}
+
+func (c *micConsumer) Stop() error {
+	if c.onClose != nil {
+		c.onClose()
+	}
+	return c.Connection.Stop()
 }
 
 type sndProducer struct {
