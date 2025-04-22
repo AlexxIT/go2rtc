@@ -203,5 +203,6 @@ func ProducerCodecs() []*core.Codec {
 		{Name: core.CodecPCM, ClockRate: 8000},
 		{Name: core.CodecPCMA, ClockRate: 8000},
 		{Name: core.CodecPCMU, ClockRate: 8000},
+		{Name: core.CodecPCML, ClockRate: 22050}, // wyoming-snd-external
 	}
 }

@@ -1,6 +1,8 @@
 package wyoming
 
 import (
+	"net"
+
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/pion/rtp"
 )
@@ -8,6 +10,26 @@ import (
 type Producer struct {
 	core.Connection
 	api *API
+}
+
+func newProducer(conn net.Conn) *Producer {
+	return &Producer{
+		core.Connection{
+			ID:         core.NewID(),
+			FormatName: "wyoming",
+			Medias: []*core.Media{
+				{
+					Kind:      core.KindAudio,
+					Direction: core.DirectionRecvonly,
+					Codecs: []*core.Codec{
+						{Name: core.CodecPCML, ClockRate: 16000},
+					},
+				},
+			},
+			Transport: conn,
+		},
+		NewAPI(conn),
+	}
 }
 
 func (p *Producer) Start() error {

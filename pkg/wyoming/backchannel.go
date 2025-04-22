@@ -2,6 +2,7 @@ package wyoming
 
 import (
 	"fmt"
+	"net"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -11,6 +12,26 @@ import (
 type Backchannel struct {
 	core.Connection
 	api *API
+}
+
+func newBackchannel(conn net.Conn) *Backchannel {
+	return &Backchannel{
+		core.Connection{
+			ID:         core.NewID(),
+			FormatName: "wyoming",
+			Medias: []*core.Media{
+				{
+					Kind:      core.KindAudio,
+					Direction: core.DirectionSendonly,
+					Codecs: []*core.Codec{
+						{Name: core.CodecPCML, ClockRate: 22050},
+					},
+				},
+			},
+			Transport: conn,
+		},
+		NewAPI(conn),
+	}
 }
 
 func (b *Backchannel) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
@@ -23,7 +44,7 @@ func (b *Backchannel) AddTrack(media *core.Media, codec *core.Codec, track *core
 		ts := time.Now().Nanosecond()
 		evt := &Event{
 			Type:    "audio-chunk",
-			Data:    []byte(fmt.Sprintf(`{"rate":16000,"width":2,"channels":1,"timestamp":%d}`, ts)),
+			Data:    []byte(fmt.Sprintf(`{"rate":22050,"width":2,"channels":1,"timestamp":%d}`, ts)),
 			Payload: pkt.Payload,
 		}
 		_ = b.api.WriteEvent(evt)
