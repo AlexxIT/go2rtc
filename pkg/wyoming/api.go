@@ -64,10 +64,11 @@ func (w *API) ReadEvent() (*Event, error) {
 	evt := Event{Type: hdr.Type}
 
 	if hdr.DataLength > 0 {
-		evt.Data = make([]byte, hdr.DataLength)
-		if _, err = io.ReadFull(w.rd, evt.Data); err != nil {
+		data = make([]byte, hdr.DataLength)
+		if _, err = io.ReadFull(w.rd, data); err != nil {
 			return nil, err
 		}
+		evt.Data = string(data)
 	}
 
 	if hdr.PayloadLength > 0 {
@@ -86,7 +87,7 @@ func (w *API) Close() error {
 
 type Event struct {
 	Type    string
-	Data    []byte
+	Data    string
 	Payload []byte
 }
 

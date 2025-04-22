@@ -44,7 +44,7 @@ func (b *Backchannel) AddTrack(media *core.Media, codec *core.Codec, track *core
 		ts := time.Now().Nanosecond()
 		evt := &Event{
 			Type:    "audio-chunk",
-			Data:    []byte(fmt.Sprintf(`{"rate":22050,"width":2,"channels":1,"timestamp":%d}`, ts)),
+			Data:    fmt.Sprintf(`{"rate":22050,"width":2,"channels":1,"timestamp":%d}`, ts),
 			Payload: pkt.Payload,
 		}
 		_ = b.api.WriteEvent(evt)
