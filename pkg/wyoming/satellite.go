@@ -21,6 +21,8 @@ type Server struct {
 
 	MicHandler func(cons core.Consumer) error
 	SndHandler func(prod core.Producer) error
+
+	Trace func(format string, v ...any)
 }
 
 func (s *Server) Serve(l net.Listener) error {
@@ -39,8 +41,6 @@ func (s *Server) Handle(conn net.Conn) error {
 	sat := newSatellite(api, s)
 	defer sat.Close()
 
-	//log.Debug().Msgf("[wyoming] new client: %s", conn.RemoteAddr())
-
 	var snd []byte
 
 	for {
@@ -49,7 +49,7 @@ func (s *Server) Handle(conn net.Conn) error {
 			return err
 		}
 
-		//log.Printf("%s %s %d", evt.Type, evt.Data, len(evt.Payload))
+		s.Trace("event: %s data: %s payload: %d", evt.Type, evt.Data, len(evt.Payload))
 
 		switch evt.Type {
 		case "ping": // {"text": null}

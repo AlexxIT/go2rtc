@@ -33,17 +33,11 @@ func Init() {
 			continue
 		}
 
-		ln, err := net.Listen("tcp", cfg.Listen)
-		if err != nil {
-			log.Warn().Msgf("[wyoming] listen error: %s", err)
-			continue
-		}
-
 		if cfg.Name == "" {
 			cfg.Name = name
 		}
 
-		srv := wyoming.Server{
+		srv := &wyoming.Server{
 			Name:         cfg.Name,
 			VADThreshold: int16(1000 * cfg.VADThreshold), // 1.0 => 1000
 			WakeURI:      cfg.WakeURI,
@@ -62,9 +56,40 @@ func Init() {
 			SndHandler: func(prod core.Producer) error {
 				return stream.Play(prod)
 			},
+			Trace: func(format string, v ...any) {
+				log.Trace().Msgf("[wyoming] "+format, v...)
+			},
 		}
-		go srv.Serve(ln)
+		go serve(srv, cfg.Listen)
 	}
 }
 
 var log zerolog.Logger
+
+func serve(srv *wyoming.Server, address string) {
+	ln, err := net.Listen("tcp", address)
+	if err != nil {
+		log.Warn().Msgf("[wyoming] listen error: %s", err)
+	}
+
+	for {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+
+		go handle(srv, conn)
+	}
+}
+
+func handle(srv *wyoming.Server, conn net.Conn) {
+	addr := conn.RemoteAddr()
+
+	log.Trace().Msgf("[wyoming] %s connected", addr)
+
+	if err := srv.Handle(conn); err != nil {
+		log.Error().Msgf("[wyoming] %s error: %s", addr, err)
+	}
+
+	log.Trace().Msgf("[wyoming] %s disconnected", addr)
+}
