@@ -53,7 +53,7 @@ func (w *WakeWord) handle() {
 			var data struct {
 				Name string `json:"name"`
 			}
-			if err = json.Unmarshal(evt.Data, &data); err != nil {
+			if err = json.Unmarshal([]byte(evt.Data), &data); err != nil {
 				return
 			}
 			w.Detection = data.Name
@@ -95,7 +95,7 @@ func (w *WakeWord) Start() error {
 	if err != nil {
 		return err
 	}
-	evt := &Event{Type: "detect", Data: data}
+	evt := &Event{Type: "detect", Data: string(data)}
 	if err := w.WriteEvent(evt); err != nil {
 		return err
 	}
@@ -114,7 +114,7 @@ func (w *WakeWord) WriteChunk(payload []byte) error {
 	return w.WriteEvent(evt)
 }
 
-func audioData(send int) []byte {
+func audioData(send int) string {
 	// timestamp in ms = send / 2 * 1000 / 16000 = send / 32
-	return []byte(fmt.Sprintf(`{"rate":16000,"width":2,"channels":1,"timestamp":%d}`, send/32))
+	return fmt.Sprintf(`{"rate":16000,"width":2,"channels":1,"timestamp":%d}`, send/32)
 }

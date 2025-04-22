@@ -16,7 +16,7 @@ func (s *Server) HandleMic(conn net.Conn) error {
 	api := NewAPI(conn)
 	mic := newMicConsumer(func(chunk []byte) {
 		data := fmt.Sprintf(`{"rate":16000,"width":2,"channels":1,"timestamp":%d}`, timestamp)
-		evt := &Event{Type: "audio-chunk", Data: []byte(data), Payload: chunk}
+		evt := &Event{Type: "audio-chunk", Data: data, Payload: chunk}
 		if err := api.WriteEvent(evt); err != nil {
 			closed.Done(nil)
 		}

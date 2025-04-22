@@ -57,7 +57,7 @@ func (s *Server) Handle(conn net.Conn) error {
 		case "describe":
 			// {"asr": [], "tts": [], "handle": [], "intent": [], "wake": [], "satellite": {"name": "my satellite", "attribution": {"name": "", "url": ""}, "installed": true, "description": "my satellite", "version": "1.4.1", "area": null, "snd_format": null}}
 			data := fmt.Sprintf(`{"satellite":{"name":%q,"attribution":{"name":"go2rtc","url":"https://github.com/AlexxIT/go2rtc"},"installed":true}}`, s.Name)
-			_ = api.WriteEvent(&Event{Type: "info", Data: []byte(data)})
+			_ = api.WriteEvent(&Event{Type: "info", Data: data})
 		case "run-satellite":
 			if err = sat.run(); err != nil {
 				return err
@@ -193,7 +193,7 @@ func (s *satellite) onMicChunk(chunk []byte) {
 				// some problems with wake word - redirect to HA
 				evt := &Event{
 					Type: "run-pipeline",
-					Data: []byte(`{"start_stage":"wake","end_stage":"tts","restart_on_end":false}`),
+					Data: `{"start_stage":"wake","end_stage":"tts","restart_on_end":false}`,
 				}
 				if err := s.api.WriteEvent(evt); err != nil {
 					return
@@ -211,7 +211,7 @@ func (s *satellite) onMicChunk(chunk []byte) {
 			// check if wake word detected
 			evt := &Event{
 				Type: "run-pipeline",
-				Data: []byte(`{"start_stage":"asr","end_stage":"tts","restart_on_end":false}`),
+				Data: `{"start_stage":"asr","end_stage":"tts","restart_on_end":false}`,
 			}
 			_ = s.api.WriteEvent(evt)
 			s.state = stateStreaming
@@ -232,7 +232,7 @@ func (s *satellite) onMicChunk(chunk []byte) {
 
 	if s.state == stateStreaming {
 		data := fmt.Sprintf(`{"rate":16000,"width":2,"channels":1,"timestamp":%d}`, s.timestamp)
-		evt := &Event{Type: "audio-chunk", Data: []byte(data), Payload: chunk}
+		evt := &Event{Type: "audio-chunk", Data: data, Payload: chunk}
 		_ = s.api.WriteEvent(evt)
 	}
 
