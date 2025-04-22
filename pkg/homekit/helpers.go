@@ -50,7 +50,7 @@ func audioToMedia(codecs []camera.AudioCodec) *core.Media {
 				mediaCodec := &core.Codec{
 					Name:      audioCodecs[codec.CodecType],
 					ClockRate: audioSampleRates[sampleRate],
-					Channels:  uint16(param.Channels),
+					Channels:  param.Channels,
 				}
 
 				if mediaCodec.Name == core.CodecELD {

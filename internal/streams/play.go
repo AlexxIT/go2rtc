@@ -140,10 +140,12 @@ func matchMedia(prod core.Producer, cons core.Consumer) bool {
 
 			track, err := prod.GetTrack(prodMedia, prodCodec)
 			if err != nil {
+				log.Warn().Err(err).Msg("[streams] can't get track")
 				continue
 			}
 
 			if err = cons.AddTrack(consMedia, consCodec, track); err != nil {
+				log.Warn().Err(err).Msg("[streams] can't add track")
 				continue
 			}
 

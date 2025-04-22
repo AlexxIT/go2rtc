@@ -84,6 +84,18 @@
 </script>
 
 
+<button id="alsa">ALSA (Linux audio)</button>
+<div class="module">
+    <table id="alsa-table"></table>
+</div>
+<script>
+    document.getElementById('alsa').addEventListener('click', async ev => {
+        ev.target.nextElementSibling.style.display = 'block';
+        await getSources('alsa-table', 'api/alsa');
+    });
+</script>
+
+
 <button id="homekit">Apple HomeKit</button>
 <div class="module">
     <form id="homekit-pair" style="margin-bottom: 10px">
@@ -341,7 +353,7 @@
 </script>
 
 
-<button id="v4l2">V4L2 (USB)</button>
+<button id="v4l2">V4L2 (Linux video)</button>
 <div class="module">
     <table id="v4l2-table"></table>
 </div>
