@@ -93,6 +93,8 @@ func handle(srv *wyoming.Server, mode string, conn net.Conn) {
 	switch mode {
 	case "mic":
 		err = srv.HandleMic(conn)
+	case "snd":
+		err = srv.HandleSnd(conn)
 	default:
 		err = srv.Handle(conn)
 	}

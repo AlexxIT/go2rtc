@@ -377,7 +377,9 @@ func (s *sndProducer) Start() error {
 		seq++
 	}
 
-	s.onClose()
+	if s.onClose != nil {
+		s.onClose()
+	}
 
 	return nil
 }
