@@ -16,11 +16,12 @@ func Init() {
 	// server
 	var cfg struct {
 		Mod map[string]struct {
-			Listen       string  `yaml:"listen"`
-			Name         string  `yaml:"name"`
-			Mode         string  `yaml:"mode"`
-			WakeURI      string  `yaml:"wake_uri"`
-			VADThreshold float32 `yaml:"vad_threshold"`
+			Listen       string            `yaml:"listen"`
+			Name         string            `yaml:"name"`
+			Mode         string            `yaml:"mode"`
+			Event        map[string]string `yaml:"event"`
+			WakeURI      string            `yaml:"wake_uri"`
+			VADThreshold float32           `yaml:"vad_threshold"`
 		} `yaml:"wyoming"`
 	}
 	app.LoadConfig(&cfg)
@@ -40,6 +41,7 @@ func Init() {
 
 		srv := &wyoming.Server{
 			Name:         cfg.Name,
+			Event:        cfg.Event,
 			VADThreshold: int16(1000 * cfg.VADThreshold), // 1.0 => 1000
 			WakeURI:      cfg.WakeURI,
 			MicHandler: func(cons core.Consumer) error {
@@ -60,6 +62,9 @@ func Init() {
 			Trace: func(format string, v ...any) {
 				log.Trace().Msgf("[wyoming] "+format, v...)
 			},
+			Error: func(format string, v ...any) {
+				log.Error().Msgf("[wyoming] "+format, v...)
+			},
 		}
 		go serve(srv, cfg.Mode, cfg.Listen)
 	}
@@ -70,7 +75,7 @@ var log zerolog.Logger
 func serve(srv *wyoming.Server, mode, address string) {
 	ln, err := net.Listen("tcp", address)
 	if err != nil {
-		log.Warn().Msgf("[wyoming] listen error: %s", err)
+		log.Warn().Err(err).Msgf("[wyoming] listen")
 	}
 
 	for {

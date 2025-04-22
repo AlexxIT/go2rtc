@@ -10,6 +10,7 @@ import (
 
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/expr-lang/expr"
+	"github.com/expr-lang/expr/vm"
 )
 
 func newRequest(method, url string, headers map[string]any, body string) (*http.Request, error) {
@@ -112,11 +113,19 @@ var Options = []expr.Option{
 	),
 }
 
-func Run(input string) (any, error) {
-	program, err := expr.Compile(input, Options...)
+func Compile(input string) (*vm.Program, error) {
+	return expr.Compile(input, Options...)
+}
+
+func Eval(input string, env any) (any, error) {
+	program, err := Compile(input)
 	if err != nil {
 		return nil, err
 	}
 
-	return expr.Run(program, nil)
+	return expr.Run(program, env)
+}
+
+func Run(program *vm.Program, env any) (any, error) {
+	return vm.Run(program, env)
 }
