@@ -12,7 +12,7 @@ func Init() {
 	log := app.GetLogger("expr")
 
 	streams.RedirectFunc("expr", func(url string) (string, error) {
-		v, err := expr.Run(url[5:])
+		v, err := expr.Eval(url[5:], nil)
 		if err != nil {
 			return "", err
 		}

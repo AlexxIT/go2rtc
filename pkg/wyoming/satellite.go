@@ -1,7 +1,6 @@
 package wyoming
 
 import (
-	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -14,7 +13,8 @@ import (
 )
 
 type Server struct {
-	Name string
+	Name  string
+	Event map[string]string
 
 	VADThreshold int16
 	WakeURI      string
@@ -23,6 +23,7 @@ type Server struct {
 	SndHandler func(prod core.Producer) error
 
 	Trace func(format string, v ...any)
+	Error func(format string, v ...any)
 }
 
 func (s *Server) Serve(l net.Listener) error {
@@ -41,66 +42,49 @@ func (s *Server) Handle(conn net.Conn) error {
 	sat := newSatellite(api, s)
 	defer sat.Close()
 
-	var snd []byte
-
 	for {
 		evt, err := api.ReadEvent()
 		if err != nil {
 			return err
 		}
 
-		s.Trace("event: %s data: %s payload: %d", evt.Type, evt.Data, len(evt.Payload))
-
 		switch evt.Type {
 		case "ping": // {"text": null}
 			_ = api.WriteEvent(&Event{Type: "pong", Data: evt.Data})
-		case "describe":
-			// {"asr": [], "tts": [], "handle": [], "intent": [], "wake": [], "satellite": {"name": "my satellite", "attribution": {"name": "", "url": ""}, "installed": true, "description": "my satellite", "version": "1.4.1", "area": null, "snd_format": null}}
-			data := fmt.Sprintf(`{"satellite":{"name":%q,"attribution":{"name":"go2rtc","url":"https://github.com/AlexxIT/go2rtc"},"installed":true}}`, s.Name)
-			_ = api.WriteEvent(&Event{Type: "info", Data: data})
-		case "run-satellite":
-			if err = sat.run(); err != nil {
-				return err
-			}
-		case "pause-satellite":
-			sat.pause()
-		case "detect": // WAKE_WORD_START {"names": null}
-		case "detection": // WAKE_WORD_END {"name": "ok_nabu_v0.1", "timestamp": 17580, "speaker": null}
-		case "transcribe": // STT_START {"language": "en"}
-		case "voice-started": // STT_VAD_START {"timestamp": 1160}
-		case "voice-stopped": // STT_VAD_END {"timestamp": 2470}
-			sat.idle()
-		case "transcript": // STT_END {"text": "how are you"}
-		case "synthesize": // TTS_START {"text": "Sorry, I couldn't understand that", "voice": {"language": "en"}}
 		case "audio-start": // TTS_END {"rate": 22050, "width": 2, "channels": 1, "timestamp": 0}
-			snd = snd[:0]
+			sat.sndAudio = sat.sndAudio[:0]
 		case "audio-chunk": // {"rate": 22050, "width": 2, "channels": 1, "timestamp": 0}
-			snd = append(snd, evt.Payload...)
-		case "audio-stop": // {"timestamp": 2.880000000000002}
-			sat.respond(snd)
-		case "error":
-			sat.start()
+			sat.sndAudio = append(sat.sndAudio, evt.Payload...)
+		}
+
+		if s.Event == nil || s.Event[evt.Type] == "" {
+			sat.handleEvent(evt)
+		} else {
+			// run async because there may be sleeps
+			go sat.handleScript(evt)
 		}
 	}
 }
 
-// states like Home Assistant
+// states like http.ConnState
 const (
-	stateUnavailable = iota
-	stateIdle
-	stateWaitVAD // aka wait VAD
-	stateWaitWakeWord
-	stateStreaming
+	stateError        = -2
+	stateClosed       = -1
+	stateNew          = 0
+	stateIdle         = 1
+	stateWaitVAD      = 2 // aka wait VAD
+	stateWaitWakeWord = 3
+	stateActive       = 4
 )
 
 type satellite struct {
 	api *API
 	srv *Server
 
-	state uint8
-	mu    sync.Mutex
-
-	timestamp int
+	micState int8
+	micTS    int
+	micMu    sync.Mutex
+	sndAudio []byte
 
 	mic  *micConsumer
 	wake *WakeWord
@@ -112,35 +96,41 @@ func newSatellite(api *API, srv *Server) *satellite {
 }
 
 func (s *satellite) Close() error {
-	s.pause()
+	s.Stop()
 	return s.api.Close()
 }
 
-func (s *satellite) run() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+const wakeTimeout = 5 * 2 * 16000 // 5 seconds
 
-	if s.state != stateUnavailable {
-		return errors.New("wyoming: wrong satellite state")
+func (s *satellite) setMicState(state int8) bool {
+	s.micMu.Lock()
+	defer s.micMu.Unlock()
+
+	if s.micState == stateNew {
+		s.mic = newMicConsumer(s.onMicChunk)
+		s.mic.RemoteAddr = s.api.conn.RemoteAddr().String()
+		if err := s.srv.MicHandler(s.mic); err != nil {
+			s.micState = stateError
+			s.srv.Error("can't get mic: %w", err)
+			_ = s.api.Close()
+		} else {
+			s.micState = stateIdle
+		}
 	}
 
-	s.mic = newMicConsumer(s.onMicChunk)
-	s.mic.RemoteAddr = s.api.conn.RemoteAddr().String()
-
-	if err := s.srv.MicHandler(s.mic); err != nil {
-		return err
+	if s.micState < stateIdle {
+		return false
 	}
 
-	s.state = stateIdle
-	go s.start()
-
-	return nil
+	s.micState = state
+	s.micTS = 0
+	return true
 }
 
-func (s *satellite) pause() {
-	s.mu.Lock()
+func (s *satellite) micStop() {
+	s.micMu.Lock()
 
-	s.state = stateUnavailable
+	s.micState = stateClosed
 	if s.mic != nil {
 		_ = s.mic.Stop()
 		s.mic = nil
@@ -150,40 +140,18 @@ func (s *satellite) pause() {
 		s.wake = nil
 	}
 
-	s.mu.Unlock()
+	s.micMu.Unlock()
 }
-
-func (s *satellite) start() {
-	s.mu.Lock()
-
-	if s.state != stateUnavailable {
-		s.state = stateWaitVAD
-	}
-
-	s.mu.Unlock()
-}
-
-func (s *satellite) idle() {
-	s.mu.Lock()
-
-	if s.state != stateUnavailable {
-		s.state = stateIdle
-	}
-
-	s.mu.Unlock()
-}
-
-const wakeTimeout = 5 * 2 * 16000 // 5 seconds
 
 func (s *satellite) onMicChunk(chunk []byte) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.micMu.Lock()
+	defer s.micMu.Unlock()
 
-	if s.state == stateIdle {
+	if s.micState == stateIdle {
 		return
 	}
 
-	if s.state == stateWaitVAD {
+	if s.micState == stateWaitVAD {
 		// tests show that values over 1000 are most likely speech
 		if s.srv.VADThreshold == 0 || s16le.PeaksRMS(chunk) > s.srv.VADThreshold {
 			if s.wake == nil && s.srv.WakeURI != "" {
@@ -191,62 +159,41 @@ func (s *satellite) onMicChunk(chunk []byte) {
 			}
 			if s.wake == nil {
 				// some problems with wake word - redirect to HA
-				evt := &Event{
-					Type: "run-pipeline",
-					Data: `{"start_stage":"wake","end_stage":"tts","restart_on_end":false}`,
-				}
-				if err := s.api.WriteEvent(evt); err != nil {
-					return
-				}
-				s.state = stateStreaming
+				s.micState = stateIdle
+				go s.handleScript(&Event{Type: "internal-run"})
 			} else {
-				s.state = stateWaitWakeWord
+				s.micState = stateWaitWakeWord
 			}
-			s.timestamp = 0
+			s.micTS = 0
 		}
 	}
 
-	if s.state == stateWaitWakeWord {
+	if s.micState == stateWaitWakeWord {
 		if s.wake.Detection != "" {
 			// check if wake word detected
-			evt := &Event{
-				Type: "run-pipeline",
-				Data: `{"start_stage":"asr","end_stage":"tts","restart_on_end":false}`,
-			}
-			_ = s.api.WriteEvent(evt)
-			s.state = stateStreaming
-			s.timestamp = 0
+			s.micState = stateIdle
+			go s.handleScript(&Event{Type: "internal-detection", Data: `{"name":"` + s.wake.Detection + `"}`})
 		} else if err := s.wake.WriteChunk(chunk); err != nil {
 			// wake word service failed
-			s.state = stateWaitVAD
+			s.micState = stateWaitVAD
 			_ = s.wake.Close()
 			s.wake = nil
-		} else if s.timestamp > wakeTimeout {
+		} else if s.micTS > wakeTimeout {
 			// wake word detection timeout
-			s.state = stateWaitVAD
+			s.micState = stateWaitVAD
 		}
 	} else if s.wake != nil {
 		_ = s.wake.Close()
 		s.wake = nil
 	}
 
-	if s.state == stateStreaming {
-		data := fmt.Sprintf(`{"rate":16000,"width":2,"channels":1,"timestamp":%d}`, s.timestamp)
+	if s.micState == stateActive {
+		data := fmt.Sprintf(`{"rate":16000,"width":2,"channels":1,"timestamp":%d}`, s.micTS)
 		evt := &Event{Type: "audio-chunk", Data: data, Payload: chunk}
 		_ = s.api.WriteEvent(evt)
 	}
 
-	s.timestamp += len(chunk) / 2
-}
-
-func (s *satellite) respond(data []byte) {
-	prod := newSndProducer(data, func() {
-		_ = s.api.WriteEvent(&Event{Type: "played"})
-		s.start()
-	})
-	if err := s.srv.SndHandler(prod); err != nil {
-		prod.onClose()
-	}
+	s.micTS += len(chunk) / 2
 }
 
 type micConsumer struct {
@@ -373,7 +320,7 @@ func (s *sndProducer) Start() error {
 		s.Recv += chunkBytes
 		s.data = s.data[chunkBytes:]
 
-		pts += 10 * time.Millisecond
+		pts += 20 * time.Millisecond
 		seq++
 	}
 
