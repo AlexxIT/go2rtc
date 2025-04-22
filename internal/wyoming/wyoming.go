@@ -18,6 +18,7 @@ func Init() {
 		Mod map[string]struct {
 			Listen       string  `yaml:"listen"`
 			Name         string  `yaml:"name"`
+			Mode         string  `yaml:"mode"`
 			WakeURI      string  `yaml:"wake_uri"`
 			VADThreshold float32 `yaml:"vad_threshold"`
 		} `yaml:"wyoming"`
@@ -60,13 +61,13 @@ func Init() {
 				log.Trace().Msgf("[wyoming] "+format, v...)
 			},
 		}
-		go serve(srv, cfg.Listen)
+		go serve(srv, cfg.Mode, cfg.Listen)
 	}
 }
 
 var log zerolog.Logger
 
-func serve(srv *wyoming.Server, address string) {
+func serve(srv *wyoming.Server, mode, address string) {
 	ln, err := net.Listen("tcp", address)
 	if err != nil {
 		log.Warn().Msgf("[wyoming] listen error: %s", err)
@@ -78,16 +79,25 @@ func serve(srv *wyoming.Server, address string) {
 			return
 		}
 
-		go handle(srv, conn)
+		go handle(srv, mode, conn)
 	}
 }
 
-func handle(srv *wyoming.Server, conn net.Conn) {
+func handle(srv *wyoming.Server, mode string, conn net.Conn) {
 	addr := conn.RemoteAddr()
 
 	log.Trace().Msgf("[wyoming] %s connected", addr)
 
-	if err := srv.Handle(conn); err != nil {
+	var err error
+
+	switch mode {
+	case "mic":
+		err = srv.HandleMic(conn)
+	default:
+		err = srv.Handle(conn)
+	}
+
+	if err != nil {
 		log.Error().Msgf("[wyoming] %s error: %s", addr, err)
 	}
 
