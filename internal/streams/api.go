@@ -11,9 +11,10 @@ import (
 func apiStreams(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	src := query.Get("src")
+	name := query.Get("name")
 
 	// without source - return all streams list
-	if src == "" && r.Method != "POST" {
+	if src == "" && name == "" && r.Method != "POST" {
 		api.ResponseJSON(w, streams)
 		return
 	}
@@ -43,7 +44,6 @@ func apiStreams(w http.ResponseWriter, r *http.Request) {
 		}
 
 	case "PUT":
-		name := query.Get("name")
 		if name == "" {
 			name = src
 		}
@@ -58,7 +58,6 @@ func apiStreams(w http.ResponseWriter, r *http.Request) {
 		}
 
 	case "PATCH":
-		name := query.Get("name")
 		if name == "" {
 			http.Error(w, "", http.StatusBadRequest)
 			return
@@ -94,7 +93,7 @@ func apiStreams(w http.ResponseWriter, r *http.Request) {
 		}
 
 	case "DELETE":
-		delete(streams, src)
+		delete(streams, name)
 
 		if err := app.PatchConfig([]string{"streams", src}, nil); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
