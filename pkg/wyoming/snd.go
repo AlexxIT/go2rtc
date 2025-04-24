@@ -1,12 +1,11 @@
 package wyoming
 
 import (
-	"io"
 	"net"
 	"time"
 )
 
-func (s *Server) HandleSnd(conn net.Conn) error {
+func (s *Server) HandleSnd(conn net.Conn) {
 	defer conn.Close()
 
 	var snd []byte
@@ -15,10 +14,7 @@ func (s *Server) HandleSnd(conn net.Conn) error {
 	for {
 		evt, err := api.ReadEvent()
 		if err != nil {
-			if err == io.EOF {
-				return nil
-			}
-			return err
+			return
 		}
 
 		s.Trace("event: %s data: %s payload: %d", evt.Type, evt.Data, len(evt.Payload))
@@ -33,7 +29,8 @@ func (s *Server) HandleSnd(conn net.Conn) error {
 				time.Sleep(time.Second) // some extra delay before close
 			})
 			if err = s.SndHandler(prod); err != nil {
-				return err
+				s.Error("snd error: %s", err)
+				return
 			}
 		}
 	}
