@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="apple-touch-icon" href="https://alexxit.github.io/go2rtc/icons/apple-touch-icon-180x180.png" sizes="180x180">
+    <link rel="icon" href="https://alexxit.github.io/go2rtc/icons/favicon.ico">
+    <link rel="manifest" href="https://alexxit.github.io/go2rtc/manifest.json">
+    <title>go2rtc - Stream</title>
+    <style>
+        body {
+            background: black;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        html, body {
+            height: 100%;
+            width: 100%;
+        }
+
+        .flex {
+            flex-wrap: wrap;
+            align-content: flex-start;
+            align-items: flex-start;
+        }
+    </style>
+</head>
+<body>
+<script type="module" src="./video-stream.js"></script>
+<script type="module">
+
+
+    const video = document.createElement('video-stream');
+    video.background = true;
+    // video.mode = modes[i] || video.mode;
+    video.style.flex = '320px';
+    video.src = new URL('api/ws?src=cam1', location.href);
+    console.log(video.src);
+
+    video.media = 'video';
+    video.autoplay = true;
+    document.body.appendChild(video);
+
+    const playPromise = video.play();
+
+    if (playPromise !== undefined) {
+        playPromise.then(_ => {
+            console.log('Auto-play started');
+            // Automatic playback started!
+            // Show playing UI.
+        })
+            .catch(error => {
+                console.log('error with promise '+error);
+                // Auto-play was prevented
+                // Show paused UI.
+            });
+    }
+
+</script>
+
+
+</body>
+</html>

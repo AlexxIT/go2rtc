@@ -154,6 +154,12 @@ func HandleFunc(pattern string, handler http.HandlerFunc) {
 	}
 	log.Trace().Str("path", pattern).Msg("[api] register path")
 	http.HandleFunc(pattern, handler)
+	// if pattern starts with api, also register go2rtc/pattern
+	if strings.HasPrefix(pattern, "/api") {
+		pattern = "/go2rtc" + pattern
+		http.HandleFunc(pattern, handler)
+	}
+
 }
 
 // ResponseJSON important always add Content-Type

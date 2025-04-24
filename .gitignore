@@ -1,5 +1,6 @@
 .idea/
 .tmp/
+node_modules
 
 go2rtc.yaml
 go2rtc.json
@@ -8,6 +9,7 @@ go2rtc_freebsd*
 go2rtc_linux*
 go2rtc_mac*
 go2rtc_win*
+go2rtc.exe
 
 0_test.go
 
