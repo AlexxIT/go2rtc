@@ -2,6 +2,7 @@ package wav
 
 import (
 	"encoding/binary"
+	"io"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 )
@@ -47,4 +48,56 @@ func Header(codec *core.Codec) []byte {
 	b = append(b, "data\xFF\xFF\xFF\xFF"...)
 
 	return b
+}
+
+func ReadHeader(r io.Reader) (*core.Codec, error) {
+	// skip Master RIFF chunk
+	if _, err := io.ReadFull(r, make([]byte, 12)); err != nil {
+		return nil, err
+	}
+
+	var codec core.Codec
+
+	for {
+		chunkID, data, err := readChunk(r)
+		if err != nil {
+			return nil, err
+		}
+
+		if chunkID == "data" {
+			break
+		}
+
+		if chunkID == "fmt " {
+			// https://audiocoding.cc/articles/2008-05-22-wav-file-structure/wav_formats.txt
+			switch data[0] {
+			case 1:
+				codec.Name = core.CodecPCML
+			case 6:
+				codec.Name = core.CodecPCMA
+			case 7:
+				codec.Name = core.CodecPCMU
+			}
+
+			codec.Channels = data[2]
+			codec.ClockRate = binary.LittleEndian.Uint32(data[4:])
+		}
+	}
+
+	return &codec, nil
+}
+
+func readChunk(r io.Reader) (chunkID string, data []byte, err error) {
+	b := make([]byte, 8)
+	if _, err = io.ReadFull(r, b); err != nil {
+		return
+	}
+
+	if chunkID = string(b[:4]); chunkID != "data" {
+		size := binary.LittleEndian.Uint32(b[4:])
+		data = make([]byte, size)
+		_, err = io.ReadFull(r, data)
+	}
+
+	return
 }

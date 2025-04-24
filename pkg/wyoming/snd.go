@@ -1,8 +1,11 @@
 package wyoming
 
 import (
+	"bytes"
 	"net"
-	"time"
+
+	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/pcm"
 )
 
 func (s *Server) HandleSnd(conn net.Conn) {
@@ -25,9 +28,7 @@ func (s *Server) HandleSnd(conn net.Conn) {
 		case "audio-chunk":
 			snd = append(snd, evt.Payload...)
 		case "audio-stop":
-			prod := newSndProducer(snd, func() {
-				time.Sleep(time.Second) // some extra delay before close
-			})
+			prod := pcm.OpenSync(sndCodec, bytes.NewReader(snd))
 			if err = s.SndHandler(prod); err != nil {
 				s.Error("snd error: %s", err)
 				return
@@ -35,3 +36,5 @@ func (s *Server) HandleSnd(conn net.Conn) {
 		}
 	}
 }
+
+var sndCodec = &core.Codec{Name: core.CodecPCML, ClockRate: 22050}

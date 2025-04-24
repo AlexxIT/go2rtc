@@ -1,11 +1,13 @@
 package wyoming
 
 import (
+	"bytes"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/expr"
-	"golang.org/x/net/context"
+	"github.com/AlexxIT/go2rtc/pkg/wav"
 )
 
 type env struct {
@@ -109,16 +111,21 @@ func (s *satellite) WriteEvent(args ...string) bool {
 }
 
 func (s *satellite) PlayAudio() bool {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	return s.playAudio(sndCodec, bytes.NewReader(s.sndAudio))
+}
 
-	prod := newSndProducer(s.sndAudio, cancel)
-	if err := s.srv.SndHandler(prod); err != nil {
+func (s *satellite) PlayFile(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
 		return false
-	} else {
-		<-ctx.Done()
-		return true
 	}
+
+	codec, err := wav.ReadHeader(f)
+	if err != nil {
+		return false
+	}
+
+	return s.playAudio(codec, f)
 }
 
 func (e *env) Sleep(s string) bool {
