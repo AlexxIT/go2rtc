@@ -10,6 +10,7 @@ This module provide [Wyoming Protocol](https://www.home-assistant.io/integration
 - any desktop/server microphone/speaker can be used as two-way audio source
   - supported any OS via FFmpeg or any similar software
   - supported Linux via alsa source
+- you can change the behavior using the built-in scripting engine
 
 ## Typical Voice Pipeline
 
@@ -55,6 +56,75 @@ Home Assistant -> Settings -> Integrations -> Add -> Wyoming Protocol -> Host + 
 Select one or multiple wake words:
 ```yaml
 wake_uri: tcp://192.168.1.23:10400?name=alexa_v0.1&name=hey_jarvis_v0.1&name=hey_mycroft_v0.1&name=hey_rhasspy_v0.1&name=ok_nabu_v0.1
+```
+
+## Events
+
+You can add wyoming event handling using the [expr](https://github.com/AlexxIT/go2rtc/blob/master/internal/expr/README.md) language. For example, to pronounce TTS on some media player from HA.
+
+Turn on the logs to see what kind of events happens.
+
+This is what the default scripts look like:
+
+```yaml
+wyoming:
+  script_example:
+    event:
+      run-satellite: Detect()
+      pause-satellite: Stop()
+      voice-stopped: Pause()
+      audio-stop: PlayAudio() && WriteEvent("played") && Detect()
+      error: Detect()
+      internal-run: WriteEvent("run-pipeline", '{"start_stage":"wake","end_stage":"tts"}') && Stream()
+      internal-detection: WriteEvent("run-pipeline", '{"start_stage":"asr","end_stage":"tts"}') && Stream()
+```
+
+If you write a script for an event - the default action is no longer executed. You need to repeat the necessary steps yourself.
+
+In addition to the standard events, there are two additional events:
+
+- `internal-run` - called after `Detect()` when VAD detected, but WAKE service unavailable
+- `internal-detection` - called after `Detect()` when WAKE word detected
+
+**Example 1.** You want to play a sound file when a wake word detected (only `wav` supported):
+
+- `PlayFile` and `PlayAudio` functions are executed synchronously, the following steps will be executed only after they are completed
+
+```yaml
+wyoming:
+  script_example:
+    event:
+      internal-detection: PlayFile('/media/beep.wav') && WriteEvent("run-pipeline", '{"start_stage":"asr","end_stage":"tts"}') && Stream()
+```
+
+**Example 2.** You want to play TTS on a Home Assistant media player:
+
+Each event has a `Type` and `Data` in JSON format. You can use their values in scripts.
+
+- in the `synthesize` step, we get the value of the `text` and call the HA REST API
+- in the `audio-stop` step we get the duration of the TTS in seconds, wait for this time and start the pipeline again
+
+```yaml
+wyoming:
+  script_example:
+    event:
+      synthesize: |
+        let text = fromJSON(Data).text;
+        let token = 'eyJhbGci...';
+        fetch('http://localhost:8123/api/services/tts/speak', {
+          method: 'POST',
+          headers: {'Authorization': 'Bearer '+token,'Content-Type': 'application/json'},
+          body: toJSON({
+            entity_id: 'tts.google_translate_com',
+            media_player_entity_id: 'media_player.google_nest',
+            message: text,
+            language: 'en',
+          }),
+        }).ok
+      audio-stop: |
+        let timestamp = fromJSON(Data).timestamp;
+        let delay = string(timestamp)+'s';
+        Sleep(delay) && WriteEvent("played") && Detect()
 ```
 
 ## Config examples
