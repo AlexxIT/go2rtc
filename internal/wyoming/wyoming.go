@@ -93,19 +93,13 @@ func handle(srv *wyoming.Server, mode string, conn net.Conn) {
 
 	log.Trace().Msgf("[wyoming] %s connected", addr)
 
-	var err error
-
 	switch mode {
 	case "mic":
-		err = srv.HandleMic(conn)
+		srv.HandleMic(conn)
 	case "snd":
-		err = srv.HandleSnd(conn)
+		srv.HandleSnd(conn)
 	default:
-		err = srv.Handle(conn)
-	}
-
-	if err != nil {
-		log.Error().Msgf("[wyoming] %s error: %s", addr, err)
+		srv.Handle(conn)
 	}
 
 	log.Trace().Msgf("[wyoming] %s disconnected", addr)

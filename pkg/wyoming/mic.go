@@ -7,7 +7,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
-func (s *Server) HandleMic(conn net.Conn) error {
+func (s *Server) HandleMic(conn net.Conn) {
 	defer conn.Close()
 
 	var closed core.Waiter
@@ -26,10 +26,10 @@ func (s *Server) HandleMic(conn net.Conn) error {
 	mic.RemoteAddr = api.conn.RemoteAddr().String()
 
 	if err := s.MicHandler(mic); err != nil {
-		return err
+		s.Error("mic error: %s", err)
+		return
 	}
 
-	defer mic.Stop()
-
-	return closed.Wait()
+	_ = closed.Wait()
+	_ = mic.Stop()
 }

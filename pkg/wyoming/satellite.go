@@ -37,7 +37,7 @@ func (s *Server) Serve(l net.Listener) error {
 	}
 }
 
-func (s *Server) Handle(conn net.Conn) error {
+func (s *Server) Handle(conn net.Conn) {
 	api := NewAPI(conn)
 	sat := newSatellite(api, s)
 	defer sat.Close()
@@ -45,7 +45,7 @@ func (s *Server) Handle(conn net.Conn) error {
 	for {
 		evt, err := api.ReadEvent()
 		if err != nil {
-			return err
+			return
 		}
 
 		switch evt.Type {
