@@ -1,13 +1,25 @@
 package pcm
 
-import "github.com/AlexxIT/go2rtc/pkg/core"
+import (
+	"math"
+
+	"github.com/AlexxIT/go2rtc/pkg/core"
+)
+
+func ceil(x float32) int {
+	d, fract := math.Modf(float64(x))
+	if fract == 0.0 {
+		return int(d)
+	}
+	return int(d) + 1
+}
 
 func Downsample(k float32) func([]int16) []int16 {
 	var sampleN, sampleSum float32
 
 	return func(src []int16) (dst []int16) {
 		var i int
-		dst = make([]int16, int((float32(len(src))+sampleN)/k))
+		dst = make([]int16, ceil((float32(len(src))+sampleN)/k))
 		for _, sample := range src {
 			sampleSum += float32(sample)
 			sampleN++
@@ -28,7 +40,7 @@ func Upsample(k float32) func([]int16) []int16 {
 
 	return func(src []int16) (dst []int16) {
 		var i int
-		dst = make([]int16, int(k*float32(len(src))))
+		dst = make([]int16, ceil(k*float32(len(src))))
 		for _, sample := range src {
 			sampleN += k
 			for sampleN > 0 {

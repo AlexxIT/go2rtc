@@ -1,10 +1,11 @@
 package wyoming
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"net"
 	"sync"
-	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/pcm"
@@ -55,13 +56,8 @@ func (s *Server) Handle(conn net.Conn) {
 			sat.sndAudio = sat.sndAudio[:0]
 		case "audio-chunk": // {"rate": 22050, "width": 2, "channels": 1, "timestamp": 0}
 			sat.sndAudio = append(sat.sndAudio, evt.Payload...)
-		}
-
-		if s.Event == nil || s.Event[evt.Type] == "" {
-			sat.handleEvent(evt)
-		} else {
-			// run async because there may be sleeps
-			go sat.handleScript(evt)
+		default:
+			sat.handleScript(evt)
 		}
 	}
 }
@@ -196,6 +192,21 @@ func (s *satellite) onMicChunk(chunk []byte) {
 	s.micTS += len(chunk) / 2
 }
 
+func (s *satellite) playAudio(codec *core.Codec, rd io.Reader) bool {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	prod := pcm.OpenSync(codec, rd)
+	prod.OnClose(cancel)
+
+	if err := s.srv.SndHandler(prod); err != nil {
+		return false
+	} else {
+		<-ctx.Done()
+		return true
+	}
+}
+
 type micConsumer struct {
 	core.Connection
 	onData  func(chunk []byte)
@@ -245,90 +256,6 @@ func (c *micConsumer) Stop() error {
 		c.onClose()
 	}
 	return c.Connection.Stop()
-}
-
-type sndProducer struct {
-	core.Connection
-	data    []byte
-	onClose func()
-}
-
-func newSndProducer(data []byte, onClose func()) *sndProducer {
-	medias := []*core.Media{
-		{
-			Kind:      core.KindAudio,
-			Direction: core.DirectionRecvonly,
-			Codecs:    pcm.ProducerCodecs(),
-		},
-	}
-
-	return &sndProducer{
-		core.Connection{
-			ID:         core.NewID(),
-			FormatName: "wyoming",
-			Protocol:   "tcp",
-			Medias:     medias,
-		},
-		data,
-		onClose,
-	}
-}
-
-func (s *sndProducer) Start() error {
-	if len(s.Receivers) == 0 {
-		return nil
-	}
-
-	var pts time.Duration
-	var seq uint16
-
-	t0 := time.Now()
-
-	src := &core.Codec{Name: core.CodecPCML, ClockRate: 22050}
-	dst := s.Receivers[0].Codec
-	f := pcm.Transcode(dst, src)
-
-	bps := uint32(pcm.BytesPerFrame(dst))
-
-	chunkBytes := int(2 * src.ClockRate / 50) // 20ms
-
-	for {
-		n := len(s.data)
-		if n == 0 {
-			break
-		}
-		if chunkBytes > n {
-			chunkBytes = n
-		}
-
-		pkt := &core.Packet{
-			Header: rtp.Header{
-				Version:        2,
-				Marker:         true,
-				SequenceNumber: seq,
-				Timestamp:      uint32(s.Recv/2) * bps,
-			},
-			Payload: f(s.data[:chunkBytes]),
-		}
-
-		if d := pts - time.Since(t0); d > 0 {
-			time.Sleep(d)
-		}
-
-		s.Receivers[0].WriteRTP(pkt)
-
-		s.Recv += chunkBytes
-		s.data = s.data[chunkBytes:]
-
-		pts += 20 * time.Millisecond
-		seq++
-	}
-
-	if s.onClose != nil {
-		s.onClose()
-	}
-
-	return nil
 }
 
 func repack(handler core.HandlerFunc) core.HandlerFunc {

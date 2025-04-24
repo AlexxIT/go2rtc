@@ -2,7 +2,6 @@ package wav
 
 import (
 	"bufio"
-	"encoding/binary"
 	"errors"
 	"io"
 
@@ -17,37 +16,9 @@ func Open(r io.Reader) (*Producer, error) {
 	// https://www.mmsp.ece.mcgill.ca/Documents/AudioFormats/WAVE/WAVE.html
 	rd := bufio.NewReaderSize(r, core.BufferSize)
 
-	// skip Master RIFF chunk
-	if _, err := rd.Discard(12); err != nil {
+	codec, err := ReadHeader(r)
+	if err != nil {
 		return nil, err
-	}
-
-	codec := &core.Codec{}
-
-	for {
-		chunkID, data, err := readChunk(rd)
-		if err != nil {
-			return nil, err
-		}
-
-		if chunkID == "data" {
-			break
-		}
-
-		if chunkID == "fmt " {
-			// https://audiocoding.cc/articles/2008-05-22-wav-file-structure/wav_formats.txt
-			switch data[0] {
-			case 1:
-				codec.Name = core.CodecPCML
-			case 6:
-				codec.Name = core.CodecPCMA
-			case 7:
-				codec.Name = core.CodecPCMU
-			}
-
-			codec.Channels = data[2]
-			codec.ClockRate = binary.LittleEndian.Uint32(data[4:])
-		}
 	}
 
 	if codec.Name == "" {
@@ -109,19 +80,4 @@ func (c *Producer) Start() error {
 		seq++
 		ts += PacketSize
 	}
-}
-
-func readChunk(r io.Reader) (chunkID string, data []byte, err error) {
-	b := make([]byte, 8)
-	if _, err = io.ReadFull(r, b); err != nil {
-		return
-	}
-
-	if chunkID = string(b[:4]); chunkID != "data" {
-		size := binary.LittleEndian.Uint32(b[4:])
-		data = make([]byte, size)
-		_, err = io.ReadFull(r, data)
-	}
-
-	return
 }
