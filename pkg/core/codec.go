@@ -249,3 +249,36 @@ func DecodeH264(fmtp string) (profile string, level byte) {
 	}
 	return
 }
+
+func ParseCodecString(s string) *Codec {
+	var codec Codec
+
+	ss := strings.Split(s, "/")
+	switch strings.ToLower(ss[0]) {
+	case "pcm_s16be", "s16be", "pcm":
+		codec.Name = CodecPCM
+	case "pcm_s16le", "s16le", "pcml":
+		codec.Name = CodecPCML
+	case "pcm_alaw", "alaw", "pcma":
+		codec.Name = CodecPCMA
+	case "pcm_mulaw", "mulaw", "pcmu":
+		codec.Name = CodecPCMU
+	case "aac", "mpeg4-generic":
+		codec.Name = CodecAAC
+	case "opus":
+		codec.Name = CodecOpus
+	case "flac":
+		codec.Name = CodecFLAC
+	default:
+		return nil
+	}
+
+	if len(ss) >= 2 {
+		codec.ClockRate = uint32(Atoi(ss[1]))
+	}
+	if len(ss) >= 3 {
+		codec.Channels = uint8(Atoi(ss[1]))
+	}
+
+	return &codec
+}

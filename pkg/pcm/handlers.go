@@ -2,6 +2,7 @@ package pcm
 
 import (
 	"sync"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/pion/rtp"
@@ -82,18 +83,27 @@ func TranscodeHandler(dst, src *core.Codec, handler core.HandlerFunc) core.Handl
 	}
 }
 
-func BytesPerFrame(codec *core.Codec) byte {
-	channels := byte(codec.Channels)
-	if channels == 0 {
-		channels = 1
-	}
-
+func BytesPerSample(codec *core.Codec) int {
 	switch codec.Name {
 	case core.CodecPCML, core.CodecPCM:
-		return 2 * channels
+		return 2
 	case core.CodecPCMU, core.CodecPCMA:
-		return channels
+		return 1
 	}
-
 	return 0
+}
+
+func BytesPerFrame(codec *core.Codec) int {
+	if codec.Channels <= 1 {
+		return BytesPerSample(codec)
+	}
+	return int(codec.Channels) * BytesPerSample(codec)
+}
+
+func FramesPerDuration(codec *core.Codec, duration time.Duration) int {
+	return int(time.Duration(codec.ClockRate) * duration / time.Second)
+}
+
+func BytesPerDuration(codec *core.Codec, duration time.Duration) int {
+	return BytesPerFrame(codec) * FramesPerDuration(codec, duration)
 }
