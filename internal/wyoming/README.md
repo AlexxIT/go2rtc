@@ -79,6 +79,20 @@ wyoming:
       internal-detection: WriteEvent("run-pipeline", '{"start_stage":"asr","end_stage":"tts"}') && Stream()
 ```
 
+Supported functions and variables:
+
+- `Detect()` - start the VAD and WAKE word detection process
+- `Stream()` - start transmission of audio data to the client (Home Assistant)
+- `Stop()` - stop and disconnect stream without disconnecting client (Home Assistant)
+- `Pause()` - temporary pause of audio transfer, without disconnecting the stream
+- `PlayAudio()` - playing the last audio that was sent from client (Home Assistant)
+- `WriteEvent(type, data)` - send event to client (Home Assistant)
+- `Sleep(duration)` - temporary script pause (ex. `Sleep('1.5s')`)
+- `PlayFile(path)` - play audio from `wav` file
+- `Type` - type (name) of event
+- `Data` - event data in JSON format (ex. `{"text":"how are you"}`)
+- also available other functions from [expr](https://github.com/AlexxIT/go2rtc/blob/master/internal/expr/README.md) module (ex. `fetch`)
+
 If you write a script for an event - the default action is no longer executed. You need to repeat the necessary steps yourself.
 
 In addition to the standard events, there are two additional events:
@@ -160,7 +174,7 @@ wyoming:
     vad_threshold: 1
 ```
 
-Satellite on Dahua camera with two-way audio support.
+Satellite on external wyoming Microphone and Sound.
 
 ```yaml
 streams:
