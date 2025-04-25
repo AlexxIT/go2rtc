@@ -6,17 +6,24 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"strings"
 
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/expr-lang/expr"
+	"github.com/expr-lang/expr/vm"
 )
 
-func newRequest(method, url string, headers map[string]any) (*http.Request, error) {
+func newRequest(method, url string, headers map[string]any, body string) (*http.Request, error) {
+	var rd io.Reader
+
 	if method == "" {
 		method = "GET"
 	}
+	if body != "" {
+		rd = strings.NewReader(body)
+	}
 
-	req, err := http.NewRequest(method, url, nil)
+	req, err := http.NewRequest(method, url, rd)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +62,8 @@ var Options = []expr.Option{
 				options := params[1].(map[string]any)
 				method, _ := options["method"].(string)
 				headers, _ := options["headers"].(map[string]any)
-				req, err = newRequest(method, url, headers)
+				body, _ := options["body"].(string)
+				req, err = newRequest(method, url, headers, body)
 			} else {
 				req, err = http.NewRequest("GET", url, nil)
 			}
@@ -105,11 +113,19 @@ var Options = []expr.Option{
 	),
 }
 
-func Run(input string) (any, error) {
-	program, err := expr.Compile(input, Options...)
+func Compile(input string) (*vm.Program, error) {
+	return expr.Compile(input, Options...)
+}
+
+func Eval(input string, env any) (any, error) {
+	program, err := Compile(input)
 	if err != nil {
 		return nil, err
 	}
 
-	return expr.Run(program, nil)
+	return expr.Run(program, env)
+}
+
+func Run(program *vm.Program, env any) (any, error) {
+	return vm.Run(program, env)
 }
