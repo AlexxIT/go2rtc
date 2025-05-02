@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/rtsp"
@@ -38,9 +39,26 @@ func Dial(rawURL string) (core.Producer, error) {
 		return nil, errors.New("nest: wrong query")
 	}
 
-	nestAPI, err := NewAPI(cliendID, cliendSecret, refreshToken)
-	if err != nil {
-		return nil, err
+	maxRetries := 3
+	retryDelay := time.Second * 30
+
+	var nestAPI *API
+	var lastErr error
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		nestAPI, err = NewAPI(cliendID, cliendSecret, refreshToken)
+		if err == nil {
+			break
+		}
+		lastErr = err
+		if attempt < maxRetries-1 {
+			time.Sleep(retryDelay)
+			retryDelay *= 2 // exponential backoff
+		}
+	}
+
+	if nestAPI == nil {
+		return nil, lastErr
 	}
 
 	protocols := strings.Split(query.Get("protocols"), ",")
@@ -79,48 +97,62 @@ func (c *WebRTCClient) MarshalJSON() ([]byte, error) {
 }
 
 func rtcConn(nestAPI *API, rawURL, projectID, deviceID string) (*WebRTCClient, error) {
-	rtcAPI, err := webrtc.NewAPI()
-	if err != nil {
-		return nil, err
+	maxRetries := 3
+	retryDelay := time.Second * 30
+	var lastErr error
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		rtcAPI, err := webrtc.NewAPI()
+		if err != nil {
+			return nil, err
+		}
+
+		conf := pion.Configuration{}
+		pc, err := rtcAPI.NewPeerConnection(conf)
+		if err != nil {
+			return nil, err
+		}
+
+		conn := webrtc.NewConn(pc)
+		conn.FormatName = "nest/webrtc"
+		conn.Mode = core.ModeActiveProducer
+		conn.Protocol = "http"
+		conn.URL = rawURL
+
+		// https://developers.google.com/nest/device-access/traits/device/camera-live-stream#generatewebrtcstream-request-fields
+		medias := []*core.Media{
+			{Kind: core.KindAudio, Direction: core.DirectionRecvonly},
+			{Kind: core.KindVideo, Direction: core.DirectionRecvonly},
+			{Kind: "app"}, // important for Nest
+		}
+
+		// 3. Create offer with candidates
+		offer, err := conn.CreateCompleteOffer(medias)
+		if err != nil {
+			return nil, err
+		}
+
+		// 4. Exchange SDP via Hass
+		answer, err := nestAPI.ExchangeSDP(projectID, deviceID, offer)
+		if err != nil {
+			lastErr = err
+			if attempt < maxRetries-1 {
+				time.Sleep(retryDelay)
+				retryDelay *= 2
+				continue
+			}
+			return nil, err
+		}
+
+		// 5. Set answer with remote medias
+		if err = conn.SetAnswer(answer); err != nil {
+			return nil, err
+		}
+
+		return &WebRTCClient{conn: conn, api: nestAPI}, nil
 	}
 
-	conf := pion.Configuration{}
-	pc, err := rtcAPI.NewPeerConnection(conf)
-	if err != nil {
-		return nil, err
-	}
-
-	conn := webrtc.NewConn(pc)
-	conn.FormatName = "nest/webrtc"
-	conn.Mode = core.ModeActiveProducer
-	conn.Protocol = "http"
-	conn.URL = rawURL
-
-	// https://developers.google.com/nest/device-access/traits/device/camera-live-stream#generatewebrtcstream-request-fields
-	medias := []*core.Media{
-		{Kind: core.KindAudio, Direction: core.DirectionRecvonly},
-		{Kind: core.KindVideo, Direction: core.DirectionRecvonly},
-		{Kind: "app"}, // important for Nest
-	}
-
-	// 3. Create offer with candidates
-	offer, err := conn.CreateCompleteOffer(medias)
-	if err != nil {
-		return nil, err
-	}
-
-	// 4. Exchange SDP via Hass
-	answer, err := nestAPI.ExchangeSDP(projectID, deviceID, offer)
-	if err != nil {
-		return nil, err
-	}
-
-	// 5. Set answer with remote medias
-	if err = conn.SetAnswer(answer); err != nil {
-		return nil, err
-	}
-
-	return &WebRTCClient{conn: conn, api: nestAPI}, nil
+	return nil, lastErr
 }
 
 func rtspConn(nestAPI *API, rawURL, projectID, deviceID string) (*RTSPClient, error) {
