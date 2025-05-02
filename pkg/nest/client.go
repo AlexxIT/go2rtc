@@ -6,14 +6,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/rtsp"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	pion "github.com/pion/webrtc/v4"
 )
-
-var log = app.GetLogger("nest")
 
 type WebRTCClient struct {
 	conn *webrtc.Conn
@@ -55,12 +52,6 @@ func Dial(rawURL string) (core.Producer, error) {
 		}
 		lastErr = err
 		if attempt < maxRetries-1 {
-			log.Info().
-				Float64("delay", retryDelay.Seconds()).
-				Int("attempt", attempt+1).
-				Int("max_retries", maxRetries-1).
-				Err(err).
-				Msg("API initialization failed, retrying")
 			time.Sleep(retryDelay)
 			retryDelay *= 2 // exponential backoff
 		}
@@ -146,12 +137,6 @@ func rtcConn(nestAPI *API, rawURL, projectID, deviceID string) (*WebRTCClient, e
 		if err != nil {
 			lastErr = err
 			if attempt < maxRetries-1 {
-				log.Info().
-					Float64("delay", retryDelay.Seconds()).
-					Int("attempt", attempt+1).
-					Int("max_retries", maxRetries-1).
-					Err(err).
-					Msg("WebRTC connection setup failed, retrying")
 				time.Sleep(retryDelay)
 				retryDelay *= 2
 				continue
