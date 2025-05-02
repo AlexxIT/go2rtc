@@ -42,6 +42,7 @@ func NewProducer(url string) (core.Producer, error) {
 			Codecs: []*core.Codec{
 				// OPUS will always marked as OPUS/48000/2
 				{Name: core.CodecOpus, ClockRate: 48000, Channels: 2},
+				{Name: core.CodecPCML, ClockRate: 16000},
 				{Name: core.CodecPCM, ClockRate: 16000},
 				{Name: core.CodecPCMA, ClockRate: 16000},
 				{Name: core.CodecPCMU, ClockRate: 16000},
@@ -97,6 +98,8 @@ func (p *Producer) newURL() string {
 			s += "#audio=opus"
 		case core.CodecAAC:
 			s += "#audio=aac/16000"
+		case core.CodecPCML:
+			s += "#audio=pcml/16000"
 		case core.CodecPCM:
 			s += "#audio=pcm/" + strconv.Itoa(int(codec.ClockRate))
 		case core.CodecPCMA:

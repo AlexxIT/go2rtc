@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/AlexxIT/go2rtc/internal/alsa"
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"github.com/AlexxIT/go2rtc/internal/app"
@@ -37,6 +38,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/v4l2"
 	"github.com/AlexxIT/go2rtc/internal/webrtc"
 	"github.com/AlexxIT/go2rtc/internal/webtorrent"
+	"github.com/AlexxIT/go2rtc/internal/wyoming"
 	"github.com/AlexxIT/go2rtc/pkg/shell"
 )
 
@@ -68,6 +70,7 @@ func main() {
 	hass.Init()       // hass source, Hass API server
 	onvif.Init()      // onvif source, ONVIF API server
 	webtorrent.Init() // webtorrent source, WebTorrent module
+	wyoming.Init()
 
 	// 5. Other sources
 
@@ -90,6 +93,7 @@ func main() {
 	gopro.Init()    // gopro source
 	doorbird.Init() // doorbird source
 	v4l2.Init()     // v4l2 source
+	alsa.Init()     // alsa source
 	flussonic.Init()
 	eseecloud.Init()
 

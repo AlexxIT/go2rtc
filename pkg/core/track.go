@@ -98,16 +98,12 @@ func NewSender(media *Media, codec *Codec) *Sender {
 	}
 	s.Input = func(packet *Packet) {
 		s.mu.Lock()
-		if s.buf != nil {
-			// unblocked write to channel
-			select {
-			case s.buf <- packet:
-				s.Bytes += len(packet.Payload)
-				s.Packets++
-			default:
-				s.Drops++
-			}
-		} else {
+		// unblock write to nil chan - OK, write to closed chan - panic
+		select {
+		case s.buf <- packet:
+			s.Bytes += len(packet.Payload)
+			s.Packets++
+		default:
 			s.Drops++
 		}
 		s.mu.Unlock()
