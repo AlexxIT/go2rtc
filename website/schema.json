@@ -1,193 +1,169 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "go2rtc",
-  "type": "object",
   "additionalProperties": false,
   "definitions": {
     "listen": {
-      "type": "string",
       "anyOf": [
         {
-          "type": "string",
-          "pattern": ":[0-9]{1,5}$"
+          "pattern": ":[0-9]{1,5}$",
+          "type": "string"
         },
         {
-          "type": "string",
-          "const": ""
+          "const": "",
+          "type": "string"
         }
-      ]
+      ],
+      "description": "Specifies the address and port on which the server will listen for incoming connections."
     },
     "log_level": {
-      "type": "string",
+      "description": "Defines the logging level for different components.",
       "enum": [
         "trace",
         "debug",
         "info",
         "warn",
         "error"
-      ]
+      ],
+      "type": "string"
     }
   },
   "properties": {
     "api": {
-      "type": "object",
+      "description": "Configuration for the API server.",
       "properties": {
-        "listen": {
-          "default": ":1984",
-          "examples": [
-            "127.0.0.1:8080"
-          ],
-          "$ref": "#/definitions/listen"
-        },
-        "username": {
-          "type": "string",
-          "examples": [
-            "admin"
-          ]
-        },
-        "password": {
-          "type": "string"
-        },
         "base_path": {
-          "type": "string",
+          "description": "Base path for the API endpoints.",
           "examples": [
             "/go2rtc"
-          ]
+          ],
+          "type": "string"
         },
-        "static_dir": {
-          "type": "string",
+        "listen": {
+          "$ref": "#/definitions/listen",
+          "default": ":1984",
+          "description": "Specifies the address and port on which the API server will listen.",
           "examples": [
-            "/var/www"
+            "127.0.0.1:8080"
           ]
         },
         "origin": {
-          "type": "string",
-          "const": "*"
+          "const": "*",
+          "description": "Allowed origin for CORS. Use '*' to allow all origins.",
+          "type": "string"
         },
-        "tls_listen": {
-          "$ref": "#/definitions/listen"
+        "password": {
+          "description": "Password for API authentication.",
+          "type": "string"
+        },
+        "static_dir": {
+          "description": "Directory for serving static files.",
+          "examples": [
+            "/var/www"
+          ],
+          "type": "string"
         },
         "tls_cert": {
-          "type": "string",
+          "description": "TLS certificate file.",
           "examples": [
             "-----BEGIN CERTIFICATE-----",
             "/ssl/fullchain.pem"
-          ]
+          ],
+          "type": "string"
         },
         "tls_key": {
-          "type": "string",
+          "description": "TLS private key file.",
           "examples": [
             "-----BEGIN PRIVATE KEY-----",
             "/ssl/privkey.pem"
-          ]
+          ],
+          "type": "string"
+        },
+        "tls_listen": {
+          "$ref": "#/definitions/listen",
+          "description": "Specifies the address and port for TLS connections."
         },
         "unix_listen": {
-          "type": "string",
+          "description": "Specifies the Unix socket on which the server will listen.",
           "examples": [
             "/tmp/go2rtc.sock"
-          ]
-        }
-      }
-    },
-    "ffmpeg": {
-      "type": "object",
-      "properties": {
-        "bin": {
-          "type": "string",
-          "default": "ffmpeg"
+          ],
+          "type": "string"
+        },
+        "username": {
+          "description": "Username for API authentication.",
+          "examples": [
+            "admin"
+          ],
+          "type": "string"
         }
       },
+      "type": "object"
+    },
+    "ffmpeg": {
       "additionalProperties": {
-        "description": "FFmpeg template",
+        "description": "Template for FFmpeg command line options.",
         "type": "string"
-      }
+      },
+      "description": "Configuration for FFmpeg integration.",
+      "properties": {
+        "bin": {
+          "default": "ffmpeg",
+          "description": "Path to the FFmpeg binary.",
+          "type": "string"
+        }
+      },
+      "type": "object"
     },
     "hass": {
-      "type": "object",
+      "description": "Configuration for Home Assistant integration.",
       "properties": {
         "config": {
-          "description": "Home Assistant config directory path",
-          "type": "string",
+          "description": "Path to the Home Assistant configuration directory.",
           "examples": [
             "/config"
-          ]
+          ],
+          "type": "string"
         }
-      }
+      },
+      "type": "object"
     },
     "homekit": {
-      "type": "object",
       "additionalProperties": {
-        "type": "object",
         "properties": {
-          "pin": {
-            "type": "string",
-            "default": "19550224",
-            "pattern": "^[0-9]{8}$"
-          },
-          "name": {
-            "type": "string"
-          },
           "device_id": {
+            "description": "Device ID for the HomeKit device.",
             "type": "string"
           },
           "device_private": {
+            "description": "Private key for the HomeKit device.",
+            "type": "string"
+          },
+          "name": {
+            "description": "Name of the HomeKit device.",
             "type": "string"
           },
           "pairings": {
-            "type": "array",
+            "description": "List of paired devices.",
             "items": {
               "type": "string"
-            }
+            },
+            "type": "array"
+          },
+          "pin": {
+            "default": "19550224",
+            "description": "PIN for pairing with HomeKit devices.",
+            "pattern": "^[0-9]{8}$",
+            "type": "string"
           }
-        }
-      }
+        },
+        "type": "object"
+      },
+      "description": "Configuration for HomeKit integration.",
+      "type": "object"
     },
     "log": {
-      "type": "object",
+      "description": "Configuration for logging.",
       "properties": {
-        "format": {
-          "type": "string",
-          "default": "color",
-          "enum": [
-            "color",
-            "json",
-            "text"
-          ]
-        },
-        "level": {
-          "description": "Defaul log level",
-          "default": "info",
-          "$ref": "#/definitions/log_level"
-        },
-        "output": {
-          "type": "string",
-          "default": "stdout",
-          "enum": [
-            "",
-            "stdout",
-            "stderr"
-          ]
-        },
-        "time": {
-          "type": "string",
-          "default": "UNIXMS",
-          "anyOf": [
-            {
-              "type": "string",
-              "enum": [
-                "",
-                "UNIXMS",
-                "UNIXMICRO",
-                "UNIXNANO",
-                "2006-01-02T15:04:05Z07:00",
-                "2006-01-02T15:04:05.999999999Z07:00"
-              ]
-            },
-            {
-              "type": "string"
-            }
-          ]
-        },
         "api": {
           "$ref": "#/definitions/log_level"
         },
@@ -195,16 +171,26 @@
           "$ref": "#/definitions/log_level"
         },
         "exec": {
-          "description": "Value `exec: debug` will print stderr",
-          "$ref": "#/definitions/log_level"
+          "$ref": "#/definitions/log_level",
+          "description": "Log level for exec module. Value 'debug' will print stderr."
         },
         "expr": {
           "$ref": "#/definitions/log_level"
         },
         "ffmpeg": {
-          "description": "Will only be displayed with `exec: debug` setting",
+          "$ref": "#/definitions/log_level",
           "default": "error",
-          "$ref": "#/definitions/log_level"
+          "description": "Log level for FFmpeg. Will only be displayed with 'exec: debug' setting."
+        },
+        "format": {
+          "default": "color",
+          "description": "Format of the logs. Can be 'color', 'json', or 'text'.",
+          "enum": [
+            "color",
+            "json",
+            "text"
+          ],
+          "type": "string"
         },
         "hass": {
           "$ref": "#/definitions/log_level"
@@ -215,6 +201,11 @@
         "homekit": {
           "$ref": "#/definitions/log_level"
         },
+        "level": {
+          "$ref": "#/definitions/log_level",
+          "default": "info",
+          "description": "Default log level for all components."
+        },
         "mp4": {
           "$ref": "#/definitions/log_level"
         },
@@ -223,6 +214,16 @@
         },
         "onvif": {
           "$ref": "#/definitions/log_level"
+        },
+        "output": {
+          "default": "stdout",
+          "description": "Output destination for the logs. Can be 'stdout', 'stderr', or a file path.",
+          "enum": [
+            "",
+            "stdout",
+            "stderr"
+          ],
+          "type": "string"
         },
         "rtmp": {
           "$ref": "#/definitions/log_level"
@@ -233,100 +234,131 @@
         "streams": {
           "$ref": "#/definitions/log_level"
         },
+        "time": {
+          "anyOf": [
+            {
+              "enum": [
+                "",
+                "UNIXMS",
+                "UNIXMICRO",
+                "UNIXNANO",
+                "2006-01-02T15:04:05Z07:00",
+                "2006-01-02T15:04:05.999999999Z07:00"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "default": "UNIXMS",
+          "description": "Timestamp format for the logs."
+        },
         "webrtc": {
           "$ref": "#/definitions/log_level"
         },
         "webtorrent": {
           "$ref": "#/definitions/log_level"
         }
-      }
+      },
+      "type": "object"
     },
     "ngrok": {
-      "type": "object",
+      "description": "Configuration for ngrok integration for external access.",
       "properties": {
         "command": {
-          "type": "string",
+          "description": "Command to run ngrok.",
           "examples": [
             "ngrok tcp 8555 --authtoken xxx",
             "ngrok start --all --config ngrok.yaml"
-          ]
+          ],
+          "type": "string"
         }
-      }
+      },
+      "type": "object"
     },
     "publish": {
-      "type": "object",
       "additionalProperties": {
         "anyOf": [
           {
-            "type": "string",
+            "description": "URL for publishing the stream.",
             "examples": [
               "rtmp://xxx.rtmp.youtube.com/live2/xxxx-xxxx-xxxx-xxxx-xxxx",
               "rtmps://xxx-x.rtmp.t.me/s/xxxxxxxxxx:xxxxxxxxxxxxxxxxxxxxxx"
-            ]
+            ],
+            "type": "string"
           },
           {
-            "type": "array",
             "items": {
               "type": "string"
-            }
+            },
+            "type": "array"
           }
         ]
-      }
+      },
+      "description": "Configuration for publishing streams to external services.",
+      "type": "object"
     },
     "rtmp": {
-      "type": "object",
+      "description": "Configuration for RTMP server.",
       "properties": {
         "listen": {
+          "$ref": "#/definitions/listen",
+          "description": "Specifies the address and port for RTMP connections.",
           "examples": [
             ":1935"
-          ],
-          "$ref": "#/definitions/listen"
+          ]
         }
-      }
+      },
+      "type": "object"
     },
     "rtsp": {
-      "type": "object",
+      "description": "Configuration for RTSP server.",
       "properties": {
-        "listen": {
-          "default": ":8554",
-          "$ref": "#/definitions/listen"
-        },
-        "username": {
-          "type": "string",
-          "examples": [
-            "admin"
-          ]
-        },
-        "password": {
+        "default_query": {
+          "default": "video&audio",
+          "description": "Default query parameters for RTSP streams.",
           "type": "string"
         },
-        "default_query": {
-          "type": "string",
-          "default": "video&audio"
+        "listen": {
+          "$ref": "#/definitions/listen",
+          "default": ":8554",
+          "description": "Specifies the address and port for RTSP connections."
+        },
+        "password": {
+          "description": "Password for RTSP authentication.",
+          "type": "string"
         },
         "pkt_size": {
+          "description": "Packet size for RTSP streams.",
           "type": "integer"
+        },
+        "username": {
+          "description": "Username for RTSP authentication.",
+          "examples": [
+            "admin"
+          ],
+          "type": "string"
         }
-      }
+      },
+      "type": "object"
     },
     "srtp": {
-      "description": "SRTP server for HomeKit",
-      "type": "object",
+      "description": "Configuration for SRTP server for HomeKit.",
       "properties": {
         "listen": {
+          "$ref": "#/definitions/listen",
           "default": ":8443",
-          "$ref": "#/definitions/listen"
+          "description": "Specifies the address and port for SRTP connections."
         }
-      }
+      },
+      "type": "object"
     },
     "streams": {
-      "type": "object",
       "additionalProperties": {
-        "title": "Stream",
         "anyOf": [
           {
-            "description": "Source",
-            "type": "string",
+            "description": "Source URL or configuration for the stream.",
             "examples": [
               "rtsp://username:password@192.168.1.123/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif",
               "rtsp://username:password@192.168.1.123/stream1",
@@ -344,97 +376,62 @@
               "onvif://username:password@192.168.1.123:80?subtype=0",
               "tapo://password@192.168.1.123:8800?channel=0&subtype=0",
               "webtorrent:?share=xxx&pwd=xxx"
-            ]
+            ],
+            "type": "string"
           },
           {
-            "type": "array",
             "items": {
-              "description": "Source",
+              "description": "Source URL or configuration for the stream.",
               "type": "string"
-            }
+            },
+            "type": "array"
           }
         ]
-      }
+      },
+      "description": "Configuration for stream sources.",
+      "type": "object"
     },
     "webrtc": {
-      "type": "object",
+      "description": "Configuration for WebRTC server.",
       "properties": {
-        "listen": {
-          "default": ":8555/tcp",
-          "type": "string",
-          "anyOf": [
-            {
-              "type": "string",
-              "pattern": ":[0-9]{1,5}(/tcp|/udp)?$"
-            },
-            {
-              "type": "string",
-              "const": ""
-            }
-          ]
-        },
         "candidates": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/listen/anyOf/0"
-          },
+          "description": "List of additional host candidates for WebRTC connections.",
           "examples": [
             "216.58.210.174:8555",
             "stun:8555",
             "home.duckdns.org:8555"
-          ]
-        },
-        "ice_servers": {
-          "type": "array",
+          ],
           "items": {
-            "type": "object",
-            "properties": {
-              "urls": {
-                "type": "array",
-                "items": {
-                  "type": "string",
-                  "examples": [
-                    "stun:stun.l.google.com:19302",
-                    "turn:123.123.123.123:3478"
-                  ]
-                }
-              },
-              "username": {
-                "type": "string"
-              },
-              "credential": {
-                "type": "string"
-              }
-            }
-          }
+            "$ref": "#/definitions/listen/anyOf/0"
+          },
+          "type": "array"
         },
         "filters": {
-          "type": "object",
+          "description": "Filters for auto discovery logic in WebRTC.",
           "properties": {
             "candidates": {
-              "description": "Keep only these candidates",
-              "type": "array",
+              "description": "Keep only these candidates.",
               "items": {
                 "type": "string"
-              }
+              },
+              "type": "array"
             },
             "interfaces": {
-              "description": "Keep only these interfaces",
-              "type": "array",
+              "description": "Keep only these network interfaces.",
               "items": {
                 "type": "string"
-              }
+              },
+              "type": "array"
             },
             "ips": {
-              "description": "Keep only these IP-addresses",
-              "type": "array",
+              "description": "Keep only these IP addresses.",
               "items": {
                 "type": "string"
-              }
+              },
+              "type": "array"
             },
             "networks": {
-              "description": "Use only these network types",
-              "type": "array",
+              "description": "Use only these network types.",
               "items": {
                 "enum": [
                   "tcp4",
@@ -443,44 +440,96 @@
                   "udp6"
                 ],
                 "type": "string"
-              }
+              },
+              "type": "array"
             },
             "udp_ports": {
-              "description": "Use only these UDP ports range [min, max]",
-              "type": "array",
+              "description": "Use only this range of UDP ports.",
               "items": {
                 "type": "integer"
               },
               "maxItems": 2,
-              "minItems": 2
+              "minItems": 2,
+              "type": "array"
             }
-          }
+          },
+          "type": "object"
+        },
+        "ice_servers": {
+          "description": "List of STUN and TURN servers for WebRTC.",
+          "items": {
+            "properties": {
+              "credential": {
+                "description": "Credential for TURN server authentication.",
+                "type": "string"
+              },
+              "urls": {
+                "description": "URLs of the STUN or TURN servers.",
+                "items": {
+                  "examples": [
+                    "stun:stun.l.google.com:19302",
+                    "turn:123.123.123.123:3478"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "username": {
+                "description": "Username for TURN server authentication.",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "listen": {
+          "anyOf": [
+            {
+              "pattern": ":[0-9]{1,5}(/tcp|/udp)?$",
+              "type": "string"
+            },
+            {
+              "const": "",
+              "type": "string"
+            }
+          ],
+          "default": ":8555/tcp",
+          "description": "Specifies the address and port for WebRTC connections."
         }
-      }
+      },
+      "type": "object"
     },
     "webtorrent": {
-      "type": "object",
+      "description": "Configuration for WebTorrent integration.",
       "properties": {
-        "trackers": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
         "shares": {
           "additionalProperties": {
-            "type": "object",
             "properties": {
               "pwd": {
+                "description": "Password for the shared torrent.",
                 "type": "string"
               },
               "src": {
+                "description": "Source of the shared torrent.",
                 "type": "string"
               }
-            }
-          }
+            },
+            "type": "object"
+          },
+          "description": "Configuration for sharing torrents."
+        },
+        "trackers": {
+          "description": "List of WebTorrent trackers.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
-      }
+      },
+      "type": "object"
     }
-  }
+  },
+  "title": "go2rtc",
+  "type": "object"
 }
