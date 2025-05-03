@@ -66,7 +66,7 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
     * [Source: Kasa](#source-kasa)
     * [Source: GoPro](#source-gopro)
     * [Source: Ivideon](#source-ivideon)
-    * [Source: Hass](#source-hass)
+    * [Source: Home Assistant](#source-homeassistant)
     * [Source: ISAPI](#source-isapi)
     * [Source: Nest](#source-nest)
     * [Source: Roborock](#source-roborock)
@@ -82,7 +82,7 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
   * [Module: HomeKit](#module-homekit)
   * [Module: WebTorrent](#module-webtorrent)
   * [Module: ngrok](#module-ngrok)
-  * [Module: Hass](#module-hass)
+  * [Module: Home Assistant](#module-homeassistant)
   * [Module: MP4](#module-mp4)
   * [Module: HLS](#module-hls)
   * [Module: MJPEG](#module-mjpeg)
@@ -142,7 +142,7 @@ The Docker container [`alexxit/go2rtc`](https://hub.docker.com/r/alexxit/go2rtc)
 1. Install Add-On:
     - Settings > Add-ons > Plus > Repositories > Add `https://github.com/AlexxIT/hassio-addons`
     - go2rtc > Install > Start
-2. Setup [Integration](#module-hass)
+2. Setup [Integration](#module-home-assistant)
 
 ### go2rtc: Home Assistant Integration
 
@@ -154,7 +154,7 @@ Latest, but maybe unstable version:
 
 - Binary: [latest nightly release](https://nightly.link/AlexxIT/go2rtc/workflows/build/master)
 - Docker: `alexxit/go2rtc:master` or `alexxit/go2rtc:master-hardware` versions
-- Hass Add-on: `go2rtc master` or `go2rtc master hardware` versions
+- Home Assistant Add-on: `go2rtc master` or `go2rtc master hardware` versions
 
 ## Configuration
 
@@ -177,7 +177,7 @@ Available modules:
 - [mjpeg](#module-mjpeg) - MJPEG Server
 - [ffmpeg](#source-ffmpeg) - FFmpeg integration
 - [ngrok](#module-ngrok) - ngrok integration (external access for private network)
-- [hass](#module-hass) - Home Assistant integration
+- [hass](#module-home-assistant) - Home Assistant integration
 - [log](#module-log) - logs config
 
 ### Module: Streams
@@ -202,7 +202,7 @@ Available source types:
 - [kasa](#source-tapo) - TP-Link Kasa cameras
 - [gopro](#source-gopro) - GoPro cameras
 - [ivideon](#source-ivideon) - public cameras from [Ivideon](https://tv.ivideon.com/) service
-- [hass](#source-hass) - Home Assistant integration
+- [hass](#source-home-assistant) - Home Assistant integration
 - [isapi](#source-isapi) - two way audio for Hikvision (ISAPI) cameras
 - [roborock](#source-roborock) - Roborock vacuums with cameras
 - [webrtc](#source-webrtc) - WebRTC/WHEP sources
@@ -329,8 +329,8 @@ streams:
 
 You can get any stream or file or device via FFmpeg and push it to go2rtc. The app will automatically start FFmpeg with the proper arguments when someone starts watching the stream.
 
-- FFmpeg preistalled for **Docker** and **Hass Add-on** users
-- **Hass Add-on** users can target files from [/media](https://www.home-assistant.io/more-info/local-media/setup-media/) folder
+- FFmpeg preistalled for **Docker** and **Home Assistant Add-on** users
+- **Home Assistant Add-on** users can target files from [/media](https://www.home-assistant.io/more-info/local-media/setup-media/) folder
 
 Format: `ffmpeg:{input}#{param1}#{param2}#{param3}`. Examples:
 
@@ -441,7 +441,7 @@ streams:
 
 Some sources may have a dynamic link. And you will need to get it using a bash or python script. Your script should echo a link to the source. RTSP, FFmpeg or any of the [supported sources](#module-streams).
 
-**Docker** and **Hass Add-on** users has preinstalled `python3`, `curl`, `jq`.
+**Docker** and **Home Assistant Add-on** users has preinstalled `python3`, `curl`, `jq`.
 
 Check examples in [wiki](https://github.com/AlexxIT/go2rtc/wiki/Source-Echo-examples).
 
@@ -464,7 +464,7 @@ Like `echo` source, but uses the built-in [expr](https://github.com/antonmedv/ex
 - HomeKit device can be paired with only one ecosystem. So, if you have paired it to an iPhone (Apple Home) - you can't pair it with Home Assistant or go2rtc. Or if you have paired it to go2rtc - you can't pair it with iPhone
 - HomeKit device should be in same network with working [mDNS](https://en.wikipedia.org/wiki/Multicast_DNS) between device and go2rtc
 
-go2rtc support import paired HomeKit devices from [Home Assistant](#source-hass). So you can use HomeKit camera with Hass and go2rtc simultaneously. If you using Hass, I recommend pairing devices with it, it will give you more options.
+go2rtc support import paired HomeKit devices from [Home Assistant](#source-home-assistant). So you can use HomeKit camera with Home Assistant and go2rtc simultaneously. If you using Home Assistant, I recommend pairing devices with it, it will give you more options.
 
 You can pair device with go2rtc on the HomeKit page. If you can't see your devices - reload the page. Also try reboot your HomeKit device (power off). If you still can't see it - you have a problems with mDNS.
 
@@ -580,7 +580,7 @@ streams:
   quailcam: ivideon:100-tu5dkUPct39cTp9oNEN2B6/0
 ```
 
-#### Source: Hass
+#### Source: Home Assistant
 
 Support import camera links from [Home Assistant](https://www.home-assistant.io/) config files:
 
@@ -591,7 +591,7 @@ Support import camera links from [Home Assistant](https://www.home-assistant.io/
 
 ```yaml
 hass:
-  config: "/config"  # skip this setting if you Hass Add-on user
+  config: "/homeassistant"  # skip this setting if you are a Home Assistant Add-on user
 
 streams:
   generic_camera: hass:Camera1  # Settings > Integrations > Integration Name
@@ -607,14 +607,14 @@ Any cameras in WebRTC format are supported. But at the moment Home Assistant onl
 ```yaml
 streams:
   # link to Home Assistant Supervised
-  hass-webrtc1: hass://supervisor?entity_id=camera.nest_doorbell
-  # link to external Hass with Long-Lived Access Tokens
-  hass-webrtc2: hass://192.168.1.123:8123?entity_id=camera.nest_doorbell&token=eyXYZ...
+  ha-webrtc1: hass://supervisor?entity_id=camera.nest_doorbell
+  # link to external Home Assistant with Long-Lived Access Tokens
+  ha-webrtc2: hass://192.168.1.123:8123?entity_id=camera.nest_doorbell&token=eyXYZ...
 ```
 
 **RTSP Cameras**
 
-By default, the Home Assistant API does not allow you to get dynamic RTSP link to a camera stream. So more cameras, like [Tuya](https://www.home-assistant.io/integrations/tuya/), and possibly others can also be imported by using [this method](https://github.com/felipecrs/hass-expose-camera-stream-source#importing-home-assistant-cameras-to-go2rtc-andor-frigate).
+By default, the Home Assistant API does not allow you to get dynamic RTSP link to a camera stream. So more cameras, like [Tuya](https://www.home-assistant.io/integrations/tuya/), and possibly others can also be imported by using [this method](https://github.com/felipecrs/hass-expose-camera-stream-source#importing-cameras-from-home-assistant-to-go2rtc-and-frigate).
 
 #### Source: ISAPI
 
@@ -635,7 +635,7 @@ streams:
 
 Currently only WebRTC cameras are supported.
 
-For simplicity, it is recommended to connect the Nest/WebRTC camera to the [Home Assistant](#source-hass). But if you can somehow get the below parameters - Nest/WebRTC source will work without Hass.
+For simplicity, it is recommended to connect the Nest/WebRTC camera to the [Home Assistant](#source-home-assistant). But if you can somehow get the below parameters - Nest/WebRTC source will work without Home Assistant.
 
 ```yaml
 streams:
@@ -863,7 +863,7 @@ api:
 
 You can get any stream as RTSP-stream: `rtsp://192.168.1.123:8554/{stream_name}`
 
-You can enable external password protection for your RTSP streams. Password protection always disabled for localhost calls (ex. FFmpeg or Hass on same server).
+You can enable external password protection for your RTSP streams. Password protection always disabled for localhost calls (ex. FFmpeg or Home Assistant on same server).
 
 ```yaml
 rtsp:
@@ -1048,7 +1048,7 @@ TODO: article how it works...
 
 With ngrok integration you can get external access to your streams in situations when you have Internet with private IP-address.
 
-- ngrok is pre-installed for **Docker** and **Hass Add-on** users
+- ngrok is pre-installed for **Docker** and **Home Assistant Add-on** users
 - you may need external access for two different things:
   - WebRTC stream, so you need tunnel WebRTC TCP port (ex. 8555)
   - go2rtc web interface, so you need tunnel API HTTP port (ex. 1984)
@@ -1100,9 +1100,9 @@ tunnels:
 
 See the [ngrok agent documentation](https://ngrok.com/docs/agent/config/) for more details on the ngrok configuration file.
 
-### Module: Hass
+### Module: Home Assistant
 
-The best and easiest way to use go2rtc inside the Home Assistant is to install the custom integration [WebRTC Camera](#go2rtc-home-assistant-integration) and custom lovelace card.
+The best and easiest way to use go2rtc inside the Home Assistant is to install the [WebRTC Camera](#go2rtc-home-assistant-integration) custom integration and card.
 
 But go2rtc is also compatible and can be used with [RTSPtoWebRTC](https://www.home-assistant.io/integrations/rtsp_to_webrtc/) built-in integration.
 
@@ -1112,20 +1112,20 @@ You have several options on how to add a camera to Home Assistant:
 2. Camera [any source](#module-streams) => [go2rtc config](#configuration) => [Generic Camera](https://www.home-assistant.io/integrations/generic/)
    - Install any [go2rtc](#fast-start)
    - Add your stream to [go2rtc config](#configuration)
-   - Hass > Settings > Integrations > Add Integration > [ONVIF](https://my.home-assistant.io/redirect/config_flow_start/?domain=onvif) > Host: `127.0.0.1`, Port: `1984`
-   - Hass > Settings > Integrations > Add Integration > [Generic Camera](https://my.home-assistant.io/redirect/config_flow_start/?domain=generic) > Stream Source URL: `rtsp://127.0.0.1:8554/camera1` (change to your stream name, leave everything else as is)
+   - Home Assistant > Settings > Integrations > Add Integration > [ONVIF](https://my.home-assistant.io/redirect/config_flow_start/?domain=onvif) > Host: `127.0.0.1`, Port: `1984`
+   - Home Assistant > Settings > Integrations > Add Integration > [Generic Camera](https://my.home-assistant.io/redirect/config_flow_start/?domain=generic) > Stream Source URL: `rtsp://127.0.0.1:8554/camera1` (change to your stream name, leave everything else as is)
 
 You have several options on how to watch the stream from the cameras in Home Assistant:
 
 1. `Camera Entity` => `Picture Entity Card` => Technology `HLS`, codecs: `H264/H265/AAC`, poor latency.
 2. `Camera Entity` => [RTSPtoWebRTC](https://www.home-assistant.io/integrations/rtsp_to_webrtc/) => `Picture Entity Card` => Technology `WebRTC`, codecs: `H264/PCMU/PCMA/OPUS`, best latency.
    - Install any [go2rtc](#fast-start)
-   - Hass > Settings > Integrations > Add Integration > [RTSPtoWebRTC](https://my.home-assistant.io/redirect/config_flow_start/?domain=rtsp_to_webrtc) > `http://127.0.0.1:1984/`
+   - Home Assistant > Settings > Integrations > Add Integration > [RTSPtoWebRTC](https://my.home-assistant.io/redirect/config_flow_start/?domain=rtsp_to_webrtc) > `http://127.0.0.1:1984/`
    - RTSPtoWebRTC > Configure > STUN server: `stun.l.google.com:19302`
-   - Use Picture Entity or Picture Glance lovelace card
+   - Use the default Picture Entity or Picture Glance card
 3. `Camera Entity` or `Camera URL` => [WebRTC Camera](https://github.com/AlexxIT/WebRTC) => Technology: `WebRTC/MSE/MP4/MJPEG`, codecs: `H264/H265/AAC/PCMU/PCMA/OPUS`, best latency, best compatibility.
    - Install and add [WebRTC Camera](https://github.com/AlexxIT/WebRTC) custom integration
-   - Use WebRTC Camera custom lovelace card
+   - Use WebRTC Camera custom card in your dashboard
 
 You can add camera `entity_id` to [go2rtc config](#configuration) if you need transcoding:
 
@@ -1134,9 +1134,9 @@ streams:
   "camera.hall": ffmpeg:{input}#video=copy#audio=opus
 ```
 
-**PS.** Default Home Assistant lovelace cards don't support 2-way audio. You can use 2-way audio from [Add-on Web UI](https://my.home-assistant.io/redirect/supervisor_addon/?addon=a889bffc_go2rtc&repository_url=https%3A%2F%2Fgithub.com%2FAlexxIT%2Fhassio-addons). But you need use HTTPS to access the microphone. This is a browser restriction and cannot be avoided.
+**PS.** Default Home Assistant cards don't support 2-way audio. You can use 2-way audio from the [Add-on Web UI](https://my.home-assistant.io/redirect/supervisor_addon/?addon=a889bffc_go2rtc&repository_url=https%3A%2F%2Fgithub.com%2FAlexxIT%2Fhassio-addons). But you need use HTTPS to access the microphone. This is a browser restriction and cannot be avoided.
 
-**PS.** There is also another nice card with go2rtc support - [Frigate Lovelace Card](https://github.com/dermotduffy/frigate-hass-card).
+**PS.** There is also another nice card with 2-way audio support through go2rtc - [Advanced Camera Card](https://github.com/dermotduffy/advanced-camera-card).
 
 ### Module: MP4
 
@@ -1241,7 +1241,7 @@ webrtc:
 ```
 
 - local access to RTSP is not a problem for [FFmpeg](#source-ffmpeg) integration, because it runs locally on your server
-- local access to API is not a problem for [Home Assistant Add-on](#go2rtc-home-assistant-add-on), because Hass runs locally on same server and Add-on Web UI protected with Hass authorization ([Ingress feature](https://www.home-assistant.io/blog/2019/04/15/hassio-ingress/))
+- local access to API is not a problem for [Home Assistant Add-on](#go2rtc-home-assistant-add-on), because Home Assistant runs locally on same server and Add-on Web UI is protected with the Home Assistant authorization ([Ingress feature](https://www.home-assistant.io/blog/2019/04/15/hassio-ingress/))
 - external access to WebRTC TCP port is not a problem, because it used only for transmit encrypted media data
   - anyway you need to open this port to your local network and to the Internet in order for WebRTC to work
 
@@ -1263,7 +1263,7 @@ Without filters:
 
 Some examples:
 
-- `rtsp://192.168.1.123:8554/camera1?mp4` - useful for recording as MP4 files (e.g. Hass or Frigate)
+- `rtsp://192.168.1.123:8554/camera1?mp4` - useful for recording as MP4 files (e.g. Home Assistant or Frigate)
 - `rtsp://192.168.1.123:8554/camera1?video=h264,h265&audio=aac` - full version of the filter above
 - `rtsp://192.168.1.123:8554/camera1?video=h264&audio=aac&audio=opus` - H264 video codec and two separate audio tracks
 - `rtsp://192.168.1.123:8554/camera1?video&audio=all` - any video codec and all audio codecs as separate tracks
@@ -1283,7 +1283,7 @@ Some examples:
 | Desktop Firefox                                                          | H264 <br/> PCMU, PCMA <br/> OPUS        | H264 <br/> AAC, FLAC* <br/> OPUS        | H264 <br/> AAC, FLAC* <br/> OPUS             | no                          |
 | - Desktop Safari 14+ <br/> - iPad Safari 14+ <br/> - iPhone Safari 17.1+ | H264, H265* <br/> PCMU, PCMA <br/> OPUS | H264, H265 <br/> AAC, FLAC*             | **no!**                                      | H264, H265 <br/> AAC, FLAC* |
 | iPhone Safari 14+                                                        | H264, H265* <br/> PCMU, PCMA <br/> OPUS | **no!**                                 | **no!**                                      | H264, H265 <br/> AAC, FLAC* |
-| macOS [Hass App][1]                                                      | no                                      | no                                      | no                                           | H264, H265 <br/> AAC, FLAC* |
+| macOS [Home Assistant App][1]                                                      | no                                      | no                                      | no                                           | H264, H265 <br/> AAC, FLAC* |
 
 [1]: https://apps.apple.com/app/home-assistant/id1099568401
 
@@ -1342,7 +1342,7 @@ PCMU/xxx => PCMU/8000 => WebRTC
 
 **Important**
 
-- FLAC codec not supported in a RTSP stream. If you using Frigate or Hass for recording MP4 files with PCMA/PCMU/PCM audio - you should setup transcoding to AAC codec.
+- FLAC codec not supported in a RTSP stream. If you using Frigate or Home Assistant for recording MP4 files with PCMA/PCMU/PCM audio - you should setup transcoding to AAC codec.
 - PCMA and PCMU are VERY low quality codecs. Them support only 256! different sounds. Use them only when you have no other options.
 
 ## Codecs negotiation
@@ -1376,8 +1376,8 @@ streams:
 
 ## Projects using go2rtc
 
-- [Frigate 12+](https://frigate.video/) - open source NVR built around real-time AI object detection
-- [Frigate Lovelace Card](https://github.com/dermotduffy/frigate-hass-card) - custom card for Home Assistant
+- [Frigate](https://frigate.video/) - open source NVR built around real-time AI object detection
+- [Advanced Camera Card](https://github.com/dermotduffy/advanced-camera-card) - custom card for Home Assistant
 - [OpenIPC](https://github.com/OpenIPC/firmware/tree/master/general/package/go2rtc) - Alternative IP Camera firmware from an open community
 - [wz_mini_hacks](https://github.com/gtxaspec/wz_mini_hacks) - Custom firmware for Wyze cameras
 - [EufyP2PStream](https://github.com/oischinger/eufyp2pstream) - A small project that provides a Video/Audio Stream from Eufy cameras that don't directly support RTSP
@@ -1421,22 +1421,22 @@ streams:
 
 **Q. What's the difference between go2rtc, WebRTC Camera and RTSPtoWebRTC?**
 
-**go2rtc** is a new version of the server-side [WebRTC Camera](https://github.com/AlexxIT/WebRTC) integration, completely rewritten from scratch, with a number of fixes and a huge number of new features. It is compatible with native Home Assistant [RTSPtoWebRTC](https://www.home-assistant.io/integrations/rtsp_to_webrtc/) integration. So you [can use](#module-hass) default lovelace Picture Entity or Picture Glance.
+**go2rtc** is a new version of the server-side [WebRTC Camera](https://github.com/AlexxIT/WebRTC) integration, completely rewritten from scratch, with a number of fixes and a huge number of new features. It is compatible with native Home Assistant [RTSPtoWebRTC](https://www.home-assistant.io/integrations/rtsp_to_webrtc/) integration so you [can use](#module-home-assistant) the default Picture Entity or Picture Glance cards, although they don't support 2-way audio.
 
-**Q. Should I use go2rtc addon or WebRTC Camera integration?**
+**Q. Should I use go2rtc add-on or WebRTC Camera integration?**
 
-**go2rtc** is more than just viewing your stream online with WebRTC/MSE/HLS/etc. You can use it all the time for your various tasks. But every time the Hass is rebooted - all integrations are also rebooted. So your streams may be interrupted if you use them in additional tasks.
+**go2rtc** is more than just viewing your stream online with WebRTC/MSE/HLS/etc. You can use it all the time for your various tasks. But every time the Home Assistant is rebooted - all integrations are also rebooted. So your streams may be interrupted if you use them in additional tasks.
 
-Basic users can use **WebRTC Camera** integration. Advanced users can use go2rtc addon or Frigate 12+ addon.
+Basic users can use **WebRTC Camera** integration. Advanced users can use go2rtc add-on or Frigate add-on.
 
-**Q. Which RTSP link should I use inside Hass?**
+**Q. Which RTSP link should I use inside Home Assistant?**
 
-You can use direct link to your cameras there (as you always do). **go2rtc** support zero-config feature. You may leave `streams` config section empty. And your streams will be created on the fly on first start from Hass. And your cameras will have multiple connections. Some from Hass directly and one from **go2rtc**.
+You can use direct link to your cameras there (as you always do). **go2rtc** support zero-config feature. You may leave `streams` config section empty. And your streams will be created on the fly on first start from Home Assistant. And your cameras will have multiple connections. Some from Home Assistant directly and one from **go2rtc**.
 
-Also you can specify your streams in **go2rtc** [config file](#configuration) and use RTSP links to this addon. With additional features: multi-source [codecs negotiation](#codecs-negotiation) or FFmpeg [transcoding](#source-ffmpeg) for unsupported codecs. Or use them as source for Frigate. And your cameras will have one connection from **go2rtc**. And **go2rtc** will have multiple connection - some from Hass via RTSP protocol, some from your browser via WebRTC/MSE/HLS protocols.
+Also you can specify your streams in **go2rtc** [config file](#configuration) and use RTSP links to this add-on. With additional features: multi-source [codecs negotiation](#codecs-negotiation) or FFmpeg [transcoding](#source-ffmpeg) for unsupported codecs. Or use them as source for Frigate. And your cameras will have one connection from **go2rtc**. And **go2rtc** will have multiple connection - some from Home Assistant via RTSP protocol, some from your browser via WebRTC/MSE/HLS protocols.
 
 Use any config what you like.
 
-**Q. What about lovelace card with support 2-way audio?**
+**Q. What about a Home Assistant card with 2-way audio support?**
 
-At this moment I am focused on improving stability and adding new features to **go2rtc**. Maybe someone could write such a card themselves. It's not difficult, I have [some sketches](https://github.com/AlexxIT/go2rtc/blob/master/www/webrtc.html).
+No built-in card supports 2-way audio as of now in Home Assistant, but you can use [WebRTC Camera](https://github.com/AlexxIT/WebRTC/) or [Advanced Camera Card](https://github.com/dermotduffy/advanced-camera-card).
