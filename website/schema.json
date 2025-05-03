@@ -109,6 +109,7 @@
           "description": "Home Assistant config directory path",
           "type": "string",
           "examples": [
+            "/homeassistant",
             "/config"
           ]
         }
