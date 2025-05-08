@@ -70,7 +70,7 @@ type CameraKind string
 
 // CameraData contains common fields for all camera types
 type CameraData struct {
-	ID          float64 `json:"id"`
+	ID          int `json:"id"`
 	Description string  `json:"description"`
 	DeviceID    string  `json:"device_id"`
 	Kind        string  `json:"kind"`

@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/url"
 
+	"fmt"
+
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -83,6 +85,7 @@ func apiRing(w http.ResponseWriter, r *http.Request) {
 
 	var items []*api.Source
 	for _, camera := range devices.AllCameras {
+		cleanQuery.Set("camera_id", fmt.Sprint(camera.ID))
 		cleanQuery.Set("device_id", camera.DeviceID)
 
 		// Stream source

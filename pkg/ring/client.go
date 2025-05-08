@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strconv"
 	"sync"
 	"time"
 
@@ -19,7 +20,7 @@ type Client struct {
 	api       *RingRestClient
 	ws        *websocket.Conn
 	prod      core.Producer
-	camera    *CameraData
+	cameraID  int
 	dialogID  string
 	sessionID string
 	wsMutex   sync.Mutex
@@ -109,11 +110,17 @@ func Dial(rawURL string) (*Client, error) {
 
 	query := u.Query()
 	encodedToken := query.Get("refresh_token")
+	cameraID := query.Get("camera_id")
 	deviceID := query.Get("device_id")
 	_, isSnapshot := query["snapshot"]
 
 	if encodedToken == "" || deviceID == "" {
 		return nil, errors.New("ring: wrong query")
+	}
+
+	camID, err := strconv.Atoi(cameraID)
+	if err != nil {
+		return nil, fmt.Errorf("ring: invalid camera_id: %w", err)
 	}
 
 	// URL-decode the refresh token
@@ -128,34 +135,17 @@ func Dial(rawURL string) (*Client, error) {
 		return nil, err
 	}
 
-	// Get camera details
-	devices, err := ringAPI.FetchRingDevices()
-	if err != nil {
-		return nil, err
-	}
-
-	var camera *CameraData
-	for _, cam := range devices.AllCameras {
-		if fmt.Sprint(cam.DeviceID) == deviceID {
-			camera = &cam
-			break
-		}
-	}
-	if camera == nil {
-		return nil, errors.New("ring: camera not found")
-	}
-
 	// Create base client
 	client := &Client{
 		api:      ringAPI,
-		camera:   camera,
+		cameraID: camID,
 		dialogID: uuid.NewString(),
 		done:     make(chan struct{}),
 	}
 
 	// Check if snapshot request
 	if isSnapshot {
-		client.prod = NewSnapshotProducer(ringAPI, camera)
+		client.prod = NewSnapshotProducer(ringAPI, cameraID)
 		return client, nil
 	}
 
@@ -365,7 +355,7 @@ func (c *Client) startMessageLoop(connState *core.Waiter) {
 
 			// check if the message is from the correct doorbot
 			doorbotID := res.Body["doorbot_id"].(float64)
-			if doorbotID != float64(c.camera.ID) {
+			if int(doorbotID) != c.cameraID {
 				continue
 			}
 
@@ -459,7 +449,7 @@ func (c *Client) sendSessionMessage(method string, body map[string]interface{}) 
 		body = make(map[string]interface{})
 	}
 
-	body["doorbot_id"] = c.camera.ID
+	body["doorbot_id"] = c.cameraID
 	if c.sessionID != "" {
 		body["session_id"] = c.sessionID
 	}
