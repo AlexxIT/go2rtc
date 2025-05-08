@@ -11,8 +11,12 @@ import (
 	"net/http"
 	"reflect"
 	"strings"
+	"sync"
 	"time"
 )
+
+var clientCache = map[string]*RingRestClient{}
+var cacheMutex sync.Mutex
 
 type RefreshTokenAuth struct {
 	RefreshToken string
@@ -52,17 +56,35 @@ type SocketTicketResponse struct {
 	ResponseTimestamp int64  `json:"response_timestamp"`
 }
 
+// SessionResponse repesents the response from the session endpoint
+type SessionResponse struct {
+	Profile struct {
+		ID         int64  `json:"id"`
+		Email      string `json:"email"`
+		FirstName  string `json:"first_name"`
+		LastName   string `json:"last_name"`
+	} `json:"profile"`
+}
+
 // RingRestClient handles authentication and requests to Ring API
 type RingRestClient struct {
 	httpClient     *http.Client
 	authConfig     *AuthConfig
 	hardwareID     string
 	authToken      *AuthTokenResponse
+	tokenExpiry    time.Time
 	Using2FA       bool
 	PromptFor2FA   string
 	RefreshToken   string
 	auth           interface{} // EmailAuth or RefreshTokenAuth
 	onTokenRefresh func(string)
+	authMutex      sync.Mutex
+	session        *SessionResponse
+	sessionExpiry  time.Time
+	sessionMutex   sync.Mutex
+	
+	// Cache-Schlüssel für diese Instanz
+	cacheKey       string
 }
 
 // CameraKind represents the different types of Ring cameras
@@ -139,23 +161,50 @@ const (
 	apiVersion         = 11
 	defaultTimeout     = 20 * time.Second
 	maxRetries         = 3
+	sessionValidTime   = 12 * time.Hour
 )
 
-// NewRingRestClient creates a new Ring client instance
+// NewRingRestClient creates a new Ring client instance with caching
 func NewRingRestClient(auth interface{}, onTokenRefresh func(string)) (*RingRestClient, error) {
-	client := &RingRestClient{
-		httpClient:     &http.Client{Timeout: defaultTimeout},
-		onTokenRefresh: onTokenRefresh,
-		hardwareID:     generateHardwareID(),
-		auth:           auth,
-	}
-
+	var cacheKey string
+	
+	// Create cache key based on auth data
 	switch a := auth.(type) {
 	case RefreshTokenAuth:
 		if a.RefreshToken == "" {
 			return nil, fmt.Errorf("refresh token is required")
 		}
+		cacheKey = "refresh:" + a.RefreshToken
+	case EmailAuth:
+		if a.Email == "" || a.Password == "" {
+			return nil, fmt.Errorf("email and password are required")
+		}
+		cacheKey = "email:" + a.Email + ":" + a.Password
+	default:
+		return nil, fmt.Errorf("invalid auth type")
+	}
+	
+	cacheMutex.Lock()
+	defer cacheMutex.Unlock()
+	
+	if cachedClient, ok := clientCache[cacheKey]; ok {
+		// Check if token is not nil and not expired
+		if cachedClient.authToken != nil && time.Now().Before(cachedClient.tokenExpiry) {
+			cachedClient.onTokenRefresh = onTokenRefresh
+			return cachedClient, nil
+		}
+	}
+	
+	client := &RingRestClient{
+		httpClient:     &http.Client{Timeout: defaultTimeout},
+		onTokenRefresh: onTokenRefresh,
+		hardwareID:     generateHardwareID(),
+		auth:           auth,
+		cacheKey:       cacheKey,
+	}
 
+	switch a := auth.(type) {
+	case RefreshTokenAuth:
 		config, err := parseAuthConfig(a.RefreshToken)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse refresh token: %w", err)
@@ -164,22 +213,18 @@ func NewRingRestClient(auth interface{}, onTokenRefresh func(string)) (*RingRest
 		client.authConfig = config
 		client.hardwareID = config.HID
 		client.RefreshToken = a.RefreshToken
-	case EmailAuth:
-		if a.Email == "" || a.Password == "" {
-			return nil, fmt.Errorf("email and password are required")
-		}
-	default:
-		return nil, fmt.Errorf("invalid auth type")
 	}
 
+	clientCache[cacheKey] = client
+	
 	return client, nil
 }
 
 // Request makes an authenticated request to the Ring API
 func (c *RingRestClient) Request(method, url string, body interface{}) ([]byte, error) {
-	// Ensure we have a valid auth token
-	if err := c.ensureAuth(); err != nil {
-		return nil, fmt.Errorf("authentication failed: %w", err)
+	// Ensure we have a valid session
+	if err := c.ensureSession(); err != nil {
+		return nil, fmt.Errorf("session validation failed: %w", err)
 	}
 
 	var bodyReader io.Reader
@@ -226,15 +271,52 @@ func (c *RingRestClient) Request(method, url string, body interface{}) ([]byte, 
 
 		// Handle 401 by refreshing auth and retrying
 		if resp.StatusCode == http.StatusUnauthorized {
-			c.authToken = nil // Force token refresh
+			// Reset token to force refresh
+			c.authMutex.Lock()
+			c.authToken = nil
+			c.tokenExpiry = time.Time{} // Reset token expiry
+			c.authMutex.Unlock()
+			
 			if attempt == maxRetries {
 				return nil, fmt.Errorf("authentication failed after %d retries", maxRetries)
 			}
-			if err := c.ensureAuth(); err != nil {
-				return nil, fmt.Errorf("failed to refresh authentication: %w", err)
+			
+			// By 401 with Auth AND Session start over
+			c.sessionMutex.Lock()
+			c.session = nil
+			c.sessionExpiry = time.Time{} // Reset session expiry
+			c.sessionMutex.Unlock()
+			
+			if err := c.ensureSession(); err != nil {
+				return nil, fmt.Errorf("failed to refresh session: %w", err)
 			}
+			
 			req.Header.Set("Authorization", "Bearer "+c.authToken.AccessToken)
 			continue
+		}
+
+		// Handle 404 error with hardware_id reference - session issue
+		if resp.StatusCode == 404 && strings.Contains(url, clientAPIBaseURL) {
+			var errorBody map[string]interface{}
+			if err := json.Unmarshal(responseBody, &errorBody); err == nil {
+				if errorStr, ok := errorBody["error"].(string); ok && strings.Contains(errorStr, c.hardwareID) {
+					// Session with hardware_id not found, refresh session
+					c.sessionMutex.Lock()
+					c.session = nil
+					c.sessionExpiry = time.Time{} // Reset session expiry
+					c.sessionMutex.Unlock()
+					
+					if attempt == maxRetries {
+						return nil, fmt.Errorf("session refresh failed after %d retries", maxRetries)
+					}
+					
+					if err := c.ensureSession(); err != nil {
+						return nil, fmt.Errorf("failed to refresh session: %w", err)
+					}
+					
+					continue
+				}
+			}
 		}
 
 		// Handle other error status codes
@@ -248,9 +330,82 @@ func (c *RingRestClient) Request(method, url string, body interface{}) ([]byte, 
 	return responseBody, nil
 }
 
-// ensureAuth ensures we have a valid auth token
+// ensureSession makes sure we have a valid session
+func (c *RingRestClient) ensureSession() error {
+	c.sessionMutex.Lock()
+	defer c.sessionMutex.Unlock()
+
+	// If session is still valid, use it
+	if c.session != nil && time.Now().Before(c.sessionExpiry) {
+		return nil
+	}
+
+	// Make sure we have a valid auth token
+	if err := c.ensureAuth(); err != nil {
+		return fmt.Errorf("authentication failed while creating session: %w", err)
+	}
+
+	sessionPayload := map[string]interface{}{
+		"device": map[string]interface{}{
+			"hardware_id": c.hardwareID,
+			"metadata": map[string]interface{}{
+				"api_version":  apiVersion,
+				"device_model": "ring-client-go",
+			},
+			"os": "android",
+		},
+	}
+
+	body, err := json.Marshal(sessionPayload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal session request: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", ClientAPI("session"), bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.authToken.AccessToken)
+	req.Header.Set("hardware_id", c.hardwareID)
+	req.Header.Set("User-Agent", "android:com.ringapp")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("session request failed with status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	var sessionResp SessionResponse
+	if err := json.NewDecoder(resp.Body).Decode(&sessionResp); err != nil {
+		return fmt.Errorf("failed to decode session response: %w", err)
+	}
+
+	c.session = &sessionResp
+	c.sessionExpiry = time.Now().Add(sessionValidTime)
+
+	// Aktualisiere den gecachten Client
+	cacheMutex.Lock()
+	clientCache[c.cacheKey] = c
+	cacheMutex.Unlock()
+
+	return nil
+}
+
+// ensureAuth ensures we have a valid auth token with expiration tracking
 func (c *RingRestClient) ensureAuth() error {
-	if c.authToken != nil {
+	c.authMutex.Lock()
+	defer c.authMutex.Unlock()
+
+	// If token exists and is not expired, use it
+	if c.authToken != nil && time.Now().Before(c.tokenExpiry) {
 		return nil
 	}
 
@@ -306,12 +461,24 @@ func (c *RingRestClient) ensureAuth() error {
 		RT:  authResp.RefreshToken,
 		HID: c.hardwareID,
 	}
+	
+	// Set token expiry (1 minute before actual expiry)
+	expiresIn := time.Duration(authResp.ExpiresIn-60) * time.Second
+	c.tokenExpiry = time.Now().Add(expiresIn)
 
 	// Encode and notify about new refresh token
 	if c.onTokenRefresh != nil {
 		newRefreshToken := encodeAuthConfig(c.authConfig)
 		c.onTokenRefresh(newRefreshToken)
 	}
+	
+	// Refreshn the token in the client
+	c.RefreshToken = encodeAuthConfig(c.authConfig)
+
+	// Refresh the cached client
+	cacheMutex.Lock()
+	clientCache[c.cacheKey] = c
+	cacheMutex.Unlock()
 
 	return nil
 }
@@ -404,16 +571,25 @@ func (c *RingRestClient) GetAuth(twoFactorAuthCode string) (*AuthTokenResponse, 
 		return nil, fmt.Errorf("failed to decode auth response: %w", err)
 	}
 
+	// Refresh token and expiry
 	c.authToken = &authResp
 	c.authConfig = &AuthConfig{
 		RT:  authResp.RefreshToken,
 		HID: c.hardwareID,
 	}
+	// Set token expiry (1 minute before actual expiry)
+	expiresIn := time.Duration(authResp.ExpiresIn-60) * time.Second
+	c.tokenExpiry = time.Now().Add(expiresIn)
 
 	c.RefreshToken = encodeAuthConfig(c.authConfig)
 	if c.onTokenRefresh != nil {
 		c.onTokenRefresh(c.RefreshToken)
 	}
+	
+	// Refresh the cached client
+	cacheMutex.Lock()
+	clientCache[c.cacheKey] = c
+	cacheMutex.Unlock()
 
 	return c.authToken, nil
 }
