@@ -237,7 +237,10 @@ func Dial(rawURL string) (*Client, error) {
 
 		case pion.PeerConnectionState:
 			switch msg {
+			case pion.PeerConnectionStateNew:
+				break
 			case pion.PeerConnectionStateConnecting:
+				break
 			case pion.PeerConnectionStateConnected:
 				connState.Done(nil)
 			default:
@@ -391,6 +394,8 @@ func (c *Client) startMessageLoop(connState *core.Waiter) {
 						c.Stop()
 						return
 					}
+
+					prod.SDP = msg.Body.SDP
 				}
 
 			case "ice":
