@@ -107,9 +107,8 @@ func(c *TuyaClient) StartMQTT() error {
 }
 
 func(c *TuyaClient) StopMQTT() {
-	c.sendDisconnect()
-
 	if c.mqtt.client != nil {
+		c.sendDisconnect()
 		c.mqtt.client.Disconnect(1000)
 	}
 }

@@ -20,6 +20,7 @@ type TuyaClient struct {
 	httpClient     	*http.Client
 	mqtt 			*TuyaMQTT
 	apiURL 			string
+	rtspURL 		string
 	sessionID 		string
 	clientID 		string
 	deviceID 		string
@@ -39,6 +40,17 @@ type Token struct {
 	AccessToken 	string `json:"access_token"`
 	RefreshToken 	string `json:"refresh_token"`
 	ExpireTime 		int64 `json:"expire_time"`
+}
+
+type RTSPRequest struct {
+	Type 			string `json:"type"`
+}
+
+type RTSPResponse struct {
+	Success 		bool `json:"success"`
+	Result  struct {
+		URL string `json:"url"`
+	} `json:"result"`
 }
 
 type AudioAttributes struct {
@@ -133,7 +145,7 @@ const (
 	defaultTimeout     = 5 * time.Second
 )
 
-func NewTuyaClient(openAPIURL string, deviceID string, uid string, clientID string, secret string) (*TuyaClient, error) {
+func NewTuyaClient(openAPIURL string, deviceID string, uid string, clientID string, secret string, useRTSP bool) (*TuyaClient, error) {
 	client := &TuyaClient{
 		httpClient:     &http.Client{Timeout: defaultTimeout},
 		mqtt:           &TuyaMQTT{waiter: core.Waiter{}},
@@ -149,12 +161,18 @@ func NewTuyaClient(openAPIURL string, deviceID string, uid string, clientID stri
 		return nil, fmt.Errorf("failed to initialize token: %w", err)
 	}
 
-	if err := client.InitDevice(); err != nil {
-		return nil, fmt.Errorf("failed to initialize device: %w", err)
-	}
+	if useRTSP {
+		if err := client.GetRTSP(); err != nil {
+			return nil, fmt.Errorf("failed to get RTSP URL: %w", err)
+		}
+	} else {
+		if err := client.InitDevice(); err != nil {
+			return nil, fmt.Errorf("failed to initialize device: %w", err)
+		}
 
-	if err := client.StartMQTT(); err != nil {
-		return nil, fmt.Errorf("failed to start MQTT: %w", err)
+		if err := client.StartMQTT(); err != nil {
+			return nil, fmt.Errorf("failed to start MQTT: %w", err)
+		}
 	}
 
 	return client, nil
@@ -324,6 +342,32 @@ func(c *TuyaClient) InitDevice() (err error) {
 	return nil
 }
 
+func(c *TuyaClient) GetRTSP() (err error) {
+	url := fmt.Sprintf("https://%s/v1.0/devices/%s/stream/actions/allocate", c.apiURL, c.deviceID)
+
+	request := &RTSPRequest{
+		Type: "rtsp",
+	}
+
+	body, err := c.Request("POST", url, request)
+	if err != nil {
+		return fmt.Errorf("failed to get rtsp url: %w", err)
+	}
+
+	var rtspResponse RTSPResponse
+	err = json.Unmarshal(body, &rtspResponse)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal rtsp response: %w", err)
+	}
+
+	if !rtspResponse.Success {
+		return fmt.Errorf("failed to get rtsp url: %s", string(body))
+	}
+
+	c.rtspURL = rtspResponse.Result.URL
+
+	return nil
+}
 
 func(c *TuyaClient) LoadHubConfig() (config *OpenIoTHubConfig, err error) {
 	url := fmt.Sprintf("https://%s/v2.0/open-iot-hub/access/config", c.apiURL)
@@ -335,12 +379,12 @@ func(c *TuyaClient) LoadHubConfig() (config *OpenIoTHubConfig, err error) {
 		Topics:   "ipc",
 	}
 
-	var openIoTHubConfigResponse OpenIoTHubConfigResponse
 	body, err := c.Request("POST", url, request)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get OpenIoTHub config: %w", err)
 	}
 
+	var openIoTHubConfigResponse OpenIoTHubConfigResponse
 	err = json.Unmarshal(body, &openIoTHubConfigResponse)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal OpenIoTHub config response: %w", err)

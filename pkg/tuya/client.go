@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strconv"
 
+	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	pion "github.com/pion/webrtc/v4"
@@ -27,7 +28,7 @@ const (
 	DefaultInURL = "openapi.tuyain.com"
 )
 
-func Dial(rawURL string) (*Client, error) {
+func Dial(rawURL string) (core.Producer, error) {
 	// Parse URL and validate basic params
 	u, err := url.Parse(rawURL)
 	if err != nil {
@@ -40,13 +41,14 @@ func Dial(rawURL string) (*Client, error) {
 	clientID := query.Get("client_id")
 	secret := query.Get("secret")
 	resolution := query.Get("resolution")
+	useRTSP := query.Get("use_rtsp") == "1"
 
 	if deviceID == "" || uid == "" || clientID == "" || secret == "" {
 		return nil, errors.New("tuya: wrong query")
 	}
 
 	// Initialize Tuya API client
-	tuyaAPI, err := NewTuyaClient(u.Hostname(), deviceID, uid, clientID, secret)
+	tuyaAPI, err := NewTuyaClient(u.Hostname(), deviceID, uid, clientID, secret, useRTSP)
 	if err != nil {
 		return nil, err
 	}
@@ -54,6 +56,14 @@ func Dial(rawURL string) (*Client, error) {
 	client := &Client{
 		api: tuyaAPI,
 		done: make(chan struct{}),
+	}
+
+	if useRTSP {
+		if client.api.rtspURL == "" {
+			return nil, errors.New("tuya: no rtsp url")
+		}
+
+		return streams.GetProducer(client.api.rtspURL)
 	}
 
 	conf := pion.Configuration{
