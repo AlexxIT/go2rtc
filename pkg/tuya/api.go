@@ -31,6 +31,7 @@ type TuyaClient struct {
 	motoID 			string
 	auth   			string
 	iceServers 		[]pionWebrtc.ICEServer
+	medias			[]*core.Media
 }
 
 type Token struct {
@@ -41,8 +42,8 @@ type Token struct {
 }
 
 type AudioAttributes struct {
-    CallMode          []int `json:"call_mode"`
-    HardwareCapability []int `json:"hardware_capability"`
+    CallMode          []int `json:"call_mode"` // 1 = one way, 2 = two way
+    HardwareCapability []int `json:"hardware_capability"` // 1 = mic, 2 = speaker
 }
 
 type OpenApiICE struct {
@@ -62,6 +63,24 @@ type P2PConfig struct {
     Ices []OpenApiICE `json:"ices"`
 }
 
+type Skill struct {
+	WebRTC int `json:"webrtc"`
+	Audios []struct {
+	Channels      	int 	`json:"channels"`
+	DataBit      	int 	`json:"dataBit"`
+	CodecType    	int 	`json:"codecType"`
+	SampleRate   	int 	`json:"sampleRate"`
+	} `json:"audios"`
+	Videos []struct {
+	StreamType   	int 	`json:"streamType"` // streamType = 2 => H265 and streamType = 4 => H264
+	ProfileId    	string 	`json:"profileId"`
+	Width        	int 	`json:"width"`
+	CodecType    	int 	`json:"codecType"`
+	SampleRate   	int 	`json:"sampleRate"`
+	Height       	int 	`json:"height"`
+	} `json:"videos"`
+}
+
 type WebRTConfig struct {
     AudioAttributes AudioAttributes `json:"audio_attributes"`
     Auth            string          `json:"auth"`
@@ -73,12 +92,12 @@ type WebRTConfig struct {
     VideoClaritiy   int             `json:"video_clarity"`
 }
 
-type TokenResponse struct {
-    Result Token `json:"result"`
-}
-
 type WebRTCConfigResponse struct {
 	Result WebRTConfig `json:"result"`
+}
+
+type TokenResponse struct {
+    Result Token `json:"result"`
 }
 
 type OpenIoTHubConfigRequest struct {
@@ -234,6 +253,63 @@ func(c *TuyaClient) InitDevice() (err error) {
 	c.motoID = webRTCConfigResponse.Result.MotoID
 	c.auth = webRTCConfigResponse.Result.Auth
 
+	var skill Skill
+    err = json.Unmarshal([]byte(webRTCConfigResponse.Result.Skill), &skill)
+    if err != nil {
+        return fmt.Errorf("failed to unmarshal skill: %w", err)
+    }
+
+	var audioDirection string
+	if contains(webRTCConfigResponse.Result.AudioAttributes.CallMode, 2) && contains(webRTCConfigResponse.Result.AudioAttributes.HardwareCapability, 1) {
+		audioDirection = core.DirectionSendRecv
+	} else {
+		audioDirection = core.DirectionRecvonly
+	}
+	
+	c.medias = make([]*core.Media, 0)
+	for _, audio := range skill.Audios {
+		media := &core.Media{
+			Kind:      core.KindAudio,
+			Direction: audioDirection,
+			Codecs: []*core.Codec{
+				{
+					Name: "PCMU",
+					ClockRate: uint32(audio.SampleRate),
+					Channels: uint8(audio.Channels),
+				},
+			},
+		}
+
+		c.medias = append(c.medias, media)
+	}
+
+	// take only the first video codec
+	video := skill.Videos[0]
+	
+	var name string
+	switch video.CodecType {
+	case 4:
+		name = core.CodecH265
+	case 2:
+		name = core.CodecH264
+	default:
+		name = core.CodecH264
+	}
+
+	media := &core.Media{
+		Kind:      core.KindVideo,
+		Direction: core.DirectionRecvonly,
+		Codecs: []*core.Codec{
+			{
+				Name: name,
+				ClockRate: uint32(video.SampleRate),
+				PayloadType: 96,
+			},
+		},
+	}
+	
+	c.medias = append(c.medias, media)
+
 	iceServersBytes, err := json.Marshal(&webRTCConfigResponse.Result.P2PConfig.Ices)
 	if err != nil {
 		return fmt.Errorf("failed to marshal ICE servers: %w", err)
@@ -282,4 +358,13 @@ func(c *TuyaClient) calBusinessSign(ts int64) string {
 	val := md5.Sum([]byte(data))
 	res := fmt.Sprintf("%X", val)
 	return res
+}
+
+func contains(slice []int, val int) bool {
+	for _, item := range slice {
+		if item == val {
+			return true
+		}
+	}
+	return false
 }

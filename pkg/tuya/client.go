@@ -58,8 +58,8 @@ func Dial(rawURL string) (*Client, error) {
 
 	conf := pion.Configuration{
 		ICEServers: 		client.api.iceServers,
-		// ICETransportPolicy: pion.ICETransportPolicyAll,
-		// BundlePolicy:       pion.BundlePolicyMaxBundle,
+		ICETransportPolicy: pion.ICETransportPolicyAll,
+		BundlePolicy:       pion.BundlePolicyMaxBundle,
 	}
 
 	api, err := webrtc.NewAPI()
@@ -99,14 +99,15 @@ func Dial(rawURL string) (*Client, error) {
 		}
 
 		if err = pc.SetRemoteDescription(desc); err != nil {
+			client.Stop()
 			return
 		}
-
-		prod.SetAnswer(answer.Sdp)
-		if err != nil {
+	
+		if err = prod.SetAnswer(answer.Sdp); err != nil {
 			client.Stop()
+			return
 		}
-
+		
 		prod.SDP = answer.Sdp
 	}
 
@@ -148,32 +149,8 @@ func Dial(rawURL string) (*Client, error) {
 		}
 	})
 
-	medias := []*core.Media{
-		{
-			Kind:      core.KindAudio,
-			Direction: core.DirectionSendRecv,
-			Codecs: []*core.Codec{
-				{
-					Name:      "PCMU",
-					ClockRate: 8000,
-					Channels:  1,
-				},
-			},
-		},
-		{
-			Kind:      core.KindVideo,
-			Direction: core.DirectionRecvonly,
-			Codecs: []*core.Codec{
-				{
-					Name:      "H264",
-					ClockRate: 90000,
-				},
-			},
-		},
-	}
-
 	// Create offer
-	offer, err := prod.CreateOffer(medias)
+	offer, err := prod.CreateOffer(client.api.medias)
 	if err != nil {
 		client.api.Close()
 		return nil, err
@@ -231,7 +208,6 @@ func (c *Client) Stop() error {
 
 	if c.api != nil {
 		c.api.Close()
-		c.api = nil
 	}
 
 	return nil
