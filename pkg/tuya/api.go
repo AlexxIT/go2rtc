@@ -398,7 +398,7 @@ func(c *TuyaClient) GetStreamUrl(streamType string) (err error) {
 		c.rtspURL = allosResponse.Result.URL
 		fmt.Printf("RTSP URL: %s\n", c.rtspURL)
 	case "hls":
-		c.hlsURL = "ffmpeg:" + allosResponse.Result.URL + "#video=copy"
+		c.hlsURL = allosResponse.Result.URL
 		fmt.Printf("HLS URL: %s\n", c.hlsURL)
 	default:
 		return fmt.Errorf("unsupported stream type: %s", streamType)
