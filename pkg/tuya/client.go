@@ -41,14 +41,15 @@ func Dial(rawURL string) (core.Producer, error) {
 	clientID := query.Get("client_id")
 	secret := query.Get("secret")
 	resolution := query.Get("resolution")
-	useRTSP := query.Get("use_rtsp") == "1"
+	useRTSP := query.Get("rtsp") == "1"
+	useHLS := query.Get("hls") == "1"
 
 	if deviceID == "" || uid == "" || clientID == "" || secret == "" {
 		return nil, errors.New("tuya: wrong query")
 	}
 
 	// Initialize Tuya API client
-	tuyaAPI, err := NewTuyaClient(u.Hostname(), deviceID, uid, clientID, secret, useRTSP)
+	tuyaAPI, err := NewTuyaClient(u.Hostname(), deviceID, uid, clientID, secret, useRTSP, useHLS)
 	if err != nil {
 		return nil, err
 	}
@@ -58,6 +59,7 @@ func Dial(rawURL string) (core.Producer, error) {
 		done: make(chan struct{}),
 	}
 
+	// RTSP
 	if useRTSP {
 		if client.api.rtspURL == "" {
 			return nil, errors.New("tuya: no rtsp url")
@@ -66,6 +68,15 @@ func Dial(rawURL string) (core.Producer, error) {
 		return streams.GetProducer(client.api.rtspURL)
 	}
 
+	// HLS
+	if useHLS {
+		if client.api.hlsURL == "" {
+			return nil, errors.New("tuya: no hls url")
+		}
+		return streams.GetProducer(client.api.hlsURL)
+	}
+
+	// Default to WebRTC
 	conf := pion.Configuration{
 		ICEServers: 		client.api.iceServers,
 		ICETransportPolicy: pion.ICETransportPolicyAll,

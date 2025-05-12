@@ -21,6 +21,7 @@ type TuyaClient struct {
 	mqtt 			*TuyaMQTT
 	apiURL 			string
 	rtspURL 		string
+	hlsURL 			string
 	sessionID 		string
 	clientID 		string
 	deviceID 		string
@@ -42,11 +43,11 @@ type Token struct {
 	ExpireTime 		int64 `json:"expire_time"`
 }
 
-type RTSPRequest struct {
+type AllocateRequest struct {
 	Type 			string `json:"type"`
 }
 
-type RTSPResponse struct {
+type AllocateResponse struct {
 	Success 		bool `json:"success"`
 	Result  struct {
 		URL string `json:"url"`
@@ -145,7 +146,7 @@ const (
 	defaultTimeout     = 5 * time.Second
 )
 
-func NewTuyaClient(openAPIURL string, deviceID string, uid string, clientID string, secret string, useRTSP bool) (*TuyaClient, error) {
+func NewTuyaClient(openAPIURL string, deviceID string, uid string, clientID string, secret string, useRTSP bool, useHLS bool) (*TuyaClient, error) {
 	client := &TuyaClient{
 		httpClient:     &http.Client{Timeout: defaultTimeout},
 		mqtt:           &TuyaMQTT{waiter: core.Waiter{}},
@@ -162,8 +163,12 @@ func NewTuyaClient(openAPIURL string, deviceID string, uid string, clientID stri
 	}
 
 	if useRTSP {
-		if err := client.GetRTSP(); err != nil {
+		if err := client.GetStreamUrl("rtsp"); err != nil {
 			return nil, fmt.Errorf("failed to get RTSP URL: %w", err)
+		}
+	} else if useHLS {
+		if err := client.GetStreamUrl("hls"); err != nil {
+			return nil, fmt.Errorf("failed to get HLS URL: %w", err)
 		}
 	} else {
 		if err := client.InitDevice(); err != nil {
@@ -285,48 +290,72 @@ func(c *TuyaClient) InitDevice() (err error) {
 	}
 	
 	c.medias = make([]*core.Media, 0)
-	for _, audio := range skill.Audios {
-		media := &core.Media{
+	if len(skill.Audios) > 0 {
+		for _, audio := range skill.Audios {
+			c.medias = append(c.medias, &core.Media{
+				Kind:      core.KindAudio,
+				Direction: audioDirection,
+				Codecs: []*core.Codec{
+					{
+						Name: "PCMU",
+						ClockRate: uint32(audio.SampleRate),
+						Channels: uint8(audio.Channels),
+					},
+				},
+			})
+		}
+	} else {
+		c.medias = append(c.medias, &core.Media{
 			Kind:      core.KindAudio,
-			Direction: audioDirection,
+			Direction: core.DirectionRecvonly,
 			Codecs: []*core.Codec{
 				{
 					Name: "PCMU",
-					ClockRate: uint32(audio.SampleRate),
-					Channels: uint8(audio.Channels),
+					ClockRate: uint32(8000),
+					Channels: uint8(1),
 				},
 			},
+		})
+	}
+
+	if len(skill.Videos) > 0 {
+		// take only the first video codec
+		video := skill.Videos[0]
+		
+		var name string
+		switch video.CodecType {
+		case 4:
+			name = core.CodecH265
+		case 2:
+			name = core.CodecH264
+		default:
+			name = core.CodecH264
 		}
-
-		c.medias = append(c.medias, media)
-	}
-
-	// take only the first video codec
-	video := skill.Videos[0]
-	
-	var name string
-	switch video.CodecType {
-	case 4:
-		name = core.CodecH265
-	case 2:
-		name = core.CodecH264
-	default:
-		name = core.CodecH264
-	}
-
-	media := &core.Media{
-		Kind:      core.KindVideo,
-		Direction: core.DirectionRecvonly,
-		Codecs: []*core.Codec{
-			{
-				Name: name,
-				ClockRate: uint32(video.SampleRate),
-				PayloadType: 96,
+		
+		c.medias = append(c.medias, &core.Media{
+			Kind:      core.KindVideo,
+			Direction: core.DirectionRecvonly,
+			Codecs: []*core.Codec{
+				{
+					Name: name,
+					ClockRate: uint32(video.SampleRate),
+					PayloadType: 96,
+				},
 			},
-		},
+		})
+	} else {
+		c.medias = append(c.medias, &core.Media{
+			Kind:      core.KindVideo,
+			Direction: core.DirectionRecvonly,
+			Codecs: []*core.Codec{
+				{
+					Name: core.CodecH264,
+					ClockRate: uint32(90000),
+					PayloadType: 96,
+				},
+			},
+		})
 	}
-	
-	c.medias = append(c.medias, media)
 
 	iceServersBytes, err := json.Marshal(&webRTCConfigResponse.Result.P2PConfig.Ices)
 	if err != nil {
@@ -342,11 +371,11 @@ func(c *TuyaClient) InitDevice() (err error) {
 	return nil
 }
 
-func(c *TuyaClient) GetRTSP() (err error) {
+func(c *TuyaClient) GetStreamUrl(streamType string) (err error) {
 	url := fmt.Sprintf("https://%s/v1.0/devices/%s/stream/actions/allocate", c.apiURL, c.deviceID)
 
-	request := &RTSPRequest{
-		Type: "rtsp",
+	request := &AllocateRequest{
+		Type: streamType,
 	}
 
 	body, err := c.Request("POST", url, request)
@@ -354,17 +383,26 @@ func(c *TuyaClient) GetRTSP() (err error) {
 		return fmt.Errorf("failed to get rtsp url: %w", err)
 	}
 
-	var rtspResponse RTSPResponse
-	err = json.Unmarshal(body, &rtspResponse)
+	var allosResponse AllocateResponse
+	err = json.Unmarshal(body, &allosResponse)
 	if err != nil {
-		return fmt.Errorf("failed to unmarshal rtsp response: %w", err)
+		return fmt.Errorf("failed to unmarshal stream response: %w", err)
 	}
 
-	if !rtspResponse.Success {
-		return fmt.Errorf("failed to get rtsp url: %s", string(body))
+	if !allosResponse.Success {
+		return fmt.Errorf("failed to get stream url: %s", string(body))
 	}
 
-	c.rtspURL = rtspResponse.Result.URL
+	switch streamType {
+	case "rtsp":
+		c.rtspURL = allosResponse.Result.URL
+		fmt.Printf("RTSP URL: %s\n", c.rtspURL)
+	case "hls":
+		c.hlsURL = "ffmpeg:" + allosResponse.Result.URL + "#video=copy"
+		fmt.Printf("HLS URL: %s\n", c.hlsURL)
+	default:
+		return fmt.Errorf("unsupported stream type: %s", streamType)
+	}
 
 	return nil
 }
