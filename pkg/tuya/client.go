@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"strconv"
+	"regexp"
 
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -14,9 +14,9 @@ import (
 )
 
 type Client struct {
-	api       	*TuyaClient
-	prod      	core.Producer
-	done      chan struct{}
+	api		*TuyaClient
+	prod	core.Producer
+	done	chan struct{}
 }
 
 const (
@@ -38,13 +38,13 @@ func Dial(rawURL string) (core.Producer, error) {
 	query := u.Query()
 	deviceID := query.Get("device_id")
 	uid := query.Get("uid")
-	clientID := query.Get("client_id")
-	secret := query.Get("secret")
-	resolution := query.Get("resolution")
+	clientId := query.Get("client_id")
+	clientSecret := query.Get("client_secret")
 	streamType := query.Get("type")
-	useRTSP := streamType == "rtsp"
-	useHLS := streamType == "hls"
-	useWebRTC := streamType == "webrtc" || streamType == ""
+	streamMode := query.Get("mode")
+	useRTSP := streamMode == "rtsp"
+	useHLS := streamMode == "hls"
+	useWebRTC := streamMode == "webrtc" || streamMode == ""
 
 	// check if host is correct
 	switch u.Hostname() {
@@ -58,8 +58,12 @@ func Dial(rawURL string) (core.Producer, error) {
 		return nil, fmt.Errorf("tuya: wrong host %s", u.Hostname())
 	}
 
-	if deviceID == "" || uid == "" || clientID == "" || secret == "" {
-		return nil, errors.New("tuya: wrong query")
+	if deviceID == "" || clientId == "" || clientSecret == "" {
+		return nil, errors.New("tuya: no device_id, client_id or client_secret")
+	}
+
+	if useWebRTC && uid == "" {
+		return nil, errors.New("tuya: no uid")
 	}
 
 	if !useRTSP && !useHLS && !useWebRTC {
@@ -67,7 +71,7 @@ func Dial(rawURL string) (core.Producer, error) {
 	}
 
 	// Initialize Tuya API client
-	tuyaAPI, err := NewTuyaClient(u.Hostname(), deviceID, uid, clientID, secret, streamType)
+	tuyaAPI, err := NewTuyaClient(u.Hostname(), deviceID, uid, clientId, clientSecret, streamType)
 	if err != nil {
 		return nil, err
 	}
@@ -157,7 +161,7 @@ func Dial(rawURL string) (core.Producer, error) {
 		}
 		
 		client.api.mqtt.handleError = func(err error) {
-			fmt.Printf("Tuya error: %s\n", err.Error())
+			// fmt.Printf("tuya: error: %s\n", err.Error())
 			client.Stop()
 		}
 
@@ -188,19 +192,16 @@ func Dial(rawURL string) (core.Producer, error) {
 			return nil, err
 		}
 
+		// horter sdp, remove a=extmap... line, device ONLY allow 8KB json payload
+		re := regexp.MustCompile(`\r\na=extmap[^\r\n]*`)
+		offer = re.ReplaceAllString(offer, "")
+
 		// Send offer
-		client.api.sendOffer(offer)
+		client.api.sendOffer(offer, tuyaAPI.getStreamType(streamType))
 		sendOffer.Done(nil)
 
 		if err = connState.Wait(); err != nil {
 			return nil, err
-		}
-
-		if resolution != "" {
-			value, err := strconv.Atoi(resolution)
-			if err == nil {
-				client.api.sendResolution(value)
-			}
 		}
 
 		return client, nil
@@ -216,11 +217,11 @@ func (c *Client) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver,
 }
 
 func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
-	if webrtcProd, ok := c.prod.(*webrtc.Conn); ok {
-		return webrtcProd.AddTrack(media, codec, track)
+	if prod, ok := c.prod.(*webrtc.Conn); ok {
+		return prod.AddTrack(media, codec, track)
 	}
 
-	return fmt.Errorf("add track not supported")
+	return nil
 }
 
 func (c *Client) Start() error {

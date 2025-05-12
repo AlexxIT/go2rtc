@@ -24,64 +24,64 @@ type TuyaMQTT struct {
 }
 
 type MqttFrameHeader struct {
-	Type 			string `json:"type"`
-	From 			string `json:"from"`
-	To 				string `json:"to"`
-	SubDevID		string `json:"sub_dev_id"`
-	SessionID 		string `json:"sessionid"`
-	MotoID 			string `json:"moto_id"`
-	TransactionID 	string `json:"tid"`
+	Type 			string	`json:"type"`
+	From 			string	`json:"from"`
+	To 				string	`json:"to"`
+	SubDevID		string	`json:"sub_dev_id"`
+	SessionID 		string	`json:"sessionid"`
+	MotoID 			string	`json:"moto_id"`
+	TransactionID 	string	`json:"tid"`
 }
 
 type MqttFrame struct {
-	Header  MqttFrameHeader `json:"header"`
-	Message json.RawMessage `json:"msg"`
+	Header	MqttFrameHeader	`json:"header"`
+	Message	json.RawMessage	`json:"msg"`
 }
 
 type OfferFrame struct {
-	Mode       string `json:"mode"`
-	Sdp        string `json:"sdp"`
-	StreamType uint32 `json:"stream_type"`
-	Auth       string `json:"auth"`
+	Mode		string	`json:"mode"`
+	Sdp			string	`json:"sdp"`
+	StreamType	uint32	`json:"stream_type"`
+	Auth		string	`json:"auth"`
 }
 
 type AnswerFrame struct {
-	Mode string `json:"mode"`
-	Sdp  string `json:"sdp"`
+	Mode	string	`json:"mode"`
+	Sdp 	string	`json:"sdp"`
 }
 
 type CandidateFrame struct {
-	Mode      string `json:"mode"`
-	Candidate string `json:"candidate"`
+	Mode		string	`json:"mode"`
+	Candidate	string	`json:"candidate"`
 }
 
 type ResolutionFrame struct {
-	Mode  string `json:"mode"`
-	Value int    `json:"value"`
+	Mode	string	`json:"mode"`
+	Value	int		`json:"value"`
 }
 
 type DisconnectFrame struct {
-	Mode string `json:"mode"`
+	Mode	string	`json:"mode"`
 }
 
 type MqttMessage struct {
-	Protocol int       `json:"protocol"` 
-	Pv       string    `json:"pv"`       
-	T        int64     `json:"t"`        
-	Data     MqttFrame `json:"data"`
+	Protocol	int			`json:"protocol"` 
+	Pv			string		`json:"pv"`       
+	T			int64		`json:"t"`        
+	Data		MqttFrame	`json:"data"`
 }
 
 func(c *TuyaClient) StartMQTT() error {
 	hubConfig, err := c.LoadHubConfig()
 	if err != nil {
-		return fmt.Errorf("failed to load hub config: %w", err)
+		return err
 	}
 
 	c.mqtt.publishTopic = hubConfig.SinkTopic.IPC
 	c.mqtt.subscribeTopic = hubConfig.SourceSink.IPC
 
-	c.mqtt.publishTopic = strings.Replace(c.mqtt.publishTopic, "moto_id", c.motoID, 1)
-	c.mqtt.publishTopic = strings.Replace(c.mqtt.publishTopic, "{device_id}", c.deviceID, 1)
+	c.mqtt.publishTopic = strings.Replace(c.mqtt.publishTopic, "moto_id", c.motoId, 1)
+	c.mqtt.publishTopic = strings.Replace(c.mqtt.publishTopic, "{device_id}", c.deviceId, 1)
 
 	parts := strings.Split(c.mqtt.subscribeTopic, "/")
 	c.mqtt.uid = parts[3]
@@ -96,7 +96,7 @@ func(c *TuyaClient) StartMQTT() error {
 	c.mqtt.client = mqtt.NewClient(opts)
 
 	if token := c.mqtt.client.Connect(); token.Wait() && token.Error() != nil {
-		return fmt.Errorf("failed to connect to MQTT broker: %w", token.Error())
+		return token.Error()
 	}
 
 	if err := c.mqtt.waiter.Wait(); err != nil {
@@ -129,7 +129,7 @@ func(c *TuyaClient) consume(client mqtt.Client, msg mqtt.Message) {
 		return
 	}
 
-	if rmqtt.Data.Header.SessionID != c.sessionID {
+	if rmqtt.Data.Header.SessionID != c.sessionId {
 		return
 	}
 
@@ -202,11 +202,11 @@ func(c *TuyaMQTT) onError(err error) {
 	}
 }
 
-func (c *TuyaClient) sendOffer(sdp string) {
+func (c *TuyaClient) sendOffer(sdp string, streamType uint32) {
 	c.sendMqttMessage("offer", 302, "", OfferFrame{
 		Mode:       "webrtc",
 		Sdp:        sdp,
-		StreamType: 1,
+		StreamType: streamType,
 		Auth:       c.auth,
 	})
 }
@@ -251,9 +251,9 @@ func (c *TuyaClient) sendMqttMessage(messageType string, protocol int, transacti
 			Header: MqttFrameHeader{
 				Type:          messageType,
 				From:          c.mqtt.uid,
-				To:            c.deviceID,
-				SessionID:     c.sessionID,
-				MotoID:        c.motoID,
+				To:            c.deviceId,
+				SessionID:     c.sessionId,
+				MotoID:        c.motoId,
 				TransactionID: transactionID,
 			},
 			Message: jsonMessage,
