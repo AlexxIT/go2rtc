@@ -329,7 +329,7 @@ streams:
 
 You can get any stream or file or device via FFmpeg and push it to go2rtc. The app will automatically start FFmpeg with the proper arguments when someone starts watching the stream.
 
-- FFmpeg preistalled for **Docker** and **Home Assistant Add-on** users
+- FFmpeg preinstalled for **Docker** and **Home Assistant Add-on** users
 - **Home Assistant Add-on** users can target files from [/media](https://www.home-assistant.io/more-info/local-media/setup-media/) folder
 
 Format: `ffmpeg:{input}#{param1}#{param2}#{param3}`. Examples:
