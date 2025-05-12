@@ -11,67 +11,67 @@ import (
 )
 
 type TuyaMQTT struct {
-	client 				mqtt.Client
-	waiter 				core.Waiter
-	publishTopic    	string
-	subscribeTopic  	string
-	uid					string
-	closed 				bool
-	handleAnswer  		func(answer AnswerFrame)
-	handleCandidate 	func(candidate CandidateFrame)
-	handleDisconnect 	func()
-	handleError			func(err error)
+	client           mqtt.Client
+	waiter           core.Waiter
+	publishTopic     string
+	subscribeTopic   string
+	uid              string
+	closed           bool
+	handleAnswer     func(answer AnswerFrame)
+	handleCandidate  func(candidate CandidateFrame)
+	handleDisconnect func()
+	handleError      func(err error)
 }
 
 type MqttFrameHeader struct {
-	Type 			string	`json:"type"`
-	From 			string	`json:"from"`
-	To 				string	`json:"to"`
-	SubDevID		string	`json:"sub_dev_id"`
-	SessionID 		string	`json:"sessionid"`
-	MotoID 			string	`json:"moto_id"`
-	TransactionID 	string	`json:"tid"`
+	Type          string `json:"type"`
+	From          string `json:"from"`
+	To            string `json:"to"`
+	SubDevID      string `json:"sub_dev_id"`
+	SessionID     string `json:"sessionid"`
+	MotoID        string `json:"moto_id"`
+	TransactionID string `json:"tid"`
 }
 
 type MqttFrame struct {
-	Header	MqttFrameHeader	`json:"header"`
-	Message	json.RawMessage	`json:"msg"`
+	Header  MqttFrameHeader `json:"header"`
+	Message json.RawMessage `json:"msg"`
 }
 
 type OfferFrame struct {
-	Mode		string	`json:"mode"`
-	Sdp			string	`json:"sdp"`
-	StreamType	uint32	`json:"stream_type"`
-	Auth		string	`json:"auth"`
+	Mode       string `json:"mode"`
+	Sdp        string `json:"sdp"`
+	StreamType uint32 `json:"stream_type"`
+	Auth       string `json:"auth"`
 }
 
 type AnswerFrame struct {
-	Mode	string	`json:"mode"`
-	Sdp 	string	`json:"sdp"`
+	Mode string `json:"mode"`
+	Sdp  string `json:"sdp"`
 }
 
 type CandidateFrame struct {
-	Mode		string	`json:"mode"`
-	Candidate	string	`json:"candidate"`
+	Mode      string `json:"mode"`
+	Candidate string `json:"candidate"`
 }
 
 type ResolutionFrame struct {
-	Mode	string	`json:"mode"`
-	Value	int		`json:"value"`
+	Mode  string `json:"mode"`
+	Value int    `json:"value"`
 }
 
 type DisconnectFrame struct {
-	Mode	string	`json:"mode"`
+	Mode string `json:"mode"`
 }
 
 type MqttMessage struct {
-	Protocol	int			`json:"protocol"` 
-	Pv			string		`json:"pv"`       
-	T			int64		`json:"t"`        
-	Data		MqttFrame	`json:"data"`
+	Protocol int       `json:"protocol"`
+	Pv       string    `json:"pv"`
+	T        int64     `json:"t"`
+	Data     MqttFrame `json:"data"`
 }
 
-func(c *TuyaClient) StartMQTT() error {
+func (c *TuyaClient) StartMQTT() error {
 	hubConfig, err := c.LoadHubConfig()
 	if err != nil {
 		return err
@@ -106,14 +106,14 @@ func(c *TuyaClient) StartMQTT() error {
 	return nil
 }
 
-func(c *TuyaClient) StopMQTT() {
+func (c *TuyaClient) StopMQTT() {
 	if c.mqtt.client != nil {
 		c.sendDisconnect()
 		c.mqtt.client.Disconnect(1000)
 	}
 }
 
-func(c *TuyaClient) onConnect(client mqtt.Client) {
+func (c *TuyaClient) onConnect(client mqtt.Client) {
 	if token := client.Subscribe(c.mqtt.subscribeTopic, 1, c.consume); token.Wait() && token.Error() != nil {
 		c.mqtt.waiter.Done(token.Error())
 		return
@@ -122,7 +122,7 @@ func(c *TuyaClient) onConnect(client mqtt.Client) {
 	c.mqtt.waiter.Done(nil)
 }
 
-func(c *TuyaClient) consume(client mqtt.Client, msg mqtt.Message) {
+func (c *TuyaClient) consume(client mqtt.Client, msg mqtt.Message) {
 	var rmqtt MqttMessage
 	if err := json.Unmarshal(msg.Payload(), &rmqtt); err != nil {
 		c.mqtt.onError(fmt.Errorf("unmarshal mqtt message fail: %s, payload: %s", err.Error(), string(msg.Payload())))
@@ -143,7 +143,7 @@ func(c *TuyaClient) consume(client mqtt.Client, msg mqtt.Message) {
 	}
 }
 
-func(c *TuyaMQTT) onMqttAnswer(msg *MqttMessage) {
+func (c *TuyaMQTT) onMqttAnswer(msg *MqttMessage) {
 	var answerFrame AnswerFrame
 	if err := json.Unmarshal(msg.Data.Message, &answerFrame); err != nil {
 		c.onError(fmt.Errorf("unmarshal mqtt answer frame fail: %s, session: %s, frame: %s",
@@ -152,11 +152,11 @@ func(c *TuyaMQTT) onMqttAnswer(msg *MqttMessage) {
 			string(msg.Data.Message)))
 		return
 	}
-	
+
 	c.onAnswer(answerFrame)
 }
 
-func(c *TuyaMQTT) onMqttCandidate(msg *MqttMessage) {
+func (c *TuyaMQTT) onMqttCandidate(msg *MqttMessage) {
 	var candidateFrame CandidateFrame
 	if err := json.Unmarshal(msg.Data.Message, &candidateFrame); err != nil {
 		c.onError(fmt.Errorf("unmarshal mqtt candidate frame fail: %s, session: %s, frame: %s",
@@ -173,30 +173,30 @@ func(c *TuyaMQTT) onMqttCandidate(msg *MqttMessage) {
 	c.onCandidate(candidateFrame)
 }
 
-func(c *TuyaMQTT) onMqttDisconnect() {
+func (c *TuyaMQTT) onMqttDisconnect() {
 	c.closed = true
 	c.onDisconnect()
 }
 
-func(c *TuyaMQTT) onAnswer(answer AnswerFrame) {
+func (c *TuyaMQTT) onAnswer(answer AnswerFrame) {
 	if c.handleAnswer != nil {
 		c.handleAnswer(answer)
 	}
 }
 
-func(c *TuyaMQTT) onCandidate(candidate CandidateFrame) {
+func (c *TuyaMQTT) onCandidate(candidate CandidateFrame) {
 	if c.handleCandidate != nil {
 		c.handleCandidate(candidate)
 	}
 }
 
-func(c *TuyaMQTT) onDisconnect() {
+func (c *TuyaMQTT) onDisconnect() {
 	if c.handleDisconnect != nil {
 		c.handleDisconnect()
 	}
 }
 
-func(c *TuyaMQTT) onError(err error) {
+func (c *TuyaMQTT) onError(err error) {
 	if c.handleError != nil {
 		c.handleError(err)
 	}
@@ -220,12 +220,12 @@ func (c *TuyaClient) sendCandidate(candidate string) {
 
 func (c *TuyaClient) sendResolution(resolution int) {
 	c.sendMqttMessage("resolution", 302, "", ResolutionFrame{
-		Mode:      "webrtc",
-		Value: 		resolution,
+		Mode:  "webrtc",
+		Value: resolution,
 	})
 }
 
-func(c *TuyaClient) sendDisconnect() {
+func (c *TuyaClient) sendDisconnect() {
 	c.sendMqttMessage("disconnect", 302, "", DisconnectFrame{
 		Mode: "webrtc",
 	})

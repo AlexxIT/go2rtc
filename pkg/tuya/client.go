@@ -14,18 +14,18 @@ import (
 )
 
 type Client struct {
-	api		*TuyaClient
-	prod	core.Producer
-	done	chan struct{}
+	api  *TuyaClient
+	prod core.Producer
+	done chan struct{}
 }
 
 const (
-	DefaultCnURL = "openapi.tuyacn.com"
-	DefaultWestUsURL = "openapi.tuyaus.com"
-	DefaultEastUsURL = "openapi-ueaz.tuyaus.com"
+	DefaultCnURL        = "openapi.tuyacn.com"
+	DefaultWestUsURL    = "openapi.tuyaus.com"
+	DefaultEastUsURL    = "openapi-ueaz.tuyaus.com"
 	DefaultCentralEuURL = "openapi.tuyaeu.com"
-	DefaultWestEuURL = "openapi-weaz.tuyaeu.com"
-	DefaultInURL = "openapi.tuyain.com"
+	DefaultWestEuURL    = "openapi-weaz.tuyaeu.com"
+	DefaultInURL        = "openapi.tuyain.com"
 )
 
 func Dial(rawURL string) (core.Producer, error) {
@@ -77,7 +77,7 @@ func Dial(rawURL string) (core.Producer, error) {
 	}
 
 	client := &Client{
-		api: tuyaAPI,
+		api:  tuyaAPI,
 		done: make(chan struct{}),
 	}
 
@@ -93,7 +93,7 @@ func Dial(rawURL string) (core.Producer, error) {
 		return streams.GetProducer(client.api.hlsURL)
 	} else {
 		conf := pion.Configuration{
-			ICEServers: 		client.api.iceServers,
+			ICEServers:         client.api.iceServers,
 			ICETransportPolicy: pion.ICETransportPolicyAll,
 			BundlePolicy:       pion.BundlePolicyMaxBundle,
 		}
@@ -138,12 +138,12 @@ func Dial(rawURL string) (core.Producer, error) {
 				client.Stop()
 				return
 			}
-		
+
 			if err = prod.SetAnswer(answer.Sdp); err != nil {
 				client.Stop()
 				return
 			}
-			
+
 			prod.SDP = answer.Sdp
 		}
 
@@ -159,7 +159,7 @@ func Dial(rawURL string) (core.Producer, error) {
 		client.api.mqtt.handleDisconnect = func() {
 			client.Stop()
 		}
-		
+
 		client.api.mqtt.handleError = func(err error) {
 			// fmt.Printf("tuya: error: %s\n", err.Error())
 			client.Stop()

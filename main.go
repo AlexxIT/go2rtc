@@ -89,7 +89,7 @@ func main() {
 	roborock.Init() // roborock source
 	homekit.Init()  // homekit source
 	ring.Init()     // ring source
-	tuya.Init()		// tuya source
+	tuya.Init()     // tuya source
 	nest.Init()     // nest source
 	bubble.Init()   // bubble source
 	expr.Init()     // expr source
