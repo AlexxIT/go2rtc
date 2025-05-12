@@ -67,7 +67,7 @@ func Dial(rawURL string) (core.Producer, error) {
 	}
 
 	// Initialize Tuya API client
-	tuyaAPI, err := NewTuyaClient(u.Hostname(), deviceID, uid, clientID, secret, useRTSP, useHLS)
+	tuyaAPI, err := NewTuyaClient(u.Hostname(), deviceID, uid, clientID, secret, streamType)
 	if err != nil {
 		return nil, err
 	}

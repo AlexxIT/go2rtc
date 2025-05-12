@@ -146,7 +146,7 @@ const (
 	defaultTimeout     = 5 * time.Second
 )
 
-func NewTuyaClient(openAPIURL string, deviceID string, uid string, clientID string, secret string, useRTSP bool, useHLS bool) (*TuyaClient, error) {
+func NewTuyaClient(openAPIURL string, deviceID string, uid string, clientID string, secret string, streamType string) (*TuyaClient, error) {
 	client := &TuyaClient{
 		httpClient:     &http.Client{Timeout: defaultTimeout},
 		mqtt:           &TuyaMQTT{waiter: core.Waiter{}},
@@ -162,11 +162,11 @@ func NewTuyaClient(openAPIURL string, deviceID string, uid string, clientID stri
 		return nil, fmt.Errorf("failed to initialize token: %w", err)
 	}
 
-	if useRTSP {
+	if streamType == "rtsp" {
 		if err := client.GetStreamUrl("rtsp"); err != nil {
 			return nil, fmt.Errorf("failed to get RTSP URL: %w", err)
 		}
-	} else if useHLS {
+	} else if streamType == "hls" {
 		if err := client.GetStreamUrl("hls"); err != nil {
 			return nil, fmt.Errorf("failed to get HLS URL: %w", err)
 		}
