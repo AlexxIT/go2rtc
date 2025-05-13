@@ -209,10 +209,17 @@ func (c *TuyaMQTT) onError(err error) {
 }
 
 func (c *TuyaClient) sendOffer(sdp string, streamType int) {
+	// Note:
 	// H265 is currently not supported because Tuya does not send H265 data, and therefore also no audio over the normal WebRTC connection.
 	// The WebRTC connection is used only for sending audio back to the device (backchannel).
 	// Tuya expects a separate WebRTC DataChannel for H265 data and sends the H265 video and audio data packaged as fMP4 data back.
 	// These must then be processed separately (WIP - Work In Progress)
+
+	// Note 2:
+	// Even if we don't receive any data, the peer connection is correctly established and connected
+
+	// Note 3:
+	// It seems that if even one stream is HEVC, we also need to use the datachannel for the substream, even if that substream is using H264.
 
 	// Example Answer (H265/PCMU with backchannel):
 
