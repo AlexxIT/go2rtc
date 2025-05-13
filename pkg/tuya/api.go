@@ -319,15 +319,8 @@ func (c *TuyaClient) InitDevice() (err error) {
 		_ = json.Unmarshal([]byte(webRTCConfigResponse.Result.Skill), c.skill)
 	}
 
-	var audioDirection string
-	if contains(webRTCConfigResponse.Result.AudioAttributes.CallMode, 2) &&
-		contains(webRTCConfigResponse.Result.AudioAttributes.HardwareCapability, 1) {
-		audioDirection = core.DirectionSendRecv
-		c.hasBackchannel = true
-	} else {
-		audioDirection = core.DirectionRecvonly
-		c.hasBackchannel = false
-	}
+	c.hasBackchannel = contains(webRTCConfigResponse.Result.AudioAttributes.CallMode, 2) &&
+		contains(webRTCConfigResponse.Result.AudioAttributes.HardwareCapability, 1)
 
 	c.medias = make([]*core.Media, 0)
 
@@ -335,9 +328,14 @@ func (c *TuyaClient) InitDevice() (err error) {
 		// Use the first Audio-Codec
 		audio := c.skill.Audios[0]
 
+		direction := core.DirectionRecvonly
+		if c.hasBackchannel {
+			direction = core.DirectionSendRecv
+		}
+
 		c.medias = append(c.medias, &core.Media{
 			Kind:      core.KindAudio,
-			Direction: audioDirection,
+			Direction: direction,
 			Codecs: []*core.Codec{
 				{
 					Name:      "PCMU",
@@ -471,7 +469,6 @@ func (c *TuyaClient) LoadHubConfig() (config *OpenIoTHubConfig, err error) {
 	return &openIoTHubConfigResponse.Result, nil
 }
 
-// Search the streamType based on the selection "main" or "sub"
 func (c *TuyaClient) getStreamType(streamChoice string) uint32 {
 	// Default streamType if nothing is found
 	defaultStreamType := uint32(1)
