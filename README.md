@@ -64,6 +64,7 @@ Ultimate camera streaming application with support for RTSP, WebRTC, HomeKit, FF
     * [Source: DVRIP](#source-dvrip)
     * [Source: Tapo](#source-tapo)
     * [Source: Kasa](#source-kasa)
+    * [Source: Tuya](#source-tuya)
     * [Source: GoPro](#source-gopro)
     * [Source: Ivideon](#source-ivideon)
     * [Source: Hass](#source-hass)
@@ -564,6 +565,41 @@ streams:
 ```
 
 Tested: KD110, KC200, KC401, KC420WS, EC71.
+
+#### Source: Tuya
+
+[Tuya](https://www.tuya.com/) proprietary camera protocol with **two way audio** support.
+
+- Obtain `client_id`, `client_secret`, `uid` and `device_id` from [Tuya IoT Platform](https://iot.tuya.com/)
+- Use `mode` parameter to select the stream type:
+  - `webrtc` - WebRTC stream (default)
+  - `rtsp` - RTSP stream _(if available)_
+  - `hls` - HLS stream _(if available)_
+- Use `type` parameter to select the stream type: _(if available)_
+  - `main` - Main stream (default)
+  - `sub` - Sub stream
+
+```yaml
+streams:
+  # Tuya WebRTC stream
+  tuya_webrtc: tuya://openapi.tuyaus.com?device_id=XXX&uid=XXX&client_id=XXX&client_secret=XXX
+
+  # Tuya WebRTC stream (same as above)
+  tuya_webrtc_2: tuya://openapi.tuyaus.com?device_id=XXX&uid=XXX&client_id=XXX&client_secret=XXX&mode=webrtc
+  
+  # Tuya WebRTC stream (HD)
+  tuya_webrtc_hd: tuya://openapi.tuyaus.com?device_id=XXX&uid=XXX&client_id=XXX&client_secret=XXX&type=main
+  
+  # Tuya WebRTC stream (SD)
+  tuya_webrtc_sd: tuya://openapi.tuyaus.com?device_id=XXX&uid=XXX&client_id=XXX&client_secret=XXX&type=sub
+  
+  # Using RTSP when available (no "uid" required)
+  tuya_rtsp: tuya://openapi.tuyaus.com?device_id=XXX&client_id=XXX&client_secret=XXX&mode=rtsp
+  
+  # Using HLS when available (no "uid" required)
+  tuya_hls: tuya://openapi.tuyaus.com?device_id=XXX&client_id=XXX&client_secret=XXX&mode=hls
+```
+
 
 #### Source: GoPro
 
