@@ -76,10 +76,10 @@ type Skill struct {
 		SampleRate int `json:"sampleRate"`
 	} `json:"audios"`
 	Videos []struct {
-		StreamType int    `json:"streamType"` // streamType = 2 => main stream - streamType = 4 => sub stream
+		StreamType int    `json:"streamType"` // 2 = main stream, 4 = sub stream
 		ProfileId  string `json:"profileId"`
 		Width      int    `json:"width"`
-		CodecType  int    `json:"codecType"`
+		CodecType  int    `json:"codecType"` // 2 = H264, 4 = H265
 		SampleRate int    `json:"sampleRate"`
 		Height     int    `json:"height"`
 	} `json:"videos"`
@@ -325,24 +325,24 @@ func (c *TuyaClient) InitDevice() (err error) {
 	c.medias = make([]*core.Media, 0)
 
 	if len(c.skill.Audios) > 0 {
-		// Use the first Audio-Codec
-		audio := c.skill.Audios[0]
-
 		direction := core.DirectionRecvonly
 		if c.hasBackchannel {
 			direction = core.DirectionSendRecv
 		}
 
+		codecs := make([]*core.Codec, 0)
+		for _, audio := range c.skill.Audios {
+			codecs = append(codecs, &core.Codec{
+				Name:      getAudioCodec(audio.CodecType),
+				ClockRate: uint32(audio.SampleRate),
+				Channels:  uint8(audio.Channels),
+			})
+		}
+
 		c.medias = append(c.medias, &core.Media{
 			Kind:      core.KindAudio,
 			Direction: direction,
-			Codecs: []*core.Codec{
-				{
-					Name:      "PCMU",
-					ClockRate: uint32(audio.SampleRate),
-					Channels:  uint8(audio.Channels),
-				},
-			},
+			Codecs:    codecs,
 		})
 	} else {
 		// Use default values for Audio
@@ -351,7 +351,7 @@ func (c *TuyaClient) InitDevice() (err error) {
 			Direction: core.DirectionRecvonly,
 			Codecs: []*core.Codec{
 				{
-					Name:      "PCMU",
+					Name:      core.CodecPCMU,
 					ClockRate: uint32(8000),
 					Channels:  uint8(1),
 				},
@@ -360,24 +360,27 @@ func (c *TuyaClient) InitDevice() (err error) {
 	}
 
 	if len(c.skill.Videos) > 0 {
-		// Use the first Video-Codec
-		video := c.skill.Videos[0]
+		codecs := make([]*core.Codec, 0)
+		for _, video := range c.skill.Videos {
+			if video.CodecType == 2 {
+				codecs = append(codecs, &core.Codec{
+					Name:        core.CodecH264,
+					ClockRate:   uint32(video.SampleRate),
+					PayloadType: 96,
+				})
+			} else if video.CodecType == 4 {
+				codecs = append(codecs, &core.Codec{
+					Name:        core.CodecH265,
+					ClockRate:   uint32(video.SampleRate),
+					PayloadType: 96,
+				})
+			}
+		}
 
 		c.medias = append(c.medias, &core.Media{
 			Kind:      core.KindVideo,
 			Direction: core.DirectionRecvonly,
-			Codecs: []*core.Codec{
-				{
-					Name:        core.CodecH265,
-					ClockRate:   uint32(video.SampleRate),
-					PayloadType: 96,
-				},
-				{
-					Name:        core.CodecH264,
-					ClockRate:   uint32(video.SampleRate),
-					PayloadType: 96,
-				},
-			},
+			Codecs:    codecs,
 		})
 	} else {
 		// Use default values for Video
@@ -469,19 +472,19 @@ func (c *TuyaClient) LoadHubConfig() (config *OpenIoTHubConfig, err error) {
 	return &openIoTHubConfigResponse.Result, nil
 }
 
-func (c *TuyaClient) getStreamType(streamChoice string) uint32 {
+func (c *TuyaClient) getStreamType(streamChoice string) int {
 	// Default streamType if nothing is found
-	defaultStreamType := uint32(1)
+	defaultStreamType := 1
 
 	if c.skill == nil || len(c.skill.Videos) == 0 {
 		return defaultStreamType
 	}
 
 	// Find the highest and lowest resolution
-	var highestResType uint32 = defaultStreamType
-	var highestRes int = 0
-	var lowestResType uint32 = defaultStreamType
-	var lowestRes int = 0
+	var highestResType = defaultStreamType
+	var highestRes = 0
+	var lowestResType = defaultStreamType
+	var lowestRes = 0
 
 	for _, video := range c.skill.Videos {
 		res := video.Width * video.Height
@@ -489,13 +492,13 @@ func (c *TuyaClient) getStreamType(streamChoice string) uint32 {
 		// Highest Resolution
 		if res > highestRes {
 			highestRes = res
-			highestResType = uint32(video.StreamType)
+			highestResType = video.StreamType
 		}
 
 		// Lower Resolution (or first if not set yet)
 		if lowestRes == 0 || res < lowestRes {
 			lowestRes = res
-			lowestResType = uint32(video.StreamType)
+			lowestResType = video.StreamType
 		}
 	}
 
@@ -507,6 +510,29 @@ func (c *TuyaClient) getStreamType(streamChoice string) uint32 {
 		return lowestResType
 	default:
 		return defaultStreamType
+	}
+}
+
+func getAudioCodec(codecType int) string {
+	switch codecType {
+	// case 100:
+	// 	return "ADPCM"
+	case 101:
+		return core.CodecPCM
+	case 102, 103, 104:
+		return core.CodecAAC
+	case 105:
+		return core.CodecPCMU
+	case 106:
+		return core.CodecPCMA
+	// case 107:
+	// 	return "G726-32"
+	// case 108:
+	// 	return "SPEEX"
+	case 109:
+		return core.CodecMP3
+	default:
+		return core.CodecPCMU
 	}
 }
 

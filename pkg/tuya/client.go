@@ -95,7 +95,7 @@ func Dial(rawURL string) (core.Producer, error) {
 		conf := pion.Configuration{
 			ICEServers:         client.api.iceServers,
 			ICETransportPolicy: pion.ICETransportPolicyAll,
-			BundlePolicy:       pion.BundlePolicyBalanced,
+			BundlePolicy:       pion.BundlePolicyMaxBundle,
 		}
 
 		api, err := webrtc.NewAPI()
@@ -148,6 +148,8 @@ func Dial(rawURL string) (core.Producer, error) {
 		}
 
 		client.api.mqtt.handleCandidate = func(candidate CandidateFrame) {
+			// fmt.Printf("tuya: candidate: %s\n", candidate.Candidate)
+
 			if candidate.Candidate != "" {
 				client.conn.AddCandidate(candidate.Candidate)
 				if err != nil {

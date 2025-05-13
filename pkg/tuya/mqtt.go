@@ -39,10 +39,11 @@ type MqttFrame struct {
 }
 
 type OfferFrame struct {
-	Mode       string `json:"mode"`
-	Sdp        string `json:"sdp"`
-	StreamType uint32 `json:"stream_type"`
-	Auth       string `json:"auth"`
+	Mode              string `json:"mode"`
+	Sdp               string `json:"sdp"`
+	StreamType        int    `json:"stream_type"`
+	Auth              string `json:"auth"`
+	DatachannelEnable bool   `json:"datachannel_enable"`
 }
 
 type AnswerFrame struct {
@@ -57,7 +58,12 @@ type CandidateFrame struct {
 
 type ResolutionFrame struct {
 	Mode  string `json:"mode"`
-	Value int    `json:"value"`
+	Value int    `json:"value"` // 0: HD, 1: SD
+}
+
+type SpeakerFrame struct {
+	Mode  string `json:"mode"`
+	Value int    `json:"value"` // 0: off, 1: on
 }
 
 type DisconnectFrame struct {
@@ -202,12 +208,61 @@ func (c *TuyaMQTT) onError(err error) {
 	}
 }
 
-func (c *TuyaClient) sendOffer(sdp string, streamType uint32) {
+func (c *TuyaClient) sendOffer(sdp string, streamType int) {
+	// H265 is currently not supported because Tuya does not send H265 data, and therefore also no audio over the normal WebRTC connection.
+	// The WebRTC connection is used only for sending audio back to the device (backchannel).
+	// Tuya expects a separate WebRTC DataChannel for H265 data and sends the H265 video and audio data packaged as fMP4 data back.
+	// These must then be processed separately (WIP - Work In Progress)
+
+	// Example Answer (H265/PCMU with backchannel):
+
+	/*
+	   v=0
+	   o=- 1747174385 1 IN IP4 127.0.0.1
+	   s=-
+	   t=0 0
+	   a=group:BUNDLE 0 1
+	   a=msid-semantic: WMS UMSklk
+	   m=audio 9 UDP/TLS/RTP/SAVPF 0
+	   c=IN IP4 0.0.0.0
+	   a=rtcp:9 IN IP4 0.0.0.0
+	   a=ice-ufrag:zuRr
+	   a=ice-pwd:EDeWXz847P810fyDyKxbmTdX
+	   a=ice-options:trickle
+	   a=fingerprint:sha-256 02:f5:44:8e:c6:5d:5c:59:49:50:a3:84:d5:e5:b9:35:bb:51:5a:0c:4d:a5:60:89:0f:e6:cb:0e:57:21:a0:14
+	   a=setup:active
+	   a=mid:0
+	   a=sendrecv
+	   a=msid:UMSklk NiNNboEn1rJWoQYtpguoKr1GBwpvPST
+	   a=rtcp-mux
+	   a=rtpmap:0 PCMU/8000
+	   a=ssrc:832759612 cname:bfa87264438073154dhdek
+	   m=video 9 UDP/TLS/RTP/SAVPF 0
+	   c=IN IP4 0.0.0.0
+	   a=rtcp:9 IN IP4 0.0.0.0
+	   a=ice-ufrag:zuRr
+	   a=ice-pwd:EDeWXz847P810fyDyKxbmTdX
+	   a=ice-options:trickle
+	   a=fingerprint:sha-256 02:f5:44:8e:c6:5d:5c:59:49:50:a3:84:d5:e5:b9:35:bb:51:5a:0c:4d:a5:60:89:0f:e6:cb:0e:57:21:a0:14
+	   a=setup:active
+	   a=mid:1
+	   a=sendonly
+	   a=msid:UMSklk l9o6icIVb7n7vDdp0KhocYnsijhd774
+	   a=rtcp-mux
+	   a=rtpmap:0 /0
+	   a=rtcp-fb:0 ccm fir
+	   a=rtcp-fb:0 nack
+	   a=rtcp-fb:0 nack pli
+	   a=fmtp:0 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=
+	   a=ssrc:0 cname:bfa87264438073154dhdek
+	*/
+
 	c.sendMqttMessage("offer", 302, "", OfferFrame{
-		Mode:       "webrtc",
-		Sdp:        sdp,
-		StreamType: streamType,
-		Auth:       c.auth,
+		Mode:              "webrtc",
+		Sdp:               sdp,
+		StreamType:        streamType,
+		Auth:              c.auth,
+		DatachannelEnable: c.isHEVC(streamType),
 	})
 }
 
@@ -219,9 +274,20 @@ func (c *TuyaClient) sendCandidate(candidate string) {
 }
 
 func (c *TuyaClient) sendResolution(resolution int) {
+	if !c.isClaritySupported(resolution) {
+		return
+	}
+
 	c.sendMqttMessage("resolution", 302, "", ResolutionFrame{
 		Mode:  "webrtc",
 		Value: resolution,
+	})
+}
+
+func (c *TuyaClient) sendSpeaker(speaker int) {
+	c.sendMqttMessage("speaker", 302, "", SpeakerFrame{
+		Mode:  "webrtc",
+		Value: speaker,
 	})
 }
 
@@ -270,4 +336,18 @@ func (c *TuyaClient) sendMqttMessage(messageType string, protocol int, transacti
 	if token.Wait() && token.Error() != nil {
 		c.mqtt.onError(fmt.Errorf("mqtt publish fail: %s, topic: %s", token.Error().Error(), c.mqtt.publishTopic))
 	}
+}
+
+func (c *TuyaClient) isHEVC(streamType int) bool {
+	for _, video := range c.skill.Videos {
+		if video.StreamType == streamType {
+			return video.CodecType == 4
+		}
+	}
+
+	return false
+}
+
+func (c *TuyaClient) isClaritySupported(webrtcValue int) bool {
+	return (webrtcValue & (1 << 5)) != 0
 }
