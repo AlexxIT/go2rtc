@@ -86,7 +86,7 @@ func DecodeAtom(b []byte) (any, error) {
 			return DecodeAtom(data[1+3+4:])
 		}
 
-	case "avc1", "hev1":
+	case "avc1", "hev1", "hvc1":
 		b = data[6+2+2+2+4+4+4+2+2+4+4+4+2+32+2+2:]
 		atom, err := DecodeAtom(b)
 		if err != nil {
@@ -141,7 +141,17 @@ func DecodeAtom(b []byte) (any, error) {
 		return atom, nil
 
 	case MoofTrafTfdt:
-		return &AtomTfdt{DecodeTime: binary.BigEndian.Uint64(data[4:])}, nil
+		// Check version to determine field size
+		version := data[0] // First byte is version
+		if version == 0 {
+			// Version 0 uses 32-bit time
+			decodeTime := uint64(binary.BigEndian.Uint32(data[4:]))
+			return &AtomTfdt{DecodeTime: decodeTime}, nil
+		} else {
+			// Version 1 uses 64-bit time
+			decodeTime := binary.BigEndian.Uint64(data[4:])
+			return &AtomTfdt{DecodeTime: decodeTime}, nil
+		}
 
 	case MoofTrafTrun:
 		rd := bits.NewReader(data)
