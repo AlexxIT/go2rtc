@@ -14,9 +14,10 @@ import (
 )
 
 type Client struct {
-	api  *TuyaClient
-	conn *webrtc.Conn
-	done chan struct{}
+	api    *TuyaClient
+	conn   *webrtc.Conn
+	dcConn *DCConn
+	done   chan struct{}
 }
 
 const (
@@ -92,6 +93,8 @@ func Dial(rawURL string) (core.Producer, error) {
 		}
 		return streams.GetProducer(client.api.hlsURL)
 	} else {
+		isHEVC := client.api.isHEVC(client.api.getStreamType(streamType))
+
 		conf := pion.Configuration{
 			ICEServers:         client.api.iceServers,
 			ICETransportPolicy: pion.ICETransportPolicyAll,
@@ -116,7 +119,7 @@ func Dial(rawURL string) (core.Producer, error) {
 		// protect from blocking on errors
 		defer sendOffer.Done(nil)
 
-		// waiter will wait PC error or WS error or nil (connection OK)
+		// waiter will wait PC error
 		var connState core.Waiter
 
 		client.conn = webrtc.NewConn(pc)
@@ -167,6 +170,15 @@ func Dial(rawURL string) (core.Producer, error) {
 			client.Stop()
 		}
 
+		// Set up data channel for HEVC
+		if isHEVC {
+			client.dcConn, err = NewDCConn(pc, client)
+			if err != nil {
+				client.api.Close()
+				return nil, err
+			}
+		}
+
 		client.conn.Listen(func(msg any) {
 			switch msg := msg.(type) {
 			case *pion.ICECandidate:
@@ -182,6 +194,7 @@ func Dial(rawURL string) (core.Producer, error) {
 				case pion.PeerConnectionStateConnected:
 					connState.Done(nil)
 				default:
+					client.Stop()
 					connState.Done(errors.New("webrtc: " + msg.String()))
 				}
 			}
@@ -200,8 +213,17 @@ func Dial(rawURL string) (core.Producer, error) {
 		offer = re.ReplaceAllString(offer, "")
 
 		// Send offer
-		client.api.sendOffer(offer, tuyaAPI.getStreamType(streamType))
+		client.api.sendOffer(offer, streamType)
 		sendOffer.Done(nil)
+
+		if client.dcConn != nil {
+			if err = client.dcConn.connected.Wait(); err != nil {
+				client.Stop()
+				return nil, err
+			}
+
+			return client.dcConn, nil
+		}
 
 		if err = connState.Wait(); err != nil {
 			return nil, err
@@ -223,12 +245,7 @@ func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Rece
 	// RepackG711 will not work, so add default logic without repacking
 
 	payloadType := codec.PayloadType
-
 	localTrack := c.conn.GetSenderTrack(media.ID)
-	if localTrack == nil {
-		return errors.New("webrtc: can't get track")
-	}
-
 	sender := core.NewSender(media, codec)
 	sender.Handler = func(packet *rtp.Packet) {
 		c.conn.Send += packet.MarshalSize()
@@ -243,6 +260,10 @@ func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Rece
 }
 
 func (c *Client) Start() error {
+	if c.dcConn != nil {
+		c.dcConn.Start()
+	}
+
 	return c.conn.Start()
 }
 
@@ -256,6 +277,10 @@ func (c *Client) Stop() error {
 
 	if c.conn != nil {
 		_ = c.conn.Stop()
+	}
+
+	if c.dcConn != nil {
+		_ = c.dcConn.Stop()
 	}
 
 	if c.api != nil {

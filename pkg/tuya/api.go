@@ -67,22 +67,26 @@ type P2PConfig struct {
 	Ices []OpenApiICE `json:"ices"`
 }
 
+type AudioSkill struct {
+	Channels   int `json:"channels"`
+	DataBit    int `json:"dataBit"`
+	CodecType  int `json:"codecType"`
+	SampleRate int `json:"sampleRate"`
+}
+
+type VideoSkill struct {
+	StreamType int    `json:"streamType"` // 2 = main stream, 4 = sub stream
+	ProfileId  string `json:"profileId,omitempty"`
+	CodecType  int    `json:"codecType"` // 2 = H264, 4 = H265
+	Width      int    `json:"width"`
+	Height     int    `json:"height"`
+	SampleRate int    `json:"sampleRate"`
+}
+
 type Skill struct {
-	WebRTC int `json:"webrtc"`
-	Audios []struct {
-		Channels   int `json:"channels"`
-		DataBit    int `json:"dataBit"`
-		CodecType  int `json:"codecType"`
-		SampleRate int `json:"sampleRate"`
-	} `json:"audios"`
-	Videos []struct {
-		StreamType int    `json:"streamType"` // 2 = main stream, 4 = sub stream
-		ProfileId  string `json:"profileId"`
-		Width      int    `json:"width"`
-		CodecType  int    `json:"codecType"` // 2 = H264, 4 = H265
-		SampleRate int    `json:"sampleRate"`
-		Height     int    `json:"height"`
-	} `json:"videos"`
+	WebRTC int          `json:"webrtc"`
+	Audios []AudioSkill `json:"audios"`
+	Videos []VideoSkill `json:"videos"`
 }
 
 type WebRTConfig struct {
@@ -299,20 +303,9 @@ func (c *TuyaClient) InitDevice() (err error) {
 	c.auth = webRTCConfigResponse.Result.Auth
 
 	c.skill = &Skill{
-		Audios: []struct {
-			Channels   int `json:"channels"`
-			DataBit    int `json:"dataBit"`
-			CodecType  int `json:"codecType"`
-			SampleRate int `json:"sampleRate"`
-		}{},
-		Videos: []struct {
-			StreamType int    `json:"streamType"`
-			ProfileId  string `json:"profileId"`
-			Width      int    `json:"width"`
-			CodecType  int    `json:"codecType"`
-			SampleRate int    `json:"sampleRate"`
-			Height     int    `json:"height"`
-		}{},
+		WebRTC: 3, // basic webrtc
+		Audios: make([]AudioSkill, 0),
+		Videos: make([]VideoSkill, 0),
 	}
 
 	if webRTCConfigResponse.Result.Skill != "" {
@@ -390,6 +383,11 @@ func (c *TuyaClient) InitDevice() (err error) {
 			Codecs: []*core.Codec{
 				{
 					Name:        core.CodecH264,
+					ClockRate:   uint32(90000),
+					PayloadType: 96,
+				},
+				{
+					Name:        core.CodecH265,
 					ClockRate:   uint32(90000),
 					PayloadType: 96,
 				},
@@ -534,6 +532,20 @@ func getAudioCodec(codecType int) string {
 	default:
 		return core.CodecPCMU
 	}
+}
+
+func (c *TuyaClient) isHEVC(streamType int) bool {
+	for _, video := range c.skill.Videos {
+		if video.StreamType == streamType {
+			return video.CodecType == 4
+		}
+	}
+
+	return false
+}
+
+func (c *TuyaClient) isClaritySupported(webrtcValue int) bool {
+	return (webrtcValue & (1 << 5)) != 0
 }
 
 func (c *TuyaClient) calBusinessSign(ts int64) string {
