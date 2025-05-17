@@ -150,7 +150,6 @@ func Dial(rawURL string) (core.Producer, error) {
 		client.conn.FormatName = "tuya/webrtc"
 		client.conn.Mode = core.ModeActiveProducer
 		client.conn.Protocol = "mqtt"
-		client.conn.URL = rawURL
 
 		// Set up MQTT handlers
 		client.api.mqtt.handleAnswer = func(answer AnswerFrame) {
