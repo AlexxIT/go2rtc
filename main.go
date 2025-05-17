@@ -35,6 +35,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/srtp"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/internal/tapo"
+	"github.com/AlexxIT/go2rtc/internal/tuya"
 	"github.com/AlexxIT/go2rtc/internal/v4l2"
 	"github.com/AlexxIT/go2rtc/internal/webrtc"
 	"github.com/AlexxIT/go2rtc/internal/webtorrent"
@@ -87,6 +88,7 @@ func main() {
 	roborock.Init() // roborock source
 	homekit.Init()  // homekit source
 	ring.Init()     // ring source
+	tuya.Init()     // tuya source
 	nest.Init()     // nest source
 	bubble.Init()   // bubble source
 	expr.Init()     // expr source
