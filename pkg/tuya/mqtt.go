@@ -56,10 +56,10 @@ type CandidateFrame struct {
 	Candidate string `json:"candidate"`
 }
 
-type ResolutionFrame struct {
-	Mode  string `json:"mode"`
-	Value int    `json:"value"` // 0: HD, 1: SD
-}
+// type ResolutionFrame struct {
+// 	Mode  string `json:"mode"`
+// 	Value int    `json:"value"` // 0: HD, 1: SD
+// }
 
 type SpeakerFrame struct {
 	Mode  string `json:"mode"`
@@ -114,7 +114,7 @@ func (c *TuyaClient) StartMQTT() error {
 
 func (c *TuyaClient) StopMQTT() {
 	if c.mqtt.client != nil {
-		c.sendDisconnect()
+		_ = c.sendDisconnect()
 		c.mqtt.client.Disconnect(1000)
 	}
 }
@@ -202,7 +202,7 @@ func (c *TuyaMQTT) onError(err error) {
 	}
 }
 
-func (c *TuyaClient) sendOffer(sdp string, streamRole string) {
+func (c *TuyaClient) sendOffer(sdp string, streamRole string) error {
 	streamType := c.getStreamType(streamRole)
 	isHEVC := c.isHEVC(streamType)
 
@@ -215,53 +215,43 @@ func (c *TuyaClient) sendOffer(sdp string, streamRole string) {
 		}
 	}
 
-	err := c.sendMqttMessage("offer", 302, "", OfferFrame{
+	return c.sendMqttMessage("offer", 302, "", OfferFrame{
 		Mode:              "webrtc",
 		Sdp:               sdp,
 		StreamType:        streamType,
 		Auth:              c.auth,
 		DatachannelEnable: isHEVC,
 	})
-
-	if err != nil {
-		c.mqtt.onError(err)
-		return
-	}
 }
 
-func (c *TuyaClient) sendCandidate(candidate string) {
-	err := c.sendMqttMessage("candidate", 302, "", CandidateFrame{
+func (c *TuyaClient) sendCandidate(candidate string) error {
+	return c.sendMqttMessage("candidate", 302, "", CandidateFrame{
 		Mode:      "webrtc",
 		Candidate: candidate,
 	})
-
-	if err != nil {
-		c.mqtt.onError(err)
-		return
-	}
 }
 
-func (c *TuyaClient) sendResolution(resolution int) {
-	isClaritySupperted := (c.skill.WebRTC & (1 << 5)) != 0
-	if !isClaritySupperted {
-		return
-	}
+// func (c *TuyaClient) sendResolution(resolution int) error {
+// 	isClaritySupperted := (c.skill.WebRTC & (1 << 5)) != 0
+// 	if !isClaritySupperted {
+// 		return nil
+// 	}
 
-	c.sendMqttMessage("resolution", 302, "", ResolutionFrame{
-		Mode:  "webrtc",
-		Value: resolution,
-	})
-}
+// 	return c.sendMqttMessage("resolution", 302, "", ResolutionFrame{
+// 		Mode:  "webrtc",
+// 		Value: resolution,
+// 	})
+// }
 
-func (c *TuyaClient) sendSpeaker(speaker int) {
-	c.sendMqttMessage("speaker", 302, "", SpeakerFrame{
+func (c *TuyaClient) sendSpeaker(speaker int) error {
+	return c.sendMqttMessage("speaker", 302, "", SpeakerFrame{
 		Mode:  "webrtc",
 		Value: speaker,
 	})
 }
 
-func (c *TuyaClient) sendDisconnect() {
-	c.sendMqttMessage("disconnect", 302, "", DisconnectFrame{
+func (c *TuyaClient) sendDisconnect() error {
+	return c.sendMqttMessage("disconnect", 302, "", DisconnectFrame{
 		Mode: "webrtc",
 	})
 }

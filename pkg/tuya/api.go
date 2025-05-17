@@ -375,6 +375,79 @@ func (c *TuyaClient) Request(method string, url string, body any) ([]byte, error
 	return res, nil
 }
 
+func (c *TuyaClient) getVideoCodecs() []*core.Codec {
+	if len(c.skill.Videos) > 0 {
+		codecs := make([]*core.Codec, 0)
+
+		for _, video := range c.skill.Videos {
+			name := core.CodecH264
+			if c.isHEVC(video.StreamType) {
+				name = core.CodecH265
+			}
+
+			codec := &core.Codec{
+				Name:      name,
+				ClockRate: uint32(video.SampleRate),
+			}
+
+			codecs = append(codecs, codec)
+		}
+
+		if len(codecs) > 0 {
+			return codecs
+		}
+	}
+
+	return nil
+}
+
+func (c *TuyaClient) getAudioCodecs() []*core.Codec {
+	if len(c.skill.Audios) > 0 {
+		codecs := make([]*core.Codec, 0)
+
+		for _, audio := range c.skill.Audios {
+			name := getAudioCodecName(&audio)
+
+			codec := &core.Codec{
+				Name:      name,
+				ClockRate: uint32(audio.SampleRate),
+				Channels:  uint8(audio.Channels),
+			}
+			codecs = append(codecs, codec)
+		}
+
+		if len(codecs) > 0 {
+			return codecs
+		}
+	}
+
+	return nil
+}
+
+// https://protect-us.ismartlife.me/
+func getAudioCodecName(audioSkill *AudioSkill) string {
+	switch audioSkill.CodecType {
+	// case 100:
+	// 	return "ADPCM"
+	case 101:
+		return core.CodecPCML
+	case 102, 103, 104:
+		return core.CodecAAC
+	case 105:
+		return core.CodecPCMU
+	case 106:
+		return core.CodecPCMA
+	// case 107:
+	// 	return "G726-32"
+	// case 108:
+	// 	return "SPEEX"
+	case 109:
+		return core.CodecMP3
+	default:
+		return core.CodecPCML
+	}
+}
+
 func (c *TuyaClient) getStreamType(streamRole string) int {
 	// Default streamType if nothing is found
 	defaultStreamType := 1

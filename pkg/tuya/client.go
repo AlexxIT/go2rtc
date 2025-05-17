@@ -129,13 +129,13 @@ func Dial(rawURL string) (core.Producer, error) {
 
 		api, err := webrtc.NewAPI()
 		if err != nil {
-			client.api.Close()
+			client.Stop()
 			return nil, err
 		}
 
 		client.pc, err = api.NewPeerConnection(conf)
 		if err != nil {
-			client.api.Close()
+			client.Stop()
 			return nil, err
 		}
 
@@ -167,18 +167,27 @@ func Dial(rawURL string) (core.Producer, error) {
 			}
 
 			if err = client.conn.SetAnswer(answer.Sdp); err != nil {
-				client.Stop()
+				client.connected.Done(err)
 				return
 			}
 
 			if client.isHEVC {
-				// Tuya answers always with H264 codec, replace with HEVC
+				// Tuya seems to answers always with H264 and PCMU/8000 and PCMA/8000 codecs, replace with real codecs
+
 				for _, media := range client.conn.Medias {
 					if media.Kind == core.KindVideo {
-						for _, codec := range media.Codecs {
-							if codec.Name == core.CodecH264 {
-								codec.Name = core.CodecH265
-							}
+						codecs := client.api.getVideoCodecs()
+						if codecs != nil {
+							media.Codecs = codecs
+						}
+					}
+				}
+
+				for _, media := range client.conn.Medias {
+					if media.Kind == core.KindAudio {
+						codecs := client.api.getAudioCodecs()
+						if codecs != nil {
+							media.Codecs = codecs
 						}
 					}
 				}
@@ -197,6 +206,7 @@ func Dial(rawURL string) (core.Producer, error) {
 		}
 
 		client.api.mqtt.handleDisconnect = func() {
+			// fmt.Println("tuya: disconnect")
 			client.Stop()
 		}
 
@@ -222,6 +232,7 @@ func Dial(rawURL string) (core.Producer, error) {
 				} else {
 					packet := &rtp.Packet{}
 					if err := packet.Unmarshal(msg.Data); err != nil {
+						// skip
 						return
 					}
 
@@ -260,7 +271,9 @@ func Dial(rawURL string) (core.Producer, error) {
 			switch msg := msg.(type) {
 			case *pion.ICECandidate:
 				_ = sendOffer.Wait()
-				client.api.sendCandidate("a=" + msg.ToJSON().Candidate)
+				if err := client.api.sendCandidate("a=" + msg.ToJSON().Candidate); err != nil {
+					client.connected.Done(err)
+				}
 
 			case pion.PeerConnectionState:
 				switch msg {
@@ -289,7 +302,7 @@ func Dial(rawURL string) (core.Producer, error) {
 		// Create offer
 		offer, err := client.conn.CreateOffer(medias)
 		if err != nil {
-			client.api.Close()
+			client.Stop()
 			return nil, err
 		}
 
@@ -299,7 +312,11 @@ func Dial(rawURL string) (core.Producer, error) {
 		offer = re.ReplaceAllString(offer, "")
 
 		// Send offer
-		client.api.sendOffer(offer, streamRole)
+		if err := client.api.sendOffer(offer, streamRole); err != nil {
+			client.Stop()
+			return nil, fmt.Errorf("tuya: %w", err)
+		}
+
 		sendOffer.Done(nil)
 
 		// Wait for connection
@@ -326,6 +343,8 @@ func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Rece
 	if localTrack == nil {
 		return errors.New("webrtc: can't get track")
 	}
+
+	_ = c.api.sendSpeaker(1)
 
 	payloadType := codec.PayloadType
 
@@ -375,6 +394,8 @@ func (c *Client) Stop() error {
 	if c.closed {
 		return nil
 	}
+
+	c.closed = true
 
 	for ssrc := range c.handlers {
 		delete(c.handlers, ssrc)
