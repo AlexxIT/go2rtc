@@ -59,10 +59,10 @@ type SocketTicketResponse struct {
 // SessionResponse repesents the response from the session endpoint
 type SessionResponse struct {
 	Profile struct {
-		ID         int64  `json:"id"`
-		Email      string `json:"email"`
-		FirstName  string `json:"first_name"`
-		LastName   string `json:"last_name"`
+		ID        int64  `json:"id"`
+		Email     string `json:"email"`
+		FirstName string `json:"first_name"`
+		LastName  string `json:"last_name"`
 	} `json:"profile"`
 }
 
@@ -82,9 +82,9 @@ type RingRestClient struct {
 	session        *SessionResponse
 	sessionExpiry  time.Time
 	sessionMutex   sync.Mutex
-	
+
 	// Cache-Schlüssel für diese Instanz
-	cacheKey       string
+	cacheKey string
 }
 
 // CameraKind represents the different types of Ring cameras
@@ -92,11 +92,11 @@ type CameraKind string
 
 // CameraData contains common fields for all camera types
 type CameraData struct {
-	ID          int `json:"id"`
-	Description string  `json:"description"`
-	DeviceID    string  `json:"device_id"`
-	Kind        string  `json:"kind"`
-	LocationID  string  `json:"location_id"`
+	ID          int    `json:"id"`
+	Description string `json:"description"`
+	DeviceID    string `json:"device_id"`
+	Kind        string `json:"kind"`
+	LocationID  string `json:"location_id"`
 }
 
 // RingDeviceType represents different types of Ring devices
@@ -167,7 +167,7 @@ const (
 // NewRingRestClient creates a new Ring client instance with caching
 func NewRingRestClient(auth interface{}, onTokenRefresh func(string)) (*RingRestClient, error) {
 	var cacheKey string
-	
+
 	// Create cache key based on auth data
 	switch a := auth.(type) {
 	case RefreshTokenAuth:
@@ -183,10 +183,10 @@ func NewRingRestClient(auth interface{}, onTokenRefresh func(string)) (*RingRest
 	default:
 		return nil, fmt.Errorf("invalid auth type")
 	}
-	
+
 	cacheMutex.Lock()
 	defer cacheMutex.Unlock()
-	
+
 	if cachedClient, ok := clientCache[cacheKey]; ok {
 		// Check if token is not nil and not expired
 		if cachedClient.authToken != nil && time.Now().Before(cachedClient.tokenExpiry) {
@@ -194,7 +194,7 @@ func NewRingRestClient(auth interface{}, onTokenRefresh func(string)) (*RingRest
 			return cachedClient, nil
 		}
 	}
-	
+
 	client := &RingRestClient{
 		httpClient:     &http.Client{Timeout: defaultTimeout},
 		onTokenRefresh: onTokenRefresh,
@@ -216,7 +216,7 @@ func NewRingRestClient(auth interface{}, onTokenRefresh func(string)) (*RingRest
 	}
 
 	clientCache[cacheKey] = client
-	
+
 	return client, nil
 }
 
@@ -276,21 +276,21 @@ func (c *RingRestClient) Request(method, url string, body interface{}) ([]byte, 
 			c.authToken = nil
 			c.tokenExpiry = time.Time{} // Reset token expiry
 			c.authMutex.Unlock()
-			
+
 			if attempt == maxRetries {
 				return nil, fmt.Errorf("authentication failed after %d retries", maxRetries)
 			}
-			
+
 			// By 401 with Auth AND Session start over
 			c.sessionMutex.Lock()
 			c.session = nil
 			c.sessionExpiry = time.Time{} // Reset session expiry
 			c.sessionMutex.Unlock()
-			
+
 			if err := c.ensureSession(); err != nil {
 				return nil, fmt.Errorf("failed to refresh session: %w", err)
 			}
-			
+
 			req.Header.Set("Authorization", "Bearer "+c.authToken.AccessToken)
 			continue
 		}
@@ -305,15 +305,15 @@ func (c *RingRestClient) Request(method, url string, body interface{}) ([]byte, 
 					c.session = nil
 					c.sessionExpiry = time.Time{} // Reset session expiry
 					c.sessionMutex.Unlock()
-					
+
 					if attempt == maxRetries {
 						return nil, fmt.Errorf("session refresh failed after %d retries", maxRetries)
 					}
-					
+
 					if err := c.ensureSession(); err != nil {
 						return nil, fmt.Errorf("failed to refresh session: %w", err)
 					}
-					
+
 					continue
 				}
 			}
@@ -461,7 +461,7 @@ func (c *RingRestClient) ensureAuth() error {
 		RT:  authResp.RefreshToken,
 		HID: c.hardwareID,
 	}
-	
+
 	// Set token expiry (1 minute before actual expiry)
 	expiresIn := time.Duration(authResp.ExpiresIn-60) * time.Second
 	c.tokenExpiry = time.Now().Add(expiresIn)
@@ -471,7 +471,7 @@ func (c *RingRestClient) ensureAuth() error {
 		newRefreshToken := encodeAuthConfig(c.authConfig)
 		c.onTokenRefresh(newRefreshToken)
 	}
-	
+
 	// Refreshn the token in the client
 	c.RefreshToken = encodeAuthConfig(c.authConfig)
 
@@ -585,7 +585,7 @@ func (c *RingRestClient) GetAuth(twoFactorAuthCode string) (*AuthTokenResponse, 
 	if c.onTokenRefresh != nil {
 		c.onTokenRefresh(c.RefreshToken)
 	}
-	
+
 	// Refresh the cached client
 	cacheMutex.Lock()
 	clientCache[c.cacheKey] = c

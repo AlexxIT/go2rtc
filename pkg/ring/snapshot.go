@@ -10,7 +10,7 @@ import (
 type SnapshotProducer struct {
 	core.Connection
 
-	client *RingRestClient
+	client   *RingRestClient
 	cameraID string
 }
 
@@ -35,7 +35,7 @@ func NewSnapshotProducer(client *RingRestClient, cameraID string) *SnapshotProdu
 				},
 			},
 		},
-		client: client,
+		client:   client,
 		cameraID: cameraID,
 	}
 }
