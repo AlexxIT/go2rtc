@@ -131,7 +131,7 @@ func (c *TuyaClient) onConnect(client mqtt.Client) {
 func (c *TuyaClient) consume(client mqtt.Client, msg mqtt.Message) {
 	var rmqtt MqttMessage
 	if err := json.Unmarshal(msg.Payload(), &rmqtt); err != nil {
-		c.mqtt.onError(fmt.Errorf("unmarshal mqtt message fail: %s, payload: %s", err.Error(), string(msg.Payload())))
+		c.mqtt.onError(err)
 		return
 	}
 
@@ -152,10 +152,7 @@ func (c *TuyaClient) consume(client mqtt.Client, msg mqtt.Message) {
 func (c *TuyaMQTT) onMqttAnswer(msg *MqttMessage) {
 	var answerFrame AnswerFrame
 	if err := json.Unmarshal(msg.Data.Message, &answerFrame); err != nil {
-		c.onError(fmt.Errorf("unmarshal mqtt answer frame fail: %s, session: %s, frame: %s",
-			err.Error(),
-			msg.Data.Header.SessionID,
-			string(msg.Data.Message)))
+		c.onError(err)
 		return
 	}
 
@@ -165,10 +162,7 @@ func (c *TuyaMQTT) onMqttAnswer(msg *MqttMessage) {
 func (c *TuyaMQTT) onMqttCandidate(msg *MqttMessage) {
 	var candidateFrame CandidateFrame
 	if err := json.Unmarshal(msg.Data.Message, &candidateFrame); err != nil {
-		c.onError(fmt.Errorf("unmarshal mqtt candidate frame fail: %s, session: %s, frame: %s",
-			err.Error(),
-			msg.Data.Header.SessionID,
-			string(msg.Data.Message)))
+		c.onError(err)
 		return
 	}
 
@@ -208,37 +202,48 @@ func (c *TuyaMQTT) onError(err error) {
 	}
 }
 
-func (c *TuyaClient) sendOffer(sdp string, streamType string) {
-	fixedStreamType := c.getStreamType(streamType)
-	isHEVC := c.isHEVC(fixedStreamType)
+func (c *TuyaClient) sendOffer(sdp string, streamRole string) {
+	streamType := c.getStreamType(streamRole)
+	isHEVC := c.isHEVC(streamType)
 
 	if isHEVC {
 		// On HEVC we use streamType 0 for main stream and 1 for sub stream
-		if streamType == "main" {
-			fixedStreamType = 0
+		if streamRole == "main" {
+			streamType = 0
 		} else {
-			fixedStreamType = 1
+			streamType = 1
 		}
 	}
 
-	c.sendMqttMessage("offer", 302, "", OfferFrame{
+	err := c.sendMqttMessage("offer", 302, "", OfferFrame{
 		Mode:              "webrtc",
 		Sdp:               sdp,
-		StreamType:        fixedStreamType,
+		StreamType:        streamType,
 		Auth:              c.auth,
 		DatachannelEnable: isHEVC,
 	})
+
+	if err != nil {
+		c.mqtt.onError(err)
+		return
+	}
 }
 
 func (c *TuyaClient) sendCandidate(candidate string) {
-	c.sendMqttMessage("candidate", 302, "", CandidateFrame{
+	err := c.sendMqttMessage("candidate", 302, "", CandidateFrame{
 		Mode:      "webrtc",
 		Candidate: candidate,
 	})
+
+	if err != nil {
+		c.mqtt.onError(err)
+		return
+	}
 }
 
 func (c *TuyaClient) sendResolution(resolution int) {
-	if !c.isClaritySupported(resolution) {
+	isClaritySupperted := (c.skill.WebRTC & (1 << 5)) != 0
+	if !isClaritySupperted {
 		return
 	}
 
@@ -261,16 +266,14 @@ func (c *TuyaClient) sendDisconnect() {
 	})
 }
 
-func (c *TuyaClient) sendMqttMessage(messageType string, protocol int, transactionID string, data interface{}) {
+func (c *TuyaClient) sendMqttMessage(messageType string, protocol int, transactionID string, data interface{}) error {
 	if c.mqtt.closed {
-		c.mqtt.onError(fmt.Errorf("mqtt client is closed, send mqtt message fail"))
-		return
+		return fmt.Errorf("mqtt client is closed, send mqtt message fail")
 	}
 
 	jsonMessage, err := json.Marshal(data)
 	if err != nil {
-		c.mqtt.onError(fmt.Errorf("marshal mqtt message fail: %s", err.Error()))
-		return
+		return err
 	}
 
 	msg := &MqttMessage{
@@ -292,12 +295,13 @@ func (c *TuyaClient) sendMqttMessage(messageType string, protocol int, transacti
 
 	payload, err := json.Marshal(msg)
 	if err != nil {
-		c.mqtt.onError(fmt.Errorf("marshal mqtt message fail: %s", err.Error()))
-		return
+		return err
 	}
 
 	token := c.mqtt.client.Publish(c.mqtt.publishTopic, 1, false, payload)
 	if token.Wait() && token.Error() != nil {
-		c.mqtt.onError(fmt.Errorf("mqtt publish fail: %s, topic: %s", token.Error().Error(), c.mqtt.publishTopic))
+		return token.Error()
 	}
+
+	return nil
 }
