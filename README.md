@@ -570,7 +570,7 @@ Tested: KD110, KC200, KC401, KC420WS, EC71.
 
 [Tuya](https://www.tuya.com/) proprietary camera protocol with **two way audio** support.
 
-- Obtain `client_id`, `client_secret`, `uid` and `device_id` from [Tuya IoT Platform](https://iot.tuya.com/)
+- Obtain `device_id`, `client_id`, `client_secret`, and `uid` (if using `mode=webrtc`) from [Tuya IoT Platform](https://iot.tuya.com/). [Here's a guide](https://xzetsubou.github.io/hass-localtuya/cloud_api/).
 - Use `mode` parameter to select the stream type:
   - `webrtc` - WebRTC stream (default)
   - `rtsp` - RTSP stream _(if available)_
