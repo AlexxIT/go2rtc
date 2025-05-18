@@ -61,11 +61,11 @@ func Dial(rawURL string) (core.Producer, error) {
 	uid := query.Get("uid")
 	clientId := query.Get("client_id")
 	clientSecret := query.Get("client_secret")
-	streamRole := query.Get("role")
+	streamResolution := query.Get("resolution")
 	streamMode := query.Get("mode")
 
-	if streamRole == "" || (streamRole != "main" && streamRole != "sub") {
-		streamRole = "main"
+	if streamResolution == "" || (streamResolution != "hd" && streamResolution != "sd") {
+		streamResolution = "hd"
 	}
 
 	useRTSP := streamMode == "rtsp"
@@ -97,7 +97,7 @@ func Dial(rawURL string) (core.Producer, error) {
 	}
 
 	// Initialize Tuya API client
-	tuyaAPI, err := NewTuyaClient(u.Hostname(), deviceID, uid, clientId, clientSecret, streamMode, streamRole)
+	tuyaAPI, err := NewTuyaClient(u.Hostname(), deviceID, uid, clientId, clientSecret, streamMode)
 	if err != nil {
 		return nil, fmt.Errorf("tuya: %w", err)
 	}
@@ -118,7 +118,7 @@ func Dial(rawURL string) (core.Producer, error) {
 		}
 		return streams.GetProducer(client.api.hlsURL)
 	} else {
-		client.isHEVC = client.api.isHEVC(client.api.getStreamType(streamRole))
+		client.isHEVC = client.api.isHEVC(client.api.getStreamType(streamResolution))
 
 		// Create a new PeerConnection
 		conf := pion.Configuration{
@@ -311,7 +311,7 @@ func Dial(rawURL string) (core.Producer, error) {
 		offer = re.ReplaceAllString(offer, "")
 
 		// Send offer
-		if err := client.api.sendOffer(offer, streamRole); err != nil {
+		if err := client.api.sendOffer(offer, streamResolution); err != nil {
 			client.Stop()
 			return nil, fmt.Errorf("tuya: %w", err)
 		}

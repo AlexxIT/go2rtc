@@ -73,7 +73,7 @@ type AudioSkill struct {
 }
 
 type VideoSkill struct {
-	StreamType int    `json:"streamType"` // 2 = main stream, 4 = sub stream
+	StreamType int    `json:"streamType"` // 2 = main stream (hd), 4 = sub stream (sd)
 	ProfileId  string `json:"profileId,omitempty"`
 	CodecType  int    `json:"codecType"` // 2 = H264, 4 = H265
 	Width      int    `json:"width"`
@@ -157,7 +157,7 @@ type OpenIoTHubConfigResponse struct {
 	Code    int              `json:"code,omitempty"`
 }
 
-func NewTuyaClient(openAPIURL string, deviceId string, uid string, clientId string, clientSecret string, streamMode string, streamRole string) (*TuyaClient, error) {
+func NewTuyaClient(openAPIURL string, deviceId string, uid string, clientId string, clientSecret string, streamMode string) (*TuyaClient, error) {
 	client := &TuyaClient{
 		httpClient:   &http.Client{Timeout: 5 * time.Second},
 		mqtt:         &TuyaMQTT{waiter: core.Waiter{}},
@@ -182,7 +182,7 @@ func NewTuyaClient(openAPIURL string, deviceId string, uid string, clientId stri
 			return nil, fmt.Errorf("failed to get HLS URL: %w", err)
 		}
 	} else {
-		if err := client.InitDevice(streamRole); err != nil {
+		if err := client.InitDevice(); err != nil {
 			return nil, fmt.Errorf("failed to initialize device: %w", err)
 		}
 
@@ -227,7 +227,7 @@ func (c *TuyaClient) InitToken() (err error) {
 	return nil
 }
 
-func (c *TuyaClient) InitDevice(streamRole string) (err error) {
+func (c *TuyaClient) InitDevice() (err error) {
 	url := fmt.Sprintf("https://%s/v1.0/users/%s/devices/%s/webrtc-configs", c.apiURL, c.uid, c.deviceId)
 
 	body, err := c.Request("GET", url, nil)
@@ -448,7 +448,7 @@ func getAudioCodecName(audioSkill *AudioSkill) string {
 	}
 }
 
-func (c *TuyaClient) getStreamType(streamRole string) int {
+func (c *TuyaClient) getStreamType(streamResolution string) int {
 	// Default streamType if nothing is found
 	defaultStreamType := 1
 
@@ -479,10 +479,10 @@ func (c *TuyaClient) getStreamType(streamRole string) int {
 	}
 
 	// Return the streamType based on the selection
-	switch streamRole {
-	case "main":
+	switch streamResolution {
+	case "hd":
 		return highestResType
-	case "sub":
+	case "sd":
 		return lowestResType
 	default:
 		return defaultStreamType

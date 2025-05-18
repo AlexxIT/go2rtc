@@ -575,9 +575,9 @@ Tested: KD110, KC200, KC401, KC420WS, EC71.
   - `webrtc` - WebRTC stream (default)
   - `rtsp` - RTSP stream _(if available)_
   - `hls` - HLS stream _(if available)_
-- Use `role` parameter to select the stream:
-  - `main` - Main stream (default)
-  - `sub` - Sub stream
+- Use `resolution` parameter to select the stream:
+  - `hd` - HD stream (default)
+  - `sd` - SD stream
 
 ```yaml
 streams:
@@ -588,10 +588,10 @@ streams:
   tuya_webrtc_2: tuya://openapi.tuyaus.com?device_id=XXX&uid=XXX&client_id=XXX&client_secret=XXX&mode=webrtc
   
   # Tuya WebRTC stream (HD)
-  tuya_webrtc_hd: tuya://openapi.tuyaus.com?device_id=XXX&uid=XXX&client_id=XXX&client_secret=XXX&role=main
+  tuya_webrtc_hd: tuya://openapi.tuyaus.com?device_id=XXX&uid=XXX&client_id=XXX&client_secret=XXX&resolution=hd
   
   # Tuya WebRTC stream (SD)
-  tuya_webrtc_sd: tuya://openapi.tuyaus.com?device_id=XXX&uid=XXX&client_id=XXX&client_secret=XXX&role=sub
+  tuya_webrtc_sd: tuya://openapi.tuyaus.com?device_id=XXX&uid=XXX&client_id=XXX&client_secret=XXX&resolution=sd
   
   # Using RTSP when available (no "uid" required)
   tuya_rtsp: tuya://openapi.tuyaus.com?device_id=XXX&client_id=XXX&client_secret=XXX&mode=rtsp

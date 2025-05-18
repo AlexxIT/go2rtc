@@ -202,13 +202,13 @@ func (c *TuyaMQTT) onError(err error) {
 	}
 }
 
-func (c *TuyaClient) sendOffer(sdp string, streamRole string) error {
-	streamType := c.getStreamType(streamRole)
+func (c *TuyaClient) sendOffer(sdp string, streamResolution string) error {
+	streamType := c.getStreamType(streamResolution)
 	isHEVC := c.isHEVC(streamType)
 
 	if isHEVC {
-		// On HEVC we use streamType 0 for main stream and 1 for sub stream
-		if streamRole == "main" {
+		// On HEVC we use streamType 0 for main stream (hd) and 1 for sub stream (sd)
+		if streamResolution == "hd" {
 			streamType = 0
 		} else {
 			streamType = 1
