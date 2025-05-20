@@ -26,35 +26,35 @@ type Secrets interface {
 type Secret struct {
 	Secrets
 
-	Name    string
+	Name   string
 	Values map[string]any
 }
 
 func NewSecret(name string, values interface{}) *Secret {
-    secretsMu.Lock()
-    defer secretsMu.Unlock()
+	secretsMu.Lock()
+	defer secretsMu.Unlock()
 
-    if s, exists := secrets[name]; exists {
-        return s
-    }
+	if s, exists := secrets[name]; exists {
+		return s
+	}
 
-    s := &Secret{Name: name, Values: make(map[string]any)}
-    
-    switch v := values.(type) {
-    case map[string]any:
-        s.Values = v
-    default:
-        data, err := yaml.Encode(values, 2)
-        if err == nil {
-            var mapValues map[string]any
-            if err := yaml.Unmarshal(data, &mapValues); err == nil {
-                s.Values = mapValues
-            }
-        }
-    }
+	s := &Secret{Name: name, Values: make(map[string]any)}
 
-    secrets[name] = s
-    return s
+	switch v := values.(type) {
+	case map[string]any:
+		s.Values = v
+	default:
+		data, err := yaml.Encode(values, 2)
+		if err == nil {
+			var mapValues map[string]any
+			if err := yaml.Unmarshal(data, &mapValues); err == nil {
+				s.Values = mapValues
+			}
+		}
+	}
+
+	secrets[name] = s
+	return s
 }
 
 func (s *Secret) Get(key string) any {

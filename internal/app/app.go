@@ -13,7 +13,6 @@ var (
 	Version    string
 	UserAgent  string
 	ConfigPath string
-	SecretPath string
 	Info       = make(map[string]any)
 )
 
@@ -77,10 +76,6 @@ func Init() {
 
 	if ConfigPath != "" {
 		Logger.Info().Str("path", ConfigPath).Msg("config")
-	}
-
-	if SecretPath != "" {
-		Logger.Info().Str("path", SecretPath).Msg("secrets")
 	}
 }
 
