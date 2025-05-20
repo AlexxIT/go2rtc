@@ -4,7 +4,6 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
@@ -47,8 +46,7 @@ func GetProducer(url string) (core.Producer, error) {
 		}
 
 		if handler, ok := handlers[scheme]; ok {
-			parsedURL := app.ResolveSecrets(url)
-			return handler(parsedURL)
+			return handler(url)
 		}
 	}
 
@@ -91,8 +89,7 @@ func GetConsumer(url string) (core.Consumer, func(), error) {
 		scheme := url[:i]
 
 		if handler, ok := consumerHandlers[scheme]; ok {
-			parsedURL := app.ResolveSecrets(url)
-			return handler(parsedURL)
+			return handler(url)
 		}
 	}
 
