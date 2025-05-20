@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
@@ -46,6 +47,18 @@ func GetProducer(url string) (core.Producer, error) {
 		}
 
 		if handler, ok := handlers[scheme]; ok {
+			index := strings.IndexByte(url, '#')
+			if index > 0 {
+				_, query := url[:index], ParseQuery(url[index+1:])
+				secretsName := query.Get("secrets")
+				if secretsName != "" {
+					secrets := app.GetSecret(secretsName)
+					if secrets != nil {
+						url = secrets.Parse(url)
+					}
+				}
+			}
+
 			return handler(url)
 		}
 	}

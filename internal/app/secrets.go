@@ -2,6 +2,8 @@ package app
 
 import (
 	"fmt"
+	"regexp"
+	"strings"
 	"sync"
 
 	"github.com/AlexxIT/go2rtc/pkg/yaml"
@@ -9,6 +11,8 @@ import (
 
 var secrets = make(map[string]*Secret)
 var secretsMu sync.Mutex
+
+var templateRegex = regexp.MustCompile(`\{\{\s*([^\}]+)\s*\}\}`)
 
 type Secrets interface {
 	Get(key string) any
@@ -53,6 +57,10 @@ func NewSecret(name string, values interface{}) *Secret {
 	return s
 }
 
+func GetSecret(name string) *Secret {
+	return secrets[name]
+}
+
 func (s *Secret) Get(key string) any {
 	secretsMu.Lock()
 	defer secretsMu.Unlock()
@@ -70,6 +78,33 @@ func (s *Secret) Set(key string, value any) {
 
 	s.Values[key] = value
 	secrets[s.Name] = s
+}
+
+func (s *Secret) Parse(template string) string {
+	if !templateRegex.MatchString(template) {
+		return template
+	}
+
+	secretsMu.Lock()
+	defer secretsMu.Unlock()
+
+	if _, exists := secrets[s.Name]; !exists {
+		return template
+	}
+
+	result := templateRegex.ReplaceAllStringFunc(template, func(match string) string {
+		varName := strings.TrimSpace(templateRegex.FindStringSubmatch(match)[1])
+		pathParts := strings.Split(varName, ".")
+		value := getNestedValue(s.Values, pathParts)
+
+		if value != nil {
+			return stringify(value)
+		}
+
+		return ""
+	})
+
+	return result
 }
 
 func (s *Secret) Marshal(v any) ([]byte, error) {
