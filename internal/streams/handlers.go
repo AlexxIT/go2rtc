@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
@@ -46,7 +47,8 @@ func GetProducer(url string) (core.Producer, error) {
 		}
 
 		if handler, ok := handlers[scheme]; ok {
-			return handler(url)
+			parsedURL := ParseURL(url)
+			return handler(parsedURL)
 		}
 	}
 
@@ -94,4 +96,8 @@ func GetConsumer(url string) (core.Consumer, func(), error) {
 	}
 
 	return nil, nil, errors.New("streams: unsupported scheme: " + url)
+}
+
+func ParseURL(url string) string {
+	return app.ResolveSecrets(url)
 }
