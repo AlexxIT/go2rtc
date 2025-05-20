@@ -16,9 +16,9 @@ var secrets [][]byte
 var templateRegex = regexp.MustCompile(`\{\{\s*([^\}]+)\s*\}\}`)
 
 func ResolveSecrets(template string) string {
-    if !templateRegex.MatchString(template) {
-        return template
-    }
+	if !templateRegex.MatchString(template) {
+		return template
+	}
 
 	var secretsMap map[string]interface{}
 	LoadSecret(&secretsMap)
@@ -28,23 +28,38 @@ func ResolveSecrets(template string) string {
 		varName := strings.TrimSpace(templateRegex.FindStringSubmatch(match)[1])
 		pathParts := strings.Split(varName, ".")
 		value := getNestedValue(secretsMap, pathParts)
-		
+
 		if value != nil {
 			return stringify(value)
 		}
-		
+
 		return ""
 	})
-	
+
 	return result
 }
 
 func LoadSecret(v any) {
-    for _, data := range secrets {
-        if err := yaml.Unmarshal(data, v); err != nil {
-            Logger.Warn().Err(err).Send()
-        }
-    }
+	for _, data := range secrets {
+		var tempData map[string]interface{}
+
+		if err := yaml.Unmarshal(data, &tempData); err != nil {
+			Logger.Warn().Err(err).Send()
+			continue
+		}
+
+		if secretData, exists := tempData["secret"]; exists {
+			secretBytes, err := yaml.Encode(secretData, 2)
+			if err != nil {
+				Logger.Warn().Err(err).Send()
+				continue
+			}
+
+			if err := yaml.Unmarshal(secretBytes, v); err != nil {
+				Logger.Warn().Err(err).Send()
+			}
+		}
+	}
 }
 
 func PatchSecret(path []string, value any) error {
@@ -55,7 +70,7 @@ func PatchSecret(path []string, value any) error {
 	// empty config is OK
 	b, _ := os.ReadFile(SecretPath)
 
-	b, err := yaml.Patch(b, path, value)
+	b, err := yaml.Patch(b, append([]string{"secret"}, path...), value)
 	if err != nil {
 		return err
 	}
@@ -82,29 +97,32 @@ func initSecret(secret string) {
 		}
 		Info["secret_path"] = SecretPath
 	}
+
+	if data, err := os.ReadFile(SecretPath); err == nil {
+		secrets = append(secrets, data)
+	}
 }
 
 func getNestedValue(m map[string]interface{}, path []string) interface{} {
 	if len(path) == 0 || m == nil {
 		return nil
 	}
-	
+
 	key := path[0]
 	value, exists := m[key]
 	if !exists {
 		return nil
 	}
-	
+
 	if len(path) == 1 {
 		return value
 	}
-	
-	// Für verschachtelte Maps
+
+	// Check nested maps
 	switch nextMap := value.(type) {
 	case map[string]interface{}:
 		return getNestedValue(nextMap, path[1:])
 	case map[interface{}]interface{}:
-		// Konvertiere map[interface{}]interface{} zu map[string]interface{}
 		stringMap := make(map[string]interface{})
 		for k, v := range nextMap {
 			if keyStr, ok := k.(string); ok {
