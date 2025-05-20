@@ -18,6 +18,14 @@ func LoadConfig(v any) {
 	}
 }
 
+func LoadSecret(v any) {
+    for _, data := range secrets {
+        if err := yaml.Unmarshal(data, v); err != nil {
+            Logger.Warn().Err(err).Send()
+        }
+    }
+}
+
 func PatchConfig(path []string, value any) error {
 	if ConfigPath == "" {
 		return errors.New("config file disabled")
@@ -34,6 +42,27 @@ func PatchConfig(path []string, value any) error {
 	return os.WriteFile(ConfigPath, b, 0644)
 }
 
+func PatchSecret(path []string, value any) error {
+	if SecretPath == "" {
+		return errors.New("secret file disabled")
+	}
+
+	// empty config is OK
+	b, _ := os.ReadFile(SecretPath)
+
+	b, err := yaml.Patch(b, path, value)
+	if err != nil {
+		return err
+	}
+
+	if err := os.WriteFile(SecretPath, b, 0644); err == nil {
+		secrets = [][]byte{b}
+	}
+
+	return err
+}
+
+
 type flagConfig []string
 
 func (c *flagConfig) String() string {
@@ -46,6 +75,7 @@ func (c *flagConfig) Set(value string) error {
 }
 
 var configs [][]byte
+var secrets [][]byte
 
 func initConfig(confs flagConfig) {
 	if confs == nil {
@@ -83,6 +113,23 @@ func initConfig(confs flagConfig) {
 			}
 		}
 		Info["config_path"] = ConfigPath
+	}
+}
+
+func initSecret(secret string) {
+	if secret == "" {
+		secret = "go2rtc.secrets"
+	}
+
+	SecretPath = secret
+
+	if SecretPath != "" {
+		if !filepath.IsAbs(SecretPath) {
+			if cwd, err := os.Getwd(); err == nil {
+				SecretPath = filepath.Join(cwd, SecretPath)
+			}
+		}
+		Info["secret_path"] = SecretPath
 	}
 }
 

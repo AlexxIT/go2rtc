@@ -13,6 +13,7 @@ var (
 	Version    string
 	UserAgent  string
 	ConfigPath string
+	SecretPath string
 	Info       = make(map[string]any)
 )
 
@@ -25,11 +26,14 @@ const usage = `Usage of go2rtc:
 
 func Init() {
 	var config flagConfig
+	var secret string
 	var daemon bool
 	var version bool
 
 	flag.Var(&config, "config", "")
 	flag.Var(&config, "c", "")
+	flag.StringVar(&secret, "secret", "go2rtc.secret", "")
+	flag.StringVar(&secret, "s", "go2rtc.secret", "")
 	flag.BoolVar(&daemon, "daemon", false, "")
 	flag.BoolVar(&daemon, "d", false, "")
 	flag.BoolVar(&version, "version", false, "")
@@ -67,6 +71,7 @@ func Init() {
 	Info["revision"] = revision
 
 	initConfig(config)
+	initSecret(secret)
 	initLogger()
 
 	platform := fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH)
@@ -75,6 +80,10 @@ func Init() {
 
 	if ConfigPath != "" {
 		Logger.Info().Str("path", ConfigPath).Msg("config")
+	}
+
+	if SecretPath != "" {
+		Logger.Info().Str("path", SecretPath).Msg("secrets")
 	}
 }
 
