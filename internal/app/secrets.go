@@ -1,33 +1,97 @@
 package app
 
 import (
-	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/AlexxIT/go2rtc/pkg/yaml"
 )
 
-var secrets [][]byte
+var secrets = make(map[string]*Secret)
+var secretsMu sync.Mutex
 
 var templateRegex = regexp.MustCompile(`\{\{\s*([^\}]+)\s*\}\}`)
 
-func ResolveSecrets(template string) string {
+type Secrets interface {
+	Get(key string) any
+	Set(key string, value any)
+	Parse(template string) string
+	Marshal(v any) ([]byte, error)
+	Unmarshal(v any) error
+	Save() error
+}
+
+type Secret struct {
+	Secrets
+
+	Name    string
+	Values map[string]any
+}
+
+func NewSecret(name string, values interface{}) *Secret {
+    secretsMu.Lock()
+    defer secretsMu.Unlock()
+
+    if s, exists := secrets[name]; exists {
+        return s
+    }
+
+    s := &Secret{Name: name, Values: make(map[string]any)}
+    
+    switch v := values.(type) {
+    case map[string]any:
+        s.Values = v
+    default:
+        data, err := yaml.Encode(values, 2)
+        if err == nil {
+            var mapValues map[string]any
+            if err := yaml.Unmarshal(data, &mapValues); err == nil {
+                s.Values = mapValues
+            }
+        }
+    }
+
+    secrets[name] = s
+    return s
+}
+
+func (s *Secret) Get(key string) any {
+	secretsMu.Lock()
+	defer secretsMu.Unlock()
+
+	return s.Values[key]
+}
+
+func (s *Secret) Set(key string, value any) {
+	secretsMu.Lock()
+	defer secretsMu.Unlock()
+
+	if s.Values == nil {
+		s.Values = make(map[string]any)
+	}
+
+	s.Values[key] = value
+	secrets[s.Name] = s
+}
+
+func (s *Secret) Parse(template string) string {
 	if !templateRegex.MatchString(template) {
 		return template
 	}
 
-	var secretsMap map[string]interface{}
-	LoadSecret(&secretsMap)
+	secretsMu.Lock()
+	defer secretsMu.Unlock()
 
-	// ex template: rtsp://{{ my_camera.username }}:{{ my_camera.password }}@192.168.178.1:554/stream
+	if _, exists := secrets[s.Name]; !exists {
+		return template
+	}
+
 	result := templateRegex.ReplaceAllStringFunc(template, func(match string) string {
 		varName := strings.TrimSpace(templateRegex.FindStringSubmatch(match)[1])
 		pathParts := strings.Split(varName, ".")
-		value := getNestedValue(secretsMap, pathParts)
+		value := getNestedValue(s.Values, pathParts)
 
 		if value != nil {
 			return stringify(value)
@@ -39,71 +103,80 @@ func ResolveSecrets(template string) string {
 	return result
 }
 
-func LoadSecret(v any) {
-	for _, data := range secrets {
-		var tempData map[string]interface{}
+func (s *Secret) Marshal(v any) ([]byte, error) {
+	secretsMu.Lock()
+	defer secretsMu.Unlock()
 
-		if err := yaml.Unmarshal(data, &tempData); err != nil {
-			Logger.Warn().Err(err).Send()
-			continue
-		}
-
-		if secretData, exists := tempData["secret"]; exists {
-			secretBytes, err := yaml.Encode(secretData, 2)
-			if err != nil {
-				Logger.Warn().Err(err).Send()
-				continue
-			}
-
-			if err := yaml.Unmarshal(secretBytes, v); err != nil {
-				Logger.Warn().Err(err).Send()
-			}
-		}
-	}
-}
-
-func PatchSecret(path []string, value any) error {
-	if SecretPath == "" {
-		return errors.New("secret file disabled")
+	if s.Values == nil {
+		return nil, fmt.Errorf("no values in secret %s", s.Name)
 	}
 
-	// empty config is OK
-	b, _ := os.ReadFile(SecretPath)
-
-	b, err := yaml.Patch(b, append([]string{"secret"}, path...), value)
+	data, err := yaml.Encode(s.Values, 2)
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("error encoding secret values: %w", err)
 	}
 
-	if err := os.WriteFile(SecretPath, b, 0644); err == nil {
-		secrets = [][]byte{b}
-	}
-
-	return err
+	return data, nil
 }
 
-func initSecret(secret string) {
-	if secret == "" {
-		secret = "go2rtc.secrets"
+func (s *Secret) Unmarshal(v any) error {
+	secretsMu.Lock()
+	defer secretsMu.Unlock()
+
+	if s.Values == nil {
+		return fmt.Errorf("no values in secret %s", s.Name)
 	}
 
-	SecretPath = secret
-
-	if SecretPath != "" {
-		if !filepath.IsAbs(SecretPath) {
-			if cwd, err := os.Getwd(); err == nil {
-				SecretPath = filepath.Join(cwd, SecretPath)
-			}
-		}
-		Info["secret_path"] = SecretPath
+	data, err := yaml.Encode(s.Values, 2)
+	if err != nil {
+		return fmt.Errorf("error encoding secret values: %w", err)
 	}
 
-	if data, err := os.ReadFile(SecretPath); err == nil {
-		secrets = append(secrets, data)
+	if err := yaml.Unmarshal(data, v); err != nil {
+		return fmt.Errorf("error unmarshaling secret values: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Secret) Save() error {
+	secretsMu.Lock()
+	defer secretsMu.Unlock()
+	return saveSecret(s.Name, s.Values)
+}
+
+func initSecrets() {
+	var cfg struct {
+		Secrets map[string]map[string]any `yaml:"secrets"`
+	}
+
+	/*
+		Example config:
+			secrets:
+				test_camera:
+					username: test
+					password: test
+	*/
+
+	LoadConfig(&cfg)
+
+	if cfg.Secrets == nil {
+		return
+	}
+
+	secretsMu.Lock()
+	defer secretsMu.Unlock()
+
+	for name, values := range cfg.Secrets {
+		secrets[name] = &Secret{Name: name, Values: values}
 	}
 }
 
-func getNestedValue(m map[string]interface{}, path []string) interface{} {
+func saveSecret(name string, secret map[string]any) error {
+	return PatchConfig([]string{"secrets", name}, secret)
+}
+
+func getNestedValue(m map[string]any, path []string) interface{} {
 	if len(path) == 0 || m == nil {
 		return nil
 	}
@@ -120,10 +193,10 @@ func getNestedValue(m map[string]interface{}, path []string) interface{} {
 
 	// Check nested maps
 	switch nextMap := value.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		return getNestedValue(nextMap, path[1:])
 	case map[interface{}]interface{}:
-		stringMap := make(map[string]interface{})
+		stringMap := make(map[string]any)
 		for k, v := range nextMap {
 			if keyStr, ok := k.(string); ok {
 				stringMap[keyStr] = v

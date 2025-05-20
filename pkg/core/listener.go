@@ -19,10 +19,6 @@ func (l *Listener) Fire(msg any) {
 	}
 }
 
-func (l *Listener) ParseSource(url string) string {
-	return app.ResolveSecrets(url)
-}
-
-func (l *Listener) SaveSource(path []string, value any) error {
-	return app.PatchSecret(path, value)
+func (l *Listener) NewSecret(name string, defaultValues interface{}) *app.Secret {
+	return app.NewSecret(name, defaultValues)
 }
