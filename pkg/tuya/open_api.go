@@ -225,12 +225,12 @@ func (c *TuyaOpenApiClient) GetAllDevices() ([]Device, error) {
 		return nil, err
 	}
 
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(2 * time.Second)
 	deviceMap := make(map[string]Device)
 
 	for i, home := range homes {
 		if i > 0 {
-			time.Sleep(300 * time.Millisecond)
+			time.Sleep(500 * time.Millisecond)
 		}
 
 		devices, err := c.queryDevicesByHome(home.OwnerID)
