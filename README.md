@@ -587,7 +587,7 @@ The `Cloud API` requires setting up a cloud project in the Tuya Developer Platfo
   - `flv` - FLV stream _(only available for `Open API`)_
   - `rtmp` - RTMP stream _(only available for `Open API`)_
 
-- Use `resolution` parameter to select the stream (only available for `Cloud API` and not all cameras support `hd` stream):
+- Use `resolution` parameter to select the stream (only available for `Cloud API` and not all cameras support `hd` stream through WebRTC even if the camera has it):
   - `hd` - HD stream (default)
   - `sd` - SD stream
 
