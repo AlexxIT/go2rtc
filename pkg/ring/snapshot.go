@@ -10,11 +10,11 @@ import (
 type SnapshotProducer struct {
 	core.Connection
 
-	client   *RingRestClient
-	cameraID string
+	client   *RingApi
+	cameraID int
 }
 
-func NewSnapshotProducer(client *RingRestClient, cameraID string) *SnapshotProducer {
+func NewSnapshotProducer(client *RingApi, cameraID int) *SnapshotProducer {
 	return &SnapshotProducer{
 		Connection: core.Connection{
 			ID:         core.NewID(),
@@ -41,8 +41,7 @@ func NewSnapshotProducer(client *RingRestClient, cameraID string) *SnapshotProdu
 }
 
 func (p *SnapshotProducer) Start() error {
-	// Fetch snapshot
-	response, err := p.client.Request("GET", fmt.Sprintf("https://app-snaps.ring.com/snapshots/next/%s", p.cameraID), nil)
+	response, err := p.client.Request("GET", fmt.Sprintf("https://app-snaps.ring.com/snapshots/next/%d", p.cameraID), nil)
 	if err != nil {
 		return err
 	}
