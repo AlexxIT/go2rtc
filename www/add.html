@@ -28,6 +28,7 @@
         }
 
     </style>
+    <script src="https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs/qrcode.min.js"></script>
 </head>
 <body>
 <script src="main.js"></script>
@@ -278,6 +279,110 @@
 
     document.getElementById('ring-credentials-form').addEventListener('submit', handleRingAuth);
     document.getElementById('ring-token-form').addEventListener('submit', handleRingAuth);
+</script>
+
+<button id="tuya">Tuya</button>
+<div class="module">
+    <p style="font-size: 0.9rem">Attention: Cameras added through QR Code does not support webrtc mode!</p>
+    <form id="tuya-qr-form" style="margin-bottom: 10px">
+        <input id="tuya-user-code" type="text" name="user_code" placeholder="User Code">
+        <input type="submit" value="Generate QR Code">
+    </form>
+
+    <form id="tuya-login-form" style="margin-bottom: 10px; display: none">
+        <div id="qrcode"></div>
+        <input type="submit" value="Login">
+    </form>
+
+    <table id="tuya-table"></table>
+</div>
+<script>
+    document.getElementById('tuya').addEventListener('click', async ev => {
+        document.getElementById('qrcode').innerHTML = '';
+        ev.target.nextElementSibling.style.display = 'block';
+    });
+
+    document.getElementById('tuya-qr-form').addEventListener('submit', async ev => {
+        ev.preventDefault();
+
+        const table = document.getElementById('tuya-table');
+
+        const query = new URLSearchParams(new FormData(ev.target));
+        if (!query.has('user_code')) {
+            table.innerText = 'User Code is required';
+            return;
+        }
+
+        table.innerText = 'loading...';
+
+        const url = new URL('api/tuya?' + query.toString(), location.href);
+
+        const r = await fetch(url, {cache: 'no-cache'});
+        
+        if (!r.ok) {
+            table.innerText = await r.text()
+            return;
+        }
+
+        const response = await r.json();
+        
+        new QRCode(document.getElementById('qrcode'), {
+            text: 'tuyaSmart--qrLogin?token=' + response.qrCode,
+            width: 256,
+            height: 256,
+            colorDark: '#000000',
+            colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.Q
+        });
+
+        table.innerText = 'Scan the QR Code with the Tuya/Smart Life app and click "Login"';
+
+        document.getElementById('tuya-qr-form').style.display = 'none';
+        document.getElementById('tuya-login-form').style.display = 'block';
+    });
+
+    document.getElementById('tuya-login-form').addEventListener('submit', async ev => {
+        ev.preventDefault();
+
+        const table = document.getElementById('tuya-table');
+
+        const qrcodeEl = document.getElementById('qrcode');
+        const userCode = document.getElementById('tuya-user-code')?.value;
+        const qrcode = qrcodeEl?.title;
+
+        if (!userCode) {
+            table.innerText = 'User Code is required! Reload the page and generate a QR Code first.';
+            return;
+        }
+
+        if (!qrcode) {
+            table.innerText = 'QR Code is required! Please generate a QR Code first and scan it with the Tuya/Smart Life app.';
+            return;
+        }
+
+        table.innerText = 'loading...';
+
+        const url = new URL('api/tuya', location.href);
+        url.searchParams.set('user_code', userCode);
+        url.searchParams.set('token', qrcode.replace('tuyaSmart--qrLogin?token=', ''));
+
+        const r = await fetch(url, {cache: 'no-cache'});
+
+        if (!r.ok) {
+            table.innerText = await r.text();
+            return;
+        }
+
+        table.innerText = '';
+
+        const data = await r.json();
+
+        document.getElementById('tuya-qr-form').style.display = 'none';
+        document.getElementById('tuya-login-form').style.display = 'none';
+
+        drawTable(table, data);
+    });
+
 </script>
 
 <button id="gopro">GoPro</button>

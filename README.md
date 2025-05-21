@@ -568,38 +568,59 @@ Tested: KD110, KC200, KC401, KC420WS, EC71.
 
 #### Source: Tuya
 
-[Tuya](https://www.tuya.com/) proprietary camera protocol with **two way audio** support.
+[Tuya](https://www.tuya.com/) proprietary camera protocol with **two way audio** support. Go2rtc supports `Cloud API` and `Open API`.
 
+The `Cloud API` requires setting up a cloud project in the Tuya Developer Platform to retrieve the required credentials. The `Open API` does not require a cloud project and the cameras can be added through the interface via QR code (user code required), but it does not support webrtc mode and two way audio.
+
+**Cloud API**:
 - Obtain `device_id`, `client_id`, `client_secret`, and `uid` (if using `mode=webrtc`) from [Tuya IoT Platform](https://iot.tuya.com/). [Here's a guide](https://xzetsubou.github.io/hass-localtuya/cloud_api/).
-- Use `mode` parameter to select the stream type:
-  - `webrtc` - WebRTC stream (default)
-  - `rtsp` - RTSP stream _(if available)_
-  - `hls` - HLS stream _(if available)_
-- Use `resolution` parameter to select the stream:
+
+**Open API**:
+- To get your user code, open the Tuya Smart app or Smart Life app and go to `Profile` > `Settings` > `Account and Security` > `User Code`
+- Open the Go2rtc interface and go to `Add` > `Tuya` and enter your `User Code` in the `User Code` field. Click on `Generate QR Code` and scan it with the Tuya Smart app or Smart Life app. After scanning, click on `Login`. All cameras in your home (not shared ones) will be listed in the Go2rtc interface. Copy/Paste stream URLs to your `go2rtc.yaml` file.
+
+**Configuring the stream:**
+- Use `mode` parameter to select the stream type (not all cameras support all modes):
+  - `webrtc` - WebRTC stream _(default for `Cloud API`)_
+  - `rtsp` - RTSP stream _(default for `Open API`)_
+  - `hls` - HLS stream
+  - `flv` - FLV stream _(only available for `Open API`)_
+  - `rtmp` - RTMP stream _(only available for `Open API`)_
+
+- Use `resolution` parameter to select the stream (only available for `Cloud API` and not all cameras support `hd` stream):
   - `hd` - HD stream (default)
   - `sd` - SD stream
 
 ```yaml
 streams:
-  # Tuya WebRTC stream
-  tuya_webrtc: tuya://openapi.tuyaus.com?device_id=XXX&uid=XXX&client_id=XXX&client_secret=XXX
+  # Cloud API: WebRTC stream
+  tuya_webrtc:
+   - tuya://openapi.tuyaus.com?device_id=XXX&uid=XXX&client_id=XXX&client_secret=XXX
 
-  # Tuya WebRTC stream (same as above)
-  tuya_webrtc_2: tuya://openapi.tuyaus.com?device_id=XXX&uid=XXX&client_id=XXX&client_secret=XXX&mode=webrtc
+  # Cloud API: WebRTC stream (same as above)
+  tuya_webrtc_2:
+   - tuya://openapi.tuyaus.com?device_id=XXX&uid=XXX&client_id=XXX&client_secret=XXX&mode=webrtc
   
-  # Tuya WebRTC stream (HD)
-  tuya_webrtc_hd: tuya://openapi.tuyaus.com?device_id=XXX&uid=XXX&client_id=XXX&client_secret=XXX&resolution=hd
+  # Cloud API: WebRTC stream (HD)
+  tuya_webrtc_hd:
+   - tuya://openapi.tuyaus.com?device_id=XXX&uid=XXX&client_id=XXX&client_secret=XXX&resolution=hd
   
-  # Tuya WebRTC stream (SD)
-  tuya_webrtc_sd: tuya://openapi.tuyaus.com?device_id=XXX&uid=XXX&client_id=XXX&client_secret=XXX&resolution=sd
+  # Cloud API: WebRTC stream (SD)
+  tuya_webrtc_sd:
+   - tuya://openapi.tuyaus.com?device_id=XXX&uid=XXX&client_id=XXX&client_secret=XXX&resolution=sd
   
-  # Using RTSP when available (no "uid" required)
-  tuya_rtsp: tuya://openapi.tuyaus.com?device_id=XXX&client_id=XXX&client_secret=XXX&mode=rtsp
+  # Cloud API: RTSP stream when available (no "uid" required)
+  tuya_rtsp:
+   - tuya://openapi.tuyaus.com?device_id=XXX&client_id=XXX&client_secret=XXX&mode=rtsp
   
-  # Using HLS when available (no "uid" required)
-  tuya_hls: tuya://openapi.tuyaus.com?device_id=XXX&client_id=XXX&client_secret=XXX&mode=hls
+  # Cloud API: HLS stream when available (no "uid" required)
+  tuya_hls: 
+   - tuya://openapi.tuyaus.com?device_id=XXX&client_id=XXX&client_secret=XXX&mode=hls
+
+  # Open API: RTSP stream
+  tuya_openapi:
+    - tuya://apigw.tuyaeu.com?device_id=XXX&terminal_id=XXX&token=XXX&uid=XXX
 ```
-
 
 #### Source: GoPro
 
