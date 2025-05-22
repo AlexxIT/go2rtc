@@ -591,7 +591,7 @@ Support import camera links from [Home Assistant](https://www.home-assistant.io/
 
 ```yaml
 hass:
-  config: "/homeassistant"  # skip this setting if you are a Home Assistant Add-on user
+  config: "/config"  # skip this setting if you are a Home Assistant Add-on user
 
 streams:
   generic_camera: hass:Camera1  # Settings > Integrations > Integration Name
