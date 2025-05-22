@@ -490,7 +490,7 @@ func (c *Client) sendMessageToDataChannel(message []byte) error {
 func (c *Client) getSender() *webrtc.Track {
 	for _, tr := range c.pc.GetTransceivers() {
 		if tr.Kind() == pion.RTPCodecTypeAudio {
-			if tr.Kind() == pion.RTPCodecType(pion.RTPTransceiverDirectionSendonly) || tr.Kind() == pion.RTPCodecType(pion.RTPTransceiverDirectionSendrecv) {
+			if tr.Direction() == pion.RTPTransceiverDirectionSendonly || tr.Direction() == pion.RTPTransceiverDirectionSendrecv {
 				if s := tr.Sender(); s != nil {
 					if t := s.Track().(*webrtc.Track); t != nil {
 						return t
