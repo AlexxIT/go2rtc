@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:labs
 
 # 0. Prepare images
-ARG PYTHON_VERSION="3.11"
+ARG PYTHON_VERSION="3.13"
 ARG GO_VERSION="1.24"
 
 
