@@ -231,7 +231,7 @@ func (c *TuyaMqttClient) onMqttCandidate(msg *MqttMessage) {
 		return
 	}
 
-	// candidate from device start with "a=", end with "\r\n", which are not needed by Chrome webRTC
+	// fix candidates
 	candidateFrame.Candidate = strings.TrimPrefix(candidateFrame.Candidate, "a=")
 	candidateFrame.Candidate = strings.TrimSuffix(candidateFrame.Candidate, "\r\n")
 

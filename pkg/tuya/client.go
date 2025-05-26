@@ -64,14 +64,14 @@ func Dial(rawURL string) (core.Producer, error) {
 	// Stream params
 	streamResolution := query.Get("resolution")
 
-	useTuyaApi := deviceId != "" && email != "" && password != ""
+	useSmartApi := deviceId != "" && email != "" && password != ""
 	useCloudApi := deviceId != "" && uid != "" && clientId != "" && clientSecret != ""
 
 	if streamResolution == "" || (streamResolution != "hd" && streamResolution != "sd") {
 		streamResolution = "hd"
 	}
 
-	if !useTuyaApi && !useCloudApi {
+	if !useSmartApi && !useCloudApi {
 		return nil, errors.New("tuya: wrong query params")
 	}
 
@@ -79,7 +79,7 @@ func Dial(rawURL string) (core.Producer, error) {
 		handlers: make(map[uint32]func(*rtp.Packet)),
 	}
 
-	if useTuyaApi {
+	if useSmartApi {
 		if client.api, err = NewTuyaSmartApiClient(nil, u.Hostname(), email, password, deviceId); err != nil {
 			return nil, fmt.Errorf("tuya: %w", err)
 		}
