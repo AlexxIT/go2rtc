@@ -122,8 +122,8 @@ type AppInfo struct {
 
 type MQTTConfigResponse struct {
 	Result  SmartApiMQTTConfig `json:"result"`
-	Success bool              `json:"success"`
-	Msg     string            `json:"errorMsg,omitempty"`
+	Success bool               `json:"success"`
+	Msg     string             `json:"errorMsg,omitempty"`
 }
 
 type SmartApiMQTTConfig struct {
@@ -210,8 +210,8 @@ type SmartApiWebRTCConfigRequest struct {
 
 type SmartApiWebRTCConfigResponse struct {
 	Result  SmartApiWebRTCConfig `json:"result"`
-	Success bool             `json:"success"`
-	Msg     string           `json:"errorMsg,omitempty"`
+	Success bool                 `json:"success"`
+	Msg     string               `json:"errorMsg,omitempty"`
 }
 
 type SmartApiWebRTCConfig struct {
