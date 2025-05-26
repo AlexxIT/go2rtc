@@ -155,15 +155,6 @@ func buildSecretReplacer(cfg struct {
 		}
 	}
 
-	if cfg.Env != nil {
-		for _, value := range cfg.Env {
-			if len(value) > 0 && !secretValues[value] {
-				secretValues[value] = true
-				newSecrets = append(newSecrets, value)
-			}
-		}
-	}
-
 	if cfg.Secrets != nil {
 		for _, secretMap := range cfg.Secrets {
 			for _, value := range secretMap {
