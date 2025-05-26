@@ -26,17 +26,13 @@ type TuyaAPI interface {
 type TuyaClient struct {
 	TuyaAPI
 
-	httpClient   *http.Client
-	mqtt         *TuyaMqttClient
-	streamMode   string
-	baseUrl      string
-	accessToken  string
-	refreshToken string
-	expireTime   int64
-	deviceId     string
-	uid          string
-	skill        *Skill
-	iceServers   []pionWebrtc.ICEServer
+	httpClient *http.Client
+	mqtt       *TuyaMqttClient
+	baseUrl    string
+	expireTime int64
+	deviceId   string
+	skill      *Skill
+	iceServers []pionWebrtc.ICEServer
 }
 
 type AudioAttributes struct {
@@ -44,11 +40,11 @@ type AudioAttributes struct {
 	HardwareCapability []int `json:"hardware_capability"` // 1 = mic, 2 = speaker
 }
 
-type OpenApiICE struct {
+type ICEServer struct {
 	Urls       string `json:"urls"`
-	Username   string `json:"username"`
-	Credential string `json:"credential"`
-	TTL        int    `json:"ttl"`
+	Username   string `json:"username,omitempty"`
+	Credential string `json:"credential,omitempty"`
+	TTL        int    `json:"ttl,omitempty"`
 }
 
 type WebICE struct {
@@ -58,7 +54,7 @@ type WebICE struct {
 }
 
 type P2PConfig struct {
-	Ices []OpenApiICE `json:"ices"`
+	Ices []ICEServer `json:"ices"`
 }
 
 type AudioSkill struct {

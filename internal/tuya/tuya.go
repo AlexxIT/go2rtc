@@ -1,21 +1,19 @@
 package tuya
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
-	"strings"
-	"time"
+	"strconv"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/tuya"
 )
-
-var users = make(map[string]tuya.LoginResponse)
 
 func Init() {
 	streams.HandleFunc("tuya", func(source string) (core.Producer, error) {
@@ -27,74 +25,41 @@ func Init() {
 
 func apiTuya(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
-	userCode := query.Get("user_code")
-	token := query.Get("token")
+	region := query.Get("region")
+	email := query.Get("email")
+	password := query.Get("password")
 
-	if userCode == "" {
-		http.Error(w, "user_code is required", http.StatusBadRequest)
+	if email == "" || password == "" || region == "" {
+		http.Error(w, "email, password and region are required", http.StatusBadRequest)
 		return
 	}
 
-	var auth *tuya.LoginResponse
-	if loginResponse, ok := users[userCode]; ok {
-		expireTime := loginResponse.Timestamp + loginResponse.Result.ExpireTime
-
-		if expireTime > time.Now().Unix() {
-			auth = &loginResponse
-		} else {
-			delete(users, userCode)
-			token = ""
+	var tuyaRegion *tuya.Region
+	for _, r := range tuya.AvailableRegions {
+		if r.Host == region {
+			tuyaRegion = &r
+			break
 		}
 	}
 
-	if auth == nil && token == "" {
-		qrCode, err := getQRCode(userCode)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		// response qrCode
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"qrCode": qrCode,
-		})
-
+	if tuyaRegion == nil {
+		http.Error(w, fmt.Sprintf("invalid region: %s", region), http.StatusBadRequest)
 		return
 	}
 
-	if auth == nil && token != "" {
-		authResponse, err := login(userCode, token)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+	httpClient := tuya.CreateHTTPClientWithSession()
 
-		auth = authResponse
-	}
-
-	if auth == nil {
-		http.Error(w, "failed to get auth", http.StatusInternalServerError)
-		return
-	}
-
-	tokenInfo := tuya.TokenInfo{
-		AccessToken:  auth.Result.AccessToken,
-		ExpireTime:   auth.Timestamp + auth.Result.ExpireTime,
-		RefreshToken: auth.Result.RefreshToken,
-	}
-
-	tokenInfoBase64, err := tuya.ToBase64(&tokenInfo)
+	_, err := login(httpClient, tuyaRegion.Host, email, password, tuyaRegion.Continent)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("login failed: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	tuyaAPI, err := tuya.NewTuyaOpenApiClient(
-		strings.Replace(auth.Result.Endpoint, "https://", "", 1),
-		auth.Result.UID,
-		"",
-		auth.Result.TerminalID,
-		tokenInfo,
+	tuyaAPI, err := tuya.NewTuyaApiClient(
+		httpClient,
+		tuyaRegion.Host,
+		email,
+		password,
 		"",
 	)
 
@@ -103,25 +68,52 @@ func apiTuya(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	devices, err := tuyaAPI.GetAllDevices()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	var devices []tuya.Device
+
+	homes, _ := tuyaAPI.GetHomeList()
+	if homes != nil && len(homes.Result) > 0 {
+		for _, home := range homes.Result {
+			roomList, err := tuyaAPI.GetRoomList(strconv.Itoa(home.Gid))
+			if err != nil {
+				continue
+			}
+
+			for _, room := range roomList.Result {
+				for _, device := range room.DeviceList {
+					if (device.Category == "sp" || device.Category == "dghsxj") && !containsDevice(devices, device.DeviceId) {
+						devices = append(devices, device)
+					}
+				}
+			}
+		}
+	}
+
+	sharedHomes, _ := tuyaAPI.GetSharedHomeList()
+	if sharedHomes != nil && len(sharedHomes.Result.SecurityWebCShareInfoList) > 0 {
+		for _, sharedHome := range sharedHomes.Result.SecurityWebCShareInfoList {
+			for _, device := range sharedHome.DeviceInfoList {
+				if (device.Category == "sp" || device.Category == "dghsxj") && !containsDevice(devices, device.DeviceId) {
+					devices = append(devices, device)
+				}
+			}
+		}
+	}
+
+	if len(devices) == 0 {
+		http.Error(w, "no cameras found", http.StatusNotFound)
 		return
 	}
 
 	var items []*api.Source
 	for _, device := range devices {
 		cleanQuery := url.Values{}
-		cleanQuery.Set("uid", auth.Result.UID)
-		cleanQuery.Set("token", tokenInfoBase64)
-		cleanQuery.Set("terminal_id", auth.Result.TerminalID)
-		cleanQuery.Set("device_id", device.ID)
-
-		endpoint := strings.Replace(auth.Result.Endpoint, "https://", "tuya://", 1)
-		url := fmt.Sprintf("%s?%s", endpoint, cleanQuery.Encode())
+		cleanQuery.Set("device_id", device.DeviceId)
+		cleanQuery.Set("email", email)
+		cleanQuery.Set("password", password)
+		url := fmt.Sprintf("tuya://%s?%s", tuyaRegion.Host, cleanQuery.Encode())
 
 		items = append(items, &api.Source{
-			Name: device.Name,
+			Name: device.DeviceName,
 			URL:  url,
 		})
 	}
@@ -129,86 +121,128 @@ func apiTuya(w http.ResponseWriter, r *http.Request) {
 	api.ResponseSources(w, items)
 }
 
-func login(userCode string, qrCode string) (*tuya.LoginResponse, error) {
-	url := fmt.Sprintf("https://%s/v1.0/m/life/home-assistant/qrcode/tokens/%s?clientid=%s&usercode=%s", tuya.TUYA_HOST, qrCode, tuya.TUYA_CLIENT_ID, userCode)
-
-	req, err := http.NewRequest("GET", url, nil)
+func login(client *http.Client, serverHost, email, password, countryCode string) (*tuya.LoginResult, error) {
+	tokenResp, err := getLoginToken(client, serverHost, email, countryCode)
 	if err != nil {
 		return nil, err
 	}
 
-	httpClient := &http.Client{
-		Timeout: 10 * time.Second,
+	encryptedPassword, err := tuya.EncryptPassword(password, tokenResp.Result.PbKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encrypt password: %v", err)
 	}
 
-	response, err := httpClient.Do(req)
+	var loginResp *tuya.PasswordLoginResponse
+	var url string
+
+	loginReq := tuya.PasswordLoginRequest{
+		CountryCode: countryCode,
+		Passwd:      encryptedPassword,
+		Token:       tokenResp.Result.Token,
+		IfEncrypt:   1,
+		Options:     `{"group":1}`,
+	}
+
+	if tuya.IsEmailAddress(email) {
+		url = fmt.Sprintf("https://%s/api/private/email/login", serverHost)
+		loginReq.Email = email
+	} else {
+		url = fmt.Sprintf("https://%s/api/private/phone/login", serverHost)
+		loginReq.Mobile = email
+	}
+
+	loginResp, err = performLogin(client, url, loginReq, serverHost)
+
 	if err != nil {
 		return nil, err
 	}
-	defer response.Body.Close()
 
-	res, err := io.ReadAll(response.Body)
-	if err != nil {
-		return nil, err
+	if !loginResp.Success {
+		return nil, errors.New(loginResp.ErrorMsg)
 	}
 
-	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to get QR code: %s", string(res))
-	}
-
-	var loginResponse tuya.LoginResponse
-	err = json.Unmarshal(res, &loginResponse)
-	if err != nil {
-		return nil, err
-	}
-
-	if !loginResponse.Success {
-		return nil, fmt.Errorf("failed to login: %s", loginResponse.Msg)
-	}
-
-	users[userCode] = loginResponse
-
-	return &loginResponse, nil
+	return &loginResp.Result, nil
 }
 
-func getQRCode(userCode string) (string, error) {
-	url := fmt.Sprintf("https://%s/v1.0/m/life/home-assistant/qrcode/tokens?clientid=%s&schema=%s&usercode=%s", tuya.TUYA_HOST, tuya.TUYA_CLIENT_ID, tuya.TUYA_SCHEMA, userCode)
+func getLoginToken(client *http.Client, serverHost, username, countryCode string) (*tuya.LoginTokenResponse, error) {
+	url := fmt.Sprintf("https://%s/api/login/token", serverHost)
 
-	req, err := http.NewRequest("POST", url, nil)
+	tokenReq := tuya.LoginTokenRequest{
+		CountryCode: countryCode,
+		Username:    username,
+		IsUid:       false,
+	}
+
+	jsonData, err := json.Marshal(tokenReq)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	req.Header.Set("Content-Type", "text/plain")
-
-	httpClient := &http.Client{
-		Timeout: 10 * time.Second,
-	}
-
-	response, err := httpClient.Do(req)
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	defer response.Body.Close()
 
-	res, err := io.ReadAll(response.Body)
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+	req.Header.Set("Accept", "*/*")
+	req.Header.Set("Origin", fmt.Sprintf("https://%s", serverHost))
+	req.Header.Set("Referer", fmt.Sprintf("https://%s/login", serverHost))
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+
+	resp, err := client.Do(req)
 	if err != nil {
-		return "", err
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var tokenResp tuya.LoginTokenResponse
+	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+		return nil, err
 	}
 
-	if response.StatusCode != http.StatusOK {
-		return "", err
+	if !tokenResp.Success {
+		return nil, err
 	}
 
-	var qrResponse tuya.QRResponse
-	err = json.Unmarshal(res, &qrResponse)
+	return &tokenResp, nil
+}
+
+func performLogin(client *http.Client, url string, loginReq tuya.PasswordLoginRequest, serverHost string) (*tuya.PasswordLoginResponse, error) {
+	jsonData, err := json.Marshal(loginReq)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	if !qrResponse.Success {
-		return "", fmt.Errorf("failed to get QR code: %s", qrResponse.Msg)
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, err
 	}
 
-	return qrResponse.Result.Code, nil
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+	req.Header.Set("Accept", "*/*")
+	req.Header.Set("Origin", fmt.Sprintf("https://%s", serverHost))
+	req.Header.Set("Referer", fmt.Sprintf("https://%s/login", serverHost))
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var loginResp tuya.PasswordLoginResponse
+	if err := json.NewDecoder(resp.Body).Decode(&loginResp); err != nil {
+		return nil, err
+	}
+
+	return &loginResp, nil
+}
+
+func containsDevice(devices []tuya.Device, deviceID string) bool {
+	for _, device := range devices {
+		if device.DeviceId == deviceID {
+			return true
+		}
+	}
+	return false
 }

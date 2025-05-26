@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/md5"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -68,24 +69,26 @@ type OpenIoTHubConfigResponse struct {
 
 type TuyaCloudApiClient struct {
 	TuyaClient
+	uid             string
 	clientId        string
 	clientSecret    string
+	accessToken     string
+	refreshToken    string
 	refreshingToken bool
 }
 
-func NewTuyaCloudApiClient(baseUrl string, uid string, deviceId string, clientId string, clientSecret string, streamMode string) (*TuyaCloudApiClient, error) {
+func NewTuyaCloudApiClient(baseUrl, uid, deviceId, clientId, clientSecret string) (*TuyaCloudApiClient, error) {
 	mqttClient := NewTuyaMqttClient(deviceId)
 
 	client := &TuyaCloudApiClient{
 		TuyaClient: TuyaClient{
 			httpClient: &http.Client{Timeout: 15 * time.Second},
 			mqtt:       mqttClient,
-			uid:        uid,
 			deviceId:   deviceId,
-			streamMode: streamMode,
 			expireTime: 0,
 			baseUrl:    baseUrl,
 		},
+		uid:             uid,
 		clientId:        clientId,
 		clientSecret:    clientSecret,
 		refreshingToken: false,
@@ -140,7 +143,7 @@ func (c *TuyaCloudApiClient) GetStreamUrl(streamType string) (streamUrl string, 
 	}
 
 	if !allocResponse.Success {
-		return "", fmt.Errorf(allocResponse.Msg)
+		return "", errors.New(allocResponse.Msg)
 	}
 
 	return allocResponse.Result.URL, nil
@@ -175,7 +178,7 @@ func (c *TuyaCloudApiClient) initToken() (err error) {
 	}
 
 	if !tokenResponse.Success {
-		return fmt.Errorf(tokenResponse.Msg)
+		return errors.New(tokenResponse.Msg)
 	}
 
 	c.accessToken = tokenResponse.Result.AccessToken

@@ -7,7 +7,6 @@ import (
 	"net/url"
 	"regexp"
 
-	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	"github.com/pion/rtp"
@@ -50,38 +49,29 @@ func Dial(rawURL string) (core.Producer, error) {
 
 	query := u.Query()
 
-	// Open API
-	tokenInfo := query.Get("token")
-	terminalId := query.Get("terminal_id")
+	// Tuya API
+	email := query.Get("email")
+	password := query.Get("password")
 
 	// Cloud API
+	uid := query.Get("uid")
 	clientId := query.Get("client_id")
 	clientSecret := query.Get("client_secret")
 
 	// Shared params
 	deviceId := query.Get("device_id")
-	uid := query.Get("uid")
 
 	// Stream params
 	streamResolution := query.Get("resolution")
-	streamMode := query.Get("mode")
 
-	useOpenApi := deviceId != "" && uid != "" && tokenInfo != "" && terminalId != ""
-	useCloudApi := deviceId != "" && ((streamMode == "webrtc" || streamMode == "") && uid != "") && clientId != "" && clientSecret != ""
+	useTuyaApi := deviceId != "" && email != "" && password != ""
+	useCloudApi := deviceId != "" && uid != "" && clientId != "" && clientSecret != ""
 
 	if streamResolution == "" || (streamResolution != "hd" && streamResolution != "sd") {
 		streamResolution = "hd"
 	}
 
-	if streamMode == "" || (streamMode != "rtsp" && streamMode != "hls" && streamMode != "flv" && streamMode != "rtmp" && streamMode != "webrtc") {
-		if useOpenApi {
-			streamMode = "rtsp"
-		} else {
-			streamMode = "webrtc"
-		}
-	}
-
-	if !useOpenApi && !useCloudApi {
+	if !useTuyaApi && !useCloudApi {
 		return nil, errors.New("tuya: wrong query params")
 	}
 
@@ -89,23 +79,14 @@ func Dial(rawURL string) (core.Producer, error) {
 		handlers: make(map[uint32]func(*rtp.Packet)),
 	}
 
-	if useOpenApi {
-		if client.api, err = NewTuyaOpenApiClient(u.Hostname(), uid, deviceId, terminalId, tokenInfo, streamMode); err != nil {
+	if useTuyaApi {
+		if client.api, err = NewTuyaApiClient(nil, u.Hostname(), email, password, deviceId); err != nil {
 			return nil, fmt.Errorf("tuya: %w", err)
 		}
 	} else {
-		if client.api, err = NewTuyaCloudApiClient(u.Hostname(), uid, deviceId, clientId, clientSecret, streamMode); err != nil {
+		if client.api, err = NewTuyaCloudApiClient(u.Hostname(), uid, deviceId, clientId, clientSecret); err != nil {
 			return nil, fmt.Errorf("tuya: %w", err)
 		}
-	}
-
-	if streamMode != "webrtc" {
-		streamUrl, err := client.api.GetStreamUrl(streamMode)
-		if err != nil {
-			return nil, fmt.Errorf("tuya: %w", err)
-		}
-
-		return streams.GetProducer(streamUrl)
 	}
 
 	if err := client.api.Init(); err != nil {

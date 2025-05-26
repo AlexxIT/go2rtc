@@ -1,72 +1,69 @@
 package tuya
 
 import (
-	"encoding/base64"
-	"encoding/json"
-	"fmt"
+	"crypto/md5"
+	cryptoRand "crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/hex"
+	"encoding/pem"
+	"errors"
+	"net/http"
+	"net/http/cookiejar"
+	"regexp"
+	"time"
+
+	"golang.org/x/net/publicsuffix"
 )
 
-func FormToJSON(content any) string {
-	if content == nil {
-		return "{}"
+func EncryptPassword(password, pbKey string) (string, error) {
+	// Hash password with MD5
+	hasher := md5.New()
+	hasher.Write([]byte(password))
+	hashedPassword := hex.EncodeToString(hasher.Sum(nil))
+
+	// Decode PEM public key
+	block, _ := pem.Decode([]byte("-----BEGIN PUBLIC KEY-----\n" + pbKey + "\n-----END PUBLIC KEY-----"))
+	if block == nil {
+		return "", errors.New("failed to decode PEM block")
 	}
 
-	jsonBytes, err := json.Marshal(content)
+	pubKey, err := x509.ParsePKIXPublicKey(block.Bytes)
 	if err != nil {
-		return "{}"
+		return "", err
 	}
 
-	return string(jsonBytes)
+	rsaPubKey, ok := pubKey.(*rsa.PublicKey)
+	if !ok {
+		return "", errors.New("not an RSA public key")
+	}
+
+	// Encrypt with RSA
+	encrypted, err := rsa.EncryptPKCS1v15(cryptoRand.Reader, rsaPubKey, []byte(hashedPassword))
+	if err != nil {
+		return "", err
+	}
+
+	// Convert to hex string
+	return hex.EncodeToString(encrypted), nil
 }
 
-func ToBase64(tokenInfo *TokenInfo) (string, error) {
-	jsonData, err := json.Marshal(tokenInfo)
-	if err != nil {
-		return "", fmt.Errorf("error marshalling token: %v", err)
-	}
-
-	encoded := base64.URLEncoding.EncodeToString(jsonData)
-
-	return encoded, nil
+func IsEmailAddress(input string) bool {
+	emailRegex := regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+	return emailRegex.MatchString(input)
 }
 
-func FromBase64(encodedTokenInfo string) (*TokenInfo, error) {
-	jsonData, err := base64.URLEncoding.DecodeString(encodedTokenInfo)
+func CreateHTTPClientWithSession() *http.Client {
+	jar, err := cookiejar.New(&cookiejar.Options{
+		PublicSuffixList: publicsuffix.List,
+	})
+
 	if err != nil {
-		return nil, fmt.Errorf("error decoding token: %v", err)
+		return nil
 	}
 
-	var tokenInfo TokenInfo
-	err = json.Unmarshal(jsonData, &tokenInfo)
-	if err != nil {
-		return nil, fmt.Errorf("error unmarshalling token: %v", err)
+	return &http.Client{
+		Timeout: 30 * time.Second,
+		Jar:     jar,
 	}
-
-	return &tokenInfo, nil
-}
-
-func ParseTokenInfo(tokenInfoOrString any) (*TokenInfo, error) {
-	var tokenInfo *TokenInfo
-	var err error
-
-	switch v := tokenInfoOrString.(type) {
-	case string:
-		tokenInfo, err = FromBase64(v)
-		if err != nil {
-			return nil, fmt.Errorf("failed to decode base64 token: %w", err)
-		}
-	case *TokenInfo:
-		tokenInfo = v
-	case TokenInfo:
-		copyOfV := v
-		tokenInfo = &copyOfV
-	default:
-		return nil, fmt.Errorf("invalid type: %T", v)
-	}
-
-	if tokenInfo == nil {
-		return nil, fmt.Errorf("token info is nil")
-	}
-
-	return tokenInfo, nil
 }
