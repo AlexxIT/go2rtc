@@ -15,6 +15,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/hass"
+	"github.com/AlexxIT/go2rtc/pkg/shell"
 	"github.com/rs/zerolog"
 )
 
@@ -177,7 +178,7 @@ func importConfig(config string) error {
 			continue
 		}
 
-		log.Debug().Str("url", "hass:"+entrie.Title).Msg("[hass] load config")
+		log.Debug().Str("url", "hass:"+shell.Redact(entrie.Title)).Msg("[hass] load config")
 		//streams.Get("hass:" + entrie.Title)
 	}
 

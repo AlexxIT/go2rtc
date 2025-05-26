@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/AlexxIT/go2rtc/internal/app"
 )
 
 const (
@@ -76,4 +78,8 @@ func Assert(ok bool) {
 func Caller() string {
 	_, file, line, _ := runtime.Caller(1)
 	return file + ":" + strconv.Itoa(line)
+}
+
+func NewSecret(name string, defaultValues interface{}) (*app.Secret, error) {
+	return app.NewSecret(name, defaultValues)
 }
