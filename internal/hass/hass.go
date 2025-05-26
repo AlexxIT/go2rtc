@@ -30,6 +30,10 @@ func Init() {
 
 	app.LoadConfig(&conf)
 
+	if config == "" {
+		config = "/homeassistant"
+	}
+
 	log = app.GetLogger("hass")
 
 	// support API for https://www.home-assistant.io/integrations/rtsp_to_webrtc/
