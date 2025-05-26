@@ -116,11 +116,11 @@ func RunUntilSignal() {
 func Redact(text string) string {
 	secretMutex.RLock()
 	defer secretMutex.RUnlock()
-	
+
 	if secretReplacer == nil {
 		return text
 	}
-	
+
 	return secretReplacer.Replace(text)
 }
 
@@ -130,13 +130,13 @@ func buildSecretReplacer(cfg struct {
 }) {
 	secretMutex.Lock()
 	defer secretMutex.Unlock()
-	
+
 	if secretValues == nil {
 		secretValues = make(map[string]bool)
 	}
-	
+
 	var newSecrets []string
-	
+
 	if dir, ok := os.LookupEnv("CREDENTIALS_DIRECTORY"); ok {
 		entries, err := os.ReadDir(dir)
 		if err == nil {
@@ -154,7 +154,7 @@ func buildSecretReplacer(cfg struct {
 			}
 		}
 	}
-	
+
 	if cfg.Env != nil {
 		for _, value := range cfg.Env {
 			if len(value) > 0 && !secretValues[value] {
@@ -163,7 +163,7 @@ func buildSecretReplacer(cfg struct {
 			}
 		}
 	}
-	
+
 	if cfg.Secrets != nil {
 		for _, secretMap := range cfg.Secrets {
 			for _, value := range secretMap {
@@ -174,7 +174,7 @@ func buildSecretReplacer(cfg struct {
 			}
 		}
 	}
-	
+
 	if len(newSecrets) > 0 {
 		rebuildReplacer()
 	}
@@ -182,11 +182,11 @@ func buildSecretReplacer(cfg struct {
 
 func rebuildReplacer() {
 	var replacements []string
-	
+
 	for secret := range secretValues {
 		replacements = append(replacements, secret, "*****")
 	}
-	
+
 	if len(replacements) > 0 {
 		secretReplacer = strings.NewReplacer(replacements...)
 	} else {

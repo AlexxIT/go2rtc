@@ -167,17 +167,17 @@ func ResponseJSON(w http.ResponseWriter, v any) {
 
 func ResponsePrettyJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
-	
+
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	enc.SetIndent("", "  ")
 	err := enc.Encode(v)
-	
+
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-	
+
 	redactedJSON := shell.Redact(buf.String())
 	w.Write([]byte(redactedJSON))
 }
