@@ -49,11 +49,11 @@ func Dial(rawURL string) (core.Producer, error) {
 
 	query := u.Query()
 
-	// Tuya API
+	// Tuya Smart API
 	email := query.Get("email")
 	password := query.Get("password")
 
-	// Cloud API
+	// Tuya Cloud API
 	uid := query.Get("uid")
 	clientId := query.Get("client_id")
 	clientSecret := query.Get("client_secret")
@@ -80,7 +80,7 @@ func Dial(rawURL string) (core.Producer, error) {
 	}
 
 	if useTuyaApi {
-		if client.api, err = NewTuyaApiClient(nil, u.Hostname(), email, password, deviceId); err != nil {
+		if client.api, err = NewTuyaSmartApiClient(nil, u.Hostname(), email, password, deviceId); err != nil {
 			return nil, fmt.Errorf("tuya: %w", err)
 		}
 	} else {

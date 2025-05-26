@@ -121,12 +121,12 @@ type AppInfo struct {
 }
 
 type MQTTConfigResponse struct {
-	Result  TuyaApiMQTTConfig `json:"result"`
+	Result  SmartApiMQTTConfig `json:"result"`
 	Success bool              `json:"success"`
 	Msg     string            `json:"errorMsg,omitempty"`
 }
 
-type TuyaApiMQTTConfig struct {
+type SmartApiMQTTConfig struct {
 	Msid     string `json:"msid"`
 	Password string `json:"password"`
 }
@@ -203,18 +203,18 @@ type Device struct {
 	Uuid                string `json:"uuid"`
 }
 
-type TuyaApiWebRTCConfigRequest struct {
+type SmartApiWebRTCConfigRequest struct {
 	DevId         string `json:"devId"`
 	ClientTraceId string `json:"clientTraceId"`
 }
 
-type TuyaApiWebRTCConfigResponse struct {
-	Result  TuyaWebRTCConfig `json:"result"`
+type SmartApiWebRTCConfigResponse struct {
+	Result  SmartApiWebRTCConfig `json:"result"`
 	Success bool             `json:"success"`
 	Msg     string           `json:"errorMsg,omitempty"`
 }
 
-type TuyaWebRTCConfig struct {
+type SmartApiWebRTCConfig struct {
 	AudioAttributes     AudioAttributes `json:"audioAttributes"`
 	Auth                string          `json:"auth"`
 	GatewayId           string          `json:"gatewayId"`
@@ -234,7 +234,7 @@ type TuyaWebRTCConfig struct {
 	VideoClarity        int             `json:"videoClarity"`
 }
 
-type TuyaApiClient struct {
+type TuyaSmartApiClient struct {
 	TuyaClient
 
 	email       string
@@ -259,7 +259,7 @@ var AvailableRegions = []Region{
 	{"india", "protect-in.ismartlife.me", "India", "IN"},
 }
 
-func NewTuyaApiClient(httpClient *http.Client, baseUrl, email, password, deviceId string) (*TuyaApiClient, error) {
+func NewTuyaSmartApiClient(httpClient *http.Client, baseUrl, email, password, deviceId string) (*TuyaSmartApiClient, error) {
 	var region *Region
 	for _, r := range AvailableRegions {
 		if r.Host == baseUrl {
@@ -278,7 +278,7 @@ func NewTuyaApiClient(httpClient *http.Client, baseUrl, email, password, deviceI
 
 	mqttClient := NewTuyaMqttClient(deviceId)
 
-	client := &TuyaApiClient{
+	client := &TuyaSmartApiClient{
 		TuyaClient: TuyaClient{
 			httpClient: httpClient,
 			mqtt:       mqttClient,
@@ -295,7 +295,7 @@ func NewTuyaApiClient(httpClient *http.Client, baseUrl, email, password, deviceI
 }
 
 // WebRTC Flow
-func (c *TuyaApiClient) Init() error {
+func (c *TuyaSmartApiClient) Init() error {
 	if err := c.initToken(); err != nil {
 		return fmt.Errorf("failed to initialize token: %w", err)
 	}
@@ -317,11 +317,11 @@ func (c *TuyaApiClient) Init() error {
 	return nil
 }
 
-func (c *TuyaApiClient) GetStreamUrl(streamType string) (streamUrl string, err error) {
+func (c *TuyaSmartApiClient) GetStreamUrl(streamType string) (streamUrl string, err error) {
 	return "", errors.New("not supported")
 }
 
-func (c *TuyaApiClient) GetAppInfo() (*AppInfoResponse, error) {
+func (c *TuyaSmartApiClient) GetAppInfo() (*AppInfoResponse, error) {
 	url := fmt.Sprintf("https://%s/api/customized/web/app/info", c.baseUrl)
 
 	body, err := c.request("POST", url, nil)
@@ -341,7 +341,7 @@ func (c *TuyaApiClient) GetAppInfo() (*AppInfoResponse, error) {
 	return &appInfoResponse, nil
 }
 
-func (c *TuyaApiClient) GetHomeList() (*HomeListResponse, error) {
+func (c *TuyaSmartApiClient) GetHomeList() (*HomeListResponse, error) {
 	url := fmt.Sprintf("https://%s/api/new/common/homeList", c.baseUrl)
 
 	body, err := c.request("POST", url, nil)
@@ -361,7 +361,7 @@ func (c *TuyaApiClient) GetHomeList() (*HomeListResponse, error) {
 	return &homeListResponse, nil
 }
 
-func (c *TuyaApiClient) GetSharedHomeList() (*SharedHomeListResponse, error) {
+func (c *TuyaSmartApiClient) GetSharedHomeList() (*SharedHomeListResponse, error) {
 	url := fmt.Sprintf("https://%s/api/new/playback/shareList", c.baseUrl)
 
 	body, err := c.request("POST", url, nil)
@@ -381,7 +381,7 @@ func (c *TuyaApiClient) GetSharedHomeList() (*SharedHomeListResponse, error) {
 	return &sharedHomeListResponse, nil
 }
 
-func (c *TuyaApiClient) GetRoomList(homeId string) (*RoomListResponse, error) {
+func (c *TuyaSmartApiClient) GetRoomList(homeId string) (*RoomListResponse, error) {
 	url := fmt.Sprintf("https://%s/api/new/common/roomList", c.baseUrl)
 
 	data := RoomListRequest{
@@ -405,7 +405,7 @@ func (c *TuyaApiClient) GetRoomList(homeId string) (*RoomListResponse, error) {
 	return &roomListResponse, nil
 }
 
-func (c *TuyaApiClient) initToken() error {
+func (c *TuyaSmartApiClient) initToken() error {
 	tokenUrl := fmt.Sprintf("https://%s/api/login/token", c.baseUrl)
 
 	tokenReq := LoginTokenRequest{
@@ -470,10 +470,10 @@ func (c *TuyaApiClient) initToken() error {
 	return nil
 }
 
-func (c *TuyaApiClient) loadWebrtcConfig() (*WebRTCConfig, error) {
+func (c *TuyaSmartApiClient) loadWebrtcConfig() (*WebRTCConfig, error) {
 	url := fmt.Sprintf("https://%s/api/jarvis/config", c.baseUrl)
 
-	data := TuyaApiWebRTCConfigRequest{
+	data := SmartApiWebRTCConfigRequest{
 		DevId:         c.deviceId,
 		ClientTraceId: fmt.Sprintf("%x", rand.Int63()),
 	}
@@ -483,7 +483,7 @@ func (c *TuyaApiClient) loadWebrtcConfig() (*WebRTCConfig, error) {
 		return nil, err
 	}
 
-	var webRTCConfigResponse TuyaApiWebRTCConfigResponse
+	var webRTCConfigResponse SmartApiWebRTCConfigResponse
 	err = json.Unmarshal(body, &webRTCConfigResponse)
 	if err != nil {
 		return nil, err
@@ -524,7 +524,7 @@ func (c *TuyaApiClient) loadWebrtcConfig() (*WebRTCConfig, error) {
 	}, nil
 }
 
-func (c *TuyaApiClient) loadHubConfig() (config *MQTTConfig, err error) {
+func (c *TuyaSmartApiClient) loadHubConfig() (config *MQTTConfig, err error) {
 	mqttUrl := fmt.Sprintf("https://%s/api/jarvis/mqtt", c.baseUrl)
 
 	mqttBody, err := c.request("POST", mqttUrl, nil)
@@ -552,7 +552,7 @@ func (c *TuyaApiClient) loadHubConfig() (config *MQTTConfig, err error) {
 	}, nil
 }
 
-func (c *TuyaApiClient) request(method string, url string, body any) ([]byte, error) {
+func (c *TuyaSmartApiClient) request(method string, url string, body any) ([]byte, error) {
 	var bodyReader io.Reader
 	if body != nil {
 		jsonBody, err := json.Marshal(body)

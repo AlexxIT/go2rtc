@@ -55,7 +55,7 @@ func apiTuya(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tuyaAPI, err := tuya.NewTuyaApiClient(
+	tuyaAPI, err := tuya.NewTuyaSmartApiClient(
 		httpClient,
 		tuyaRegion.Host,
 		email,
