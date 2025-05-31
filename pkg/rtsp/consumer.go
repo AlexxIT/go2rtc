@@ -85,13 +85,22 @@ func (c *Conn) packetWriter(codec *core.Codec, channel, payloadType uint8) core.
 	}
 
 	flushBuf := func() {
-		if err := c.conn.SetWriteDeadline(time.Now().Add(Timeout)); err != nil {
-			return
-		}
 		//log.Printf("[rtsp] channel:%2d write_size:%6d buffer_size:%6d", channel, n, len(buf))
-		if _, err := c.conn.Write(buf[:n]); err == nil {
-			c.Send += n
+
+		if c.transportMode == TransportUDP {
+			if err := c.sendUDPRtpPacket(buf[:n]); err == nil {
+				c.Send += n
+			}
+		} else {
+			if err := c.conn.SetWriteDeadline(time.Now().Add(Timeout)); err != nil {
+				return
+			}
+
+			if _, err := c.conn.Write(buf[:n]); err == nil {
+				c.Send += n
+			}
 		}
+
 		n = 0
 	}
 
