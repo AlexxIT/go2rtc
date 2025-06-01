@@ -52,10 +52,8 @@ func (c *Conn) Dial() (err error) {
 
 		if c.Transport != "udp" {
 			c.Protocol = "rtsp+tcp"
-			c.transportMode = TransportTCP
 		} else {
 			c.Protocol = "rtsp+udp"
-			c.transportMode = TransportUDP
 		}
 	} else {
 		conn, err = websocket.Dial(c.Transport)
@@ -245,14 +243,13 @@ func (c *Conn) SetupMedia(media *core.Media) (byte, error) {
 		return 0, fmt.Errorf("wrong media: %v", media)
 	}
 
-	if c.transportMode == TransportUDP {
+	if c.Transport == "udp" {
 		transport, err := c.setupUDPTransport()
-		if err == nil {
-			return c.sendSetupRequest(media, transport)
+		if err != nil {
+			return 0, err
 		}
-		// Fall back to TCP if UDP fails
-		c.closeUDP()
-		c.transportMode = TransportTCP
+
+		return c.sendSetupRequest(media, transport)
 	}
 
 	transport = c.setupTCPTransport(mediaIndex)
@@ -344,7 +341,7 @@ func (c *Conn) sendSetupRequest(media *core.Media, transport string) (byte, erro
 	// Parse server response
 	responseTransport := res.Header.Get("Transport")
 
-	if c.transportMode == TransportUDP {
+	if c.Transport == "udp" {
 		// Parse UDP response: client_ports=1234-1235;server_port=1234-1235
 		var clientPorts []int
 		var serverPorts []int

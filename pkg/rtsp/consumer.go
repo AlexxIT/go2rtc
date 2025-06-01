@@ -87,7 +87,7 @@ func (c *Conn) packetWriter(codec *core.Codec, channel, payloadType uint8) core.
 	flushBuf := func() {
 		//log.Printf("[rtsp] channel:%2d write_size:%6d buffer_size:%6d", channel, n, len(buf))
 
-		if c.transportMode == TransportUDP {
+		if c.Transport == "udp" {
 			if err := c.sendUDPRtpPacket(buf[:n]); err == nil {
 				c.Send += n
 			}

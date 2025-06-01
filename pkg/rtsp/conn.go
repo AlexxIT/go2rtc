@@ -49,8 +49,6 @@ type Conn struct {
 	state   State
 	stateMu sync.Mutex
 
-	transportMode TransportMode
-
 	// UDP
 
 	udpRtpConns      map[byte]*UDPConnection
@@ -69,8 +67,6 @@ type UDPConnection struct {
 type TransportMode int
 
 const (
-	TransportTCP TransportMode = iota
-	TransportUDP
 	ReceiveMTU = 1500
 )
 
@@ -161,7 +157,7 @@ func (c *Conn) Handle() (err error) {
 			return
 		}
 
-		if c.transportMode == TransportUDP {
+		if c.Transport == "udp" {
 			if err = c.handleUDPClientData(time); err != nil {
 				return err
 			}
