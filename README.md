@@ -75,6 +75,7 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
     * [Incoming sources](#incoming-sources)
     * [Stream to camera](#stream-to-camera)
     * [Publish stream](#publish-stream)
+    * [Preload stream](#preload-stream)
   * [Module: API](#module-api)
   * [Module: RTSP](#module-rtsp)
   * [Module: RTMP](#module-rtmp)
@@ -817,6 +818,25 @@ streams:
 
 - **Telegram Desktop App** > Any public or private channel or group (where you admin) > Live stream > Start with... > Start streaming.
 - **YouTube** > Create > Go live > Stream latency: Ultra low-latency > Copy: Stream URL + Stream key.
+
+### Preload stream
+
+You can preload any stream on go2rtc start. This is useful for cameras that take a long time to start up.
+
+```yaml
+preload:
+  - my_stream1
+  - my_stream2#video#audio#microphone
+  - my_stream3#video=h265#audio=opus
+streams:
+  my_stream1: 
+   - rtsp://129.168.3.1:554/stream1
+  my_stream2: 
+   - rtsp://129.168.3.1:554/stream1
+  my_stream3: 
+   - rtsp://129.168.3.1:554/stream1
+   - ffmpeg:my_stream3#video=copy#audio=opus
+````
 
 ### Module: API
 
