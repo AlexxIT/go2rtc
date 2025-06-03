@@ -586,6 +586,14 @@ Tested: KD110, KC200, KC401, KC420WS, EC71.
 
 ```yaml
 streams:
+  # Tuya Smart API: WebRTC main stream (use Add > Tuya to discover the URL)
+  tuya_main:
+    - tuya://protect-us.ismartlife.me?device_id=XXX&email=XXX&password=XXX
+
+  # Tuya Smart API: WebRTC sub stream (use Add > Tuya to discover the URL)
+  tuya_sub:
+    - tuya://protect-us.ismartlife.me?device_id=XXX&email=XXX&password=XXX&resolution=sd
+
   # Tuya Cloud API: WebRTC main stream
   tuya_webrtc:
    - tuya://openapi.tuyaus.com?device_id=XXX&uid=XXX&client_id=XXX&client_secret=XXX
@@ -593,14 +601,6 @@ streams:
   # Tuya Cloud API: WebRTC sub stream
   tuya_webrtc_sd:
    - tuya://openapi.tuyaus.com?device_id=XXX&uid=XXX&client_id=XXX&client_secret=XXX&resolution=sd
-
-  # Tuya Smart API: WebRTC main stream
-  tuya_main:
-    - tuya://protect-us.ismartlife.me?device_id=XXX&email=XXX&password=XXX
-
-  # Tuya Smart API: WebRTC sub stream
-  tuya_sub:
-    - tuya://protect-us.ismartlife.me?device_id=XXX&email=XXX&password=XXX&resolution=sd
 ```
 
 #### Source: GoPro
