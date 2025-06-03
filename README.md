@@ -570,12 +570,12 @@ Tested: KD110, KC200, KC401, KC420WS, EC71.
 
 [Tuya](https://www.tuya.com/) proprietary camera protocol with **two way audio** support. Go2rtc supports `Tuya Smart API` and `Tuya Cloud API`.
 
-The `Tuya Cloud API` requires setting up a cloud project in the Tuya Developer Platform to retrieve the required credentials. The `Tuya Smart API` does not require a cloud project and the cameras can be added through the interface via email/password.
-
 **Tuya Smart API (recommended)**:
-- Smart Life accounts are not supported, you need to create a Tuya account. If the cameras are already added to the Smart Life app, you need to remove them and add them again to the Tuya Smart app.
+- Cameras can be discovered through the go2rtc web interface via Tuya Smart account (Add > Tuya > Select region and fill in email and password > Login).
+- Smart Life accounts are not supported, you need to create a Tuya Smart account. If the cameras are already added to the Smart Life app, you need to remove them and add them again to the Tuya Smart app.
 
 **Tuya Cloud API**:
+- Requires setting up a cloud project in the Tuya Developer Platform.
 - Obtain `device_id`, `client_id`, `client_secret`, and `uid` from [Tuya IoT Platform](https://iot.tuya.com/). [Here's a guide](https://xzetsubou.github.io/hass-localtuya/cloud_api/).
 - Please ensure that you have subscribed to the `IoT Video Live Stream` service (Free Trial) in the Tuya Developer Platform, otherwise the stream will not work (Tuya Developer Platform > Service API > Authorize > IoT Video Live Stream).
 
