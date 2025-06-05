@@ -9,11 +9,10 @@ import (
 
 type Preload struct {
 	core.Connection
-
 	Closed core.Waiter
 }
 
-func NewPreload(query url.Values) *Preload {
+func NewPreload(name string, query url.Values) *Preload {
 	medias := core.ParseQuery(query)
 
 	for _, value := range query["microphone"] {
@@ -49,11 +48,10 @@ func NewPreload(query url.Values) *Preload {
 	return &Preload{
 		Connection: core.Connection{
 			ID:         core.NewID(),
-			FormatName: "preload",
 			Medias:     medias,
 			Protocol:   "native",
 			RemoteAddr: "localhost",
-			UserAgent:  "go2rtc",
+			UserAgent:  "go2rtc/preload",
 		},
 	}
 }

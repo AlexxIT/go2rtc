@@ -2,13 +2,15 @@ package streams
 
 import (
 	"net/url"
-	"strings"
 
 	"github.com/AlexxIT/go2rtc/pkg/preload"
 )
 
-func (s *Stream) Preload(query url.Values) error {
-	cons := preload.NewPreload(query)
+var preloads = map[string]*preload.Preload{}
+
+func (s *Stream) Preload(name string, query url.Values) error {
+	cons := preload.NewPreload(name, query)
+	preloads[name] = cons
 
 	if err := s.AddConsumer(cons); err != nil {
 		return err
@@ -17,14 +19,16 @@ func (s *Stream) Preload(query url.Values) error {
 	return nil
 }
 
-func Preload(src string) {
-	name, rawQuery, _ := strings.Cut(src, "#")
-	query := ParseQuery(rawQuery)
+func Preload(src string, rawQuery string) {
+	// skip if exists
+	if _, ok := preloads[src]; ok {
+		return
+	}
 
-	if stream := Get(name); stream != nil {
-		if err := stream.Preload(query); err != nil {
+	if stream := Get(src); stream != nil {
+		query := ParseQuery(rawQuery)
+		if err := stream.Preload(src, query); err != nil {
 			log.Error().Err(err).Caller().Send()
 		}
-		return
 	}
 }
