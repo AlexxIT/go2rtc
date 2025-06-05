@@ -825,18 +825,19 @@ You can preload any stream on go2rtc start. This is useful for cameras that take
 
 ```yaml
 preload:
-  - my_stream1
-  - my_stream2#video#audio#microphone
-  - my_stream3#video=h265#audio=opus
+  camera1:                                     # default: video&audio = ANY
+  camera2: "video"                             # preload only video track
+  camera3: "video=h264#audio=opus"             # initialize transcoding pipeline
+
 streams:
-  my_stream1: 
-   - rtsp://129.168.3.1:554/stream1
-  my_stream2: 
-   - rtsp://129.168.3.1:554/stream1
-  my_stream3: 
-   - rtsp://129.168.3.1:554/stream1
-   - ffmpeg:my_stream3#video=copy#audio=opus
-````
+  camera1: 
+    - rtsp://192.168.1.100/stream
+  camera2: 
+    - rtsp://192.168.1.101/stream  
+  camera3: 
+    - rtsp://192.168.1.102/h265stream
+    - ffmpeg:camera3#video=h264#audio=opus#hardware
+```
 
 ### Module: API
 
