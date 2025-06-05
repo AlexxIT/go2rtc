@@ -237,6 +237,54 @@ paths:
 
 
 
+  /api/preload:
+    put:
+      summary: Preload new stream
+      tags: [ Streams list ]
+      parameters:
+        - name: src
+          in: query
+          description: Stream source (name)
+          required: true
+          schema: { type: string }
+          example: "camera1"
+        - name: video
+          in: query
+          description: Video codecs filter
+          required: false
+          schema: { type: string }
+          example: all,h264,h265,...
+        - name: audio
+          in: query
+          description: Audio codecs filter
+          required: false
+          schema: { type: string }
+          example: all,aac,opus,...
+        - name: microphone
+          in: query
+          description: Microphone codecs filter
+          required: false
+          schema: { type: string }
+          example: all,aac,opus,...
+      responses:
+            default:
+              description: Default response
+    delete:
+      summary: Delete preloaded stream
+      tags: [ Streams list ]
+      parameters:
+        - name: src
+          in: query
+          description: Stream source (name)
+          required: true
+          schema: { type: string }
+          example: "camera1"
+      responses:
+            default:
+              description: Default response
+
+
+
   /api/streams?src={src}:
     get:
       summary: Get stream info in JSON format
