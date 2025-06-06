@@ -15,7 +15,7 @@ import (
 
 var (
 	secretReplacer *strings.Replacer
-	secretValues   map[string]bool // Tracker für alle bekannten Secret-Werte
+	secretValues   map[string]bool
 	secretMutex    sync.RWMutex
 )
 
