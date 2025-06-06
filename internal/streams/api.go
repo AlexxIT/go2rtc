@@ -140,14 +140,15 @@ func apiPreload(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "PUT":
 		// check if stream exists
-		if stream := Get(src); stream == nil {
+		stream := Get(src)
+		if stream == nil {
 			http.Error(w, "stream not found", http.StatusNotFound)
 			return
 		}
 
 		// check if consumer exists
 		if cons, ok := preloads[src]; ok {
-			cons.Stop()
+			stream.RemoveConsumer(cons)
 			delete(preloads, src)
 		}
 
@@ -172,7 +173,12 @@ func apiPreload(w http.ResponseWriter, r *http.Request) {
 
 	case "DELETE":
 		if cons, ok := preloads[src]; ok {
-			cons.Stop()
+			if stream := Get(src); stream != nil {
+				stream.RemoveConsumer(cons)
+			} else {
+				cons.Stop()
+			}
+
 			delete(preloads, src)
 		}
 

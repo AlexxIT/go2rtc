@@ -9,7 +9,7 @@ import (
 
 type Preload struct {
 	core.Connection
-	Closed core.Waiter
+	closed core.Waiter
 }
 
 func NewPreload(name string, query url.Values) *Preload {
@@ -74,7 +74,7 @@ func (p *Preload) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver
 }
 
 func (p *Preload) Start() error {
-	p.Closed.Wait()
+	p.closed.Wait()
 	return nil
 }
 
@@ -85,6 +85,6 @@ func (p *Preload) Stop() error {
 	for _, sender := range p.Senders {
 		sender.Close()
 	}
-	p.Closed.Done(nil)
+	p.closed.Done(nil)
 	return nil
 }
