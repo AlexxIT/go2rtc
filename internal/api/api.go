@@ -215,6 +215,13 @@ func middlewareCORS(next http.Handler) http.Handler {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+
+		// Handle preflight OPTIONS request
+	        if r.Method == http.MethodOptions {
+	            w.WriteHeader(http.StatusNoContent) // 204
+	            return
+	        }
+		
 		next.ServeHTTP(w, r)
 	})
 }
