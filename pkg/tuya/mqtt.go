@@ -111,9 +111,9 @@ func (c *TuyaMqttClient) Start(hubConfig *MQTTConfig, webrtcConfig *WebRTCConfig
 		SetOnConnectHandler(c.onConnect).
 		SetAutoReconnect(true).
 		SetMaxReconnectInterval(30 * time.Second).
-		SetConnectTimeout(15 * time.Second).
+		SetConnectTimeout(30 * time.Second).
 		SetKeepAlive(30 * time.Second).
-		SetPingTimeout(15 * time.Second)
+		SetPingTimeout(20 * time.Second)
 
 	c.client = mqtt.NewClient(opts)
 
