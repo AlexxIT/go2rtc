@@ -11,6 +11,21 @@ import (
 	"github.com/pion/rtp"
 )
 
+func JoinNALU(nalus ...[]byte) []byte {
+	var result []byte
+	
+	for _, nalu := range nalus {
+		if len(nalu) > 0 {
+			result = append(result, 0, 0, 0, 0)
+			start := len(result) - 4
+			result = append(result, nalu...)
+			binary.BigEndian.PutUint32(result[start:], uint32(len(nalu)))
+		}
+	}
+	
+	return result
+}
+
 func RepairAVCC(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 	vds, sps, pps := GetParameterSet(codec.FmtpLine)
 	ps := h264.JoinNALU(vds, sps, pps)

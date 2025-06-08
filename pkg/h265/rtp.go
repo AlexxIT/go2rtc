@@ -9,8 +9,8 @@ import (
 )
 
 func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
-	//vps, sps, pps := GetParameterSet(codec.FmtpLine)
-	//ps := h264.EncodeAVC(vps, sps, pps)
+	vps, sps, pps := GetParameterSet(codec.FmtpLine)
+	ps := JoinNALU(vps, sps, pps)
 
 	buf := make([]byte, 0, 512*1024) // 512K
 	var nuStart int
@@ -74,6 +74,39 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 		// collect all NAL Units for Access Unit
 		if !packet.Marker {
 			return
+		}
+
+		// Memory overflow protection
+		if len(buf) > 5*1024*1024 {
+			buf = buf[:0:512*1024]
+		}
+
+		if len(buf) == 0 {
+			// Define NAL type of the current Access Unit
+			currentType := NALUType(packet.Payload)
+			
+			switch currentType {
+			case NALUTypeIFrame, NALUTypeIFrame2, NALUTypeIFrame3:
+				// I-Frame without parameter sets - add them
+				if len(ps) > 0 {
+					buf = append(buf, ps...)
+				}
+				
+			case NALUTypePrefixSEI, NALUTypeSuffixSEI:
+				// Ignore SEI at stream start
+				return
+				
+			case NALUTypePFrame:
+				// Ignore P-Frame at stream start
+				return
+				
+			case NALUTypeVPS, NALUTypeSPS, NALUTypePPS:
+				// continue
+				
+			default:
+				// Ignore unknown NAL unit at stream start
+				return
+			}
 		}
 
 		//log.Printf("[HEVC] %v, len: %d", Types(buf), len(buf))
