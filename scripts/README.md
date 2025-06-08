@@ -7,8 +7,12 @@ So we will set `go 1.20` (minimum version) inside `go.mod` file. And will use en
 `win32` and `mac_amd64` binaries. All other binaries will use latest go version.
 
 ```
+github.com/miekg/dns v1.1.63
 golang.org/x/crypto v0.33.0
 golang.org/x/mod v0.20.0 // indirect
+golang.org/x/net v0.35.0 // indirect
+golang.org/x/sync v0.11.0 // indirect
+golang.org/x/sys v0.30.0 // indirect
 golang.org/x/tools v0.24.0 // indirect
 ```
 

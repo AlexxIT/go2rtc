@@ -2,7 +2,7 @@ package webrtc
 
 import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/pion/webrtc/v3"
+	"github.com/pion/webrtc/v4"
 )
 
 func (c *Conn) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
@@ -21,7 +21,7 @@ func (c *Conn) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, e
 			RTPCodecCapability: webrtc.RTPCodecCapability{
 				MimeType:  MimeType(codec),
 				ClockRate: codec.ClockRate,
-				Channels:  codec.Channels,
+				Channels:  uint16(codec.Channels),
 			},
 			PayloadType: 0, // don't know if this necessary
 		}

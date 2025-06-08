@@ -113,6 +113,7 @@ var defaults = map[string]string{
 	"pcm/48000":  "-c:a pcm_s16be -ar:a 48000 -ac:a 1",
 	"pcml":       "-c:a pcm_s16le -ar:a 8000 -ac:a 1",
 	"pcml/8000":  "-c:a pcm_s16le -ar:a 8000 -ac:a 1",
+	"pcml/16000": "-c:a pcm_s16le -ar:a 16000 -ac:a 1",
 	"pcml/44100": "-c:a pcm_s16le -ar:a 44100 -ac:a 1",
 
 	// hardware Intel and AMD on Linux
@@ -129,8 +130,9 @@ var defaults = map[string]string{
 	// hardware Rockchip
 	// important to use custom ffmpeg https://github.com/AlexxIT/go2rtc/issues/768
 	// hevc - doesn't have a profile setting
-	"h264/rkmpp": "-c:v h264_rkmpp_encoder -g 50 -bf 0 -profile:v high -level:v 4.1",
-	"h265/rkmpp": "-c:v hevc_rkmpp_encoder -g 50 -bf 0 -level:v 5.1",
+	"h264/rkmpp":  "-c:v h264_rkmpp -g 50 -bf 0 -profile:v high -level:v 4.1",
+	"h265/rkmpp":  "-c:v hevc_rkmpp -g 50 -bf 0 -profile:v main -level:v 5.1",
+	"mjpeg/rkmpp": "-c:v mjpeg_rkmpp",
 
 	// hardware NVidia on Linux and Windows
 	// preset=p2 - faster, tune=ll - low latency
