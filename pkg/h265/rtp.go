@@ -10,7 +10,7 @@ import (
 
 func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 	vps, sps, pps := GetParameterSet(codec.FmtpLine)
-	ps := JoinNALU(vps, sps, pps)
+	ps := h264.JoinNALU(vps, sps, pps)
 
 	buf := make([]byte, 0, 512*1024) // 512K
 	var nuStart int
