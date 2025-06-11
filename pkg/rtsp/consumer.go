@@ -59,7 +59,8 @@ func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiv
 		sender.Handler = pcm.RepackG711(true, sender.Handler)
 	}
 
-	sender.HandleRTP(track)
+	// Bind here, start sender after Play
+	sender.Bind(track)
 
 	c.Senders = append(c.Senders, sender)
 	return nil

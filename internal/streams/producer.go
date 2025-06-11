@@ -34,23 +34,31 @@ type Producer struct {
 	state    state
 	mu       sync.Mutex
 	workerID int
+
+	gopEnabled bool
 }
 
 const SourceTemplate = "{input}"
 
 func NewProducer(source string) *Producer {
+	rawSource, gop, _ := strings.Cut(source, "#gop=")
+	gopEnabled := gop == "1"
+
 	if strings.Contains(source, SourceTemplate) {
-		return &Producer{template: source}
+		return &Producer{template: rawSource, gopEnabled: gopEnabled}
 	}
 
-	return &Producer{url: source}
+	return &Producer{url: rawSource, gopEnabled: gopEnabled}
 }
 
 func (p *Producer) SetSource(s string) {
+	rawSource, gop, _ := strings.Cut(s, "#gop=")
+	p.gopEnabled = gop == "1"
+
 	if p.template == "" {
-		p.url = s
+		p.url = rawSource
 	} else {
-		p.url = strings.Replace(p.template, SourceTemplate, s, 1)
+		p.url = strings.Replace(p.template, SourceTemplate, rawSource, 1)
 	}
 }
 
@@ -99,6 +107,10 @@ func (p *Producer) GetTrack(media *core.Media, codec *core.Codec) (*core.Receive
 	track, err := p.conn.GetTrack(media, codec)
 	if err != nil {
 		return nil, err
+	}
+
+	if p.gopEnabled {
+		track.SetupGOP()
 	}
 
 	p.receivers = append(p.receivers, track)
