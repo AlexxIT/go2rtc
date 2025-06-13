@@ -635,7 +635,11 @@ streams:
 
 Currently only WebRTC cameras are supported.
 
-For simplicity, it is recommended to connect the Nest/WebRTC camera to the [Home Assistant](#source-hass). But if you can somehow get the below parameters - Nest/WebRTC source will work without Hass.
+It is recommended to connect the Nest/WebRTC camera to [Home Assistant](#source-hass) for simplicity but you can connect it directly with some additional external configuration.
+
+You will need to follow the first two pages of the [Device Access Get Started Guide](https://developers.google.com/nest/device-access/get-started) which will guide you through setting up an OAuth client in Google Cloud Platform, creating a project in Google Device Access Console and getting a refresh token. When you create a project in Device Access Console, you do not need to enable events. If the refresh token is not present in the response from the request sent in the "Get an access token" step, try adding `openid` to the scopes too.
+
+Once the project is created and has permission to access your device, you can send a GET request to `https://smartdevicemanagement.googleapis.com/v1/enterprises/<<DEVICE_ACCESS_PROJECT_ID>>/devices`. You should do this in [Postman](https://www.postman.com/downloads/) so that the the access token management is handled for you. The response will contain a list of all devices you have given access to. You will need the `name` of the device you want to access, which will be a mixture of it's enterprise ID and it's device ID but the device ID is the only you need. The device ID is everything after `/devices/` in the `name` field. The `project_id` parameter below is the ID of the project you created in the Device Access Console.
 
 ```yaml
 streams:
