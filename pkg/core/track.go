@@ -3,7 +3,6 @@ package core
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 
 	"github.com/pion/rtp"
 )
@@ -37,8 +36,8 @@ func NewReceiver(media *Media, codec *Codec) *Receiver {
 		r.Packets++
 
 		if r.codecHandler != nil {
-			fmt.Printf("[RECEIVER] Receiver %d received packet, sequence=%d, timestampe=%d, len=%d\n",
-				r.id, packet.Header.SequenceNumber, packet.Header.Timestamp, len(packet.Payload))
+			// fmt.Printf("[RECEIVER] Receiver %d received packet, sequence=%d, timestampe=%d, len=%d\n",
+			// 	r.id, packet.Header.SequenceNumber, packet.Header.Timestamp, len(packet.Payload))
 
 			r.codecHandler.ProcessPacket(packet)
 		}
@@ -52,16 +51,16 @@ func NewReceiver(media *Media, codec *Codec) *Receiver {
 
 func (r *Receiver) SetupGOP() {
 	if !r.Codec.IsVideo() {
-		fmt.Printf("[RECEIVER] Receiver %d is not video codec, skipping GOP setup\n", r.id)
+		// fmt.Printf("[RECEIVER] Receiver %d is not video codec, skipping GOP setup\n", r.id)
 		return
 	}
 
 	if r.codecHandler != nil {
-		fmt.Printf("[RECEIVER] Receiver %d already has codec handler, skipping GOP setup\n", r.id)
+		// fmt.Printf("[RECEIVER] Receiver %d already has codec handler, skipping GOP setup\n", r.id)
 		return
 	}
 
-	fmt.Printf("[RECEIVER] Receiver %d setting up GOP for codec %s\n", r.id, r.Codec.Name)
+	// fmt.Printf("[RECEIVER] Receiver %d setting up GOP for codec %s\n", r.id, r.Codec.Name)
 
 	if handler := CreateCodecHandler(r.Codec); handler != nil {
 		r.codecHandler = handler
@@ -140,15 +139,15 @@ func NewSender(media *Media, codec *Codec) *Sender {
 		waitingForCache: true,
 	}
 
-	fmt.Printf("[SENDER] New Sender %d, codec=%s, sender codec=%s, media kind=%s\n",
-		s.id, codec.Name, s.Codec.Name, media.Kind)
+	// fmt.Printf("[SENDER] New Sender %d, codec=%s, sender codec=%s, media kind=%s\n",
+	// 	s.id, codec.Name, s.Codec.Name, media.Kind)
 
 	s.SetOwner(s)
 
 	s.Input = func(packet *Packet) {
 		if !s.started && s.Codec.IsVideo() {
-			fmt.Printf("[SENDER] Sender %d not started, ignoring packet: sequence=%d, timestamp=%d, len=%d\n",
-				s.id, packet.Header.SequenceNumber, packet.Header.Timestamp, len(packet.Payload))
+			// fmt.Printf("[SENDER] Sender %d not started, ignoring packet: sequence=%d, timestamp=%d, len=%d\n",
+			// 	s.id, packet.Header.SequenceNumber, packet.Header.Timestamp, len(packet.Payload))
 			return
 		}
 
@@ -156,18 +155,18 @@ func NewSender(media *Media, codec *Codec) *Sender {
 			if s.waitingForCache {
 				select {
 				case s.liveQueue <- packet:
-					fmt.Printf("[SENDER] Sender %d waiting for cache, queueing packet: sequence=%d, timestamp=%d, len=%d, queue=%d\n",
-						s.id, packet.Header.SequenceNumber, packet.Header.Timestamp, len(packet.Payload), len(s.liveQueue))
+					// fmt.Printf("[SENDER] Sender %d waiting for cache, queueing packet: sequence=%d, timestamp=%d, len=%d, queue=%d\n",
+					// 	s.id, packet.Header.SequenceNumber, packet.Header.Timestamp, len(packet.Payload), len(s.liveQueue))
 				default:
-					fmt.Printf("[SENDER] Sender %d live queue is full, dropping packet: sequence=%d, timestamp=%d, len=%d, queue=%d\n",
-						s.id, packet.Header.SequenceNumber, packet.Header.Timestamp, len(packet.Payload), len(s.liveQueue))
+					// fmt.Printf("[SENDER] Sender %d live queue is full, dropping packet: sequence=%d, timestamp=%d, len=%d, queue=%d\n",
+					// 	s.id, packet.Header.SequenceNumber, packet.Header.Timestamp, len(packet.Payload), len(s.liveQueue))
 				}
 				return
 			}
 		}
 
-		fmt.Printf("[SENDER] Sender %d processing packet: sequence=%d, timestamp=%d, len=%d\n",
-			s.id, packet.Header.SequenceNumber, packet.Header.Timestamp, len(packet.Payload))
+		// fmt.Printf("[SENDER] Sender %d processing packet: sequence=%d, timestamp=%d, len=%d\n",
+		// 	s.id, packet.Header.SequenceNumber, packet.Header.Timestamp, len(packet.Payload))
 
 		s.processPacket(packet)
 	}
@@ -216,10 +215,10 @@ func (s *Sender) Start() {
 
 	s.started = true
 
-	fmt.Printf("[SENDER] Sender %d started", s.id)
+	// fmt.Printf("[SENDER] Sender %d started", s.id)
 
 	if !s.Codec.IsVideo() {
-		fmt.Printf("[SENDER] Sender %d is not video codec, skipping cache processing\n", s.id)
+		// fmt.Printf("[SENDER] Sender %d is not video codec, skipping cache processing\n", s.id)
 		s.waitingForCache = false
 		return
 	}
@@ -232,7 +231,7 @@ func (s *Sender) Start() {
 			}
 		}
 
-		fmt.Printf("[SENDER] Sender %d finished processing cache, starting to process live queue\n", s.id)
+		// fmt.Printf("[SENDER] Sender %d finished processing cache, starting to process live queue\n", s.id)
 
 		s.waitingForCache = false
 	}()
