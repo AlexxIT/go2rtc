@@ -254,11 +254,23 @@
 
     async function handleRingAuth(ev) {
         ev.preventDefault();
+
+        const table = document.getElementById('ring-table');
+        table.innerText = 'loading...';
+
         const query = new URLSearchParams(new FormData(ev.target));
         const url = new URL('api/ring?' + query.toString(), location.href);
 
         const r = await fetch(url, {cache: 'no-cache'});
+
+        if (!r.ok) {
+            table.innerText = (await r.text()) || 'Unknown error';
+            return;
+        }
+
         const data = await r.json();
+
+        table.innerText = '';
 
         if (data.needs_2fa) {
             document.getElementById('tfa-field').style.display = 'block';
@@ -266,13 +278,6 @@
             return;
         }
 
-        if (!r.ok) {
-            const table = document.getElementById('ring-table');
-            table.innerText = data.error || 'Unknown error';
-            return;
-        }
-
-        const table = document.getElementById('ring-table');
         drawTable(table, data);
     }
 
