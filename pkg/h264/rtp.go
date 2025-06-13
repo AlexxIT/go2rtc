@@ -22,6 +22,11 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 	buf := make([]byte, 0, 512*1024) // 512K
 
 	return func(packet *rtp.Packet) {
+		if packet.Version == RTPPacketVersionAVC {
+			handler(packet)
+			return
+		}
+
 		//log.Printf("[RTP] codec: %s, nalu: %2d, size: %6d, ts: %10d, pt: %2d, ssrc: %d, seq: %d, %v", codec.Name, packet.Payload[0]&0x1F, len(packet.Payload), packet.Timestamp, packet.PayloadType, packet.SSRC, packet.SequenceNumber, packet.Marker)
 
 		payload, err := depack.Unmarshal(packet.Payload)
@@ -115,6 +120,8 @@ func RTPPay(mtu uint16, handler core.HandlerFunc) core.HandlerFunc {
 
 	return func(packet *rtp.Packet) {
 		if packet.Version != RTPPacketVersionAVC {
+			clone := *packet
+			clone.Header.SequenceNumber = sequencer.NextSequenceNumber()
 			handler(packet)
 			return
 		}
