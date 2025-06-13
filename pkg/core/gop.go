@@ -16,10 +16,6 @@ type GopCache struct {
 	currentGOPFrames int
 }
 
-const maxCachedGOPSize = 512
-const maxPendingRTPPackets = 512
-const maxGOPFrames = 512
-
 func (c *GopCache) Add(packet *Packet, isKeyframe bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -60,17 +56,6 @@ func (c *GopCache) Add(packet *Packet, isKeyframe bool) {
 			len(c.pendingRTPPackets))
 		c.pendingRTPPackets = c.pendingRTPPackets[:0]
 	}
-
-	if len(c.currentGOP) > maxCachedGOPSize {
-		fmt.Printf("[CACHE] Trimming current GOP to last %d packets\n", maxCachedGOPSize)
-		c.currentGOP = c.currentGOP[len(c.currentGOP)-maxCachedGOPSize:]
-	}
-
-	if c.currentGOPFrames > maxGOPFrames {
-		fmt.Printf("[CACHE] Current GOP has %d frames, trimming oldest\n", c.currentGOPFrames)
-		c.currentGOP = c.currentGOP[1:]
-		c.currentGOPFrames--
-	}
 }
 
 func (c *GopCache) AddRTPFragment(packet *Packet) {
@@ -91,11 +76,6 @@ func (c *GopCache) AddRTPFragment(packet *Packet) {
 	copy(clone.Payload, packet.Payload)
 
 	c.pendingRTPPackets = append(c.pendingRTPPackets, clone)
-
-	if len(c.pendingRTPPackets) > maxPendingRTPPackets {
-		fmt.Printf("[CACHE] Trimmed pending RTP packets to %d\n", maxPendingRTPPackets)
-		c.pendingRTPPackets = c.pendingRTPPackets[len(c.pendingRTPPackets)-maxPendingRTPPackets:]
-	}
 }
 
 func (c *GopCache) Get() []*Packet {

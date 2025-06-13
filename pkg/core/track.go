@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 
-	"sync"
-
 	"github.com/pion/rtp"
 )
 
@@ -53,7 +51,7 @@ func NewReceiver(media *Media, codec *Codec) *Receiver {
 }
 
 func (r *Receiver) SetupGOP() {
-	if r.Codec.Kind() != KindVideo {
+	if !r.Codec.IsVideo() {
 		fmt.Printf("[RECEIVER] Receiver %d is not video codec, skipping GOP setup\n", r.id)
 		return
 	}
@@ -62,6 +60,8 @@ func (r *Receiver) SetupGOP() {
 		fmt.Printf("[RECEIVER] Receiver %d already has codec handler, skipping GOP setup\n", r.id)
 		return
 	}
+
+	fmt.Printf("[RECEIVER] Receiver %d setting up GOP for codec %s\n", r.id, r.Codec.Name)
 
 	if handler := CreateCodecHandler(r.Codec); handler != nil {
 		r.codecHandler = handler
@@ -113,19 +113,13 @@ type Sender struct {
 
 	started         bool
 	waitingForCache bool
-	liveQueue       []Packet
-	queueMu         sync.Mutex
+	liveQueue       chan *Packet
 }
 
 func NewSender(media *Media, codec *Codec) *Sender {
 	var bufSize uint16
-	waitingForCache := false
 
 	if GetKind(codec.Name) == KindVideo {
-		// if video codec, we need to wait for cache to be filled
-		// will be used only if gop cache is enabled by receiver
-		waitingForCache = true
-
 		if codec.IsRTP() {
 			// in my tests 40Mbit/s 4K-video can generate up to 1500 items
 			// for the h264.RTPDepay => RTPPay queue
@@ -142,32 +136,34 @@ func NewSender(media *Media, codec *Codec) *Sender {
 		Node:            Node{id: NewID(), Codec: codec},
 		Media:           media,
 		buf:             buf,
-		liveQueue:       make([]Packet, 0, 64),
-		waitingForCache: waitingForCache,
+		liveQueue:       make(chan *Packet, 256),
+		waitingForCache: true,
 	}
+
+	fmt.Printf("[SENDER] New Sender %d, codec=%s, sender codec=%s, media kind=%s\n",
+		s.id, codec.Name, s.Codec.Name, media.Kind)
 
 	s.SetOwner(s)
 
 	s.Input = func(packet *Packet) {
-		// skip if added as child but not started yet
-		if !s.started {
-			fmt.Printf("[SENDER] Sender %d not started yet, ignoring packet: sequence=%d, timestamp=%d, len=%d\n",
+		if !s.started && s.Codec.IsVideo() {
+			fmt.Printf("[SENDER] Sender %d not started, ignoring packet: sequence=%d, timestamp=%d, len=%d\n",
 				s.id, packet.Header.SequenceNumber, packet.Header.Timestamp, len(packet.Payload))
 			return
 		}
 
-		if s.waitingForCache {
-			s.queueMu.Lock()
-			s.liveQueue = append(s.liveQueue, Packet{
-				Header:  packet.Header,
-				Payload: append([]byte(nil), packet.Payload...),
-			})
-
-			fmt.Printf("[SENDER] Sender %d waiting for cache, queueing packet: sequence=%d, timestamp=%d, len=%d, queue=%d\n",
-				s.id, packet.Header.SequenceNumber, packet.Header.Timestamp, len(packet.Payload), len(s.liveQueue))
-
-			s.queueMu.Unlock()
-			return
+		if s.Codec.IsVideo() {
+			if s.waitingForCache {
+				select {
+				case s.liveQueue <- packet:
+					fmt.Printf("[SENDER] Sender %d waiting for cache, queueing packet: sequence=%d, timestamp=%d, len=%d, queue=%d\n",
+						s.id, packet.Header.SequenceNumber, packet.Header.Timestamp, len(packet.Payload), len(s.liveQueue))
+				default:
+					fmt.Printf("[SENDER] Sender %d live queue is full, dropping packet: sequence=%d, timestamp=%d, len=%d, queue=%d\n",
+						s.id, packet.Header.SequenceNumber, packet.Header.Timestamp, len(packet.Payload), len(s.liveQueue))
+				}
+				return
+			}
 		}
 
 		fmt.Printf("[SENDER] Sender %d processing packet: sequence=%d, timestamp=%d, len=%d\n",
@@ -218,46 +214,23 @@ func (s *Sender) Start() {
 		close(s.done)
 	}(s.buf)
 
-	// signal that we are ready to process packets
 	s.started = true
 
-	if s.Codec.Kind() != KindVideo {
+	if !s.Codec.IsVideo() {
+		fmt.Printf("[SENDER] Sender %d is not video codec, skipping cache processing\n", s.id)
+		s.waitingForCache = false
 		return
 	}
 
-	// start processing cached packets
 	go func() {
 		if receiver, ok := s.parent.owner.(*Receiver); ok {
 			if receiver.codecHandler != nil {
-				receiver.codecHandler.SendCacheTo(s)
+				nextTimestamp := receiver.codecHandler.SendCacheTo(s, 100)
+				receiver.codecHandler.SendQueueTo(s, 100, nextTimestamp)
 			}
 		}
 
-		s.queueMu.Lock()
-		queued := s.liveQueue
-		s.liveQueue = s.liveQueue[:0]
-		s.queueMu.Unlock()
-
-		if len(queued) == 0 {
-			fmt.Printf("[SENDER] Sender %d has no queued live packets\n", s.id)
-			s.waitingForCache = false
-			return
-		}
-
-		fmt.Printf("[SENDER] Sender %d processing %d queued live packets, seq %d-%d\n",
-			s.id, len(queued), queued[0].Header.SequenceNumber, queued[len(queued)-1].Header.SequenceNumber)
-
-		for i := range queued {
-			fmt.Printf("[SENDER] Sender %d processing queued packet: sequence=%d, timestamp=%d, len=%d\n",
-				s.id, queued[i].Header.SequenceNumber, queued[i].Header.Timestamp, len(queued[i].Payload))
-			s.processPacket(&queued[i])
-		}
-
-		fmt.Printf("[SENDER] COMPLETE: Sender %d processed %d queued live packets, seq %d-%d (%d packets)\n",
-			s.id, len(queued),
-			queued[0].Header.SequenceNumber, queued[len(queued)-1].Header.SequenceNumber, len(queued))
-
-		fmt.Printf("[SENDER] Sender %d processed all packets, waitingForCache=false\n", s.id)
+		fmt.Printf("[SENDER] Sender %d finished processing cache, starting to process live queue\n", s.id)
 
 		s.waitingForCache = false
 	}()
@@ -285,6 +258,10 @@ func (s *Sender) Close() {
 	if s.buf != nil {
 		close(s.buf) // exit from for range loop
 		s.buf = nil  // prevent writing to closed chan
+	}
+	if s.liveQueue != nil {
+		close(s.liveQueue)
+		s.liveQueue = nil
 	}
 	s.mu.Unlock()
 
