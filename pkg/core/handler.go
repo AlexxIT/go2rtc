@@ -10,8 +10,8 @@ import (
 
 type CodecHandler interface {
 	ProcessPacket(packet *Packet)
-	SendCacheTo(s *Sender, playbackFPS int) (nextTimestamp uint32)
-	SendQueueTo(s *Sender, playbackFPS int, startTimestamp uint32)
+	SendCacheTo(s *Sender, playbackFPS int) (nextTimestamp uint32, lastSequence uint16)
+	SendQueueTo(s *Sender, playbackFPS int, startTimestamp uint32, lastSequence uint16)
 	ClearCache()
 }
 
@@ -76,7 +76,7 @@ func (ch *BaseCodecHandler) ProcessPacket(packet *Packet) {
 	}
 }
 
-func (ch *BaseCodecHandler) SendCacheTo(s *Sender, playbackFPS int) uint32 {
+func (ch *BaseCodecHandler) SendCacheTo(s *Sender, playbackFPS int) (nextTimestamp uint32, lastSequence uint16) {
 	fmt.Printf("[HANDLER] Sending cache to sender %d for codec %s at %d FPS\n", s.id, ch.codec.Name, playbackFPS)
 
 	ch.mu.RLock()
@@ -85,121 +85,85 @@ func (ch *BaseCodecHandler) SendCacheTo(s *Sender, playbackFPS int) uint32 {
 
 	if cache == nil || !cache.HasContent() {
 		fmt.Printf("[HANDLER] No content in cache for sender %d\n", s.id)
-		return 0
+		return 0, 0
 	}
 	cachedPackets := cache.Get()
 	if len(cachedPackets) == 0 {
 		fmt.Printf("[HANDLER] No cached packets to send for sender %d\n", s.id)
-		return 0
+		return 0, 0
 	}
 
 	sleepDurationPerFrame := time.Second / time.Duration(playbackFPS)
 	ticksPerPlaybackFrame := uint32(90000 / playbackFPS)
 	lastOriginalTimestamp := cachedPackets[len(cachedPackets)-1].Header.Timestamp
 
-	if !ch.codec.IsRTP() {
-		var avccFrames []*Packet
-		for _, pkt := range cachedPackets {
-			if pkt.Header.Version == 0 {
-				avccFrames = append(avccFrames, pkt)
-			}
+	var avccFrames []*Packet
+	var rtpFragments []*Packet
+	for _, pkt := range cachedPackets {
+		if pkt.Header.Version == 0 {
+			avccFrames = append(avccFrames, pkt)
+		} else {
+			rtpFragments = append(rtpFragments, pkt)
+		}
+	}
+
+	currentTimestamp := lastOriginalTimestamp - uint32(len(avccFrames)*int(ticksPerPlaybackFrame))
+
+	firstAVCCSequenceNumber := avccFrames[0].Header.SequenceNumber
+	lastAVCCSequenceNumber := firstAVCCSequenceNumber
+	if len(avccFrames) > 1 {
+		lastAVCCSequenceNumber = avccFrames[len(avccFrames)-1].Header.SequenceNumber
+	}
+
+	fmt.Printf("[HANDLER] Sender %d processing %d AVCC frames and %d RTP fragments\n",
+		s.id, len(avccFrames), len(rtpFragments))
+
+	fmt.Printf("[HANDLER] AVCC frames: first sequence=%d, last sequence=%d\n",
+		firstAVCCSequenceNumber, lastAVCCSequenceNumber)
+
+	var lastSequenceNumber uint16
+
+	for _, pkt := range avccFrames {
+		clone := &rtp.Packet{Header: pkt.Header, Payload: pkt.Payload}
+		clone.Header.Timestamp = currentTimestamp
+		fmt.Printf("[HANDLER] Sender %d processing cached avcc frame: sequence=%d, timestamp=%d, len=%d\n",
+			s.id, pkt.Header.SequenceNumber, pkt.Header.Timestamp, len(pkt.Payload))
+		s.InputCache(clone)
+		time.Sleep(sleepDurationPerFrame)
+		currentTimestamp += ticksPerPlaybackFrame
+		lastSequenceNumber = pkt.Header.SequenceNumber
+	}
+
+	if len(rtpFragments) > 0 {
+		firstRTPSequenceNumber := rtpFragments[0].Header.SequenceNumber
+		lastRTPSequenceNumber := firstRTPSequenceNumber
+		if len(rtpFragments) > 1 {
+			lastRTPSequenceNumber = rtpFragments[len(rtpFragments)-1].Header.SequenceNumber
 		}
 
-		currentTimestamp := lastOriginalTimestamp - uint32(len(avccFrames)*int(ticksPerPlaybackFrame))
-		fmt.Printf("[HANDLER] Sending %d raw AVCC frames to sender %d\n", len(avccFrames), s.id)
+		fmt.Printf("[HANDLER] RTP fragments: first sequence=%d, last sequence=%d\n",
+			firstRTPSequenceNumber, lastRTPSequenceNumber)
 
-		for _, pkt := range avccFrames {
+		ticksPerFragment := ticksPerPlaybackFrame / uint32(len(rtpFragments))
+		sleepDurationPerFragment := sleepDurationPerFrame / time.Duration(len(rtpFragments))
+
+		for _, pkt := range rtpFragments {
 			clone := &rtp.Packet{Header: pkt.Header, Payload: pkt.Payload}
 			clone.Header.Timestamp = currentTimestamp
-			fmt.Printf("[HANDLER] Sender %d processing cached avcc frame: sequence=%d, timestamp=%d, len=%d\n",
+			fmt.Printf("[HANDLER] Sender %d processing cached RTP fragment: sequence=%d, timestamp=%d, len=%d\n",
 				s.id, pkt.Header.SequenceNumber, pkt.Header.Timestamp, len(pkt.Payload))
 			s.InputCache(clone)
-			time.Sleep(sleepDurationPerFrame)
-			currentTimestamp += ticksPerPlaybackFrame
-		}
-
-		fmt.Printf("[HANDLER] COMPLETE: Sent %d AVCC frames. Next timestamp: %d\n", len(avccFrames), currentTimestamp)
-		return currentTimestamp
-	}
-
-	allRtpPackets := make([]*rtp.Packet, 0, len(cachedPackets))
-	var frameCount int
-
-	for i, pkt := range cachedPackets {
-		if pkt.Header.Version == 0 {
-			// AVCC-Frame
-			payloads := ch.payloader.Payload(1460, pkt.Payload)
-			last := len(payloads) - 1
-			for j, payload := range payloads {
-				allRtpPackets = append(allRtpPackets, &rtp.Packet{
-					Header: rtp.Header{
-						Version:     2,
-						Marker:      j == last,
-						PayloadType: pkt.Header.PayloadType,
-					},
-					Payload: payload,
-				})
-
-				if j == last {
-					frameCount++
-				}
-			}
-		} else {
-			// RTP-Paket
-			allRtpPackets = append(allRtpPackets, pkt)
-
-			if pkt.Marker {
-				frameCount++
-			}
-		}
-
-		if i == len(cachedPackets)-1 && !pkt.Marker {
-			// Last packet in cache is not a marker, tread it as a start of a new frame
-			frameCount++
+			time.Sleep(sleepDurationPerFragment)
+			currentTimestamp += ticksPerFragment
+			lastSequenceNumber = pkt.Header.SequenceNumber
 		}
 	}
 
-	if len(allRtpPackets) == 0 {
-		fmt.Printf("[HANDLER] No RTP packets found in cache for sender %d\n", s.id)
-		return 0
-	}
-
-	currentTimestamp := lastOriginalTimestamp - uint32(frameCount*int(ticksPerPlaybackFrame))
-	cacheEndSequence := allRtpPackets[len(allRtpPackets)-1].Header.SequenceNumber
-	currentSequence := cacheEndSequence - uint16(len(allRtpPackets)) + 1
-
-	fmt.Printf("[HANDLER] Found %d RTP packets in cache for sender %d (%d-%d)\n",
-		len(allRtpPackets), s.id,
-		currentSequence, currentSequence+ uint16(len(allRtpPackets))-1)
-
-	startOfFrame := 0
-	for i, packet := range allRtpPackets {
-		if packet.Marker || i == len(allRtpPackets)-1 {
-			frameSlice := allRtpPackets[startOfFrame : i+1]
-			sleepPerPacket := sleepDurationPerFrame / time.Duration(len(frameSlice))
-
-			for _, p := range frameSlice {
-				p.Header.SequenceNumber = currentSequence
-				p.Header.Timestamp = currentTimestamp
-				fmt.Printf("[HANDLER] Sender %d processing cached RTP packet: sequence=%d, timestamp=%d, len=%d\n",
-					s.id, p.Header.SequenceNumber, p.Header.Timestamp, len(p.Payload))
-				s.InputCache(p)
-				time.Sleep(sleepPerPacket)
-				currentSequence++
-			}
-
-			currentTimestamp += ticksPerPlaybackFrame
-			startOfFrame = i + 1
-		}
-	}
-
-	fmt.Printf("[HANDLER] COMPLETE: Sent %d RTP packets. Next timestamp: %d (sequence=%d)\n",
-		len(allRtpPackets), currentTimestamp, currentSequence)
-
-	return currentTimestamp
+	fmt.Printf("[HANDLER] COMPLETE: Sent %d AVCC frames and %d RTP fragments. Next timestamp: %d\n", len(avccFrames), len(rtpFragments), currentTimestamp)
+	return currentTimestamp, lastSequenceNumber
 }
 
-func (ch *BaseCodecHandler) SendQueueTo(s *Sender, playbackFPS int, startTimestamp uint32) {
+func (ch *BaseCodecHandler) SendQueueTo(s *Sender, playbackFPS int, startTimestamp uint32, lastSequence uint16) {
 	ticksPerPlaybackFrame := uint32(90000 / playbackFPS)
 	currentTimestamp := startTimestamp
 
@@ -208,6 +172,12 @@ func (ch *BaseCodecHandler) SendQueueTo(s *Sender, playbackFPS int, startTimesta
 	for {
 		select {
 		case packet := <-s.liveQueue:
+			if packet.Header.SequenceNumber <= lastSequence {
+				fmt.Printf("[SENDER] Sender %d skipping packet with sequence %d (already processed)\n",
+					s.id, packet.Header.SequenceNumber)
+				continue
+			}
+
 			if currentTimestamp == 0 {
 				currentTimestamp = packet.Header.Timestamp
 			}

@@ -136,7 +136,7 @@ func NewSender(media *Media, codec *Codec) *Sender {
 		Node:            Node{id: NewID(), Codec: codec},
 		Media:           media,
 		buf:             buf,
-		liveQueue:       make(chan *Packet, 256),
+		liveQueue:       make(chan *Packet, 512),
 		waitingForCache: true,
 	}
 
@@ -216,6 +216,8 @@ func (s *Sender) Start() {
 
 	s.started = true
 
+	fmt.Printf("[SENDER] Sender %d started", s.id)
+
 	if !s.Codec.IsVideo() {
 		fmt.Printf("[SENDER] Sender %d is not video codec, skipping cache processing\n", s.id)
 		s.waitingForCache = false
@@ -225,8 +227,8 @@ func (s *Sender) Start() {
 	go func() {
 		if receiver, ok := s.parent.owner.(*Receiver); ok {
 			if receiver.codecHandler != nil {
-				nextTimestamp := receiver.codecHandler.SendCacheTo(s, 100)
-				receiver.codecHandler.SendQueueTo(s, 100, nextTimestamp)
+				nextTimestamp, lastSeq := receiver.codecHandler.SendCacheTo(s, 100)
+				receiver.codecHandler.SendQueueTo(s, 100, nextTimestamp, lastSeq)
 			}
 		}
 
