@@ -31,8 +31,8 @@ golang.org/x/tools v0.24.0 // indirect
 go get -u
 go mod tidy
 go mod why github.com/pion/rtcp
-go list -deps .\cmd\go2rtc_rtsp\
-./goweight
+go list -deps .\examples\go2rtc_rtsp\
+go run github.com/paralin/goweight@latest .
 ```
 
 ## Dependencies
