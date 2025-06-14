@@ -583,7 +583,10 @@ export class VideoRTC extends HTMLElement {
             if (stream.getVideoTracks().length > 0) rtcPriority += 0x220;
             if (stream.getAudioTracks().length > 0) rtcPriority += 0x102;
 
-            if (this.mseCodecs.indexOf('hvc1.') >= 0) msePriority += 0x230;
+            if (this.mseCodecs.indexOf('hvc1.')) {
+                if (VideoRTC.isH265Supported()) rtcPriority += 0x230;
+                else msePriority += 0x230;
+            }
             if (this.mseCodecs.indexOf('avc1.') >= 0) msePriority += 0x210;
             if (this.mseCodecs.indexOf('mp4a.') >= 0) msePriority += 0x101;
 
@@ -662,6 +665,23 @@ export class VideoRTC extends HTMLElement {
         };
 
         this.send({type: 'mp4', value: this.codecs(this.video.canPlayType)});
+    }
+
+    static isH265Supported() {
+        try {
+            const videoCodecs = RTCRtpSender?.getCapabilities('video')?.codecs;
+            
+            if (!videoCodecs) {
+            return false;
+            }
+            
+            return videoCodecs.some(codec => 
+                codec.mimeType.toLowerCase().includes('h265') || 
+                codec.mimeType.toLowerCase().includes('hevc')
+            );
+        } catch {
+            return false;
+        }
     }
 
     static btoa(buffer) {
