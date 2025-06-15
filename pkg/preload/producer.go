@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/pion/rtp"
 )
 
 type Preload struct {
@@ -62,7 +63,10 @@ func (p *Preload) GetMedias() []*core.Media {
 
 func (p *Preload) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
 	sender := core.NewSender(media, track.Codec)
-	sender.Bind(track)
+	sender.Handler = func(pkt *rtp.Packet) {
+		p.Send += pkt.MarshalSize()
+	}
+	sender.HandleRTP(track)
 	p.Senders = append(p.Senders, sender)
 	return nil
 }
