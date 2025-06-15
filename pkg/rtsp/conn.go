@@ -24,6 +24,7 @@ type Conn struct {
 	// public
 
 	Backchannel bool
+	GOP		    bool
 	Media       string
 	OnClose     func() error
 	PacketSize  uint16
