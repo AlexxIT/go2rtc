@@ -213,9 +213,7 @@ Read more about [incoming sources](#incoming-sources)
 
 #### GOP Cache
 
-go2rtc has a built-in [GOP cache](https://en.wikipedia.org/wiki/Group_of_pictures) for all sources. It allows to reduce the delay of the stream by caching the last GOP (Group of Pictures) frames. This is useful for sources with high latency, such as some IP cameras. The cache is disabled by default and can be configured in the `go2rtc.yaml` file.
-
-You can enable GOP cache for all sources or for specific sources. The cache will be used only if the source supports it.
+go2rtc has a built-in [GOP cache](https://en.wikipedia.org/wiki/Group_of_pictures) for all sources. It allows to reduce the delay of the stream by caching the last GOP (Group of Pictures) frames. This is useful for sources with high latency, such as some IP cameras. The cache is disabled by default and can be configured in the config file.
 
 ```yaml
 streams:
