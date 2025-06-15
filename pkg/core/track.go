@@ -107,6 +107,8 @@ type Sender struct {
 	Packets int `json:"packets,omitempty"`
 	Drops   int `json:"drops,omitempty"`
 
+	UseGOP bool `json:"-"`
+
 	buf  chan *Packet
 	done chan struct{}
 
@@ -134,6 +136,7 @@ func NewSender(media *Media, codec *Codec) *Sender {
 	s := &Sender{
 		Node:            Node{id: NewID(), Codec: codec},
 		Media:           media,
+		UseGOP:	 	 	 true,
 		buf:             buf,
 		liveQueue:       make(chan *Packet, 512),
 		waitingForCache: true,
@@ -145,23 +148,25 @@ func NewSender(media *Media, codec *Codec) *Sender {
 	s.SetOwner(s)
 
 	s.Input = func(packet *Packet) {
-		if !s.started && s.Codec.IsVideo() {
-			// fmt.Printf("[SENDER] Sender %d not started, ignoring packet: sequence=%d, timestamp=%d, len=%d\n",
-			// 	s.id, packet.Header.SequenceNumber, packet.Header.Timestamp, len(packet.Payload))
-			return
-		}
-
-		if s.Codec.IsVideo() {
-			if s.waitingForCache {
-				select {
-				case s.liveQueue <- packet:
-					// fmt.Printf("[SENDER] Sender %d waiting for cache, queueing packet: sequence=%d, timestamp=%d, len=%d, queue=%d\n",
-					// 	s.id, packet.Header.SequenceNumber, packet.Header.Timestamp, len(packet.Payload), len(s.liveQueue))
-				default:
-					// fmt.Printf("[SENDER] Sender %d live queue is full, dropping packet: sequence=%d, timestamp=%d, len=%d, queue=%d\n",
-					// 	s.id, packet.Header.SequenceNumber, packet.Header.Timestamp, len(packet.Payload), len(s.liveQueue))
-				}
+		if s.UseGOP {
+			if !s.started && s.Codec.IsVideo() {
+				// fmt.Printf("[SENDER] Sender %d not started, ignoring packet: sequence=%d, timestamp=%d, len=%d\n",
+				// 	s.id, packet.Header.SequenceNumber, packet.Header.Timestamp, len(packet.Payload))
 				return
+			}
+
+			if s.Codec.IsVideo() {
+				if s.waitingForCache {
+					select {
+					case s.liveQueue <- packet:
+						// fmt.Printf("[SENDER] Sender %d waiting for cache, queueing packet: sequence=%d, timestamp=%d, len=%d, queue=%d\n",
+						// 	s.id, packet.Header.SequenceNumber, packet.Header.Timestamp, len(packet.Payload), len(s.liveQueue))
+					default:
+						// fmt.Printf("[SENDER] Sender %d live queue is full, dropping packet: sequence=%d, timestamp=%d, len=%d, queue=%d\n",
+						// 	s.id, packet.Header.SequenceNumber, packet.Header.Timestamp, len(packet.Payload), len(s.liveQueue))
+					}
+					return
+				}
 			}
 		}
 
@@ -217,7 +222,7 @@ func (s *Sender) Start() {
 
 	// fmt.Printf("[SENDER] Sender %d started", s.id)
 
-	if !s.Codec.IsVideo() {
+	if !s.Codec.IsVideo() || !s.UseGOP {
 		// fmt.Printf("[SENDER] Sender %d is not video codec, skipping cache processing\n", s.id)
 		s.waitingForCache = false
 		return
