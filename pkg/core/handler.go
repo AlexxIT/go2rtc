@@ -171,7 +171,7 @@ func (ch *BaseCodecHandler) SendQueueTo(s *Sender, playbackFPS int, startTimesta
 	for {
 		select {
 		case packet := <-s.liveQueue:
-			if packet.Header.SequenceNumber != 0 && packet.Header.SequenceNumber <= lastSequence {
+			if packet.Header.SequenceNumber > 0 && packet.Header.SequenceNumber <= lastSequence {
 				// fmt.Printf("[SENDER] Sender %d skipping packet with sequence %d (already processed)\n",
 				// 	s.id, packet.Header.SequenceNumber)
 				continue
