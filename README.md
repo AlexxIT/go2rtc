@@ -49,6 +49,7 @@ Ultimate camera streaming application with support for RTSP, WebRTC, HomeKit, FF
   * [go2rtc: Dev version](#go2rtc-dev-version)
 * [Configuration](#configuration)
   * [Module: Streams](#module-streams)
+    * [GOP Cache](#gop-cache)
     * [Two way audio](#two-way-audio)
     * [Source: RTSP](#source-rtsp)
     * [Source: RTMP](#source-rtmp)
@@ -209,6 +210,17 @@ Available source types:
 - [webtorrent](#source-webtorrent) - WebTorrent source from another go2rtc
 
 Read more about [incoming sources](#incoming-sources)
+
+### GOP Cache
+
+go2rtc has a built-in [GOP cache](#gop-cache) for all sources. It allows to reduce the delay of the stream by caching the last GOP (Group of Pictures) frames. This is useful for sources with high latency, such as some IP cameras. The cache is disabled by default and can be configured in the `go2rtc.yaml` file.
+
+You can enable GOP cache for all sources or for specific sources. The cache will be used only if the source supports it.
+
+```yaml
+streams:
+  unifi_camera: rtspx://192.168.1.123:7441/fD6ouM72bWoFijxK#gop=1
+```
 
 #### Two-way audio
 
