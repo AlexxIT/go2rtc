@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"strings"
 	"sync"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -44,7 +45,8 @@ type RecvMessage struct {
 }
 
 func Dial(rawURL string) (core.Producer, error) {
-	u, err := url.Parse(rawURL)
+	escapedURL := strings.ReplaceAll(rawURL, "#", "%23")
+	u, err := url.Parse(escapedURL)
 	if err != nil {
 		return nil, err
 	}
@@ -277,8 +279,10 @@ func Dial(rawURL string) (core.Producer, error) {
 					}
 					client.connected.Done(nil)
 				}
-			default:
+			case pion.PeerConnectionStateClosed:
 				client.Close(errors.New("webrtc: " + msg.String()))
+			default:
+				// client.Close(errors.New("webrtc: " + msg.String()))
 			}
 		}
 	})
