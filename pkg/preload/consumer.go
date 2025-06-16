@@ -51,13 +51,8 @@ func NewPreload(name string, query url.Values) *Preload {
 			ID:         core.NewID(),
 			FormatName: "preload",
 			Medias:     medias,
-			RemoteAddr: "localhost",
 		},
 	}
-}
-
-func (p *Preload) GetMedias() []*core.Media {
-	return p.Medias
 }
 
 func (p *Preload) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
@@ -68,12 +63,6 @@ func (p *Preload) AddTrack(media *core.Media, codec *core.Codec, track *core.Rec
 	sender.HandleRTP(track)
 	p.Senders = append(p.Senders, sender)
 	return nil
-}
-
-func (p *Preload) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
-	receiver := core.NewReceiver(media, codec)
-	p.Receivers = append(p.Receivers, receiver)
-	return receiver, nil
 }
 
 func (p *Preload) Start() error {
