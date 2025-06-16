@@ -128,10 +128,6 @@ func apiPreload(w http.ResponseWriter, r *http.Request) {
 	src := query.Get("src")
 	query.Del("src")
 
-	videoQuery := query.Get("video")
-	audioQuery := query.Get("audio")
-	micQuery := query.Get("microphone")
-
 	if src == "" {
 		http.Error(w, "no source", http.StatusBadRequest)
 		return
@@ -152,15 +148,28 @@ func apiPreload(w http.ResponseWriter, r *http.Request) {
 			delete(preloads, src)
 		}
 
+		// parse query parameters
 		var rawQuery string
-		if videoQuery != "" {
-			rawQuery += "video=" + videoQuery + "#"
+		if query.Has("video") {
+			if videoQuery := query.Get("video"); videoQuery != "" {
+				rawQuery += "video=" + videoQuery + "#"
+			} else {
+				rawQuery += "video#"
+			}
 		}
-		if audioQuery != "" {
-			rawQuery += "audio=" + audioQuery + "#"
+		if query.Has("audio") {
+			if audioQuery := query.Get("audio"); audioQuery != "" {
+				rawQuery += "audio=" + audioQuery + "#"
+			} else {
+				rawQuery += "audio#"
+			}
 		}
-		if micQuery != "" {
-			rawQuery += "microphone=" + micQuery
+		if query.Has("microphone") {
+			if micQuery := query.Get("microphone"); micQuery != "" {
+				rawQuery += "microphone=" + micQuery + "#"
+			} else {
+				rawQuery += "microphone#"
+			}
 		}
 
 		if err := app.PatchConfig([]string{"preload", src}, rawQuery); err != nil {
