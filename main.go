@@ -39,6 +39,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/webrtc"
 	"github.com/AlexxIT/go2rtc/internal/webtorrent"
 	"github.com/AlexxIT/go2rtc/internal/wyoming"
+	"github.com/AlexxIT/go2rtc/internal/yandex"
 	"github.com/AlexxIT/go2rtc/pkg/shell"
 )
 
@@ -96,6 +97,7 @@ func main() {
 	alsa.Init()     // alsa source
 	flussonic.Init()
 	eseecloud.Init()
+	yandex.Init()
 
 	// 6. Helper modules
 
