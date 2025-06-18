@@ -106,7 +106,7 @@ func RTPPay(mtu uint16, handler core.HandlerFunc) core.HandlerFunc {
 		if packet.Version != h264.RTPPacketVersionAVC {
 			clone := *packet
 			clone.Header.SequenceNumber = sequencer.NextSequenceNumber()
-			handler(packet)
+			handler(&clone)
 			return
 		}
 
