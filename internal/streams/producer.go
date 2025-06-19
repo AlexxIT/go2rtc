@@ -229,6 +229,10 @@ func (p *Producer) reconnect(workerID, retry int) {
 					continue
 				}
 
+				if p.gopEnabled {
+					track.SetupGOP()
+				}
+
 				receiver.Replace(track)
 				p.receivers[i] = track
 				break
