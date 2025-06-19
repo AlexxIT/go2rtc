@@ -136,7 +136,7 @@ func NewSender(media *Media, codec *Codec) *Sender {
 	s := &Sender{
 		Node:            Node{id: NewID(), Codec: codec},
 		Media:           media,
-		UseGOP:	 	 	 true,
+		UseGOP:          true,
 		buf:             buf,
 		liveQueue:       make(chan *Packet, 512),
 		waitingForCache: true,
@@ -220,24 +220,38 @@ func (s *Sender) Start() {
 
 	s.started = true
 
-	// fmt.Printf("[SENDER] Sender %d started", s.id)
+	// fmt.Printf("[SENDER] Sender %d started\n", s.id)
 
-	if !s.Codec.IsVideo() || !s.UseGOP {
+	var codecHandler CodecHandler
+	if receiver, ok := s.parent.owner.(*Receiver); ok {
+		if receiver.codecHandler != nil {
+			codecHandler = receiver.codecHandler
+			// fmt.Printf("[SENDER] Sender %d using codec handler from Receiver %d\n", s.id, receiver.id)
+		}
+	}
+
+	if !s.Codec.IsVideo() {
 		// fmt.Printf("[SENDER] Sender %d is not video codec, skipping cache processing\n", s.id)
 		s.waitingForCache = false
 		return
 	}
 
+	if !s.UseGOP {
+		// fmt.Printf("[SENDER] Sender %d is not using GOP, skipping cache processing\n", s.id)
+		s.waitingForCache = false
+		return
+	}
+
+	if codecHandler == nil {
+		// fmt.Printf("[SENDER] Sender %d has no codec handler, skipping cache processing\n", s.id)
+		s.waitingForCache = false
+		return
+	}
+
 	go func() {
-		if receiver, ok := s.parent.owner.(*Receiver); ok {
-			if receiver.codecHandler != nil {
-				nextTimestamp, lastSeq := receiver.codecHandler.SendCacheTo(s, 100)
-				receiver.codecHandler.SendQueueTo(s, 100, nextTimestamp, lastSeq)
-			}
-		}
-
-		// fmt.Printf("[SENDER] Sender %d finished processing cache, starting to process live queue\n", s.id)
-
+		nextTimestamp, lastSeq := codecHandler.SendCacheTo(s, 100)
+		codecHandler.SendQueueTo(s, 100, nextTimestamp, lastSeq)
+		// fmt.Printf("[SENDER] Sender %d finished processing cache, starting to process live packets\n", s.id)
 		s.waitingForCache = false
 	}()
 }
