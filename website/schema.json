@@ -334,7 +334,7 @@
               "rtmp://192.168.1.123/bcs/channel0_main.bcs?channel=0&stream=0&user=username&password=password",
               "http://192.168.1.123/flv?port=1935&app=bcs&stream=channel0_main.bcs&user=username&password=password",
               "http://username:password@192.168.1.123/cgi-bin/snapshot.cgi?channel=1",
-              "ffmpeg:media.mp4#video=h264#hadware#width=1920#height=1080#rotate=180#audio=copy",
+              "ffmpeg:media.mp4#video=h264#hardware#width=1920#height=1080#rotate=180#audio=copy",
               "ffmpeg:virtual?video=testsrc&size=4K#video=h264#hardware#bitrate=50M",
               "bubble://username:password@192.168.1.123:34567/bubble/live?ch=0&stream=0",
               "dvrip://username:password@192.168.1.123:34567?channel=0&subtype=0",
