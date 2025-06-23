@@ -5,7 +5,6 @@ import (
 	"net"
 	"net/url"
 	"time"
-
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/pion/rtp"
 )
@@ -15,7 +14,11 @@ type Client struct {
 	conn net.Conn
 }
 
+var dialLimiter = time.Tick(time.Second) // 1 tick per second
+
 func Dial(rawURL string) (*Client, error) {
+	<-dialLimiter // Wait for the next tick before dialing
+
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, err
@@ -38,6 +41,7 @@ func Dial(rawURL string) (*Client, error) {
 		"Content-Length: 9999999\r\n" +
 		"Connection: Keep-Alive\r\n" +
 		"Cache-Control: no-cache\r\n" +
+		"Use-Content-Length: true\r\n" +
 		"\r\n"
 
 	_ = conn.SetWriteDeadline(time.Now().Add(core.ConnDeadline))
