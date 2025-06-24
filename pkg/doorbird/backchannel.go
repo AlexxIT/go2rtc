@@ -14,7 +14,10 @@ type Client struct {
 	conn net.Conn
 }
 
-var dialLimiter = time.Tick(time.Second) // 1 tick per second
+var dialLimiter = time.Tick(time.Second)
+// Limit to one connection per second
+// https://www.doorbird.com/downloads/api_lan.pdf?rev=0.36
+// As described on page 5
 
 func Dial(rawURL string) (*Client, error) {
 	<-dialLimiter // Wait for the next tick before dialing
