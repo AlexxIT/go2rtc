@@ -1,13 +1,20 @@
 package doorbird
 
 import (
+	"bufio"
 	"fmt"
 	"net"
 	"net/url"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/pion/rtp"
+)
+
+var (
+	clt Client
 )
 
 type Client struct {
@@ -16,6 +23,10 @@ type Client struct {
 }
 
 func Dial(rawURL string) (*Client, error) {
+	if clt.conn != nil {
+		return &clt, nil
+	}
+
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, err
@@ -45,6 +56,23 @@ func Dial(rawURL string) (*Client, error) {
 		return nil, err
 	}
 
+	reader := bufio.NewReader(conn)
+	statusLine, _ := reader.ReadString('\n')
+	parts := strings.SplitN(statusLine, " ", 3)
+	if len(parts) >= 2 {
+		statusCode, err := strconv.Atoi(parts[1])
+		if err == nil {
+			if statusCode == 204 {
+				conn.Close()
+				return nil, fmt.Errorf("DoorBird user has no api permission: %d", statusCode)
+			}
+			if statusCode == 503 {
+				conn.Close()
+				return nil, fmt.Errorf("DoorBird device is busy: %d", statusCode)
+			}
+		}
+	}
+
 	medias := []*core.Media{
 		{
 			Kind:      core.KindAudio,
@@ -55,17 +83,19 @@ func Dial(rawURL string) (*Client, error) {
 		},
 	}
 
-	return &Client{
+	clt = Client{
 		core.Connection{
 			ID:         core.NewID(),
 			FormatName: "doorbird",
 			Protocol:   "http",
 			URL:        rawURL,
 			Medias:     medias,
-			Transport:  conn,
+			// Transport:  conn,
 		},
 		conn,
-	}, nil
+	}
+
+	return &clt, nil
 }
 
 func (c *Client) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
@@ -73,12 +103,18 @@ func (c *Client) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver,
 }
 
 func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
+	if len(c.Senders) > 0 {
+		return fmt.Errorf("DoorBird backchannel already in use")
+	}
+
 	sender := core.NewSender(media, track.Codec)
 
 	sender.Handler = func(pkt *rtp.Packet) {
-		_ = c.conn.SetWriteDeadline(time.Now().Add(core.ConnDeadline))
-		if n, err := c.conn.Write(pkt.Payload); err == nil {
-			c.Send += n
+		if c.conn != nil {
+			_ = c.conn.SetWriteDeadline(time.Now().Add(core.ConnDeadline))
+			if n, err := c.conn.Write(pkt.Payload); err == nil {
+				c.Send += n
+			}
 		}
 	}
 
@@ -87,7 +123,17 @@ func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Rece
 	return nil
 }
 
-func (c *Client) Start() (err error) {
-	_, err = c.conn.Read(nil)
-	return
+func (c *Client) Start() error {
+	if c.conn == nil {
+		return nil
+	}
+	buf := make([]byte, 1)
+	for {
+		_, err := c.conn.Read(buf)
+		if err != nil {
+			c.conn.Close()
+			c.conn = nil
+			return err
+		}
+	}
 }
