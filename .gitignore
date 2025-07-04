@@ -1,6 +1,7 @@
 .idea/
 .tmp/
 
+go2rtc
 go2rtc.yaml
 go2rtc.json
 
@@ -12,3 +13,7 @@ go2rtc_win*
 0_test.go
 
 .DS_Store
+
+*.mp3
+*.wav
+*.al
