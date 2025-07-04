@@ -6,6 +6,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/bubble"
+	"github.com/AlexxIT/go2rtc/internal/dahua"
 	"github.com/AlexxIT/go2rtc/internal/debug"
 	"github.com/AlexxIT/go2rtc/internal/doorbird"
 	"github.com/AlexxIT/go2rtc/internal/dvrip"
@@ -84,6 +85,7 @@ func main() {
 	dvrip.Init()    // dvrip source
 	tapo.Init()     // tapo source
 	isapi.Init()    // isapi source
+	dahua.Init()    // dahua source
 	mpegts.Init()   // mpegts passive source
 	roborock.Init() // roborock source
 	homekit.Init()  // homekit source
