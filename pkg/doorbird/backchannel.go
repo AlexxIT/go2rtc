@@ -2,6 +2,7 @@ package doorbird
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -64,11 +65,11 @@ func Dial(rawURL string) (*Client, error) {
 		if err == nil {
 			if statusCode == 204 {
 				conn.Close()
-				return nil, fmt.Errorf("DoorBird user has no api permission: %d", statusCode)
+				return nil, errors.New("DoorBird user has no api permission")
 			}
 			if statusCode == 503 {
 				conn.Close()
-				return nil, fmt.Errorf("DoorBird device is busy: %d", statusCode)
+				return nil, errors.New("DoorBird device is busy")
 			}
 		}
 	}
@@ -104,7 +105,7 @@ func (c *Client) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver,
 
 func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
 	if len(c.Senders) > 0 {
-		return fmt.Errorf("DoorBird backchannel already in use")
+		return errors.New("DoorBird backchannel already in use")
 	}
 
 	sender := core.NewSender(media, track.Codec)
