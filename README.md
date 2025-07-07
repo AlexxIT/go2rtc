@@ -96,7 +96,7 @@ Ultimate camera streaming application with support for RTSP, WebRTC, HomeKit, FF
 - [Codecs negotiation](#codecs-negotiation)
 - [Projects using go2rtc](#projects-using-go2rtc)
 - [Camera experience](#camera-experience)
-- [TIPS](#tips)
+- [Tips](#tips)
 - [FAQ](#faq)
 
 ## Fast start
@@ -1416,7 +1416,7 @@ streams:
 - [TP-Link](https://www.tp-link.com/) - few streaming clients, packet loss?
 - Chinese cheap noname cameras, Wyze Cams, Xiaomi cameras with hacks (usually have `/live/ch00_1` in RTSP URL) - awful but usable RTSP protocol implementation, low stream quality, few settings, packet loss?
 
-## TIPS
+## Tips
 
 **Using apps for low RTSP delay**
 
