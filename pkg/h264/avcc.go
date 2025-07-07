@@ -82,7 +82,15 @@ func AVCCToCodec(avcc []byte) *core.Codec {
 	buf := bytes.NewBufferString("packetization-mode=1")
 
 	for {
+		n := len(avcc)
+		if n < 4 {
+			break
+		}
+
 		size := 4 + int(binary.BigEndian.Uint32(avcc))
+		if n < size {
+			break
+		}
 
 		switch NALUType(avcc) {
 		case NALUTypeSPS:
@@ -95,11 +103,7 @@ func AVCCToCodec(avcc []byte) *core.Codec {
 			buf.WriteString(base64.StdEncoding.EncodeToString(avcc[4:size]))
 		}
 
-		if size < len(avcc) {
-			avcc = avcc[size:]
-		} else {
-			break
-		}
+		avcc = avcc[size:]
 	}
 
 	return &core.Codec{
