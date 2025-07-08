@@ -16,6 +16,8 @@ golang.org/x/sys v0.30.0 // indirect
 golang.org/x/tools v0.24.0 // indirect
 ```
 
+**PS.** Unfortunately, due to the dependency on `pion/webrtc/v4 v4.1.3`, had to upgrade go to `1.23`.
+
 ## Build
 
 - UPX-3.96 pack broken bin for `linux_mipsel`
