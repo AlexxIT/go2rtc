@@ -3,6 +3,7 @@ package onvif
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"html"
 	"io"
 	"net/http"
@@ -20,6 +21,9 @@ type Client struct {
 	deviceURL string
 	mediaURL  string
 	imaginURL string
+	ptzURL    string
+
+	hasZoom bool
 }
 
 func NewClient(rawURL string) (*Client, error) {
@@ -44,6 +48,7 @@ func NewClient(rawURL string) (*Client, error) {
 
 	client.mediaURL = FindTagValue(b, "Media.+?XAddr")
 	client.imaginURL = FindTagValue(b, "Imaging.+?XAddr")
+	client.ptzURL = FindTagValue(b, "PTZ.+?XAddr")
 
 	return client, nil
 }
@@ -104,6 +109,8 @@ func (c *Client) GetProfilesTokens() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	c.hasZoom = FindTagValue(b, "ZoomLimits.+?URI") != ""
 
 	var tokens []string
 
@@ -183,6 +190,9 @@ func (c *Client) Request(url, body string) ([]byte, error) {
 	e := NewEnvelopeWithUser(c.url.User)
 	e.Append(body)
 
+	//TODO: use log
+	fmt.Printf("url: %s, body: %s\n", url, e.Bytes())
+
 	client := &http.Client{Timeout: time.Second * 5000}
 	res, err := client.Post(url, `application/soap+xml;charset=utf-8`, bytes.NewReader(e.Bytes()))
 	if err != nil {
@@ -195,6 +205,8 @@ func (c *Client) Request(url, body string) ([]byte, error) {
 	if err == nil && res.StatusCode != http.StatusOK {
 		err = errors.New("onvif: " + res.Status + " for " + url)
 	}
+
+	fmt.Printf("url: %s, resp: %s\n", url, b)
 
 	return b, err
 }
