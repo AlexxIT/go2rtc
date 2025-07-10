@@ -1144,7 +1144,7 @@ streams:
   "camera.hall": ffmpeg:{input}#video=copy#audio=opus
 ```
 
-**PS.** Default Home Assistant cards don't support two-way audio. You can use two-way audio from the [add-on Web UI](https://my.home-assistant.io/redirect/supervisor_addon/?addon=a889bffc_go2rtc&repository_url=https%3A%2F%2Fgithub.com%2FAlexxIT%2Fsource-hassio-addons), but you need to use HTTPS to access the microphone. This is a browser restriction and cannot be avoided.
+**PS.** Default Home Assistant cards don't support two-way audio. You can use two-way audio from the [add-on Web UI](https://my.home-assistant.io/redirect/supervisor_addon/?addon=a889bffc_go2rtc&repository_url=https%3A%2F%2Fgithub.com%2FAlexxIT%2Fhassio-addons), but you need to use HTTPS to access the microphone. This is a browser restriction and cannot be avoided.
 
 **PS.** There is also another nice card with two-way audio support through go2rtc - [Advanced Camera Card](https://github.com/dermotduffy/advanced-camera-card).
 
