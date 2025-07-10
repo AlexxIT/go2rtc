@@ -610,9 +610,9 @@ Any cameras in WebRTC format are supported. But at the moment Home Assistant onl
 ```yaml
 streams:
   # link to Home Assistant Supervised
-  ha-webrtc1: hass://supervisor?entity_id=camera.nest_doorbell
+  hass-webrtc1: hass://supervisor?entity_id=camera.nest_doorbell
   # link to external Home Assistant with Long-Lived Access Tokens
-  ha-webrtc2: hass://192.168.1.123:8123?entity_id=camera.nest_doorbell&token=eyXYZ...
+  hass-webrtc2: hass://192.168.1.123:8123?entity_id=camera.nest_doorbell&token=eyXYZ...
 ```
 
 **RTSP Cameras**
