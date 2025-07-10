@@ -1384,6 +1384,7 @@ streams:
 - [ioBroker.euSec](https://github.com/bropat/ioBroker.eusec) - [ioBroker](https://www.iobroker.net/) adapter for controlling Eufy security devices
 - [MMM-go2rtc](https://github.com/Anonym-tsk/MMM-go2rtc) - MagicMirror² module
 - [ring-mqtt](https://github.com/tsightler/ring-mqtt) - Ring-to-MQTT bridge
+- [lightNVR](https://github.com/opensensor/lightNVR)
 
 **Distributions**
 
