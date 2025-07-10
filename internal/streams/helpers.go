@@ -20,3 +20,37 @@ func ParseQuery(s string) url.Values {
 	}
 	return params
 }
+
+func FindPrefixURL(prefix string, sources []string) string {
+	if len(sources) == 0 {
+		return ""
+	}
+
+	url := sources[0]
+	if strings.HasPrefix(url, prefix) {
+		return url
+	}
+
+	if prefix == "homekit" {
+		if strings.HasPrefix(url, "hass") {
+			location, _ := Location(url)
+			if strings.HasPrefix(location, prefix) {
+				return url
+			}
+		}
+	}
+
+	return ""
+}
+
+func FindPrefixURLs(prefix string) map[string]*url.URL {
+	urls := map[string]*url.URL{}
+	for name, sources := range GetAllSources() {
+		if rawURL := FindPrefixURL(prefix, sources); rawURL != "" {
+			if u, err := url.Parse(rawURL); err == nil {
+				urls[name] = u
+			}
+		}
+	}
+	return urls
+}
