@@ -1293,7 +1293,7 @@ Some examples:
 | Desktop Firefox                                                          | H264 <br/> PCMU, PCMA <br/> OPUS        | H264 <br/> AAC, FLAC* <br/> OPUS        | H264 <br/> AAC, FLAC* <br/> OPUS             | no                          |
 | - Desktop Safari 14+ <br/> - iPad Safari 14+ <br/> - iPhone Safari 17.1+ | H264, H265* <br/> PCMU, PCMA <br/> OPUS | H264, H265 <br/> AAC, FLAC*             | **no!**                                      | H264, H265 <br/> AAC, FLAC* |
 | iPhone Safari 14+                                                        | H264, H265* <br/> PCMU, PCMA <br/> OPUS | **no!**                                 | **no!**                                      | H264, H265 <br/> AAC, FLAC* |
-| macOS [Home Assistant App][1]                                                      | no                                      | no                                      | no                                           | H264, H265 <br/> AAC, FLAC* |
+| macOS [Home Assistant App][1]                                            | no                                      | no                                      | no                                           | H264, H265 <br/> AAC, FLAC* |
 
 [1]: https://apps.apple.com/app/home-assistant/id1099568401
 
