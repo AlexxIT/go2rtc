@@ -1112,9 +1112,7 @@ See the [ngrok agent documentation](https://ngrok.com/docs/agent/config/) for mo
 
 ### Module: Hass
 
-The best and easiest way to use go2rtc inside Home Assistant is to install the [WebRTC Camera](#go2rtc-home-assistant-integration) custom integration and card.
-
-But go2rtc is also compatible and can be used with the [RTSPtoWebRTC](https://www.home-assistant.io/integrations/rtsp_to_webrtc/) built-in integration.
+While [go2rtc is used by default in Home Assistant](https://www.home-assistant.io/integrations/go2rtc/), the best and easiest way to have full control over it is to install the [WebRTC Camera](#go2rtc-home-assistant-integration) custom integration and card.
 
 You have several options on how to add a camera to Home Assistant:
 
@@ -1127,13 +1125,8 @@ You have several options on how to add a camera to Home Assistant:
 
 You have several options on how to watch the stream from the cameras in Home Assistant:
 
-1. `Camera Entity` => `Picture Entity Card` => Technology `HLS`, codecs: `H264/H265/AAC`, poor latency.
-2. `Camera Entity` => [RTSPtoWebRTC](https://www.home-assistant.io/integrations/rtsp_to_webrtc/) => `Picture Entity Card` => Technology `WebRTC`, codecs: `H264/PCMU/PCMA/OPUS`, best latency.
-   - Install any [go2rtc](#fast-start)
-   - Home Assistant > Settings > Integrations > Add Integration > [RTSPtoWebRTC](https://my.home-assistant.io/redirect/config_flow_start/?domain=rtsp_to_webrtc) > `http://127.0.0.1:1984/`
-   - RTSPtoWebRTC > Configure > STUN server: `stun.l.google.com:19302`
-   - Use Picture Entity or Picture Glance Lovelace card
-3. `Camera Entity` or `Camera URL` => [WebRTC Camera](https://github.com/AlexxIT/WebRTC) => Technology: `WebRTC/MSE/MP4/MJPEG`, codecs: `H264/H265/AAC/PCMU/PCMA/OPUS`, best latency, best compatibility.
+1. `Camera Entity` => `Picture Entity Card` => Technology `WebRTC` (through [built-in go2rtc](https://www.home-assistant.io/integrations/go2rtc/)), codecs `H264/H265/AAC/PCMU/PCMA/OPUS`, best latency. Fallbacks to: Technology `HLS`, codecs: `H264/H265/AAC`, poor latency.
+2. `Camera Entity` or `Camera URL` => [WebRTC Camera](https://github.com/AlexxIT/WebRTC) => Technology: `WebRTC/MSE/MP4/MJPEG`, codecs: `H264/H265/AAC/PCMU/PCMA/OPUS`, best latency, best compatibility.
    - Install and add [WebRTC Camera](https://github.com/AlexxIT/WebRTC) custom integration
    - Use WebRTC Camera custom card in your dashboard
 
@@ -1429,7 +1422,7 @@ streams:
 
 ## FAQ
 
-**Q. What's the difference between go2rtc, WebRTC Camera and RTSPtoWebRTC?**
+**Q. What's the difference between go2rtc and WebRTC Camera?**
 
 **go2rtc** is a new version of the server-side [WebRTC Camera](https://github.com/AlexxIT/WebRTC) integration, completely rewritten from scratch, with a number of fixes and a huge number of new features. [go2rtc is used by default in Home Assistant](https://www.home-assistant.io/integrations/go2rtc/).
 
