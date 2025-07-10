@@ -638,7 +638,7 @@ streams:
 
 Currently, only WebRTC cameras are supported.
 
-For simplicity, it is recommended to connect the Nest/WebRTC camera to the [Home Assistant](#source-source-hass). But if you can somehow get the below parameters, Nest/WebRTC source will work without Home Assistant.
+For simplicity, it is recommended to connect the Nest/WebRTC camera to the [Home Assistant](#source-hass). But if you can somehow get the below parameters, Nest/WebRTC source will work without Home Assistant.
 
 ```yaml
 streams:
