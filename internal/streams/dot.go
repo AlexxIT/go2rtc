@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/AlexxIT/go2rtc/pkg/shell"
 )
 
 func AppendDOT(dot []byte, stream *Stream) []byte {
@@ -166,7 +168,7 @@ func (c *conn) label() string {
 		sb.WriteString("\nsource=" + c.Source)
 	}
 	if c.URL != "" {
-		sb.WriteString("\nurl=" + c.URL)
+		sb.WriteString("\nurl=" + shell.Redact(c.URL))
 	}
 	if c.UserAgent != "" {
 		sb.WriteString("\nuser_agent=" + c.UserAgent)
