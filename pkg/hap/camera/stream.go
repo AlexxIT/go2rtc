@@ -16,7 +16,7 @@ type Stream struct {
 
 func NewStream(
 	client *hap.Client, videoCodec *VideoCodec, audioCodec *AudioCodec,
-	videoSession, audioSession *srtp.Session, bitrate int,
+	videoSession, audioSession *srtp.Session, bitrate int, width int, height int,
 ) (*Stream, error) {
 	stream := &Stream{
 		id:     core.RandString(16, 0),
@@ -46,6 +46,12 @@ func NewStream(
 			MaxMTU:       []uint16{1378},
 		},
 	}
+
+	if width != 0 && height != 0 {
+		videoCodec.VideoAttrs[0].Width = uint16(width)
+		videoCodec.VideoAttrs[0].Height = uint16(height)
+	}
+
 	audioCodec.RTPParams = []RTPParams{
 		{
 			PayloadType:  110,
