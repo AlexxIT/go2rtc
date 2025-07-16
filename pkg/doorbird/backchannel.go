@@ -5,9 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"net/url"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -57,20 +56,15 @@ func Dial(rawURL string) (*Client, error) {
 		return nil, err
 	}
 
-	reader := bufio.NewReader(conn)
-	statusLine, _ := reader.ReadString('\n')
-	parts := strings.SplitN(statusLine, " ", 3)
-	if len(parts) >= 2 {
-		statusCode, err := strconv.Atoi(parts[1])
-		if err == nil {
-			if statusCode == 204 {
-				conn.Close()
-				return nil, errors.New("DoorBird user has no api permission")
-			}
-			if statusCode == 503 {
-				conn.Close()
-				return nil, errors.New("DoorBird device is busy")
-			}
+	resp, _ := http.ReadResponse(bufio.NewReader(conn), nil)
+	if resp != nil {
+		switch resp.StatusCode {
+		case 204:
+			conn.Close()
+			return nil, errors.New("DoorBird user has no api permission")
+		case 503:
+			conn.Close()
+			return nil, errors.New("DoorBird device is busy")
 		}
 	}
 
