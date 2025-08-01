@@ -65,7 +65,8 @@ transeivers:
 
 		switch tr.Direction() {
 		case webrtc.RTPTransceiverDirectionSendrecv:
-			_ = tr.Sender().Stop()
+			_ = tr.Sender().Stop()             // don't know if necessary
+			_ = tr.SetSender(tr.Sender(), nil) // set direction to recvonly
 		case webrtc.RTPTransceiverDirectionSendonly:
 			_ = tr.Stop()
 		}
