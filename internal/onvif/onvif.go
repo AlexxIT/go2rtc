@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
@@ -32,14 +33,20 @@ func Init() {
 
 var log zerolog.Logger
 
-func streamOnvif(rawURL string) (core.Producer, error) {
-	// Parse the original URL to extract fragment parameters
-	originalURL, err := url.Parse(rawURL)
-	if err != nil {
-		return nil, err
+// extractFragment separates the URL and fragment parts to avoid encoding issues.
+// Returns the URL without fragment and the fragment (including # if present).
+func extractFragment(rawURL string) (url, fragment string) {
+	if idx := strings.IndexByte(rawURL, '#'); idx >= 0 {
+		return rawURL[:idx], rawURL[idx:]
 	}
+	return rawURL, ""
+}
 
-	client, err := onvif.NewClient(rawURL)
+func streamOnvif(rawURL string) (core.Producer, error) {
+	// Extract fragment part manually to avoid encoding issues
+	url, fragment := extractFragment(rawURL)
+
+	client, err := onvif.NewClient(url)
 	if err != nil {
 		return nil, err
 	}
@@ -49,17 +56,9 @@ func streamOnvif(rawURL string) (core.Producer, error) {
 		return nil, err
 	}
 
-	// If the original URL had a fragment, append it to the resolved URI
-	if originalURL.Fragment != "" {
-		// Parse the resolved URI
-		resolvedURL, err := url.Parse(uri)
-		if err != nil {
-			return nil, err
-		}
-
-		// Append the fragment from the original URL
-		resolvedURL.Fragment = originalURL.Fragment
-		uri = resolvedURL.String()
+	// If the original URL had a fragment, append it directly to avoid encoding
+	if fragment != "" {
+		uri += fragment
 	}
 
 	log.Debug().Msgf("[onvif] new uri=%s", uri)
