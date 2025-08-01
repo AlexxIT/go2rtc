@@ -33,6 +33,12 @@ func Init() {
 var log zerolog.Logger
 
 func streamOnvif(rawURL string) (core.Producer, error) {
+	// Parse the original URL to extract fragment parameters
+	originalURL, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, err
+	}
+
 	client, err := onvif.NewClient(rawURL)
 	if err != nil {
 		return nil, err
@@ -41,6 +47,19 @@ func streamOnvif(rawURL string) (core.Producer, error) {
 	uri, err := client.GetURI()
 	if err != nil {
 		return nil, err
+	}
+
+	// If the original URL had a fragment, append it to the resolved URI
+	if originalURL.Fragment != "" {
+		// Parse the resolved URI
+		resolvedURL, err := url.Parse(uri)
+		if err != nil {
+			return nil, err
+		}
+
+		// Append the fragment from the original URL
+		resolvedURL.Fragment = originalURL.Fragment
+		uri = resolvedURL.String()
 	}
 
 	log.Debug().Msgf("[onvif] new uri=%s", uri)
