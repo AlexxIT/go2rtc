@@ -21,6 +21,8 @@ const (
 	OutputChannelBuffer   = 10
 	SenderCleanupInterval = 5 * time.Second
 	SenderTimeoutDuration = 5 * time.Second
+	ConnectionReadTimeout = 5 * time.Minute
+	HeartbeatInterval     = 30 * time.Second
 )
 
 var (
@@ -244,6 +246,8 @@ func Dial(rawURL string) (*Client, error) {
 
 	cltMap[rawURL] = client
 
+	fmt.Printf("DoorBird: New connection established to %s\n", rawURL)
+
 	return client, nil
 }
 
@@ -299,6 +303,7 @@ func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Rece
 					if n, err := conn.Write(mixedData); err == nil {
 						c.Send += n
 					} else {
+						fmt.Printf("DoorBird: Write error, breaking audio loop: %v\n", err)
 						break
 					}
 				}
@@ -324,16 +329,46 @@ func (c *Client) Start() error {
 		}
 	}()
 
+	// Start a heartbeat goroutine to periodically check connection health
+	go func() {
+		heartbeat := time.NewTicker(HeartbeatInterval)
+		defer heartbeat.Stop()
+
+		for range heartbeat.C {
+			c.mu.RLock()
+			conn := c.conn
+			c.mu.RUnlock()
+
+			if conn != nil {
+				// Try to write a small amount of silence to keep connection alive
+				silence := make([]byte, 160) // 20ms of silence at 8kHz
+				_ = conn.SetWriteDeadline(time.Now().Add(core.ConnDeadline))
+				if _, err := conn.Write(silence); err != nil {
+					fmt.Printf("DoorBird: Heartbeat write failed: %v\n", err)
+					// Don't break here, let the main read loop handle it
+				}
+			}
+		}
+	}()
+
+	// The main loop now just monitors for any unexpected data or connection errors
+	// DoorBird typically doesn't send data back, so we use a very long timeout
 	buf := make([]byte, 1)
+	connectionStart := time.Now()
 	for {
-		_ = c.conn.SetReadDeadline(time.Now().Add(30 * time.Second))
-		_, err := c.conn.Read(buf)
+		_ = c.conn.SetReadDeadline(time.Now().Add(ConnectionReadTimeout))
+		n, err := c.conn.Read(buf)
 		if err != nil {
+			elapsed := time.Since(connectionStart)
+			fmt.Printf("DoorBird: Connection failed after %v, error: %v\n", elapsed, err)
 			c.cleanup()
 			cltMu.Lock()
 			delete(cltMap, c.URL)
 			cltMu.Unlock()
 			return err
+		}
+		if n > 0 {
+			fmt.Printf("DoorBird: Unexpected data received: %v\n", buf[:n])
 		}
 	}
 }
@@ -341,6 +376,8 @@ func (c *Client) Start() error {
 func (c *Client) cleanup() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	fmt.Printf("DoorBird: Starting cleanup for connection %s\n", c.URL)
 
 	if c.conn != nil {
 		c.conn.Close()
