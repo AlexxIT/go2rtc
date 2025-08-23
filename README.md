@@ -1391,7 +1391,7 @@ streams:
 - [Arch User Repository](https://linux-packages.com/aur/package/go2rtc)
 - [Gentoo](https://github.com/inode64/inode64-overlay/tree/main/media-video/go2rtc)
 - [NixOS](https://search.nixos.org/packages?query=go2rtc)
-- [Proxmox Helper Scripts](https://tteck.github.io/Proxmox/)
+- [Proxmox Helper Scripts](https://github.com/community-scripts/ProxmoxVE/)
 - [QNAP](https://www.myqnap.org/product/go2rtc/)
 - [Synology NAS](https://synocommunity.com/package/go2rtc)
 - [Unraid](https://unraid.net/community/apps?q=go2rtc)
