@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"regexp"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/app"
@@ -132,7 +133,11 @@ func apiWS(w http.ResponseWriter, r *http.Request) {
 		if handler := wsHandlers[msg.Type]; handler != nil {
 			go func() {
 				if err = handler(tr, msg); err != nil {
-					tr.Write(&Message{Type: "error", Value: msg.Type + ": " + err.Error()})
+					// Some streams such as ffmpeg might return credentials on error messages
+					errMsg := err.Error()
+					sanitizer := regexp.MustCompile(`(\w+)://(.*)@`)
+					errMsg = sanitizer.ReplaceAllString(errMsg, "$1://******@")
+					tr.Write(&Message{Type: "error", Value: msg.Type + ": " + errMsg})
 				}
 			}()
 		}
