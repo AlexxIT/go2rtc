@@ -1132,8 +1132,8 @@ You need to manually install the [tuna cli](https://tuna.am/docs/guides/install-
 You need to add your [tuna token](https://my.tuna.am/token) and WebRTC TCP port to YAML:
 
 ```yaml
-ngrok:
-  command: ngrok tcp 8555 --token eW91IHNoYWxsIG5vdCBwYXNzCnlvdSBzaGFsbCBub3QgcGFzcw
+tuna:
+  command: tuna tcp 8555 --token tt_dveq6c8hfmfmz8b0u4ft80nub8fctvp9
 ```
 
 **Tunnel for WebRTC, RTSP and Web interface**

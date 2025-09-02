@@ -49,10 +49,15 @@ func Init() {
 					log.Warn().Err(err).Msg("[tuna] add candidate")
 					return
 				}
-
-				log.Info().Str("addr", address).Msg("[tuna] add external candidate for WebRTC")
-
-				webrtc.AddCandidate("tcp", address)
+				port, err := GetPort(msg.Addr)
+				if err != nil {
+					log.Warn().Err(err).Msg("[tuna] get port")
+					return
+				}
+				if port == "8555" {
+					log.Info().Str("addr", address).Msg("[tuna] add external candidate for WebRTC")
+					webrtc.AddCandidate("tcp", address)
+				}
 			}
 		}
 	})
@@ -83,4 +88,12 @@ func ConvertHostToIP(address string) (string, error) {
 	}
 
 	return ip[0].String() + ":" + port, nil
+}
+
+func GetPort(address string) (string, error) {
+	_, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return "", err
+	}
+	return port, nil
 }

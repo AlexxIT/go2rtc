@@ -3,7 +3,6 @@ package tuna
 import (
 	"bufio"
 	"encoding/json"
-	"fmt"
 	"io"
 	"os/exec"
 	"strings"
@@ -71,16 +70,8 @@ func (n *Tuna) Serve() error {
 		msg := new(Message)
 		_ = json.Unmarshal(line, msg)
 
-		if msg.Level != "error" && strings.HasPrefix(msg.Msg, "Forwarding") {
-			parts := strings.Fields(msg.Msg)
-			if len(parts) >= 3 {
-				url := parts[1]
-				addr := parts[3]
-				msg.URL = url
-				msg.Addr = addr
-				n.Tunnels[addr] = url
-			}
-			fmt.Println(msg.Addr, msg.URL)
+		if msg.Level != "error" && msg.Msg == "Forwarding" {
+			n.Tunnels[msg.Addr] = msg.URL
 		}
 
 		msg.Line = string(line)
