@@ -1110,7 +1110,8 @@ See the [ngrok agent documentation](https://ngrok.com/docs/agent/config/) for mo
 [Tuna](https://tuna.am/) - is an analogue of ngrok in Russia with access nodes and the ability to pay for a subscription.
 You also can get external access to your streams in situations when you have Internet with a private IP address.
 
-> [!TIP] Ngrok blocked users from Russia with [ERR_NGROK_9040](https://ngrok.com/docs/errors/err_ngrok_9040/) error code.
+> [!TIP]
+> Ngrok blocked users from Russia with [ERR_NGROK_9040](https://ngrok.com/docs/errors/err_ngrok_9040/) error code.
 
 - tuna is pre-installed for **Docker** and **Hass add-on** users
 - you may need external access for two different things:
