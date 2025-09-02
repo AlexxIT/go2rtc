@@ -1123,7 +1123,7 @@ You also can get external access to your streams in situations when you have Int
 Tuna in the free version has limitations, you can only create HTTP tunnels with an active address for 30 minutes. Therefore, to open access to WebRTC or RTSP, a subscription is required.
 More details in [tuna documentation](https://tuna.am/docs/tunnels/)
 
-go2rtc will automatically get your external TCP address (if you enable it in ngrok config) and use it with WebRTC connection (if you enable it in webrtc config).
+go2rtc will automatically get your external TCP address and use it with WebRTC connection.
 
 You need to manually install the [tuna cli](https://tuna.am/docs/guides/install-manual/) for your OS and register with the [tuna portal](https://my.tuna.com/).
 
