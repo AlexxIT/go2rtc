@@ -79,7 +79,7 @@ func Init() {
 			Handler:       homekit.ServerHandler(srv),
 		}
 
-		if url := findHomeKitURL(stream.Sources()); url != "" {
+		if url := streams.FindPrefixURL("homekit", stream.Sources()); url != "" {
 			// 1. Act as transparent proxy for HomeKit camera
 			dial := func() (net.Conn, error) {
 				client, err := homekit.Dial(url, srtp.Server)
@@ -188,26 +188,6 @@ func hapHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil && err != io.EOF {
 		log.Error().Err(err).Caller().Send()
 	}
-}
-
-func findHomeKitURL(sources []string) string {
-	if len(sources) == 0 {
-		return ""
-	}
-
-	url := sources[0]
-	if strings.HasPrefix(url, "homekit") {
-		return url
-	}
-
-	if strings.HasPrefix(url, "hass") {
-		location, _ := streams.Location(url)
-		if strings.HasPrefix(location, "homekit") {
-			return url
-		}
-	}
-
-	return ""
 }
 
 func parseBitrate(s string) int {
