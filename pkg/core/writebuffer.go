@@ -42,8 +42,11 @@ func (w *WriteBuffer) Write(p []byte) (n int, err error) {
 	if err != nil {
 		w.err = err
 		w.done()
-	} else if f, ok := w.Writer.(http.Flusher); ok {
-		f.Flush()
+	} else {
+		if f, ok := w.Writer.(http.Flusher); ok && f != nil {
+			// Вызов Flush только если Writer поддерживает Flusher и не nil
+			f.Flush()
+		}
 	}
 	return
 }
