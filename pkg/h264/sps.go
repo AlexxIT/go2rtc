@@ -364,3 +364,17 @@ func FixPixFmt(sps []byte) {
 		}
 	}
 }
+
+// FPS returns frames per second if timing info is present in SPS, otherwise 0.
+// Formula: fps = time_scale / (2 * num_units_in_tick) for progressive streams.
+// If timing info is absent, returns 0.
+func (s *SPS) FPS() float64 {
+	if s == nil {
+		return 0
+	}
+	if s.timing_info_present_flag == 0 || s.num_units_in_tick == 0 {
+		return 0
+	}
+	// Most streams are progressive; the H.264 spec uses the factor 2.
+	return float64(s.time_scale) / (2.0 * float64(s.num_units_in_tick))
+}

@@ -18,6 +18,8 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 
 	sps, pps := GetParameterSet(codec.FmtpLine)
 	ps := JoinNALU(sps, pps)
+	// Track latest SPS/PPS observed in-band and use them if SDP had none
+	var spsLast, ppsLast []byte
 
 	buf := make([]byte, 0, 512*1024) // 512K
 
@@ -33,6 +35,26 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 		// https://github.com/AlexxIT/go2rtc/issues/675
 		if len(buf) > 5*1024*1024 {
 			buf = buf[: 0 : 512*1024]
+		}
+
+		// Capture SPS/PPS from current payload (AVCC) to update parameter sets dynamically
+		// This helps when remote SDP doesn't provide sprop-parameter-sets
+		for off := 0; off+4 <= len(payload); {
+			size := 4 + int(binary.BigEndian.Uint32(payload[off:]))
+			if off+size > len(payload) || size <= 4 {
+				break
+			}
+			nalu := payload[off : off+size]
+			switch NALUType(nalu) {
+			case NALUTypeSPS:
+				spsLast = append(spsLast[:0], nalu[4:]...)
+			case NALUTypePPS:
+				ppsLast = append(ppsLast[:0], nalu[4:]...)
+			}
+			off += size
+		}
+		if len(spsLast) > 0 && len(ppsLast) > 0 {
+			ps = JoinNALU(spsLast, ppsLast)
 		}
 
 		// Fix TP-Link Tapo TC70: sends SPS and PPS with packet.Marker = true
@@ -55,8 +77,10 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 				// Amcrest IP4M-1051: 9, 6, 1
 				switch NALUType(payload) {
 				case NALUTypeIFrame:
-					// fix IFrame without SPS,PPS
-					buf = append(buf, ps...)
+					// fix IFrame without SPS,PPS (use latest known)
+					if len(ps) > 0 {
+						buf = append(buf, ps...)
+					}
 				case NALUTypeSEI, NALUTypeAUD:
 					// fix ffmpeg with transcoding first frame
 					i := int(4 + binary.BigEndian.Uint32(payload))
