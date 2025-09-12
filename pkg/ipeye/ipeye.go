@@ -1,8 +1,6 @@
 package ipeye
 
 import (
-	"bytes"
-	"errors"
 	"log"
 	"net/http"
 	"strings"
@@ -10,10 +8,12 @@ import (
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
-	"github.com/AlexxIT/go2rtc/pkg/h264/annexb"
 	"github.com/AlexxIT/go2rtc/pkg/iso"
 	"github.com/gorilla/websocket"
 	"github.com/pion/rtp"
+	"github.com/pion/rtp/codecs"
+
+	mediacommonh264 "github.com/bluenviron/mediacommon/pkg/codecs/h264"
 )
 
 type Producer struct {
@@ -59,51 +59,70 @@ func Dial(source string) (core.Producer, error) {
 	return prod, nil
 }
 
-// первый пакет содержит строку кодеков ("avc1.42001F,mp4a.40.2")
+// probe ждёт init с avcC и извлекает SPS/PPS
 func (p *Producer) probe() error {
-	_, b, err := p.conn.ReadMessage()
-	if err != nil {
-		return err
-	}
-	if len(b) == 0 || b[0] != 6 {
-		return errors.New("ipeye: invalid first packet (codec info not found)")
-	}
-
-	codecStr := string(b[1:])
-	log.Printf("[ipeye] codecs string: %s", codecStr)
-
-	if strings.Contains(codecStr, "avc1") {
-		// создаём provisional H264 codec без SPS/PPS
-		codec := &core.Codec{
-			Name:        core.CodecH264,
-			ClockRate:   90000,
-			FmtpLine:    "packetization-mode=1",
-			PayloadType: core.PayloadTypeRAW,
+	for {
+		mType, b, err := p.conn.ReadMessage()
+		if err != nil {
+			return err
 		}
-		p.Medias = append(p.Medias, &core.Media{
-			Kind:      core.KindVideo,
-			Direction: core.DirectionRecvonly,
-			Codecs:    []*core.Codec{codec},
-		})
-		log.Printf("[ipeye] provisional H264 codec created")
+
+		if mType == websocket.BinaryMessage {
+			atoms, err := iso.DecodeAtoms(b)
+			if err != nil {
+				continue
+			}
+
+			var trackID uint32
+
+			for _, atom := range atoms {
+				switch atom := atom.(type) {
+				case *iso.AtomTkhd:
+					trackID = atom.TrackID
+				case *iso.AtomVideo:
+					if atom.Name == "avc1" {
+						codec := h264.AVCCToCodec(atom.Config)
+						sps, pps := parseSPSPPS(atom.Config)
+						p.sps, p.pps = sps, pps
+
+						p.Medias = append(p.Medias, &core.Media{
+							Kind:      core.KindVideo,
+							Direction: core.DirectionRecvonly,
+							Codecs:    []*core.Codec{codec},
+						})
+						p.videoTrackID = trackID
+
+						log.Printf("[ipeye] fMP4 video avc1 trackID=%d", trackID)
+					}
+				}
+			}
+
+			if len(p.Medias) > 0 {
+				log.Printf("[ipeye] detected fMP4 init with %d medias", len(p.Medias))
+				return nil
+			}
+		}
 	}
-	return nil
 }
 
+// Start запускает основной цикл чтения фрагментов
 func (p *Producer) Start() error {
 	receivers := make(map[uint32]*core.Receiver)
-	for _, receiver := range p.Receivers {
-		if receiver.Codec.Kind() == core.KindVideo {
-			receivers[0] = receiver // trackID узнаем позже
+	if p.videoTrackID != 0 {
+		for _, receiver := range p.Receivers {
+			if receiver.Codec.Kind() == core.KindVideo {
+				receivers[p.videoTrackID] = receiver
+			}
 		}
 	}
 
-	sequencer := rtp.NewRandomSequencer()
-	payloader := &h264.Payloader{IsAVC: false}
+	// RTP packetizer
+	h264Pay := &codecs.H264Payloader{}
+	seq := rtp.NewRandomSequencer()
+	h264pkt := rtp.NewPacketizer(1200, 96, 0, h264Pay, seq, 90000)
 
-	log.Printf("[ipeye] start streaming")
-
-	var trackDetected bool
+	var tsCounter uint32 = 0
+	const frameDur = 90000 / 25 // фиксированный шаг для 25fps
 
 	for {
 		mType, b, err := p.conn.ReadMessage()
@@ -117,126 +136,83 @@ func (p *Producer) Start() error {
 
 		atoms, err := iso.DecodeAtoms(b)
 		if err != nil {
-			log.Printf("[ipeye] iso.DecodeAtoms error: %v", err)
 			continue
 		}
 
 		var trackID uint32
-		var decodeTime uint64
-		var data []byte
+		var mdatData []byte
 
 		for _, atom := range atoms {
 			switch atom := atom.(type) {
 			case *iso.AtomTfhd:
 				trackID = atom.TrackID
-				if !trackDetected {
-					p.videoTrackID = trackID
-					if recv0, ok := receivers[0]; ok {
-						receivers = make(map[uint32]*core.Receiver)
-						receivers[trackID] = recv0
-					}
-					trackDetected = true
-					log.Printf("[ipeye] detected video trackID=%d", trackID)
-				}
-			case *iso.AtomTfdt:
-				decodeTime = atom.DecodeTime
 			case *iso.AtomMdat:
-				data = atom.Data
+				mdatData = atom.Data
 			}
 		}
 
-		if recv := receivers[trackID]; recv != nil && len(data) > 0 {
-			annex := annexb.DecodeAVCC(data, true)
-			if annex == nil {
+		if recv := receivers[trackID]; recv != nil && len(mdatData) > 0 {
+			var avcc mediacommonh264.AVCC
+			if err := avcc.Unmarshal(mdatData); err != nil {
+				log.Printf("[ipeye] avcc unmarshal error: %v", err)
 				continue
 			}
 
-			// если ещё нет SPS/PPS — пробуем достать
-			if p.sps == nil || p.pps == nil {
-				sps, pps := extractSPSPPS(annex)
-				if sps != nil && pps != nil {
-					p.sps, p.pps = sps, pps
-					codec := h264.ConfigToCodec(h264.EncodeConfig(sps, pps))
-					p.Medias[0].Codecs = []*core.Codec{codec}
-					log.Printf("[ipeye] Codec updated with SPS/PPS: %s", codec.FmtpLine)
+			for _, nalu := range avcc {
+				typ := nalu[0] & 0x1F
+
+				// Если IDR — добавляем SPS/PPS
+				if typ == 5 {
+					if len(p.sps) > 0 {
+						for _, pkt := range h264pkt.Packetize(p.sps, tsCounter) {
+							recv.WriteRTP(pkt)
+						}
+					}
+					if len(p.pps) > 0 {
+						for _, pkt := range h264pkt.Packetize(p.pps, tsCounter) {
+							recv.WriteRTP(pkt)
+						}
+					}
+				}
+
+				for _, pkt := range h264pkt.Packetize(nalu, tsCounter) {
+					recv.WriteRTP(pkt)
 				}
 			}
-
-			// timestamp в 90 кГц
-			ts := uint32(decodeTime * 90)
-
-			// если это ключевой кадр — добавляем SPS/PPS в поток
-			if h264.IsKeyframe(annex) && p.sps != nil && p.pps != nil {
-				ps := h264.JoinNALU(p.sps, p.pps)
-				annex = append(ps, annex...)
-				log.Printf("[ipeye] prepended SPS/PPS to keyframe")
-			}
-
-			payloads := payloader.Payload(1400, annex)
-			if len(payloads) == 0 {
-				continue
-			}
-
-			last := len(payloads) - 1
-			for i, pl := range payloads {
-				pkt := &rtp.Packet{
-					Header: rtp.Header{
-						Version:        2,
-						PayloadType:    recv.Codec.PayloadType,
-						SequenceNumber: sequencer.NextSequenceNumber(),
-						Timestamp:      ts,
-						Marker:         i == last,
-					},
-					Payload: pl,
-				}
-				recv.WriteRTP(pkt)
-			}
-
-			log.Printf("[ipeye] sent frame track=%d ts=%d parts=%d", trackID, ts, len(payloads))
+			tsCounter += frameDur
 		}
 	}
 }
 
-// extractSPSPPS ищет SPS/PPS в AnnexB-потоке
-func extractSPSPPS(b []byte) (sps, pps []byte) {
-	const startCode = "\x00\x00\x00\x01"
-	for {
-		i := bytes.Index(b, []byte(startCode))
-		if i < 0 || i+4 >= len(b) {
-			break
-		}
-		b = b[i+4:]
-
-		ntype := h264.NALUType(b)
-		size := nextNALUSize(b)
-
-		switch ntype {
-		case h264.NALUTypeSPS:
-			if sps == nil {
-				sps = b[:size]
-			}
-		case h264.NALUTypePPS:
-			if pps == nil {
-				pps = b[:size]
-			}
-		}
-
-		if sps != nil && pps != nil {
+// parseSPSPPS парсит SPS/PPS из avcC
+func parseSPSPPS(avcc []byte) (sps, pps []byte) {
+	if len(avcc) < 7 {
+		return
+	}
+	numSPS := int(avcc[5] & 0x1F)
+	pos := 6
+	for i := 0; i < numSPS && pos+2 <= len(avcc); i++ {
+		size := int(avcc[pos])<<8 | int(avcc[pos+1])
+		pos += 2
+		if pos+size > len(avcc) {
 			return
 		}
-		if size <= 0 || size >= len(b) {
-			break
+		sps = avcc[pos : pos+size]
+		pos += size
+	}
+	if pos >= len(avcc) {
+		return
+	}
+	numPPS := int(avcc[pos])
+	pos++
+	for i := 0; i < numPPS && pos+2 <= len(avcc); i++ {
+		size := int(avcc[pos])<<8 | int(avcc[pos+1])
+		pos += 2
+		if pos+size > len(avcc) {
+			return
 		}
-		b = b[size:]
+		pps = avcc[pos : pos+size]
+		pos += size
 	}
 	return
-}
-
-func nextNALUSize(b []byte) int {
-	const startCode = "\x00\x00\x00\x01"
-	i := bytes.Index(b, []byte(startCode))
-	if i < 0 {
-		return len(b)
-	}
-	return i
 }

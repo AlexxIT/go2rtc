@@ -3,7 +3,7 @@ module github.com/AlexxIT/go2rtc
 go 1.23.0
 
 require (
-	github.com/asticode/go-astits v1.13.0
+	github.com/bluenviron/mediacommon v1.14.0
 	github.com/expr-lang/expr v1.17.5
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
@@ -27,7 +27,6 @@ require (
 )
 
 require (
-	github.com/asticode/go-astikit v0.56.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
