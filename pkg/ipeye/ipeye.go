@@ -1,12 +1,12 @@
 package ipeye
 
 import (
-	"log"
 	"math/rand"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/iso"
@@ -28,7 +28,7 @@ type Producer struct {
 	baseDecodeTime uint64
 }
 
-// Dial подключается к ipeye WebSocket с обязательным Origin
+// Dial connects to ipeye WebSocket with required Origin
 func Dial(source string) (core.Producer, error) {
 	url, _ := strings.CutPrefix(source, "ipeye:")
 
@@ -64,8 +64,10 @@ func Dial(source string) (core.Producer, error) {
 	return prod, nil
 }
 
-// probe ждёт init с avcC и извлекает SPS/PPS
+// probe waits for init with avcC and extracts SPS/PPS
 func (p *Producer) probe() error {
+	log := app.GetLogger("ipeye")
+
 	for {
 		mType, b, err := p.conn.ReadMessage()
 		if err != nil {
@@ -100,23 +102,27 @@ func (p *Producer) probe() error {
 						p.videoTrackID = trackID
 						p.clockRate = codec.ClockRate
 
-						log.Printf("[ipeye] fMP4 video avc1 trackID=%d timeScale=%d", trackID, timeScale)
+						log.Info().
+							Uint32("trackID", trackID).
+							Uint32("timeScale", timeScale).
+							Msg("fMP4 video detected")
 					}
 				}
 			}
 
 			if len(p.Medias) > 0 {
-				log.Printf("[ipeye] detected fMP4 init with %d medias", len(p.Medias))
+				log.Info().Int("medias", len(p.Medias)).Msg("fMP4 init complete")
 				return nil
 			}
 		}
 	}
 }
 
-// Start запускает основной цикл чтения фрагментов
+// Start runs the main fragment reading loop
 func (p *Producer) Start() error {
-	receivers := make(map[uint32]*core.Receiver)
+	log := app.GetLogger("ipeye")
 
+	receivers := make(map[uint32]*core.Receiver)
 	if p.videoTrackID != 0 {
 		for _, receiver := range p.Receivers {
 			if receiver.Codec.Kind() == core.KindVideo {
@@ -130,18 +136,18 @@ func (p *Producer) Start() error {
 	seq := rtp.NewRandomSequencer()
 	h264pkt := rtp.NewPacketizer(1200, 96, 0, h264Pay, seq, p.clockRate)
 
-	// глобальные счётчики
+	// global counters
 	rtpStart := rand.Uint32()
 	var dts uint64
 	var defaultDur uint32
 	var initialized bool
 
-	const wrapPeriod = uint64(1) << 32 // RTP TS цикличный (mod 2^32)
+	const wrapPeriod = uint64(1) << 32 // RTP TS wraps (mod 2^32)
 
 	for {
 		mType, b, err := p.conn.ReadMessage()
 		if err != nil {
-			log.Printf("[ipeye] read error: %v", err)
+			log.Error().Err(err).Msg("read error")
 			return err
 		}
 		if mType != websocket.BinaryMessage {
@@ -165,8 +171,10 @@ func (p *Producer) Start() error {
 
 			case *iso.AtomTfdt:
 				if !initialized {
-					log.Printf("[ipeye] init DecodeTime=%d rtpStart=%d",
-						atom.DecodeTime, rtpStart)
+					log.Info().
+						Uint64("decodeTime", atom.DecodeTime).
+						Uint32("rtpStart", rtpStart).
+						Msg("stream initialized")
 					dts = atom.DecodeTime
 					initialized = true
 				}
@@ -186,46 +194,58 @@ func (p *Producer) Start() error {
 
 		var avcc mediacommonh264.AVCC
 		if err := avcc.Unmarshal(mdatData); err != nil {
-			log.Printf("[ipeye] avcc unmarshal error: %v", err)
+			log.Warn().Err(err).Msg("AVCC unmarshal failed")
 			continue
 		}
 
-		// бежим по сэмплам
+		// iterate over samples
 		for i, nalu := range avcc {
 			typ := nalu[0] & 0x1F
 
-			// считаем RTP TS для этого сэмпла (mod 2^32)
+			// RTP TS for this sample (mod 2^32)
 			ts := rtpStart + uint32((dts*uint64(p.clockRate)/90000)%wrapPeriod)
 
-			// SPS/PPS перед IDR
+			// SPS/PPS before IDR
 			if typ == 5 {
 				if len(p.sps) > 0 {
 					for _, pkt := range h264pkt.Packetize(p.sps, ts) {
 						pkt.Timestamp = ts
 						recv.Input(pkt)
-						log.Printf("[ipeye] RTP ts=%d seq=%d size=%d type=SPS",
-							pkt.Timestamp, pkt.SequenceNumber, len(pkt.Payload))
+						log.Debug().
+							Uint32("ts", pkt.Timestamp).
+							Uint16("seq", pkt.SequenceNumber).
+							Int("size", len(pkt.Payload)).
+							Str("type", "SPS").
+							Msg("RTP packet")
 					}
 				}
 				if len(p.pps) > 0 {
 					for _, pkt := range h264pkt.Packetize(p.pps, ts) {
 						pkt.Timestamp = ts
 						recv.Input(pkt)
-						log.Printf("[ipeye] RTP ts=%d seq=%d size=%d type=PPS",
-							pkt.Timestamp, pkt.SequenceNumber, len(pkt.Payload))
+						log.Debug().
+							Uint32("ts", pkt.Timestamp).
+							Uint16("seq", pkt.SequenceNumber).
+							Int("size", len(pkt.Payload)).
+							Str("type", "PPS").
+							Msg("RTP packet")
 					}
 				}
 			}
 
-			// сам кадр
+			// actual frame
 			for _, pkt := range h264pkt.Packetize(nalu, ts) {
-				pkt.Timestamp = ts // фиксируем TS у всех пакетов
+				pkt.Timestamp = ts
 				recv.Input(pkt)
-				log.Printf("[ipeye] RTP ts=%d seq=%d size=%d type=%d",
-					pkt.Timestamp, pkt.SequenceNumber, len(pkt.Payload), typ)
+				log.Debug().
+					Uint32("ts", pkt.Timestamp).
+					Uint16("seq", pkt.SequenceNumber).
+					Int("size", len(pkt.Payload)).
+					Int("nalType", int(typ)).
+					Msg("RTP packet")
 			}
 
-			// выбираем длительность
+			// duration selection
 			dur := defaultDur
 			if i < len(samplesDur) && samplesDur[i] != 0 {
 				dur = samplesDur[i]
@@ -234,10 +254,16 @@ func (p *Producer) Start() error {
 				dur = p.clockRate / 25 // fallback
 			}
 
-			log.Printf("[ipeye] sample=%d dur=%d DTS=%d RTP.ts=%d NALU.type=%d size=%d",
-				i, dur, dts, ts, typ, len(nalu))
+			log.Trace().
+				Int("sample", i).
+				Uint32("dur", dur).
+				Uint64("dts", dts).
+				Uint32("rtpTS", ts).
+				Int("nalType", int(typ)).
+				Int("size", len(nalu)).
+				Msg("sample processed")
 
-			// двигаем DTS
+			// increment DTS
 			dts += uint64(dur)
 			if dts >= wrapPeriod {
 				dts %= wrapPeriod
@@ -246,7 +272,7 @@ func (p *Producer) Start() error {
 	}
 }
 
-// parseSPSPPS парсит SPS/PPS из avcC
+// parseSPSPPS extracts SPS/PPS from avcC
 func parseSPSPPS(avcc []byte) (sps, pps []byte) {
 	if len(avcc) < 7 {
 		return
