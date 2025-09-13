@@ -1,6 +1,7 @@
 package ipeye
 
 import (
+	"bytes"
 	"math/rand"
 	"net/http"
 	"strings"
@@ -9,12 +10,11 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
+	"github.com/AlexxIT/go2rtc/pkg/h264/annexb"
 	"github.com/AlexxIT/go2rtc/pkg/iso"
 	"github.com/gorilla/websocket"
 	"github.com/pion/rtp"
 	"github.com/pion/rtp/codecs"
-
-	mediacommonh264 "github.com/bluenviron/mediacommon/pkg/codecs/h264"
 )
 
 type Producer struct {
@@ -192,21 +192,22 @@ func (p *Producer) Start() error {
 			continue
 		}
 
-		var avcc mediacommonh264.AVCC
-		if err := avcc.Unmarshal(mdatData); err != nil {
-			log.Warn().Err(err).Msg("AVCC unmarshal failed")
-			continue
-		}
+		// convert AVCC -> AnnexB
+		annexbData := annexb.DecodeAVCC(mdatData, true)
+		nalus := bytes.Split(annexbData, []byte{0, 0, 0, 1})
 
-		// iterate over samples
-		for i, nalu := range avcc {
+		// iterate over NALUs
+		for i, nalu := range nalus {
+			if len(nalu) == 0 {
+				continue
+			}
 			typ := nalu[0] & 0x1F
 
 			// RTP TS for this sample (mod 2^32)
 			ts := rtpStart + uint32((dts*uint64(p.clockRate)/90000)%wrapPeriod)
 
 			// SPS/PPS before IDR
-			if typ == 5 {
+			if typ == h264.NALUTypeIFrame {
 				if len(p.sps) > 0 {
 					for _, pkt := range h264pkt.Packetize(p.sps, ts) {
 						pkt.Timestamp = ts
