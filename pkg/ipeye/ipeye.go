@@ -136,6 +136,8 @@ func (p *Producer) Start() error {
 	var defaultDur uint32
 	var initialized bool
 
+	const wrapPeriod = uint64(1) << 32 // RTP TS цикличный (mod 2^32)
+
 	for {
 		mType, b, err := p.conn.ReadMessage()
 		if err != nil {
@@ -192,8 +194,8 @@ func (p *Producer) Start() error {
 		for i, nalu := range avcc {
 			typ := nalu[0] & 0x1F
 
-			// считаем RTP TS для этого сэмпла
-			ts := rtpStart + uint32(dts*uint64(p.clockRate)/90000)
+			// считаем RTP TS для этого сэмпла (mod 2^32)
+			ts := rtpStart + uint32((dts*uint64(p.clockRate)/90000)%wrapPeriod)
 
 			// SPS/PPS перед IDR
 			if typ == 5 {
@@ -237,6 +239,9 @@ func (p *Producer) Start() error {
 
 			// двигаем DTS
 			dts += uint64(dur)
+			if dts >= wrapPeriod {
+				dts %= wrapPeriod
+			}
 		}
 	}
 }
