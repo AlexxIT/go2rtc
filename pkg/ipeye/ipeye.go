@@ -117,7 +117,7 @@ func (p *Producer) Start() error {
 		}
 	}
 
-	// RTP счётчики
+	// RTP counters
 	rtpStart := rand.Uint32()
 	seq := uint16(rand.Uint32())
 	var dts uint64
@@ -169,10 +169,10 @@ func (p *Producer) Start() error {
 			continue
 		}
 
-		// RTP TS для этого sample
+		// RTP TS for this sample
 		ts := rtpStart + uint32((dts*uint64(p.clockRate)/90000)%wrapPeriod)
 
-		// Отправляем один RTP-пакет с полезной нагрузкой в AVCC
+		// Send one RTP packet with payload in AVCC
 		seq++
 		recv.Input(&rtp.Packet{
 			Header: rtp.Header{
@@ -185,7 +185,7 @@ func (p *Producer) Start() error {
 			Payload: mdatData,
 		})
 
-		// выбираем длительность
+		// Choose duration
 		dur := defaultDur
 		if len(samplesDur) > 0 && samplesDur[0] != 0 {
 			dur = samplesDur[0]
@@ -194,7 +194,7 @@ func (p *Producer) Start() error {
 			dur = p.clockRate / 25 // fallback
 		}
 
-		// инкремент DTS
+		// Increment DTS
 		dts += uint64(dur)
 		if dts >= wrapPeriod {
 			dts %= wrapPeriod
