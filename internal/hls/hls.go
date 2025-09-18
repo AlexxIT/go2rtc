@@ -12,6 +12,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/mp4"
 	"github.com/AlexxIT/go2rtc/pkg/mpegts"
+	"github.com/AlexxIT/go2rtc/pkg/shell"
 	"github.com/rs/zerolog"
 )
 
@@ -142,7 +143,7 @@ func handlerSegmentTS(w http.ResponseWriter, r *http.Request) {
 
 	data := session.Segment()
 	if data == nil {
-		log.Warn().Msgf("[hls] can't get segment %s", r.URL.RawQuery)
+		log.Warn().Msgf("[hls] can't get segment %s", shell.Redact(r.URL.RawQuery))
 		http.NotFound(w, r)
 		return
 	}
@@ -172,7 +173,7 @@ func handlerInit(w http.ResponseWriter, r *http.Request) {
 
 	data := session.Init()
 	if data == nil {
-		log.Warn().Msgf("[hls] can't get init %s", r.URL.RawQuery)
+		log.Warn().Msgf("[hls] can't get init %s", shell.Redact(r.URL.RawQuery))
 		http.NotFound(w, r)
 		return
 	}
@@ -206,7 +207,7 @@ func handlerSegmentMP4(w http.ResponseWriter, r *http.Request) {
 
 	data := session.Segment()
 	if data == nil {
-		log.Warn().Msgf("[hls] can't get segment %s", r.URL.RawQuery)
+		log.Warn().Msgf("[hls] can't get segment %s", shell.Redact(r.URL.RawQuery))
 		http.NotFound(w, r)
 		return
 	}
