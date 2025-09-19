@@ -12,3 +12,4 @@ go2rtc_win*
 0_test.go
 
 .DS_Store
+.aider*
