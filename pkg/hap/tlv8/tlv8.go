@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"io"
 	"math"
 	"reflect"
@@ -187,57 +186,32 @@ func Unmarshal(data []byte, v any) error {
 }
 
 func unmarshalStruct(b []byte, value reflect.Value) error {
-	var waitSlice bool
+	if len(b) < 2 {
+		return nil // End of payload, nothing left to process
+	}
 
-	for len(b) >= 2 {
-		t := b[0]
-		l := int(b[1])
+	t := b[0]            // Type
+	l := int(b[1])       // Length
+	v := b[2 : 2+l]      // Value (can be empty if l == 0)
+	remainder := b[2+l:] // Move cursor to the next TLV item
+	tag := strconv.Itoa(int(t))
+	valueField, ok := getStructField(value, tag)
 
-		// array item divider
-		if t == 0 && l == 0 {
-			b = b[2:]
-			waitSlice = true
-			continue
-		}
+	// Accumulate fragments if the value length is 255
+	for l == 255 && len(remainder) >= 2 && remainder[0] == t {
+		l = int(remainder[1])
+		v = append(v, remainder[2:2+l]...)
+		remainder = remainder[2+l:]
+	}
 
-		var v []byte
-
-		for {
-			if len(b) < 2+l {
-				return errors.New("tlv8: wrong size: " + value.Type().Name())
-			}
-
-			v = append(v, b[2:2+l]...)
-			b = b[2+l:]
-
-			// if size == 255 and same tag - continue read big payload
-			if l < 255 || len(b) < 2 || b[0] != t {
-				break
-			}
-
-			l = int(b[1])
-		}
-
-		tag := strconv.Itoa(int(t))
-
-		valueField, ok := getStructField(value, tag)
-		if !ok {
-			return fmt.Errorf("tlv8: can't find T=%d,L=%d,V=%x for: %s", t, l, v, value.Type().Name())
-		}
-
-		if waitSlice {
-			if valueField.Kind() != reflect.Slice {
-				return fmt.Errorf("tlv8: should be slice T=%d,L=%d,V=%x for: %s", t, l, v, value.Type().Name())
-			}
-			waitSlice = false
-		}
-
+	if ok {
 		if err := unmarshalValue(v, valueField); err != nil {
 			return err
 		}
 	}
 
-	return nil
+	// Recursively process the remaining payload
+	return unmarshalStruct(remainder, value)
 }
 
 func unmarshalValue(v []byte, value reflect.Value) error {

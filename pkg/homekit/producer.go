@@ -30,6 +30,8 @@ type Client struct {
 
 	stream *camera.Stream
 
+	Width   int
+	Height  int
 	Bitrate int // in bits/s
 }
 
@@ -102,7 +104,7 @@ func (c *Client) GetMedias() []*core.Media {
 
 	c.Medias = []*core.Media{
 		videoToMedia(c.videoConfig.Codecs),
-		audioToMedia(c.audioConfig.Codecs),
+		audioToMedia(c.audioConfig.Codecs, core.DirectionRecvonly),
 		{
 			Kind:      core.KindVideo,
 			Direction: core.DirectionRecvonly,
@@ -116,7 +118,44 @@ func (c *Client) GetMedias() []*core.Media {
 		},
 	}
 
+	if acc.GetService(camera.TypeSpeaker) != nil {
+		c.Medias = append(c.Medias,
+			audioToMedia(c.audioConfig.Codecs, core.DirectionSendonly),
+			&core.Media{
+				Kind:      core.KindAudio,
+				Direction: core.DirectionSendonly,
+				Codecs: []*core.Codec{
+					{
+						Name:      core.CodecOpus,
+						ClockRate: 48000,
+						Channels:  2,
+					},
+				},
+			},
+		)
+	}
+
 	return c.Medias
+}
+
+func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
+	switch codec.Name {
+	case core.CodecOpus:
+		sender := core.NewSender(media, track.Codec)
+
+		sender.Handler = func(packet *rtp.Packet) {
+			if c.audioSession != nil {
+				if n, err := c.audioSession.WriteRTP(packet); err == nil {
+					c.Send += n
+				}
+			}
+		}
+
+		sender.HandleRTP(track)
+		c.Senders = append(c.Senders, sender)
+	}
+
+	return nil
 }
 
 func (c *Client) Start() error {
@@ -138,13 +177,19 @@ func (c *Client) Start() error {
 	c.audioSession = &srtp.Session{Local: c.srtpEndpoint()}
 
 	var err error
-	c.stream, err = camera.NewStream(c.hap, videoCodec, audioCodec, c.videoSession, c.audioSession, c.Bitrate)
+	c.stream, err = camera.NewStream(c.hap, videoCodec, audioCodec, c.videoSession, c.audioSession, c.Bitrate, c.Width, c.Height)
 	if err != nil {
 		return err
 	}
 
 	c.srtp.AddSession(c.videoSession)
 	c.srtp.AddSession(c.audioSession)
+
+	c.videoSession.PayloadType = videoCodec.RTPParams[0].PayloadType
+	c.videoSession.RTCPInterval = toDuration(videoCodec.RTPParams[0].RTCPInterval)
+
+	c.audioSession.PayloadType = audioCodec.RTPParams[0].PayloadType
+	c.audioSession.RTCPInterval = toDuration(audioCodec.RTPParams[0].RTCPInterval)
 
 	deadline := time.NewTimer(core.ConnDeadline)
 
@@ -167,10 +212,6 @@ func (c *Client) Start() error {
 			audioTrack.WriteRTP(packet)
 			c.Recv += len(packet.Payload)
 		}
-	}
-
-	if c.audioSession.OnReadRTP != nil {
-		c.audioSession.OnReadRTP = timekeeper(c.audioSession.OnReadRTP)
 	}
 
 	<-deadline.C
@@ -224,32 +265,5 @@ func (c *Client) srtpEndpoint() *srtp.Endpoint {
 		MasterKey:  []byte(core.RandString(16, 0)),
 		MasterSalt: []byte(core.RandString(14, 0)),
 		SSRC:       rand.Uint32(),
-	}
-}
-
-func timekeeper(handler core.HandlerFunc) core.HandlerFunc {
-	const sampleRate = 16000
-	const sampleSize = 480
-
-	var send time.Duration
-	var firstTime time.Time
-
-	return func(packet *rtp.Packet) {
-		now := time.Now()
-
-		if send != 0 {
-			elapsed := now.Sub(firstTime) * sampleRate / time.Second
-			if send+sampleSize > elapsed {
-				return // drop overflow frame
-			}
-		} else {
-			firstTime = now
-		}
-
-		send += sampleSize
-
-		packet.Timestamp = uint32(send)
-
-		handler(packet)
 	}
 }
