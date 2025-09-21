@@ -531,7 +531,7 @@ streams:
 
 - stream quality is the same as [RTSP protocol](https://www.tapo.com/en/faq/34/)
 - use the **cloud password**, this is not the RTSP password! you do not need to add a login!
-- you can also use UPPERCASE MD5 hash from your cloud password with `admin` username
+- you can also use **UPPERCASE** MD5 hash from your cloud password with `admin` username
 - some new camera firmwares require SHA256 instead of MD5
 
 ```yaml
@@ -542,6 +542,10 @@ streams:
   camera2: tapo://admin:UPPERCASE-MD5@192.168.1.123
   # admin username and UPPERCASE SHA256 cloud-password hash
   camera3: tapo://admin:UPPERCASE-SHA256@192.168.1.123
+  # VGA stream (the so called substream, the lower resolution one)
+  camera4: tapo://cloud-password@192.168.1.123?subtype=1 
+  # HD stream (default)
+  camera5: tapo://cloud-password@192.168.1.123?subtype=0 
 ```
 
 ```bash
