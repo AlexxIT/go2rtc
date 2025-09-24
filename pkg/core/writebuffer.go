@@ -28,15 +28,26 @@ func NewWriteBuffer(wr io.Writer) *WriteBuffer {
 
 func (w *WriteBuffer) Write(p []byte) (n int, err error) {
 	w.mu.Lock()
+	defer w.mu.Unlock()
+
 	if w.err != nil {
-		err = w.err
-	} else if n, err = w.Writer.Write(p); err != nil {
+		return 0, w.err
+	}
+	if w.Writer == nil {
+		w.err = io.ErrClosedPipe
+		w.done()
+		return 0, w.err
+	}
+	n, err = w.Writer.Write(p)
+	if err != nil {
 		w.err = err
 		w.done()
-	} else if f, ok := w.Writer.(http.Flusher); ok {
-		f.Flush()
+	} else {
+		if f, ok := w.Writer.(http.Flusher); ok && f != nil {
+			// Вызов Flush только если Writer поддерживает Flusher и не nil
+			f.Flush()
+		}
 	}
-	w.mu.Unlock()
 	return
 }
 
@@ -58,6 +69,7 @@ func (w *WriteBuffer) Close() error {
 
 func (w *WriteBuffer) Reset(wr io.Writer) {
 	w.mu.Lock()
+	defer w.mu.Unlock()
 	w.add()
 	if buf, ok := w.Writer.(*bytes.Buffer); ok && buf.Len() != 0 {
 		if _, err := io.Copy(wr, buf); err != nil {
@@ -66,7 +78,6 @@ func (w *WriteBuffer) Reset(wr io.Writer) {
 		}
 	}
 	w.Writer = wr
-	w.mu.Unlock()
 }
 
 const (
