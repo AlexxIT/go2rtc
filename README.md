@@ -116,7 +116,7 @@ Ultimate camera streaming application with support for RTSP, WebRTC, HomeKit, FF
 Download binary for your OS from [latest release](https://github.com/AlexxIT/go2rtc/releases/):
 
 - `go2rtc_win64.zip` - Windows 10+ 64-bit
-- `go2rtc_win32.zip` - Windows 7+ 32-bit
+- `go2rtc_win32.zip` - Windows 10+ 32-bit
 - `go2rtc_win_arm64.zip` - Windows ARM 64-bit
 - `go2rtc_linux_amd64` - Linux 64-bit
 - `go2rtc_linux_i386` - Linux 32-bit
@@ -124,7 +124,7 @@ Download binary for your OS from [latest release](https://github.com/AlexxIT/go2
 - `go2rtc_linux_arm` - Linux ARM 32-bit (ex. Raspberry 32-bit OS)
 - `go2rtc_linux_armv6` - Linux ARMv6 (for old Raspberry 1 and Zero)
 - `go2rtc_linux_mipsel` - Linux MIPS (ex. [Xiaomi Gateway 3](https://github.com/AlexxIT/XiaomiGateway3), [Wyze cameras](https://github.com/gtxaspec/wz_mini_hacks))
-- `go2rtc_mac_amd64.zip` - macOS 10.13+ Intel 64-bit
+- `go2rtc_mac_amd64.zip` - macOS 11+ Intel 64-bit
 - `go2rtc_mac_arm64.zip` - macOS ARM 64-bit
 - `go2rtc_freebsd_amd64.zip` - FreeBSD 64-bit
 - `go2rtc_freebsd_arm64.zip` - FreeBSD ARM 64-bit
