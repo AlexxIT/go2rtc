@@ -12,7 +12,7 @@ func NewAccessory(manuf, model, name, serial, firmware string) *hap.Accessory {
 			hap.ServiceAccessoryInformation(manuf, model, name, serial, firmware),
 			ServiceCameraRTPStreamManagement(),
 			//hap.ServiceHAPProtocolInformation(),
-			//ServiceMicrophone(),
+			ServiceMicrophone(),
 		},
 	}
 	acc.InitIID()
@@ -30,17 +30,17 @@ func ServiceMicrophone() *hap.Service {
 				Perms:  hap.EVPRPW,
 				//Descr:  "Mute",
 			},
-			{
-				Type:   "119",
-				Format: hap.FormatUInt8,
-				Value:  100,
-				Perms:  hap.EVPRPW,
-				//Descr:    "Volume",
-				//Unit:     hap.UnitPercentage,
-				//MinValue: 0,
-				//MaxValue: 100,
-				//MinStep:  1,
-			},
+			//{
+			//	Type:   "119",
+			//	Format: hap.FormatUInt8,
+			//	Value:  100,
+			//	Perms:  hap.EVPRPW,
+			//	//Descr:    "Volume",
+			//	//Unit:     hap.UnitPercentage,
+			//	//MinValue: 0,
+			//	//MaxValue: 100,
+			//	//MinStep:  1,
+			//},
 		},
 	}
 }
@@ -62,7 +62,7 @@ func ServiceCameraRTPStreamManagement() *hap.Service {
 				VideoAttrs: []VideoAttrs{
 					{Width: 1920, Height: 1080, Framerate: 30},
 					{Width: 1280, Height: 720, Framerate: 30}, // important for iPhones
-					{Width: 320, Height: 240, Framerate: 15}, // apple watch
+					{Width: 320, Height: 240, Framerate: 15},  // apple watch
 				},
 			},
 		},
