@@ -71,10 +71,16 @@ type JSONCharacter struct {
 	Event  any    `json:"ev,omitempty"`
 }
 
+// 4.2.1.2 Invalid Setup Codes
+const insecurePINs = "00000000 11111111 22222222 33333333 44444444 55555555 66666666 77777777 88888888 99999999 12345678 87654321"
+
 func SanitizePin(pin string) (string, error) {
 	s := strings.ReplaceAll(pin, "-", "")
 	if len(s) != 8 {
 		return "", errors.New("hap: wrong PIN format: " + pin)
+	}
+	if strings.Contains(insecurePINs, s) {
+		return "", errors.New("hap: insecure PIN: " + pin)
 	}
 	// 123-45-678
 	return s[:3] + "-" + s[3:5] + "-" + s[5:], nil
