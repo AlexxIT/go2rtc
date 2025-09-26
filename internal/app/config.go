@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/AlexxIT/go2rtc/pkg/shell"
 	"github.com/AlexxIT/go2rtc/pkg/yaml"
@@ -18,10 +19,15 @@ func LoadConfig(v any) {
 	}
 }
 
+var configMu sync.Mutex
+
 func PatchConfig(path []string, value any) error {
 	if ConfigPath == "" {
 		return errors.New("config file disabled")
 	}
+
+	configMu.Lock()
+	defer configMu.Unlock()
 
 	// empty config is OK
 	b, _ := os.ReadFile(ConfigPath)
