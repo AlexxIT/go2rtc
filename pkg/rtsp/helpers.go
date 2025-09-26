@@ -116,20 +116,39 @@ func findFmtpLine(payloadType uint8, descriptions []*sdp.MediaDescription) strin
 // urlParse fix bugs:
 // 1. Content-Base: rtsp://::ffff:192.168.1.123/onvif/profile.1/
 // 2. Content-Base: rtsp://rtsp://turret2-cam.lan:554/stream1/
+// 3. Content-Base: 192.168.253.220:1935/
 func urlParse(rawURL string) (*url.URL, error) {
 	// fix https://github.com/AlexxIT/go2rtc/issues/830
 	if strings.HasPrefix(rawURL, "rtsp://rtsp://") {
 		rawURL = rawURL[7:]
 	}
 
+	// fix https://github.com/AlexxIT/go2rtc/issues/1852
+	if !strings.Contains(rawURL, "://") {
+		rawURL = "rtsp://" + rawURL
+	}
+
 	u, err := url.Parse(rawURL)
 	if err != nil && strings.HasSuffix(err.Error(), "after host") {
-		if i1 := strings.Index(rawURL, "://"); i1 > 0 {
-			if i2 := strings.IndexByte(rawURL[i1+3:], '/'); i2 > 0 {
-				return urlParse(rawURL[:i1+3+i2] + ":" + rawURL[i1+3+i2:])
-			}
+		if i := indexN(rawURL, '/', 3); i > 0 {
+			return urlParse(rawURL[:i] + ":" + rawURL[i:])
 		}
 	}
 
 	return u, err
+}
+
+func indexN(s string, c byte, n int) int {
+	var offset int
+	for {
+		i := strings.IndexByte(s[offset:], c)
+		if i < 0 {
+			break
+		}
+		if n--; n == 0 {
+			return offset + i
+		}
+		offset += i + 1
+	}
+	return -1
 }
