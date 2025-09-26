@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/AlexxIT/go2rtc/internal/app"
 )
 
 const (
@@ -88,4 +90,8 @@ const (
 func StripUserinfo(s string) string {
 	sanitizer := regexp.MustCompile(`://[` + userinfo + `]+@`)
 	return sanitizer.ReplaceAllString(s, `://***@`)
+}
+
+func NewSecret(name string, defaultValues interface{}) (*app.Secret, error) {
+	return app.NewSecret(name, defaultValues)
 }
