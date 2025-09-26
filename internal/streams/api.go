@@ -122,3 +122,80 @@ func apiStreamsDOT(w http.ResponseWriter, r *http.Request) {
 
 	api.Response(w, dot, "text/vnd.graphviz")
 }
+
+func apiPreload(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	src := query.Get("src")
+	query.Del("src")
+
+	if src == "" {
+		http.Error(w, "no source", http.StatusBadRequest)
+		return
+	}
+
+	switch r.Method {
+	case "PUT":
+		// check if stream exists
+		stream := Get(src)
+		if stream == nil {
+			http.Error(w, "stream not found", http.StatusNotFound)
+			return
+		}
+
+		// check if consumer exists
+		if cons, ok := preloads[src]; ok {
+			stream.RemoveConsumer(cons)
+			delete(preloads, src)
+		}
+
+		// parse query parameters
+		var rawQuery string
+		if query.Has("video") {
+			if videoQuery := query.Get("video"); videoQuery != "" {
+				rawQuery += "video=" + videoQuery + "#"
+			} else {
+				rawQuery += "video#"
+			}
+		}
+		if query.Has("audio") {
+			if audioQuery := query.Get("audio"); audioQuery != "" {
+				rawQuery += "audio=" + audioQuery + "#"
+			} else {
+				rawQuery += "audio#"
+			}
+		}
+		if query.Has("microphone") {
+			if micQuery := query.Get("microphone"); micQuery != "" {
+				rawQuery += "microphone=" + micQuery + "#"
+			} else {
+				rawQuery += "microphone#"
+			}
+		}
+
+		if err := app.PatchConfig([]string{"preload", src}, rawQuery); err != nil {
+			log.Error().Err(err).Str("src", src).Msg("Failed to patch config for PUT")
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		Preload(src, rawQuery)
+
+	case "DELETE":
+		if cons, ok := preloads[src]; ok {
+			if stream := Get(src); stream != nil {
+				stream.RemoveConsumer(cons)
+			} else {
+				cons.Stop()
+			}
+
+			delete(preloads, src)
+		}
+
+		if err := app.PatchConfig([]string{"preload", src}, nil); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		}
+
+	default:
+		http.Error(w, "", http.StatusMethodNotAllowed)
+	}
+}
