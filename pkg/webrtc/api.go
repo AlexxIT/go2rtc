@@ -125,13 +125,20 @@ func NewServerAPI(network, address string, filters *Filters) (*webrtc.API, error
 					networks = append(networks, ice.NetworkType(ntype))
 				}
 
-				udpMux, _ = ice.NewMultiUDPMuxFromPort(
+				var err error
+				if udpMux, err = ice.NewMultiUDPMuxFromPort(
 					port,
 					ice.UDPMuxFromPortWithInterfaceFilter(interfaceFilter),
 					ice.UDPMuxFromPortWithIPFilter(ipFilter),
 					ice.UDPMuxFromPortWithNetworks(networks...),
-				)
-			} else if ln, err := net.ListenPacket("udp", address); err == nil {
+				); err != nil {
+					return nil, err
+				}
+			} else {
+				ln, err := net.ListenPacket("udp", address)
+				if err != nil {
+					return nil, err
+				}
 				udpMux = ice.NewUDPMuxDefault(ice.UDPMuxParams{UDPConn: ln})
 			}
 			s.SetICEUDPMux(udpMux)
