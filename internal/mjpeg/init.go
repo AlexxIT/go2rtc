@@ -23,6 +23,31 @@ import (
 )
 
 func Init() {
+	var cfg struct {
+		Mod struct {
+			SnapshotCache                bool `yaml:"snapshot_cache"`
+			SnapshotCacheTimeout         int  `yaml:"snapshot_cache_timeout"`
+			SnapshotServeCachedByDefault bool `yaml:"snapshot_serve_cached_by_default"`
+		} `yaml:"mjpeg"`
+	}
+
+	// Defaults
+	cfg.Mod.SnapshotCache = true
+	cfg.Mod.SnapshotCacheTimeout = 600
+	cfg.Mod.SnapshotServeCachedByDefault = false
+
+	app.LoadConfig(&cfg)
+
+	// Store global config
+	snapshotCacheEnabled = cfg.Mod.SnapshotCache
+	snapshotCacheTimeout = time.Duration(cfg.Mod.SnapshotCacheTimeout) * time.Second
+	snapshotServeCachedByDefault = cfg.Mod.SnapshotServeCachedByDefault
+
+	// Handle special values
+	if cfg.Mod.SnapshotCacheTimeout < 0 {
+		snapshotCacheEnabled = false
+	}
+
 	api.HandleFunc("api/frame.jpeg", handlerKeyframe)
 	api.HandleFunc("api/stream.mjpeg", handlerStream)
 	api.HandleFunc("api/stream.ascii", handlerStream)
@@ -35,12 +60,67 @@ func Init() {
 
 var log zerolog.Logger
 
+var (
+	snapshotCacheEnabled         bool
+	snapshotCacheTimeout         time.Duration
+	snapshotServeCachedByDefault bool
+)
+
+func getSnapshotCacheTimeout() time.Duration {
+	if !snapshotCacheEnabled {
+		return -1 // disabled
+	}
+	return snapshotCacheTimeout
+}
+
 func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 	stream, _ := streams.GetOrPatch(r.URL.Query())
 	if stream == nil {
 		http.Error(w, api.StreamNotFound, http.StatusNotFound)
 		return
 	}
+
+	query := r.URL.Query()
+
+	// Determine if client wants cached snapshot
+	// Priority: query param > global config
+	allowCached := snapshotServeCachedByDefault
+	if query.Has("cached") {
+		allowCached = query.Get("cached") != "false" && query.Get("cached") != "0"
+	}
+
+	// Start/reset snapshot cache (if enabled)
+	stream.TouchSnapshotCache(getSnapshotCacheTimeout(), transcodeToJPEG)
+
+	// Try to serve from cache if allowed
+	if allowCached {
+		if b, timestamp, exists := stream.GetCachedSnapshot(); exists {
+			age := time.Since(timestamp)
+
+			log.Trace().
+				Dur("age_ms", age).
+				Int("size", len(b)).
+				Msg("[mjpeg] serving cached snapshot")
+
+			w.Header().Set("Content-Type", "image/jpeg")
+			w.Header().Set("Content-Length", strconv.Itoa(len(b)))
+			w.Header().Set("X-Snapshot-Age-Ms", strconv.Itoa(int(age.Milliseconds())))
+			w.Header().Set("X-Snapshot-Timestamp", timestamp.Format(time.RFC3339Nano))
+			w.Header().Set("X-Snapshot-Cached", "true")
+			w.Header().Set("Cache-Control", "no-cache")
+			w.Header().Set("Connection", "close")
+			w.Header().Set("Pragma", "no-cache")
+
+			if _, err := w.Write(b); err != nil {
+				log.Error().Err(err).Caller().Send()
+			}
+			return
+		}
+	}
+
+	// Client wants fresh snapshot OR no cache available yet
+	// Use traditional blocking approach
+	log.Debug().Bool("allow_cached", allowCached).Msg("[mjpeg] fetching fresh snapshot")
 
 	cons := magic.NewKeyframe()
 	cons.WithRequest(r)
@@ -50,7 +130,7 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	once := &core.OnceBuffer{} // init and first frame
+	once := &core.OnceBuffer{}
 	_, _ = cons.WriteTo(once)
 	b := once.Buffer()
 
@@ -60,7 +140,7 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 	case core.CodecH264, core.CodecH265:
 		ts := time.Now()
 		var err error
-		if b, err = ffmpeg.JPEGWithQuery(b, r.URL.Query()); err != nil {
+		if b, err = ffmpeg.JPEGWithQuery(b, query); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -69,12 +149,14 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 		b = mjpeg.FixJPEG(b)
 	}
 
-	h := w.Header()
-	h.Set("Content-Type", "image/jpeg")
-	h.Set("Content-Length", strconv.Itoa(len(b)))
-	h.Set("Cache-Control", "no-cache")
-	h.Set("Connection", "close")
-	h.Set("Pragma", "no-cache")
+	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("Content-Length", strconv.Itoa(len(b)))
+	w.Header().Set("X-Snapshot-Age-Ms", "0")
+	w.Header().Set("X-Snapshot-Timestamp", time.Now().Format(time.RFC3339Nano))
+	w.Header().Set("X-Snapshot-Cached", "false")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "close")
+	w.Header().Set("Pragma", "no-cache")
 
 	if _, err := w.Write(b); err != nil {
 		log.Error().Err(err).Caller().Send()
@@ -188,4 +270,25 @@ func apiStreamY4M(w http.ResponseWriter, r *http.Request) {
 	_, _ = cons.WriteTo(w)
 
 	stream.RemoveConsumer(cons)
+}
+
+// transcodeToJPEG is injected into snapshot cache to avoid import cycles
+func transcodeToJPEG(b []byte, codecName string) ([]byte, error) {
+	switch codecName {
+	case core.CodecH264, core.CodecH265:
+		// Transcode via FFmpeg (no query params for cached version)
+		return ffmpeg.JPEGWithScale(b, -1, -1)
+
+	case core.CodecJPEG:
+		// Fix JPEG headers if needed
+		return mjpeg.FixJPEG(b), nil
+
+	case core.CodecRAW:
+		// Should already be encoded by Encoder(), skip
+		return nil, errors.New("raw codec not supported in cache")
+
+	default:
+		// Unsupported codec
+		return nil, errors.New("unsupported codec: " + codecName)
+	}
 }
