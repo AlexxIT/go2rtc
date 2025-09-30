@@ -69,6 +69,7 @@ Ultimate camera streaming application with support for RTSP, WebRTC, HomeKit, FF
     * [Source: Hass](#source-hass)
     * [Source: ISAPI](#source-isapi)
     * [Source: Nest](#source-nest)
+    * [Source: Ring](#source-ring)
     * [Source: Roborock](#source-roborock)
     * [Source: WebRTC](#source-webrtc)
     * [Source: WebTorrent](#source-webtorrent)
@@ -200,6 +201,7 @@ Available source types:
 - [bubble](#source-bubble) - streaming from ESeeCloud/dvr163 NVR
 - [dvrip](#source-dvrip) - streaming from DVR-IP NVR
 - [tapo](#source-tapo) - TP-Link Tapo cameras with [two way audio](#two-way-audio) support
+- [ring](#source-ring) - Ring cameras with [two way audio](#two-way-audio) support
 - [kasa](#source-tapo) - TP-Link Kasa cameras
 - [gopro](#source-gopro) - GoPro cameras
 - [ivideon](#source-ivideon) - public cameras from [Ivideon](https://tv.ivideon.com/) service
@@ -221,6 +223,7 @@ Supported sources:
 - [Hikvision ISAPI](#source-isapi) cameras
 - [Roborock vacuums](#source-roborock) models with cameras
 - [Exec](#source-exec) audio on server
+- [Ring](#source-ring) cameras
 - [Any Browser](#incoming-browser) as IP-camera
 
 Two-way audio can be used in browser with [WebRTC](#module-webrtc) technology. The browser will give access to the microphone only for HTTPS sites ([read more](https://stackoverflow.com/questions/52759992/how-to-access-camera-and-microphone-in-chrome-without-https)).
@@ -645,6 +648,16 @@ For simplicity, it is recommended to connect the Nest/WebRTC camera to the [Home
 ```yaml
 streams:
   nest-doorbell: nest:?client_id=***&client_secret=***&refresh_token=***&project_id=***&device_id=***
+```
+
+#### Source: Ring
+
+This source type support Ring cameras with [two way audio](#two-way-audio) support. If you have a `refresh_token` and `device_id` - you can use it in `go2rtc.yaml` config file. Otherwise, you can use the go2rtc interface and add your ring account (WebUI > Add > Ring). Once added, it will list all your Ring cameras.
+
+```yaml
+streams:
+  ring: ring:?device_id=XXX&refresh_token=XXX
+  ring_snapshot: ring:?device_id=XXX&refresh_token=XXX&snapshot
 ```
 
 #### Source: Roborock
