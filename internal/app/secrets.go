@@ -3,34 +3,23 @@ package app
 import (
 	"sync"
 
+	"github.com/AlexxIT/go2rtc/pkg/secrets"
 	"github.com/AlexxIT/go2rtc/pkg/yaml"
 )
 
 var (
-	secrets   = make(map[string]*Secret)
-	secretsMu sync.Mutex
+	secretsMap = make(map[string]*Secret)
+	secretsMu  sync.Mutex
 )
 
-type Secrets interface {
-	Get(key string) any
-	Set(key string, value any)
-	Marshal(v any) ([]byte, error)
-	Unmarshal(v any) error
-	Save() error
-}
+// SecretsManager implements secrets.SecretsManager interface
+type SecretsManager struct{}
 
-type Secret struct {
-	Secrets
-
-	Name   string
-	Values map[string]string
-}
-
-func NewSecret(name string, values interface{}) (*Secret, error) {
+func (m *SecretsManager) NewSecret(name string, values interface{}) (secrets.Secret, error) {
 	secretsMu.Lock()
 	defer secretsMu.Unlock()
 
-	if s, exists := secrets[name]; exists {
+	if s, exists := secretsMap[name]; exists {
 		return s, nil
 	}
 
@@ -45,15 +34,21 @@ func NewSecret(name string, values interface{}) (*Secret, error) {
 		return nil, err
 	}
 
-	secrets[name] = s
+	secretsMap[name] = s
 
 	return s, nil
 }
 
-func GetSecret(name string) *Secret {
+func (m *SecretsManager) GetSecret(name string) secrets.Secret {
 	secretsMu.Lock()
 	defer secretsMu.Unlock()
-	return secrets[name]
+	return secretsMap[name]
+}
+
+// Secret implements secrets.Secret interface
+type Secret struct {
+	Name   string
+	Values map[string]string
 }
 
 func (s *Secret) Get(key string) any {
@@ -112,7 +107,7 @@ func (s *Secret) Unmarshal(value any) error {
 func (s *Secret) Save() error {
 	secretsMu.Lock()
 	defer secretsMu.Unlock()
-	return saveSecret(s.Name, s.Values)
+	return PatchConfig([]string{"secrets", s.Name}, s.Values)
 }
 
 func initSecrets() {
@@ -130,13 +125,12 @@ func initSecrets() {
 	defer secretsMu.Unlock()
 
 	for name, values := range cfg.Secrets {
-		secrets[name] = &Secret{
+		secretsMap[name] = &Secret{
 			Name:   name,
 			Values: values,
 		}
 	}
-}
 
-func saveSecret(name string, secretValues map[string]string) error {
-	return PatchConfig([]string{"secrets", name}, secretValues)
+	// Register
+	secrets.SetManager(&SecretsManager{})
 }
