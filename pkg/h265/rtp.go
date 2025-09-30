@@ -9,8 +9,8 @@ import (
 )
 
 func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
-	//vps, sps, pps := GetParameterSet(codec.FmtpLine)
-	//ps := h264.EncodeAVC(vps, sps, pps)
+	vps, sps, pps := GetParameterSet(codec.FmtpLine)
+	ps := h264.JoinNALU(vps, sps, pps)
 
 	buf := make([]byte, 0, 512*1024) // 512K
 	var nuStart int
@@ -40,9 +40,9 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 				nuType = data[2] & 0x3F
 
 				// push PS data before keyframe
-				//if len(buf) == 0 && nuType >= 19 && nuType <= 21 {
-				//	buf = append(buf, ps...)
-				//}
+				if len(buf) == 0 && nuType >= 19 && nuType <= 21 {
+					buf = append(buf, ps...)
+				}
 
 				nuStart = len(buf)
 				buf = append(buf, 0, 0, 0, 0) // NAL unit size
