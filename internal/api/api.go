@@ -166,7 +166,7 @@ func ResponseJSON(w http.ResponseWriter, v any) {
 }
 
 func ResponsePrettyJSON(w http.ResponseWriter, v any) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", MimeJSON)
 
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
