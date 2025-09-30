@@ -5,6 +5,7 @@ import (
 
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/app"
+	"github.com/AlexxIT/go2rtc/pkg/hap"
 	"github.com/AlexxIT/go2rtc/pkg/probe"
 )
 
@@ -94,6 +95,13 @@ func apiStreams(w http.ResponseWriter, r *http.Request) {
 		}
 
 	case "DELETE":
+		stream := Get(src)
+		if stream != nil {
+			if rawURL := FindPrefixURL("homekit", stream.Sources()); rawURL != "" {
+				_ = hap.Unpair(rawURL)
+			}
+		}
+
 		delete(streams, src)
 
 		if err := app.PatchConfig([]string{"streams", src}, nil); err != nil {

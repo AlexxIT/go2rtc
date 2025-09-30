@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
@@ -23,7 +22,7 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		urls := findHomeKitURLs()
+		urls := streams.FindPrefixURLs("homekit")
 		for id, u := range urls {
 			deviceID := u.Query().Get("device_id")
 			for _, source := range sources {
@@ -112,7 +111,7 @@ func apiUnpair(id string) error {
 		return errors.New(api.StreamNotFound)
 	}
 
-	rawURL := findHomeKitURL(stream.Sources())
+	rawURL := streams.FindPrefixURL("homekit", stream.Sources())
 	if rawURL == "" {
 		return errors.New("not homekit source")
 	}
@@ -124,16 +123,4 @@ func apiUnpair(id string) error {
 	streams.Delete(id)
 
 	return app.PatchConfig([]string{"streams", id}, nil)
-}
-
-func findHomeKitURLs() map[string]*url.URL {
-	urls := map[string]*url.URL{}
-	for name, sources := range streams.GetAllSources() {
-		if rawURL := findHomeKitURL(sources); rawURL != "" {
-			if u, err := url.Parse(rawURL); err == nil {
-				urls[name] = u
-			}
-		}
-	}
-	return urls
 }
