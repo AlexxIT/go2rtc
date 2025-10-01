@@ -16,6 +16,11 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 	var nuStart int
 
 	return func(packet *rtp.Packet) {
+		if packet.Version == h264.RTPPacketVersionAVC {
+			handler(packet)
+			return
+		}
+
 		data := packet.Payload
 		if len(data) < 3 {
 			return
@@ -99,7 +104,9 @@ func RTPPay(mtu uint16, handler core.HandlerFunc) core.HandlerFunc {
 
 	return func(packet *rtp.Packet) {
 		if packet.Version != h264.RTPPacketVersionAVC {
-			handler(packet)
+			clone := *packet
+			clone.Header.SequenceNumber = sequencer.NextSequenceNumber()
+			handler(&clone)
 			return
 		}
 

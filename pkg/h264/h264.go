@@ -143,3 +143,19 @@ func GetFmtpLine(avc []byte) string {
 		}
 	}
 }
+
+func ContainsParameterSets(payload []byte) bool {
+	types := NALUTypes(payload)
+	hasSPS, hasPPS := false, false
+
+	for _, nalType := range types {
+		switch nalType {
+		case NALUTypeSPS:
+			hasSPS = true
+		case NALUTypePPS:
+			hasPPS = true
+		}
+	}
+
+	return hasSPS && hasPPS
+}
