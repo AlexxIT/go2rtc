@@ -14,8 +14,9 @@ import (
 
 func Init() {
 	var cfg struct {
-		Streams map[string]any `yaml:"streams"`
-		Publish map[string]any `yaml:"publish"`
+		Streams map[string]any    `yaml:"streams"`
+		Publish map[string]any    `yaml:"publish"`
+		Preload map[string]string `yaml:"preload"`
 	}
 
 	app.LoadConfig(&cfg)
@@ -28,15 +29,22 @@ func Init() {
 
 	api.HandleFunc("api/streams", apiStreams)
 	api.HandleFunc("api/streams.dot", apiStreamsDOT)
+	api.HandleFunc("api/preload", apiPreload)
 
-	if cfg.Publish == nil {
+	if cfg.Publish == nil && cfg.Preload == nil {
 		return
 	}
 
 	time.AfterFunc(time.Second, func() {
+		// range for nil map is OK
 		for name, dst := range cfg.Publish {
 			if stream := Get(name); stream != nil {
 				Publish(stream, dst)
+			}
+		}
+		for name, rawQuery := range cfg.Preload {
+			if stream := Get(name); stream != nil {
+				Preload(stream, rawQuery)
 			}
 		}
 	})

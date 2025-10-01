@@ -11,7 +11,7 @@ type Probe struct {
 	core.Connection
 }
 
-func NewProbe(query url.Values) *Probe {
+func Create(name string, query url.Values) *Probe {
 	medias := core.ParseQuery(query)
 
 	for _, value := range query["microphone"] {
@@ -32,39 +32,18 @@ func NewProbe(query url.Values) *Probe {
 	return &Probe{
 		Connection: core.Connection{
 			ID:         core.NewID(),
-			FormatName: "probe",
+			FormatName: name,
 			Medias:     medias,
 		},
 	}
 }
 
-func (p *Probe) GetMedias() []*core.Media {
-	return p.Medias
-}
-
 func (p *Probe) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
 	sender := core.NewSender(media, track.Codec)
-	sender.Bind(track)
+	sender.Handler = func(pkt *core.Packet) {
+		p.Send += len(pkt.Payload)
+	}
+	sender.HandleRTP(track)
 	p.Senders = append(p.Senders, sender)
-	return nil
-}
-
-func (p *Probe) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
-	receiver := core.NewReceiver(media, codec)
-	p.Receivers = append(p.Receivers, receiver)
-	return receiver, nil
-}
-
-func (p *Probe) Start() error {
-	return nil
-}
-
-func (p *Probe) Stop() error {
-	for _, receiver := range p.Receivers {
-		receiver.Close()
-	}
-	for _, sender := range p.Senders {
-		sender.Close()
-	}
 	return nil
 }

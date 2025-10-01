@@ -44,7 +44,7 @@ Ultimate camera streaming application with support for RTSP, WebRTC, HomeKit, FF
 - [Fast start](#fast-start)
   - [go2rtc: Binary](#go2rtc-binary)
   - [go2rtc: Docker](#go2rtc-docker)
-  - [go2rtc: Home Assistant add-on](#go2rtc-home-assistant-add-on)
+  - [go2rtc: Home Assistant Add-on](#go2rtc-home-assistant-add-on)
   - [go2rtc: Home Assistant Integration](#go2rtc-home-assistant-integration)
   - [go2rtc: Dev version](#go2rtc-dev-version)
 - [Configuration](#configuration)
@@ -69,14 +69,14 @@ Ultimate camera streaming application with support for RTSP, WebRTC, HomeKit, FF
     - [Source: Hass](#source-hass)
     - [Source: ISAPI](#source-isapi)
     - [Source: Nest](#source-nest)
+    - [Source: Ring](#source-ring)
     - [Source: Roborock](#source-roborock)
     - [Source: WebRTC](#source-webrtc)
     - [Source: WebTorrent](#source-webtorrent)
     - [Incoming sources](#incoming-sources)
-    - [Incoming: Browser](#incoming-browser)
-    - [Incoming: WebRTC/WHIP](#incoming-webrtcwhip)
     - [Stream to camera](#stream-to-camera)
-  - [Publish stream](#publish-stream)
+    - [Publish stream](#publish-stream)
+    - [Preload stream](#preload-stream)
   - [Module: API](#module-api)
   - [Module: RTSP](#module-rtsp)
   - [Module: RTMP](#module-rtmp)
@@ -92,11 +92,10 @@ Ultimate camera streaming application with support for RTSP, WebRTC, HomeKit, FF
 - [Security](#security)
 - [Codecs filters](#codecs-filters)
 - [Codecs madness](#codecs-madness)
-- [Built-in transcoding](#built-in-transcoding)
 - [Codecs negotiation](#codecs-negotiation)
 - [Projects using go2rtc](#projects-using-go2rtc)
 - [Camera experience](#camera-experience)
-- [Tips](#tips)
+- [TIPS](#tips)
 - [FAQ](#faq)
 
 ## Fast start
@@ -119,7 +118,7 @@ Ultimate camera streaming application with support for RTSP, WebRTC, HomeKit, FF
 Download binary for your OS from [latest release](https://github.com/AlexxIT/go2rtc/releases/):
 
 - `go2rtc_win64.zip` - Windows 10+ 64-bit
-- `go2rtc_win32.zip` - Windows 7+ 32-bit
+- `go2rtc_win32.zip` - Windows 10+ 32-bit
 - `go2rtc_win_arm64.zip` - Windows ARM 64-bit
 - `go2rtc_linux_amd64` - Linux 64-bit
 - `go2rtc_linux_i386` - Linux 32-bit
@@ -127,7 +126,7 @@ Download binary for your OS from [latest release](https://github.com/AlexxIT/go2
 - `go2rtc_linux_arm` - Linux ARM 32-bit (ex. Raspberry 32-bit OS)
 - `go2rtc_linux_armv6` - Linux ARMv6 (for old Raspberry 1 and Zero)
 - `go2rtc_linux_mipsel` - Linux MIPS (ex. [Xiaomi Gateway 3](https://github.com/AlexxIT/XiaomiGateway3), [Wyze cameras](https://github.com/gtxaspec/wz_mini_hacks))
-- `go2rtc_mac_amd64.zip` - macOS 10.13+ Intel 64-bit
+- `go2rtc_mac_amd64.zip` - macOS 11+ Intel 64-bit
 - `go2rtc_mac_arm64.zip` - macOS ARM 64-bit
 - `go2rtc_freebsd_amd64.zip` - FreeBSD 64-bit
 - `go2rtc_freebsd_arm64.zip` - FreeBSD ARM 64-bit
@@ -202,6 +201,7 @@ Available source types:
 - [bubble](#source-bubble) - streaming from ESeeCloud/dvr163 NVR
 - [dvrip](#source-dvrip) - streaming from DVR-IP NVR
 - [tapo](#source-tapo) - TP-Link Tapo cameras with [two-way audio](#two-way-audio) support
+- [ring](#source-ring) - Ring cameras with [two-way audio](#two-way-audio) support
 - [kasa](#source-tapo) - TP-Link Kasa cameras
 - [gopro](#source-gopro) - GoPro cameras
 - [ivideon](#source-ivideon) - public cameras from [Ivideon](https://tv.ivideon.com/) service
@@ -223,6 +223,7 @@ Supported sources:
 - [Hikvision ISAPI](#source-isapi) cameras
 - [Roborock vacuums](#source-roborock) models with cameras
 - [Exec](#source-exec) audio on server
+- [Ring](#source-ring) cameras
 - [Any Browser](#incoming-browser) as IP-camera
 
 Two-way audio can be used in browser with [WebRTC](#module-webrtc) technology. The browser will give access to the microphone only for HTTPS sites ([read more](https://stackoverflow.com/questions/52759992/how-to-access-camera-and-microphone-in-chrome-without-https)).
@@ -534,7 +535,7 @@ streams:
 
 - stream quality is the same as [RTSP protocol](https://www.tapo.com/en/faq/34/)
 - use the **cloud password**, this is not the RTSP password! you do not need to add a login!
-- you can also use UPPERCASE MD5 hash from your cloud password with `admin` username
+- you can also use **UPPERCASE** MD5 hash from your cloud password with `admin` username
 - some new camera firmwares require SHA256 instead of MD5
 
 ```yaml
@@ -545,6 +546,10 @@ streams:
   camera2: tapo://admin:UPPERCASE-MD5@192.168.1.123
   # admin username and UPPERCASE SHA256 cloud-password hash
   camera3: tapo://admin:UPPERCASE-SHA256@192.168.1.123
+  # VGA stream (the so called substream, the lower resolution one)
+  camera4: tapo://cloud-password@192.168.1.123?subtype=1 
+  # HD stream (default)
+  camera5: tapo://cloud-password@192.168.1.123?subtype=0 
 ```
 
 ```bash
@@ -643,6 +648,16 @@ For simplicity, it is recommended to connect the Nest/WebRTC camera to the [Home
 ```yaml
 streams:
   nest-doorbell: nest:?client_id=***&client_secret=***&refresh_token=***&project_id=***&device_id=***
+```
+
+#### Source: Ring
+
+This source type support Ring cameras with [two-way audio](#two-way-audio) support. If you have a `refresh_token` and `device_id` - you can use it in `go2rtc.yaml` config file. Otherwise, you can use the go2rtc interface and add your ring account (WebUI > Add > Ring). Once added, it will list all your Ring cameras.
+
+```yaml
+streams:
+  ring: ring:?device_id=XXX&refresh_token=XXX
+  ring_snapshot: ring:?device_id=XXX&refresh_token=XXX&snapshot
 ```
 
 #### Source: Roborock
@@ -827,6 +842,26 @@ streams:
 
 - **Telegram Desktop App** > Any public or private channel or group (where you admin) > Live stream > Start with... > Start streaming.
 - **YouTube** > Create > Go live > Stream latency: Ultra low-latency > Copy: Stream URL + Stream key.
+
+### Preload stream
+
+You can preload any stream on go2rtc start. This is useful for cameras that take a long time to start up.
+
+```yaml
+preload:
+  camera1:                                     # default: video&audio = ANY
+  camera2: "video"                             # preload only video track
+  camera3: "video=h264&audio=opus"             # preload H264 video and OPUS audio
+
+streams:
+  camera1: 
+    - rtsp://192.168.1.100/stream
+  camera2: 
+    - rtsp://192.168.1.101/stream  
+  camera3: 
+    - rtsp://192.168.1.102/h265stream
+    - ffmpeg:camera3#video=h264#audio=opus#hardware
+```
 
 ### Module: API
 
@@ -1387,6 +1422,7 @@ streams:
 - [ioBroker.euSec](https://github.com/bropat/ioBroker.eusec) - [ioBroker](https://www.iobroker.net/) adapter for controlling Eufy security devices
 - [MMM-go2rtc](https://github.com/Anonym-tsk/MMM-go2rtc) - MagicMirror² module
 - [ring-mqtt](https://github.com/tsightler/ring-mqtt) - Ring-to-MQTT bridge
+- [lightNVR](https://github.com/opensensor/lightNVR)
 
 **Distributions**
 
@@ -1394,7 +1430,7 @@ streams:
 - [Arch User Repository](https://linux-packages.com/aur/package/go2rtc)
 - [Gentoo](https://github.com/inode64/inode64-overlay/tree/main/media-video/go2rtc)
 - [NixOS](https://search.nixos.org/packages?query=go2rtc)
-- [Proxmox Helper Scripts](https://tteck.github.io/Proxmox/)
+- [Proxmox Helper Scripts](https://github.com/community-scripts/ProxmoxVE/)
 - [QNAP](https://www.myqnap.org/product/go2rtc/)
 - [Synology NAS](https://synocommunity.com/package/go2rtc)
 - [Unraid](https://unraid.net/community/apps?q=go2rtc)

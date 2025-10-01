@@ -2,7 +2,7 @@
 
 # 0. Prepare images
 ARG PYTHON_VERSION="3.13-slim-bookworm"
-ARG GO_VERSION="1.24-bookworm"
+ARG GO_VERSION="1.25-bookworm"
 
 
 # 1. Build go2rtc binary
