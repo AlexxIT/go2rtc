@@ -63,12 +63,12 @@ func (c *Conn) SetAnswer(answer string) (err error) {
 		SDP:  fakeFormatsInAnswer(c.pc.LocalDescription().SDP, answer),
 	}
 	if err = c.pc.SetRemoteDescription(desc); err != nil {
-		return
+		return err
 	}
 
 	sd := &sdp.SessionDescription{}
 	if err = sd.Unmarshal([]byte(answer)); err != nil {
-		return
+		return err
 	}
 
 	c.Medias = UnmarshalMedias(sd.MediaDescriptions)
