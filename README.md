@@ -844,7 +844,7 @@ You can preload any stream on go2rtc start. This is useful for cameras that take
 preload:
   camera1:                                     # default: video&audio = ANY
   camera2: "video"                             # preload only video track
-  camera3: "video=h264#audio=opus"             # initialize transcoding pipeline
+  camera3: "video=h264&audio=opus"             # preload H264 video and OPUS audio
 
 streams:
   camera1: 
