@@ -36,17 +36,15 @@ func Init() {
 	}
 
 	time.AfterFunc(time.Second, func() {
-		if cfg.Publish != nil {
-			for name, dst := range cfg.Publish {
-				if stream := Get(name); stream != nil {
-					Publish(stream, dst)
-				}
+		// range for nil map is OK
+		for name, dst := range cfg.Publish {
+			if stream := Get(name); stream != nil {
+				Publish(stream, dst)
 			}
 		}
-
-		if cfg.Preload != nil {
-			for name, rawQuery := range cfg.Preload {
-				Preload(name, rawQuery)
+		for name, rawQuery := range cfg.Preload {
+			if stream := Get(name); stream != nil {
+				Preload(stream, rawQuery)
 			}
 		}
 	})

@@ -5,6 +5,7 @@ import (
 
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/app"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/probe"
 )
 
@@ -27,7 +28,7 @@ func apiStreams(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		cons := probe.NewProbe(query)
+		cons := probe.Create("probe", query)
 		if len(cons.Medias) != 0 {
 			cons.WithRequest(r)
 			if err := stream.AddConsumer(cons); err != nil {
@@ -126,73 +127,44 @@ func apiStreamsDOT(w http.ResponseWriter, r *http.Request) {
 func apiPreload(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	src := query.Get("src")
-	query.Del("src")
 
-	if src == "" {
-		http.Error(w, "no source", http.StatusBadRequest)
+	// check if stream exists
+	stream := Get(src)
+	if stream == nil {
+		http.Error(w, "", http.StatusNotFound)
 		return
 	}
 
 	switch r.Method {
 	case "PUT":
-		// check if stream exists
-		stream := Get(src)
-		if stream == nil {
-			http.Error(w, "stream not found", http.StatusNotFound)
+		// it's safe to delete from map while iterating
+		for k := range query {
+			switch k {
+			case core.KindVideo, core.KindAudio, "microphone":
+			default:
+				delete(query, k)
+			}
+		}
+
+		rawQuery := query.Encode()
+
+		if err := AddPreload(stream, rawQuery); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
-		}
-
-		// check if consumer exists
-		if cons, ok := preloads[src]; ok {
-			stream.RemoveConsumer(cons)
-			delete(preloads, src)
-		}
-
-		// parse query parameters
-		var rawQuery string
-		if query.Has("video") {
-			if videoQuery := query.Get("video"); videoQuery != "" {
-				rawQuery += "video=" + videoQuery + "#"
-			} else {
-				rawQuery += "video#"
-			}
-		}
-		if query.Has("audio") {
-			if audioQuery := query.Get("audio"); audioQuery != "" {
-				rawQuery += "audio=" + audioQuery + "#"
-			} else {
-				rawQuery += "audio#"
-			}
-		}
-		if query.Has("microphone") {
-			if micQuery := query.Get("microphone"); micQuery != "" {
-				rawQuery += "microphone=" + micQuery + "#"
-			} else {
-				rawQuery += "microphone#"
-			}
 		}
 
 		if err := app.PatchConfig([]string{"preload", src}, rawQuery); err != nil {
-			log.Error().Err(err).Str("src", src).Msg("Failed to patch config for PUT")
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+
+	case "DELETE":
+		if err := DelPreload(stream); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		Preload(src, rawQuery)
-
-	case "DELETE":
-		if cons, ok := preloads[src]; ok {
-			if stream := Get(src); stream != nil {
-				stream.RemoveConsumer(cons)
-			} else {
-				cons.Stop()
-			}
-
-			delete(preloads, src)
-		}
-
 		if err := app.PatchConfig([]string{"preload", src}, nil); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 
 	default:

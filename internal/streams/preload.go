@@ -1,34 +1,58 @@
 package streams
 
 import (
+	"errors"
 	"net/url"
+	"sync"
 
-	"github.com/AlexxIT/go2rtc/pkg/preload"
+	"github.com/AlexxIT/go2rtc/pkg/probe"
 )
 
-var preloads = map[string]*preload.Preload{}
+var preloads = map[*Stream]*probe.Probe{}
+var preloadsMu sync.Mutex
 
-func (s *Stream) Preload(name string, query url.Values) error {
-	cons := preload.NewPreload(name, query)
-	preloads[name] = cons
+func Preload(stream *Stream, rawQuery string) {
+	if err := AddPreload(stream, rawQuery); err != nil {
+		log.Error().Err(err).Caller().Send()
+	}
+}
 
-	if err := s.AddConsumer(cons); err != nil {
+func AddPreload(stream *Stream, rawQuery string) error {
+	if rawQuery == "" {
+		rawQuery = "video&audio"
+	}
+
+	query, err := url.ParseQuery(rawQuery)
+	if err != nil {
 		return err
 	}
 
+	preloadsMu.Lock()
+	defer preloadsMu.Unlock()
+
+	if cons := preloads[stream]; cons != nil {
+		stream.RemoveConsumer(cons)
+	}
+
+	cons := probe.Create("preload", query)
+
+	if err = stream.AddConsumer(cons); err != nil {
+		return err
+	}
+
+	preloads[stream] = cons
 	return nil
 }
 
-func Preload(src string, rawQuery string) {
-	// skip if exists
-	if _, ok := preloads[src]; ok {
-		return
+func DelPreload(stream *Stream) error {
+	preloadsMu.Lock()
+	defer preloadsMu.Unlock()
+
+	if cons := preloads[stream]; cons != nil {
+		stream.RemoveConsumer(cons)
+		delete(preloads, stream)
+		return nil
 	}
 
-	if stream := Get(src); stream != nil {
-		query := ParseQuery(rawQuery)
-		if err := stream.Preload(src, query); err != nil {
-			log.Error().Err(err).Caller().Send()
-		}
-	}
+	return errors.New("streams: preload not found")
 }
