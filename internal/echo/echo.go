@@ -22,7 +22,7 @@ func Init() {
 
 		b = bytes.TrimSpace(b)
 
-		log.Debug().Str("url", shell.Redact(url)).Msgf("[echo] %s", b)
+		log.Debug().Str("url", url).Msgf("[echo] %s", b)
 
 		return string(b), nil
 	})

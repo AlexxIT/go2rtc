@@ -67,7 +67,6 @@ func Init() {
 	Info["revision"] = revision
 
 	initConfig(config)
-	initSecrets()
 	initLogger()
 
 	platform := fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH)

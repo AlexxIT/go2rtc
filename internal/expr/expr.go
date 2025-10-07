@@ -6,7 +6,6 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/expr"
-	"github.com/AlexxIT/go2rtc/pkg/shell"
 )
 
 func Init() {
@@ -18,7 +17,7 @@ func Init() {
 			return "", err
 		}
 
-		log.Debug().Msgf("[expr] url=%s", shell.Redact(url))
+		log.Debug().Msgf("[expr] url=%s", url)
 
 		if url = v.(string); url == "" {
 			return "", errors.New("expr: result is empty")

@@ -9,7 +9,6 @@ import (
 
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/app"
-	"github.com/AlexxIT/go2rtc/pkg/shell"
 	"github.com/rs/zerolog"
 )
 
@@ -128,7 +127,7 @@ func GetOrPatch(query url.Values) *Stream {
 
 	// check if name param provided
 	if name := query.Get("name"); name != "" {
-		log.Info().Msgf("[streams] create new stream url=%s", shell.Redact(source))
+		log.Info().Msgf("[streams] create new stream url=%s", source)
 
 		return Patch(name, source)
 	}
