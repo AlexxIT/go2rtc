@@ -5,6 +5,7 @@ import (
 
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/app"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/creds"
 	"github.com/AlexxIT/go2rtc/pkg/probe"
 )
@@ -30,7 +31,7 @@ func apiStreams(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		cons := probe.NewProbe(query)
+		cons := probe.Create("probe", query)
 		if len(cons.Medias) != 0 {
 			cons.WithRequest(r)
 			if err := stream.AddConsumer(cons); err != nil {
@@ -126,4 +127,52 @@ func apiStreamsDOT(w http.ResponseWriter, r *http.Request) {
 	dot = []byte(creds.SecretString(string(dot)))
 
 	api.Response(w, dot, "text/vnd.graphviz")
+}
+
+func apiPreload(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	src := query.Get("src")
+
+	// check if stream exists
+	stream := Get(src)
+	if stream == nil {
+		http.Error(w, "", http.StatusNotFound)
+		return
+	}
+
+	switch r.Method {
+	case "PUT":
+		// it's safe to delete from map while iterating
+		for k := range query {
+			switch k {
+			case core.KindVideo, core.KindAudio, "microphone":
+			default:
+				delete(query, k)
+			}
+		}
+
+		rawQuery := query.Encode()
+
+		if err := AddPreload(stream, rawQuery); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		if err := app.PatchConfig([]string{"preload", src}, rawQuery); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+
+	case "DELETE":
+		if err := DelPreload(stream); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		if err := app.PatchConfig([]string{"preload", src}, nil); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+
+	default:
+		http.Error(w, "", http.StatusMethodNotAllowed)
+	}
 }
