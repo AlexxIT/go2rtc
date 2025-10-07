@@ -6,10 +6,13 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/creds"
 	"github.com/AlexxIT/go2rtc/pkg/probe"
 )
 
 func apiStreams(w http.ResponseWriter, r *http.Request) {
+	w = creds.SecretResponse(w)
+
 	query := r.URL.Query()
 	src := query.Get("src")
 
@@ -120,6 +123,8 @@ func apiStreamsDOT(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	dot = append(dot, '}')
+
+	dot = []byte(creds.SecretString(string(dot)))
 
 	api.Response(w, dot, "text/vnd.graphviz")
 }
