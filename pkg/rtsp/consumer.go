@@ -86,21 +86,9 @@ func (c *Conn) packetWriter(codec *core.Codec, channel, payloadType uint8) core.
 
 	flushBuf := func() {
 		//log.Printf("[rtsp] channel:%2d write_size:%6d buffer_size:%6d", channel, n, len(buf))
-
-		if c.Transport == "udp" {
-			if err := c.sendUDPRtpPacket(buf[:n]); err == nil {
-				c.Send += n
-			}
-		} else {
-			if err := c.conn.SetWriteDeadline(time.Now().Add(Timeout)); err != nil {
-				return
-			}
-
-			if _, err := c.conn.Write(buf[:n]); err == nil {
-				c.Send += n
-			}
+		if err := c.writeInterleavedData(buf[:n]); err != nil {
+			c.Send += n
 		}
-
 		n = 0
 	}
 
@@ -185,4 +173,26 @@ func (c *Conn) packetWriter(codec *core.Codec, channel, payloadType uint8) core.
 	}
 
 	return handlerFunc
+}
+
+func (c *Conn) writeInterleavedData(data []byte) error {
+	if c.Transport != "udp" {
+		_ = c.conn.SetWriteDeadline(time.Now().Add(Timeout))
+		_, err := c.conn.Write(data)
+		return err
+	}
+
+	for len(data) >= 4 && data[0] == '$' {
+		channel := data[1]
+		size := uint16(data[2])<<8 | uint16(data[3])
+		rtpData := data[4 : 4+size]
+
+		if _, err := c.WriteToUDP(rtpData, channel); err != nil {
+			return err
+		}
+
+		data = data[4+size:]
+	}
+
+	return nil
 }

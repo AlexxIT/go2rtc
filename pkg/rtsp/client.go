@@ -2,7 +2,6 @@ package rtsp
 
 import (
 	"bufio"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"net"
@@ -10,6 +9,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/tcp/websocket"
@@ -26,13 +26,7 @@ func NewClient(uri string) *Conn {
 			ID:         core.NewID(),
 			FormatName: "rtsp",
 		},
-		uri:              uri,
-		udpRtpConns:      make(map[byte]*UDPConnection),
-		udpRtcpConns:     make(map[byte]*UDPConnection),
-		udpRtpListeners:  make(map[byte]*UDPConnection),
-		udpRtcpListeners: make(map[byte]*UDPConnection),
-		portToChannel:    make(map[int]byte),
-		channelCounter:   0,
+		uri: uri,
 	}
 }
 
@@ -43,10 +37,13 @@ func (c *Conn) Dial() (err error) {
 
 	var conn net.Conn
 
-	if c.Transport == "" || c.Transport == "tcp" || c.Transport == "udp" {
-		timeout := core.ConnDialTimeout
+	switch c.Transport {
+	case "", "tcp", "udp":
+		var timeout time.Duration
 		if c.Timeout != 0 {
 			timeout = time.Second * time.Duration(c.Timeout)
+		} else {
+			timeout = core.ConnDialTimeout
 		}
 		conn, err = tcp.Dial(c.URL, timeout)
 
@@ -55,7 +52,7 @@ func (c *Conn) Dial() (err error) {
 		} else {
 			c.Protocol = "rtsp+udp"
 		}
-	} else {
+	default:
 		conn, err = websocket.Dial(c.Transport)
 		c.Protocol = "ws"
 	}
@@ -72,6 +69,9 @@ func (c *Conn) Dial() (err error) {
 	c.session = ""
 	c.sequence = 0
 	c.state = StateConn
+
+	c.udpConn = nil
+	c.udpAddr = nil
 
 	c.Connection.RemoteAddr = conn.RemoteAddr().String()
 	c.Connection.Transport = conn
@@ -229,63 +229,35 @@ func (c *Conn) Record() (err error) {
 
 func (c *Conn) SetupMedia(media *core.Media) (byte, error) {
 	var transport string
-	var mediaIndex int = -1
-
-	// try to use media position as channel number
-	for i, m := range c.Medias {
-		if m.Equal(media) {
-			mediaIndex = i
-			break
-		}
-	}
-
-	if mediaIndex == -1 {
-		return 0, fmt.Errorf("wrong media: %v", media)
-	}
 
 	if c.Transport == "udp" {
-		transport, err := c.setupUDPTransport()
+		conn1, conn2, err := ListenUDPPair()
 		if err != nil {
 			return 0, err
 		}
 
-		return c.sendSetupRequest(media, transport)
+		c.udpConn = append(c.udpConn, conn1, conn2)
+
+		port := conn1.LocalAddr().(*net.UDPAddr).Port
+		transport = fmt.Sprintf("RTP/AVP;unicast;client_port=%d-%d", port, port+1)
+	} else {
+		// try to use media position as channel number
+		for i, m := range c.Medias {
+			if m.Equal(media) {
+				transport = fmt.Sprintf(
+					// i   - RTP (data channel)
+					// i+1 - RTCP (control channel)
+					"RTP/AVP/TCP;unicast;interleaved=%d-%d", i*2, i*2+1,
+				)
+				break
+			}
+		}
 	}
 
-	transport = c.setupTCPTransport(mediaIndex)
-	return c.sendSetupRequest(media, transport)
-}
-
-func (c *Conn) setupTCPTransport(mediaIndex int) string {
-	channel := byte(mediaIndex * 2)
-	transport := fmt.Sprintf("RTP/AVP/TCP;unicast;interleaved=%d-%d", channel, channel+1)
-	return transport
-}
-
-func (c *Conn) setupUDPTransport() (string, error) {
-	portPair, err := GetUDPPorts(nil, 10)
-	if err != nil {
-		return "", err
+	if transport == "" {
+		return 0, fmt.Errorf("wrong media: %v", media)
 	}
 
-	rtpChannel := c.getChannelForPort(portPair.RTPPort)
-	rtcpChannel := c.getChannelForPort(portPair.RTCPPort)
-
-	c.udpRtpListeners[rtpChannel] = &UDPConnection{
-		Conn:    *portPair.RTPListener,
-		Channel: rtpChannel,
-	}
-
-	c.udpRtcpListeners[rtcpChannel] = &UDPConnection{
-		Conn:    *portPair.RTCPListener,
-		Channel: rtcpChannel,
-	}
-
-	transport := fmt.Sprintf("RTP/AVP;unicast;client_port=%d-%d", portPair.RTPPort, portPair.RTCPPort)
-	return transport, nil
-}
-
-func (c *Conn) sendSetupRequest(media *core.Media, transport string) (byte, error) {
 	rawURL := media.ID // control
 	if !strings.Contains(rawURL, "://") {
 		rawURL = c.URL.String()
@@ -339,109 +311,48 @@ func (c *Conn) sendSetupRequest(media *core.Media, transport string) (byte, erro
 	}
 
 	// Parse server response
-	responseTransport := res.Header.Get("Transport")
+	transport = res.Header.Get("Transport")
 
 	if c.Transport == "udp" {
-		// Parse UDP response: client_ports=1234-1235;server_port=1234-1235
-		var clientPorts []int
-		var serverPorts []int
+		channel := byte(len(c.udpConn) - 2)
 
-		if strings.Contains(transport, "client_port=") {
-			parts := strings.Split(responseTransport, "client_port=")
-			if len(parts) > 1 {
-				portPart := strings.Split(strings.Split(parts[1], ";")[0], "-")
-				for _, p := range portPart {
-					if port, err := strconv.Atoi(p); err == nil {
-						clientPorts = append(clientPorts, port)
-					}
-				}
+		// Dahua:   RTP/AVP/UDP;unicast;client_port=49292-49293;server_port=43670-43671;ssrc=7CB694B4
+		// OpenIPC: RTP/AVP/UDP;unicast;client_port=59612-59613
+		if s := core.Between(transport, "server_port=", ";"); s != "" {
+			s1, s2, _ := strings.Cut(s, "-")
+			port1 := core.Atoi(s1)
+			port2 := core.Atoi(s2)
+			// TODO: more smart handling empty server ports
+			if port1 > 0 && port2 > 0 {
+				remoteIP := c.conn.RemoteAddr().(*net.TCPAddr).IP
+				c.udpAddr = append(c.udpAddr,
+					&net.UDPAddr{IP: remoteIP, Port: port1},
+					&net.UDPAddr{IP: remoteIP, Port: port2},
+				)
+
+				go func() {
+					// Try to open a hole in the NAT router (to allow incoming UDP packets)
+					// by send a UDP packet for RTP and RTCP to the remote RTSP server.
+					// https://github.com/FFmpeg/FFmpeg/blob/aa91ae25b88e195e6af4248e0ab30605735ca1cd/libavformat/rtpdec.c#L416-L438
+					_, _ = c.WriteToUDP([]byte{0x80, 0x00, 0x00, 0x00}, channel)
+					_, _ = c.WriteToUDP([]byte{0x80, 0xC8, 0x00, 0x01}, channel+1)
+				}()
 			}
 		}
 
-		if strings.Contains(responseTransport, "server_port=") {
-			parts := strings.Split(responseTransport, "server_port=")
-			if len(parts) > 1 {
-				portPart := strings.Split(strings.Split(parts[1], ";")[0], "-")
-				for _, p := range portPart {
-					if port, err := strconv.Atoi(p); err == nil {
-						serverPorts = append(serverPorts, port)
-					}
-				}
-			}
-		}
-
-		// Create UDP connections for RTP and RTCP if we have both server ports
-		if len(serverPorts) >= 2 {
-			if host, _, err := net.SplitHostPort(c.Connection.RemoteAddr); err == nil {
-				rtpServerPort := serverPorts[0]
-				rtcpServerPort := serverPorts[1]
-
-				cleanHost := host
-				if strings.Contains(cleanHost, ":") {
-					cleanHost = fmt.Sprintf("[%s]", host)
-				}
-
-				remoteRtpAddr := fmt.Sprintf("%s:%d", cleanHost, rtpServerPort)
-				remoteRtcpAddr := fmt.Sprintf("%s:%d", cleanHost, rtcpServerPort)
-
-				if rtpAddr, err := net.ResolveUDPAddr("udp", remoteRtpAddr); err == nil {
-					if rtpConn, err := net.DialUDP("udp", nil, rtpAddr); err == nil {
-						channel := c.getChannelForPort(rtpServerPort)
-						c.udpRtpConns[channel] = &UDPConnection{
-							Conn:    *rtpConn,
-							Channel: channel,
-						}
-					}
-				}
-
-				if rtcpAddr, err := net.ResolveUDPAddr("udp", remoteRtcpAddr); err == nil {
-					if rtcpConn, err := net.DialUDP("udp", nil, rtcpAddr); err == nil {
-						channel := c.getChannelForPort(rtcpServerPort)
-						c.udpRtcpConns[channel] = &UDPConnection{
-							Conn:    *rtcpConn,
-							Channel: channel,
-						}
-					}
-				}
-			}
-		}
-
-		// Try to open a hole in the NAT router (to allow incoming UDP packets)
-		// by send a UDP packet for RTP and RTCP to the remote RTSP server.
-		go c.tryHolePunching(clientPorts, serverPorts)
-
-		var rtpPort string
-		if media.Direction == core.DirectionRecvonly {
-			rtpPort = core.Between(transport, "client_port=", "-")
-		} else {
-			rtpPort = core.Between(responseTransport, "server_port=", "-")
-		}
-
-		i, err := strconv.Atoi(rtpPort)
-		if err != nil {
-			return 0, err
-		}
-
-		return c.getChannelForPort(i), nil
-
+		return channel, nil
 	} else {
 		// we send our `interleaved`, but camera can answer with another
 
 		// Transport: RTP/AVP/TCP;unicast;interleaved=10-11;ssrc=10117CB7
 		// Transport: RTP/AVP/TCP;unicast;destination=192.168.1.111;source=192.168.1.222;interleaved=0
 		// Transport: RTP/AVP/TCP;ssrc=22345682;interleaved=0-1
-		if !strings.HasPrefix(responseTransport, "RTP/AVP/TCP;") {
-			// Escam Q6 has a bug:
-			// Transport: RTP/AVP;unicast;destination=192.168.1.111;source=192.168.1.222;interleaved=0-1
-			if !strings.Contains(responseTransport, ";interleaved=") {
-				return 0, fmt.Errorf("wrong transport: %s", responseTransport)
-			}
-		}
-
-		channel := core.Between(responseTransport, "interleaved=", "-")
-		i, err := strconv.Atoi(channel)
+		// Escam Q6 has a bug:
+		// Transport: RTP/AVP;unicast;destination=192.168.1.111;source=192.168.1.222;interleaved=0-1
+		s := core.Between(transport, "interleaved=", "-")
+		i, err := strconv.Atoi(s)
 		if err != nil {
-			return 0, err
+			return 0, fmt.Errorf("wrong transport: %s", transport)
 		}
 
 		return byte(i), nil
@@ -460,106 +371,62 @@ func (c *Conn) Teardown() (err error) {
 }
 
 func (c *Conn) Close() error {
-	c.closeUDP()
-
 	if c.mode == core.ModeActiveProducer {
 		_ = c.Teardown()
 	}
-
 	if c.OnClose != nil {
 		_ = c.OnClose()
 	}
-
+	for _, conn := range c.udpConn {
+		_ = conn.Close()
+	}
 	return c.conn.Close()
 }
 
-func (c *Conn) closeUDP() {
-	for _, listener := range c.udpRtpListeners {
-		_ = listener.Conn.Close()
-	}
-	for _, listener := range c.udpRtcpListeners {
-		_ = listener.Conn.Close()
-	}
-	for _, conn := range c.udpRtpConns {
-		_ = conn.Conn.Close()
-	}
-	for _, conn := range c.udpRtcpConns {
-		_ = conn.Conn.Close()
-	}
-
-	c.udpRtpListeners = make(map[byte]*UDPConnection)
-	c.udpRtcpListeners = make(map[byte]*UDPConnection)
-	c.udpRtpConns = make(map[byte]*UDPConnection)
-	c.udpRtcpConns = make(map[byte]*UDPConnection)
-	c.portToChannel = make(map[int]byte)
-	c.channelCounter = 0
+func (c *Conn) WriteToUDP(b []byte, channel byte) (int, error) {
+	return c.udpConn[channel].WriteToUDP(b, c.udpAddr[channel])
 }
 
-func (c *Conn) sendUDPRtpPacket(data []byte) error {
-	for len(data) >= 4 && data[0] == '$' {
-		channel := data[1]
-		size := binary.BigEndian.Uint16(data[2:4])
+const listenUDPAttemps = 10
 
-		if len(data) < 4+int(size) {
-			return fmt.Errorf("incomplete RTP packet: %d < %d", len(data), 4+size)
+var listenUDPMu sync.Mutex
+
+func ListenUDPPair() (*net.UDPConn, *net.UDPConn, error) {
+	listenUDPMu.Lock()
+	defer listenUDPMu.Unlock()
+
+	for i := 0; i < listenUDPAttemps; i++ {
+		// Get a random even port from the OS
+		ln1, err := net.ListenUDP("udp", &net.UDPAddr{IP: nil, Port: 0})
+		if err != nil {
+			continue
 		}
 
-		// Send RTP data without interleaved header
-		rtpData := data[4 : 4+size]
+		var port1 = ln1.LocalAddr().(*net.UDPAddr).Port
+		var port2 int
 
-		if conn, ok := c.udpRtpConns[channel]; ok {
-			if err := conn.Conn.SetWriteDeadline(time.Now().Add(Timeout)); err != nil {
-				return nil
-			}
-
-			if _, err := conn.Conn.Write(rtpData); err != nil {
-				return err
-			}
+		// 11. RTP over Network and Transport Protocols (https://www.ietf.org/rfc/rfc3550.txt)
+		// For UDP and similar protocols,
+		// RTP SHOULD use an even destination port number and the corresponding
+		// RTCP stream SHOULD use the next higher (odd) destination port number
+		if port1&1 > 0 {
+			port2 = port1 - 1
+		} else {
+			port2 = port1 + 1
 		}
 
-		data = data[4+size:] // Move to next packet
-	}
+		ln2, err := net.ListenUDP("udp", &net.UDPAddr{IP: nil, Port: port2})
+		if err != nil {
+			_ = ln1.Close()
+			continue
+		}
 
-	return nil
-}
-
-func (c *Conn) tryHolePunching(clientPorts, serverPorts []int) {
-	if len(clientPorts) < 2 || len(serverPorts) < 2 {
-		return
-	}
-
-	host, _, _ := net.SplitHostPort(c.Connection.RemoteAddr)
-	if strings.Contains(host, ":") {
-		host = fmt.Sprintf("[%s]", host)
-	}
-
-	// RTP hole punch
-	if rtpListener, ok := c.udpRtpListeners[c.getChannelForPort(clientPorts[0])]; ok {
-		if addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", host, serverPorts[0])); err == nil {
-			rtpListener.Conn.WriteToUDP([]byte{0x80, 0x00, 0x00, 0x00}, addr)
+		if port1 < port2 {
+			return ln1, ln2, nil
+		} else {
+			return ln2, ln1, nil
 		}
 	}
 
-	// RTCP hole punch
-	if rtcpListener, ok := c.udpRtcpListeners[c.getChannelForPort(clientPorts[1])]; ok {
-		if addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", host, serverPorts[1])); err == nil {
-			rtcpListener.Conn.WriteToUDP([]byte{0x80, 0xC8, 0x00, 0x01}, addr)
-		}
-	}
-}
-
-func (c *Conn) getChannelForPort(port int) byte {
-	if channel, exists := c.portToChannel[port]; exists {
-		return channel
-	}
-
-	c.channelCounter++
-	if c.channelCounter == 0 {
-		c.channelCounter = 1
-	}
-
-	channel := c.channelCounter
-	c.portToChannel[port] = channel
-
-	return channel
+	return nil, nil, fmt.Errorf("can't open two UDP ports")
 }
