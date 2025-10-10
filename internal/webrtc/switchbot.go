@@ -3,8 +3,6 @@ package webrtc
 import (
 	"net/url"
 
-	"strconv"
-
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 )
@@ -39,10 +37,7 @@ func switchbotClient(rawURL string, query url.Values) (core.Producer, error) {
 			v.Resolution = 2
 		}
 
-		playtype, err := strconv.Atoi(query.Get("play_type"))
-		if err == nil {
-			v.PlayType = playtype
-		}
+		v.PlayType = core.Atoi(query.Get("play_type")) // zero by default
 
 		return v, nil
 	})
