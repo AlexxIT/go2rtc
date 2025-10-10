@@ -38,22 +38,20 @@ func NewClient(rawURL string) (*Client, error) {
 		client.deviceURL = baseURL + u.Path
 	}
 
-    // Set default media URL before trying to get capabilities
-    client.mediaURL = baseURL + "/onvif/media_service"
-    client.imaginURL = baseURL + "/onvif/imaging_service"
-
 	b, err := client.DeviceRequest(DeviceGetCapabilities)
 	if err != nil {
 		return nil, err
 	}
 
-    // Update URLs if found in capabilities
-    if mediaAddr := FindTagValue(b, "Media.+?XAddr"); mediaAddr != "" {
-        client.mediaURL = mediaAddr
-    }
-    if imagingAddr := FindTagValue(b, "Imaging.+?XAddr"); imagingAddr != "" {
-        client.imaginURL = imagingAddr
-    }
+	client.mediaURL = FindTagValue(b, "Media.+?XAddr")
+	if client.mediaURL == "" {
+		client.mediaURL = baseURL + "/onvif/media_service"
+	}
+
+	client.imaginURL = FindTagValue(b, "Imaging.+?XAddr")
+	if client.imaginURL == "" {
+		client.imaginURL = baseURL + "/onvif/imaging_service"
+	}
 
 	return client, nil
 }
@@ -198,57 +196,49 @@ func (c *Client) Request(rawUrl, body string) ([]byte, error) {
 		return nil, err
 	}
 
-	// Ensure we have a port
 	host := u.Host
-	if !strings.Contains(host, ":") {
-		host = host + ":80"
+	if u.Port() == "" {
+		host += ":80"
 	}
 
-	// Connect with timeout
 	conn, err := net.DialTimeout("tcp", host, 5*time.Second)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
 
-	// Send request
-	httpReq := fmt.Sprintf("POST %s HTTP/1.1\r\n"+
+	reqBody := e.Bytes()
+	rawReq := fmt.Appendf(nil, "POST %s HTTP/1.1\r\n"+
 		"Host: %s\r\n"+
 		"Content-Type: application/soap+xml;charset=utf-8\r\n"+
 		"Content-Length: %d\r\n"+
 		"Connection: close\r\n"+
-		"\r\n%s", u.Path, u.Host, len(e.Bytes()), e.Bytes())
+		"\r\n", u.Path, u.Host, len(reqBody))
+	rawReq = append(rawReq, reqBody...)
 
-	if _, err = conn.Write([]byte(httpReq)); err != nil {
+	if _, err = conn.Write(rawReq); err != nil {
 		return nil, err
 	}
 
-	// Read full response first
-	var fullResponse []byte
-	buf := make([]byte, 4096)
-	for {
-		n, err := conn.Read(buf)
-		if n > 0 {
-			fullResponse = append(fullResponse, buf[:n]...)
-		}
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
+	rawRes, err := io.ReadAll(conn)
+	if err != nil {
+		return nil, err
 	}
 
 	// Look for XML in complete response
-	if idx := bytes.Index(fullResponse, []byte("<?xml")); idx >= 0 {
-		return fullResponse[idx:], nil
+	if i := bytes.Index(rawRes, []byte("<?xml")); i > 0 {
+		return rawRes[i:], nil
 	}
 
 	// No XML found - might be an error response
-	if idx := bytes.Index(fullResponse, []byte("\r\n\r\n")); idx >= 0 {
+	if i := bytes.Index(rawRes, []byte("\r\n\r\n")); i > 0 {
+		if bytes.Contains(rawRes[:i], []byte("chunked")) {
+			return nil, errors.New("onvif: TODO: support chunked encoding")
+		}
+
 		// Return body after headers
-		return fullResponse[idx+4:], nil
+		return rawRes[i+4:], nil
 	}
 
-	return fullResponse, nil
+	return rawRes, nil
 }
