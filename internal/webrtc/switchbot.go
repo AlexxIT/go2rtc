@@ -33,7 +33,11 @@ func switchbotClient(rawURL string, query url.Values) (core.Producer, error) {
 			v.Resolution = 0
 		case "sd":
 			v.Resolution = 1
+		case "auto":
+			v.Resolution = 2
 		}
+
+		v.PlayType = core.Atoi(query.Get("play_type")) // zero by default
 
 		return v, nil
 	})
