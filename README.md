@@ -262,7 +262,6 @@ Format: `rtsp...#{param1}#{param2}#{param3}`
 - Ignore audio - `#media=video` or ignore video - `#media=audio` 
 - Ignore two-way audio API `#backchannel=0` - important for some glitchy cameras
 - Use WebSocket transport `#transport=ws...`
-- Use UDP transport `#transport=udp`
 
 **RTSP over WebSocket**
 
@@ -272,7 +271,6 @@ streams:
   axis-rtsp-ws:  rtsp://192.168.1.123:4567/axis-media/media.amp?overview=0&camera=1&resolution=1280x720&videoframeskipmode=empty&Axis-Orig-Sw=true#transport=ws://user:pass@192.168.1.123:4567/rtsp-over-websocket
   # WebSocket without authorization, RTSP - with
   dahua-rtsp-ws: rtsp://user:pass@192.168.1.123/cam/realmonitor?channel=1&subtype=1&proto=Private3#transport=ws://192.168.1.123/rtspoverwebsocket
-  udp_camera:   rtsp://user:pass@192.168.1.345:554/stream1#transport=udp
 ```
 
 #### Source: RTMP
