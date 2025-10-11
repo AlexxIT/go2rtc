@@ -6,6 +6,9 @@ import "encoding/binary"
 type Payloader struct {
 	IsAVC     bool
 	stapANalu []byte
+	// Persist latest SPS/PPS across calls to prepend on IDR frames
+	lastSPS []byte
+	lastPPS []byte
 }
 
 const (
@@ -100,12 +103,27 @@ func (p *Payloader) Payload(mtu uint16, payload []byte) [][]byte {
 		case audNALUType, fillerNALUType:
 			return
 		case spsNALUType, ppsNALUType:
+			// Store latest SPS/PPS for future IDR frames
+			if naluType == spsNALUType {
+				p.lastSPS = append(p.lastSPS[:0], nalu...)
+			} else {
+				p.lastPPS = append(p.lastPPS[:0], nalu...)
+			}
 			if p.stapANalu == nil {
 				p.stapANalu = []byte{outputStapAHeader}
 			}
 			p.stapANalu = append(p.stapANalu, byte(len(nalu)>>8), byte(len(nalu)))
 			p.stapANalu = append(p.stapANalu, nalu...)
 			return
+		}
+
+		// If this is an IDR without in-band SPS/PPS, prepend last known SPS/PPS
+		if naluType == NALUTypeIFrame && p.stapANalu == nil && len(p.lastSPS) > 0 && len(p.lastPPS) > 0 {
+			p.stapANalu = []byte{outputStapAHeader}
+			p.stapANalu = append(p.stapANalu, byte(len(p.lastSPS)>>8), byte(len(p.lastSPS)))
+			p.stapANalu = append(p.stapANalu, p.lastSPS...)
+			p.stapANalu = append(p.stapANalu, byte(len(p.lastPPS)>>8), byte(len(p.lastPPS)))
+			p.stapANalu = append(p.stapANalu, p.lastPPS...)
 		}
 
 		if p.stapANalu != nil {
