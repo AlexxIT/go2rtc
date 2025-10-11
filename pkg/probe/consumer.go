@@ -47,3 +47,7 @@ func (p *Probe) AddTrack(media *core.Media, codec *core.Codec, track *core.Recei
 	p.Senders = append(p.Senders, sender)
 	return nil
 }
+
+func (p *Probe) Start() error {
+	return nil
+}

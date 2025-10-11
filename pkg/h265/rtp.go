@@ -14,6 +14,7 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 
 	buf := make([]byte, 0, 512*1024) // 512K
 	var nuStart int
+	var seqNum uint16
 
 	return func(packet *rtp.Packet) {
 		data := packet.Payload
@@ -34,9 +35,19 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 			}
 		}
 
+		// when we collect data into one buffer, we need to make sure
+		// that all of it falls into the same sequence
+		if len(buf) > 0 && packet.SequenceNumber-seqNum != 1 {
+			//log.Printf("broken H265 sequence")
+			buf = buf[:0] // drop data
+			return
+		}
+
+		seqNum = packet.SequenceNumber
+
 		if nuType == NALUTypeFU {
 			switch data[2] >> 6 {
-			case 2: // begin
+			case 0b10: // begin
 				nuType = data[2] & 0x3F
 
 				// push PS data before keyframe
@@ -49,13 +60,30 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 				buf = append(buf, (data[0]&0x81)|(nuType<<1), data[1])
 				buf = append(buf, data[3:]...)
 				return
-			case 0: // continue
+			case 0b00: // continue
+				if len(buf) == 0 {
+					//log.Printf("broken H265 fragment")
+					return
+				}
+
 				buf = append(buf, data[3:]...)
 				return
-			case 1: // end
+			case 0b01: // end
+				if len(buf) == 0 {
+					//log.Printf("broken H265 fragment")
+					return
+				}
+
 				buf = append(buf, data[3:]...)
+
+				if nuStart > len(buf)+4 {
+					//log.Printf("broken H265 fragment")
+					buf = buf[:0] // drop data
+					return
+				}
+
 				binary.BigEndian.PutUint32(buf[nuStart:], uint32(len(buf)-nuStart-4))
-			case 3: // wrong RFC 7798 realisation from OpenIPC project
+			case 0b11: // wrong RFC 7798 realisation from OpenIPC project
 				// A non-fragmented NAL unit MUST NOT be transmitted in one FU; i.e.,
 				// the Start bit and End bit must not both be set to 1 in the same FU
 				// header.
@@ -65,10 +93,8 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 				buf = append(buf, data[3:]...)
 			}
 		} else {
-			nuStart = len(buf)
-			buf = append(buf, 0, 0, 0, 0) // NAL unit size
+			buf = binary.BigEndian.AppendUint32(buf, uint32(len(data))) // NAL unit size
 			buf = append(buf, data...)
-			binary.BigEndian.PutUint32(buf[nuStart:], uint32(len(data)))
 		}
 
 		// collect all NAL Units for Access Unit

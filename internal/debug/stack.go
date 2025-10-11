@@ -29,8 +29,8 @@ var stackSkip = [][]byte{
 	[]byte("created by github.com/AlexxIT/go2rtc/internal/homekit.Init"),
 
 	// webrtc/api.go
-	[]byte("created by github.com/pion/ice/v2.NewTCPMuxDefault"),
-	[]byte("created by github.com/pion/ice/v2.NewUDPMuxDefault"),
+	[]byte("created by github.com/pion/ice/v4.NewTCPMuxDefault"),
+	[]byte("created by github.com/pion/ice/v4.NewUDPMuxDefault"),
 }
 
 func stackHandler(w http.ResponseWriter, r *http.Request) {
