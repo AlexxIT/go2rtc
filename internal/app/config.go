@@ -5,8 +5,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
-	"github.com/AlexxIT/go2rtc/pkg/shell"
+	"github.com/AlexxIT/go2rtc/pkg/creds"
 	"github.com/AlexxIT/go2rtc/pkg/yaml"
 )
 
@@ -18,10 +19,15 @@ func LoadConfig(v any) {
 	}
 }
 
+var configMu sync.Mutex
+
 func PatchConfig(path []string, value any) error {
 	if ConfigPath == "" {
 		return errors.New("config file disabled")
 	}
+
+	configMu.Lock()
+	defer configMu.Unlock()
 
 	// empty config is OK
 	b, _ := os.ReadFile(ConfigPath)
@@ -65,13 +71,15 @@ func initConfig(confs flagConfig) {
 			// config as file
 			if ConfigPath == "" {
 				ConfigPath = conf
+				initStorage()
 			}
 
 			if data, _ = os.ReadFile(conf); data == nil {
 				continue
 			}
 
-			data = []byte(shell.ReplaceEnvVars(string(data)))
+			loadEnv(data)
+			data = creds.ReplaceVars(data)
 			configs = append(configs, data)
 		}
 	}

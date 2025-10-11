@@ -39,11 +39,12 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/webrtc"
 	"github.com/AlexxIT/go2rtc/internal/webtorrent"
 	"github.com/AlexxIT/go2rtc/internal/wyoming"
+	"github.com/AlexxIT/go2rtc/internal/yandex"
 	"github.com/AlexxIT/go2rtc/pkg/shell"
 )
 
 func main() {
-	app.Version = "1.9.9"
+	app.Version = "1.9.10"
 
 	// 1. Core modules: app, api/ws, streams
 
@@ -96,6 +97,7 @@ func main() {
 	alsa.Init()     // alsa source
 	flussonic.Init()
 	eseecloud.Init()
+	yandex.Init()
 
 	// 6. Helper modules
 
