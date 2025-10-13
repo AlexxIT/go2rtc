@@ -2,6 +2,7 @@ package core
 
 import (
 	"crypto/rand"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -76,4 +77,15 @@ func Assert(ok bool) {
 func Caller() string {
 	_, file, line, _ := runtime.Caller(1)
 	return file + ":" + strconv.Itoa(line)
+}
+
+const (
+	unreserved = `A-Za-z0-9-._~`
+	subdelims  = `!$&'()*+,;=`
+	userinfo   = unreserved + subdelims + `%:`
+)
+
+func StripUserinfo(s string) string {
+	sanitizer := regexp.MustCompile(`://[` + userinfo + `]+@`)
+	return sanitizer.ReplaceAllString(s, `://***@`)
 }

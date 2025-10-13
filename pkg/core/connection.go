@@ -25,6 +25,7 @@ type Info interface {
 	SetSource(string)
 	SetURL(string)
 	WithRequest(*http.Request)
+	GetSource() string
 }
 
 // Connection just like webrtc.PeerConnection
@@ -121,6 +122,10 @@ func (c *Connection) WithRequest(r *http.Request) {
 	}
 
 	c.UserAgent = r.UserAgent()
+}
+
+func (c *Connection) GetSource() string {
+	return c.Source
 }
 
 // Create like os.Create, init Consumer with existing Transport

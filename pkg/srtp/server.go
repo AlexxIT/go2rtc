@@ -65,6 +65,13 @@ func (s *Server) DelSession(session *Session) {
 	s.mu.Unlock()
 }
 
+func (s *Server) GetSession(ssrc uint32) (session *Session) {
+	s.mu.Lock()
+	session = s.sessions[ssrc]
+	s.mu.Unlock()
+	return
+}
+
 func (s *Server) handle() error {
 	b := make([]byte, 2048)
 	for {
@@ -80,14 +87,14 @@ func (s *Server) handle() error {
 		case 99, 110, 0x80 | 99, 0x80 | 110:
 			// this is default position for SSRC in RTP packet
 			ssrc := binary.BigEndian.Uint32(b[8:])
-			if session, ok := s.sessions[ssrc]; ok {
+			if session := s.GetSession(ssrc); session != nil {
 				session.ReadRTP(b[:n])
 			}
 
 		case 200, 201, 202, 203, 204, 205, 206, 207:
 			// this is default position for SSRC in RTCP packet
 			ssrc := binary.BigEndian.Uint32(b[4:])
-			if session, ok := s.sessions[ssrc]; ok {
+			if session := s.GetSession(ssrc); session != nil {
 				session.ReadRTCP(b[:n])
 			}
 		}

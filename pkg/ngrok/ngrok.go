@@ -3,10 +3,11 @@ package ngrok
 import (
 	"bufio"
 	"encoding/json"
-	"github.com/AlexxIT/go2rtc/pkg/core"
 	"io"
 	"os/exec"
 	"strings"
+
+	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
 type Ngrok struct {

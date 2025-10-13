@@ -35,7 +35,7 @@
     function drawTable(table, data) {
         const cols = ['id', 'name', 'info', 'url', 'location'];
         const th = (row) => cols.reduce((html, k) => k in row ? `${html}<th>${k}</th>` : html, '<tr>') + '</tr>';
-        const td = (row) => cols.reduce((html, k) => k in row ? `${html}<td>${row[k]}</td>` : html, '<tr>') + '</tr>';
+        const td = (row) => cols.reduce((html, k) => k in row ? `${html}<td style="word-break: break-word;white-space: normal;">${row[k]}</td>` : html, '<tr>') + '</tr>';
 
         const thead = th(data.sources[0]);
         const tbody = data.sources.reduce((html, source) => `${html}${td(source)}`, '');
@@ -80,6 +80,18 @@
 
         const r = await fetch(url, {method: 'PUT'});
         alert(r.ok ? 'OK' : 'ERROR: ' + await r.text());
+    });
+</script>
+
+
+<button id="alsa">ALSA (Linux audio)</button>
+<div class="module">
+    <table id="alsa-table"></table>
+</div>
+<script>
+    document.getElementById('alsa').addEventListener('click', async ev => {
+        ev.target.nextElementSibling.style.display = 'block';
+        await getSources('alsa-table', 'api/alsa');
     });
 </script>
 
@@ -218,6 +230,60 @@
     });
 </script>
 
+<button id="ring">Ring</button>
+<div class="module">
+    <form id="ring-credentials-form" style="margin-bottom: 10px">
+        <input type="email" name="email" placeholder="email">
+        <input type="password" name="password" placeholder="password">
+        <div id="tfa-field" style="display: none">
+            <input type="text" name="code" placeholder="2FA code">
+            <div id="tfa-prompt"></div>
+        </div>
+        <input type="submit" value="Login">
+    </form>
+    <form id="ring-token-form" style="margin-bottom: 10px">
+        <input type="text" name="refresh_token" placeholder="refresh_token">
+        <input type="submit" value="Login">
+    </form>
+    <table id="ring-table"></table>
+</div>
+<script>
+    document.getElementById('ring').addEventListener('click', async ev => {
+        ev.target.nextElementSibling.style.display = 'block';
+    });
+
+    async function handleRingAuth(ev) {
+        ev.preventDefault();
+
+        const table = document.getElementById('ring-table');
+        table.innerText = 'loading...';
+
+        const query = new URLSearchParams(new FormData(ev.target));
+        const url = new URL('api/ring?' + query.toString(), location.href);
+
+        const r = await fetch(url, {cache: 'no-cache'});
+
+        if (!r.ok) {
+            table.innerText = (await r.text()) || 'Unknown error';
+            return;
+        }
+
+        const data = await r.json();
+
+        table.innerText = '';
+
+        if (data.needs_2fa) {
+            document.getElementById('tfa-field').style.display = 'block';
+            document.getElementById('tfa-prompt').textContent = data.prompt || 'Enter 2FA code';
+            return;
+        }
+
+        drawTable(table, data);
+    }
+
+    document.getElementById('ring-credentials-form').addEventListener('submit', handleRingAuth);
+    document.getElementById('ring-token-form').addEventListener('submit', handleRingAuth);
+</script>
 
 <button id="gopro">GoPro</button>
 <div class="module">
@@ -288,6 +354,18 @@
         ev.preventDefault();
         const r = await fetch('api/roborock', {method: 'POST', body: new FormData(ev.target)});
         await getSources('roborock-table', r);
+    });
+</script>
+
+
+<button id="v4l2">V4L2 (Linux video)</button>
+<div class="module">
+    <table id="v4l2-table"></table>
+</div>
+<script>
+    document.getElementById('v4l2').addEventListener('click', async ev => {
+        ev.target.nextElementSibling.style.display = 'block';
+        await getSources('v4l2-table', 'api/v4l2');
     });
 </script>
 

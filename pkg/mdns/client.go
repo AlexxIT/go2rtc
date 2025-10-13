@@ -10,10 +10,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/AlexxIT/go2rtc/pkg/xnet"
 	"github.com/miekg/dns" // awesome library for parsing mDNS records
 )
 
-const ServiceHAP = "_hap._tcp.local." // HomeKit Accessory Protocol
+const (
+	ServiceDNSSD = "_services._dns-sd._udp.local."
+	ServiceHAP   = "_hap._tcp.local." // HomeKit Accessory Protocol
+)
 
 type ServiceEntry struct {
 	Name string            `json:"name,omitempty"`
@@ -153,6 +157,7 @@ type Browser struct {
 	Service string
 
 	Addr  net.Addr
+	Nets  []*net.IPNet
 	Recv  net.PacketConn
 	Sends []net.PacketConn
 
@@ -165,7 +170,9 @@ type Browser struct {
 // Receiver will get multicast responses on senders requests.
 func (b *Browser) ListenMulticastUDP() error {
 	// 1. Collect IPv4 interfaces
-	ip4s, err := InterfacesIP4()
+	nets, err := xnet.IPNets(func(ip net.IP) bool {
+		return !xnet.Docker.Contains(ip)
+	})
 	if err != nil {
 		return err
 	}
@@ -182,14 +189,15 @@ func (b *Browser) ListenMulticastUDP() error {
 
 	ctx := context.Background()
 
-	for _, ip4 := range ip4s {
-		conn, err := lc1.ListenPacket(ctx, "udp4", ip4.String()+":5353") // same port important
+	for _, ipn := range nets {
+		conn, err := lc1.ListenPacket(ctx, "udp4", ipn.IP.String()+":5353") // same port important
 		if err != nil {
 			if strings.Contains(err.Error(), "address already in use") {
 				continue
 			}
 			continue
 		}
+		b.Nets = append(b.Nets, ipn)
 		b.Sends = append(b.Sends, conn)
 	}
 

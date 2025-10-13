@@ -19,15 +19,15 @@ go2rtc -c log.format=text -c /config/go2rtc.yaml -c rtsp.listen='' -c /usr/local
 
 ## Environment variables
 
-Also go2rtc support templates for using environment variables in any part of config:
+There is support for loading external variables into the config. First, they will be attempted to be loaded from [credential files](https://systemd.io/CREDENTIALS). If `CREDENTIALS_DIRECTORY` is not set, then the key will be loaded from an environment variable. If no environment variable is set, then the string will be left as-is.
 
 ```yaml
 streams:
   camera1: rtsp://rtsp:${CAMERA_PASSWORD}@192.168.1.123/av_stream/ch0
 
 rtsp:
-  username: ${RTSP_USER:admin}   # "admin" if env "RTSP_USER" not set
-  password: ${RTSP_PASS:secret}  # "secret" if env "RTSP_PASS" not set
+  username: ${RTSP_USER:admin}   # "admin" if "RTSP_USER" not set
+  password: ${RTSP_PASS:secret}  # "secret" if "RTSP_PASS" not set
 ```
 
 ## JSON Schema

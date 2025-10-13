@@ -46,11 +46,30 @@ func Marshal(v any) ([]byte, error) {
 	}
 
 	switch kind {
+	case reflect.Slice:
+		return appendSlice(nil, value)
 	case reflect.Struct:
 		return appendStruct(nil, value)
 	}
 
 	return nil, errors.New("tlv8: not implemented: " + kind.String())
+}
+
+// separator the most confusing meaning in the documentation.
+// It can have a value of 0x00 or 0xFF or even 0x05.
+const separator = 0xFF
+
+func appendSlice(b []byte, value reflect.Value) ([]byte, error) {
+	for i := 0; i < value.Len(); i++ {
+		if i > 0 {
+			b = append(b, separator, 0)
+		}
+		var err error
+		if b, err = appendStruct(b, value.Index(i)); err != nil {
+			return nil, err
+		}
+	}
+	return b, nil
 }
 
 func appendStruct(b []byte, value reflect.Value) ([]byte, error) {
@@ -121,7 +140,7 @@ func appendValue(b []byte, tag byte, value reflect.Value) ([]byte, error) {
 	case reflect.Slice:
 		for i := 0; i < value.Len(); i++ {
 			if i > 0 {
-				b = append(b, 0, 0)
+				b = append(b, separator, 0)
 			}
 			if b, err = appendValue(b, tag, value.Index(i)); err != nil {
 				return nil, err
@@ -142,12 +161,13 @@ func appendValue(b []byte, tag byte, value reflect.Value) ([]byte, error) {
 	return nil, errors.New("tlv8: not implemented: " + value.Kind().String())
 }
 
-func UnmarshalBase64(s string, v any) error {
+func UnmarshalBase64(in any, out any) error {
+	s, _ := in.(string) // protect from in == nil
 	data, err := base64.StdEncoding.DecodeString(s)
 	if err != nil {
 		return err
 	}
-	return Unmarshal(data, v)
+	return Unmarshal(data, out)
 }
 
 func UnmarshalReader(r io.Reader, v any) error {
@@ -178,64 +198,86 @@ func Unmarshal(data []byte, v any) error {
 		kind = value.Kind()
 	}
 
-	if kind != reflect.Struct {
-		return errors.New("tlv8: not implemented: " + kind.String())
+	switch kind {
+	case reflect.Slice:
+		return unmarshalSlice(data, value)
+	case reflect.Struct:
+		return unmarshalStruct(data, value)
 	}
 
-	return unmarshalStruct(data, value)
+	return errors.New("tlv8: not implemented: " + kind.String())
 }
 
-func unmarshalStruct(b []byte, value reflect.Value) error {
-	var waitSlice bool
+// unmarshalTLV can return two types of errors:
+// - critical and then the value of []byte will be nil
+// - not critical and then []byte will contain the value
+func unmarshalTLV(b []byte, value reflect.Value) ([]byte, error) {
+	if len(b) < 2 {
+		return nil, errors.New("tlv8: wrong size: " + value.Type().Name())
+	}
 
-	for len(b) >= 2 {
-		t := b[0]
-		l := int(b[1])
+	t := b[0]
+	l := int(b[1])
 
-		// array item divider
-		if t == 0 && l == 0 {
-			b = b[2:]
-			waitSlice = true
-			continue
+	// array item divider (t == 0x00 || t == 0xFF)
+	if l == 0 {
+		return b[2:], errors.New("tlv8: zero item")
+	}
+
+	var v []byte
+
+	for {
+		if len(b) < 2+l {
+			return nil, errors.New("tlv8: wrong size: " + value.Type().Name())
 		}
 
-		var v []byte
+		v = append(v, b[2:2+l]...)
+		b = b[2+l:]
 
-		for {
-			if len(b) < 2+l {
-				return errors.New("tlv8: wrong size: " + value.Type().Name())
+		// if size == 255 and same tag - continue read big payload
+		if l < 255 || len(b) < 2 || b[0] != t {
+			break
+		}
+
+		l = int(b[1])
+	}
+
+	tag := strconv.Itoa(int(t))
+
+	valueField, ok := getStructField(value, tag)
+	if !ok {
+		return b, fmt.Errorf("tlv8: can't find T=%d,L=%d,V=%x for: %s", t, l, v, value.Type().Name())
+	}
+
+	if err := unmarshalValue(v, valueField); err != nil {
+		return nil, err
+	}
+
+	return b, nil
+}
+
+func unmarshalSlice(b []byte, value reflect.Value) error {
+	valueIndex := value.Index(growSlice(value))
+	for len(b) > 0 {
+		var err error
+		if b, err = unmarshalTLV(b, valueIndex); err != nil {
+			if b != nil {
+				valueIndex = value.Index(growSlice(value))
+				continue
 			}
-
-			v = append(v, b[2:2+l]...)
-			b = b[2+l:]
-
-			// if size == 255 and same tag - continue read big payload
-			if l < 255 || len(b) < 2 || b[0] != t {
-				break
-			}
-
-			l = int(b[1])
-		}
-
-		tag := strconv.Itoa(int(t))
-
-		valueField, ok := getStructField(value, tag)
-		if !ok {
-			return fmt.Errorf("tlv8: can't find T=%d,L=%d,V=%x for: %s", t, l, v, value.Type().Name())
-		}
-
-		if waitSlice {
-			if valueField.Kind() != reflect.Slice {
-				return fmt.Errorf("tlv8: should be slice T=%d,L=%d,V=%x for: %s", t, l, v, value.Type().Name())
-			}
-			waitSlice = false
-		}
-
-		if err := unmarshalValue(v, valueField); err != nil {
 			return err
 		}
 	}
+	return nil
+}
 
+func unmarshalStruct(b []byte, value reflect.Value) error {
+	for len(b) > 0 {
+		var err error
+		if b, err = unmarshalTLV(b, value); b == nil && err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

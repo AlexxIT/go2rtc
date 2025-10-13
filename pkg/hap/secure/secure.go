@@ -6,7 +6,6 @@ import (
 	"errors"
 	"io"
 	"net"
-	"sync"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/hap/chacha20poly1305"
@@ -24,7 +23,7 @@ type Conn struct {
 	encryptCnt uint64
 	decryptCnt uint64
 
-	mx sync.Mutex
+	SharedKey []byte
 }
 
 func Client(conn net.Conn, sharedKey []byte, isClient bool) (net.Conn, error) {
@@ -42,6 +41,8 @@ func Client(conn net.Conn, sharedKey []byte, isClient bool) (net.Conn, error) {
 		conn: conn,
 		rd:   bufio.NewReaderSize(conn, 32*1024),
 		wr:   bufio.NewWriterSize(conn, 32*1024),
+
+		SharedKey: sharedKey,
 	}
 
 	if isClient {

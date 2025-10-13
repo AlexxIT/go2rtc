@@ -56,11 +56,11 @@ func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiv
 		}
 
 	case core.CodecH265:
-		// SafariPay because it is the only browser in the world
-		// that supports WebRTC + H265
-		sender.Handler = h265.SafariPay(1200, sender.Handler)
+		sender.Handler = h265.RTPPay(1200, sender.Handler)
 		if track.Codec.IsRTP() {
 			sender.Handler = h265.RTPDepay(track.Codec, sender.Handler)
+		} else {
+			sender.Handler = h265.RepairAVCC(track.Codec, sender.Handler)
 		}
 
 	case core.CodecPCMA, core.CodecPCMU, core.CodecPCM, core.CodecPCML:
@@ -73,7 +73,7 @@ func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiv
 				codec.Name = core.CodecPCMA
 			}
 			codec.ClockRate = 8000
-			sender.Handler = pcm.ResampleToG711(track.Codec, 8000, sender.Handler)
+			sender.Handler = pcm.TranscodeHandler(codec, track.Codec, sender.Handler)
 		}
 	}
 

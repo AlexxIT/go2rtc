@@ -9,7 +9,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
-	"github.com/pion/webrtc/v3"
+	"github.com/pion/webrtc/v4"
 )
 
 type Conn struct {
@@ -29,6 +29,7 @@ func NewConn(pc *webrtc.PeerConnection) *Conn {
 		Connection: core.Connection{
 			ID:         core.NewID(),
 			FormatName: "webrtc",
+			Transport:  pc,
 		},
 		pc: pc,
 	}
@@ -50,6 +51,10 @@ func NewConn(pc *webrtc.PeerConnection) *Conn {
 		}
 		pc.SCTP().Transport().ICETransport().OnSelectedCandidatePairChange(
 			func(pair *webrtc.ICECandidatePair) {
+				// fix situation when candidate pair changes multiple times
+				if i := strings.IndexByte(c.Protocol, '+'); i > 0 {
+					c.Protocol = c.Protocol[:i]
+				}
 				c.Protocol += "+" + pair.Remote.Protocol.String()
 				c.RemoteAddr = fmt.Sprintf(
 					"%s:%d %s", sanitizeIP6(pair.Remote.Address), pair.Remote.Port, pair.Remote.Typ,

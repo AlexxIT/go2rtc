@@ -139,7 +139,11 @@ func MarshalSDP(name string, medias []*Media) ([]byte, error) {
 				Protos: []string{"RTP", "AVP"},
 			},
 		}
-		md.WithCodec(codec.PayloadType, name, codec.ClockRate, codec.Channels, codec.FmtpLine)
+		md.WithCodec(codec.PayloadType, name, codec.ClockRate, uint16(codec.Channels), codec.FmtpLine)
+
+		if media.Direction != "" {
+			md.WithPropertyAttribute(media.Direction)
+		}
 
 		if media.ID != "" {
 			md.WithValueAttribute("control", media.ID)

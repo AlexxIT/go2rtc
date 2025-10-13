@@ -22,6 +22,15 @@ func RTPDepay(handler core.HandlerFunc) core.HandlerFunc {
 		//log.Printf("[RTP/AAC] units: %d, size: %4d, ts: %10d, %t", headersSize/2, len(packet.Payload), packet.Timestamp, packet.Marker)
 
 		if len(packet.Payload) < int(2+headersSize) {
+			// In very rare cases noname cameras may send data not according to the standard
+			// https://github.com/AlexxIT/go2rtc/issues/1328
+			if IsADTS(packet.Payload) {
+				clone := *packet
+				clone.Version = RTPPacketVersionAAC
+				clone.Timestamp = timestamp
+				clone.Payload = clone.Payload[ADTSHeaderSize:]
+				handler(&clone)
+			}
 			return
 		}
 

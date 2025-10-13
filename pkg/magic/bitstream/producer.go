@@ -25,7 +25,7 @@ func Open(r io.Reader) (*Producer, error) {
 		return nil, err
 	}
 
-	buf = annexb.EncodeToAVCC(buf, false) // won't break original buffer
+	buf = annexb.EncodeToAVCC(buf) // won't break original buffer
 
 	var codec *core.Codec
 	var format string
@@ -82,7 +82,7 @@ func (c *Producer) Start() error {
 			if len(c.Receivers) > 0 {
 				pkt := &rtp.Packet{
 					Header:  rtp.Header{Timestamp: core.Now90000()},
-					Payload: annexb.EncodeToAVCC(buf[:i], true),
+					Payload: annexb.EncodeToAVCC(buf[:i]),
 				}
 				c.Receivers[0].WriteRTP(pkt)
 

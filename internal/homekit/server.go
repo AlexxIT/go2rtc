@@ -87,7 +87,7 @@ func (s *server) SetCharacteristic(conn net.Conn, aid uint8, iid uint64, value a
 	switch char.Type {
 	case camera.TypeSetupEndpoints:
 		var offer camera.SetupEndpoints
-		if err := tlv8.UnmarshalBase64(value.(string), &offer); err != nil {
+		if err := tlv8.UnmarshalBase64(value, &offer); err != nil {
 			return
 		}
 
@@ -96,7 +96,7 @@ func (s *server) SetCharacteristic(conn net.Conn, aid uint8, iid uint64, value a
 
 	case camera.TypeSelectedStreamConfiguration:
 		var conf camera.SelectedStreamConfig
-		if err := tlv8.UnmarshalBase64(value.(string), &conf); err != nil {
+		if err := tlv8.UnmarshalBase64(value, &conf); err != nil {
 			return
 		}
 
@@ -222,7 +222,7 @@ func (s *server) DelPair(conn net.Conn, id string) {
 }
 
 func (s *server) PatchConfig() {
-	if err := app.PatchConfig("pairings", s.pairings, "homekit", s.stream); err != nil {
+	if err := app.PatchConfig([]string{"homekit", s.stream, "pairings"}, s.pairings); err != nil {
 		log.Error().Err(err).Msgf(
 			"[homekit] can't save %s pairings=%v", s.stream, s.pairings,
 		)

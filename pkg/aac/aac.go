@@ -53,7 +53,7 @@ func ConfigToCodec(conf []byte) *core.Codec {
 		codec.ClockRate = rd.ReadBits(24)
 	}
 
-	codec.Channels = rd.ReadBits16(4)
+	codec.Channels = rd.ReadBits8(4)
 
 	return codec
 }

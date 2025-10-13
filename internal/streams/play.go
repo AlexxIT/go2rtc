@@ -7,7 +7,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
-func (s *Stream) Play(source string) error {
+func (s *Stream) Play(urlOrProd any) error {
 	s.mu.Lock()
 	for _, producer := range s.producers {
 		if producer.state == stateInternal && producer.conn != nil {
@@ -16,11 +16,17 @@ func (s *Stream) Play(source string) error {
 	}
 	s.mu.Unlock()
 
-	if source == "" {
-		return nil
-	}
-
+	var source string
 	var src core.Producer
+
+	switch urlOrProd.(type) {
+	case string:
+		if source = urlOrProd.(string); source == "" {
+			return nil
+		}
+	case core.Producer:
+		src = urlOrProd.(core.Producer)
+	}
 
 	for _, producer := range s.producers {
 		if producer.conn == nil {
@@ -103,7 +109,7 @@ func (s *Stream) Play(source string) error {
 }
 
 func (s *Stream) AddInternalProducer(conn core.Producer) {
-	producer := &Producer{conn: conn, state: stateInternal}
+	producer := &Producer{conn: conn, state: stateInternal, url: "internal"}
 	s.mu.Lock()
 	s.producers = append(s.producers, producer)
 	s.mu.Unlock()
@@ -140,10 +146,12 @@ func matchMedia(prod core.Producer, cons core.Consumer) bool {
 
 			track, err := prod.GetTrack(prodMedia, prodCodec)
 			if err != nil {
+				log.Warn().Err(err).Msg("[streams] can't get track")
 				continue
 			}
 
 			if err = cons.AddTrack(consMedia, consCodec, track); err != nil {
+				log.Warn().Err(err).Msg("[streams] can't add track")
 				continue
 			}
 

@@ -2,8 +2,9 @@ package hass
 
 import (
 	"errors"
-	"github.com/gorilla/websocket"
 	"os"
+
+	"github.com/gorilla/websocket"
 )
 
 type API struct {

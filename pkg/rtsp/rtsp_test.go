@@ -11,14 +11,20 @@ func TestURLParse(t *testing.T) {
 	// https://github.com/AlexxIT/WebRTC/issues/395
 	base := "rtsp://::ffff:192.168.1.123/onvif/profile.1/"
 	u, err := urlParse(base)
-	assert.Empty(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, "::ffff:192.168.1.123:", u.Host)
 
 	// https://github.com/AlexxIT/go2rtc/issues/208
 	base = "rtsp://rtsp://turret2-cam.lan:554/stream1/"
 	u, err = urlParse(base)
-	assert.Empty(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, "turret2-cam.lan:554", u.Host)
+
+	// https://github.com/AlexxIT/go2rtc/issues/1852
+	base = "192.168.253.220:1935/"
+	u, err = urlParse(base)
+	assert.NoError(t, err)
+	assert.Equal(t, "192.168.253.220:1935", u.Host)
 }
 
 func TestBugSDP1(t *testing.T) {
@@ -197,6 +203,40 @@ b=AS:1
 a=x-bufferdelay:0.55000
 a=rtpmap:108 video.analysis/90000/500
 a=control:track5
+`
+	medias, err := UnmarshalSDP([]byte(s))
+	assert.Nil(t, err)
+	assert.Len(t, medias, 4)
+}
+
+func TestBugSDP7(t *testing.T) {
+	// https://github.com/AlexxIT/go2rtc/issues/1426
+	s := `v=0
+o=- 1001 1 IN
+s=VCP IPC Realtime stream
+m=video 0 RTP/AVP 105
+c=IN
+a=control:rtsp://1.0.1.113/media/video2/video
+a=rtpmap:105 H264/90000
+a=fmtp:105 profile-level-id=640016; packetization-mode=1; sprop-parameter-sets=Z2QAFqw7UFAX/LCAAAH0AABOIEI=,aOqPLA==
+a=recvonly
+m=audio 0 RTP/AVP 0
+c=IN
+a=fmtp:0 RTCP=0
+a=control:rtsp://1.0.1.113/media/video2/audio1
+a=recvonly
+m=audio 0 RTP/AVP 0
+c=IN
+a=control:rtsp://1.0.1.113/media/video2/backchannel
+a=rtpmap:0 PCMA/8000
+a=rtpmap:0 PCMU/8000
+a=sendonly
+m=application 0 RTP/AVP 107
+c=IN
+a=control:rtsp://1.0.1.113/media/video2/metadata
+a=rtpmap:107 vnd.onvif.metadata/90000
+a=fmtp:107 DecoderTag=h3c-v3 RTCP=0
+a=recvonly
 `
 	medias, err := UnmarshalSDP([]byte(s))
 	assert.Nil(t, err)

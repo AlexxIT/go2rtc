@@ -22,7 +22,7 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 	buf := make([]byte, 0, 512*1024) // 512K
 
 	return func(packet *rtp.Packet) {
-		//log.Printf("[RTP] codec: %s, nalu: %2d, size: %6d, ts: %10d, pt: %2d, ssrc: %d, seq: %d, %v", track.Codec.Name, packet.Payload[0]&0x1F, len(packet.Payload), packet.Timestamp, packet.PayloadType, packet.SSRC, packet.SequenceNumber, packet.Marker)
+		//log.Printf("[RTP] codec: %s, nalu: %2d, size: %6d, ts: %10d, pt: %2d, ssrc: %d, seq: %d, %v", codec.Name, packet.Payload[0]&0x1F, len(packet.Payload), packet.Timestamp, packet.PayloadType, packet.SSRC, packet.SequenceNumber, packet.Marker)
 
 		payload, err := depack.Unmarshal(packet.Payload)
 		if len(payload) == 0 || err != nil {
@@ -68,6 +68,9 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 
 					payload = payload[i:]
 					continue
+				case NALUTypePFrame, NALUTypeSPS, NALUTypePPS: // pass
+				default:
+					return // skip any unknown NAL unit type
 				}
 				break
 			}

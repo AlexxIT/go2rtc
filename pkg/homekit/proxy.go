@@ -3,65 +3,210 @@ package homekit
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
 	"net"
 	"net/http"
 
 	"github.com/AlexxIT/go2rtc/pkg/hap"
+	"github.com/AlexxIT/go2rtc/pkg/hap/camera"
+	"github.com/AlexxIT/go2rtc/pkg/hap/hds"
+	"github.com/AlexxIT/go2rtc/pkg/hap/secure"
+	"github.com/AlexxIT/go2rtc/pkg/hap/tlv8"
 )
 
 func ProxyHandler(pair ServerPair, dial func() (net.Conn, error)) hap.HandlerFunc {
-	return func(controller net.Conn) error {
-		accessory, err := dial()
+	return func(con net.Conn) error {
+		defer con.Close()
+
+		acc, err := dial()
+		if err != nil {
+			return err
+		}
+		defer acc.Close()
+
+		pr := &Proxy{
+			con: con.(*secure.Conn),
+			acc: acc.(*secure.Conn),
+			res: make(chan *http.Response),
+		}
+
+		// accessory (ex. Camera) => controller (ex. iPhone)
+		go pr.handleAcc()
+
+		// controller => accessory
+		return pr.handleCon(pair)
+	}
+}
+
+type Proxy struct {
+	con *secure.Conn
+	acc *secure.Conn
+	res chan *http.Response
+}
+
+func (p *Proxy) handleCon(pair ServerPair) error {
+	var hdsCharIID uint64
+
+	rd := bufio.NewReader(p.con)
+	for {
+		req, err := http.ReadRequest(rd)
 		if err != nil {
 			return err
 		}
 
-		// accessory (ex. Camera) => controller (ex. iPhone)
-		go proxy(accessory, controller, nil)
+		var hdsConSalt string
 
-		// controller => accessory
-		return proxy(controller, accessory, pair)
+		switch {
+		case req.Method == "POST" && req.URL.Path == hap.PathPairings:
+			var res *http.Response
+			if res, err = handlePairings(p.con, req, pair); err != nil {
+				return err
+			}
+			if err = res.Write(p.con); err != nil {
+				return err
+			}
+			continue
+		case req.Method == "PUT" && req.URL.Path == hap.PathCharacteristics && hdsCharIID != 0:
+			body, _ := io.ReadAll(req.Body)
+			var v hap.JSONCharacters
+			_ = json.Unmarshal(body, &v)
+			for _, char := range v.Value {
+				if char.IID == hdsCharIID {
+					var hdsReq camera.SetupDataStreamRequest
+					_ = tlv8.UnmarshalBase64(char.Value, &hdsReq)
+					hdsConSalt = hdsReq.ControllerKeySalt
+					break
+				}
+			}
+			req.Body = io.NopCloser(bytes.NewReader(body))
+		}
+
+		if err = req.Write(p.acc); err != nil {
+			return err
+		}
+
+		res := <-p.res
+
+		switch {
+		case req.Method == "GET" && req.URL.Path == hap.PathAccessories:
+			body, _ := io.ReadAll(res.Body)
+			var v hap.JSONAccessories
+			if err = json.Unmarshal(body, &v); err != nil {
+				return err
+			}
+			for _, acc := range v.Value {
+				if char := acc.GetCharacter(camera.TypeSetupDataStreamTransport); char != nil {
+					hdsCharIID = char.IID
+				}
+				break
+			}
+			res.Body = io.NopCloser(bytes.NewReader(body))
+
+		case hdsConSalt != "":
+			body, _ := io.ReadAll(res.Body)
+			var v hap.JSONCharacters
+			_ = json.Unmarshal(body, &v)
+			for i, char := range v.Value {
+				if char.IID == hdsCharIID {
+					var hdsRes camera.SetupDataStreamResponse
+					_ = tlv8.UnmarshalBase64(char.Value, &hdsRes)
+
+					hdsAccSalt := hdsRes.AccessoryKeySalt
+					hdsPort := int(hdsRes.TransportTypeSessionParameters.TCPListeningPort)
+
+					// swtich accPort to conPort
+					hdsPort, err = p.listenHDS(hdsPort, hdsConSalt+hdsAccSalt)
+					if err != nil {
+						return err
+					}
+
+					hdsRes.TransportTypeSessionParameters.TCPListeningPort = uint16(hdsPort)
+					if v.Value[i].Value, err = tlv8.MarshalBase64(hdsRes); err != nil {
+						return err
+					}
+					body, _ = json.Marshal(v)
+					res.ContentLength = int64(len(body))
+					break
+				}
+			}
+			res.Body = io.NopCloser(bytes.NewReader(body))
+		}
+
+		if err = res.Write(p.con); err != nil {
+			return err
+		}
 	}
 }
 
-func proxy(r, w net.Conn, pair ServerPair) error {
-	b := make([]byte, 64*1024)
+func (p *Proxy) handleAcc() error {
+	rd := bufio.NewReader(p.acc)
 	for {
-		n, err := r.Read(b)
+		res, err := hap.ReadResponse(rd, nil)
 		if err != nil {
-			break
+			return err
 		}
 
-		if pair != nil && bytes.HasPrefix(b[:n], []byte("POST /pairings HTTP/1.1")) {
-			buf := bytes.NewBuffer(b[:n])
-			req, err := http.ReadRequest(bufio.NewReader(buf))
-			if err != nil {
-				return err
-			}
-
-			res, err := handlePairings(r, req, pair)
-			if err != nil {
-				return err
-			}
-
-			buf.Reset()
-
-			if err = res.Write(buf); err != nil {
-				return err
-			}
-			if _, err = buf.WriteTo(r); err != nil {
+		if res.Proto == hap.ProtoEvent {
+			if err = res.Write(p.con); err != nil {
 				return err
 			}
 			continue
 		}
 
-		//log.Printf("[hap] %d bytes => %s\n%.512s", n, w.RemoteAddr(), b[:n])
-
-		if _, err = w.Write(b[:n]); err != nil {
-			break
+		// important to read body before next read response
+		body, err := io.ReadAll(res.Body)
+		if err != nil {
+			return err
 		}
+		res.Body = io.NopCloser(bytes.NewReader(body))
+
+		p.res <- res
 	}
-	_ = r.Close()
-	_ = w.Close()
-	return nil
+}
+
+func (p *Proxy) listenHDS(accPort int, salt string) (int, error) {
+	ln, err := net.ListenTCP("tcp", nil)
+	if err != nil {
+		return 0, err
+	}
+
+	go func() {
+		defer ln.Close()
+
+		// raw controller conn
+		con, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer con.Close()
+
+		// secured controller conn (controlle=false because we are accessory)
+		con, err = hds.Client(con, p.con.SharedKey, salt, false)
+		if err != nil {
+			return
+		}
+
+		accIP := p.acc.RemoteAddr().(*net.TCPAddr).IP
+
+		// raw accessory conn
+		acc, err := net.Dial("tcp", fmt.Sprintf("%s:%d", accIP, accPort))
+		if err != nil {
+			return
+		}
+		defer acc.Close()
+
+		// secured accessory conn (controller=true because we are controller)
+		acc, err = hds.Client(acc, p.acc.SharedKey, salt, true)
+		if err != nil {
+			return
+		}
+
+		go io.Copy(con, acc)
+		_, _ = io.Copy(acc, con)
+	}()
+
+	conPort := ln.Addr().(*net.TCPAddr).Port
+	return conPort, nil
 }

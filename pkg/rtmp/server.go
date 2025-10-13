@@ -2,10 +2,13 @@ package rtmp
 
 import (
 	"bufio"
+	"crypto/rand"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"net"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/flv/amf"
@@ -34,23 +37,54 @@ func NewServer(conn net.Conn) (*Conn, error) {
 }
 
 func (c *Conn) serverHandshake() error {
-	b := make([]byte, 1+1536)
-	// read C0+C1
+	// based on https://rtmp.veriskope.com/docs/spec/
+	_ = c.conn.SetDeadline(time.Now().Add(core.ConnDeadline))
+
+	// read C0
+	b := make([]byte, 1)
 	if _, err := io.ReadFull(c.rd, b); err != nil {
 		return err
 	}
-	// write S0+S1, skip random
+
+	if b[0] != 3 {
+		return errors.New("rtmp: wrong handshake")
+	}
+
+	// write S0
+	if _, err := c.conn.Write([]byte{3}); err != nil {
+		return err
+	}
+
+	b = make([]byte, 1536)
+
+	// write S1
+	tsS1 := nowMS()
+	binary.BigEndian.PutUint32(b, tsS1)
+	binary.BigEndian.PutUint32(b[4:], 0)
+	_, _ = rand.Read(b[8:])
 	if _, err := c.conn.Write(b); err != nil {
 		return err
 	}
-	// read S1, skip check
-	if _, err := io.ReadFull(c.rd, make([]byte, 1536)); err != nil {
+
+	// read C1
+	if _, err := io.ReadFull(c.rd, b); err != nil {
 		return err
 	}
-	// write C1
-	if _, err := c.conn.Write(b[1:]); err != nil {
+
+	// write S2
+	tsS2 := nowMS()
+	binary.BigEndian.PutUint32(b, tsS1)
+	binary.BigEndian.PutUint32(b[4:], tsS2)
+	if _, err := c.conn.Write(b); err != nil {
 		return err
 	}
+
+	// read C2
+	if _, err := io.ReadFull(c.rd, b); err != nil {
+		return err
+	}
+
+	_ = c.conn.SetDeadline(time.Time{})
 	return nil
 }
 
@@ -117,10 +151,6 @@ func (c *Conn) acceptCommand(b []byte) error {
 			}
 		}
 
-		if c.App == "" {
-			return fmt.Errorf("rtmp: read command %x", b)
-		}
-
 		payload := amf.EncodeItems(
 			"_result", tID,
 			map[string]any{"fmsVer": "FMS/3,0,1,123"},
@@ -129,8 +159,15 @@ func (c *Conn) acceptCommand(b []byte) error {
 		return c.writeMessage(3, TypeCommand, 0, payload)
 
 	case CommandReleaseStream:
+		// if app is empty - will use key as app
+		if c.App == "" && len(items) == 4 {
+			c.App, _ = items[3].(string)
+		}
+
 		payload := amf.EncodeItems("_result", tID, nil)
 		return c.writeMessage(3, TypeCommand, 0, payload)
+
+	case CommandFCPublish: // no response
 
 	case CommandCreateStream:
 		payload := amf.EncodeItems("_result", tID, nil, 1)
@@ -139,8 +176,6 @@ func (c *Conn) acceptCommand(b []byte) error {
 	case CommandPublish, CommandPlay: // response later
 		c.Intent = cmd
 		c.streamID = 1
-
-	case CommandFCPublish: // no response
 
 	default:
 		println("rtmp: unknown command: " + cmd)
@@ -159,4 +194,8 @@ func (c *Conn) WriteStart() error {
 
 	payload := amf.EncodeItems("onStatus", 0, nil, map[string]any{"code": code})
 	return c.writeMessage(3, TypeCommand, 0, payload)
+}
+
+func nowMS() uint32 {
+	return uint32(time.Now().UnixNano() / int64(time.Millisecond))
 }

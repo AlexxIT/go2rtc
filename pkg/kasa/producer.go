@@ -113,7 +113,7 @@ func (c *Producer) Start() error {
 					Header: rtp.Header{
 						Timestamp: uint32(ts * 90000),
 					},
-					Payload: annexb.EncodeToAVCC(body, false),
+					Payload: annexb.EncodeToAVCC(body),
 				}
 				video.WriteRTP(pkt)
 			}
@@ -168,7 +168,7 @@ func (c *Producer) probe() error {
 			}
 			waitVideo = false
 
-			body = annexb.EncodeToAVCC(body, false)
+			body = annexb.EncodeToAVCC(body)
 			codec := h264.AVCCToCodec(body)
 			media = &core.Media{
 				Kind:      core.KindVideo,

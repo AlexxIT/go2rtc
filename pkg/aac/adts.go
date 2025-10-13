@@ -9,7 +9,6 @@ import (
 )
 
 func IsADTS(b []byte) bool {
-	_ = b[1]
 	return len(b) > 7 && b[0] == 0xFF && b[1]&0xF6 == 0xF0
 }
 
@@ -29,7 +28,7 @@ func ADTSToCodec(b []byte) *core.Codec {
 	objType := rd.ReadBits8(2) + 1   // Profile, the MPEG-4 Audio Object Type minus 1
 	sampleRateIdx := rd.ReadBits8(4) // MPEG-4 Sampling Frequency Index
 	_ = rd.ReadBit()                 // Private bit, guaranteed never to be used by MPEG, set to 0 when encoding, ignore when decoding
-	channels := rd.ReadBits16(3)     // MPEG-4 Channel Configuration
+	channels := rd.ReadBits8(3)      // MPEG-4 Channel Configuration
 
 	//_ = rd.ReadBit()    // Originality, set to 1 to signal originality of the audio and 0 otherwise
 	//_ = rd.ReadBit()    // Home, set to 1 to signal home usage of the audio and 0 otherwise
@@ -44,7 +43,7 @@ func ADTSToCodec(b []byte) *core.Codec {
 	wr := bits.NewWriter(nil)
 	wr.WriteBits8(objType, 5)
 	wr.WriteBits8(sampleRateIdx, 4)
-	wr.WriteBits16(channels, 4)
+	wr.WriteBits8(channels, 4)
 	conf := wr.Bytes()
 
 	codec := &core.Codec{

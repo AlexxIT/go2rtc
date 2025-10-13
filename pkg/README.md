@@ -13,6 +13,7 @@ Some formats and protocols go2rtc supports exclusively. They have no equivalent 
 | Format       | Source protocols | Ingress protocols | Recevers codecs              | Senders codecs     | Example       |
 |--------------|------------------|-------------------|------------------------------|--------------------|---------------|
 | adts         | http,tcp,pipe    | http              | aac                          |                    | `http:`       |
+| alsa         | pipe             |                   |                              | pcm                | `alsa:`       |
 | bubble       | http             |                   | h264,hevc,pcm_alaw           |                    | `bubble:`     |
 | dvrip        | tcp              |                   | h264,hevc,pcm_alaw,pcm_mulaw | pcm_alaw           | `dvrip:`      |
 | flv          | http,tcp,pipe    | http              | h264,aac                     |                    | `http:`       |

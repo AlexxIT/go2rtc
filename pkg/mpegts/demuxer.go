@@ -364,7 +364,7 @@ func (p *PES) GetPacket() (pkt *rtp.Packet) {
 			Header: rtp.Header{
 				PayloadType: p.StreamType,
 			},
-			Payload: annexb.EncodeToAVCC(p.Payload, false),
+			Payload: annexb.EncodeToAVCC(p.Payload),
 		}
 
 		if p.DTS != 0 {

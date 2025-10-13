@@ -2,18 +2,15 @@ package onvif
 
 import (
 	"bytes"
-	"crypto/sha1"
-	"encoding/base64"
 	"errors"
+	"fmt"
 	"html"
 	"io"
-	"net/http"
+	"net"
 	"net/url"
 	"regexp"
 	"strings"
 	"time"
-
-	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
 const PathDevice = "/onvif/device_service"
@@ -41,13 +38,20 @@ func NewClient(rawURL string) (*Client, error) {
 		client.deviceURL = baseURL + u.Path
 	}
 
-	b, err := client.GetCapabilities()
+	b, err := client.DeviceRequest(DeviceGetCapabilities)
 	if err != nil {
 		return nil, err
 	}
 
 	client.mediaURL = FindTagValue(b, "Media.+?XAddr")
+	if client.mediaURL == "" {
+		client.mediaURL = baseURL + "/onvif/media_service"
+	}
+
 	client.imaginURL = FindTagValue(b, "Imaging.+?XAddr")
+	if client.imaginURL == "" {
+		client.imaginURL = baseURL + "/onvif/imaging_service"
+	}
 
 	return client, nil
 }
@@ -95,7 +99,7 @@ func (c *Client) GetURI() (string, error) {
 }
 
 func (c *Client) GetName() (string, error) {
-	b, err := c.GetDeviceInformation()
+	b, err := c.DeviceRequest(DeviceGetDeviceInformation)
 	if err != nil {
 		return "", err
 	}
@@ -104,7 +108,7 @@ func (c *Client) GetName() (string, error) {
 }
 
 func (c *Client) GetProfilesTokens() ([]string, error) {
-	b, err := c.GetProfiles()
+	b, err := c.MediaRequest(MediaGetProfiles)
 	if err != nil {
 		return nil, err
 	}
@@ -127,132 +131,114 @@ func (c *Client) HasSnapshots() bool {
 	return strings.Contains(string(b), `SnapshotUri="true"`)
 }
 
-func (c *Client) GetCapabilities() ([]byte, error) {
+func (c *Client) GetProfile(token string) ([]byte, error) {
 	return c.Request(
-		c.deviceURL,
-		`<tds:GetCapabilities xmlns:tds="http://www.onvif.org/ver10/device/wsdl">
-	<tds:Category>All</tds:Category>
-</tds:GetCapabilities>`,
+		c.mediaURL, `<trt:GetProfile><trt:ProfileToken>`+token+`</trt:ProfileToken></trt:GetProfile>`,
 	)
 }
 
-func (c *Client) GetNetworkInterfaces() ([]byte, error) {
-	return c.Request(
-		c.deviceURL, `<tds:GetNetworkInterfaces xmlns:tds="http://www.onvif.org/ver10/device/wsdl"/>`,
-	)
-}
-
-func (c *Client) GetDeviceInformation() ([]byte, error) {
-	return c.Request(
-		c.deviceURL, `<tds:GetDeviceInformation xmlns:tds="http://www.onvif.org/ver10/device/wsdl"/>`,
-	)
-}
-
-func (c *Client) GetProfiles() ([]byte, error) {
-	return c.Request(
-		c.mediaURL, `<trt:GetProfiles xmlns:trt="http://www.onvif.org/ver10/media/wsdl"/>`,
-	)
+func (c *Client) GetVideoSourceConfiguration(token string) ([]byte, error) {
+	return c.Request(c.mediaURL, `<trt:GetVideoSourceConfiguration>
+	<trt:ConfigurationToken>`+token+`</trt:ConfigurationToken>
+</trt:GetVideoSourceConfiguration>`)
 }
 
 func (c *Client) GetStreamUri(token string) ([]byte, error) {
-	return c.Request(
-		c.mediaURL,
-		`<trt:GetStreamUri xmlns:trt="http://www.onvif.org/ver10/media/wsdl" xmlns:tt="http://www.onvif.org/ver10/schema">
+	return c.Request(c.mediaURL, `<trt:GetStreamUri>
 	<trt:StreamSetup>
 		<tt:Stream>RTP-Unicast</tt:Stream>
 		<tt:Transport><tt:Protocol>RTSP</tt:Protocol></tt:Transport>
 	</trt:StreamSetup>
 	<trt:ProfileToken>`+token+`</trt:ProfileToken>
-</trt:GetStreamUri>`,
-	)
+</trt:GetStreamUri>`)
 }
 
 func (c *Client) GetSnapshotUri(token string) ([]byte, error) {
 	return c.Request(
-		c.imaginURL,
-		`<trt:GetSnapshotUri xmlns:trt="http://www.onvif.org/ver10/media/wsdl">
-	<trt:ProfileToken>`+token+`</trt:ProfileToken>
-</trt:GetSnapshotUri>`,
-	)
-}
-
-func (c *Client) GetSystemDateAndTime() ([]byte, error) {
-	return c.Request(
-		c.deviceURL, `<tds:GetSystemDateAndTime xmlns:tds="http://www.onvif.org/ver10/device/wsdl"/>`,
+		c.imaginURL, `<trt:GetSnapshotUri><trt:ProfileToken>`+token+`</trt:ProfileToken></trt:GetSnapshotUri>`,
 	)
 }
 
 func (c *Client) GetServiceCapabilities() ([]byte, error) {
 	// some cameras answer GetServiceCapabilities for media only for path = "/onvif/media"
 	return c.Request(
-		c.mediaURL, `<trt:GetServiceCapabilities xmlns:trt="http://www.onvif.org/ver10/media/wsdl"/>`,
+		c.mediaURL, `<trt:GetServiceCapabilities />`,
 	)
 }
 
-func (c *Client) SystemReboot() ([]byte, error) {
-	return c.Request(
-		c.deviceURL, `<tds:SystemReboot xmlns:tds="http://www.onvif.org/ver10/device/wsdl"/>`,
-	)
+func (c *Client) DeviceRequest(operation string) ([]byte, error) {
+	switch operation {
+	case DeviceGetServices:
+		operation = `<tds:GetServices><tds:IncludeCapability>true</tds:IncludeCapability></tds:GetServices>`
+	case DeviceGetCapabilities:
+		operation = `<tds:GetCapabilities><tds:Category>All</tds:Category></tds:GetCapabilities>`
+	default:
+		operation = `<tds:` + operation + `/>`
+	}
+	return c.Request(c.deviceURL, operation)
 }
 
-func (c *Client) GetServices() ([]byte, error) {
-	return c.Request(
-		c.deviceURL, `<tds:GetServices xmlns:tds="http://www.onvif.org/ver10/device/wsdl">
-	<tds:IncludeCapability>true</tds:IncludeCapability>
-</tds:GetServices>`,
-	)
+func (c *Client) MediaRequest(operation string) ([]byte, error) {
+	operation = `<trt:` + operation + `/>`
+	return c.Request(c.mediaURL, operation)
 }
 
-func (c *Client) GetScopes() ([]byte, error) {
-	return c.Request(
-		c.deviceURL, `<tds:GetScopes xmlns:tds="http://www.onvif.org/ver10/device/wsdl" />`,
-	)
-}
-
-func (c *Client) Request(url, body string) ([]byte, error) {
-	if url == "" {
+func (c *Client) Request(rawUrl, body string) ([]byte, error) {
+	if rawUrl == "" {
 		return nil, errors.New("onvif: unsupported service")
 	}
 
-	buf := bytes.NewBuffer(nil)
-	buf.WriteString(
-		`<?xml version="1.0" encoding="UTF-8"?><s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope">`,
-	)
+	e := NewEnvelopeWithUser(c.url.User)
+	e.Append(body)
 
-	if user := c.url.User; user != nil {
-		nonce := core.RandString(16, 36)
-		created := time.Now().UTC().Format(time.RFC3339Nano)
-		pass, _ := user.Password()
-
-		h := sha1.New()
-		h.Write([]byte(nonce + created + pass))
-
-		buf.WriteString(`<s:Header>
-<wsse:Security xmlns:wsse="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd">
-<wsse:UsernameToken>
-<wsse:Username>` + user.Username() + `</wsse:Username>
-<wsse:Password Type="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordDigest">` + base64.StdEncoding.EncodeToString(h.Sum(nil)) + `</wsse:Password>
-<wsse:Nonce EncodingType="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-soap-message-security-1.0#Base64Binary">` + base64.StdEncoding.EncodeToString([]byte(nonce)) + `</wsse:Nonce>
-<wsu:Created xmlns:wsu="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd">` + created + `</wsu:Created>
-</wsse:UsernameToken>
-</wsse:Security>
-</s:Header>`)
-	}
-
-	buf.WriteString(`<s:Body>` + body + `</s:Body></s:Envelope>`)
-
-	client := &http.Client{Timeout: time.Second * 5000}
-	res, err := client.Post(url, `application/soap+xml;charset=utf-8`, buf)
+	u, err := url.Parse(rawUrl)
 	if err != nil {
 		return nil, err
 	}
 
-	// need to close body with eny response status
-	b, err := io.ReadAll(res.Body)
-
-	if err == nil && res.StatusCode != http.StatusOK {
-		err = errors.New("onvif: " + res.Status + " for " + url)
+	host := u.Host
+	if u.Port() == "" {
+		host += ":80"
 	}
 
-	return b, err
+	conn, err := net.DialTimeout("tcp", host, 5*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	reqBody := e.Bytes()
+	rawReq := fmt.Appendf(nil, "POST %s HTTP/1.1\r\n"+
+		"Host: %s\r\n"+
+		"Content-Type: application/soap+xml;charset=utf-8\r\n"+
+		"Content-Length: %d\r\n"+
+		"Connection: close\r\n"+
+		"\r\n", u.Path, u.Host, len(reqBody))
+	rawReq = append(rawReq, reqBody...)
+
+	if _, err = conn.Write(rawReq); err != nil {
+		return nil, err
+	}
+
+	rawRes, err := io.ReadAll(conn)
+	if err != nil {
+		return nil, err
+	}
+
+	// Look for XML in complete response
+	if i := bytes.Index(rawRes, []byte("<?xml")); i > 0 {
+		return rawRes[i:], nil
+	}
+
+	// No XML found - might be an error response
+	if i := bytes.Index(rawRes, []byte("\r\n\r\n")); i > 0 {
+		if bytes.Contains(rawRes[:i], []byte("chunked")) {
+			return nil, errors.New("onvif: TODO: support chunked encoding")
+		}
+
+		// Return body after headers
+		return rawRes[i+4:], nil
+	}
+
+	return rawRes, nil
 }
