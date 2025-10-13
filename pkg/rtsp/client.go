@@ -93,7 +93,46 @@ func (c *Conn) Do(req *tcp.Request) (*tcp.Response, error) {
 
 	c.Fire(res)
 
-	if res.StatusCode == http.StatusUnauthorized {
+	switch res.StatusCode {
+	case http.StatusOK:
+		return res, nil
+	case http.StatusMovedPermanently, http.StatusFound:
+		loc := res.Header.Get("Location")
+		if loc == "" {
+			return nil, fmt.Errorf("rtsp: redirect with no location")
+		}
+
+		newURL, err := urlParse(loc)
+		if err != nil {
+			return nil, fmt.Errorf("rtsp: can't parse redirect URL: %s", loc)
+		}
+
+		c.URL = c.URL.ResolveReference(newURL)
+		req.URL = c.URL // Update the request URL to the new redirect location
+
+		if err = c.conn.Close(); err != nil {
+			return nil, err
+		}
+
+		var conn net.Conn
+		var timeout time.Duration
+		if c.Timeout != 0 {
+			timeout = time.Second * time.Duration(c.Timeout)
+		} else {
+			timeout = core.ConnDialTimeout
+		}
+
+		conn, err = tcp.Dial(c.URL, timeout)
+		if err != nil {
+			return nil, err
+		}
+
+		c.conn = conn
+		c.reader = bufio.NewReaderSize(conn, core.BufferSize)
+		c.Connection.RemoteAddr = conn.RemoteAddr().String()
+
+		return c.Do(req)
+	case http.StatusUnauthorized:
 		switch c.auth.Method {
 		case tcp.AuthNone:
 			if c.auth.ReadNone(res) {
@@ -109,11 +148,8 @@ func (c *Conn) Do(req *tcp.Request) (*tcp.Response, error) {
 		}
 	}
 
-	if res.StatusCode != http.StatusOK {
-		return res, fmt.Errorf("wrong response on %s", req.Method)
-	}
-
-	return res, nil
+	fmt.Printf("RTSP client received unhandled status code: %d for method: %s\n", res.StatusCode, req.Method)
+	return res, fmt.Errorf("wrong response on %s", req.Method)
 }
 
 func (c *Conn) Options() error {
