@@ -39,6 +39,9 @@ Ultimate camera streaming application with support for RTSP, WebRTC, HomeKit, FF
 - HomeKit Accessory Protocol from [@brutella](https://github.com/brutella/hap)
 - creator of the project's logo [@v_novoseltsev](https://www.instagram.com/v_novoseltsev) 
 
+> [!CAUTION]
+> There is NO existing website for go2rtc project other than this GitHub repository. The website go2rtc[.]com is in no way associated with the authors of this project.
+
 ---
 
 * [Fast start](#fast-start)
