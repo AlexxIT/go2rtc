@@ -97,8 +97,8 @@ func NewSender(media *Media, codec *Codec) *Sender {
 		buf:   buf,
 	}
 	s.Input = func(packet *Packet) {
-		// writing to nil chan - OK, writing to closed chan - panic
 		s.mu.Lock()
+		// unblock write to nil chan - OK, write to closed chan - panic
 		select {
 		case s.buf <- packet:
 			s.Bytes += len(packet.Payload)
@@ -139,13 +139,13 @@ func (s *Sender) Start() {
 	}
 	s.done = make(chan struct{})
 
-	go func() {
-		// for range on nil chan is OK
-		for packet := range s.buf {
+	// pass buf directly so that it's impossible for buf to be nil
+	go func(buf chan *Packet) {
+		for packet := range buf {
 			s.Output(packet)
 		}
 		close(s.done)
-	}()
+	}(s.buf)
 }
 
 func (s *Sender) Wait() {

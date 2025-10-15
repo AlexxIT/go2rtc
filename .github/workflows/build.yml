@@ -19,7 +19,7 @@ jobs:
 
       - name: Setup Go
         uses: actions/setup-go@v5
-        with: { go-version: '1.24' }
+        with: { go-version: '1.25' }
 
       - name: Build go2rtc_win64
         env: { GOOS: windows, GOARCH: amd64 }
@@ -29,7 +29,7 @@ jobs:
         with: { name: go2rtc_win64, path: go2rtc.exe }
 
       - name: Build go2rtc_win32
-        env: { GOOS: windows, GOARCH: 386, GOTOOLCHAIN: go1.20.14 }
+        env: { GOOS: windows, GOARCH: 386 }
         run: go build -ldflags "-s -w" -trimpath
       - name: Upload go2rtc_win32
         uses: actions/upload-artifact@v4
@@ -85,7 +85,7 @@ jobs:
         with: { name: go2rtc_linux_mipsel, path: go2rtc }
 
       - name: Build go2rtc_mac_amd64
-        env: { GOOS: darwin, GOARCH: amd64, GOTOOLCHAIN: go1.20.14 }
+        env: { GOOS: darwin, GOARCH: amd64 }
         run: go build -ldflags "-s -w" -trimpath
       - name: Upload go2rtc_mac_amd64
         uses: actions/upload-artifact@v4
@@ -124,7 +124,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            ${{ github.repository }}
+            name=${{ github.repository }},enable=${{ github.event.repository.fork == false }}
             ghcr.io/${{ github.repository }}
           tags: |
             type=ref,event=branch
@@ -138,14 +138,14 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Login to DockerHub
-        if: github.event_name != 'pull_request'
+        if: github.event_name == 'push' && github.event.repository.fork == false
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Login to GitHub Container Registry
-        if: github.event_name != 'pull_request'
+        if: github.event_name == 'push'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -156,6 +156,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
+          file: docker/Dockerfile
           platforms: |
             linux/amd64
             linux/386
@@ -180,7 +181,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            ${{ github.repository }}
+            name=${{ github.repository }},enable=${{ github.event.repository.fork == false }}
             ghcr.io/${{ github.repository }}
           flavor: |
             suffix=-hardware,onlatest=true
@@ -197,14 +198,14 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Login to DockerHub
-        if: github.event_name != 'pull_request'
+        if: github.event_name == 'push' && github.event.repository.fork == false
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      
+
       - name: Login to GitHub Container Registry
-        if: github.event_name != 'pull_request'
+        if: github.event_name == 'push'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -215,10 +216,65 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: hardware.Dockerfile
+          file: docker/hardware.Dockerfile
           platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta-hw.outputs.tags }}
           labels: ${{ steps.meta-hw.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  docker-rockchip:
+    name: Build docker rockchip
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Docker meta
+        id: meta-rk
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            name=${{ github.repository }},enable=${{ github.event.repository.fork == false }}
+            ghcr.io/${{ github.repository }}
+          flavor: |
+            suffix=-rockchip,onlatest=true
+            latest=auto
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}},enable=false
+            type=match,pattern=v(.*),group=1
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to DockerHub
+        if: github.event_name == 'push' && github.event.repository.fork == false
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Login to GitHub Container Registry
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/rockchip.Dockerfile
+          platforms: linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta-rk.outputs.tags }}
+          labels: ${{ steps.meta-rk.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

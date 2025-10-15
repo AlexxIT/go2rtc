@@ -9,6 +9,8 @@ go2rtc_linux*
 go2rtc_mac*
 go2rtc_win*
 
+/go2rtc
+
 0_test.go
 
 .DS_Store

@@ -5,9 +5,9 @@ import (
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/xnet"
-	"github.com/pion/ice/v2"
+	"github.com/pion/ice/v4"
 	"github.com/pion/interceptor"
-	"github.com/pion/webrtc/v3"
+	"github.com/pion/webrtc/v4"
 )
 
 // ReceiveMTU = Ethernet MTU (1500) - IP Header (20) - UDP Header (8)
@@ -125,13 +125,20 @@ func NewServerAPI(network, address string, filters *Filters) (*webrtc.API, error
 					networks = append(networks, ice.NetworkType(ntype))
 				}
 
-				udpMux, _ = ice.NewMultiUDPMuxFromPort(
+				var err error
+				if udpMux, err = ice.NewMultiUDPMuxFromPort(
 					port,
 					ice.UDPMuxFromPortWithInterfaceFilter(interfaceFilter),
 					ice.UDPMuxFromPortWithIPFilter(ipFilter),
 					ice.UDPMuxFromPortWithNetworks(networks...),
-				)
-			} else if ln, err := net.ListenPacket("udp", address); err == nil {
+				); err != nil {
+					return nil, err
+				}
+			} else {
+				ln, err := net.ListenPacket("udp", address)
+				if err != nil {
+					return nil, err
+				}
 				udpMux = ice.NewUDPMuxDefault(ice.UDPMuxParams{UDPConn: ln})
 			}
 			s.SetICEUDPMux(udpMux)

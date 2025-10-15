@@ -1,5 +1,7 @@
 ## Versions
 
+**PS.** Unfortunately, due to the dependency on `pion/webrtc/v4 v4.1.3`, had to upgrade go to `1.23`. Everything described below is not relevant.
+
 [Go 1.20](https://go.dev/doc/go1.20) is last version with support Windows 7 and macOS 10.13.
 Go 1.21 support only Windows 10 and macOS 10.15.
 
@@ -7,8 +9,12 @@ So we will set `go 1.20` (minimum version) inside `go.mod` file. And will use en
 `win32` and `mac_amd64` binaries. All other binaries will use latest go version.
 
 ```
+github.com/miekg/dns v1.1.63
 golang.org/x/crypto v0.33.0
 golang.org/x/mod v0.20.0 // indirect
+golang.org/x/net v0.35.0 // indirect
+golang.org/x/sync v0.11.0 // indirect
+golang.org/x/sys v0.30.0 // indirect
 golang.org/x/tools v0.24.0 // indirect
 ```
 

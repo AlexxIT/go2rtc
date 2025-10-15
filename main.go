@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/AlexxIT/go2rtc/internal/alsa"
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"github.com/AlexxIT/go2rtc/internal/app"
@@ -9,9 +10,11 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/doorbird"
 	"github.com/AlexxIT/go2rtc/internal/dvrip"
 	"github.com/AlexxIT/go2rtc/internal/echo"
+	"github.com/AlexxIT/go2rtc/internal/eseecloud"
 	"github.com/AlexxIT/go2rtc/internal/exec"
 	"github.com/AlexxIT/go2rtc/internal/expr"
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg"
+	"github.com/AlexxIT/go2rtc/internal/flussonic"
 	"github.com/AlexxIT/go2rtc/internal/gopro"
 	"github.com/AlexxIT/go2rtc/internal/hass"
 	"github.com/AlexxIT/go2rtc/internal/hls"
@@ -35,11 +38,13 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/v4l2"
 	"github.com/AlexxIT/go2rtc/internal/webrtc"
 	"github.com/AlexxIT/go2rtc/internal/webtorrent"
+	"github.com/AlexxIT/go2rtc/internal/wyoming"
+	"github.com/AlexxIT/go2rtc/internal/yandex"
 	"github.com/AlexxIT/go2rtc/pkg/shell"
 )
 
 func main() {
-	app.Version = "1.9.8"
+	app.Version = "1.9.10"
 
 	// 1. Core modules: app, api/ws, streams
 
@@ -66,6 +71,7 @@ func main() {
 	hass.Init()       // hass source, Hass API server
 	onvif.Init()      // onvif source, ONVIF API server
 	webtorrent.Init() // webtorrent source, WebTorrent module
+	wyoming.Init()
 
 	// 5. Other sources
 
@@ -88,6 +94,10 @@ func main() {
 	gopro.Init()    // gopro source
 	doorbird.Init() // doorbird source
 	v4l2.Init()     // v4l2 source
+	alsa.Init()     // alsa source
+	flussonic.Init()
+	eseecloud.Init()
+	yandex.Init()
 
 	// 6. Helper modules
 
