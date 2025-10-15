@@ -27,7 +27,7 @@ GOOS=windows GOARCH=amd64 \
 
 # Windows 386
 FILENAME="go2rtc_win32.zip"
-GOOS=windows GOARCH=386 GOTOOLCHAIN=go1.20.14 \
+GOOS=windows GOARCH=386 \
     go build -ldflags "-s -w" -trimpath
 7z a -mx9 -bso0 -sdel $FILENAME go2rtc.exe
 
@@ -75,7 +75,7 @@ upx --lzma --force-overwrite -q --no-progress $FILENAME
 
 # Darwin amd64
 FILENAME="go2rtc_mac_amd64.zip"
-GOOS=darwin GOARCH=amd64 GOTOOLCHAIN=go1.20.14 \
+GOOS=darwin GOARCH=amd64 \
     go build -ldflags "-s -w" -trimpath
 7z a -mx9 -bso0 -sdel $FILENAME go2rtc
 
