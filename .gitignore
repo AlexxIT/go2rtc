@@ -10,6 +10,7 @@ go2rtc_mac*
 go2rtc_win*
 
 /go2rtc
+/go2rtc.exe
 
 0_test.go
 
