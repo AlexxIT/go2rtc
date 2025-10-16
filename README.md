@@ -26,7 +26,7 @@ Ultimate camera streaming application with support for RTSP, WebRTC, HomeKit, FF
    - mixing tracks from different sources to single stream
    - auto-match client-supported codecs
    - [2-way audio](#two-way-audio) for some cameras
-- streaming from private networks via [ngrok](#module-ngrok)
+- streaming from private networks via [ngrok](#module-ngrok) or [tuna](#module-tuna)
 - can be [integrated to](#module-api) any smart home platform or be used as [standalone app](#go2rtc-binary)
 
 **Inspired by:**
@@ -87,6 +87,7 @@ Ultimate camera streaming application with support for RTSP, WebRTC, HomeKit, FF
   * [Module: HomeKit](#module-homekit)
   * [Module: WebTorrent](#module-webtorrent)
   * [Module: ngrok](#module-ngrok)
+  * [Module: tuna](#module-tuna)
   * [Module: Hass](#module-hass)
   * [Module: MP4](#module-mp4)
   * [Module: HLS](#module-hls)
@@ -138,7 +139,7 @@ Don't forget to fix the rights `chmod +x go2rtc_xxx_xxx` on Linux and Mac.
 
 ### go2rtc: Docker
 
-The Docker container [`alexxit/go2rtc`](https://hub.docker.com/r/alexxit/go2rtc) supports multiple architectures including `amd64`, `386`, `arm64`, and `arm`. This container offers the same functionality as the [Home Assistant Add-on](#go2rtc-home-assistant-add-on) but is designed to operate independently of Home Assistant. It comes preinstalled with [FFmpeg](#source-ffmpeg), [ngrok](#module-ngrok), and [Python](#source-echo).
+The Docker container [`alexxit/go2rtc`](https://hub.docker.com/r/alexxit/go2rtc) supports multiple architectures including `amd64`, `386`, `arm64`, and `arm`. This container offers the same functionality as the [Home Assistant Add-on](#go2rtc-home-assistant-add-on) but is designed to operate independently of Home Assistant. It comes preinstalled with [FFmpeg](#source-ffmpeg), [ngrok](#module-ngrok) or  [tuna](#module-tuna), and [Python](#source-echo).
 
 ### go2rtc: Home Assistant Add-on
 
@@ -182,6 +183,7 @@ Available modules:
 - [mjpeg](#module-mjpeg) - MJPEG Server
 - [ffmpeg](#source-ffmpeg) - FFmpeg integration
 - [ngrok](#module-ngrok) - ngrok integration (external access for private network)
+- [tuna](#module-tuna) - tuna integration (external access for private network)
 - [hass](#module-hass) - Home Assistant integration
 - [log](#module-log) - logs config
 
@@ -979,10 +981,13 @@ webrtc:
 
 **Private IP**
 
-- setup integration with [ngrok service](#module-ngrok)
+- setup integration with [ngrok service](#module-ngrok) or [tuna service](#module-tuna)
 
 ```yaml
 ngrok:
+  command: ...
+
+tuna:
   command: ...
 ```
 
@@ -1140,6 +1145,67 @@ tunnels:
 ```
 
 See the [ngrok agent documentation](https://ngrok.com/docs/agent/config/) for more details on the ngrok configuration file.
+
+### Module: tuna
+
+[Tuna](https://tuna.am/) - is an analogue of ngrok in Russia with access nodes and the ability to pay for a subscription.
+You also can get external access to your streams in situations when you have Internet with a private IP address.
+
+> [!WARNING]
+> Ngrok blocked users from Russia with [ERR_NGROK_9040](https://ngrok.com/docs/errors/err_ngrok_9040/) error code.
+
+- tuna is pre-installed for **Docker** and **Hass add-on** users
+- you may need external access for two different things:
+  - WebRTC stream, so you need a tunnel WebRTC TCP port (ex. 8555)
+  - go2rtc web interface, so you need a tunnel API HTTP port (ex. 1984)
+- tuna supports authorization for your web interface
+- tuna automatically adds HTTPS to your web interface
+
+Tuna in the free version has limitations, you can only create HTTP tunnels with an active address for 30 minutes. Therefore, to open access to WebRTC or RTSP, a subscription is required.
+More details in [tuna documentation](https://tuna.am/docs/tunnels/)
+
+go2rtc will automatically get your external TCP address and use it with WebRTC connection.
+
+You need to manually install the [tuna cli](https://tuna.am/docs/guides/install-manual/) for your OS and register with the [tuna portal](https://my.tuna.com/).
+
+**Tunnel for only WebRTC Stream**
+
+You need to add your [tuna token](https://my.tuna.am/token) and WebRTC TCP port to YAML:
+
+```yaml
+tuna:
+  command: tuna tcp 8555 --token tt_dveq6c8hfmfmz8b0u4ft80nub8fctvp9
+```
+
+**Tunnel for WebRTC, RTSP and Web interface**
+
+You need to create `tuna.yaml` config file and add it to the go2rtc config:
+
+```yaml
+tuna:
+  command: tuna start --all --config tuna.yaml
+```
+
+tuna config example:
+
+```yaml
+---
+version: "1"
+token: tt_dveq6c8hfmfmz8b0u4ft80nub8fctvp9
+tunnels:
+  api:
+    commandLine: tuna http 1984 --basic-auth user:password --subdomain my-go2rtc # change subdomain to your
+    tags: [api]
+  rtsp:
+    commandLine: tuna tcp 8554 --port rtsp # with static port
+    tags: [rtsp]
+  webrtc:
+    commandLine: tuna tcp 8555 --port webrtc # with static port
+    tags: [webrtc]
+
+```
+
+See the [documentation](https://tuna.am/docs/guides/config-file/) for more details on the tuna configuration file.
 
 ### Module: Hass
 
