@@ -112,6 +112,10 @@ func (a *Auth) ReadNone(res *Response) bool {
 	return false
 }
 
+func (a *Auth) UserInfo() *url.Userinfo {
+	return url.UserPassword(a.user, a.pass)
+}
+
 func Between(s, sub1, sub2 string) string {
 	i := strings.Index(s, sub1)
 	if i < 0 {

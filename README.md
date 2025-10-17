@@ -39,6 +39,9 @@ Ultimate camera streaming application with support for RTSP, WebRTC, HomeKit, FF
 - HomeKit Accessory Protocol from [@brutella](https://github.com/brutella/hap)
 - creator of the project's logo [@v_novoseltsev](https://www.instagram.com/v_novoseltsev) 
 
+> [!CAUTION]
+> There is NO existing website for go2rtc project other than this GitHub repository. The website go2rtc[.]com is in no way associated with the authors of this project.
+
 ---
 
 * [Fast start](#fast-start)
@@ -77,6 +80,7 @@ Ultimate camera streaming application with support for RTSP, WebRTC, HomeKit, FF
     * [Incoming sources](#incoming-sources)
     * [Stream to camera](#stream-to-camera)
     * [Publish stream](#publish-stream)
+    * [Preload stream](#preload-stream)
   * [Module: API](#module-api)
   * [Module: RTSP](#module-rtsp)
   * [Module: RTMP](#module-rtmp)
@@ -713,7 +717,7 @@ Supports [Amazon Kinesis Video Streams](https://aws.amazon.com/kinesis/video-str
 
 **switchbot**
 
-Support connection to [SwitchBot](https://us.switch-bot.com/) cameras that are based on Kinesis Video Streams. Specifically, this includes [Pan/Tilt Cam Plus 2K](https://us.switch-bot.com/pages/switchbot-pan-tilt-cam-plus-2k) and [Pan/Tilt Cam Plus 3K](https://us.switch-bot.com/pages/switchbot-pan-tilt-cam-plus-3k). `Outdoor Spotlight Cam 1080P`, `Outdoor Spotlight Cam 2K`, `Pan/Tilt Cam`, `Pan/Tilt Cam 2K`, `Indoor Cam` are based on Tuya, so this feature is not available.
+Support connection to [SwitchBot](https://us.switch-bot.com/) cameras that are based on Kinesis Video Streams. Specifically, this includes [Pan/Tilt Cam Plus 2K](https://us.switch-bot.com/pages/switchbot-pan-tilt-cam-plus-2k) and [Pan/Tilt Cam Plus 3K](https://us.switch-bot.com/pages/switchbot-pan-tilt-cam-plus-3k) and [Smart Video Doorbell](https://www.switchbot.jp/products/switchbot-smart-video-doorbell). `Outdoor Spotlight Cam 1080P`, `Outdoor Spotlight Cam 2K`, `Pan/Tilt Cam`, `Pan/Tilt Cam 2K`, `Indoor Cam` are based on Tuya, so this feature is not available.
 
 ```yaml
 streams:
@@ -722,7 +726,7 @@ streams:
   webrtc-openipc:   webrtc:ws://192.168.1.123/webrtc_ws#format=openipc#ice_servers=[{"urls":"stun:stun.kinesisvideo.eu-north-1.amazonaws.com:443"}]
   webrtc-wyze:      webrtc:http://192.168.1.123:5000/signaling/camera1?kvs#format=wyze
   webrtc-kinesis:   webrtc:wss://...amazonaws.com/?...#format=kinesis#client_id=...#ice_servers=[{...},{...}]
-  webrtc-switchbot: webrtc:wss://...amazonaws.com/?...#format=switchbot#resolution=hd#client_id=...#ice_servers=[{...},{...}]
+  webrtc-switchbot: webrtc:wss://...amazonaws.com/?...#format=switchbot#resolution=hd#play_type=0#client_id=...#ice_servers=[{...},{...}]
 ```
 
 **PS.** For `kinesis` sources, you can use [echo](#source-echo) to get connection params using `bash`, `python` or any other script language.
@@ -846,6 +850,26 @@ streams:
 
 - **Telegram Desktop App** > Any public or private channel or group (where you admin) > Live stream > Start with... > Start streaming.
 - **YouTube** > Create > Go live > Stream latency: Ultra low-latency > Copy: Stream URL + Stream key.
+
+### Preload stream
+
+You can preload any stream on go2rtc start. This is useful for cameras that take a long time to start up.
+
+```yaml
+preload:
+  camera1:                                     # default: video&audio = ANY
+  camera2: "video"                             # preload only video track
+  camera3: "video=h264&audio=opus"             # preload H264 video and OPUS audio
+
+streams:
+  camera1: 
+    - rtsp://192.168.1.100/stream
+  camera2: 
+    - rtsp://192.168.1.101/stream  
+  camera3: 
+    - rtsp://192.168.1.102/h265stream
+    - ffmpeg:camera3#video=h264#audio=opus#hardware
+```
 
 ### Module: API
 
