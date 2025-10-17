@@ -74,3 +74,21 @@ func GetParameterSet(fmtp string) (vps, sps, pps []byte) {
 
 	return
 }
+
+func ContainsParameterSets(payload []byte) bool {
+	types := Types(payload)
+	hasVPS, hasSPS, hasPPS := false, false, false
+
+	for _, nalType := range types {
+		switch nalType {
+		case NALUTypeVPS:
+			hasVPS = true
+		case NALUTypeSPS:
+			hasSPS = true
+		case NALUTypePPS:
+			hasPPS = true
+		}
+	}
+
+	return hasVPS && hasSPS && hasPPS
+}
