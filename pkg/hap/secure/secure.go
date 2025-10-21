@@ -14,9 +14,7 @@ import (
 
 type Conn struct {
 	conn net.Conn
-
-	rd *bufio.Reader
-	wr *bufio.Writer
+	rw   *bufio.ReadWriter
 
 	encryptKey []byte
 	decryptKey []byte
@@ -26,7 +24,7 @@ type Conn struct {
 	SharedKey []byte
 }
 
-func Client(conn net.Conn, sharedKey []byte, isClient bool) (net.Conn, error) {
+func Client(conn net.Conn, rw *bufio.ReadWriter, sharedKey []byte, isClient bool) (*Conn, error) {
 	key1, err := hkdf.Sha512(sharedKey, "Control-Salt", "Control-Read-Encryption-Key")
 	if err != nil {
 		return nil, err
@@ -39,8 +37,7 @@ func Client(conn net.Conn, sharedKey []byte, isClient bool) (net.Conn, error) {
 
 	c := &Conn{
 		conn: conn,
-		rd:   bufio.NewReaderSize(conn, 32*1024),
-		wr:   bufio.NewWriterSize(conn, 32*1024),
+		rw:   rw,
 
 		SharedKey: sharedKey,
 	}
@@ -69,14 +66,14 @@ func (c *Conn) Read(b []byte) (n int, err error) {
 	}
 
 	verify := make([]byte, 2) // verify = plain message size
-	if _, err = io.ReadFull(c.rd, verify); err != nil {
+	if _, err = io.ReadFull(c.rw, verify); err != nil {
 		return
 	}
 
 	n = int(binary.LittleEndian.Uint16(verify))
 	ciphertext := make([]byte, n+Overhead)
 
-	if _, err = io.ReadFull(c.rd, ciphertext); err != nil {
+	if _, err = io.ReadFull(c.rw, ciphertext); err != nil {
 		return
 	}
 
@@ -100,7 +97,7 @@ func (c *Conn) Write(b []byte) (n int, err error) {
 		}
 
 		binary.LittleEndian.PutUint16(verify, uint16(size))
-		if _, err = c.wr.Write(verify); err != nil {
+		if _, err = c.rw.Write(verify); err != nil {
 			return
 		}
 
@@ -112,7 +109,7 @@ func (c *Conn) Write(b []byte) (n int, err error) {
 			return
 		}
 
-		if _, err = c.wr.Write(buf[:size+Overhead]); err != nil {
+		if _, err = c.rw.Write(buf[:size+Overhead]); err != nil {
 			return
 		}
 
@@ -120,7 +117,7 @@ func (c *Conn) Write(b []byte) (n int, err error) {
 		n += size
 	}
 
-	err = c.wr.Flush()
+	err = c.rw.Flush()
 	return
 }
 

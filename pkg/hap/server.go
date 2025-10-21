@@ -166,7 +166,7 @@ func (s *Server) PairVerify(req *http.Request, rw *bufio.ReadWriter, conn net.Co
 		return err
 	}
 
-	if conn, err = secure.Client(conn, sessionShared, false); err != nil {
+	if conn, err = secure.Client(conn, rw, sessionShared, false); err != nil {
 		return err
 	}
 

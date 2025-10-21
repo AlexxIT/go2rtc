@@ -216,8 +216,10 @@ func (c *Client) Dial() (err error) {
 		return newResponseError(cipherM3, plainM4)
 	}
 
+	rw := bufio.NewReadWriter(c.reader, bufio.NewWriter(c.Conn))
+
 	// like tls.Client wrapper over net.Conn
-	if c.Conn, err = secure.Client(c.Conn, sessionShared, true); err != nil {
+	if c.Conn, err = secure.Client(c.Conn, rw, sessionShared, true); err != nil {
 		return
 	}
 	// new reader for new conn
