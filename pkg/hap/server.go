@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 
@@ -55,7 +54,7 @@ func (s *Server) PairVerify(req *http.Request, rw *bufio.ReadWriter, conn net.Co
 		PublicKey string `tlv8:"3"`
 		State     byte   `tlv8:"6"`
 	}
-	if err := tlv8.UnmarshalReader(io.LimitReader(rw, req.ContentLength), &plainM1); err != nil {
+	if err := tlv8.UnmarshalReader(req.Body, req.ContentLength, &plainM1); err != nil {
 		return err
 	}
 	if plainM1.State != StateM1 {
@@ -125,7 +124,7 @@ func (s *Server) PairVerify(req *http.Request, rw *bufio.ReadWriter, conn net.Co
 		EncryptedData string `tlv8:"5"`
 		State         byte   `tlv8:"6"`
 	}
-	if err = tlv8.UnmarshalReader(req.Body, &cipherM3); err != nil {
+	if err = tlv8.UnmarshalReader(req.Body, req.ContentLength, &cipherM3); err != nil {
 		return err
 	}
 	if cipherM3.State != StateM3 {

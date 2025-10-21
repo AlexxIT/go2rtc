@@ -107,7 +107,7 @@ func (c *Client) Pair(feature, pin string) (err error) {
 		State      byte   `tlv8:"6"`
 		Error      byte   `tlv8:"7"`
 	}
-	if err = tlv8.UnmarshalReader(res.Body, &plainM2); err != nil {
+	if err = tlv8.UnmarshalReader(res.Body, res.ContentLength, &plainM2); err != nil {
 		return
 	}
 	if plainM2.State != StateM2 {
@@ -159,7 +159,7 @@ func (c *Client) Pair(feature, pin string) (err error) {
 
 		EncryptedData string `tlv8:"5"` // skip EncryptedData validation (for MFi devices)
 	}
-	if err = tlv8.UnmarshalReader(res.Body, &plainM4); err != nil {
+	if err = tlv8.UnmarshalReader(res.Body, res.ContentLength, &plainM4); err != nil {
 		return
 	}
 	if plainM4.State != StateM4 {
@@ -232,7 +232,7 @@ func (c *Client) Pair(feature, pin string) (err error) {
 		State         byte   `tlv8:"6"`
 		Error         byte   `tlv8:"7"`
 	}{}
-	if err = tlv8.UnmarshalReader(res.Body, &cipherM6); err != nil {
+	if err = tlv8.UnmarshalReader(res.Body, res.ContentLength, &cipherM6); err != nil {
 		return
 	}
 	if cipherM6.State != StateM6 || cipherM6.Error != 0 {
@@ -296,7 +296,7 @@ func (c *Client) ListPairings() error {
 		State      byte   `tlv8:"6"`
 		Permission byte   `tlv8:"11"`
 	}
-	if err = tlv8.UnmarshalReader(res.Body, &plainM2); err != nil {
+	if err = tlv8.UnmarshalReader(res.Body, res.ContentLength, &plainM2); err != nil {
 		return err
 	}
 
@@ -329,7 +329,7 @@ func (c *Client) PairingsAdd(clientID string, clientPublic []byte, admin bool) e
 		State   byte `tlv8:"6"`
 		Unknown byte `tlv8:"7"`
 	}
-	if err = tlv8.UnmarshalReader(res.Body, &plainM2); err != nil {
+	if err = tlv8.UnmarshalReader(res.Body, res.ContentLength, &plainM2); err != nil {
 		return err
 	}
 
@@ -354,7 +354,7 @@ func (c *Client) DeletePairing(id string) error {
 	var plainM2 struct {
 		State byte `tlv8:"6"`
 	}
-	if err = tlv8.UnmarshalReader(res.Body, &plainM2); err != nil {
+	if err = tlv8.UnmarshalReader(res.Body, res.ContentLength, &plainM2); err != nil {
 		return err
 	}
 	if plainM2.State != StateM2 {

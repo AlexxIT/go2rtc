@@ -170,11 +170,20 @@ func UnmarshalBase64(in any, out any) error {
 	return Unmarshal(data, out)
 }
 
-func UnmarshalReader(r io.Reader, v any) error {
-	data, err := io.ReadAll(r)
+func UnmarshalReader(r io.Reader, n int64, v any) error {
+	var data []byte
+	var err error
+
+	if n > 0 {
+		data = make([]byte, n)
+		_, err = io.ReadFull(r, data)
+	} else {
+		data, err = io.ReadAll(r)
+	}
 	if err != nil {
 		return err
 	}
+
 	return Unmarshal(data, v)
 }
 

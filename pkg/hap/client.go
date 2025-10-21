@@ -124,7 +124,7 @@ func (c *Client) Dial() (err error) {
 		EncryptedData string `tlv8:"5"`
 		State         byte   `tlv8:"6"`
 	}
-	if err = tlv8.UnmarshalReader(res.Body, &cipherM2); err != nil {
+	if err = tlv8.UnmarshalReader(res.Body, res.ContentLength, &cipherM2); err != nil {
 		return err
 	}
 	if cipherM2.State != StateM2 {
@@ -209,7 +209,7 @@ func (c *Client) Dial() (err error) {
 	var plainM4 struct {
 		State byte `tlv8:"6"`
 	}
-	if err = tlv8.UnmarshalReader(res.Body, &plainM4); err != nil {
+	if err = tlv8.UnmarshalReader(res.Body, res.ContentLength, &plainM4); err != nil {
 		return
 	}
 	if plainM4.State != StateM4 {

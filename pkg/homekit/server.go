@@ -139,7 +139,7 @@ func handlePairings(conn net.Conn, req *http.Request, pair ServerPair) (*http.Re
 		Permissions byte   `tlv8:"11"`
 	}{}
 
-	if err := tlv8.UnmarshalReader(req.Body, &cmd); err != nil {
+	if err := tlv8.UnmarshalReader(req.Body, req.ContentLength, &cmd); err != nil {
 		return nil, err
 	}
 

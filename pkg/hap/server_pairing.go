@@ -5,7 +5,6 @@ import (
 	"crypto/sha512"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 
@@ -25,18 +24,33 @@ const (
 	PairMethodList
 )
 
-func (s *Server) PairSetup(req *http.Request, rw *bufio.ReadWriter, conn net.Conn) error {
-	if req.Header.Get("Content-Type") != MimeTLV8 {
-		return errors.New("hap: wrong content type")
+func (s *Server) HandleConn(conn net.Conn) error {
+	rd := bufio.NewReader(conn)
+	req, err := http.ReadRequest(rd)
+	if err != nil {
+		return err
 	}
 
+	rw := bufio.NewReadWriter(rd, bufio.NewWriter(conn))
+
+	switch req.RequestURI {
+	case PathPairSetup:
+		return s.PairSetup(req, rw, conn)
+	case PathPairVerify:
+		return s.PairVerify(req, rw, conn)
+	}
+
+	return errors.New("hap: unsupported request uri: " + req.RequestURI)
+}
+
+func (s *Server) PairSetup(req *http.Request, rw *bufio.ReadWriter, conn net.Conn) error {
 	// STEP 1. Request from iPhone
 	var plainM1 struct {
 		Method byte   `tlv8:"0"`
 		State  byte   `tlv8:"6"`
 		Flags  uint32 `tlv8:"19"`
 	}
-	if err := tlv8.UnmarshalReader(io.LimitReader(rw, req.ContentLength), &plainM1); err != nil {
+	if err := tlv8.UnmarshalReader(req.Body, req.ContentLength, &plainM1); err != nil {
 		return err
 	}
 	if plainM1.State != StateM1 {
@@ -87,7 +101,7 @@ func (s *Server) PairSetup(req *http.Request, rw *bufio.ReadWriter, conn net.Con
 		Proof      string `tlv8:"4"`
 		State      byte   `tlv8:"6"`
 	}
-	if err = tlv8.UnmarshalReader(req.Body, &plainM3); err != nil {
+	if err = tlv8.UnmarshalReader(req.Body, req.ContentLength, &plainM3); err != nil {
 		return err
 	}
 	if plainM3.State != StateM3 {
@@ -129,7 +143,7 @@ func (s *Server) PairSetup(req *http.Request, rw *bufio.ReadWriter, conn net.Con
 		EncryptedData string `tlv8:"5"`
 		State         byte   `tlv8:"6"`
 	}
-	if err = tlv8.UnmarshalReader(req.Body, &cipherM5); err != nil {
+	if err = tlv8.UnmarshalReader(req.Body, req.ContentLength, &cipherM5); err != nil {
 		return err
 	}
 	if cipherM5.State != StateM5 {
