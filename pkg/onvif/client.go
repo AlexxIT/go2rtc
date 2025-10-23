@@ -1,12 +1,14 @@
 package onvif
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
 	"html"
 	"io"
 	"net"
+	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
@@ -32,26 +34,18 @@ func NewClient(rawURL string) (*Client, error) {
 	baseURL := "http://" + u.Host
 
 	client := &Client{url: u}
-	if u.Path == "" {
-		client.deviceURL = baseURL + PathDevice
-	} else {
-		client.deviceURL = baseURL + u.Path
-	}
+	client.deviceURL = baseURL + GetPath(u.Path, PathDevice)
 
 	b, err := client.DeviceRequest(DeviceGetCapabilities)
 	if err != nil {
 		return nil, err
 	}
 
-	client.mediaURL = FindTagValue(b, "Media.+?XAddr")
-	if client.mediaURL == "" {
-		client.mediaURL = baseURL + "/onvif/media_service"
-	}
+	s := FindTagValue(b, "Media.+?XAddr")
+	client.mediaURL = baseURL + GetPath(s, "/onvif/media_service")
 
-	client.imaginURL = FindTagValue(b, "Imaging.+?XAddr")
-	if client.imaginURL == "" {
-		client.imaginURL = baseURL + "/onvif/imaging_service"
-	}
+	s = FindTagValue(b, "Imaging.+?XAddr")
+	client.imaginURL = baseURL + GetPath(s, "/onvif/imaging_service")
 
 	return client, nil
 }
@@ -188,9 +182,6 @@ func (c *Client) Request(rawUrl, body string) ([]byte, error) {
 		return nil, errors.New("onvif: unsupported service")
 	}
 
-	e := NewEnvelopeWithUser(c.url.User)
-	e.Append(body)
-
 	u, err := url.Parse(rawUrl)
 	if err != nil {
 		return nil, err
@@ -201,44 +192,58 @@ func (c *Client) Request(rawUrl, body string) ([]byte, error) {
 		host += ":80"
 	}
 
-	conn, err := net.DialTimeout("tcp", host, 5*time.Second)
+	const timeout = 5 * time.Second
+
+	conn, err := net.DialTimeout("tcp", host, timeout)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
 
-	reqBody := e.Bytes()
-	rawReq := fmt.Appendf(nil, "POST %s HTTP/1.1\r\n"+
-		"Host: %s\r\n"+
-		"Content-Type: application/soap+xml;charset=utf-8\r\n"+
-		"Content-Length: %d\r\n"+
-		"Connection: close\r\n"+
-		"\r\n", u.Path, u.Host, len(reqBody))
-	rawReq = append(rawReq, reqBody...)
+	e := NewEnvelopeWithUser(c.url.User)
+	e.Append(body)
+	buf := e.Bytes()
 
-	if _, err = conn.Write(rawReq); err != nil {
+	req := &http.Request{
+		Method:        "POST",
+		URL:           u,
+		Proto:         "HTTP/1.1",
+		Header:        http.Header{"Content-Type": {"application/soap+xml;charset=utf-8"}},
+		Body:          io.NopCloser(bytes.NewReader(buf)),
+		ContentLength: int64(len(buf)),
+		Close:         true,
+	}
+
+	_ = conn.SetWriteDeadline(time.Now().Add(timeout))
+	if err = req.Write(conn); err != nil {
 		return nil, err
 	}
 
-	rawRes, err := io.ReadAll(conn)
+	rd := bufio.NewReaderSize(conn, 16*1024)
+
+	_ = conn.SetReadDeadline(time.Now().Add(timeout))
+	res, err := http.ReadResponse(rd, req)
 	if err != nil {
-		return nil, err
-	}
-
-	// Look for XML in complete response
-	if i := bytes.Index(rawRes, []byte("<?xml")); i > 0 {
-		return rawRes[i:], nil
-	}
-
-	// No XML found - might be an error response
-	if i := bytes.Index(rawRes, []byte("\r\n\r\n")); i > 0 {
-		if bytes.Contains(rawRes[:i], []byte("chunked")) {
-			return nil, errors.New("onvif: TODO: support chunked encoding")
+		// Try to fix broken response https://github.com/AlexxIT/go2rtc/pull/1589
+		if buf, err = io.ReadAll(rd); err != nil {
+			return nil, err
 		}
 
-		// Return body after headers
-		return rawRes[i+4:], nil
+		// Look for XML in complete response
+		if i := bytes.Index(buf, []byte("<?xml")); i > 0 {
+			return buf[i:], nil
+		}
+
+		return nil, fmt.Errorf("onvif: broken response: %.100s", buf)
 	}
 
-	return rawRes, nil
+	if res.StatusCode != http.StatusOK {
+		return nil, errors.New("onvif: wrong response " + res.Status)
+	}
+
+	if buf, err = io.ReadAll(res.Body); err != nil {
+		return nil, err
+	}
+
+	return buf, nil
 }
