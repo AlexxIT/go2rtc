@@ -140,6 +140,12 @@ func (c *Client) newDectypter(res *http.Response, brand, username, password stri
 		username = "admin"
 	}
 
+	if strings.Contains(exchange, `username="none"`) {
+		// https://nvd.nist.gov/vuln/detail/CVE-2022-37255
+		username = "none"
+		password = "TPL075526460603"
+	}
+
 	key := md5.Sum([]byte(nonce + ":" + password))
 	iv := md5.Sum([]byte(username + ":" + nonce))
 
