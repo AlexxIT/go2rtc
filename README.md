@@ -361,7 +361,7 @@ streams:
   rotate: ffmpeg:rtsp://12345678@192.168.1.123/av_stream/ch0#video=h264#rotate=90
 ```
 
-All transcoding formats have [built-in templates](https://github.com/AlexxIT/go2rtc/blob/master/internal/ffmpeg/ffmpeg.go): `h264`, `h265`, `opus`, `pcmu`, `pcmu/16000`, `pcmu/48000`, `pcma`, `pcma/16000`, `pcma/48000`, `aac`, `aac/16000`.
+All transcoding formats have [built-in templates](./internal/ffmpeg/ffmpeg.go): `h264`, `h265`, `opus`, `pcmu`, `pcmu/16000`, `pcmu/48000`, `pcma`, `pcma/16000`, `pcma/48000`, `aac`, `aac/16000`.
 
 But you can override them via YAML config. You can also add your own formats to the config and use them with source params.
 
@@ -460,7 +460,7 @@ streams:
 
 *[New in v1.8.2](https://github.com/AlexxIT/go2rtc/releases/tag/v1.8.2)*
 
-Like `echo` source, but uses the built-in [expr](https://github.com/antonmedv/expr) expression language ([read more](https://github.com/AlexxIT/go2rtc/blob/master/internal/expr/README.md)).
+Like `echo` source, but uses the built-in [expr](https://github.com/antonmedv/expr) expression language ([read more](./internal/expr/README.md)).
 
 #### Source: HomeKit
 
@@ -1082,7 +1082,7 @@ Link example: `https://alexxit.github.io/go2rtc/#share=02SNtgjKXY&pwd=wznEQqznxW
 
 ### Module: ngrok
 
-With [ngrok](https://ngrok.com/) integration, you can get external access to your streams in situations when you have Internet with a private IP address ([read more](https://github.com/AlexxIT/go2rtc/blob/master/internal/ngrok/README.md)).
+With [ngrok](https://ngrok.com/) integration, you can get external access to your streams in situations when you have Internet with a private IP address ([read more](./internal/ngrok/README.md)).
 
 ### Module: Hass
 
@@ -1181,7 +1181,7 @@ API examples:
   - You can use `rotate` param with `90`, `180`, `270` or `-90` values
   - You can use `hardware`/`hw` param [read more](https://github.com/AlexxIT/go2rtc/wiki/Hardware-acceleration)
 
-**PS.** This module also supports streaming to the server console (terminal) in the **animated ASCII art** format ([read more](https://github.com/AlexxIT/go2rtc/blob/master/internal/mjpeg/README.md)):
+**PS.** This module also supports streaming to the server console (terminal) in the **animated ASCII art** format ([read more](./internal/mjpeg/README.md)):
 
 [![](https://img.youtube.com/vi/sHj_3h_sX7M/mqdefault.jpg)](https://www.youtube.com/watch?v=sHj_3h_sX7M)
 
