@@ -1,13 +1,10 @@
 package onvif
 
 import (
-	"bufio"
 	"bytes"
 	"errors"
-	"fmt"
 	"html"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -177,73 +174,24 @@ func (c *Client) MediaRequest(operation string) ([]byte, error) {
 	return c.Request(c.mediaURL, operation)
 }
 
-func (c *Client) Request(rawUrl, body string) ([]byte, error) {
-	if rawUrl == "" {
+func (c *Client) Request(url, body string) ([]byte, error) {
+	if url == "" {
 		return nil, errors.New("onvif: unsupported service")
 	}
 
-	u, err := url.Parse(rawUrl)
-	if err != nil {
-		return nil, err
-	}
-
-	host := u.Host
-	if u.Port() == "" {
-		host += ":80"
-	}
-
-	const timeout = 5 * time.Second
-
-	conn, err := net.DialTimeout("tcp", host, timeout)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Close()
-
 	e := NewEnvelopeWithUser(c.url.User)
 	e.Append(body)
-	buf := e.Bytes()
 
-	req := &http.Request{
-		Method:        "POST",
-		URL:           u,
-		Proto:         "HTTP/1.1",
-		Header:        http.Header{"Content-Type": {"application/soap+xml;charset=utf-8"}},
-		Body:          io.NopCloser(bytes.NewReader(buf)),
-		ContentLength: int64(len(buf)),
-		Close:         true,
-	}
-
-	_ = conn.SetWriteDeadline(time.Now().Add(timeout))
-	if err = req.Write(conn); err != nil {
+	client := &http.Client{Timeout: time.Second * 5000}
+	res, err := client.Post(url, `application/soap+xml;charset=utf-8`, bytes.NewReader(e.Bytes()))
+	if err != nil {
 		return nil, err
 	}
-
-	rd := bufio.NewReaderSize(conn, 16*1024)
-
-	_ = conn.SetReadDeadline(time.Now().Add(timeout))
-	res, err := http.ReadResponse(rd, req)
-	if err != nil {
-		// Try to fix broken response https://github.com/AlexxIT/go2rtc/pull/1589
-		if buf, err = io.ReadAll(rd); err != nil {
-			return nil, err
-		}
-
-		// Look for XML in complete response
-		if i := bytes.Index(buf, []byte("<?xml")); i > 0 {
-			return buf[i:], nil
-		}
-
-		return nil, fmt.Errorf("onvif: broken response: %.100s", buf)
-	}
+	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
 		return nil, errors.New("onvif: wrong response " + res.Status)
 	}
 
-	if buf, err = io.ReadAll(res.Body); err != nil {
-		return nil, err
-	}
-
-	return buf, nil
+	return io.ReadAll(res.Body)
 }
