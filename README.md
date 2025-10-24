@@ -1082,7 +1082,7 @@ Link example: `https://alexxit.github.io/go2rtc/#share=02SNtgjKXY&pwd=wznEQqznxW
 
 ### Module: ngrok
 
-With [ngrok](https://ngrok.com/) integration, you can get external access to your streams in situations where you have Internet with a private IP address ([read more](https://github.com/AlexxIT/go2rtc/blob/master/internal/ngrok/README.md)).
+With [ngrok](https://ngrok.com/) integration, you can get external access to your streams in situations when you have Internet with a private IP address ([read more](https://github.com/AlexxIT/go2rtc/blob/master/internal/ngrok/README.md)).
 
 ### Module: Hass
 
