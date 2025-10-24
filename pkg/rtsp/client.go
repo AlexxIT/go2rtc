@@ -93,7 +93,35 @@ func (c *Conn) Do(req *tcp.Request) (*tcp.Response, error) {
 
 	c.Fire(res)
 
-	if res.StatusCode == http.StatusUnauthorized {
+	switch res.StatusCode {
+	case http.StatusOK:
+		return res, nil
+
+	case http.StatusMovedPermanently, http.StatusFound:
+		rawURL := res.Header.Get("Location")
+
+		var u *url.URL
+		if u, err = url.Parse(rawURL); err != nil {
+			return nil, err
+		}
+
+		if u.User == nil {
+			u.User = c.auth.UserInfo() // restore auth if we don't have it in the new URL
+		}
+
+		c.uri = u.String() // so auth will be saved on reconnect
+
+		_ = c.conn.Close()
+
+		if err = c.Dial(); err != nil {
+			return nil, err
+		}
+
+		req.URL = c.URL // because path was changed
+
+		return c.Do(req)
+
+	case http.StatusUnauthorized:
 		switch c.auth.Method {
 		case tcp.AuthNone:
 			if c.auth.ReadNone(res) {
@@ -109,11 +137,7 @@ func (c *Conn) Do(req *tcp.Request) (*tcp.Response, error) {
 		}
 	}
 
-	if res.StatusCode != http.StatusOK {
-		return res, fmt.Errorf("wrong response on %s", req.Method)
-	}
-
-	return res, nil
+	return res, fmt.Errorf("wrong response on %s", req.Method)
 }
 
 func (c *Conn) Options() error {
