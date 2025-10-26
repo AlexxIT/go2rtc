@@ -79,12 +79,18 @@ type DisconnectFrame struct {
 	Mode string `json:"mode"`
 }
 
-// {"protocol":4,"t":1761487814,"data":{"dps":{"152":"0","160":1,"170":false}}}
-type DPSMessage struct {
-	Protocol int `json:"protocol"`
-	T        int `json:"t"`
+type MqttLowPowerMessage struct {
+	Protocol int    `json:"protocol"`
+	T        int    `json:"t"`
+	S        int    `json:"s,omitempty"`
+	Type     string `json:"type,omitempty"`
 	Data     struct {
-		Dps map[string]interface{} `json:"dps"`
+		DevID                string                 `json:"devId,omitempty"`
+		Online               bool                   `json:"online,omitempty"`
+		LastOnlineChangeTime int64                  `json:"lastOnlineChangeTime,omitempty"`
+		GwID                 string                 `json:"gwId,omitempty"`
+		Cmd                  string                 `json:"cmd,omitempty"`
+		Dps                  map[string]interface{} `json:"dps,omitempty"`
 	} `json:"data"`
 }
 
@@ -277,12 +283,13 @@ func (c *TuyaMqttClient) onMessage(client mqtt.Client, msg mqtt.Message) {
 }
 
 func (c *TuyaMqttClient) onLowPowerMessage(client mqtt.Client, msg mqtt.Message) {
-	var message DPSMessage
+	var message MqttLowPowerMessage
 	if err := json.Unmarshal(msg.Payload(), &message); err != nil {
 		return
 	}
 
-	// Check if protocol is 4 and dps[149] is true (motion detection = camera ready)
+	// Check if protocol is 4 and dps[149] is true
+	// https://developer.tuya.com/en/docs/iot-device-dev/doorbell_solution?id=Kayamyivh15ox#title-2-Battery
 	if message.Protocol == 4 {
 		if val, ok := message.Data.Dps["149"]; ok {
 			if ready, ok := val.(bool); ok && ready {
@@ -290,7 +297,7 @@ func (c *TuyaMqttClient) onLowPowerMessage(client mqtt.Client, msg mqtt.Message)
 				// However, we don't wait for this signal (like ismartlife.me doesn't either).
 				// The camera starts responding immediately after WakeUp() is called,
 				// so we proceed with the connection without blocking.
-				// This waiter is kept for potential future use or debugging.
+				// This waiter is kept for potential future use.
 				c.wakeupWaiter.Done(nil)
 			}
 		}
