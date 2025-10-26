@@ -140,6 +140,12 @@ func (c *Client) newDectypter(res *http.Response, brand, username, password stri
 		username = "admin"
 	}
 
+	if strings.Contains(exchange, `username="none"`) {
+		// https://nvd.nist.gov/vuln/detail/CVE-2022-37255
+		username = "none"
+		password = "TPL075526460603"
+	}
+
 	key := md5.Sum([]byte(nonce + ":" + password))
 	iv := md5.Sum([]byte(username + ":" + nonce))
 
@@ -158,8 +164,9 @@ func (c *Client) newDectypter(res *http.Response, brand, username, password stri
 		cbc.CryptBlocks(b, b)
 
 		// unpad
-		padSize := int(b[len(b)-1])
-		return b[:len(b)-padSize]
+		n := len(b)
+		padSize := int(b[n-1])
+		return b[:n-padSize]
 	}
 }
 
@@ -297,7 +304,7 @@ func dial(req *http.Request, brand, username, password string) (net.Conn, *http.
 	auth := res.Header.Get("WWW-Authenticate")
 
 	if res.StatusCode != http.StatusUnauthorized || !strings.HasPrefix(auth, "Digest") {
-		return nil, nil, fmt.Errorf("Expected StatusCode to be %d, received %d", http.StatusUnauthorized, res.StatusCode)
+		return nil, nil, errors.New("tapo: wrond status: " + res.Status)
 	}
 
 	if brand == "tapo" && password == "" {
