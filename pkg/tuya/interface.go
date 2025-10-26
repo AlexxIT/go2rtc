@@ -31,6 +31,7 @@ type TuyaClient struct {
 	baseUrl    string
 	expireTime int64
 	deviceId   string
+	localKey   string
 	skill      *Skill
 	iceServers []pionWebrtc.ICEServer
 }
@@ -74,15 +75,17 @@ type VideoSkill struct {
 }
 
 type Skill struct {
-	WebRTC int          `json:"webrtc"`
-	Audios []AudioSkill `json:"audios"`
-	Videos []VideoSkill `json:"videos"`
+	WebRTC   int          `json:"webrtc"`
+	LowPower int          `json:"lowPower,omitempty"`
+	Audios   []AudioSkill `json:"audios"`
+	Videos   []VideoSkill `json:"videos"`
 }
 
 type WebRTCConfig struct {
 	AudioAttributes      AudioAttributes `json:"audio_attributes"`
 	Auth                 string          `json:"auth"`
 	ID                   string          `json:"id"`
+	LocalKey             string          `json:"local_key,omitempty"`
 	MotoID               string          `json:"moto_id"`
 	P2PConfig            P2PConfig       `json:"p2p_config"`
 	ProtocolVersion      string          `json:"protocol_version"`

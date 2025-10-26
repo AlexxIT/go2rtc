@@ -314,6 +314,10 @@ func (c *TuyaSmartApiClient) Init() error {
 		return fmt.Errorf("failed to start MQTT: %w", err)
 	}
 
+	if c.skill.LowPower > 0 {
+		_ = c.mqtt.WakeUp(c.localKey)
+	}
+
 	return nil
 }
 
@@ -497,6 +501,9 @@ func (c *TuyaSmartApiClient) loadWebrtcConfig() (*WebRTCConfig, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Store LocalKey
+	c.localKey = webRTCConfigResponse.Result.LocalKey
 
 	iceServers, err := json.Marshal(&webRTCConfigResponse.Result.P2PConfig.Ices)
 	if err != nil {

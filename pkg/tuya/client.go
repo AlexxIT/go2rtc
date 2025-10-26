@@ -20,8 +20,8 @@ type Client struct {
 	conn       *webrtc.Conn
 	pc         *pion.PeerConnection
 	dc         *pion.DataChannel
-	videoSSRC  uint32
-	audioSSRC  uint32
+	videoSSRC  *uint32
+	audioSSRC  *uint32
 	streamType int
 	isHEVC     bool
 	connected  core.Waiter
@@ -374,16 +374,16 @@ func (c *Client) Start() error {
 		}
 	}
 
-	if c.videoSSRC != 0 {
-		c.setHandler(c.videoSSRC, func(packet *rtp.Packet) {
+	if c.videoSSRC != nil {
+		c.setHandler(*c.videoSSRC, func(packet *rtp.Packet) {
 			if video != nil {
 				video.WriteRTP(packet)
 			}
 		})
 	}
 
-	if c.audioSSRC != 0 {
-		c.setHandler(c.audioSSRC, func(packet *rtp.Packet) {
+	if c.audioSSRC != nil {
+		c.setHandler(*c.audioSSRC, func(packet *rtp.Packet) {
 			if audio != nil {
 				audio.WriteRTP(packet)
 			}
@@ -469,8 +469,10 @@ func (c *Client) probe(msg pion.DataChannelMessage) (bool, error) {
 			return false, err
 		}
 
-		c.videoSSRC = recvMessage.Video.SSRC
-		c.audioSSRC = recvMessage.Audio.SSRC
+		videoSSRC := recvMessage.Video.SSRC
+		audioSSRC := recvMessage.Audio.SSRC
+		c.videoSSRC = &videoSSRC
+		c.audioSSRC = &audioSSRC
 
 		completeMsg, _ := json.Marshal(DataChannelMessage{
 			Type: "complete",

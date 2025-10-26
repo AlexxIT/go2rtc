@@ -117,6 +117,10 @@ func (c *TuyaCloudApiClient) Init() error {
 		return fmt.Errorf("failed to start MQTT: %w", err)
 	}
 
+	if c.skill.LowPower > 0 {
+		_ = c.mqtt.WakeUp(c.localKey)
+	}
+
 	return nil
 }
 
@@ -211,6 +215,9 @@ func (c *TuyaCloudApiClient) loadWebrtcConfig() (*WebRTCConfig, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Store LocalKey (not sure if cloud api provides this, but we need it for low power cameras)
+	c.localKey = webRTCConfigResponse.Result.LocalKey
 
 	iceServers, err := json.Marshal(&webRTCConfigResponse.Result.P2PConfig.Ices)
 	if err != nil {

@@ -1,8 +1,11 @@
 package tuya
 
 import (
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"hash/crc32"
 	"strings"
 	"time"
 
@@ -13,6 +16,7 @@ import (
 type TuyaMqttClient struct {
 	client           mqtt.Client
 	waiter           core.Waiter
+	wakeupWaiter     core.Waiter
 	publishTopic     string
 	subscribeTopic   string
 	auth             string
@@ -75,6 +79,15 @@ type DisconnectFrame struct {
 	Mode string `json:"mode"`
 }
 
+// {"protocol":4,"t":1761487814,"data":{"dps":{"152":"0","160":1,"170":false}}}
+type DPSMessage struct {
+	Protocol int `json:"protocol"`
+	T        int `json:"t"`
+	Data     struct {
+		Dps map[string]interface{} `json:"dps"`
+	} `json:"data"`
+}
+
 type MqttMessage struct {
 	Protocol int       `json:"protocol"`
 	Pv       string    `json:"pv"`
@@ -84,9 +97,10 @@ type MqttMessage struct {
 
 func NewTuyaMqttClient(deviceId string) *TuyaMqttClient {
 	return &TuyaMqttClient{
-		deviceId:  deviceId,
-		sessionId: core.RandString(6, 62),
-		waiter:    core.Waiter{},
+		deviceId:     deviceId,
+		sessionId:    core.RandString(6, 62),
+		waiter:       core.Waiter{},
+		wakeupWaiter: core.Waiter{},
 	}
 }
 
@@ -129,26 +143,70 @@ func (c *TuyaMqttClient) Start(hubConfig *MQTTConfig, webrtcConfig *WebRTCConfig
 }
 
 func (c *TuyaMqttClient) Stop() {
+	c.closed = true
+	c.waiter.Done(errors.New("mqtt: stopped"))
+	c.wakeupWaiter.Done(errors.New("mqtt: stopped"))
+
 	if c.client != nil {
 		_ = c.SendDisconnect()
 		c.client.Disconnect(1000)
 	}
 }
 
-func (c *TuyaMqttClient) SendOffer(sdp string, streamResolution string, streamType int, isHEVC bool) error {
-	if isHEVC {
-		// On HEVC we use streamType 0 for main stream (hd) and 1 for sub stream (sd)
-		if streamResolution == "hd" {
-			streamType = 0
-		} else {
-			streamType = 1
+func (c *TuyaMqttClient) WakeUp(localKey string) error {
+	// Calculate CRC32 of localKey
+	crc := crc32.ChecksumIEEE([]byte(localKey))
+
+	// Convert to hex string
+	hexStr := fmt.Sprintf("%08x", crc)
+
+	// Convert hex string to byte array (2 chars at a time)
+	payload := make([]byte, len(hexStr)/2)
+	for i := 0; i < len(hexStr); i += 2 {
+		b, err := hex.DecodeString(hexStr[i : i+2])
+		if err != nil {
+			return fmt.Errorf("failed to decode hex: %w", err)
 		}
+		payload[i/2] = b[0]
+	}
+
+	// Publish to wake-up topic: m/w/{deviceId}
+	wakeUpTopic := fmt.Sprintf("m/w/%s", c.deviceId)
+	token := c.client.Publish(wakeUpTopic, 1, false, payload)
+	if token.Wait() && token.Error() != nil {
+		return fmt.Errorf("failed to publish wake-up message: %w", token.Error())
+	}
+
+	// Subscribe to lowPower topic: smart/decrypt/in/{deviceId}
+	lowPowerTopic := fmt.Sprintf("smart/decrypt/in/%s", c.deviceId)
+	if token := c.client.Subscribe(lowPowerTopic, 1, c.onLowPowerMessage); token.Wait() && token.Error() != nil {
+		return fmt.Errorf("failed to subscribe to lowPower topic: %w", token.Error())
+	}
+
+	return nil
+}
+
+func (c *TuyaMqttClient) SendOffer(sdp string, streamResolution string, streamType int, isHEVC bool) error {
+	// streamType comes from GetStreamType() and uses Skill StreamType values:
+	// - mainStream = 2 (HD)
+	// - substream = 4 (SD)
+	//
+	// But MQTT expects mapped stream_type values:
+	// - mainStream (2) → stream_type: 0
+	// - substream (4) → stream_type: 1
+
+	mqttStreamType := streamType
+	switch streamType {
+	case 2:
+		mqttStreamType = 0 // mainStream (HD)
+	case 4:
+		mqttStreamType = 1 // substream (SD)
 	}
 
 	return c.sendMqttMessage("offer", 302, "", OfferFrame{
 		Mode:              "webrtc",
 		Sdp:               sdp,
-		StreamType:        streamType,
+		StreamType:        mqttStreamType,
 		Auth:              c.auth,
 		DatachannelEnable: isHEVC,
 	})
@@ -189,7 +247,7 @@ func (c *TuyaMqttClient) SendDisconnect() error {
 }
 
 func (c *TuyaMqttClient) onConnect(client mqtt.Client) {
-	if token := client.Subscribe(c.subscribeTopic, 1, c.consume); token.Wait() && token.Error() != nil {
+	if token := client.Subscribe(c.subscribeTopic, 1, c.onMessage); token.Wait() && token.Error() != nil {
 		c.waiter.Done(token.Error())
 		return
 	}
@@ -197,7 +255,7 @@ func (c *TuyaMqttClient) onConnect(client mqtt.Client) {
 	c.waiter.Done(nil)
 }
 
-func (c *TuyaMqttClient) consume(client mqtt.Client, msg mqtt.Message) {
+func (c *TuyaMqttClient) onMessage(client mqtt.Client, msg mqtt.Message) {
 	var rmqtt MqttMessage
 	if err := json.Unmarshal(msg.Payload(), &rmqtt); err != nil {
 		c.onError(err)
@@ -215,6 +273,27 @@ func (c *TuyaMqttClient) consume(client mqtt.Client, msg mqtt.Message) {
 		c.onMqttCandidate(&rmqtt)
 	case "disconnect":
 		c.onMqttDisconnect()
+	}
+}
+
+func (c *TuyaMqttClient) onLowPowerMessage(client mqtt.Client, msg mqtt.Message) {
+	var message DPSMessage
+	if err := json.Unmarshal(msg.Payload(), &message); err != nil {
+		return
+	}
+
+	// Check if protocol is 4 and dps[149] is true (motion detection = camera ready)
+	if message.Protocol == 4 {
+		if val, ok := message.Data.Dps["149"]; ok {
+			if ready, ok := val.(bool); ok && ready {
+				// Camera is now ready after wake-up (dps[149]:true received).
+				// However, we don't wait for this signal (like ismartlife.me doesn't either).
+				// The camera starts responding immediately after WakeUp() is called,
+				// so we proceed with the connection without blocking.
+				// This waiter is kept for potential future use or debugging.
+				c.wakeupWaiter.Done(nil)
+			}
+		}
 	}
 }
 
