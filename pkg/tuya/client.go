@@ -339,10 +339,10 @@ func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Rece
 		return errors.New("webrtc: can't get track")
 	}
 
-	mqttClient := c.api.GetMqtt()
-	if mqttClient != nil {
-		_ = mqttClient.SendSpeaker(1)
-	}
+	// mqttClient := c.api.GetMqtt()
+	// if mqttClient != nil {
+	// 	_ = mqttClient.SendSpeaker(1)
+	// }
 
 	payloadType := codec.PayloadType
 
