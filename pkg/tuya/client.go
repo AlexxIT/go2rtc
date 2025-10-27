@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/pcm"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	"github.com/pion/rtp"
 	pion "github.com/pion/webrtc/v4"
@@ -333,9 +334,7 @@ func (c *Client) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver,
 }
 
 func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
-	// Manually handle backchannel, because repacking audio through go2rtc does not work
-
-	localTrack := c.getSender()
+	localTrack := c.conn.GetSenderTrack(media.ID)
 	if localTrack == nil {
 		return errors.New("webrtc: can't get track")
 	}
@@ -350,8 +349,19 @@ func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Rece
 	sender := core.NewSender(media, codec)
 	sender.Handler = func(packet *rtp.Packet) {
 		c.conn.Send += packet.MarshalSize()
-		//important to send with remote PayloadType
 		_ = localTrack.WriteRTP(payloadType, packet)
+	}
+
+	switch track.Codec.Name {
+	case core.CodecPCMA, core.CodecPCMU, core.CodecPCM, core.CodecPCML:
+		// https://developer.tuya.com/en/docs/iot-device-dev/tuyaos-package-ipc-device?id=Kcn1px33iptn2#title-29-Why%20can%E2%80%99t%20WebRTC%20play%20audio%3F
+		frameSize := 240
+		if track.Codec.Name == core.CodecPCM {
+			frameSize = 560
+		}
+
+		sender.Handler = pcm.RepackG711(false, frameSize, sender.Handler)
+		sender.Handler = pcm.TranscodeHandler(codec, track.Codec, sender.Handler)
 	}
 
 	sender.HandleRTP(track)
@@ -496,20 +506,5 @@ func (c *Client) sendMessageToDataChannel(message []byte) error {
 		return c.dc.Send(message)
 	}
 
-	return nil
-}
-
-func (c *Client) getSender() *webrtc.Track {
-	for _, tr := range c.pc.GetTransceivers() {
-		if tr.Kind() == pion.RTPCodecTypeAudio {
-			if tr.Direction() == pion.RTPTransceiverDirectionSendonly || tr.Direction() == pion.RTPTransceiverDirectionSendrecv {
-				if s := tr.Sender(); s != nil {
-					if t := s.Track().(*webrtc.Track); t != nil {
-						return t
-					}
-				}
-			}
-		}
-	}
 	return nil
 }
