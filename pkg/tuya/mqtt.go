@@ -17,6 +17,7 @@ type TuyaMqttClient struct {
 	client           mqtt.Client
 	waiter           core.Waiter
 	wakeupWaiter     core.Waiter
+	speakerWaiter    core.Waiter
 	publishTopic     string
 	subscribeTopic   string
 	auth             string
@@ -152,6 +153,7 @@ func (c *TuyaMqttClient) Stop() {
 	c.closed = true
 	c.waiter.Done(errors.New("mqtt: stopped"))
 	c.wakeupWaiter.Done(errors.New("mqtt: stopped"))
+	c.speakerWaiter.Done(errors.New("mqtt: stopped"))
 
 	if c.client != nil {
 		_ = c.SendDisconnect()
@@ -240,10 +242,18 @@ func (c *TuyaMqttClient) SendResolution(resolution int) error {
 
 func (c *TuyaMqttClient) SendSpeaker(speaker int) error {
 	// Protocol 312 is used for speaker
-	return c.sendMqttMessage("speaker", 312, "", SpeakerFrame{
+	if err := c.sendMqttMessage("speaker", 312, "", SpeakerFrame{
 		Mode:  "webrtc",
 		Value: speaker,
-	})
+	}); err != nil {
+		return err
+	}
+
+	// if err := c.speakerWaiter.Wait(); err != nil {
+	// 	return fmt.Errorf("speaker wait failed: %w", err)
+	// }
+
+	return nil
 }
 
 func (c *TuyaMqttClient) SendDisconnect() error {
@@ -279,6 +289,8 @@ func (c *TuyaMqttClient) onMessage(client mqtt.Client, msg mqtt.Message) {
 		c.onMqttCandidate(&rmqtt)
 	case "disconnect":
 		c.onMqttDisconnect()
+	case "speaker":
+		c.onMqttSpeaker(&rmqtt)
 	}
 }
 
@@ -331,6 +343,21 @@ func (c *TuyaMqttClient) onMqttCandidate(msg *MqttMessage) {
 func (c *TuyaMqttClient) onMqttDisconnect() {
 	c.closed = true
 	c.onDisconnect()
+}
+
+func (c *TuyaMqttClient) onMqttSpeaker(msg *MqttMessage) {
+	var speakerResponse struct {
+		ResCode int `json:"resCode"`
+	}
+
+	if err := json.Unmarshal(msg.Data.Message, &speakerResponse); err == nil {
+		if speakerResponse.ResCode != 0 {
+			c.speakerWaiter.Done(fmt.Errorf("speaker failed with resCode: %d", speakerResponse.ResCode))
+			return
+		}
+	}
+
+	c.speakerWaiter.Done(nil)
 }
 
 func (c *TuyaMqttClient) onAnswer(answer AnswerFrame) {
