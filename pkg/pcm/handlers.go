@@ -12,8 +12,11 @@ import (
 //  1. Fixes WebRTC audio quality issue (monotonic timestamp)
 //  2. Fixes Reolink Doorbell backchannel issue (zero timestamp)
 //     https://github.com/AlexxIT/go2rtc/issues/331
-func RepackG711(zeroTS bool, handler core.HandlerFunc) core.HandlerFunc {
-	const PacketSize = 1024
+func RepackG711(zeroTS bool, size int, handler core.HandlerFunc) core.HandlerFunc {
+	packetSize := 1024
+	if size > 0 {
+		packetSize = size
+	}
 
 	var buf []byte
 	var seq uint16
@@ -26,7 +29,7 @@ func RepackG711(zeroTS bool, handler core.HandlerFunc) core.HandlerFunc {
 		mu.Lock()
 
 		buf = append(buf, packet.Payload...)
-		if len(buf) < PacketSize {
+		if len(buf) < packetSize {
 			mu.Unlock()
 			return
 		}
@@ -39,7 +42,7 @@ func RepackG711(zeroTS bool, handler core.HandlerFunc) core.HandlerFunc {
 				SequenceNumber: seq,
 				SSRC:           packet.SSRC,
 			},
-			Payload: buf[:PacketSize],
+			Payload: buf[:packetSize],
 		}
 
 		seq++
@@ -48,10 +51,10 @@ func RepackG711(zeroTS bool, handler core.HandlerFunc) core.HandlerFunc {
 		// don't have this strange devices for tests
 		if !zeroTS {
 			pkt.Timestamp = ts
-			ts += PacketSize
+			ts += uint32(packetSize)
 		}
 
-		buf = buf[PacketSize:]
+		buf = buf[packetSize:]
 
 		mu.Unlock()
 

@@ -56,7 +56,7 @@ func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiv
 
 	if c.mode == core.ModeActiveProducer && track.Codec.Name == core.CodecPCMA {
 		// Fix Reolink Doorbell https://github.com/AlexxIT/go2rtc/issues/331
-		sender.Handler = pcm.RepackG711(true, sender.Handler)
+		sender.Handler = pcm.RepackG711(true, 0, sender.Handler)
 	}
 
 	sender.HandleRTP(track)
