@@ -21,6 +21,7 @@ type TuyaMqttClient struct {
 	publishTopic     string
 	subscribeTopic   string
 	auth             string
+	iceServers       []ICEServer
 	uid              string
 	motoId           string
 	deviceId         string
@@ -49,11 +50,12 @@ type MqttFrame struct {
 }
 
 type OfferFrame struct {
-	Mode              string `json:"mode"`
-	Sdp               string `json:"sdp"`
-	StreamType        int    `json:"stream_type"`
-	Auth              string `json:"auth"`
-	DatachannelEnable bool   `json:"datachannel_enable"`
+	Mode              string      `json:"mode"`
+	Sdp               string      `json:"sdp"`
+	StreamType        int         `json:"stream_type"`
+	Auth              string      `json:"auth"`
+	DatachannelEnable bool        `json:"datachannel_enable"`
+	Token             []ICEServer `json:"token"`
 }
 
 type AnswerFrame struct {
@@ -115,6 +117,7 @@ func (c *TuyaMqttClient) Start(hubConfig *MQTTConfig, webrtcConfig *WebRTCConfig
 	c.webrtcVersion = webrtcVersion
 	c.motoId = webrtcConfig.MotoID
 	c.auth = webrtcConfig.Auth
+	c.iceServers = webrtcConfig.P2PConfig.Ices
 
 	c.publishTopic = hubConfig.PublishTopic
 	c.subscribeTopic = hubConfig.SubscribeTopic
@@ -150,15 +153,16 @@ func (c *TuyaMqttClient) Start(hubConfig *MQTTConfig, webrtcConfig *WebRTCConfig
 }
 
 func (c *TuyaMqttClient) Stop() {
-	c.closed = true
 	c.waiter.Done(errors.New("mqtt: stopped"))
 	c.wakeupWaiter.Done(errors.New("mqtt: stopped"))
 	c.speakerWaiter.Done(errors.New("mqtt: stopped"))
 
 	if c.client != nil {
 		_ = c.SendDisconnect()
-		c.client.Disconnect(1000)
+		c.client.Disconnect(100)
 	}
+
+	c.closed = true
 }
 
 func (c *TuyaMqttClient) WakeUp(localKey string) error {
@@ -217,6 +221,7 @@ func (c *TuyaMqttClient) SendOffer(sdp string, streamResolution string, streamTy
 		StreamType:        mqttStreamType,
 		Auth:              c.auth,
 		DatachannelEnable: isHEVC,
+		Token:             c.iceServers,
 	})
 }
 
@@ -242,18 +247,16 @@ func (c *TuyaMqttClient) SendResolution(resolution int) error {
 
 func (c *TuyaMqttClient) SendSpeaker(speaker int) error {
 	// Protocol 312 is used for speaker
-	if err := c.sendMqttMessage("speaker", 312, "", SpeakerFrame{
+	return c.sendMqttMessage("speaker", 312, "", SpeakerFrame{
 		Mode:  "webrtc",
 		Value: speaker,
-	}); err != nil {
-		return err
-	}
+	})
 
 	// if err := c.speakerWaiter.Wait(); err != nil {
 	// 	return fmt.Errorf("speaker wait failed: %w", err)
 	// }
 
-	return nil
+	// return nil
 }
 
 func (c *TuyaMqttClient) SendDisconnect() error {
