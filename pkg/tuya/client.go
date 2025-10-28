@@ -161,9 +161,8 @@ func Dial(rawURL string) (core.Producer, error) {
 		}
 
 		if client.isHEVC {
-			// We need to replace the SDP codecs with the real ones from Skill.
-			// The actual media comes via DataChannel, not RTP tracks.
-
+			// Tuya responds with H264/90000 even for HEVC streams
+			// So we need to replace video codecs with HEVC ones from API
 			for _, media := range client.conn.Medias {
 				if media.Kind == core.KindVideo {
 					codecs := client.api.GetVideoCodecs()
@@ -173,6 +172,9 @@ func Dial(rawURL string) (core.Producer, error) {
 				}
 			}
 
+			// Audio codecs from API as well
+			// Tuya responds with multiple audio codecs (PCMU, PCMA)
+			// But the quality is bad if we use PCMU and skill only has PCMA
 			for _, media := range client.conn.Medias {
 				if media.Kind == core.KindAudio {
 					codecs := client.api.GetAudioCodecs()
@@ -356,41 +358,50 @@ func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Rece
 
 	sender := core.NewSender(media, codec)
 
-	// Frame size affects audio delay with Tuya cameras:
-	// Browser sends standard 20ms frames (160 bytes for G.711), but this causes
-	// up to 4s delay on some Tuya cameras. Increasing to 240 bytes (30ms) reduces
-	// delay to ~2s. Higher values (320+ bytes) don't work and cause issues.
-	// Using 240 bytes (30ms) as optimal balance between latency and stability.
-	frameSize := 240
+	switch track.Codec.Name {
+	case core.CodecPCMA, core.CodecPCMU, core.CodecPCM, core.CodecPCML:
+		// Frame size affects audio delay with Tuya cameras:
+		// Browser sends standard 20ms frames (160 bytes for G.711), but this causes
+		// up to 4s delay on some Tuya cameras. Increasing to 240 bytes (30ms) reduces
+		// delay to ~2s. Higher values (320+ bytes) don't work and cause issues.
+		// Using 240 bytes (30ms) as optimal balance between latency and stability.
+		frameSize := 240
 
-	var buf []byte
-	var seq uint16
-	var ts uint32
+		var buf []byte
+		var seq uint16
+		var ts uint32
 
-	sender.Handler = func(packet *rtp.Packet) {
-		buf = append(buf, packet.Payload...)
+		sender.Handler = func(packet *rtp.Packet) {
+			buf = append(buf, packet.Payload...)
 
-		for len(buf) >= frameSize {
-			payload := buf[:frameSize]
+			for len(buf) >= frameSize {
+				payload := buf[:frameSize]
 
-			pkt := &rtp.Packet{
-				Header: rtp.Header{
-					Version:        2,
-					Marker:         true,
-					PayloadType:    payloadType,
-					SequenceNumber: seq,
-					Timestamp:      ts,
-					SSRC:           packet.SSRC,
-				},
-				Payload: payload,
+				pkt := &rtp.Packet{
+					Header: rtp.Header{
+						Version:        2,
+						Marker:         true,
+						PayloadType:    payloadType,
+						SequenceNumber: seq,
+						Timestamp:      ts,
+						SSRC:           packet.SSRC,
+					},
+					Payload: payload,
+				}
+
+				seq++
+				ts += uint32(frameSize)
+				buf = buf[frameSize:]
+
+				c.conn.Send += pkt.MarshalSize()
+				_ = localTrack.WriteRTP(payloadType, pkt)
 			}
+		}
 
-			seq++
-			ts += uint32(frameSize)
-			buf = buf[frameSize:]
-
-			c.conn.Send += pkt.MarshalSize()
-			_ = localTrack.WriteRTP(payloadType, pkt)
+	default:
+		sender.Handler = func(packet *rtp.Packet) {
+			c.conn.Send += packet.MarshalSize()
+			_ = localTrack.WriteRTP(payloadType, packet)
 		}
 	}
 
