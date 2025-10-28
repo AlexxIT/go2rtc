@@ -3,10 +3,9 @@ package onvif
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"html"
 	"io"
-	"net"
+	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
@@ -32,26 +31,18 @@ func NewClient(rawURL string) (*Client, error) {
 	baseURL := "http://" + u.Host
 
 	client := &Client{url: u}
-	if u.Path == "" {
-		client.deviceURL = baseURL + PathDevice
-	} else {
-		client.deviceURL = baseURL + u.Path
-	}
+	client.deviceURL = baseURL + GetPath(u.Path, PathDevice)
 
 	b, err := client.DeviceRequest(DeviceGetCapabilities)
 	if err != nil {
 		return nil, err
 	}
 
-	client.mediaURL = FindTagValue(b, "Media.+?XAddr")
-	if client.mediaURL == "" {
-		client.mediaURL = baseURL + "/onvif/media_service"
-	}
+	s := FindTagValue(b, "Media.+?XAddr")
+	client.mediaURL = baseURL + GetPath(s, "/onvif/media_service")
 
-	client.imaginURL = FindTagValue(b, "Imaging.+?XAddr")
-	if client.imaginURL == "" {
-		client.imaginURL = baseURL + "/onvif/imaging_service"
-	}
+	s = FindTagValue(b, "Imaging.+?XAddr")
+	client.imaginURL = baseURL + GetPath(s, "/onvif/imaging_service")
 
 	return client, nil
 }
@@ -183,62 +174,24 @@ func (c *Client) MediaRequest(operation string) ([]byte, error) {
 	return c.Request(c.mediaURL, operation)
 }
 
-func (c *Client) Request(rawUrl, body string) ([]byte, error) {
-	if rawUrl == "" {
+func (c *Client) Request(url, body string) ([]byte, error) {
+	if url == "" {
 		return nil, errors.New("onvif: unsupported service")
 	}
 
 	e := NewEnvelopeWithUser(c.url.User)
 	e.Append(body)
 
-	u, err := url.Parse(rawUrl)
+	client := &http.Client{Timeout: time.Second * 5000}
+	res, err := client.Post(url, `application/soap+xml;charset=utf-8`, bytes.NewReader(e.Bytes()))
 	if err != nil {
 		return nil, err
 	}
+	defer res.Body.Close()
 
-	host := u.Host
-	if u.Port() == "" {
-		host += ":80"
+	if res.StatusCode != http.StatusOK {
+		return nil, errors.New("onvif: wrong response " + res.Status)
 	}
 
-	conn, err := net.DialTimeout("tcp", host, 5*time.Second)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Close()
-
-	reqBody := e.Bytes()
-	rawReq := fmt.Appendf(nil, "POST %s HTTP/1.1\r\n"+
-		"Host: %s\r\n"+
-		"Content-Type: application/soap+xml;charset=utf-8\r\n"+
-		"Content-Length: %d\r\n"+
-		"Connection: close\r\n"+
-		"\r\n", u.Path, u.Host, len(reqBody))
-	rawReq = append(rawReq, reqBody...)
-
-	if _, err = conn.Write(rawReq); err != nil {
-		return nil, err
-	}
-
-	rawRes, err := io.ReadAll(conn)
-	if err != nil {
-		return nil, err
-	}
-
-	// Look for XML in complete response
-	if i := bytes.Index(rawRes, []byte("<?xml")); i > 0 {
-		return rawRes[i:], nil
-	}
-
-	// No XML found - might be an error response
-	if i := bytes.Index(rawRes, []byte("\r\n\r\n")); i > 0 {
-		if bytes.Contains(rawRes[:i], []byte("chunked")) {
-			return nil, errors.New("onvif: TODO: support chunked encoding")
-		}
-
-		// Return body after headers
-		return rawRes[i+4:], nil
-	}
-
-	return rawRes, nil
+	return io.ReadAll(res.Body)
 }
