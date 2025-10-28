@@ -355,9 +355,43 @@ func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Rece
 	payloadType := codec.PayloadType
 
 	sender := core.NewSender(media, codec)
+
+	// Frame size affects audio delay with Tuya cameras:
+	// Browser sends standard 20ms frames (160 bytes for G.711), but this causes
+	// up to 4s delay on some Tuya cameras. Increasing to 240 bytes (30ms) reduces
+	// delay to ~2s. Higher values (320+ bytes) don't work and cause issues.
+	// Using 240 bytes (30ms) as optimal balance between latency and stability.
+	frameSize := 240
+
+	var buf []byte
+	var seq uint16
+	var ts uint32
+
 	sender.Handler = func(packet *rtp.Packet) {
-		c.conn.Send += packet.MarshalSize()
-		_ = localTrack.WriteRTP(payloadType, packet)
+		buf = append(buf, packet.Payload...)
+
+		for len(buf) >= frameSize {
+			payload := buf[:frameSize]
+
+			pkt := &rtp.Packet{
+				Header: rtp.Header{
+					Version:        2,
+					Marker:         true,
+					PayloadType:    payloadType,
+					SequenceNumber: seq,
+					Timestamp:      ts,
+					SSRC:           packet.SSRC,
+				},
+				Payload: payload,
+			}
+
+			seq++
+			ts += uint32(frameSize)
+			buf = buf[frameSize:]
+
+			c.conn.Send += pkt.MarshalSize()
+			_ = localTrack.WriteRTP(payloadType, pkt)
+		}
 	}
 
 	sender.HandleRTP(track)
