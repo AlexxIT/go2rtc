@@ -11,6 +11,7 @@ func CreateHandler(codec *core.Codec) core.CodecHandler {
 		RTPDepay,
 		RepairAVCC,
 		&Payloader{},
+		UpdateFmtpLine,
 	)
 }
 

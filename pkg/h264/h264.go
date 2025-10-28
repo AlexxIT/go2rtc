@@ -159,3 +159,14 @@ func ContainsParameterSets(payload []byte) bool {
 
 	return hasSPS && hasPPS
 }
+
+func UpdateFmtpLine(codec *core.Codec, payload []byte) {
+	if !ContainsParameterSets(payload) {
+		return
+	}
+
+	newFmtpLine := GetFmtpLine(payload)
+	if newFmtpLine != "" {
+		codec.FmtpLine = newFmtpLine
+	}
+}

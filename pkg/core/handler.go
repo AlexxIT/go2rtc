@@ -28,6 +28,8 @@ type BaseCodecHandler struct {
 	createRTPDepayFunc   func(*Codec, HandlerFunc) HandlerFunc
 	createAVCCRepairFunc func(*Codec, HandlerFunc) HandlerFunc
 	payloader            Payloader
+	updateFmtpLineFunc   func(*Codec, []byte)
+	fmtpLineUpdated      bool
 }
 
 func NewCodecHandler(
@@ -36,6 +38,7 @@ func NewCodecHandler(
 	createRTPDepayFunc func(*Codec, HandlerFunc) HandlerFunc,
 	createAVCCRepairFunc func(*Codec, HandlerFunc) HandlerFunc,
 	payloader Payloader,
+	updateFmtpLineFunc func(*Codec, []byte),
 ) CodecHandler {
 	ch := &BaseCodecHandler{
 		codec:                codec,
@@ -43,11 +46,19 @@ func NewCodecHandler(
 		createRTPDepayFunc:   createRTPDepayFunc,
 		createAVCCRepairFunc: createAVCCRepairFunc,
 		payloader:            payloader,
+		updateFmtpLineFunc:   updateFmtpLineFunc,
 		gopCache:             &GopCache{},
 	}
 
 	gopHandler := func(packet *Packet) {
 		isKeyframe := ch.isKeyframeFunc(packet.Payload)
+
+		// Update FmtpLine from first keyframe with parameter sets
+		if isKeyframe && !ch.fmtpLineUpdated && ch.updateFmtpLineFunc != nil {
+			ch.updateFmtpLineFunc(ch.codec, packet.Payload)
+			ch.fmtpLineUpdated = true
+		}
+
 		ch.gopCache.Add(packet, isKeyframe)
 	}
 
