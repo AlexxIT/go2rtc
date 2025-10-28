@@ -10,7 +10,6 @@ import (
 	"sync"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/pcm"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	"github.com/pion/rtp"
 	pion "github.com/pion/webrtc/v4"
@@ -359,20 +358,6 @@ func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Rece
 	sender.Handler = func(packet *rtp.Packet) {
 		c.conn.Send += packet.MarshalSize()
 		_ = localTrack.WriteRTP(payloadType, packet)
-	}
-
-	// Tuya cameras require specific frame sizes
-	// See: https://developer.tuya.com/en/docs/iot-device-dev/tuyaos-package-ipc-device?id=Kcn1px33iptn2#title-29
-	switch track.Codec.Name {
-	case core.CodecPCMA, core.CodecPCMU, core.CodecPCM, core.CodecPCML:
-		frameSize := 240
-		if track.Codec.Name == core.CodecPCM {
-			frameSize = 560
-		}
-
-		// Repack to required frame size
-		sender.Handler = pcm.RepackG711(false, frameSize, sender.Handler)
-		sender.Handler = pcm.TranscodeHandler(codec, track.Codec, sender.Handler)
 	}
 
 	sender.HandleRTP(track)
