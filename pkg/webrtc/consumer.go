@@ -66,7 +66,7 @@ func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiv
 	case core.CodecPCMA, core.CodecPCMU, core.CodecPCM, core.CodecPCML:
 		// Fix audio quality https://github.com/AlexxIT/WebRTC/issues/500
 		// should be before ResampleToG711, because it will be called last
-		sender.Handler = pcm.RepackG711(false, 0, sender.Handler)
+		sender.Handler = pcm.RepackG711(false, sender.Handler)
 
 		if codec.ClockRate == 0 {
 			if codec.Name == core.CodecPCM || codec.Name == core.CodecPCML {
