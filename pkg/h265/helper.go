@@ -45,7 +45,7 @@ func IsKeyframe(b []byte) bool {
 
 func Types(data []byte) []byte {
 	var types []byte
-	for {
+	for len(data) >= 5 { // minimum: 4 bytes length + 1 byte NAL header
 		types = append(types, NALUType(data))
 
 		size := 4 + int(binary.BigEndian.Uint32(data))
@@ -98,8 +98,12 @@ func ContainsParameterSets(payload []byte) bool {
 func GetFmtpLine(avcc []byte) string {
 	var vps, sps, pps []byte
 
-	for {
+	for len(avcc) >= 5 { // minimum: 4 bytes length + 1 byte NAL header
 		size := 4 + int(binary.BigEndian.Uint32(avcc))
+
+		if size > len(avcc) {
+			break
+		}
 
 		switch NALUType(avcc) {
 		case NALUTypeVPS:

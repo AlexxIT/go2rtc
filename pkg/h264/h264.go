@@ -125,15 +125,19 @@ func GetParameterSet(fmtp string) (sps, pps []byte) {
 func GetFmtpLine(avc []byte) string {
 	s := "packetization-mode=1"
 
-	for {
+	for len(avc) >= 5 { // minimum: 4 bytes length + 1 byte NAL header
 		size := 4 + int(binary.BigEndian.Uint32(avc))
 
 		switch NALUType(avc) {
 		case NALUTypeSPS:
-			s += ";profile-level-id=" + hex.EncodeToString(avc[5:8])
-			s += ";sprop-parameter-sets=" + base64.StdEncoding.EncodeToString(avc[4:size])
+			if len(avc) >= 8 && size <= len(avc) { // need at least profile-level-id
+				s += ";profile-level-id=" + hex.EncodeToString(avc[5:8])
+				s += ";sprop-parameter-sets=" + base64.StdEncoding.EncodeToString(avc[4:size])
+			}
 		case NALUTypePPS:
-			s += "," + base64.StdEncoding.EncodeToString(avc[4:size])
+			if size <= len(avc) {
+				s += "," + base64.StdEncoding.EncodeToString(avc[4:size])
+			}
 		}
 
 		if size < len(avc) {
@@ -142,6 +146,7 @@ func GetFmtpLine(avc []byte) string {
 			return s
 		}
 	}
+	return s
 }
 
 // ContainsParameterSets checks if payload contains both SPS and PPS

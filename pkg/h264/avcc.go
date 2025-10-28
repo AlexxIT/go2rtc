@@ -85,7 +85,7 @@ func SplitNALU(avcc []byte) [][]byte {
 
 func NALUTypes(avcc []byte) []byte {
 	var types []byte
-	for {
+	for len(avcc) >= 5 { // minimum: 4 bytes length + 1 byte NAL header
 		types = append(types, NALUType(avcc))
 
 		size := 4 + int(binary.BigEndian.Uint32(avcc))
