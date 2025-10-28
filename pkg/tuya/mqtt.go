@@ -52,9 +52,9 @@ type MqttFrame struct {
 type OfferFrame struct {
 	Mode              string      `json:"mode"`
 	Sdp               string      `json:"sdp"`
-	StreamType        int         `json:"stream_type"`
+	StreamType        int         `json:"stream_type"` // 0: mainStream(HD), 1: substream(SD)
 	Auth              string      `json:"auth"`
-	DatachannelEnable bool        `json:"datachannel_enable"`
+	DatachannelEnable bool        `json:"datachannel_enable"` // true for HEVC, false for H264
 	Token             []ICEServer `json:"token"`
 }
 
@@ -165,8 +165,11 @@ func (c *TuyaMqttClient) Stop() {
 	c.closed = true
 }
 
+// WakeUp sends a wake-up signal to battery-powered cameras (LowPower mode).
+// The camera wakes up and starts responding immediately - we don't wait for dps[149].
+// Note: LowPower cameras sleep after ~3 minutes of inactivity.
 func (c *TuyaMqttClient) WakeUp(localKey string) error {
-	// Calculate CRC32 of localKey
+	// Calculate CRC32 of localKey as wake-up payload
 	crc := crc32.ChecksumIEEE([]byte(localKey))
 
 	// Convert to hex string
@@ -189,7 +192,8 @@ func (c *TuyaMqttClient) WakeUp(localKey string) error {
 		return fmt.Errorf("failed to publish wake-up message: %w", token.Error())
 	}
 
-	// Subscribe to lowPower topic: smart/decrypt/in/{deviceId}
+	// Subscribe to lowPower topic to receive dps[149] status updates
+	// (we don't wait for this signal - camera responds immediately)
 	lowPowerTopic := fmt.Sprintf("smart/decrypt/in/%s", c.deviceId)
 	if token := c.client.Subscribe(lowPowerTopic, 1, c.onLowPowerMessage); token.Wait() && token.Error() != nil {
 		return fmt.Errorf("failed to subscribe to lowPower topic: %w", token.Error())
@@ -199,6 +203,7 @@ func (c *TuyaMqttClient) WakeUp(localKey string) error {
 }
 
 func (c *TuyaMqttClient) SendOffer(sdp string, streamResolution string, streamType int, isHEVC bool) error {
+	// Map Skill StreamType to MQTT stream_type values
 	// streamType comes from GetStreamType() and uses Skill StreamType values:
 	// - mainStream = 2 (HD)
 	// - substream = 4 (SD)
@@ -220,7 +225,7 @@ func (c *TuyaMqttClient) SendOffer(sdp string, streamResolution string, streamTy
 		Sdp:               sdp,
 		StreamType:        mqttStreamType,
 		Auth:              c.auth,
-		DatachannelEnable: isHEVC,
+		DatachannelEnable: isHEVC, // must be true for HEVC
 		Token:             c.iceServers,
 	})
 }
@@ -233,30 +238,32 @@ func (c *TuyaMqttClient) SendCandidate(candidate string) error {
 }
 
 func (c *TuyaMqttClient) SendResolution(resolution int) error {
-	// isClaritySupperted := (c.webrtcVersion & (1 << 5)) != 0
-	// if !isClaritySupperted {
-	// 	return nil
-	// }
+	// Check if camera supports clarity switching
+	isClaritySupported := (c.webrtcVersion & (1 << 5)) != 0
+	if !isClaritySupported {
+		return nil
+	}
 
-	// Protocol 312 is used for clarity
 	return c.sendMqttMessage("resolution", 312, "", ResolutionFrame{
 		Mode:  "webrtc",
-		Value: resolution,
+		Value: resolution, // 0: HD, 1: SD
 	})
 }
 
 func (c *TuyaMqttClient) SendSpeaker(speaker int) error {
-	// Protocol 312 is used for speaker
-	return c.sendMqttMessage("speaker", 312, "", SpeakerFrame{
+	if err := c.sendMqttMessage("speaker", 312, "", SpeakerFrame{
 		Mode:  "webrtc",
-		Value: speaker,
-	})
+		Value: speaker, // 0: off, 1: on
+	}); err != nil {
+		return err
+	}
 
-	// if err := c.speakerWaiter.Wait(); err != nil {
-	// 	return fmt.Errorf("speaker wait failed: %w", err)
-	// }
+	// Wait for camera response
+	if err := c.speakerWaiter.Wait(); err != nil {
+		return fmt.Errorf("speaker wait failed: %w", err)
+	}
 
-	// return nil
+	return nil
 }
 
 func (c *TuyaMqttClient) SendDisconnect() error {
@@ -281,6 +288,7 @@ func (c *TuyaMqttClient) onMessage(client mqtt.Client, msg mqtt.Message) {
 		return
 	}
 
+	// Filter by session ID to prevent processing messages from other sessions
 	if rmqtt.Data.Header.SessionID != c.sessionId {
 		return
 	}

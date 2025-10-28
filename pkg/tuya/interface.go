@@ -66,17 +66,17 @@ type AudioSkill struct {
 }
 
 type VideoSkill struct {
-	StreamType int    `json:"streamType"` // 2 = main stream (hd), 4 = sub stream (sd)
-	ProfileId  string `json:"profileId,omitempty"`
-	CodecType  int    `json:"codecType"` // 2 = H264, 4 = H265
+	StreamType int    `json:"streamType"` // 2 = main stream (HD), 4 = sub stream (SD)
+	CodecType  int    `json:"codecType"`  // 2 = H264, 4 = H265 (HEVC)
 	Width      int    `json:"width"`
 	Height     int    `json:"height"`
 	SampleRate int    `json:"sampleRate"`
+	ProfileId  string `json:"profileId,omitempty"`
 }
 
 type Skill struct {
-	WebRTC   int          `json:"webrtc"`
-	LowPower int          `json:"lowPower,omitempty"`
+	WebRTC   int          `json:"webrtc"`             // Bit flags: bit 4=speaker, bit 5=clarity, bit 6=record
+	LowPower int          `json:"lowPower,omitempty"` // 1 = battery-powered camera
 	Audios   []AudioSkill `json:"audios"`
 	Videos   []VideoSkill `json:"videos"`
 }
@@ -128,6 +128,14 @@ func (c *TuyaClient) GetMqtt() *TuyaMqttClient {
 	return c.mqtt
 }
 
+// GetStreamType returns the Skill StreamType for the requested resolution
+// Returns Skill values (2 or 4), not MQTT values (0 or 1)
+// - "hd" → highest resolution streamType (usually 2 = mainStream)
+// - "sd" → lowest resolution streamType (usually 4 = substream)
+//
+// These values must be mapped before sending to MQTT:
+// - streamType 2 → MQTT stream_type 0
+// - streamType 4 → MQTT stream_type 1
 func (c *TuyaClient) GetStreamType(streamResolution string) int {
 	// Default streamType if nothing is found
 	defaultStreamType := 1
@@ -136,7 +144,7 @@ func (c *TuyaClient) GetStreamType(streamResolution string) int {
 		return defaultStreamType
 	}
 
-	// Find the highest and lowest resolution
+	// Find the highest and lowest resolution based on pixel count
 	var highestResType = defaultStreamType
 	var highestRes = 0
 	var lowestResType = defaultStreamType
@@ -169,10 +177,14 @@ func (c *TuyaClient) GetStreamType(streamResolution string) int {
 	}
 }
 
+// IsHEVC checks if the given streamType uses H265 (HEVC) codec
+// HEVC cameras use DataChannel, H264 cameras use RTP tracks
+// - codecType 4 = H265 (HEVC) → DataChannel mode
+// - codecType 2 = H264 → Normal RTP mode
 func (c *TuyaClient) IsHEVC(streamType int) bool {
 	for _, video := range c.skill.Videos {
 		if video.StreamType == streamType {
-			return video.CodecType == 4
+			return video.CodecType == 4 // 4 = H265/HEVC
 		}
 	}
 
