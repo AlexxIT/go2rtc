@@ -90,7 +90,8 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Start/reset snapshot cache (if enabled)
-	stream.TouchSnapshotCache(getSnapshotCacheTimeout(), transcodeToJPEG)
+	streamName := query.Get("src")
+	stream.TouchSnapshotCache(streamName, getSnapshotCacheTimeout(), transcodeToJPEG)
 
 	// Try to serve from cache if allowed
 	if allowCached {
