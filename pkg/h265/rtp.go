@@ -109,6 +109,7 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 		clone.Payload = buf
 
 		buf = buf[:0]
+		nuStart = 0 // Reset nuStart when buffer is cleared
 
 		handler(&clone)
 	}
