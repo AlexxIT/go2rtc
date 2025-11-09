@@ -149,7 +149,7 @@ func (p *Proxy) handleAcc() error {
 		}
 
 		if res.Proto == hap.ProtoEvent {
-			if err = res.Write(p.con); err != nil {
+			if err = hap.WriteEvent(p.con, res); err != nil {
 				return err
 			}
 			continue
