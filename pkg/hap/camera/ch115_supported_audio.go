@@ -2,9 +2,9 @@ package camera
 
 const TypeSupportedAudioStreamConfiguration = "115"
 
-type SupportedAudioStreamConfig struct {
-	Codecs       []AudioCodec `tlv8:"1"`
-	ComfortNoise byte         `tlv8:"2"`
+type SupportedAudioStreamConfiguration struct {
+	Codecs              []AudioCodecConfiguration `tlv8:"1"`
+	ComfortNoiseSupport byte                      `tlv8:"2"`
 }
 
 //goland:noinspection ALL
@@ -31,16 +31,16 @@ const (
 	RTPTimeAACLD24  = 40 // 24000/1000*40=960
 )
 
-type AudioCodec struct {
-	CodecType    byte          `tlv8:"1"`
-	CodecParams  []AudioParams `tlv8:"2"`
-	RTPParams    []RTPParams   `tlv8:"3"`
-	ComfortNoise []byte        `tlv8:"4"`
+type AudioCodecConfiguration struct {
+	CodecType    byte                   `tlv8:"1"`
+	CodecParams  []AudioCodecParameters `tlv8:"2"`
+	RTPParams    []RTPParams            `tlv8:"3"`
+	ComfortNoise []byte                 `tlv8:"4"`
 }
 
-type AudioParams struct {
-	Channels   uint8   `tlv8:"1"`
-	Bitrate    byte    `tlv8:"2"` // 0 - variable, 1 - constant
-	SampleRate []byte  `tlv8:"3"` // 0 - 8000, 1 - 16000, 2 - 24000
-	RTPTime    []uint8 `tlv8:"4"` // 20, 30, 40, 60
+type AudioCodecParameters struct {
+	Channels    uint8   `tlv8:"1"`
+	BitrateMode byte    `tlv8:"2"` // 0 - variable, 1 - constant
+	SampleRate  []byte  `tlv8:"3"` // 0 - 8000, 1 - 16000, 2 - 24000
+	RTPTime     []uint8 `tlv8:"4"` // 20, 30, 40, 60
 }

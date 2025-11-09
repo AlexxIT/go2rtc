@@ -13,7 +13,7 @@ var videoCodecs = [...]string{core.CodecH264}
 var videoProfiles = [...]string{"4200", "4D00", "6400"}
 var videoLevels = [...]string{"1F", "20", "28"}
 
-func videoToMedia(codecs []camera.VideoCodec) *core.Media {
+func videoToMedia(codecs []camera.VideoCodecConfiguration) *core.Media {
 	media := &core.Media{
 		Kind: core.KindVideo, Direction: core.DirectionRecvonly,
 	}
@@ -39,7 +39,7 @@ func videoToMedia(codecs []camera.VideoCodec) *core.Media {
 var audioCodecs = [...]string{core.CodecPCMU, core.CodecPCMA, core.CodecELD, core.CodecOpus}
 var audioSampleRates = [...]uint32{8000, 16000, 24000}
 
-func audioToMedia(codecs []camera.AudioCodec) *core.Media {
+func audioToMedia(codecs []camera.AudioCodecConfiguration) *core.Media {
 	media := &core.Media{
 		Kind: core.KindAudio, Direction: core.DirectionRecvonly,
 	}
@@ -67,7 +67,7 @@ func audioToMedia(codecs []camera.AudioCodec) *core.Media {
 	return media
 }
 
-func trackToVideo(track *core.Receiver, video0 *camera.VideoCodec) *camera.VideoCodec {
+func trackToVideo(track *core.Receiver, video0 *camera.VideoCodecConfiguration) *camera.VideoCodecConfiguration {
 	profileID := video0.CodecParams[0].ProfileID[0]
 	level := video0.CodecParams[0].Level[0]
 	attrs := video0.VideoAttrs[0]
@@ -96,19 +96,19 @@ func trackToVideo(track *core.Receiver, video0 *camera.VideoCodec) *camera.Video
 		}
 	}
 
-	return &camera.VideoCodec{
+	return &camera.VideoCodecConfiguration{
 		CodecType: video0.CodecType,
-		CodecParams: []camera.VideoParams{
+		CodecParams: []camera.VideoCodecParameters{
 			{
 				ProfileID: []byte{profileID},
 				Level:     []byte{level},
 			},
 		},
-		VideoAttrs: []camera.VideoAttrs{attrs},
+		VideoAttrs: []camera.VideoCodecAttributes{attrs},
 	}
 }
 
-func trackToAudio(track *core.Receiver, audio0 *camera.AudioCodec) *camera.AudioCodec {
+func trackToAudio(track *core.Receiver, audio0 *camera.AudioCodecConfiguration) *camera.AudioCodecConfiguration {
 	codecType := audio0.CodecType
 	channels := audio0.CodecParams[0].Channels
 	sampleRate := audio0.CodecParams[0].SampleRate[0]
@@ -131,9 +131,9 @@ func trackToAudio(track *core.Receiver, audio0 *camera.AudioCodec) *camera.Audio
 		}
 	}
 
-	return &camera.AudioCodec{
+	return &camera.AudioCodecConfiguration{
 		CodecType: codecType,
-		CodecParams: []camera.AudioParams{
+		CodecParams: []camera.AudioCodecParameters{
 			{
 				Channels:   channels,
 				SampleRate: []byte{sampleRate},

@@ -2,10 +2,10 @@ package camera
 
 const TypeSelectedStreamConfiguration = "117"
 
-type SelectedStreamConfig struct {
-	Control    SessionControl `tlv8:"1"`
-	VideoCodec VideoCodec     `tlv8:"2"`
-	AudioCodec AudioCodec     `tlv8:"3"`
+type SelectedStreamConfiguration struct {
+	Control    SessionControl          `tlv8:"1"`
+	VideoCodec VideoCodecConfiguration `tlv8:"2"`
+	AudioCodec AudioCodecConfiguration `tlv8:"3"`
 }
 
 //goland:noinspection ALL

@@ -22,8 +22,8 @@ type Client struct {
 	hap  *hap.Client
 	srtp *srtp.Server
 
-	videoConfig camera.SupportedVideoStreamConfig
-	audioConfig camera.SupportedAudioStreamConfig
+	videoConfig camera.SupportedVideoStreamConfiguration
+	audioConfig camera.SupportedAudioStreamConfiguration
 
 	videoSession *srtp.Session
 	audioSession *srtp.Session

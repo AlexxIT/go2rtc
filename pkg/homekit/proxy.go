@@ -74,7 +74,7 @@ func (p *Proxy) handleCon(pair ServerPair) error {
 			_ = json.Unmarshal(body, &v)
 			for _, char := range v.Value {
 				if char.IID == hdsCharIID {
-					var hdsReq camera.SetupDataStreamRequest
+					var hdsReq camera.SetupDataStreamTransportRequest
 					_ = tlv8.UnmarshalBase64(char.Value, &hdsReq)
 					hdsConSalt = hdsReq.ControllerKeySalt
 					break
@@ -110,7 +110,7 @@ func (p *Proxy) handleCon(pair ServerPair) error {
 			_ = json.Unmarshal(body, &v)
 			for i, char := range v.Value {
 				if char.IID == hdsCharIID {
-					var hdsRes camera.SetupDataStreamResponse
+					var hdsRes camera.SetupDataStreamTransportResponse
 					_ = tlv8.UnmarshalBase64(char.Value, &hdsRes)
 
 					hdsAccSalt := hdsRes.AccessoryKeySalt

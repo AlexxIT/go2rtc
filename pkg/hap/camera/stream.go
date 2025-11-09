@@ -15,7 +15,7 @@ type Stream struct {
 }
 
 func NewStream(
-	client *hap.Client, videoCodec *VideoCodec, audioCodec *AudioCodec,
+	client *hap.Client, videoCodec *VideoCodecConfiguration, audioCodec *AudioCodecConfiguration,
 	videoSession, audioSession *srtp.Session, bitrate int,
 ) (*Stream, error) {
 	stream := &Stream{
@@ -58,7 +58,7 @@ func NewStream(
 	}
 	audioCodec.ComfortNoise = []byte{0}
 
-	config := &SelectedStreamConfig{
+	config := &SelectedStreamConfiguration{
 		Control: SessionControl{
 			SessionID: stream.id,
 			Command:   SessionCommandStart,
@@ -103,19 +103,19 @@ func (s *Stream) GetFreeStream() error {
 }
 
 func (s *Stream) ExchangeEndpoints(videoSession, audioSession *srtp.Session) error {
-	req := SetupEndpoints{
+	req := SetupEndpointsRequest{
 		SessionID: s.id,
-		Address: Addr{
+		Address: Address{
 			IPVersion:    0,
 			IPAddr:       videoSession.Local.Addr,
 			VideoRTPPort: videoSession.Local.Port,
 			AudioRTPPort: audioSession.Local.Port,
 		},
-		VideoCrypto: CryptoSuite{
+		VideoCrypto: SRTPCryptoSuite{
 			MasterKey:  string(videoSession.Local.MasterKey),
 			MasterSalt: string(videoSession.Local.MasterSalt),
 		},
-		AudioCrypto: CryptoSuite{
+		AudioCrypto: SRTPCryptoSuite{
 			MasterKey:  string(audioSession.Local.MasterKey),
 			MasterSalt: string(audioSession.Local.MasterSalt),
 		},
@@ -129,7 +129,7 @@ func (s *Stream) ExchangeEndpoints(videoSession, audioSession *srtp.Session) err
 		return err
 	}
 
-	var res SetupEndpoints
+	var res SetupEndpointsResponse
 	if err := s.client.GetCharacter(char); err != nil {
 		return err
 	}
@@ -142,7 +142,7 @@ func (s *Stream) ExchangeEndpoints(videoSession, audioSession *srtp.Session) err
 		Port:       res.Address.VideoRTPPort,
 		MasterKey:  []byte(res.VideoCrypto.MasterKey),
 		MasterSalt: []byte(res.VideoCrypto.MasterSalt),
-		SSRC:       res.VideoSSRC[0],
+		SSRC:       res.VideoSSRC,
 	}
 
 	audioSession.Remote = &srtp.Endpoint{
@@ -150,13 +150,13 @@ func (s *Stream) ExchangeEndpoints(videoSession, audioSession *srtp.Session) err
 		Port:       res.Address.AudioRTPPort,
 		MasterKey:  []byte(res.AudioCrypto.MasterKey),
 		MasterSalt: []byte(res.AudioCrypto.MasterSalt),
-		SSRC:       res.AudioSSRC[0],
+		SSRC:       res.AudioSSRC,
 	}
 
 	return nil
 }
 
-func (s *Stream) SetStreamConfig(config *SelectedStreamConfig) error {
+func (s *Stream) SetStreamConfig(config *SelectedStreamConfiguration) error {
 	char := s.service.GetCharacter(TypeSelectedStreamConfiguration)
 	if err := char.Write(config); err != nil {
 		return err
@@ -169,7 +169,7 @@ func (s *Stream) SetStreamConfig(config *SelectedStreamConfig) error {
 }
 
 func (s *Stream) Close() error {
-	config := &SelectedStreamConfig{
+	config := &SelectedStreamConfiguration{
 		Control: SessionControl{
 			SessionID: s.id,
 			Command:   SessionCommandEnd,

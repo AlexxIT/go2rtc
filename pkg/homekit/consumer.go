@@ -59,7 +59,7 @@ func NewConsumer(conn net.Conn, server *srtp.Server) *Consumer {
 	}
 }
 
-func (c *Consumer) SetOffer(offer *camera.SetupEndpoints) {
+func (c *Consumer) SetOffer(offer *camera.SetupEndpointsRequest) {
 	c.sessionID = offer.SessionID
 	c.videoSession = &srtp.Session{
 		Remote: &srtp.Endpoint{
@@ -79,32 +79,32 @@ func (c *Consumer) SetOffer(offer *camera.SetupEndpoints) {
 	}
 }
 
-func (c *Consumer) GetAnswer() *camera.SetupEndpoints {
+func (c *Consumer) GetAnswer() *camera.SetupEndpointsResponse {
 	c.videoSession.Local = c.srtpEndpoint()
 	c.audioSession.Local = c.srtpEndpoint()
 
-	return &camera.SetupEndpoints{
+	return &camera.SetupEndpointsResponse{
 		SessionID: c.sessionID,
-		Status:    []byte{0},
-		Address: camera.Addr{
+		Status:    camera.StreamingStatusAvailable,
+		Address: camera.Address{
 			IPAddr:       c.videoSession.Local.Addr,
 			VideoRTPPort: c.videoSession.Local.Port,
 			AudioRTPPort: c.audioSession.Local.Port,
 		},
-		VideoCrypto: camera.CryptoSuite{
+		VideoCrypto: camera.SRTPCryptoSuite{
 			MasterKey:  string(c.videoSession.Local.MasterKey),
 			MasterSalt: string(c.videoSession.Local.MasterSalt),
 		},
-		AudioCrypto: camera.CryptoSuite{
+		AudioCrypto: camera.SRTPCryptoSuite{
 			MasterKey:  string(c.audioSession.Local.MasterKey),
 			MasterSalt: string(c.audioSession.Local.MasterSalt),
 		},
-		VideoSSRC: []uint32{c.videoSession.Local.SSRC},
-		AudioSSRC: []uint32{c.audioSession.Local.SSRC},
+		VideoSSRC: c.videoSession.Local.SSRC,
+		AudioSSRC: c.audioSession.Local.SSRC,
 	}
 }
 
-func (c *Consumer) SetConfig(conf *camera.SelectedStreamConfig) bool {
+func (c *Consumer) SetConfig(conf *camera.SelectedStreamConfiguration) bool {
 	if c.sessionID != conf.Control.SessionID {
 		return false
 	}
