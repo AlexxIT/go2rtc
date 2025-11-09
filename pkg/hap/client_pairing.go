@@ -121,9 +121,7 @@ func (c *Client) Pair(feature, pin string) (err error) {
 	username := []byte("Pair-Setup")
 
 	// Stanford Secure Remote Password (SRP) / Password Authenticated Key Exchange (PAKE)
-	pake, err := srp.NewSRP(
-		"rfc5054.3072", sha512.New, keyDerivativeFuncRFC2945(username),
-	)
+	pake, err := srp.NewSRP("rfc5054.3072", sha512.New, keyDerivativeFuncRFC2945(username))
 	if err != nil {
 		return
 	}
@@ -132,6 +130,7 @@ func (c *Client) Pair(feature, pin string) (err error) {
 
 	// username: "Pair-Setup", password: PIN (with dashes)
 	session := pake.NewClientSession(username, []byte(pin))
+
 	sessionShared, err := session.ComputeKey([]byte(plainM2.Salt), []byte(plainM2.SessionKey))
 	if err != nil {
 		return

@@ -4,31 +4,30 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net"
 	"net/http"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/hap"
 	"github.com/AlexxIT/go2rtc/pkg/hap/camera"
 	"github.com/AlexxIT/go2rtc/pkg/hap/hds"
-	"github.com/AlexxIT/go2rtc/pkg/hap/secure"
 	"github.com/AlexxIT/go2rtc/pkg/hap/tlv8"
 )
 
-func ProxyHandler(pair ServerPair, dial func() (net.Conn, error)) hap.HandlerFunc {
+type ServerProxy interface {
+	ServerPair
+	AddConn(conn any)
+	DelConn(conn any)
+}
+
+func ProxyHandler(srv ServerProxy, acc net.Conn) HandlerFunc {
 	return func(con net.Conn) error {
 		defer con.Close()
 
-		acc, err := dial()
-		if err != nil {
-			return err
-		}
-		defer acc.Close()
-
 		pr := &Proxy{
-			con: con.(*secure.Conn),
-			acc: acc.(*secure.Conn),
+			con: con.(*hap.Conn),
+			acc: acc.(*hap.Conn),
 			res: make(chan *http.Response),
 		}
 
@@ -36,17 +35,17 @@ func ProxyHandler(pair ServerPair, dial func() (net.Conn, error)) hap.HandlerFun
 		go pr.handleAcc()
 
 		// controller => accessory
-		return pr.handleCon(pair)
+		return pr.handleCon(srv)
 	}
 }
 
 type Proxy struct {
-	con *secure.Conn
-	acc *secure.Conn
+	con *hap.Conn
+	acc *hap.Conn
 	res chan *http.Response
 }
 
-func (p *Proxy) handleCon(pair ServerPair) error {
+func (p *Proxy) handleCon(srv ServerProxy) error {
 	var hdsCharIID uint64
 
 	rd := bufio.NewReader(p.con)
@@ -61,7 +60,7 @@ func (p *Proxy) handleCon(pair ServerPair) error {
 		switch {
 		case req.Method == "POST" && req.URL.Path == hap.PathPairings:
 			var res *http.Response
-			if res, err = handlePairings(p.con, req, pair); err != nil {
+			if res, err = handlePairings(req, srv); err != nil {
 				return err
 			}
 			if err = res.Write(p.con); err != nil {
@@ -117,7 +116,7 @@ func (p *Proxy) handleCon(pair ServerPair) error {
 					hdsPort := int(hdsRes.TransportTypeSessionParameters.TCPListeningPort)
 
 					// swtich accPort to conPort
-					hdsPort, err = p.listenHDS(hdsPort, hdsConSalt+hdsAccSalt)
+					hdsPort, err = p.listenHDS(srv, hdsPort, hdsConSalt+hdsAccSalt)
 					if err != nil {
 						return err
 					}
@@ -166,7 +165,8 @@ func (p *Proxy) handleAcc() error {
 	}
 }
 
-func (p *Proxy) listenHDS(accPort int, salt string) (int, error) {
+func (p *Proxy) listenHDS(srv ServerProxy, accPort int, salt string) (int, error) {
+	// The TCP port range for HDS must be >= 32768.
 	ln, err := net.ListenTCP("tcp", nil)
 	if err != nil {
 		return 0, err
@@ -175,30 +175,36 @@ func (p *Proxy) listenHDS(accPort int, salt string) (int, error) {
 	go func() {
 		defer ln.Close()
 
+		_ = ln.SetDeadline(time.Now().Add(30 * time.Second))
+
 		// raw controller conn
-		con, err := ln.Accept()
+		conn1, err := ln.Accept()
 		if err != nil {
 			return
 		}
-		defer con.Close()
+
+		defer conn1.Close()
 
 		// secured controller conn (controlle=false because we are accessory)
-		con, err = hds.Client(con, p.con.SharedKey, salt, false)
+		con, err := hds.NewConn(conn1, p.con.SharedKey, salt, false)
 		if err != nil {
 			return
 		}
+
+		srv.AddConn(con)
+		defer srv.DelConn(con)
 
 		accIP := p.acc.RemoteAddr().(*net.TCPAddr).IP
 
 		// raw accessory conn
-		acc, err := net.Dial("tcp", fmt.Sprintf("%s:%d", accIP, accPort))
+		conn2, err := net.DialTCP("tcp", nil, &net.TCPAddr{IP: accIP, Port: accPort})
 		if err != nil {
 			return
 		}
-		defer acc.Close()
+		defer conn2.Close()
 
 		// secured accessory conn (controller=true because we are controller)
-		acc, err = hds.Client(acc, p.acc.SharedKey, salt, true)
+		acc, err := hds.NewConn(conn2, p.acc.SharedKey, salt, true)
 		if err != nil {
 			return
 		}

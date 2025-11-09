@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
-	"net/url"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -34,21 +33,8 @@ type Client struct {
 }
 
 func Dial(rawURL string, server *srtp.Server) (*Client, error) {
-	u, err := url.Parse(rawURL)
+	conn, err := hap.Dial(rawURL)
 	if err != nil {
-		return nil, err
-	}
-
-	query := u.Query()
-	conn := &hap.Client{
-		DeviceAddress: u.Host,
-		DeviceID:      query.Get("device_id"),
-		DevicePublic:  hap.DecodeKey(query.Get("device_public")),
-		ClientID:      query.Get("client_id"),
-		ClientPrivate: hap.DecodeKey(query.Get("client_private")),
-	}
-
-	if err = conn.Dial(); err != nil {
 		return nil, err
 	}
 

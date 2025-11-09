@@ -49,7 +49,7 @@ func NewConsumer(conn net.Conn, server *srtp.Server) *Consumer {
 		Connection: core.Connection{
 			ID:         core.NewID(),
 			FormatName: "homekit",
-			Protocol:   "udp",
+			Protocol:   "rtp",
 			RemoteAddr: conn.RemoteAddr().String(),
 			Medias:     medias,
 			Transport:  conn,
@@ -57,6 +57,10 @@ func NewConsumer(conn net.Conn, server *srtp.Server) *Consumer {
 		conn: conn,
 		srtp: server,
 	}
+}
+
+func (c *Consumer) SessionID() string {
+	return c.sessionID
 }
 
 func (c *Consumer) SetOffer(offer *camera.SetupEndpointsRequest) {

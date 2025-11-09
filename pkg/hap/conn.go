@@ -1,13 +1,16 @@
-package secure
+package hap
 
 import (
 	"bufio"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"io"
 	"net"
+	"sync"
 	"time"
 
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/hap/chacha20poly1305"
 	"github.com/AlexxIT/go2rtc/pkg/hap/hkdf"
 )
@@ -15,16 +18,33 @@ import (
 type Conn struct {
 	conn net.Conn
 	rw   *bufio.ReadWriter
+	wmu  sync.Mutex
 
 	encryptKey []byte
 	decryptKey []byte
 	encryptCnt uint64
 	decryptCnt uint64
 
+	//ClientID  string
 	SharedKey []byte
+
+	recv int
+	send int
 }
 
-func Client(conn net.Conn, rw *bufio.ReadWriter, sharedKey []byte, isClient bool) (*Conn, error) {
+func (c *Conn) MarshalJSON() ([]byte, error) {
+	conn := core.Connection{
+		ID:         core.ID(c),
+		FormatName: "homekit",
+		Protocol:   "hap",
+		RemoteAddr: c.conn.RemoteAddr().String(),
+		Recv:       c.recv,
+		Send:       c.send,
+	}
+	return json.Marshal(conn)
+}
+
+func NewConn(conn net.Conn, rw *bufio.ReadWriter, sharedKey []byte, isClient bool) (*Conn, error) {
 	key1, err := hkdf.Sha512(sharedKey, "Control-Salt", "Control-Read-Encryption-Key")
 	if err != nil {
 		return nil, err
@@ -52,8 +72,8 @@ func Client(conn net.Conn, rw *bufio.ReadWriter, sharedKey []byte, isClient bool
 }
 
 const (
-	// PacketSizeMax is the max length of encrypted packets
-	PacketSizeMax = 0x400
+	// packetSizeMax is the max length of encrypted packets
+	packetSizeMax = 0x400
 
 	VerifySize = 2
 	NonceSize  = 8
@@ -61,18 +81,18 @@ const (
 )
 
 func (c *Conn) Read(b []byte) (n int, err error) {
-	if cap(b) < PacketSizeMax {
+	if cap(b) < packetSizeMax {
 		return 0, errors.New("hap: read buffer is too small")
 	}
 
-	verify := make([]byte, 2) // verify = plain message size
+	verify := make([]byte, VerifySize) // verify = plain message size
 	if _, err = io.ReadFull(c.rw, verify); err != nil {
 		return
 	}
 
 	n = int(binary.LittleEndian.Uint16(verify))
-	ciphertext := make([]byte, n+Overhead)
 
+	ciphertext := make([]byte, n+Overhead)
 	if _, err = io.ReadFull(c.rw, ciphertext); err != nil {
 		return
 	}
@@ -82,18 +102,23 @@ func (c *Conn) Read(b []byte) (n int, err error) {
 	c.decryptCnt++
 
 	_, err = chacha20poly1305.DecryptAndVerify(c.decryptKey, b[:0], nonce, ciphertext, verify)
+
+	c.recv += n
 	return
 }
 
 func (c *Conn) Write(b []byte) (n int, err error) {
-	buf := make([]byte, 0, PacketSizeMax+Overhead)
+	c.wmu.Lock()
+	defer c.wmu.Unlock()
+
+	buf := make([]byte, 0, packetSizeMax+Overhead)
 	nonce := make([]byte, NonceSize)
 	verify := make([]byte, VerifySize)
 
 	for len(b) > 0 {
 		size := len(b)
-		if size > PacketSizeMax {
-			size = PacketSizeMax
+		if size > packetSizeMax {
+			size = packetSizeMax
 		}
 
 		binary.LittleEndian.PutUint16(verify, uint16(size))
@@ -118,6 +143,8 @@ func (c *Conn) Write(b []byte) (n int, err error) {
 	}
 
 	err = c.rw.Flush()
+
+	c.send += n
 	return
 }
 

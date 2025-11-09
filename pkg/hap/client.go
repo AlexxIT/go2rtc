@@ -18,7 +18,6 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/hap/curve25519"
 	"github.com/AlexxIT/go2rtc/pkg/hap/ed25519"
 	"github.com/AlexxIT/go2rtc/pkg/hap/hkdf"
-	"github.com/AlexxIT/go2rtc/pkg/hap/secure"
 	"github.com/AlexxIT/go2rtc/pkg/hap/tlv8"
 	"github.com/AlexxIT/go2rtc/pkg/mdns"
 )
@@ -46,7 +45,7 @@ type Client struct {
 	err error
 }
 
-func NewClient(rawURL string) (*Client, error) {
+func Dial(rawURL string) (*Client, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, err
@@ -59,6 +58,10 @@ func NewClient(rawURL string) (*Client, error) {
 		DevicePublic:  DecodeKey(query.Get("device_public")),
 		ClientID:      query.Get("client_id"),
 		ClientPrivate: DecodeKey(query.Get("client_private")),
+	}
+
+	if err = c.Dial(); err != nil {
+		return nil, err
 	}
 
 	return c, nil
@@ -96,6 +99,7 @@ func (c *Client) Dial() (err error) {
 		return false
 	})
 
+	// TODO: close conn on error
 	if c.Conn, err = net.DialTimeout("tcp", c.DeviceAddress, ConnDialTimeout); err != nil {
 		return
 	}
@@ -219,7 +223,7 @@ func (c *Client) Dial() (err error) {
 	rw := bufio.NewReadWriter(c.reader, bufio.NewWriter(c.Conn))
 
 	// like tls.Client wrapper over net.Conn
-	if c.Conn, err = secure.Client(c.Conn, rw, sessionShared, true); err != nil {
+	if c.Conn, err = NewConn(c.Conn, rw, sessionShared, true); err != nil {
 		return
 	}
 	// new reader for new conn

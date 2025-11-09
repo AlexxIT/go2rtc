@@ -3,6 +3,7 @@ package homekit
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -14,54 +15,82 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/mdns"
 )
 
-func apiHandler(w http.ResponseWriter, r *http.Request) {
+func apiDiscovery(w http.ResponseWriter, r *http.Request) {
+	sources, err := discovery()
+	if err != nil {
+		api.Error(w, err)
+		return
+	}
+
+	urls := findHomeKitURLs()
+	for id, u := range urls {
+		deviceID := u.Query().Get("device_id")
+		for _, source := range sources {
+			if strings.Contains(source.URL, deviceID) {
+				source.Location = id
+				break
+			}
+		}
+	}
+
+	for _, source := range sources {
+		if source.Location == "" {
+			source.Location = " "
+		}
+	}
+
+	api.ResponseSources(w, sources)
+}
+
+func apiHomekit(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	switch r.Method {
 	case "GET":
-		sources, err := discovery()
-		if err != nil {
-			api.Error(w, err)
-			return
+		if id := r.Form.Get("id"); id != "" {
+			api.ResponsePrettyJSON(w, servers[id])
+		} else {
+			api.ResponsePrettyJSON(w, servers)
 		}
-
-		urls := findHomeKitURLs()
-		for id, u := range urls {
-			deviceID := u.Query().Get("device_id")
-			for _, source := range sources {
-				if strings.Contains(source.URL, deviceID) {
-					source.Location = id
-					break
-				}
-			}
-		}
-
-		for _, source := range sources {
-			if source.Location == "" {
-				source.Location = " "
-			}
-		}
-
-		api.ResponseSources(w, sources)
 
 	case "POST":
-		if err := r.ParseMultipartForm(1024); err != nil {
-			api.Error(w, err)
-			return
-		}
-
-		if err := apiPair(r.Form.Get("id"), r.Form.Get("url")); err != nil {
-			api.Error(w, err)
+		id := r.Form.Get("id")
+		rawURL := r.Form.Get("src") + "&pin=" + r.Form.Get("pin")
+		if err := apiPair(id, rawURL); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 
 	case "DELETE":
-		if err := r.ParseMultipartForm(1024); err != nil {
-			api.Error(w, err)
-			return
-		}
-
-		if err := apiUnpair(r.Form.Get("id")); err != nil {
-			api.Error(w, err)
+		id := r.Form.Get("id")
+		if err := apiUnpair(id); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	}
+}
+
+func apiHomekitAccessories(w http.ResponseWriter, r *http.Request) {
+	src := r.URL.Query().Get("src")
+	stream := streams.Get(src)
+	rawURL := findHomeKitURL(stream.Sources())
+
+	client, err := hap.Dial(rawURL)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer client.Close()
+
+	res, err := client.Get(hap.PathAccessories)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", api.MimeJSON)
+	_, _ = io.Copy(w, res.Body)
 }
 
 func discovery() ([]*api.Source, error) {

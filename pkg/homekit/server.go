@@ -15,15 +15,17 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/hap/tlv8"
 )
 
+type HandlerFunc func(net.Conn) error
+
 type Server interface {
 	ServerPair
 	ServerAccessory
 }
 
 type ServerPair interface {
-	GetPair(conn net.Conn, id string) []byte
-	AddPair(conn net.Conn, id string, public []byte, permissions byte)
-	DelPair(conn net.Conn, id string)
+	GetPair(id string) []byte
+	AddPair(id string, public []byte, permissions byte)
+	DelPair(id string)
 }
 
 type ServerAccessory interface {
@@ -33,11 +35,11 @@ type ServerAccessory interface {
 	GetImage(conn net.Conn, width, height int) []byte
 }
 
-func ServerHandler(server Server) hap.HandlerFunc {
+func ServerHandler(server Server) HandlerFunc {
 	return handleRequest(func(conn net.Conn, req *http.Request) (*http.Response, error) {
 		switch req.URL.Path {
 		case hap.PathPairings:
-			return handlePairings(conn, req, server)
+			return handlePairings(req, server)
 
 		case hap.PathAccessories:
 			body := hap.JSONAccessories{Value: server.GetAccessories(conn)}
@@ -103,7 +105,7 @@ func ServerHandler(server Server) hap.HandlerFunc {
 	})
 }
 
-func handleRequest(handle func(conn net.Conn, req *http.Request) (*http.Response, error)) hap.HandlerFunc {
+func handleRequest(handle func(conn net.Conn, req *http.Request) (*http.Response, error)) HandlerFunc {
 	return func(conn net.Conn) error {
 		rw := bufio.NewReaderSize(conn, 16*1024)
 		wr := bufio.NewWriterSize(conn, 16*1024)
@@ -130,7 +132,7 @@ func handleRequest(handle func(conn net.Conn, req *http.Request) (*http.Response
 	}
 }
 
-func handlePairings(conn net.Conn, req *http.Request, pair ServerPair) (*http.Response, error) {
+func handlePairings(req *http.Request, srv ServerPair) (*http.Response, error) {
 	cmd := struct {
 		Method      byte   `tlv8:"0"`
 		Identifier  string `tlv8:"1"`
@@ -145,9 +147,9 @@ func handlePairings(conn net.Conn, req *http.Request, pair ServerPair) (*http.Re
 
 	switch cmd.Method {
 	case 3: // add
-		pair.AddPair(conn, cmd.Identifier, []byte(cmd.PublicKey), cmd.Permissions)
+		srv.AddPair(cmd.Identifier, []byte(cmd.PublicKey), cmd.Permissions)
 	case 4: // delete
-		pair.DelPair(conn, cmd.Identifier)
+		srv.DelPair(cmd.Identifier)
 	}
 
 	body := struct {
@@ -190,40 +192,3 @@ func makeResponse(mime string, v any) (*http.Response, error) {
 	}
 	return res, nil
 }
-
-//func debug(v any) {
-//	switch v := v.(type) {
-//	case *http.Request:
-//		if v == nil {
-//			return
-//		}
-//		if v.ContentLength != 0 {
-//			b, err := io.ReadAll(v.Body)
-//			if err != nil {
-//				panic(err)
-//			}
-//			v.Body = io.NopCloser(bytes.NewReader(b))
-//			log.Printf("[homekit] request: %s %s\n%s", v.Method, v.RequestURI, b)
-//		} else {
-//			log.Printf("[homekit] request: %s %s <nobody>", v.Method, v.RequestURI)
-//		}
-//	case *http.Response:
-//		if v == nil {
-//			return
-//		}
-//		if v.Header.Get("Content-Type") == "image/jpeg" {
-//			log.Printf("[homekit] response: %d <jpeg>", v.StatusCode)
-//			return
-//		}
-//		if v.ContentLength != 0 {
-//			b, err := io.ReadAll(v.Body)
-//			if err != nil {
-//				panic(err)
-//			}
-//			v.Body = io.NopCloser(bytes.NewReader(b))
-//			log.Printf("[homekit] response: %d\n%s", v.StatusCode, b)
-//		} else {
-//			log.Printf("[homekit] response: %d <nobody>", v.StatusCode)
-//		}
-//	}
-//}

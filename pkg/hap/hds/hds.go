@@ -4,16 +4,18 @@ package hds
 import (
 	"bufio"
 	"encoding/binary"
+	"encoding/json"
 	"io"
 	"net"
 	"time"
 
+	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/hap"
 	"github.com/AlexxIT/go2rtc/pkg/hap/chacha20poly1305"
 	"github.com/AlexxIT/go2rtc/pkg/hap/hkdf"
-	"github.com/AlexxIT/go2rtc/pkg/hap/secure"
 )
 
-func Client(conn net.Conn, key []byte, salt string, controller bool) (*Conn, error) {
+func NewConn(conn net.Conn, key []byte, salt string, controller bool) (*Conn, error) {
 	writeKey, err := hkdf.Sha512(key, salt, "HDS-Write-Encryption-Key")
 	if err != nil {
 		return nil, err
@@ -49,6 +51,21 @@ type Conn struct {
 	encryptKey []byte
 	decryptCnt uint64
 	encryptCnt uint64
+
+	recv int
+	send int
+}
+
+func (c *Conn) MarshalJSON() ([]byte, error) {
+	conn := core.Connection{
+		ID:         core.ID(c),
+		FormatName: "homekit",
+		Protocol:   "hds",
+		RemoteAddr: c.conn.RemoteAddr().String(),
+		Recv:       c.recv,
+		Send:       c.send,
+	}
+	return json.Marshal(conn)
 }
 
 func (c *Conn) Read(p []byte) (n int, err error) {
@@ -59,16 +76,18 @@ func (c *Conn) Read(p []byte) (n int, err error) {
 
 	n = int(binary.BigEndian.Uint32(verify) & 0xFFFFFF)
 
-	ciphertext := make([]byte, n+secure.Overhead)
+	ciphertext := make([]byte, n+hap.Overhead)
 	if _, err = io.ReadFull(c.rd, ciphertext); err != nil {
 		return
 	}
 
-	nonce := make([]byte, secure.NonceSize)
+	nonce := make([]byte, hap.NonceSize)
 	binary.LittleEndian.PutUint64(nonce, c.decryptCnt)
 	c.decryptCnt++
 
 	_, err = chacha20poly1305.DecryptAndVerify(c.decryptKey, p[:0], nonce, ciphertext, verify)
+
+	c.recv += n
 	return
 }
 
@@ -81,11 +100,11 @@ func (c *Conn) Write(b []byte) (n int, err error) {
 		return
 	}
 
-	nonce := make([]byte, secure.NonceSize)
+	nonce := make([]byte, hap.NonceSize)
 	binary.LittleEndian.PutUint64(nonce, c.encryptCnt)
 	c.encryptCnt++
 
-	buf := make([]byte, n+secure.Overhead)
+	buf := make([]byte, n+hap.Overhead)
 	if _, err = chacha20poly1305.EncryptAndSeal(c.encryptKey, buf[:0], nonce, b, verify); err != nil {
 		return
 	}
@@ -95,6 +114,8 @@ func (c *Conn) Write(b []byte) (n int, err error) {
 	}
 
 	err = c.wr.Flush()
+
+	c.send += n
 	return
 }
 

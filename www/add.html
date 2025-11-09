@@ -100,7 +100,7 @@
 <div class="module">
     <form id="homekit-pair" style="margin-bottom: 10px">
         <input type="text" name="id" placeholder="stream id" size="20">
-        <input type="text" name="url" placeholder="url" size="40">
+        <input type="text" name="src" placeholder="src" size="40">
         <input type="text" name="pin" placeholder="pin" size="10">
         <input type="submit" value="Pair">
     </form>
@@ -112,7 +112,7 @@
 </div>
 <script>
     async function reloadHomeKit() {
-        await getSources('homekit-table', 'api/homekit');
+        await getSources('homekit-table', 'api/discovery/homekit');
 
         const rows = document.querySelectorAll('#homekit-table tr');
         rows.forEach((row, i) => {
@@ -147,11 +147,8 @@
     document.getElementById('homekit-pair').addEventListener('submit', async ev => {
         ev.preventDefault();
 
-        const body = new FormData(ev.target);
-        body.set('url', body.get('url') + '&pin=' + body.get('pin'));
-        body.delete('pin');
-
-        const r = await fetch('api/homekit', {method: 'POST', body: body});
+        const params = new URLSearchParams(new FormData(ev.target));
+        const r = await fetch('api/homekit', {method: 'POST', body: params});
         alert(r.ok ? 'OK' : 'ERROR: ' + await r.text());
 
         await reloadHomeKit();
@@ -159,7 +156,9 @@
 
     document.getElementById('homekit-unpair').addEventListener('submit', async ev => {
         ev.preventDefault();
-        const r = await fetch('api/homekit', {method: 'DELETE', body: new FormData(ev.target)});
+
+        const params = new URLSearchParams(new FormData(ev.target));
+        const r = await fetch('api/homekit?' + params.toString(), {method: 'DELETE'});
         alert(r.ok ? 'OK' : 'ERROR: ' + await r.text());
 
         await reloadHomeKit();
