@@ -177,7 +177,7 @@ func findHomeKitURL(sources []string) string {
 	if strings.HasPrefix(url, "hass") {
 		location, _ := streams.Location(url)
 		if strings.HasPrefix(location, "homekit") {
-			return url
+			return location
 		}
 	}
 
