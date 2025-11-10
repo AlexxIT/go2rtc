@@ -72,9 +72,18 @@ func apiHomekit(w http.ResponseWriter, r *http.Request) {
 }
 
 func apiHomekitAccessories(w http.ResponseWriter, r *http.Request) {
-	src := r.URL.Query().Get("src")
-	stream := streams.Get(src)
+	id := r.URL.Query().Get("id")
+	stream := streams.Get(id)
+	if stream == nil {
+		http.Error(w, "", http.StatusNotFound)
+		return
+	}
+
 	rawURL := findHomeKitURL(stream.Sources())
+	if rawURL == "" {
+		http.Error(w, "", http.StatusBadRequest)
+		return
+	}
 
 	client, err := hap.Dial(rawURL)
 	if err != nil {
