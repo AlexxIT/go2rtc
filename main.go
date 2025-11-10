@@ -20,6 +20,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/hls"
 	"github.com/AlexxIT/go2rtc/internal/homekit"
 	"github.com/AlexxIT/go2rtc/internal/http"
+	"github.com/AlexxIT/go2rtc/internal/ipeye"
 	"github.com/AlexxIT/go2rtc/internal/isapi"
 	"github.com/AlexxIT/go2rtc/internal/ivideon"
 	"github.com/AlexxIT/go2rtc/internal/mjpeg"
@@ -98,6 +99,7 @@ func main() {
 	flussonic.Init()
 	eseecloud.Init()
 	yandex.Init()
+	ipeye.Init()
 
 	// 6. Helper modules
 
