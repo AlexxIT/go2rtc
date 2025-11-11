@@ -158,6 +158,7 @@ func HandleFunc(pattern string, handler http.HandlerFunc) {
 		pattern = basePath + "/" + pattern
 	}
 	if allowPaths != nil && !slices.Contains(allowPaths, pattern) {
+		log.Trace().Str("path", pattern).Msg("[api] ignore path not in allow_paths")
 		return
 	}
 	log.Trace().Str("path", pattern).Msg("[api] register path")
