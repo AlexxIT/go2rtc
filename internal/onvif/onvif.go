@@ -45,6 +45,10 @@ func streamOnvif(rawURL string) (core.Producer, error) {
 
 	log.Debug().Msgf("[onvif] new uri=%s", uri)
 
+	if err = streams.Validate(uri); err != nil {
+		return nil, err
+	}
+
 	return streams.GetProducer(uri)
 }
 
