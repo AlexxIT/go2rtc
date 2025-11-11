@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -30,6 +31,8 @@ func Init() {
 			TLSCert    string `yaml:"tls_cert"`
 			TLSKey     string `yaml:"tls_key"`
 			UnixListen string `yaml:"unix_listen"`
+
+			AllowPaths []string `yaml:"allow_paths"`
 		} `yaml:"api"`
 	}
 
@@ -43,6 +46,7 @@ func Init() {
 		return
 	}
 
+	allowPaths = cfg.Mod.AllowPaths
 	basePath = cfg.Mod.BasePath
 	log = app.GetLogger("api")
 
@@ -152,6 +156,9 @@ func HandleFunc(pattern string, handler http.HandlerFunc) {
 	if len(pattern) == 0 || pattern[0] != '/' {
 		pattern = basePath + "/" + pattern
 	}
+	if allowPaths != nil && !slices.Contains(allowPaths, pattern) {
+		return
+	}
 	log.Trace().Str("path", pattern).Msg("[api] register path")
 	http.HandleFunc(pattern, handler)
 }
@@ -185,6 +192,7 @@ func Response(w http.ResponseWriter, body any, contentType string) {
 
 const StreamNotFound = "stream not found"
 
+var allowPaths []string
 var basePath string
 var log zerolog.Logger
 
