@@ -29,7 +29,9 @@ type Client struct {
 
 	stream *camera.Stream
 
-	Bitrate int // in bits/s
+	MaxWidth  int
+	MaxHeight int
+	Bitrate   int // in bits/s
 }
 
 func Dial(rawURL string, server *srtp.Server) (*Client, error) {
@@ -115,7 +117,7 @@ func (c *Client) Start() error {
 	}
 
 	videoTrack := c.trackByKind(core.KindVideo)
-	videoCodec := trackToVideo(videoTrack, &c.videoConfig.Codecs[0])
+	videoCodec := trackToVideo(videoTrack, &c.videoConfig.Codecs[0], c.MaxWidth, c.MaxHeight)
 
 	audioTrack := c.trackByKind(core.KindAudio)
 	audioCodec := trackToAudio(audioTrack, &c.audioConfig.Codecs[0])

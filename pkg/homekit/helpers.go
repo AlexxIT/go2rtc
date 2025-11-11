@@ -67,10 +67,10 @@ func audioToMedia(codecs []camera.AudioCodecConfiguration) *core.Media {
 	return media
 }
 
-func trackToVideo(track *core.Receiver, video0 *camera.VideoCodecConfiguration) *camera.VideoCodecConfiguration {
+func trackToVideo(track *core.Receiver, video0 *camera.VideoCodecConfiguration, maxWidth, maxHeight int) *camera.VideoCodecConfiguration {
 	profileID := video0.CodecParams[0].ProfileID[0]
 	level := video0.CodecParams[0].Level[0]
-	attrs := video0.VideoAttrs[0]
+	var attrs camera.VideoCodecAttributes
 
 	if track != nil {
 		profile := h264.GetProfileLevelID(track.Codec.FmtpLine)
@@ -90,6 +90,9 @@ func trackToVideo(track *core.Receiver, video0 *camera.VideoCodecConfiguration) 
 		}
 
 		for _, s := range video0.VideoAttrs {
+			if (maxWidth > 0 && int(s.Width) > maxWidth) || (maxHeight > 0 && int(s.Height) > maxHeight) {
+				continue
+			}
 			if s.Width > attrs.Width || s.Height > attrs.Height {
 				attrs = s
 			}
