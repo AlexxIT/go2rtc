@@ -1,9 +1,7 @@
 package streams
 
 import (
-	"errors"
 	"net/url"
-	"regexp"
 	"sync"
 	"time"
 
@@ -48,16 +46,6 @@ func Init() {
 			}
 		}
 	})
-}
-
-var sanitize = regexp.MustCompile(`\s`)
-
-// Validate - not allow creating dynamic streams with spaces in the source
-func Validate(source string) error {
-	if sanitize.MatchString(source) {
-		return errors.New("streams: invalid dynamic source")
-	}
-	return nil
 }
 
 func New(name string, sources ...string) *Stream {

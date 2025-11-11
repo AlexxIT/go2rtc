@@ -56,6 +56,7 @@ func Init() {
 	})
 
 	streams.HandleFunc("exec", execHandle)
+	streams.MarkInsecure("exec")
 
 	log = app.GetLogger("exec")
 }

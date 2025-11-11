@@ -42,4 +42,5 @@ func Init() {
 
 		return string(b), nil
 	})
+	streams.MarkInsecure("echo")
 }
