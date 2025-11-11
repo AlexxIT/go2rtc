@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -26,6 +27,16 @@ import (
 )
 
 func Init() {
+	var cfg struct {
+		Mod struct {
+			AllowPaths []string `yaml:"allow_paths"`
+		} `yaml:"exec"`
+	}
+
+	app.LoadConfig(&cfg)
+
+	allowPaths = cfg.Mod.AllowPaths
+
 	rtsp.HandleFunc(func(conn *pkg.Conn) bool {
 		waitersMu.Lock()
 		waiter := waiters[conn.URL.Path]
@@ -49,6 +60,8 @@ func Init() {
 	log = app.GetLogger("exec")
 }
 
+var allowPaths []string
+
 func execHandle(rawURL string) (prod core.Producer, err error) {
 	rawURL, rawQuery, _ := strings.Cut(rawURL, "#")
 	query := streams.ParseQuery(rawQuery)
@@ -71,6 +84,10 @@ func execHandle(rawURL string) (prod core.Producer, err error) {
 	cmd.Stderr = &logWriter{
 		buf:   make([]byte, 512),
 		debug: log.Debug().Enabled(),
+	}
+
+	if allowPaths != nil && !slices.Contains(allowPaths, cmd.Args[0]) {
+		return nil, errors.New("exec: bin not in allow_paths: " + cmd.Args[0])
 	}
 
 	if s := query.Get("killsignal"); s != "" {
