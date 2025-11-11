@@ -24,6 +24,7 @@ func Init() {
 			Listen     string `yaml:"listen"`
 			Username   string `yaml:"username"`
 			Password   string `yaml:"password"`
+			LocalAuth  bool   `yaml:"local_auth"`
 			BasePath   string `yaml:"base_path"`
 			StaticDir  string `yaml:"static_dir"`
 			Origin     string `yaml:"origin"`
@@ -65,7 +66,7 @@ func Init() {
 	}
 
 	if cfg.Mod.Username != "" {
-		Handler = middlewareAuth(cfg.Mod.Username, cfg.Mod.Password, Handler) // 2nd
+		Handler = middlewareAuth(cfg.Mod.Username, cfg.Mod.Password, cfg.Mod.LocalAuth, Handler) // 2nd
 	}
 
 	if log.Trace().Enabled() {
@@ -203,9 +204,13 @@ func middlewareLog(next http.Handler) http.Handler {
 	})
 }
 
-func middlewareAuth(username, password string, next http.Handler) http.Handler {
+func isLoopback(remoteAddr string) bool {
+	return strings.HasPrefix(remoteAddr, "127.") || strings.HasPrefix(remoteAddr, "[::1]") || remoteAddr == "@"
+}
+
+func middlewareAuth(username, password string, localAuth bool, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasPrefix(r.RemoteAddr, "127.") && !strings.HasPrefix(r.RemoteAddr, "[::1]") && r.RemoteAddr != "@" {
+		if localAuth || !isLoopback(r.RemoteAddr) {
 			user, pass, ok := r.BasicAuth()
 			if !ok || user != username || pass != password {
 				w.Header().Set("Www-Authenticate", `Basic realm="go2rtc"`)
