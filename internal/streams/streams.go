@@ -135,8 +135,6 @@ func GetOrPatch(query url.Values) *Stream {
 
 	// check if name param provided
 	if name := query.Get("name"); name != "" {
-		log.Info().Msgf("[streams] create new stream url=%s", source)
-
 		return Patch(name, source)
 	}
 
