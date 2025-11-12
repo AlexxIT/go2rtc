@@ -27,6 +27,10 @@ func HasProducer(url string) bool {
 		if _, ok := redirects[scheme]; ok {
 			return true
 		}
+
+		log.Warn().Str("scheme", scheme).Msg("[streams] Unknown producer scheme")
+	} else {
+		log.Warn().Str("url", url).Msg("[streams] Invalid producer URL")
 	}
 
 	return false
