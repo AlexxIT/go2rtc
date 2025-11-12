@@ -59,15 +59,17 @@ func Init() {
 	HandleFunc("api/restart", restartHandler)
 	HandleFunc("api/log", logHandler)
 
-	Handler = http.DefaultServeMux // 4th
+	Handler = http.DefaultServeMux // 5th
 
 	if cfg.Mod.Origin == "*" {
-		Handler = middlewareCORS(Handler) // 3rd
+		Handler = middlewareCORS(Handler) // 4th
 	}
 
 	if cfg.Mod.Username != "" {
-		Handler = middlewareAuth(cfg.Mod.Username, cfg.Mod.Password, cfg.Mod.LocalAuth, Handler) // 2nd
+		Handler = middlewareAuth(cfg.Mod.Username, cfg.Mod.Password, cfg.Mod.LocalAuth, Handler) // 3rd
 	}
+
+	Handler = middleware404Logger(Handler) // 2nd
 
 	if log.Trace().Enabled() {
 		Handler = middlewareLog(Handler) // 1st
@@ -203,6 +205,28 @@ func middlewareLog(next http.Handler) http.Handler {
 		log.Trace().Msgf("[api] %s %s %s", r.Method, r.URL, r.RemoteAddr)
 		next.ServeHTTP(w, r)
 	})
+}
+
+func middleware404Logger(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Create a response writer wrapper to capture the status code
+		rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+		next.ServeHTTP(rw, r)
+
+		if rw.statusCode == http.StatusNotFound {
+			log.Warn().Str("method", r.Method).Str("path", r.URL.Path).Str("remote", r.RemoteAddr).Msg("[api] unregistered path")
+		}
+	})
+}
+
+type responseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (rw *responseWriter) WriteHeader(code int) {
+	rw.statusCode = code
+	rw.ResponseWriter.WriteHeader(code)
 }
 
 func isLoopback(remoteAddr string) bool {
