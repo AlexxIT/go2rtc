@@ -1,27 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>go2rtc - links</title>
-    <meta name="viewport" content="width=device-width, user-scalable=yes, initial-scale=1, maximum-scale=1">
-    <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <style>
-
-        body {
-            margin: 0;
-            padding: 0;
-            display: flex;
-            flex-direction: column;
-        }
-
-        html, body {
-            width: 100%;
-            height: 100%;
-        }
-
-        div {
-            padding: 10px;
-        }
-
         div > li {
             list-style-type: none;
             padding-left: 10px;
@@ -36,28 +19,33 @@
     </style>
 </head>
 <body>
-<script src="main.js"></script>
-<div id="links"></div>
-<script>
-    const src = new URLSearchParams(location.search).get('src').replace(/[<">]/g, ''); // sanitize
 
-    document.getElementById('links').innerHTML = `
+<script src="main.js"></script>
+
+<main>
+    <div id="links"></div>
+    <script>
+        const src = new URLSearchParams(location.search).get('src').replace(/[<">]/g, ''); // sanitize
+
+        const links = document.getElementById('links');
+
+        links.innerHTML = `
         <h2>Any codec in source</h2>
         <li><a href="stream.html?src=${src}">stream.html</a> with auto-select mode / browsers: all / codecs: H264, H265*, MJPEG, JPEG, AAC, PCMU, PCMA, OPUS</li>
         <li><a href="api/streams?src=${src}">info.json</a> page with active connections</li>
     `;
 
-    const url = new URL('api', location.href);
-    fetch(url, {cache: 'no-cache'}).then(r => r.json()).then(data => {
-        let rtsp = location.host + ':8554';
-        try {
-            const host = data.host.match(/^[^:]+/)[0];
-            const port = data.rtsp.listen.match(/[0-9]+$/)[0];
-            rtsp = `${host}:${port}`;
-        } catch (e) {
-        }
+        const url = new URL('api', location.href);
+        fetch(url, {cache: 'no-cache'}).then(r => r.json()).then(data => {
+            let rtsp = location.host + ':8554';
+            try {
+                const host = data.host.match(/^[^:]+/)[0];
+                const port = data.rtsp.listen.match(/[0-9]+$/)[0];
+                rtsp = `${host}:${port}`;
+            } catch (e) {
+            }
 
-        document.getElementById('links').innerHTML += `
+            links.innerHTML += `
             <li><a href="rtsp://${rtsp}/${src}">rtsp</a> with only one video and one audio / codecs: any</li>
             <li><a href="rtsp://${rtsp}/${src}?mp4">rtsp</a> for MP4 recording (Hass or Frigate) / codecs: H264, H265, AAC</li>
             <li><a href="rtsp://${rtsp}/${src}?video=all&audio=all">rtsp</a> with all tracks / codecs: any</li>
@@ -80,148 +68,165 @@
             <li><a href="api/stream.mjpeg?src=${src}">stream.mjpeg</a> MJPEG stream / browsers: all / codecs: MJPEG, JPEG</li>
             <li><a href="api/frame.jpeg?src=${src}">frame.jpeg</a> snapshot in JPEG-format / browsers: all / codecs: MJPEG, JPEG</li>
         `;
-    });
-</script>
+        });
+    </script>
 
-<div>
-    <h2>Play audio</h2>
-    <label><input type="radio" name="play" value="file" checked>file - play remote (https://example.com/song.mp3) or local (/media/song.mp3) file</label><br>
-    <label><input type="radio" name="play" value="live">live - play remote live stream (radio, etc.)</label><br>
-    <label><input type="radio" name="play" value="text">text - play Text To Speech (if your FFmpeg support this)</label><br>
-    <br>
-    <input id="play-url" type="text" placeholder="path / url / text">
-    <a id="play-send" href="#">send</a> / cameras with two way audio support
-</div>
-<script>
-    document.getElementById('play-send').addEventListener('click', ev => {
-        ev.preventDefault();
-        // action - file / live / text
-        const action = document.querySelector('input[name="play"]:checked').value;
-        const url = new URL('api/ffmpeg', location.href);
-        url.searchParams.set('dst', src);
-        url.searchParams.set(action, document.getElementById('play-url').value);
-        fetch(url, {method: 'POST'});
-    });
-</script>
+    <div>
+        <h2>Play audio</h2>
+        <label><input type="radio" name="play" value="file" checked>
+            file - play remote (https://example.com/song.mp3) or local (/media/song.mp3) file
+        </label>
+        <label><input type="radio" name="play" value="live">
+            live - play remote live stream (radio, etc.)
+        </label>
+        <label><input type="radio" name="play" value="text">
+            text - play Text To Speech (if your FFmpeg support this)
+        </label>
+        <br>
+        <input id="play-url" type="text" placeholder="path / url / text">
+        <button id="play-send">send</button>
+        / cameras with two way audio support
+    </div>
+    <script>
+        document.getElementById('play-send').addEventListener('click', ev => {
+            ev.preventDefault();
+            // action - file / live / text
+            const action = document.querySelector('input[name="play"]:checked').value;
+            const url = new URL('api/ffmpeg', location.href);
+            url.searchParams.set('dst', src);
+            url.searchParams.set(action, document.getElementById('play-url').value);
+            fetch(url, {method: 'POST'});
+        });
+    </script>
 
-<div>
-    <h2>Publish stream</h2>
-    <pre>YouTube:  rtmps://xxx.rtmp.youtube.com/live2/xxxx-xxxx-xxxx-xxxx-xxxx
+    <div>
+        <h2>Publish stream</h2>
+        <pre>YouTube:  rtmps://xxx.rtmp.youtube.com/live2/xxxx-xxxx-xxxx-xxxx-xxxx
 Telegram: rtmps://xxx-x.rtmp.t.me/s/xxxxxxxxxx:xxxxxxxxxxxxxxxxxxxxxx</pre>
-    <input id="pub-url" type="text" placeholder="url">
-    <a id="pub-send" href="#">send</a> / Telegram RTMPS server
-</div>
-<script>
-    document.getElementById('pub-send').addEventListener('click', ev => {
-        ev.preventDefault();
-        const url = new URL('api/streams', location.href);
-        url.searchParams.set('src', src);
-        url.searchParams.set('dst', document.getElementById('pub-url').value);
-        fetch(url, {method: 'POST'});
-    });
-</script>
+        <input id="pub-url" type="text" placeholder="url">
+        <button id="pub-send">send</button>
+        / Telegram RTMPS server
+    </div>
+    <script>
+        document.getElementById('pub-send').addEventListener('click', ev => {
+            ev.preventDefault();
+            const url = new URL('api/streams', location.href);
+            url.searchParams.set('src', src);
+            url.searchParams.set('dst', document.getElementById('pub-url').value);
+            fetch(url, {method: 'POST'});
+        });
+    </script>
 
-<div id="webrtc">
-    <h2>WebRTC Magic</h2>
-    <label><input type="radio" name="webrtc" value="video+audio" checked>video+audio = simple viewer</label><br>
-    <label><input type="radio" name="webrtc" value="video+audio+microphone">video+audio+microphone = two way audio from camera</label><br>
-    <label><input type="radio" name="webrtc" value="camera+microphone">camera+microphone = stream from browser</label><br>
-    <label><input type="radio" name="webrtc" value="display+speaker">display+speaker = broadcast software</label><br>
+    <div id="webrtc">
+        <h2>WebRTC Magic</h2>
+        <label><input type="radio" name="webrtc" value="video+audio" checked>
+            video+audio = simple viewer
+        </label>
+        <label><input type="radio" name="webrtc" value="video+audio+microphone">
+            video+audio+microphone = two way audio from camera
+        </label>
+        <label><input type="radio" name="webrtc" value="camera+microphone">
+            camera+microphone = stream from browser
+        </label>
+        <label><input type="radio" name="webrtc" value="display+speaker">
+            display+speaker = broadcast software
+        </label>
 
-    <br>
-    <li><a id="local" href="webrtc.html?src=">webrtc.html</a> local WebRTC viewer</li>
+        <br>
+        <li><a id="local" href="webrtc.html?src=">webrtc.html</a> local WebRTC viewer</li>
 
-    <li>
-        <a id="shareadd" href="#">share link</a>
-        <a id="shareget" href="#">copy link</a>
-        <a id="sharedel" href="#">delete</a>
-        external WebRTC viewer
-    </li>
-</div>
-<script>
-    function webrtcLinksUpdate() {
-        const media = document.querySelector('input[name="webrtc"]:checked').value;
+        <li>
+            <a id="shareadd" href="#">share link</a>
+            <a id="shareget" href="#">copy link</a>
+            <a id="sharedel" href="#">delete</a>
+            external WebRTC viewer
+        </li>
+    </div>
+    <script>
+        function webrtcLinksUpdate() {
+            const media = document.querySelector('input[name="webrtc"]:checked').value;
 
-        const direction = media.indexOf('video') >= 0 || media === 'audio' ? 'src' : 'dst';
-        document.getElementById('local').href = `webrtc.html?${direction}=${src}&media=${media}`;
+            const direction = media.indexOf('video') >= 0 || media === 'audio' ? 'src' : 'dst';
+            document.getElementById('local').href = `webrtc.html?${direction}=${src}&media=${media}`;
 
-        const share = document.getElementById('shareget');
-        share.href = `https://alexxit.github.io/go2rtc/#${share.dataset.auth}&media=${media}`;
-    }
+            const share = document.getElementById('shareget');
+            share.href = `https://alexxit.github.io/go2rtc/#${share.dataset.auth}&media=${media}`;
+        }
 
-    function share(method) {
-        const url = new URL('api/webtorrent', location.href);
-        url.searchParams.set('src', src);
-        return fetch(url, {method: method, cache: 'no-cache'});
-    }
+        function share(method) {
+            const url = new URL('api/webtorrent', location.href);
+            url.searchParams.set('src', src);
+            return fetch(url, {method: method, cache: 'no-cache'});
+        }
 
-    function onshareadd(r) {
-        document.getElementById('shareget').dataset['auth'] = `share=${r.share}&pwd=${r.pwd}`;
+        function onshareadd(r) {
+            document.getElementById('shareget').dataset['auth'] = `share=${r.share}&pwd=${r.pwd}`;
 
-        document.getElementById('shareadd').style.display = 'none';
-        document.getElementById('shareget').style.display = '';
-        document.getElementById('sharedel').style.display = '';
+            document.getElementById('shareadd').style.display = 'none';
+            document.getElementById('shareget').style.display = '';
+            document.getElementById('sharedel').style.display = '';
+
+            webrtcLinksUpdate();
+        }
+
+        function onsharedel() {
+            document.getElementById('shareadd').style.display = '';
+            document.getElementById('shareget').style.display = 'none';
+            document.getElementById('sharedel').style.display = 'none';
+        }
+
+        function copyTextToClipboard(text) {
+            // https://web.dev/patterns/clipboard/copy-text
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text).catch(err => {
+                    console.error(err.name, err.message);
+                });
+            } else {
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.style.opacity = '0';
+                document.body.appendChild(textarea);
+
+                textarea.focus();
+                textarea.select();
+
+                try {
+                    document.execCommand('copy');
+                } catch (err) {
+                    console.error(err.name, err.message);
+                }
+
+                document.body.removeChild(textarea);
+            }
+        }
+
+        document.getElementById('shareadd').addEventListener('click', ev => {
+            ev.preventDefault();
+            share('POST').then(r => r.json()).then(r => onshareadd(r));
+        });
+
+        document.getElementById('shareget').addEventListener('click', ev => {
+            ev.preventDefault();
+            copyTextToClipboard(ev.target.href);
+        });
+
+        document.getElementById('sharedel').addEventListener('click', ev => {
+            ev.preventDefault();
+            share('DELETE').then(() => onsharedel());
+        });
+
+        document.getElementById('webrtc').addEventListener('click', ev => {
+            if (ev.target.tagName === 'INPUT') webrtcLinksUpdate();
+        });
+
+        share('GET').then(r => {
+            if (r.ok) r.json().then(r => onshareadd(r));
+            else onsharedel();
+        });
 
         webrtcLinksUpdate();
-    }
-
-    function onsharedel() {
-        document.getElementById('shareadd').style.display = '';
-        document.getElementById('shareget').style.display = 'none';
-        document.getElementById('sharedel').style.display = 'none';
-    }
-
-    function copyTextToClipboard(text) {
-        // https://web.dev/patterns/clipboard/copy-text
-        if (navigator.clipboard && window.isSecureContext) {
-            navigator.clipboard.writeText(text).catch(err => {
-                console.error(err.name, err.message);
-            });
-        } else {
-            const textarea = document.createElement('textarea');
-            textarea.value = text;
-            textarea.style.opacity = '0';
-            document.body.appendChild(textarea);
-
-            textarea.focus();
-            textarea.select();
-
-            try {
-                document.execCommand('copy');
-            } catch (err) {
-                console.error(err.name, err.message);
-            }
-
-            document.body.removeChild(textarea);
-        }
-    }
-
-    document.getElementById('shareadd').addEventListener('click', ev => {
-        ev.preventDefault();
-        share('POST').then(r => r.json()).then(r => onshareadd(r));
-    });
-
-    document.getElementById('shareget').addEventListener('click', ev => {
-        ev.preventDefault();
-        copyTextToClipboard(ev.target.href);
-    });
-
-    document.getElementById('sharedel').addEventListener('click', ev => {
-        ev.preventDefault();
-        share('DELETE').then(() => onsharedel());
-    });
-
-    document.getElementById('webrtc').addEventListener('click', ev => {
-        if (ev.target.tagName === 'INPUT') webrtcLinksUpdate();
-    });
-
-    share('GET').then(r => {
-        if (r.ok) r.json().then(r => onshareadd(r));
-        else onsharedel();
-    });
-
-    webrtcLinksUpdate();
-</script>
+    </script>
+</main>
 
 </body>
 </html>
