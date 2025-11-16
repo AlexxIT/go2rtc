@@ -1,6 +1,7 @@
 package streams
 
 import (
+	"errors"
 	"net/url"
 	"sync"
 	"time"
@@ -48,10 +49,14 @@ func Init() {
 	})
 }
 
-func New(name string, sources ...string) *Stream {
+func New(name string, sources ...string) (*Stream, error) {
 	for _, source := range sources {
-		if Validate(source) != nil {
-			return nil
+		if !HasProducer(source) {
+			return nil, errors.New("streams: source not supported")
+		}
+
+		if err := Validate(source); err != nil {
+			return nil, err
 		}
 	}
 
@@ -61,10 +66,10 @@ func New(name string, sources ...string) *Stream {
 	streams[name] = stream
 	streamsMu.Unlock()
 
-	return stream
+	return stream, nil
 }
 
-func Patch(name string, source string) *Stream {
+func Patch(name string, source string) (*Stream, error) {
 	streamsMu.Lock()
 	defer streamsMu.Unlock()
 
@@ -76,7 +81,7 @@ func Patch(name string, source string) *Stream {
 				// link (alias) streams[name] to streams[rtspName]
 				streams[name] = stream
 			}
-			return stream
+			return stream, nil
 		}
 	}
 
@@ -85,40 +90,40 @@ func Patch(name string, source string) *Stream {
 			// link (alias) streams[name] to streams[source]
 			streams[name] = stream
 		}
-		return stream
+		return stream, nil
 	}
 
 	// check if src has supported scheme
 	if !HasProducer(source) {
-		return nil
+		return nil, errors.New("streams: source not supported")
 	}
 
-	if Validate(source) != nil {
-		return nil
+	if err := Validate(source); err != nil {
+		return nil, err
 	}
 
 	// check an existing stream with this name
 	if stream, ok := streams[name]; ok {
 		stream.SetSource(source)
-		return stream
+		return stream, nil
 	}
 
 	// create new stream with this name
 	stream := NewStream(source)
 	streams[name] = stream
-	return stream
+	return stream, nil
 }
 
-func GetOrPatch(query url.Values) *Stream {
+func GetOrPatch(query url.Values) (*Stream, error) {
 	// check if src param exists
 	source := query.Get("src")
 	if source == "" {
-		return nil
+		return nil, errors.New("streams: source empty")
 	}
 
 	// check if src is stream name
 	if stream := Get(source); stream != nil {
-		return stream
+		return stream, nil
 	}
 
 	// check if name param provided
