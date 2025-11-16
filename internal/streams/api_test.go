@@ -36,40 +36,18 @@ func TestApiSchemes(t *testing.T) {
 		require.Contains(t, schemes, "http")
 	})
 
-	t.Run("POST request returns method not allowed", func(t *testing.T) {
-		req := httptest.NewRequest("POST", "/api/schemes", nil)
-		w := httptest.NewRecorder()
+	t.Run("non-GET requests return method not allowed", func(t *testing.T) {
+		methods := []string{"POST", "PUT", "DELETE", "PATCH"}
+		for _, method := range methods {
+			t.Run(method, func(t *testing.T) {
+				req := httptest.NewRequest(method, "/api/schemes", nil)
+				w := httptest.NewRecorder()
 
-		apiSchemes(w, req)
+				apiSchemes(w, req)
 
-		require.Equal(t, http.StatusMethodNotAllowed, w.Code)
-	})
-
-	t.Run("PUT request returns method not allowed", func(t *testing.T) {
-		req := httptest.NewRequest("PUT", "/api/schemes", nil)
-		w := httptest.NewRecorder()
-
-		apiSchemes(w, req)
-
-		require.Equal(t, http.StatusMethodNotAllowed, w.Code)
-	})
-
-	t.Run("DELETE request returns method not allowed", func(t *testing.T) {
-		req := httptest.NewRequest("DELETE", "/api/schemes", nil)
-		w := httptest.NewRecorder()
-
-		apiSchemes(w, req)
-
-		require.Equal(t, http.StatusMethodNotAllowed, w.Code)
-	})
-
-	t.Run("PATCH request returns method not allowed", func(t *testing.T) {
-		req := httptest.NewRequest("PATCH", "/api/schemes", nil)
-		w := httptest.NewRecorder()
-
-		apiSchemes(w, req)
-
-		require.Equal(t, http.StatusMethodNotAllowed, w.Code)
+				require.Equal(t, http.StatusMethodNotAllowed, w.Code)
+			})
+		}
 	})
 }
 
