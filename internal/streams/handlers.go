@@ -2,7 +2,9 @@ package streams
 
 import (
 	"errors"
+	"maps"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -14,6 +16,17 @@ var handlers = map[string]Handler{}
 
 func HandleFunc(scheme string, handler Handler) {
 	handlers[scheme] = handler
+}
+
+func GetSupportedSchemes() []string {
+	unique := make(map[string]bool)
+	for scheme := range handlers {
+		unique[scheme] = true
+	}
+	for scheme := range redirects {
+		unique[scheme] = true
+	}
+	return slices.Collect(maps.Keys(unique))
 }
 
 func HasProducer(url string) bool {
