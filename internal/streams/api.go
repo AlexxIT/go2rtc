@@ -176,3 +176,7 @@ func apiPreload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "", http.StatusMethodNotAllowed)
 	}
 }
+
+func apiSchemes(w http.ResponseWriter, r *http.Request) {
+	api.ResponseJSON(w, SupportedSchemes())
+}

@@ -16,6 +16,21 @@ func HandleFunc(scheme string, handler Handler) {
 	handlers[scheme] = handler
 }
 
+func SupportedSchemes() []string {
+	uniqueKeys := make(map[string]struct{}, len(handlers)+len(redirects))
+	for scheme := range handlers {
+		uniqueKeys[scheme] = struct{}{}
+	}
+	for scheme := range redirects {
+		uniqueKeys[scheme] = struct{}{}
+	}
+	resultKeys := make([]string, 0, len(uniqueKeys))
+	for key := range uniqueKeys {
+		resultKeys = append(resultKeys, key)
+	}
+	return resultKeys
+}
+
 func HasProducer(url string) bool {
 	if i := strings.IndexByte(url, ':'); i > 0 {
 		scheme := url[:i]
