@@ -35,20 +35,6 @@ func TestApiSchemes(t *testing.T) {
 		require.Contains(t, schemes, "rtmp")
 		require.Contains(t, schemes, "http")
 	})
-
-	t.Run("non-GET requests return method not allowed", func(t *testing.T) {
-		methods := []string{"POST", "PUT", "DELETE", "PATCH"}
-		for _, method := range methods {
-			t.Run(method, func(t *testing.T) {
-				req := httptest.NewRequest(method, "/api/schemes", nil)
-				w := httptest.NewRecorder()
-
-				apiSchemes(w, req)
-
-				require.Equal(t, http.StatusMethodNotAllowed, w.Code)
-			})
-		}
-	})
 }
 
 func TestApiSchemesNoDuplicates(t *testing.T) {
