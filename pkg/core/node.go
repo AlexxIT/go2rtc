@@ -59,15 +59,33 @@ func (n *Node) RemoveChild(child *Node) {
 }
 
 func (n *Node) Close() {
-	if parent := n.parent; parent != nil {
+	// Lock to safely read parent
+	n.mu.Lock()
+	parent := n.parent
+	n.parent = nil // Clear parent reference
+	n.mu.Unlock()
+
+	if parent != nil {
 		parent.RemoveChild(n)
 
-		if len(parent.childs) == 0 {
+		// Thread-safe check for parent's children
+		parent.mu.Lock()
+		hasChildren := len(parent.childs) > 0
+		parent.mu.Unlock()
+
+		if !hasChildren {
 			parent.Close()
 		}
 	} else {
-		for _, childs := range n.childs {
-			childs.Close()
+		// Copy children before iterating
+		n.mu.Lock()
+		children := make([]*Node, len(n.childs))
+		copy(children, n.childs)
+		n.childs = nil // Clear to prevent further access
+		n.mu.Unlock()
+
+		for _, child := range children {
+			child.Close()
 		}
 	}
 }
