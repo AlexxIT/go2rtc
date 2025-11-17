@@ -1,6 +1,7 @@
 document.head.innerHTML += `
 <style>
     body {
+        background-color: white;  /* fix Hass black theme */
         display: flex;
         flex-direction: column;
         font-family: Arial, sans-serif;
