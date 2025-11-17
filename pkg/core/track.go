@@ -49,8 +49,11 @@ func (r *Receiver) WriteRTP(packet *rtp.Packet) {
 	r.Input(packet)
 }
 
-// Thread-safe check for senders
+// Thread-safe check for senders with ghost children cleanup
 func (r *Receiver) HasSenders() bool {
+	// Clean up any ghost children first
+	r.cleanGhostChildren()
+
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return len(r.childs) > 0
@@ -198,6 +201,8 @@ func (s *Sender) Close() {
 	}
 	s.mu.Unlock()
 
+	// Always call Node.Close() to ensure proper cleanup
+	// even if the sender-specific cleanup already happened
 	s.Node.Close()
 }
 
