@@ -3,6 +3,7 @@ package tapo
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/md5"
@@ -17,6 +18,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/mpegts"
@@ -44,6 +46,12 @@ type Client struct {
 
 	recv int
 	send int
+
+	// Context for cancellation
+	ctx        context.Context
+	cancel     context.CancelFunc
+	closeMutex sync.Mutex
+	closed     bool
 }
 
 // block ciphers using cipher block chaining.
@@ -69,8 +77,17 @@ func Dial(rawURL string) (*Client, error) {
 		u.Host += ":8800"
 	}
 
-	c := &Client{url: u}
+	// Create context with cancel
+	ctx, cancel := context.WithCancel(context.Background())
+
+	c := &Client{
+		url:    u,
+		ctx:    ctx,
+		cancel: cancel,
+	}
+
 	if c.conn1, err = c.newConn(); err != nil {
+		cancel()
 		return nil, err
 	}
 	return c, nil
@@ -185,9 +202,39 @@ func (c *Client) Handle() error {
 	rd := multipart.NewReader(c.conn1, "--device-stream-boundary--")
 	demux := mpegts.NewDemuxer()
 
+	// Create done channel to signal completion
+	done := make(chan struct{})
+	defer close(done)
+
+	// Monitor context cancellation in separate goroutine
+	go func() {
+		select {
+		case <-c.ctx.Done():
+			// Force close connection to unblock Read operations
+			c.closeMutex.Lock()
+			if !c.closed && c.conn1 != nil {
+				_ = c.conn1.Close()
+			}
+			c.closeMutex.Unlock()
+		case <-done:
+			// Handle() finished normally
+		}
+	}()
+
 	for {
+		// Check context before each read
+		select {
+		case <-c.ctx.Done():
+			return c.ctx.Err()
+		default:
+		}
+
 		p, err := rd.NextRawPart()
 		if err != nil {
+			// Check if error is due to cancellation
+			if c.ctx.Err() != nil {
+				return c.ctx.Err()
+			}
 			return err
 		}
 
@@ -207,6 +254,13 @@ func (c *Client) Handle() error {
 
 		b := body
 		for {
+			// Check context during read loop
+			select {
+			case <-c.ctx.Done():
+				return c.ctx.Err()
+			default:
+			}
+
 			if n, err2 := p.Read(b); err2 == nil {
 				b = b[n:]
 			} else {
@@ -237,17 +291,37 @@ func (c *Client) Handle() error {
 	}
 }
 
-func (c *Client) Close() (err error) {
+// Safe close with proper synchronization
+func (c *Client) Close() error {
+	c.closeMutex.Lock()
+	if c.closed {
+		c.closeMutex.Unlock()
+		return nil
+	}
+	c.closed = true
+	c.closeMutex.Unlock()
+
+	// Cancel context first to signal Handle() to stop
+	c.cancel()
+
+	// Close connections (will unblock any blocking reads)
+	var err error
 	if c.conn1 != nil {
 		err = c.conn1.Close()
 	}
-	if c.conn2 != nil {
+	if c.conn2 != nil && c.conn2 != c.conn1 {
 		_ = c.conn2.Close()
 	}
-	return
+
+	return err
 }
 
 func (c *Client) Request(conn net.Conn, body []byte) (string, error) {
+	// Check if context is cancelled
+	if c.ctx.Err() != nil {
+		return "", c.ctx.Err()
+	}
+
 	// TODO: fixme (size)
 	buf := bytes.NewBuffer(nil)
 	buf.WriteString("----client-stream-boundary--\r\n")
@@ -263,6 +337,11 @@ func (c *Client) Request(conn net.Conn, body []byte) (string, error) {
 	mpReader := multipart.NewReader(conn, "--device-stream-boundary--")
 
 	for {
+		// Check cancellation
+		if c.ctx.Err() != nil {
+			return "", c.ctx.Err()
+		}
+
 		p, err := mpReader.NextRawPart()
 		if err != nil {
 			return "", err
