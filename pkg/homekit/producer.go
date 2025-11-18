@@ -29,9 +29,9 @@ type Client struct {
 
 	stream *camera.Stream
 
-	MaxWidth  int
-	MaxHeight int
-	Bitrate   int // in bits/s
+	MaxWidth  int `json:"-"`
+	MaxHeight int `json:"-"`
+	Bitrate   int `json:"-"` // in bits/s
 }
 
 func Dial(rawURL string, server *srtp.Server) (*Client, error) {
