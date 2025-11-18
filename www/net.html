@@ -2,31 +2,21 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>go2rtc - Network</title>
     <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
     <style>
-        body {
-            font-family: Arial, Helvetica, sans-serif;
-            background-color: white;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            flex-direction: column;
-        }
-
         html, body, #network {
             height: 100%;
-            width: 100%;
-        }
-
-        #network {
-            flex-grow: 1;
         }
     </style>
 </head>
 <body>
-<div id="network"></div>
+
 <script src="main.js"></script>
+
+<div id="network"></div>
+
 <script>
     /* global vis */
     window.addEventListener('load', () => {
@@ -79,5 +69,6 @@
         update();
     });
 </script>
+
 </body>
 </html>
