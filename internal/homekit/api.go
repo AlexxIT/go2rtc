@@ -51,7 +51,11 @@ func apiHomekit(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
 		if id := r.Form.Get("id"); id != "" {
-			api.ResponsePrettyJSON(w, servers[id])
+			if srv := servers[id]; srv != nil {
+				api.ResponsePrettyJSON(w, srv)
+			} else {
+				http.Error(w, "server not found", http.StatusNotFound)
+			}
 		} else {
 			api.ResponsePrettyJSON(w, servers)
 		}
