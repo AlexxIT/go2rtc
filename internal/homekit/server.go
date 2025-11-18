@@ -40,20 +40,29 @@ type server struct {
 	accessory *hap.Accessory // HAP accessory
 	consumer  *homekit.Consumer
 	proxyURL  string
+	setupID   string
 	stream    string // stream name from YAML
 }
 
 func (s *server) MarshalJSON() ([]byte, error) {
 	v := struct {
-		Name     string `json:"name"`
-		DeviceID string `json:"device_id"`
-		Paired   int    `json:"paired"`
-		Conns    []any  `json:"connections"`
+		Name       string `json:"name"`
+		DeviceID   string `json:"device_id"`
+		Paired     int    `json:"paired,omitempty"`
+		CategoryID string `json:"category_id,omitempty"`
+		SetupCode  string `json:"setup_code,omitempty"`
+		SetupID    string `json:"setup_id,omitempty"`
+		Conns      []any  `json:"connections,omitempty"`
 	}{
-		Name:     s.mdns.Name,
-		DeviceID: s.mdns.Info[hap.TXTDeviceID],
-		Paired:   len(s.pairings),
-		Conns:    s.conns,
+		Name:       s.mdns.Name,
+		DeviceID:   s.mdns.Info[hap.TXTDeviceID],
+		CategoryID: s.mdns.Info[hap.TXTCategory],
+		Paired:     len(s.pairings),
+		Conns:      s.conns,
+	}
+	if v.Paired == 0 {
+		v.SetupCode = s.hap.Pin
+		v.SetupID = s.setupID
 	}
 	return json.Marshal(v)
 }
@@ -375,6 +384,11 @@ func calcDevicePrivate(private, seed string) []byte {
 	}
 	b := sha512.Sum512([]byte(seed))
 	return ed25519.NewKeyFromSeed(b[:ed25519.SeedSize])
+}
+
+func calcSetupID(seed string) string {
+	b := sha512.Sum512([]byte(seed))
+	return fmt.Sprintf("%02X%02X", b[44], b[46])
 }
 
 func calcCategoryID(categoryID string) string {

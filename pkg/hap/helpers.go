@@ -3,6 +3,8 @@ package hap
 import (
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/sha512"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -97,6 +99,12 @@ func GenerateUUID() string {
 	_, _ = rand.Read(data)
 	s := hex.EncodeToString(data)
 	return s[:8] + "-" + s[8:12] + "-" + s[12:16] + "-" + s[16:20] + "-" + s[20:]
+}
+
+func SetupHash(setupID, deviceID string) string {
+	// should be setup_id (random 4 alphanum) + device_id (mac address)
+	b := sha512.Sum512([]byte(setupID + deviceID))
+	return base64.StdEncoding.EncodeToString(b[:4])
 }
 
 func Append(items ...any) (b []byte) {

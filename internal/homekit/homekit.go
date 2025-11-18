@@ -65,10 +65,12 @@ func Init() {
 
 		deviceID := calcDeviceID(conf.DeviceID, id) // random MAC-address
 		name := calcName(conf.Name, deviceID)
+		setupID := calcSetupID(id)
 
 		srv := &server{
 			stream:   id,
 			pairings: conf.Pairings,
+			setupID:  setupID,
 		}
 
 		srv.hap = &hap.Server{
@@ -90,7 +92,7 @@ func Init() {
 				hap.TXTStateNumber:  "1",
 				hap.TXTStatusFlags:  hap.StatusNotPaired,
 				hap.TXTCategory:     calcCategoryID(conf.CategoryID),
-				hap.TXTSetupHash:    srv.hap.SetupHash(),
+				hap.TXTSetupHash:    hap.SetupHash(setupID, deviceID),
 			},
 		}
 		entries = append(entries, srv.mdns)

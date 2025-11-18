@@ -71,6 +71,42 @@
         });
     </script>
 
+    <div id="homekit" style="display: none">
+        <h2>HomeKit server</h2>
+    </div>
+    <script>
+        fetch(`api/homekit?id=${src}`, {cache: 'no-cache'}).then(async (r) => {
+            if (!r.ok) return;
+
+            const div = document.querySelector('#homekit');
+            div.innerHTML += `<div><a href="${r.url}">info.json</a> page with active connections</div>`;
+            div.style = '';
+
+            /** @type {{name: string, category_id: string, setup_code: string, setup_id: string, setup_uri: string}} */
+            const data = await r.json();
+            if (data.setup_code === undefined) return;
+
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
+            script.async = true;
+            script.onload = () => {
+                /* global BigInt */
+                const categoryID = BigInt(data.category_id);
+                const pin = BigInt(data.setup_code.replaceAll('-', ''));
+                const payload = categoryID << BigInt(31) | BigInt(2 << 27) | pin;
+                const setupURI = `X-HM://${payload.toString(36).toUpperCase().padStart(9, '0')}${data.setup_id}`;
+
+                div.innerHTML += `<pre>Setup Name: ${data.name}
+Setup Code: ${data.setup_code}</pre>
+<div id="homekit-qrcode"></div>`;
+
+                /* global QRCode */
+                new QRCode('homekit-qrcode', {text: setupURI, width: 128, height: 128});
+            };
+            document.head.appendChild(script);
+        });
+    </script>
+
     <div>
         <h2>Play audio</h2>
         <label><input type="radio" name="play" value="file" checked>
