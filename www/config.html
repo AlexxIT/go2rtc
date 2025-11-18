@@ -1,40 +1,35 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>go2rtc - File Editor</title>
-    <meta name="viewport" content="width=device-width, user-scalable=yes, initial-scale=1, maximum-scale=1">
-    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>go2rtc - Config</title>
     <script src="https://unpkg.com/ace-builds@1.33.1/src-min/ace.js"></script>
     <style>
-        body {
-            font-family: Arial, Helvetica, sans-serif;
-            background-color: white;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            flex-direction: column;
-        }
-
         html, body, #config {
-            width: 100%;
             height: 100%;
         }
     </style>
 </head>
 <body>
-<script src="main.js"></script>
-<div>
-    <button id="save">Save & Restart</button>
-</div>
-<br>
-<div id="config"></div>
-<script>
-    let dump;
 
+<script src="main.js"></script>
+
+<main>
+    <div>
+        <button id="save">Save & Restart</button>
+    </div>
+</main>
+<div id="config"></div>
+
+<script>
+    /* global ace */
     ace.config.set('basePath', 'https://unpkg.com/ace-builds@1.33.1/src-min/');
     const editor = ace.edit('config', {
         mode: 'ace/mode/yaml',
     });
+
+    let dump;
 
     document.getElementById('save').addEventListener('click', async () => {
         let r = await fetch('api/config', {cache: 'no-cache'});
@@ -67,5 +62,6 @@
         }
     });
 </script>
+
 </body>
 </html>

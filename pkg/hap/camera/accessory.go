@@ -49,17 +49,17 @@ func ServiceCameraRTPStreamManagement() *hap.Service {
 	val120, _ := tlv8.MarshalBase64(StreamingStatus{
 		Status: StreamingStatusAvailable,
 	})
-	val114, _ := tlv8.MarshalBase64(SupportedVideoStreamConfig{
-		Codecs: []VideoCodec{
+	val114, _ := tlv8.MarshalBase64(SupportedVideoStreamConfiguration{
+		Codecs: []VideoCodecConfiguration{
 			{
 				CodecType: VideoCodecTypeH264,
-				CodecParams: []VideoParams{
+				CodecParams: []VideoCodecParameters{
 					{
 						ProfileID: []byte{VideoCodecProfileMain},
 						Level:     []byte{VideoCodecLevel31, VideoCodecLevel40},
 					},
 				},
-				VideoAttrs: []VideoAttrs{
+				VideoAttrs: []VideoCodecAttributes{
 					{Width: 1920, Height: 1080, Framerate: 30},
 					{Width: 1280, Height: 720, Framerate: 30}, // important for iPhones
 					{Width: 320, Height: 240, Framerate: 15},  // apple watch
@@ -67,23 +67,23 @@ func ServiceCameraRTPStreamManagement() *hap.Service {
 			},
 		},
 	})
-	val115, _ := tlv8.MarshalBase64(SupportedAudioStreamConfig{
-		Codecs: []AudioCodec{
+	val115, _ := tlv8.MarshalBase64(SupportedAudioStreamConfiguration{
+		Codecs: []AudioCodecConfiguration{
 			{
 				CodecType: AudioCodecTypeOpus,
-				CodecParams: []AudioParams{
+				CodecParams: []AudioCodecParameters{
 					{
-						Channels:   1,
-						Bitrate:    AudioCodecBitrateVariable,
-						SampleRate: []byte{AudioCodecSampleRate16Khz},
+						Channels:    1,
+						BitrateMode: AudioCodecBitrateVariable,
+						SampleRate:  []byte{AudioCodecSampleRate16Khz},
 					},
 				},
 			},
 		},
-		ComfortNoise: 0,
+		ComfortNoiseSupport: 0,
 	})
-	val116, _ := tlv8.MarshalBase64(SupportedRTPConfig{
-		CryptoType: []byte{CryptoAES_CM_128_HMAC_SHA1_80},
+	val116, _ := tlv8.MarshalBase64(SupportedRTPConfiguration{
+		SRTPCryptoType: []byte{CryptoAES_CM_128_HMAC_SHA1_80},
 	})
 
 	service := &hap.Service{

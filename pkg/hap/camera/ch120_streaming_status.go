@@ -9,6 +9,6 @@ type StreamingStatus struct {
 //goland:noinspection ALL
 const (
 	StreamingStatusAvailable   = 0
-	StreamingStatusBusy        = 1
+	StreamingStatusInUse       = 1
 	StreamingStatusUnavailable = 2
 )

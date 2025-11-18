@@ -112,6 +112,10 @@ func appendValue(b []byte, tag byte, value reflect.Value) ([]byte, error) {
 		v := value.Uint()
 		return append(b, tag, 4, byte(v), byte(v>>8), byte(v>>16), byte(v>>24)), nil
 
+	case reflect.Uint64:
+		v := value.Uint()
+		return binary.LittleEndian.AppendUint64(append(b, tag, 8), v), nil
+
 	case reflect.Float32:
 		v := math.Float32bits(float32(value.Float()))
 		return append(b, tag, 4, byte(v), byte(v>>8), byte(v>>16), byte(v>>24)), nil
@@ -170,11 +174,20 @@ func UnmarshalBase64(in any, out any) error {
 	return Unmarshal(data, out)
 }
 
-func UnmarshalReader(r io.Reader, v any) error {
-	data, err := io.ReadAll(r)
+func UnmarshalReader(r io.Reader, n int64, v any) error {
+	var data []byte
+	var err error
+
+	if n > 0 {
+		data = make([]byte, n)
+		_, err = io.ReadFull(r, data)
+	} else {
+		data, err = io.ReadAll(r)
+	}
 	if err != nil {
 		return err
 	}
+
 	return Unmarshal(data, v)
 }
 
@@ -300,6 +313,12 @@ func unmarshalValue(v []byte, value reflect.Value) error {
 			return errors.New("tlv8: wrong size: " + value.Type().Name())
 		}
 		value.SetUint(uint64(v[0]) | uint64(v[1])<<8 | uint64(v[2])<<16 | uint64(v[3])<<24)
+
+	case reflect.Uint64:
+		if len(v) != 8 {
+			return errors.New("tlv8: wrong size: " + value.Type().Name())
+		}
+		value.SetUint(binary.LittleEndian.Uint64(v))
 
 	case reflect.Float32:
 		f := math.Float32frombits(binary.LittleEndian.Uint32(v))

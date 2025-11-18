@@ -1,6 +1,8 @@
 package main
 
 import (
+	"slices"
+
 	"github.com/AlexxIT/go2rtc/internal/alsa"
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
@@ -35,7 +37,6 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/srtp"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/internal/tapo"
-	"github.com/AlexxIT/go2rtc/internal/tuya"
 	"github.com/AlexxIT/go2rtc/internal/v4l2"
 	"github.com/AlexxIT/go2rtc/internal/webrtc"
 	"github.com/AlexxIT/go2rtc/internal/webtorrent"
@@ -45,69 +46,67 @@ import (
 )
 
 func main() {
-	app.Version = "1.9.11"
+	app.Version = "1.9.12"
 
-	// 1. Core modules: app, api/ws, streams
+	type module struct {
+		name string
+		init func()
+	}
 
-	app.Init() // init config and logs
+	modules := []module{
+		{"", app.Init},    // init config and logs
+		{"api", api.Init}, // init API before all others
+		{"ws", ws.Init},   // init WS API endpoint
+		{"", streams.Init},
+		// Main sources and servers
+		{"http", http.Init},     // rtsp source, HTTP server
+		{"rtsp", rtsp.Init},     // rtsp source, RTSP server
+		{"webrtc", webrtc.Init}, // webrtc source, WebRTC server
+		// Main API
+		{"mp4", mp4.Init},     // MP4 API
+		{"hls", hls.Init},     // HLS API
+		{"mjpeg", mjpeg.Init}, // MJPEG API
+		// Other sources and servers
+		{"hass", hass.Init},             // hass source, Hass API server
+		{"homekit", homekit.Init},       // homekit source, HomeKit server
+		{"onvif", onvif.Init},           // onvif source, ONVIF API server
+		{"rtmp", rtmp.Init},             // rtmp source, RTMP server
+		{"webtorrent", webtorrent.Init}, // webtorrent source, WebTorrent module
+		{"wyoming", wyoming.Init},
+		// Exec and script sources
+		{"echo", echo.Init},
+		{"exec", exec.Init},
+		{"expr", expr.Init},
+		{"ffmpeg", ffmpeg.Init},
+		// Hardware sources
+		{"alsa", alsa.Init},
+		{"v4l2", v4l2.Init},
+		// Other sources
+		{"bubble", bubble.Init},
+		{"doorbird", doorbird.Init},
+		{"dvrip", dvrip.Init},
+		{"eseecloud", eseecloud.Init},
+		{"flussonic", flussonic.Init},
+		{"gopro", gopro.Init},
+		{"isapi", isapi.Init},
+		{"ivideon", ivideon.Init},
+		{"mpegts", mpegts.Init},
+		{"nest", nest.Init},
+		{"ring", ring.Init},
+		{"roborock", roborock.Init},
+		{"tapo", tapo.Init},
+		{"yandex", yandex.Init},
+		// Helper modules
+		{"debug", debug.Init},
+		{"ngrok", ngrok.Init},
+		{"srtp", srtp.Init},
+	}
 
-	api.Init() // init API before all others
-	ws.Init()  // init WS API endpoint
-
-	streams.Init() // streams module
-
-	// 2. Main sources and servers
-
-	rtsp.Init()   // rtsp source, RTSP server
-	webrtc.Init() // webrtc source, WebRTC server
-
-	// 3. Main API
-
-	mp4.Init()   // MP4 API
-	hls.Init()   // HLS API
-	mjpeg.Init() // MJPEG API
-
-	// 4. Other sources and servers
-
-	hass.Init()       // hass source, Hass API server
-	onvif.Init()      // onvif source, ONVIF API server
-	webtorrent.Init() // webtorrent source, WebTorrent module
-	wyoming.Init()
-
-	// 5. Other sources
-
-	rtmp.Init()     // rtmp source
-	exec.Init()     // exec source
-	ffmpeg.Init()   // ffmpeg source
-	echo.Init()     // echo source
-	ivideon.Init()  // ivideon source
-	http.Init()     // http/tcp source
-	dvrip.Init()    // dvrip source
-	tapo.Init()     // tapo source
-	isapi.Init()    // isapi source
-	mpegts.Init()   // mpegts passive source
-	roborock.Init() // roborock source
-	homekit.Init()  // homekit source
-	ring.Init()     // ring source
-	tuya.Init()     // tuya source
-	nest.Init()     // nest source
-	bubble.Init()   // bubble source
-	expr.Init()     // expr source
-	gopro.Init()    // gopro source
-	doorbird.Init() // doorbird source
-	v4l2.Init()     // v4l2 source
-	alsa.Init()     // alsa source
-	flussonic.Init()
-	eseecloud.Init()
-	yandex.Init()
-
-	// 6. Helper modules
-
-	ngrok.Init() // ngrok module
-	srtp.Init()  // SRTP server
-	debug.Init() // debug API
-
-	// 7. Go
+	for _, m := range modules {
+		if app.Modules == nil || m.name == "" || slices.Contains(app.Modules, m.name) {
+			m.init()
+		}
+	}
 
 	shell.RunUntilSignal()
 }

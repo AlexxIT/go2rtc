@@ -36,7 +36,7 @@ func Init() {
 var log zerolog.Logger
 
 func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
-	stream := streams.GetOrPatch(r.URL.Query())
+	stream, _ := streams.GetOrPatch(r.URL.Query())
 	if stream == nil {
 		http.Error(w, api.StreamNotFound, http.StatusNotFound)
 		return
@@ -145,7 +145,7 @@ func inputMjpeg(w http.ResponseWriter, r *http.Request) {
 }
 
 func handlerWS(tr *ws.Transport, _ *ws.Message) error {
-	stream := streams.GetOrPatch(tr.Request.URL.Query())
+	stream, _ := streams.GetOrPatch(tr.Request.URL.Query())
 	if stream == nil {
 		return errors.New(api.StreamNotFound)
 	}
