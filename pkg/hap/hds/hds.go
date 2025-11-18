@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"time"
@@ -68,13 +69,13 @@ func (c *Conn) MarshalJSON() ([]byte, error) {
 	return json.Marshal(conn)
 }
 
-func (c *Conn) Read(p []byte) (n int, err error) {
+func (c *Conn) read() (b []byte, err error) {
 	verify := make([]byte, 4)
 	if _, err = io.ReadFull(c.rd, verify); err != nil {
 		return
 	}
 
-	n = int(binary.BigEndian.Uint32(verify) & 0xFFFFFF)
+	n := int(binary.BigEndian.Uint32(verify) & 0xFFFFFF)
 
 	ciphertext := make([]byte, n+hap.Overhead)
 	if _, err = io.ReadFull(c.rd, ciphertext); err != nil {
@@ -85,14 +86,45 @@ func (c *Conn) Read(p []byte) (n int, err error) {
 	binary.LittleEndian.PutUint64(nonce, c.decryptCnt)
 	c.decryptCnt++
 
-	_, err = chacha20poly1305.DecryptAndVerify(c.decryptKey, p[:0], nonce, ciphertext, verify)
-
 	c.recv += n
+
+	return chacha20poly1305.DecryptAndVerify(c.decryptKey, ciphertext[:0], nonce, ciphertext, verify)
+}
+
+func (c *Conn) Read(p []byte) (n int, err error) {
+	b, err := c.read()
+	if err != nil {
+		return 0, err
+	}
+	n = copy(p, b)
+	if len(b) > n {
+		err = errors.New("hds: read buffer too small")
+	}
 	return
+}
+
+func (c *Conn) WriteTo(w io.Writer) (int64, error) {
+	var total int64
+	for {
+		b, err := c.read()
+		if err != nil {
+			return total, err
+		}
+
+		n, err := w.Write(b)
+		total += int64(n)
+		if err != nil {
+			return total, err
+		}
+	}
 }
 
 func (c *Conn) Write(b []byte) (n int, err error) {
 	n = len(b)
+
+	if n > 0xFFFFFF {
+		return 0, errors.New("hds: write buffer too big")
+	}
 
 	verify := make([]byte, 4)
 	binary.BigEndian.PutUint32(verify, 0x01000000|uint32(n))
