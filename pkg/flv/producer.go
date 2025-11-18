@@ -44,7 +44,9 @@ const (
 	TagData  = 18
 
 	CodecAAC = 10
-	CodecAVC = 7
+
+	CodecH264 = 7
+	CodecHEVC = 12
 )
 
 const (
@@ -207,15 +209,18 @@ func (c *Producer) probe() error {
 			} else {
 				_ = pkt.Payload[0] >> 4 // FrameType
 
-				if codecID := pkt.Payload[0] & 0b1111; codecID != CodecAVC {
-					continue
-				}
-
 				if packetType := pkt.Payload[1]; packetType != PacketTypeAVCHeader { // check if header
 					continue
 				}
 
-				codec = h264.ConfigToCodec(pkt.Payload[5:])
+				switch codecID := pkt.Payload[0] & 0b1111; codecID {
+				case CodecH264:
+					codec = h264.ConfigToCodec(pkt.Payload[5:])
+				case CodecHEVC:
+					codec = h265.ConfigToCodec(pkt.Payload[5:])
+				default:
+					continue
+				}
 			}
 
 			media := &core.Media{
