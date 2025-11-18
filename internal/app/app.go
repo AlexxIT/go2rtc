@@ -11,6 +11,7 @@ import (
 
 var (
 	Version    string
+	Modules    []string
 	UserAgent  string
 	ConfigPath string
 	Info       = make(map[string]any)
@@ -76,6 +77,16 @@ func Init() {
 	if ConfigPath != "" {
 		Logger.Info().Str("path", ConfigPath).Msg("config")
 	}
+
+	var cfg struct {
+		Mod struct {
+			Modules []string `yaml:"modules"`
+		} `yaml:"app"`
+	}
+
+	LoadConfig(&cfg)
+
+	Modules = cfg.Mod.Modules
 }
 
 func readRevisionTime() (revision, vcsTime string) {

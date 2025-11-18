@@ -891,6 +891,7 @@ api:
   listen: ":1984"    # default ":1984", HTTP API port ("" - disabled)
   username: "admin"  # default "", Basic auth for WebUI
   password: "pass"   # default "", Basic auth for WebUI
+  local_auth: true   # default false, Enable auth check for localhost requests
   base_path: "/rtc"  # default "", API prefix for serving on suburl (/api => /rtc/api)
   static_dir: "www"  # default "", folder for static files (custom web interface)
   origin: "*"        # default "", allow CORS requests (only * supported)
@@ -1212,6 +1213,27 @@ log:
 ```
 
 ## Security
+
+> [!IMPORTANT]
+> If an attacker gains access to the API, you are in danger. Through the API, an attacker can use insecure sources such as echo and exec. And get full access to your server.
+
+For maximum (paranoid) security, go2rtc has special settings:
+
+```yaml
+app:
+  # use only allowed modules
+  modules: [api, rtsp, webrtc, exec, ffmpeg, mjpeg]
+
+api:
+  # use only allowed API paths
+  allow_paths: [/api, /api/streams, /api/webrtc, /api/frame.jpeg]
+  # enable auth for localhost (used together with username and password)
+  local_auth: true
+
+exec:
+  # use only allowed exec paths
+  allow_paths: [ffmpeg]
+```
 
 By default, `go2rtc` starts the Web interface on port `1984` and RTSP on port `8554`, as well as uses port `8555` for WebRTC connections. The three ports are accessible from your local network. So anyone on your local network can watch video from your cameras without authorization. The same rule applies to the Home Assistant Add-on.
 

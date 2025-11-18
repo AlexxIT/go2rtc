@@ -2,15 +2,15 @@ package camera
 
 const TypeSupportedVideoStreamConfiguration = "114"
 
-type SupportedVideoStreamConfig struct {
-	Codecs []VideoCodec `tlv8:"1"`
+type SupportedVideoStreamConfiguration struct {
+	Codecs []VideoCodecConfiguration `tlv8:"1"`
 }
 
-type VideoCodec struct {
-	CodecType   byte          `tlv8:"1"`
-	CodecParams []VideoParams `tlv8:"2"`
-	VideoAttrs  []VideoAttrs  `tlv8:"3"`
-	RTPParams   []RTPParams   `tlv8:"4"`
+type VideoCodecConfiguration struct {
+	CodecType   byte                   `tlv8:"1"`
+	CodecParams []VideoCodecParameters `tlv8:"2"`
+	VideoAttrs  []VideoCodecAttributes `tlv8:"3"`
+	RTPParams   []RTPParams            `tlv8:"4"`
 }
 
 //goland:noinspection ALL
@@ -31,15 +31,15 @@ const (
 	VideoCodecCvoSuppported    = 1
 )
 
-type VideoParams struct {
+type VideoCodecParameters struct {
 	ProfileID         []byte `tlv8:"1"` // 0 - baseline, 1 - main, 2 - high
 	Level             []byte `tlv8:"2"` // 0 - 3.1, 1 - 3.2, 2 - 4.0
 	PacketizationMode byte   `tlv8:"3"` // only 0 - non interleaved
 	CVOEnabled        []byte `tlv8:"4"` // 0 - not supported, 1 - supported
-	CVOID             []byte `tlv8:"5"` // ???
+	CVOID             []byte `tlv8:"5"` // ID for CVO RTP extensio
 }
 
-type VideoAttrs struct {
+type VideoCodecAttributes struct {
 	Width     uint16 `tlv8:"1"`
 	Height    uint16 `tlv8:"2"`
 	Framerate uint8  `tlv8:"3"`
