@@ -24,6 +24,7 @@ func Init() {
 			Name          string   `yaml:"name"`
 			DeviceID      string   `yaml:"device_id"`
 			DevicePrivate string   `yaml:"device_private"`
+			CategoryID    string   `yaml:"category_id"`
 			Pairings      []string `yaml:"pairings"`
 		} `yaml:"homekit"`
 	}
@@ -88,7 +89,7 @@ func Init() {
 				hap.TXTProtoVersion: "1.1",
 				hap.TXTStateNumber:  "1",
 				hap.TXTStatusFlags:  hap.StatusNotPaired,
-				hap.TXTCategory:     hap.CategoryCamera,
+				hap.TXTCategory:     calcCategoryID(conf.CategoryID),
 				hap.TXTSetupHash:    srv.hap.SetupHash(),
 			},
 		}

@@ -376,3 +376,16 @@ func calcDevicePrivate(private, seed string) []byte {
 	b := sha512.Sum512([]byte(seed))
 	return ed25519.NewKeyFromSeed(b[:ed25519.SeedSize])
 }
+
+func calcCategoryID(categoryID string) string {
+	switch categoryID {
+	case "bridge":
+		return hap.CategoryBridge
+	case "doorbell":
+		return hap.CategoryDoorbell
+	}
+	if core.Atoi(categoryID) > 0 {
+		return categoryID
+	}
+	return hap.CategoryCamera
+}
