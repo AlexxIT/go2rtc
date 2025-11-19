@@ -299,8 +299,12 @@ func (c *Producer) readPacket() (*rtp.Packet, error) {
 	return pkt, nil
 }
 
-func TimeToRTP(timeMS uint32, clockRate uint32) uint32 {
-	return timeMS * clockRate / 1000
+// TimeToRTP convert time in milliseconds to RTP time
+func TimeToRTP(timeMS, clockRate uint32) uint32 {
+	// for clockRates 90000, 16000, 8000, etc. - we can use:
+	//     return timeMS * (clockRate / 1000)
+	// but for clockRates 44100, 22050, 11025 - we should use:
+	return uint32(uint64(timeMS) * uint64(clockRate) / 1000)
 }
 
 func isExHeader(data []byte) bool {
