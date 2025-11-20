@@ -16,6 +16,8 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 	var nuStart int
 	var seqNum uint16
 
+	fmtpLineUpdated := false
+
 	return func(packet *rtp.Packet) {
 		data := packet.Payload
 		if len(data) < 3 {
@@ -103,6 +105,19 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 		}
 
 		//log.Printf("[HEVC] %v, len: %d", Types(buf), len(buf))
+
+		// Update FmtpLine from first keyframe with parameter sets
+		// This fixes MSE aspect ratio issues when RTSP cameras don't send VPS/SPS/PPS in DESCRIBE
+		if !fmtpLineUpdated && ContainsParameterSets(buf) {
+			newFmtpLine := GetFmtpLine(buf)
+			if newFmtpLine != "" {
+				codec.FmtpLine = newFmtpLine
+				// Re-extract VPS/SPS/PPS with updated FmtpLine
+				vps, sps, pps = GetParameterSet(codec.FmtpLine)
+				ps = h264.JoinNALU(vps, sps, pps)
+			}
+			fmtpLineUpdated = true
+		}
 
 		clone := *packet
 		clone.Version = h264.RTPPacketVersionAVC
