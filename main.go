@@ -37,6 +37,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/srtp"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/internal/tapo"
+	"github.com/AlexxIT/go2rtc/internal/tuya"
 	"github.com/AlexxIT/go2rtc/internal/v4l2"
 	"github.com/AlexxIT/go2rtc/internal/webrtc"
 	"github.com/AlexxIT/go2rtc/internal/webtorrent"
@@ -95,6 +96,7 @@ func main() {
 		{"ring", ring.Init},
 		{"roborock", roborock.Init},
 		{"tapo", tapo.Init},
+		{"tuya", tuya.Init},
 		{"yandex", yandex.Init},
 		// Helper modules
 		{"debug", debug.Init},

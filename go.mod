@@ -29,6 +29,7 @@ require (
 require (
 	github.com/asticode/go-astikit v0.56.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/eclipse/paho.mqtt.golang v1.5.0 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/pion/datachannel v1.5.10 // indirect
