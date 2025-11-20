@@ -2,7 +2,7 @@ package aac
 
 import (
 	"bufio"
-	"encoding/binary"
+	"errors"
 	"io"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -17,16 +17,22 @@ type Producer struct {
 func Open(r io.Reader) (*Producer, error) {
 	rd := bufio.NewReader(r)
 
-	b, err := rd.Peek(8)
+	b, err := rd.Peek(ADTSHeaderSize)
 	if err != nil {
 		return nil, err
 	}
+
+	codec := ADTSToCodec(b)
+	if codec == nil {
+		return nil, errors.New("adts: wrong header")
+	}
+	codec.PayloadType = core.PayloadTypeRAW
 
 	medias := []*core.Media{
 		{
 			Kind:      core.KindAudio,
 			Direction: core.DirectionRecvonly,
-			Codecs:    []*core.Codec{ADTSToCodec(b)},
+			Codecs:    []*core.Codec{codec},
 		},
 	}
 	return &Producer{
@@ -42,14 +48,25 @@ func Open(r io.Reader) (*Producer, error) {
 
 func (c *Producer) Start() error {
 	for {
-		b, err := c.rd.Peek(6)
-		if err != nil {
+		// read ADTS header
+		adts := make([]byte, ADTSHeaderSize)
+		if _, err := io.ReadFull(c.rd, adts); err != nil {
 			return err
 		}
 
-		auSize := ReadADTSSize(b)
-		payload := make([]byte, 2+2+auSize)
-		if _, err = io.ReadFull(c.rd, payload[4:]); err != nil {
+		auSize := ReadADTSSize(adts) - ADTSHeaderSize
+
+		if HasCRC(adts) {
+			// skip CRC after header
+			if _, err := c.rd.Discard(2); err != nil {
+				return err
+			}
+			auSize -= 2
+		}
+
+		// read AAC payload after header
+		payload := make([]byte, auSize)
+		if _, err := io.ReadFull(c.rd, payload); err != nil {
 			return err
 		}
 
@@ -58,9 +75,6 @@ func (c *Producer) Start() error {
 		if len(c.Receivers) == 0 {
 			continue
 		}
-
-		payload[1] = 16 // header size in bits
-		binary.BigEndian.PutUint16(payload[2:], auSize<<3)
 
 		pkt := &rtp.Packet{
 			Header:  rtp.Header{Timestamp: core.Now90000()},
