@@ -68,8 +68,10 @@ func (c *Client) Stop() error {
 	for _, receiver := range c.receivers {
 		receiver.Close()
 	}
+	// Close and clear sender reference
 	if c.sender != nil {
 		c.sender.Close()
+		c.sender = nil  // Clear reference to prevent ghost sender
 	}
 	return c.Close()
 }
