@@ -30,6 +30,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/nest"
 	"github.com/AlexxIT/go2rtc/internal/ngrok"
 	"github.com/AlexxIT/go2rtc/internal/onvif"
+	"github.com/AlexxIT/go2rtc/internal/pinggy"
 	"github.com/AlexxIT/go2rtc/internal/ring"
 	"github.com/AlexxIT/go2rtc/internal/roborock"
 	"github.com/AlexxIT/go2rtc/internal/rtmp"
@@ -99,6 +100,7 @@ func main() {
 		// Helper modules
 		{"debug", debug.Init},
 		{"ngrok", ngrok.Init},
+		{"pinggy", pinggy.Init},
 		{"srtp", srtp.Init},
 	}
 
