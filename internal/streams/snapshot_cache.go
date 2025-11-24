@@ -61,14 +61,14 @@ func (s *Stream) TouchSnapshotCache(name string, timeout time.Duration, transcod
 	}
 
 	// Start new background cacher (will retry on every request if nil)
-	log.Debug().Msgf("[snapshot-cache] touch: stream=%s cacher is nil, attempting to start", name)
+	log.Trace().Msgf("[snapshot-cache] touch: stream=%s cacher is nil, attempting to start", name)
 	s.snapshotCacher = s.startSnapshotCacher(name, timeout, transcodeFunc)
 	if s.snapshotCacher == nil {
 		log.Warn().Msgf("[snapshot-cache] touch: stream=%s failed to start cacher, will retry on next request", name)
 		// Leave s.snapshotCacher as nil so next request will retry
 		// Old cached snapshot remains available
 	} else {
-		log.Info().Msgf("[snapshot-cache] touch: stream=%s successfully started cacher", name)
+		log.Debug().Msgf("[snapshot-cache] touch: stream=%s successfully started cacher", name)
 	}
 }
 
@@ -83,7 +83,7 @@ func (s *Stream) startSnapshotCacher(name string, timeout time.Duration, transco
 		transcodeFunc: transcodeFunc,
 	}
 
-	log.Debug().Msgf("[snapshot-cache] stream=%s creating cacher with timeout=%v", name, timeout)
+	log.Trace().Msgf("[snapshot-cache] stream=%s creating cacher with timeout=%v", name, timeout)
 
 	// Set up idle timer (0 = never timeout)
 	if timeout > 0 {
@@ -95,7 +95,7 @@ func (s *Stream) startSnapshotCacher(name string, timeout time.Duration, transco
 
 	// Add as persistent consumer
 	// This may trigger producer start, or piggyback on existing connection
-	log.Debug().Msgf("[snapshot-cache] stream=%s attempting to add consumer", name)
+	log.Trace().Msgf("[snapshot-cache] stream=%s attempting to add consumer", name)
 	if err := s.AddConsumer(cons); err != nil {
 		log.Warn().Err(err).Msgf("[snapshot-cache] stream=%s failed to add consumer", name)
 		return nil
@@ -104,27 +104,27 @@ func (s *Stream) startSnapshotCacher(name string, timeout time.Duration, transco
 	// Start background processing loop
 	go cacher.run()
 
-	log.Debug().Msgf("[snapshot-cache] stream=%s started successfully", name)
+	log.Trace().Msgf("[snapshot-cache] stream=%s started successfully", name)
 
 	return cacher
 }
 
 func (c *SnapshotCacher) run() {
-	log.Debug().Msgf("[snapshot-cache] stream=%s run loop starting", c.name)
-	defer log.Debug().Msgf("[snapshot-cache] stream=%s run loop exiting", c.name)
+	log.Trace().Msgf("[snapshot-cache] stream=%s run loop starting", c.name)
+	defer log.Trace().Msgf("[snapshot-cache] stream=%s run loop exiting", c.name)
 
 	// Use custom writer that updates cache on each keyframe write
 	cacheWriter := &snapshotCacheWriter{cacher: c}
 
 	// WriteTo will block here and stream keyframes continuously
 	// until the connection closes or an error occurs
-	log.Debug().Msgf("[snapshot-cache] stream=%s calling consumer.WriteTo", c.name)
+	log.Trace().Msgf("[snapshot-cache] stream=%s calling consumer.WriteTo", c.name)
 	bytesWritten, err := c.consumer.WriteTo(cacheWriter)
 
 	if err != nil && !c.stopped.Load() {
 		log.Warn().Err(err).Msgf("[snapshot-cache] stream=%s consumer error after %d bytes", c.name, bytesWritten)
 	} else {
-		log.Debug().Msgf("[snapshot-cache] stream=%s consumer.WriteTo completed normally, bytes=%d", c.name, bytesWritten)
+		log.Trace().Msgf("[snapshot-cache] stream=%s consumer.WriteTo completed normally, bytes=%d", c.name, bytesWritten)
 	}
 
 	// Clean up on exit
@@ -176,7 +176,7 @@ func (w *snapshotCacheWriter) Write(b []byte) (n int, err error) {
 	w.cacher.stream.cachedJPEGTime = timestamp
 	w.cacher.stream.cachedJPEGMu.Unlock()
 
-	log.Debug().Msgf("[snapshot-cache] stream=%s codec=%s updated cache, size=%d, timestamp=%s",
+	log.Trace().Msgf("[snapshot-cache] stream=%s codec=%s updated cache, size=%d, timestamp=%s",
 		w.cacher.name, codecName, len(frame), timestamp.Format(time.RFC3339Nano))
 
 	return len(b), nil
@@ -195,25 +195,25 @@ func (c *SnapshotCacher) stop() {
 		return
 	}
 
-	log.Debug().Msgf("[snapshot-cache] stream=%s stopping", c.name)
+	log.Trace().Msgf("[snapshot-cache] stream=%s stopping", c.name)
 
 	// Stop the timer
 	if c.idleTimer != nil {
-		log.Debug().Msgf("[snapshot-cache] stream=%s stopping idle timer", c.name)
+		log.Trace().Msgf("[snapshot-cache] stream=%s stopping idle timer", c.name)
 		c.idleTimer.Stop()
 	}
 
 	// Close the consumer transport to unblock WriteTo
-	log.Debug().Msgf("[snapshot-cache] stream=%s stopping consumer", c.name)
+	log.Trace().Msgf("[snapshot-cache] stream=%s stopping consumer", c.name)
 	if err := c.consumer.Stop(); err != nil {
 		log.Trace().Err(err).Msgf("[snapshot-cache] stream=%s consumer close error", c.name)
 	}
 
 	// Remove consumer (may stop producer if no other consumers)
-	log.Debug().Msgf("[snapshot-cache] stream=%s removing consumer from stream", c.name)
+	log.Trace().Msgf("[snapshot-cache] stream=%s removing consumer from stream", c.name)
 	c.stream.RemoveConsumer(c.consumer)
 
-	log.Debug().Msgf("[snapshot-cache] stream=%s stop complete, cached snapshot retained in memory", c.name)
+	log.Trace().Msgf("[snapshot-cache] stream=%s stop complete, cached snapshot retained in memory", c.name)
 }
 
 // stopAndClear stops the cacher and clears the reference - MUST be called with snapshotCacherMu held
