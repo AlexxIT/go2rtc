@@ -43,11 +43,13 @@ type Connection struct {
 	SDP        string `json:"sdp,omitempty"`
 	UserAgent  string `json:"user_agent,omitempty"`
 
-	Medias    []*Media    `json:"medias,omitempty"`
+	Medias []*Media `json:"medias,omitempty"`
+
+	Recv int `json:"bytes_recv,omitempty"`
+	Send int `json:"bytes_send,omitempty"`
+
 	Receivers []*Receiver `json:"receivers,omitempty"`
 	Senders   []*Sender   `json:"senders,omitempty"`
-	Recv      int         `json:"bytes_recv,omitempty"`
-	Send      int         `json:"bytes_send,omitempty"`
 
 	Transport any `json:"-"`
 }

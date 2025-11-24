@@ -23,15 +23,27 @@ type Filter func(handler HandlerFunc) HandlerFunc
 
 // Node - Receiver or Sender or Filter (transform)
 type Node struct {
-	Codec  *Codec
-	Input  HandlerFunc
-	Output HandlerFunc
+	Codec   *Codec
+	Input   HandlerFunc
+	Output  HandlerFunc
+	Forward HandlerFunc
 
 	id     uint32
 	childs []*Node
 	parent *Node
 
+	owner any
+
 	mu sync.Mutex
+}
+
+func (n *Node) SetOwner(owner any) *Node {
+	n.owner = owner
+	return n
+}
+
+func (n *Node) GetOwner() any {
+	return n.owner
 }
 
 func (n *Node) WithParent(parent *Node) *Node {
@@ -66,8 +78,13 @@ func (n *Node) Close() {
 			parent.Close()
 		}
 	} else {
-		for _, childs := range n.childs {
-			childs.Close()
+		for _, child := range n.childs {
+			// Skip closing mixers - they manage their own lifecycle
+			// Mixers are closed by RemoveParent when the last parent is removed
+			if _, isMixer := child.owner.(*RTPMixer); isMixer {
+				continue
+			}
+			child.Close()
 		}
 	}
 }

@@ -16,13 +16,14 @@ const (
 )
 
 type Args struct {
-	Bin     string   // ffmpeg
-	Global  string   // -hide_banner -v error
-	Input   string   // -re -stream_loop -1 -i /media/bunny.mp4
-	Codecs  []string // -c:v libx264 -g:v 30 -preset:v ultrafast -tune:v zerolatency
-	Filters []string // scale=1920:1080
-	Output  string   // -f rtsp {output}
-	Version string   // libavformat version, it's more reliable than the ffmpeg version
+	Bin           string   // ffmpeg
+	Global        string   // -hide_banner -v error
+	Input         string   // -re -stream_loop -1 -i /media/bunny.mp4
+	Codecs        []string // -c:v libx264 -g:v 30 -preset:v ultrafast -tune:v zerolatency
+	Filters       []string // scale=1920:1080
+	FilterComplex string   // amix=inputs=2:duration=longest (for -filter_complex)
+	Output        string   // -f rtsp {output}
+	Version       string   // libavformat version, it's more reliable than the ffmpeg version
 
 	Video, Audio int // count of Video and Audio params
 }
@@ -87,6 +88,12 @@ func (a *Args) String() string {
 
 		b.WriteByte(' ')
 		b.WriteString(codec)
+	}
+
+	if a.FilterComplex != "" {
+		b.WriteString(` -filter_complex "`)
+		b.WriteString(a.FilterComplex)
+		b.WriteByte('"')
 	}
 
 	if len(a.Filters) > 0 {
