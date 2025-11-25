@@ -468,7 +468,7 @@ func (c *TuyaSmartApiClient) initToken() error {
 		return errors.New(loginResp.ErrorMsg)
 	}
 
-	c.mqttsUrl = fmt.Sprintf("wss://%s/mqtt", loginResp.Result.Domain.MobileMqttsUrl)
+	c.mqttsUrl = fmt.Sprintf("ssl://%s:%d", loginResp.Result.Domain.MobileMqttsUrl, loginResp.Result.Domain.MqttsPort)
 	c.expireTime = time.Now().Unix() + 2*24*60*60 // 2 days in seconds
 
 	return nil
