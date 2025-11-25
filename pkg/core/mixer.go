@@ -285,7 +285,7 @@ func (m *RTPMixer) startFFmpeg() error {
 	args := &ffmpeg.Args{
 		Bin:           m.ffmpegBinary,
 		Global:        "-hide_banner",
-		Input:         "-protocol_whitelist pipe,rtp,udp,file,crypto -listen_timeout -1 -f sdp -i pipe:0",
+		Input:         "-protocol_whitelist pipe,rtp,udp,file,crypto  -listen_timeout 1 -f sdp -i pipe:0",
 		FilterComplex: fmt.Sprintf("amix=inputs=%d:duration=longest:dropout_transition=0", numParents),
 		Output:        fmt.Sprintf("-f rtp rtp://127.0.0.1:%d", udpServer.Port()),
 	}
@@ -334,7 +334,7 @@ func (m *RTPMixer) monitorFFmpeg() {
 		}
 
 		if wasIntentional {
-			continue // Don't restart, handleTopologyChange already did it
+			continue
 		}
 
 		time.Sleep(restartDelay)
