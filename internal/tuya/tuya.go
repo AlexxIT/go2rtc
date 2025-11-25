@@ -196,12 +196,12 @@ func getLoginToken(client *http.Client, serverHost, username, countryCode string
 	defer resp.Body.Close()
 
 	var tokenResp tuya.LoginTokenResponse
-	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+	if err = json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
 		return nil, err
 	}
 
 	if !tokenResp.Success {
-		return nil, err
+		return nil, errors.New("tuya: " + tokenResp.Msg)
 	}
 
 	return &tokenResp, nil
