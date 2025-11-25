@@ -58,7 +58,7 @@ document.head.innerHTML += `
         gap: 10px;
     }
 
-    input[type="text"] {
+    input[type="text"], input[type="email"], input[type="password"], select {
         padding: 10px;
         border: 1px solid #ccc;
         border-radius: 4px;
