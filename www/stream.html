@@ -60,6 +60,8 @@
         video.src = new URL('api/ws?src=' + encodeURIComponent(streams[i]), location.href);
         document.body.appendChild(video);
     }
+
+    document.title = streams.join('/') + ' - go2rtc';
 </script>
 </body>
 </html>
