@@ -19,6 +19,8 @@ type Receiver struct {
 
 	Bytes   int `json:"bytes,omitempty"`
 	Packets int `json:"packets,omitempty"`
+
+	codecHandler CodecHandler
 }
 
 func NewReceiver(media *Media, codec *Codec) *Receiver {
@@ -26,14 +28,43 @@ func NewReceiver(media *Media, codec *Codec) *Receiver {
 		Node:  Node{id: NewID(), Codec: codec},
 		Media: media,
 	}
+
+	r.SetOwner(r)
+
 	r.Input = func(packet *Packet) {
 		r.Bytes += len(packet.Payload)
 		r.Packets++
+
+		if r.codecHandler != nil {
+			// fmt.Printf("[RECEIVER] Receiver %d received packet, sequence=%d, timestampe=%d, len=%d\n",
+			// 	r.id, packet.Header.SequenceNumber, packet.Header.Timestamp, len(packet.Payload))
+
+			r.codecHandler.ProcessPacket(packet)
+		}
+
 		for _, child := range r.childs {
 			child.Input(packet)
 		}
 	}
 	return r
+}
+
+func (r *Receiver) SetupGOP() {
+	if !r.Codec.IsVideo() {
+		// fmt.Printf("[RECEIVER] Receiver %d is not video codec, skipping GOP setup\n", r.id)
+		return
+	}
+
+	if r.codecHandler != nil {
+		// fmt.Printf("[RECEIVER] Receiver %d already has codec handler, skipping GOP setup\n", r.id)
+		return
+	}
+
+	// fmt.Printf("[RECEIVER] Receiver %d setting up GOP for codec %s\n", r.id, r.Codec.Name)
+
+	if handler := CreateCodecHandler(r.Codec); handler != nil {
+		r.codecHandler = handler
+	}
 }
 
 // Deprecated: should be removed
@@ -56,11 +87,16 @@ func (r *Receiver) Replace(target *Receiver) {
 }
 
 func (r *Receiver) Close() {
+	if r.codecHandler != nil {
+		r.codecHandler.ClearCache()
+	}
 	r.Node.Close()
 }
 
 type Sender struct {
 	Node
+
+	InputCache HandlerFunc
 
 	// Deprecated:
 	Media *Media `json:"-"`
@@ -71,8 +107,14 @@ type Sender struct {
 	Packets int `json:"packets,omitempty"`
 	Drops   int `json:"drops,omitempty"`
 
+	UseGOP bool `json:"-"`
+
 	buf  chan *Packet
 	done chan struct{}
+
+	started         bool
+	waitingForCache bool
+	liveQueue       chan *Packet
 }
 
 func NewSender(media *Media, codec *Codec) *Sender {
@@ -92,21 +134,50 @@ func NewSender(media *Media, codec *Codec) *Sender {
 
 	buf := make(chan *Packet, bufSize)
 	s := &Sender{
-		Node:  Node{id: NewID(), Codec: codec},
-		Media: media,
-		buf:   buf,
+		Node:            Node{id: NewID(), Codec: codec},
+		Media:           media,
+		UseGOP:          true,
+		buf:             buf,
+		liveQueue:       make(chan *Packet, 512),
+		waitingForCache: true,
 	}
+
+	// fmt.Printf("[SENDER] New Sender %d, codec=%s, sender codec=%s, media kind=%s\n",
+	// 	s.id, codec.Name, s.Codec.Name, media.Kind)
+
+	s.SetOwner(s)
+
 	s.Input = func(packet *Packet) {
-		s.mu.Lock()
-		// unblock write to nil chan - OK, write to closed chan - panic
-		select {
-		case s.buf <- packet:
-			s.Bytes += len(packet.Payload)
-			s.Packets++
-		default:
-			s.Drops++
+		if s.UseGOP {
+			if !s.started && s.Codec.IsVideo() {
+				// fmt.Printf("[SENDER] Sender %d not started, ignoring packet: sequence=%d, timestamp=%d, len=%d\n",
+				// 	s.id, packet.Header.SequenceNumber, packet.Header.Timestamp, len(packet.Payload))
+				return
+			}
+
+			if s.Codec.IsVideo() {
+				if s.waitingForCache {
+					select {
+					case s.liveQueue <- packet:
+						// fmt.Printf("[SENDER] Sender %d waiting for cache, queueing packet: sequence=%d, timestamp=%d, len=%d, queue=%d\n",
+						// 	s.id, packet.Header.SequenceNumber, packet.Header.Timestamp, len(packet.Payload), len(s.liveQueue))
+					default:
+						// fmt.Printf("[SENDER] Sender %d live queue is full, dropping packet: sequence=%d, timestamp=%d, len=%d, queue=%d\n",
+						// 	s.id, packet.Header.SequenceNumber, packet.Header.Timestamp, len(packet.Payload), len(s.liveQueue))
+					}
+					return
+				}
+			}
 		}
-		s.mu.Unlock()
+
+		// fmt.Printf("[SENDER] Sender %d processing packet: sequence=%d, timestamp=%d, len=%d\n",
+		// 	s.id, packet.Header.SequenceNumber, packet.Header.Timestamp, len(packet.Payload))
+
+		s.processPacket(packet)
+	}
+
+	s.InputCache = func(packet *Packet) {
+		s.processPacket(packet)
 	}
 	s.Output = func(packet *Packet) {
 		s.Handler(packet)
@@ -146,6 +217,43 @@ func (s *Sender) Start() {
 		}
 		close(s.done)
 	}(s.buf)
+
+	s.started = true
+
+	// fmt.Printf("[SENDER] Sender %d started\n", s.id)
+
+	var codecHandler CodecHandler
+	if receiver, ok := s.parent.owner.(*Receiver); ok {
+		if receiver.codecHandler != nil {
+			codecHandler = receiver.codecHandler
+			// fmt.Printf("[SENDER] Sender %d using codec handler from Receiver %d\n", s.id, receiver.id)
+		}
+	}
+
+	if !s.Codec.IsVideo() {
+		// fmt.Printf("[SENDER] Sender %d is not video codec, skipping cache processing\n", s.id)
+		s.waitingForCache = false
+		return
+	}
+
+	if !s.UseGOP {
+		// fmt.Printf("[SENDER] Sender %d is not using GOP, skipping cache processing\n", s.id)
+		s.waitingForCache = false
+		return
+	}
+
+	if codecHandler == nil {
+		// fmt.Printf("[SENDER] Sender %d has no codec handler, skipping cache processing\n", s.id)
+		s.waitingForCache = false
+		return
+	}
+
+	go func() {
+		nextTimestamp, lastSeq := codecHandler.SendCacheTo(s, 100)
+		codecHandler.SendQueueTo(s, 100, nextTimestamp, lastSeq)
+		// fmt.Printf("[SENDER] Sender %d finished processing cache, starting to process live packets\n", s.id)
+		s.waitingForCache = false
+	}()
 }
 
 func (s *Sender) Wait() {
@@ -170,6 +278,10 @@ func (s *Sender) Close() {
 	if s.buf != nil {
 		close(s.buf) // exit from for range loop
 		s.buf = nil  // prevent writing to closed chan
+	}
+	if s.liveQueue != nil {
+		close(s.liveQueue)
+		s.liveQueue = nil
 	}
 	s.mu.Unlock()
 
@@ -214,4 +326,17 @@ func (s *Sender) MarshalJSON() ([]byte, error) {
 		v.Parent = s.parent.id
 	}
 	return json.Marshal(v)
+}
+
+func (s *Sender) processPacket(packet *Packet) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	select {
+	case s.buf <- packet:
+		s.Bytes += len(packet.Payload)
+		s.Packets++
+	default:
+		s.Drops++
+	}
 }
