@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>config - go2rtc</title>
-    <script src="https://unpkg.com/ace-builds@1.33.1/src-min/ace.js"></script>
+    <script src="https://unpkg.com/ace-builds@1.43.4/src-min/ace.js"></script>
     <style>
         html, body, #config {
             height: 100%;
@@ -24,10 +24,19 @@
 
 <script>
     /* global ace */
-    ace.config.set('basePath', 'https://unpkg.com/ace-builds@1.33.1/src-min/');
+    ace.config.set('basePath', 'https://unpkg.com/ace-builds@1.43.4/src-min/');
+
+    const getTheme = () => document.documentElement.classList.contains('dark')
+        ? 'ace/theme/cloud_editor_dark'
+        : 'ace/theme/cloud_editor';
+
     const editor = ace.edit('config', {
         mode: 'ace/mode/yaml',
+        theme: getTheme(),
+        showPrintMargin: false,
     });
+
+    window.addEventListener('themeChanged', () => editor.setTheme(getTheme()));
 
     let dump;
 
@@ -56,7 +65,7 @@
             editor.setValue(''); // config file not exist
         } else if (r.ok) {
             dump = await r.text();
-            editor.setValue(dump);
+            editor.setValue(dump, -1);
         } else {
             alert(`Unknown error: ${r.statusText} (${r.status})`);
         }
