@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>net - go2rtc</title>
-    <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
+    <script src="https://unpkg.com/vis-network@10.0.2/standalone/umd/vis-network.min.js"></script>
     <style>
         html, body, #network {
             height: 100%;
@@ -23,16 +23,28 @@
         const url = new URL('api/streams.dot' + location.search, location.href);
 
         const container = document.getElementById('network');
-        const options = {
-            edges: {
-                font: {align: 'middle'},
-                smooth: false,
-            },
-            nodes: {shape: 'box'},
-            physics: false,
-        };
+
+        function getOptions() {
+            const isDark = document.documentElement.classList.contains('dark');
+            return {
+                edges: {
+                    font: {
+                        align: 'middle',
+                        color: isDark ? '#e0e0e0' : undefined,
+                        strokeColor: isDark ? '#121212' : undefined,
+                    },
+                    smooth: false,
+                },
+                nodes: {shape: 'box'},
+                physics: false,
+            };
+        }
 
         let network;
+
+        window.addEventListener('themeChanged', () => {
+            if (network) network.setOptions(getOptions());
+        });
 
         async function update() {
             try {
@@ -41,7 +53,7 @@
                 const data = vis.parseDOTNetwork(dotData);
 
                 if (!network) {
-                    network = new vis.Network(container, data, options);
+                    network = new vis.Network(container, data, getOptions());
                     network.storePositions();
                 } else {
                     const positions = network.getPositions();
