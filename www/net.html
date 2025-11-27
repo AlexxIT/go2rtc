@@ -25,13 +25,15 @@
         const container = document.getElementById('network');
 
         function getOptions() {
-            const isDark = document.documentElement.classList.contains('dark');
+            const style = getComputedStyle(document.documentElement);
+            const textColor = style.getPropertyValue('--text-color').trim();
+            const bgColor = style.getPropertyValue('--bg-color').trim();
             return {
                 edges: {
                     font: {
                         align: 'middle',
-                        color: isDark ? '#e0e0e0' : undefined,
-                        strokeColor: isDark ? '#121212' : undefined,
+                        color: textColor || undefined,
+                        strokeColor: bgColor || undefined,
                     },
                     smooth: false,
                 },
