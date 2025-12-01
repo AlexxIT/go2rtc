@@ -18,9 +18,11 @@ type Address struct {
 	Priority uint32
 }
 
+var stuns []string
+
 func (a *Address) Host() string {
 	if a.host == "stun" {
-		ip, err := webrtc.GetCachedPublicIP()
+		ip, err := webrtc.GetCachedPublicIP(stuns...)
 		if err != nil {
 			return ""
 		}
