@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 )
@@ -13,6 +14,15 @@ type Stream struct {
 	consumers []core.Consumer
 	mu        sync.Mutex
 	pending   atomic.Int32
+
+	// Snapshot cache - JPEG data and metadata
+	cachedJPEG       []byte
+	cachedJPEGTime   time.Time
+	cachedJPEGMu     sync.RWMutex
+
+	// Cache lifecycle management
+	snapshotCacher   *SnapshotCacher
+	snapshotCacherMu sync.Mutex
 }
 
 func NewStream(source any) *Stream {
