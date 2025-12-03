@@ -1,6 +1,7 @@
 document.head.innerHTML += `
 <style>
     body {
+        background-color: white;  /* fix Hass black theme */
         display: flex;
         flex-direction: column;
         font-family: Arial, sans-serif;
@@ -57,7 +58,7 @@ document.head.innerHTML += `
         gap: 10px;
     }
 
-    input[type="text"] {
+    input[type="text"], input[type="email"], input[type="password"], select {
         padding: 10px;
         border: 1px solid #ccc;
         border-radius: 4px;

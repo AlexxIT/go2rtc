@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>go2rtc - Add Stream</title>
+    <title>add - go2rtc</title>
     <style>
         main > button {
             background-color: #444;
@@ -327,6 +327,53 @@
 
         document.getElementById('ring-credentials-form').addEventListener('submit', handleRingAuth);
         document.getElementById('ring-token-form').addEventListener('submit', handleRingAuth);
+    </script>
+
+
+    <button id="tuya">Tuya</button>
+    <div>
+        <form id="tuya-credentials-form">
+            <select name="region" required>
+                <option value="protect-eu.ismartlife.me">EU Central</option>
+                <option value="protect-we.ismartlife.me">EU East</option>
+                <option value="protect-us.ismartlife.me">US West</option>
+                <option value="protect-ue.ismartlife.me">US East</option>
+                <option value="protect.ismartlife.me">China</option>
+                <option value="protect-in.ismartlife.me">India</option>
+            </select>
+            <input type="email" name="email" placeholder="email" required>
+            <input type="password" name="password" placeholder="password" required>
+            <button type="submit">login</button>
+        </form>
+        <table id="tuya-table"></table>
+    </div>
+    <script>
+        document.getElementById('tuya').addEventListener('click', async ev => {
+            ev.target.nextElementSibling.style.display = 'grid';
+        });
+
+        document.getElementById('tuya-credentials-form').addEventListener('submit', async ev => {
+            ev.preventDefault();
+
+            const table = document.getElementById('tuya-table');
+            table.innerText = 'loading...';
+
+            const query = new URLSearchParams(new FormData(ev.target));
+            const url = new URL('api/tuya?' + query.toString(), location.href);
+
+            const r = await fetch(url, {cache: 'no-cache'});
+
+            if (!r.ok) {
+                table.innerText = (await r.text()) || 'Unknown error';
+                return;
+            }
+
+            const data = await r.json();
+
+            table.innerText = '';
+
+            drawTable(table, data);
+        });
     </script>
 
 

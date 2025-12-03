@@ -3,7 +3,6 @@ package hap
 import (
 	"bufio"
 	"crypto/sha512"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
@@ -35,13 +34,6 @@ func (s *Server) ServerPublic() []byte {
 //	}
 //	return StatusPaired
 //}
-
-func (s *Server) SetupHash() string {
-	// should be setup_id (random 4 alphanum) + device_id (mac address)
-	// but device_id is random, so OK
-	b := sha512.Sum512([]byte(s.DeviceID))
-	return base64.StdEncoding.EncodeToString(b[:4])
-}
 
 func (s *Server) PairSetup(req *http.Request, rw *bufio.ReadWriter) (id string, publicKey []byte, err error) {
 	// STEP 1. Request from iPhone

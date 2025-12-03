@@ -24,6 +24,7 @@ func Init() {
 			Name          string   `yaml:"name"`
 			DeviceID      string   `yaml:"device_id"`
 			DevicePrivate string   `yaml:"device_private"`
+			CategoryID    string   `yaml:"category_id"`
 			Pairings      []string `yaml:"pairings"`
 		} `yaml:"homekit"`
 	}
@@ -64,10 +65,12 @@ func Init() {
 
 		deviceID := calcDeviceID(conf.DeviceID, id) // random MAC-address
 		name := calcName(conf.Name, deviceID)
+		setupID := calcSetupID(id)
 
 		srv := &server{
 			stream:   id,
 			pairings: conf.Pairings,
+			setupID:  setupID,
 		}
 
 		srv.hap = &hap.Server{
@@ -88,8 +91,8 @@ func Init() {
 				hap.TXTProtoVersion: "1.1",
 				hap.TXTStateNumber:  "1",
 				hap.TXTStatusFlags:  hap.StatusNotPaired,
-				hap.TXTCategory:     hap.CategoryCamera,
-				hap.TXTSetupHash:    srv.hap.SetupHash(),
+				hap.TXTCategory:     calcCategoryID(conf.CategoryID),
+				hap.TXTSetupHash:    hap.SetupHash(setupID, deviceID),
 			},
 		}
 		entries = append(entries, srv.mdns)

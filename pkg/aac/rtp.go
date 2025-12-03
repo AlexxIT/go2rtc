@@ -8,7 +8,6 @@ import (
 )
 
 const RTPPacketVersionAAC = 0
-const ADTSHeaderSize = 7
 
 func RTPDepay(handler core.HandlerFunc) core.HandlerFunc {
 	var timestamp uint32
@@ -65,7 +64,8 @@ func RTPDepay(handler core.HandlerFunc) core.HandlerFunc {
 }
 
 func RTPPay(handler core.HandlerFunc) core.HandlerFunc {
-	sequencer := rtp.NewRandomSequencer()
+	var seq uint16
+	var ts uint32
 
 	return func(packet *rtp.Packet) {
 		if packet.Version != RTPPacketVersionAAC {
@@ -85,12 +85,15 @@ func RTPPay(handler core.HandlerFunc) core.HandlerFunc {
 			Header: rtp.Header{
 				Version:        2,
 				Marker:         true,
-				SequenceNumber: sequencer.NextSequenceNumber(),
-				Timestamp:      packet.Timestamp,
+				SequenceNumber: seq,
+				Timestamp:      ts,
 			},
 			Payload: payload,
 		}
 		handler(&clone)
+
+		seq++
+		ts += AUTime
 	}
 }
 
