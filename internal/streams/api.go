@@ -133,6 +133,12 @@ func apiPreload(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	src := query.Get("src")
 
+	// GET - return all preloads
+	if r.Method == "GET" {
+		api.ResponseJSON(w, GetPreloads())
+		return
+	}
+
 	// check if stream exists
 	stream := Get(src)
 	if stream == nil {

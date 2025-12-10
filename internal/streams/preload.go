@@ -8,7 +8,12 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/probe"
 )
 
-var preloads = map[*Stream]*probe.Probe{}
+type preload struct {
+	cons  *probe.Probe
+	query string
+}
+
+var preloads = map[*Stream]*preload{}
 var preloadsMu sync.Mutex
 
 func Preload(stream *Stream, rawQuery string) {
@@ -30,8 +35,8 @@ func AddPreload(stream *Stream, rawQuery string) error {
 	preloadsMu.Lock()
 	defer preloadsMu.Unlock()
 
-	if cons := preloads[stream]; cons != nil {
-		stream.RemoveConsumer(cons)
+	if p := preloads[stream]; p != nil {
+		stream.RemoveConsumer(p.cons)
 	}
 
 	cons := probe.Create("preload", query)
@@ -40,7 +45,7 @@ func AddPreload(stream *Stream, rawQuery string) error {
 		return err
 	}
 
-	preloads[stream] = cons
+	preloads[stream] = &preload{cons: cons, query: rawQuery}
 	return nil
 }
 
@@ -48,11 +53,33 @@ func DelPreload(stream *Stream) error {
 	preloadsMu.Lock()
 	defer preloadsMu.Unlock()
 
-	if cons := preloads[stream]; cons != nil {
-		stream.RemoveConsumer(cons)
+	if p := preloads[stream]; p != nil {
+		stream.RemoveConsumer(p.cons)
 		delete(preloads, stream)
 		return nil
 	}
 
 	return errors.New("streams: preload not found")
+}
+
+func GetPreloads() map[string]string {
+	streamsMu.Lock()
+	defer streamsMu.Unlock()
+
+	preloadsMu.Lock()
+	defer preloadsMu.Unlock()
+
+	// build reverse lookup: stream -> name
+	streamNames := make(map[*Stream]string, len(streams))
+	for name, stream := range streams {
+		streamNames[stream] = name
+	}
+
+	result := make(map[string]string, len(preloads))
+	for stream, p := range preloads {
+		if name, ok := streamNames[stream]; ok {
+			result[name] = p.query
+		}
+	}
+	return result
 }
