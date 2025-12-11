@@ -11,9 +11,9 @@ import (
 
 const (
 	BufferSize      = 64 * 1024 // 64K
-	ConnDialTimeout = time.Second * 3
-	ConnDeadline    = time.Second * 5
-	ProbeTimeout    = time.Second * 3
+	ConnDialTimeout = 5 * time.Second
+	ConnDeadline    = 5 * time.Second
+	ProbeTimeout    = 5 * time.Second
 )
 
 // Now90000 - timestamp for Video (clock rate = 90000 samples per second)
