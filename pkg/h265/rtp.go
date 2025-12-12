@@ -106,7 +106,9 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 
 		clone := *packet
 		clone.Version = h264.RTPPacketVersionAVC
-		clone.Payload = buf
+		// Clone buffer to prevent data corruption - buf will be reused for next frame
+		// and would overwrite clone.Payload's underlying array if they share it
+		clone.Payload = append([]byte(nil), buf...)
 
 		buf = buf[:0]
 		nuStart = 0 // Reset nuStart when buffer is cleared
