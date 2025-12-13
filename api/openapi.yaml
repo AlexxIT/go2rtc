@@ -238,6 +238,14 @@ paths:
 
 
   /api/preload:
+    get:
+      summary: Get all preloaded streams
+      tags: [ Streams list ]
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json: { example: { camera1: "video&audio", camera2: "video" } }
     put:
       summary: Preload new stream
       tags: [ Streams list ]
