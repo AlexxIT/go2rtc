@@ -11,16 +11,24 @@ import (
 	"github.com/rs/zerolog"
 )
 
+var ffmpegBin string
+
 func Init() {
 	var cfg struct {
 		Streams map[string]any    `yaml:"streams"`
 		Publish map[string]any    `yaml:"publish"`
 		Preload map[string]string `yaml:"preload"`
+		FFmpeg  map[string]string `yaml:"ffmpeg"`
 	}
 
 	app.LoadConfig(&cfg)
 
 	log = app.GetLogger("streams")
+
+	ffmpegBin = cfg.FFmpeg["bin"]
+	if ffmpegBin == "" {
+		ffmpegBin = "ffmpeg" // Default fallback
+	}
 
 	for name, item := range cfg.Streams {
 		streams[name] = NewStream(item)
