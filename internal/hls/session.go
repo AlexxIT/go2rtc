@@ -11,6 +11,11 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/mp4"
 )
 
+// MaxBufferSize limits the HLS segment buffer to prevent memory leaks
+// when clients don't fetch segments. 16MB should be enough for ~30 seconds
+// of high-quality video at typical bitrates.
+const MaxBufferSize = 16 * 1024 * 1024
+
 type Session struct {
 	cons     core.Consumer
 	id       string
@@ -20,6 +25,7 @@ type Session struct {
 	seq      int
 	alive    *time.Timer
 	mu       sync.Mutex
+	dropped  int // count of dropped writes due to buffer overflow
 }
 
 func NewSession(cons core.Consumer) *Session {
@@ -55,12 +61,33 @@ segment.ts?id=` + s.id + `&n=%d`
 
 func (s *Session) Write(p []byte) (n int, err error) {
 	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if s.init == nil {
 		s.init = p
-	} else {
-		s.buffer = append(s.buffer, p...)
+		return len(p), nil
 	}
-	s.mu.Unlock()
+
+	// Check if adding this data would exceed the buffer limit
+	if len(s.buffer)+len(p) > MaxBufferSize {
+		// Buffer is full - drop old data to make room
+		// This prevents unbounded memory growth when clients don't consume segments
+		s.dropped++
+
+		// If buffer is way too big, reset it entirely
+		if len(s.buffer) > MaxBufferSize {
+			s.buffer = nil
+		} else {
+			// Trim the beginning of the buffer to make room
+			trimSize := len(p)
+			if trimSize > len(s.buffer) {
+				trimSize = len(s.buffer)
+			}
+			s.buffer = s.buffer[trimSize:]
+		}
+	}
+
+	s.buffer = append(s.buffer, p...)
 	return len(p), nil
 }
 

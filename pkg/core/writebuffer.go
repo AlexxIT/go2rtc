@@ -7,6 +7,10 @@ import (
 	"sync"
 )
 
+// MaxWriteBufferSize limits the internal buffer size to prevent memory leaks
+// when data is written but not consumed. 8MB should be enough for buffering.
+const MaxWriteBufferSize = 8 * 1024 * 1024
+
 // WriteBuffer by defaul Write(s) to bytes.Buffer.
 // But after WriteTo to new io.Writer - calls Reset.
 // Reset will flush current buffer data to new writer and starts to Write to new io.Writer
@@ -28,15 +32,33 @@ func NewWriteBuffer(wr io.Writer) *WriteBuffer {
 
 func (w *WriteBuffer) Write(p []byte) (n int, err error) {
 	w.mu.Lock()
+	defer w.mu.Unlock()
+
 	if w.err != nil {
-		err = w.err
-	} else if n, err = w.Writer.Write(p); err != nil {
+		return 0, w.err
+	}
+
+	// Check if we're writing to an internal buffer and enforce size limit
+	if buf, ok := w.Writer.(*bytes.Buffer); ok {
+		if buf.Len()+len(p) > MaxWriteBufferSize {
+			// Buffer is too large - truncate old data to make room
+			// This prevents unbounded memory growth
+			if buf.Len() > MaxWriteBufferSize/2 {
+				// Keep only the second half of the buffer
+				data := buf.Bytes()
+				buf.Reset()
+				buf.Write(data[len(data)/2:])
+			}
+		}
+	}
+
+	n, err = w.Writer.Write(p)
+	if err != nil {
 		w.err = err
 		w.done()
 	} else if f, ok := w.Writer.(http.Flusher); ok {
 		f.Flush()
 	}
-	w.mu.Unlock()
 	return
 }
 
