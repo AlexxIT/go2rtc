@@ -250,6 +250,14 @@ export class VideoRTC extends HTMLElement {
 
         this.video.addEventListener('error', ev => {
             console.warn(ev);
+
+            if (this.video.error) {
+                console.error('Video error details:', {
+                    code: this.video.error.code,
+                    message: this.video.error.message
+                });
+            }
+    
             if (this.ws) this.ws.close(); // run reconnect for broken MSE stream
         });
 
