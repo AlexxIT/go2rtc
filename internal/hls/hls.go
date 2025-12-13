@@ -51,12 +51,39 @@ func sessionCleanup() {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		sessionsMu.Lock()
+		now := time.Now()
+		var staleIDs []string
+
+		sessionsMu.RLock()
 		count := len(sessions)
-		sessionsMu.Unlock()
+		for id, session := range sessions {
+			// Check if session has exceeded maximum age
+			if now.Sub(session.createdAt) > MaxSessionAge {
+				staleIDs = append(staleIDs, id)
+			}
+		}
+		sessionsMu.RUnlock()
+
+		// Remove stale sessions
+		if len(staleIDs) > 0 {
+			sessionsMu.Lock()
+			for _, id := range staleIDs {
+				if session, ok := sessions[id]; ok {
+					// Stop the alive timer to prevent double cleanup
+					if session.alive != nil {
+						session.alive.Stop()
+					}
+					delete(sessions, id)
+					log.Info().Str("id", id).Dur("age", now.Sub(session.createdAt)).
+						Msg("[hls] cleaned up stale session")
+				}
+			}
+			sessionsMu.Unlock()
+		}
 
 		if count > 0 {
-			log.Debug().Int("sessions", count).Msg("[hls] active sessions")
+			log.Debug().Int("sessions", count).Int("stale_removed", len(staleIDs)).
+				Msg("[hls] active sessions")
 		}
 
 		// If we have too many sessions, log a warning

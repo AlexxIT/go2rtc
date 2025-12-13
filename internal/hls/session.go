@@ -16,22 +16,28 @@ import (
 // of high-quality video at typical bitrates.
 const MaxBufferSize = 16 * 1024 * 1024
 
+// MaxSessionAge is the maximum time a session can exist before being forcefully cleaned up
+// This prevents orphaned sessions from leaking memory
+const MaxSessionAge = 24 * time.Hour
+
 type Session struct {
-	cons     core.Consumer
-	id       string
-	template string
-	init     []byte
-	buffer   []byte
-	seq      int
-	alive    *time.Timer
-	mu       sync.Mutex
-	dropped  int // count of dropped writes due to buffer overflow
+	cons      core.Consumer
+	id        string
+	template  string
+	init      []byte
+	buffer    []byte
+	seq       int
+	alive     *time.Timer
+	mu        sync.Mutex
+	dropped   int       // count of dropped writes due to buffer overflow
+	createdAt time.Time // when session was created, for cleanup
 }
 
 func NewSession(cons core.Consumer) *Session {
 	s := &Session{
-		id:   core.RandString(8, 62),
-		cons: cons,
+		id:        core.RandString(8, 62),
+		cons:      cons,
+		createdAt: time.Now(),
 	}
 
 	// two segments important for Chromecast
