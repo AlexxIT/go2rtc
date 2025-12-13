@@ -29,15 +29,70 @@ func Init() {
 	api.HandleFunc("api/hls/segment.m4s", handlerSegmentMP4)
 
 	ws.HandleFunc("hls", handlerWSHLS)
+
+	// Start session cleanup goroutine
+	go sessionCleanup()
 }
 
 var log zerolog.Logger
 
 const keepalive = 5 * time.Second
 
+// MaxSessions limits total concurrent HLS sessions to prevent memory exhaustion
+const MaxSessions = 100
+
 // once I saw 404 on MP4 segment, so better to use mutex
 var sessions = map[string]*Session{}
 var sessionsMu sync.RWMutex
+
+// sessionCleanup periodically checks for and removes stale sessions
+func sessionCleanup() {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		now := time.Now()
+		var staleIDs []string
+
+		sessionsMu.RLock()
+		count := len(sessions)
+		for id, session := range sessions {
+			// Check if session has exceeded maximum age
+			if now.Sub(session.createdAt) > MaxSessionAge {
+				staleIDs = append(staleIDs, id)
+			}
+		}
+		sessionsMu.RUnlock()
+
+		// Remove stale sessions
+		if len(staleIDs) > 0 {
+			sessionsMu.Lock()
+			for _, id := range staleIDs {
+				if session, ok := sessions[id]; ok {
+					// Stop the alive timer to prevent double cleanup
+					if session.alive != nil {
+						session.alive.Stop()
+					}
+					delete(sessions, id)
+					log.Info().Str("id", id).Dur("age", now.Sub(session.createdAt)).
+						Msg("[hls] cleaned up stale session")
+				}
+			}
+			sessionsMu.Unlock()
+		}
+
+		if count > 0 {
+			log.Debug().Int("sessions", count).Int("stale_removed", len(staleIDs)).
+				Msg("[hls] active sessions")
+		}
+
+		// If we have too many sessions, log a warning
+		if count > MaxSessions/2 {
+			log.Warn().Int("sessions", count).Int("max", MaxSessions).
+				Msg("[hls] high session count - possible leak")
+		}
+	}
+}
 
 func handlerStream(w http.ResponseWriter, r *http.Request) {
 	// CORS important for Chromecast
@@ -46,6 +101,17 @@ func handlerStream(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == "OPTIONS" {
 		w.Header().Set("Access-Control-Allow-Methods", "GET")
+		return
+	}
+
+	// Check session limit before creating new session
+	sessionsMu.RLock()
+	sessionCount := len(sessions)
+	sessionsMu.RUnlock()
+
+	if sessionCount >= MaxSessions {
+		log.Warn().Int("sessions", sessionCount).Msg("[hls] max sessions reached, rejecting new request")
+		http.Error(w, "too many HLS sessions", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -84,6 +150,7 @@ func handlerStream(w http.ResponseWriter, r *http.Request) {
 		sessionsMu.Unlock()
 
 		stream.RemoveConsumer(cons)
+		log.Debug().Str("id", session.id).Msg("[hls] session expired and cleaned up")
 	})
 
 	sessionsMu.Lock()
@@ -91,6 +158,8 @@ func handlerStream(w http.ResponseWriter, r *http.Request) {
 	sessionsMu.Unlock()
 
 	go session.Run()
+
+	log.Debug().Str("id", session.id).Str("src", src).Msg("[hls] new session created")
 
 	if _, err := w.Write(session.Main()); err != nil {
 		log.Error().Err(err).Caller().Send()
