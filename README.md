@@ -66,6 +66,7 @@ Ultimate camera streaming application with support for RTSP, WebRTC, HomeKit, FF
     * [Source: Tapo](#source-tapo)
     * [Source: Kasa](#source-kasa)
     * [Source: Tuya](#source-tuya)
+    * [Source: Xiaomi](#source-xiaomi)
     * [Source: GoPro](#source-gopro)
     * [Source: Ivideon](#source-ivideon)
     * [Source: Hass](#source-hass)
@@ -207,6 +208,7 @@ Available source types:
 - [tapo](#source-tapo) - TP-Link Tapo cameras with [two way audio](#two-way-audio) support
 - [ring](#source-ring) - Ring cameras with [two way audio](#two-way-audio) support
 - [tuya](#source-tuya) - Tuya cameras with [two way audio](#two-way-audio) support
+- [xiaomi](#source-xiaomi) - Xiaomi cameras with [two way audio](#two-way-audio) support
 - [kasa](#source-tapo) - TP-Link Kasa cameras
 - [gopro](#source-gopro) - GoPro cameras
 - [ivideon](#source-ivideon) - public cameras from [Ivideon](https://tv.ivideon.com/) service
@@ -232,6 +234,7 @@ Supported sources:
 - [Exec](#source-exec) audio on server
 - [Ring](#source-ring) cameras
 - [Tuya](#source-tuya) cameras
+- [Xiaomi](#source-xiaomi) cameras
 - [Any Browser](#incoming-browser) as IP-camera
 
 Two-way audio can be used in browser with [WebRTC](#module-webrtc) technology. The browser will give access to the microphone only for HTTPS sites ([read more](https://stackoverflow.com/questions/52759992/how-to-access-camera-and-microphone-in-chrome-without-https)).
@@ -595,6 +598,12 @@ Tested: KD110, KC200, KC401, KC420WS, EC71.
 *[New in v1.9.13](https://github.com/AlexxIT/go2rtc/releases/tag/v1.9.13)*
 
 [Tuya](https://www.tuya.com/) proprietary camera protocol with **two way audio** support. Go2rtc supports `Tuya Smart API` and `Tuya Cloud API`. [Read more](https://github.com/AlexxIT/go2rtc/blob/master/internal/tuya/README.md).
+
+#### Source: Xiaomi
+
+*[New in v1.9.13](https://github.com/AlexxIT/go2rtc/releases/tag/v1.9.13)*
+
+This source allows you to view cameras from the [Xiaomi Mi Home](https://home.mi.com/) ecosystem. [Read more](https://github.com/AlexxIT/go2rtc/blob/master/internal/xiaomi/README.md).
 
 #### Source: GoPro
 
