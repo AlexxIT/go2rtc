@@ -67,6 +67,21 @@ func Atoi(s string) (i int) {
 	return
 }
 
+// ParseByte - fast parsing string to byte function
+func ParseByte(s string) (b byte) {
+	for i, ch := range []byte(s) {
+		ch -= '0'
+		if ch > 9 {
+			return 0
+		}
+		if i > 0 {
+			b *= 10
+		}
+		b += ch
+	}
+	return
+}
+
 func Assert(ok bool) {
 	if !ok {
 		_, file, line, _ := runtime.Caller(1)
