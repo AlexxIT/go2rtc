@@ -204,6 +204,7 @@ Available source types:
 - [homekit](#source-homekit) - streaming from HomeKit Camera
 - [bubble](#source-bubble) - streaming from ESeeCloud/dvr163 NVR
 - [dvrip](#source-dvrip) - streaming from DVR-IP NVR
+- [eseecloud](#source-eseecloud) - streaming from ESeeCloud/dvr163 NVR
 - [tapo](#source-tapo) - TP-Link Tapo cameras with [two way audio](#two-way-audio) support
 - [ring](#source-ring) - Ring cameras with [two way audio](#two-way-audio) support
 - [tuya](#source-tuya) - Tuya cameras with [two way audio](#two-way-audio) support
@@ -533,6 +534,15 @@ streams:
   two_way_audio:
     - dvrip://username:password@192.168.1.123:34567?channel=0&subtype=0
     - dvrip://username:password@192.168.1.123:34567?backchannel=1
+```
+
+#### Source: EseeCloud
+
+*[New in v1.9.10](https://github.com/AlexxIT/go2rtc/releases/tag/v1.9.10)*
+
+```yaml
+streams:
+  camera1: eseecloud://user:pass@192.168.1.123:80/livestream/12
 ```
 
 #### Source: Tapo
