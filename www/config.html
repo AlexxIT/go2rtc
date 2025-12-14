@@ -356,6 +356,21 @@
 
                     if (!contextSchema) return {suggestions: []};
 
+                    // Scalar array item (e.g. "- tcp4") - suggest values (enum/examples/default)
+                    if (listItem && colonIndex === -1 && !isValueContext) {
+                        const props = getObjectProperties(contextSchema);
+                        if (!props || Object.keys(props).length === 0) {
+                            const values = getValueSuggestions(contextSchema);
+                            const suggestions = values.map((v) => ({
+                                label: toYamlScalar(v),
+                                kind: monaco.languages.CompletionItemKind.Value,
+                                insertText: toYamlScalar(v),
+                                range,
+                            }));
+                            return {suggestions};
+                        }
+                    }
+
                     if (!isValueContext) {
                         const props = getObjectProperties(contextSchema);
                         const suggestions = Object.keys(props).map((key) => {

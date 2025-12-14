@@ -24,7 +24,10 @@
         "debug",
         "info",
         "warn",
-        "error"
+        "error",
+        "fatal",
+        "panic",
+        "disabled"
       ]
     }
   },
@@ -48,6 +51,11 @@
         "password": {
           "type": "string"
         },
+        "local_auth": {
+          "description": "Allow auth from local network without credentials (uses existing Auth header)",
+          "type": "boolean",
+          "default": false
+        },
         "base_path": {
           "type": "string",
           "examples": [
@@ -61,8 +69,18 @@
           ]
         },
         "origin": {
+          "description": "Set to \"*\" to enable CORS and allow any Origin",
           "type": "string",
-          "const": "*"
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "*"
+            },
+            {
+              "type": "string",
+              "const": ""
+            }
+          ]
         },
         "tls_listen": {
           "$ref": "#/definitions/listen"
@@ -85,6 +103,116 @@
           "type": "string",
           "examples": [
             "/tmp/go2rtc.sock"
+          ]
+        },
+        "allow_paths": {
+          "description": "Allow only these HTTP paths (full paths, including base_path); when set, all other endpoints are not registered",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "examples": [
+            [
+              "/api/ws",
+              "/api/config",
+              "/api/streams"
+            ]
+          ]
+        }
+      }
+    },
+    "app": {
+      "type": "object",
+      "properties": {
+        "modules": {
+          "description": "Enable only these modules (empty / omitted means all)",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "api",
+              "ws",
+              "http",
+              "rtsp",
+              "webrtc",
+              "mp4",
+              "hls",
+              "mjpeg",
+              "hass",
+              "homekit",
+              "onvif",
+              "rtmp",
+              "webtorrent",
+              "wyoming",
+              "echo",
+              "exec",
+              "expr",
+              "ffmpeg",
+              "alsa",
+              "v4l2",
+              "bubble",
+              "doorbird",
+              "dvrip",
+              "eseecloud",
+              "flussonic",
+              "gopro",
+              "isapi",
+              "ivideon",
+              "mpegts",
+              "nest",
+              "ring",
+              "roborock",
+              "tapo",
+              "tuya",
+              "yandex",
+              "debug",
+              "ngrok",
+              "pinggy",
+              "srtp"
+            ]
+          }
+        }
+      }
+    },
+    "env": {
+      "description": "Config variables that can be referenced as ${NAME} / ${NAME:default}",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "echo": {
+      "type": "object",
+      "properties": {
+        "allow_paths": {
+          "description": "Allow only these binaries for echo: URLs (exact cmd name/path)",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "examples": [
+            [
+              "ffmpeg",
+              "/usr/bin/ffmpeg"
+            ]
+          ]
+        }
+      }
+    },
+    "exec": {
+      "type": "object",
+      "properties": {
+        "allow_paths": {
+          "description": "Allow only these binaries for exec: URLs (exact cmd name/path)",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "examples": [
+            [
+              "ffmpeg",
+              "/usr/bin/ffmpeg"
+            ]
           ]
         }
       }
@@ -118,25 +246,56 @@
       "type": "object",
       "additionalProperties": {
         "type": "object",
-        "properties": {
-          "pin": {
-            "type": "string",
-            "default": "19550224",
-            "pattern": "^[0-9]{8}$"
-          },
-          "name": {
-            "type": "string"
-          },
+      "properties": {
+        "pin": {
+          "description": "HomeKit pairing PIN (will be normalized to XXX-XX-XXX); insecure PINs are rejected",
+          "type": "string",
+          "default": "19550224",
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9]{8}$"
+            },
+            {
+              "type": "string",
+              "pattern": "^[0-9]{3}-[0-9]{2}-[0-9]{3}$"
+            }
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
           "device_id": {
             "type": "string"
           },
-          "device_private": {
+        "device_private": {
+          "type": "string"
+        },
+        "category_id": {
+          "description": "Accessory category: \"bridge\", \"doorbell\" or numeric ID (default: camera)",
+          "type": "string",
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "bridge",
+                "doorbell"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            {
+              "type": "string",
+              "const": ""
+            }
+          ]
+        },
+        "pairings": {
+          "type": "array",
+          "items": {
             "type": "string"
-          },
-          "pairings": {
-            "type": "array",
-            "items": {
-              "type": "string"
             }
           }
         }
@@ -146,9 +305,11 @@
       "type": "object",
       "properties": {
         "format": {
+          "description": "Log format: color/json/text or empty for autodetect",
           "type": "string",
           "default": "color",
           "enum": [
+            "",
             "color",
             "json",
             "text"
@@ -160,12 +321,26 @@
           "$ref": "#/definitions/log_level"
         },
         "output": {
+          "description": "Log output: stdout/stderr/file[:path] or empty (memory only)",
           "type": "string",
           "default": "stdout",
-          "enum": [
-            "",
-            "stdout",
-            "stderr"
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "",
+                "stdout",
+                "stderr"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^file(:.+)?$",
+              "examples": [
+                "file",
+                "file:go2rtc.log"
+              ]
+            }
           ]
         },
         "time": {
@@ -191,6 +366,24 @@
         "api": {
           "$ref": "#/definitions/log_level"
         },
+        "alsa": {
+          "$ref": "#/definitions/log_level"
+        },
+        "bubble": {
+          "$ref": "#/definitions/log_level"
+        },
+        "debug": {
+          "$ref": "#/definitions/log_level"
+        },
+        "doorbird": {
+          "$ref": "#/definitions/log_level"
+        },
+        "dvrip": {
+          "$ref": "#/definitions/log_level"
+        },
+        "eseecloud": {
+          "$ref": "#/definitions/log_level"
+        },
         "echo": {
           "$ref": "#/definitions/log_level"
         },
@@ -206,6 +399,12 @@
           "default": "error",
           "$ref": "#/definitions/log_level"
         },
+        "flussonic": {
+          "$ref": "#/definitions/log_level"
+        },
+        "gopro": {
+          "$ref": "#/definitions/log_level"
+        },
         "hass": {
           "$ref": "#/definitions/log_level"
         },
@@ -215,7 +414,25 @@
         "homekit": {
           "$ref": "#/definitions/log_level"
         },
+        "http": {
+          "$ref": "#/definitions/log_level"
+        },
+        "isapi": {
+          "$ref": "#/definitions/log_level"
+        },
+        "ivideon": {
+          "$ref": "#/definitions/log_level"
+        },
+        "mjpeg": {
+          "$ref": "#/definitions/log_level"
+        },
+        "mpegts": {
+          "$ref": "#/definitions/log_level"
+        },
         "mp4": {
+          "$ref": "#/definitions/log_level"
+        },
+        "nest": {
           "$ref": "#/definitions/log_level"
         },
         "ngrok": {
@@ -224,13 +441,34 @@
         "onvif": {
           "$ref": "#/definitions/log_level"
         },
+        "pinggy": {
+          "$ref": "#/definitions/log_level"
+        },
+        "ring": {
+          "$ref": "#/definitions/log_level"
+        },
+        "roborock": {
+          "$ref": "#/definitions/log_level"
+        },
         "rtmp": {
           "$ref": "#/definitions/log_level"
         },
         "rtsp": {
           "$ref": "#/definitions/log_level"
         },
+        "srtp": {
+          "$ref": "#/definitions/log_level"
+        },
         "streams": {
+          "$ref": "#/definitions/log_level"
+        },
+        "tapo": {
+          "$ref": "#/definitions/log_level"
+        },
+        "tuya": {
+          "$ref": "#/definitions/log_level"
+        },
+        "v4l2": {
           "$ref": "#/definitions/log_level"
         },
         "webrtc": {
@@ -238,7 +476,16 @@
         },
         "webtorrent": {
           "$ref": "#/definitions/log_level"
+        },
+        "wyoming": {
+          "$ref": "#/definitions/log_level"
+        },
+        "yandex": {
+          "$ref": "#/definitions/log_level"
         }
+      },
+      "additionalProperties": {
+        "$ref": "#/definitions/log_level"
       }
     },
     "ngrok": {
@@ -251,6 +498,30 @@
             "ngrok start --all --config ngrok.yaml"
           ]
         }
+      }
+    },
+    "pinggy": {
+      "type": "object",
+      "properties": {
+        "tunnel": {
+          "description": "Expose local address via Pinggy (scheme: http/tcp/tls/tlstcp, host:port is your local address)",
+          "type": "string",
+          "examples": [
+            "http://127.0.0.1:1984",
+            "tcp://127.0.0.1:8554"
+          ]
+        }
+      }
+    },
+    "preload": {
+      "description": "Preload streams on startup (map stream name => probe query, default \"video&audio\")",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "examples": [
+          "video&audio",
+          "video"
+        ]
       }
     },
     "publish": {
@@ -351,6 +622,29 @@
             "items": {
               "description": "Source",
               "type": "string"
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "url": {
+                "description": "Source URL or list of URLs",
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "examples": [
+                      "rtsp://username:password@192.168.1.123/stream1",
+                      "ffmpeg:media.mp4#video=h264#audio=copy"
+                    ]
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                ]
+              }
             }
           }
         ]
@@ -472,12 +766,56 @@
             "type": "object",
             "properties": {
               "pwd": {
-                "type": "string"
+                "type": "string",
+                "minLength": 4
               },
               "src": {
                 "type": "string"
               }
             }
+          }
+        }
+      }
+    },
+    "wyoming": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "listen": {
+            "description": "Listen address for Wyoming server",
+            "$ref": "#/definitions/listen"
+          },
+          "name": {
+            "description": "Optional satellite name (default: stream name)",
+            "type": "string"
+          },
+          "mode": {
+            "description": "Optional mode: mic / snd / default",
+            "type": "string",
+            "enum": [
+              "",
+              "mic",
+              "snd"
+            ]
+          },
+          "event": {
+            "description": "Event handlers (map event type => expr script)",
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "wake_uri": {
+            "description": "Optional WAKE service URI (ex. tcp://host:port?name=...)",
+            "type": "string",
+            "examples": [
+              "tcp://192.168.1.23:10400"
+            ]
+          },
+          "vad_threshold": {
+            "description": "Optional VAD threshold (0.1..3.5 typical)",
+            "type": "number"
           }
         }
       }
