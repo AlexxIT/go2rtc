@@ -221,6 +221,11 @@ func tcpHandler(conn *rtsp.Conn) {
 				return
 			}
 
+			// Trigger re-matching for OPUS audio requests (FFmpeg accept-audio consumers)
+			if query.Has("audio") && query.Get("audio") == "opus" {
+				stream.TriggerReMatching()
+			}
+
 			closer = func() {
 				stream.RemoveConsumer(conn)
 			}
@@ -243,9 +248,23 @@ func tcpHandler(conn *rtsp.Conn) {
 				conn.Timeout = core.Atoi(s)
 			}
 
+			// will help to protect looping requests to same source
+			conn.Connection.Source = query.Get("source")
+
 			log.Debug().Str("stream", name).Msg("[rtsp] new producer")
 
 			stream.AddProducer(conn)
+
+			// Check if this is an FFmpeg RTSP producer from bidirectional transcoding
+			source := query.Get("source")
+			isFFmpegWithAcceptAudio := strings.Contains(source, "accept-audio") ||
+				strings.Contains(source, "accept%2Daudio") ||
+				strings.Contains(source, "%23audio%3D")
+
+			if isFFmpegWithAcceptAudio {
+				// Match existing consumers with this new FFmpeg producer
+				stream.MatchConsumersWithProducer(conn)
+			}
 
 			closer = func() {
 				stream.RemoveProducer(conn)

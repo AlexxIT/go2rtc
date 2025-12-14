@@ -263,6 +263,8 @@ func (c *Conn) handleTCPData() error {
 			}
 		}
 	} else {
+		// RTP/RTCP interleaved data starting with '$'
+
 		// hope that the odd channels are always RTCP
 		channel = buf4[1]
 

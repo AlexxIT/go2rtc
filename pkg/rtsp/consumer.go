@@ -85,7 +85,6 @@ func (c *Conn) packetWriter(codec *core.Codec, channel, payloadType uint8) core.
 	}
 
 	flushBuf := func() {
-		//log.Printf("[rtsp] channel:%2d write_size:%6d buffer_size:%6d", channel, n, len(buf))
 		if err := c.writeInterleavedData(buf[:n]); err != nil {
 			c.Send += n
 		}
@@ -123,8 +122,6 @@ func (c *Conn) packetWriter(codec *core.Codec, channel, payloadType uint8) core.
 			}
 		}
 
-		//log.Printf("[RTP] codec: %s, size: %6d, ts: %10d, pt: %2d, ssrc: %d, seq: %d, mark: %v", codec.Name, len(packet.Payload), packet.Timestamp, packet.PayloadType, packet.SSRC, packet.SequenceNumber, packet.Marker)
-
 		chunk := buf[n:]
 		_ = chunk[4] // bounds
 		chunk[0] = '$'
@@ -139,9 +136,8 @@ func (c *Conn) packetWriter(codec *core.Codec, channel, payloadType uint8) core.
 		n += 4 + size
 
 		if !packet.Marker || !c.playOK {
-			// collect continious video packets to buffer
+			// collect continuous video packets to buffer
 			// or wait OK for PLAY command for backchannel
-			//log.Printf("[rtsp] collecting buffer ok=%t", c.playOK)
 			return
 		}
 

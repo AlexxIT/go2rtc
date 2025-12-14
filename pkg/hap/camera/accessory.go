@@ -13,6 +13,7 @@ func NewAccessory(manuf, model, name, serial, firmware string) *hap.Accessory {
 			ServiceCameraRTPStreamManagement(),
 			//hap.ServiceHAPProtocolInformation(),
 			ServiceMicrophone(),
+			ServiceSpeaker(),
 		},
 	}
 	acc.InitIID()
@@ -26,21 +27,21 @@ func ServiceMicrophone() *hap.Service {
 			{
 				Type:   "11A",
 				Format: hap.FormatBool,
-				Value:  0,
+				Value:  0, // Not muted
 				Perms:  hap.EVPRPW,
 				//Descr:  "Mute",
 			},
-			//{
-			//	Type:   "119",
-			//	Format: hap.FormatUInt8,
-			//	Value:  100,
-			//	Perms:  hap.EVPRPW,
-			//	//Descr:    "Volume",
-			//	//Unit:     hap.UnitPercentage,
-			//	//MinValue: 0,
-			//	//MaxValue: 100,
-			//	//MinStep:  1,
-			//},
+			{
+				Type:   "119",
+				Format: hap.FormatUInt8,
+				Value:  100, // Normal volume with correct bitrate
+				Perms:  hap.EVPRPW,
+				//Descr:    "Volume",
+				//Unit:     hap.UnitPercentage,
+				//MinValue: 0,
+				//MaxValue: 100,
+				//MinStep:  1,
+			},
 		},
 	}
 }

@@ -90,7 +90,7 @@ func (c *Client) GetMedias() []*core.Media {
 
 	c.Medias = []*core.Media{
 		videoToMedia(c.videoConfig.Codecs),
-		audioToMedia(c.audioConfig.Codecs),
+		audioToMedia(c.audioConfig.Codecs, core.DirectionRecvonly),
 		{
 			Kind:      core.KindVideo,
 			Direction: core.DirectionRecvonly,
@@ -102,6 +102,23 @@ func (c *Client) GetMedias() []*core.Media {
 				},
 			},
 		},
+	}
+
+	// Add speaker support if available
+	if acc.GetService(camera.TypeSpeaker) != nil {
+		c.Medias = append(c.Medias,
+			&core.Media{
+				Kind:      core.KindAudio,
+				Direction: core.DirectionSendonly,
+				Codecs: []*core.Codec{
+					{
+						Name:      core.CodecELD,
+						ClockRate: 16000,
+						Channels:  1,
+					},
+				},
+			},
+		)
 	}
 
 	return c.Medias
@@ -130,6 +147,12 @@ func (c *Client) Start() error {
 	if err != nil {
 		return err
 	}
+
+	// Set PayloadType and RTCPInterval for speaker audio (required for HomeKit)
+	c.videoSession.PayloadType = 99         // H.264
+	c.videoSession.RTCPInterval = 500 * time.Millisecond
+	c.audioSession.PayloadType = 110        // AAC-ELD
+	c.audioSession.RTCPInterval = 5 * time.Second
 
 	c.srtp.AddSession(c.videoSession)
 	c.srtp.AddSession(c.audioSession)
@@ -183,6 +206,26 @@ func (c *Client) trackByKind(kind string) *core.Receiver {
 			return receiver
 		}
 	}
+	return nil
+}
+
+func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
+	switch codec.Name {
+	case core.CodecELD, core.CodecOpus:
+		sender := core.NewSender(media, track.Codec)
+
+		sender.Handler = func(packet *rtp.Packet) {
+			if c.audioSession != nil && c.audioSession.Remote != nil {
+				if n, err := c.audioSession.WriteRTP(packet); err == nil {
+					c.Send += n
+				}
+			}
+		}
+
+		sender.HandleRTP(track)
+		c.Senders = append(c.Senders, sender)
+	}
+
 	return nil
 }
 

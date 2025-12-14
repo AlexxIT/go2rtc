@@ -2,6 +2,7 @@ package streams
 
 import (
 	"errors"
+	"reflect"
 	"strings"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -28,19 +29,59 @@ func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
 				continue
 			}
 
+			// Prevent consumers from routing audio back to producers with the same underlying connection
+			// This prevents audio feedback loops in bidirectional protocols like WebRTC
+			if prod.conn != nil && consMedia.Kind == "audio" {
+				consPtr := reflect.ValueOf(cons).Pointer()
+				prodPtr := reflect.ValueOf(prod.conn).Pointer()
+				if consPtr == prodPtr {
+					log.Trace().Msgf("[streams] skip cons=%d prod=%d (same connection)", consN, prodN)
+					continue
+				}
+			}
+
+			// Skip FFmpeg producers with accept-audio when consumer is internal (FFmpeg/RTSP)
+			// accept-audio should only match with external consumers like WebRTC
+			if strings.Contains(prod.url, "ffmpeg:") && strings.Contains(prod.url, "accept-audio") {
+				if info, ok := cons.(core.Info); ok {
+					consSource := info.GetSource()
+					// Skip if consumer is FFmpeg, RTSP, or empty source (internal)
+					if consSource == "" || strings.HasPrefix(consSource, "ffmpeg:") || strings.HasPrefix(consSource, "rtsp://") {
+						continue
+					}
+				}
+			}
+
 			if prodErrors[prodN] != nil {
 				log.Trace().Msgf("[streams] skip cons=%d prod=%d", consN, prodN)
 				continue
 			}
 
-			if err = prod.Dial(); err != nil {
-				log.Trace().Err(err).Msgf("[streams] dial cons=%d prod=%d", consN, prodN)
-				prodErrors[prodN] = err
-				continue
+			// Step 2. Get producer medias (dial if needed)
+			medias := prod.GetMedias()
+			if len(medias) == 0 && prod.state == stateNone {
+				// Async dial for FFmpeg accept-audio to avoid blocking video start
+				if strings.Contains(prod.url, "ffmpeg:") && strings.Contains(prod.url, "accept-audio") {
+					go func(p *Producer) {
+						if dialErr := p.Dial(); dialErr != nil {
+							log.Debug().Err(dialErr).Msgf("[streams] async dial failed url=%s", p.url)
+						} else if p.conn != nil {
+							s.MatchConsumersWithProducer(p.conn)
+						}
+					}(prod)
+					continue
+				}
+
+				// Sync dial for other producers
+				if err = prod.Dial(); err != nil {
+					log.Trace().Err(err).Msgf("[streams] dial cons=%d prod=%d", consN, prodN)
+					prodErrors[prodN] = err
+					continue
+				}
+				medias = prod.GetMedias()
 			}
 
-			// Step 2. Get producer medias (not tracks yet)
-			for _, prodMedia := range prod.GetMedias() {
+			for _, prodMedia := range medias {
 				log.Trace().Msgf("[streams] check cons=%d prod=%d media=%s", consN, prodN, prodMedia)
 				prodMedias = append(prodMedias, prodMedia)
 

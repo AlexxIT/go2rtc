@@ -149,6 +149,8 @@ func UnmarshalCodec(md *sdp.MediaDescription, payloadType string) *Codec {
 
 			if len(ss) == 3 && ss[2] == "2" {
 				c.Channels = 2
+			} else if len(ss) == 3 && ss[2] == "1" {
+				c.Channels = 1
 			}
 		case c.FmtpLine == "" && attr.Key == "fmtp" && strings.HasPrefix(attr.Value, payloadType):
 			if i := strings.IndexByte(attr.Value, ' '); i > 0 {
@@ -276,8 +278,10 @@ func ParseCodecString(s string) *Codec {
 	if len(ss) >= 2 {
 		codec.ClockRate = uint32(Atoi(ss[1]))
 	}
-	if len(ss) >= 3 {
-		codec.Channels = uint8(Atoi(ss[1]))
+	if len(ss) >= 3 && ss[2] == "2" {
+		codec.Channels = 2
+	} else if len(ss) >= 3 && ss[2] == "1" {
+		codec.Channels = 1
 	}
 
 	return &codec

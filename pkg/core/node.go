@@ -41,6 +41,13 @@ func (n *Node) WithParent(parent *Node) *Node {
 
 func (n *Node) AppendChild(child *Node) {
 	n.mu.Lock()
+	// Check if child already exists to prevent duplicates
+	for _, existing := range n.childs {
+		if existing == child {
+			n.mu.Unlock()
+			return // Child already exists, don't add duplicate
+		}
+	}
 	n.childs = append(n.childs, child)
 	n.mu.Unlock()
 

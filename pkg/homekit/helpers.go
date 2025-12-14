@@ -39,9 +39,9 @@ func videoToMedia(codecs []camera.VideoCodecConfiguration) *core.Media {
 var audioCodecs = [...]string{core.CodecPCMU, core.CodecPCMA, core.CodecELD, core.CodecOpus}
 var audioSampleRates = [...]uint32{8000, 16000, 24000}
 
-func audioToMedia(codecs []camera.AudioCodecConfiguration) *core.Media {
+func audioToMedia(codecs []camera.AudioCodecConfiguration, direction string) *core.Media {
 	media := &core.Media{
-		Kind: core.KindAudio, Direction: core.DirectionRecvonly,
+		Kind: core.KindAudio, Direction: direction,
 	}
 
 	for _, codec := range codecs {
