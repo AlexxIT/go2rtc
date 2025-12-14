@@ -85,3 +85,34 @@ func parseFrames(c byte) byte {
 	}
 	return 0xFF
 }
+
+func JoinFrames(b1, b2 []byte) []byte {
+	// can't join
+	if b1[0]&0b11 != 0 || b2[0]&0b11 != 0 {
+		return append(b1, b2...)
+	}
+
+	size1, size2 := len(b1)-1, len(b2)-1
+
+	// join same sizes
+	if size1 == size2 {
+		b := make([]byte, 1+size1+size2)
+		copy(b, b1)
+		copy(b[1+size1:], b2[1:])
+		b[0] |= 0b01
+		return b
+	}
+
+	b := make([]byte, 1, 3+size1+size2)
+	b[0] = b1[0] | 0b10
+	if size1 >= 252 {
+		b0 := 252 + byte(size1)&0b11
+		b = append(b, b0, byte(size1/4)-b0)
+	} else {
+		b = append(b, byte(size1))
+	}
+
+	b = append(b, b1[1:]...)
+	b = append(b, b2[1:]...)
+	return b
+}

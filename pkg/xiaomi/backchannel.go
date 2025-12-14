@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/opus"
 	"github.com/AlexxIT/go2rtc/pkg/pcm"
 	"github.com/AlexxIT/go2rtc/pkg/xiaomi/miss"
 	"github.com/pion/rtp"
@@ -45,8 +46,22 @@ func (p *Producer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 			}
 		}
 	case core.CodecOpus:
-		sender.Handler = func(pkt *rtp.Packet) {
-			_ = p.client.WriteAudio(miss.CodecOPUS, pkt.Payload)
+		if p.model == "chuangmi.camera.72ac1" {
+			var buf []byte
+			sender.Handler = func(pkt *rtp.Packet) {
+				if buf == nil {
+					buf = pkt.Payload
+				} else {
+					// convert two 20ms to one 40ms
+					buf = opus.JoinFrames(buf, pkt.Payload)
+					_ = p.client.WriteAudio(miss.CodecOPUS, buf)
+					buf = nil
+				}
+			}
+		} else {
+			sender.Handler = func(pkt *rtp.Packet) {
+				_ = p.client.WriteAudio(miss.CodecOPUS, pkt.Payload)
+			}
 		}
 	}
 
