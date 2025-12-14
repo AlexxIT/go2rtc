@@ -74,6 +74,7 @@ Ultimate camera streaming application with support for RTSP, WebRTC, HomeKit, FF
     * [Source: Nest](#source-nest)
     * [Source: Ring](#source-ring)
     * [Source: Roborock](#source-roborock)
+    * [Source: Doorbird](#source-doorbird)
     * [Source: WebRTC](#source-webrtc)
     * [Source: WebTorrent](#source-webtorrent)
     * [Incoming sources](#incoming-sources)
@@ -212,6 +213,7 @@ Available source types:
 - [hass](#source-hass) - Home Assistant integration
 - [isapi](#source-isapi) - two-way audio for Hikvision (ISAPI) cameras
 - [roborock](#source-roborock) - Roborock vacuums with cameras
+- [doorbird](#source-doorbird) - Doorbird cameras with [two way audio](#two-way-audio) support
 - [webrtc](#source-webrtc) - WebRTC/WHEP sources
 - [webtorrent](#source-webtorrent) - WebTorrent source from another go2rtc
 
@@ -226,6 +228,7 @@ Supported sources:
 - [TP-Link Tapo](#source-tapo) cameras
 - [Hikvision ISAPI](#source-isapi) cameras
 - [Roborock vacuums](#source-roborock) models with cameras
+- [Doorbird](#source-doorbird) cameras
 - [Exec](#source-exec) audio on server
 - [Ring](#source-ring) cameras
 - [Tuya](#source-tuya) cameras
@@ -715,6 +718,21 @@ This source type supports Roborock vacuums with cameras. Known working models:
 Source supports loading Roborock credentials from Home Assistant [custom integration](https://github.com/humbertogontijo/homeassistant-roborock) or the [core integration](https://www.home-assistant.io/integrations/roborock). Otherwise, you need to log in to your Roborock account (MiHome account is not supported). Go to: go2rtc WebUI > Add webpage. Copy `roborock://...` source for your vacuum and paste it to `go2rtc.yaml` config.
 
 If you have a graphic PIN for your vacuum, add it as a numeric PIN (lines: 123, 456, 789) to the end of the `roborock` link.
+
+#### Source: Doorbird
+
+*[New in v1.9.11](https://github.com/AlexxIT/go2rtc/releases/tag/v1.9.11)*
+
+This source type supports Doorbird devices including MJPEG stream, audio stream as well as two-way audio.
+
+```yaml
+streams:
+  doorbird1:
+    - rtsp://admin:password@192.168.1.123:8557/mpeg/720p/media.amp  # RTSP stream
+    - doorbird://admin:password@192.168.1.123?media=video           # MJPEG stream
+    - doorbird://admin:password@192.168.1.123?media=audio           # audio stream
+    - doorbird://admin:password@192.168.1.123                       # two-way audio
+```
 
 #### Source: WebRTC
 
