@@ -16,6 +16,7 @@ import (
 type Producer struct {
 	core.Connection
 	client *miss.Client
+	model  string
 }
 
 func Dial(rawURL string) (core.Producer, error) {
@@ -60,6 +61,7 @@ func Dial(rawURL string) (core.Producer, error) {
 			Transport:  client,
 		},
 		client: client,
+		model:  query.Get("model"),
 	}, nil
 }
 
