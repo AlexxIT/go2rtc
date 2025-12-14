@@ -213,7 +213,7 @@ Available source types:
 - [hass](#source-hass) - Home Assistant integration
 - [isapi](#source-isapi) - two-way audio for Hikvision (ISAPI) cameras
 - [roborock](#source-roborock) - Roborock vacuums with cameras
-- [Doorbird](#source-doorbird) - Doorbird cameras
+- [doorbird](#source-doorbird) - Doorbird cameras with [two way audio](#two-way-audio) support
 - [webrtc](#source-webrtc) - WebRTC/WHEP sources
 - [webtorrent](#source-webtorrent) - WebTorrent source from another go2rtc
 
@@ -228,7 +228,7 @@ Supported sources:
 - [TP-Link Tapo](#source-tapo) cameras
 - [Hikvision ISAPI](#source-isapi) cameras
 - [Roborock vacuums](#source-roborock) models with cameras
-- [Doorbird](#source-doorbird) - Doorbird cameras
+- [Doorbird](#source-doorbird) cameras
 - [Exec](#source-exec) audio on server
 - [Ring](#source-ring) cameras
 - [Tuya](#source-tuya) cameras
@@ -728,10 +728,10 @@ This source type supports Doorbird devices including MJPEG stream, audio stream 
 ```yaml
 streams:
   doorbird1:
-    - rtsp://admin:password@192.168.1.123:8557/mpeg/720p/media.amp #RTSP stream
-    - doorbird://admin:password@192.168.1.123?media=video #MJPEG stream
-    - doorbird://admin:password@192.168.1.123?media=audio #Audio stream
-    - doorbird://admin:password@192.168.1.123 #Backchannel connection
+    - rtsp://admin:password@192.168.1.123:8557/mpeg/720p/media.amp  # RTSP stream
+    - doorbird://admin:password@192.168.1.123?media=video           # MJPEG stream
+    - doorbird://admin:password@192.168.1.123?media=audio           # audio stream
+    - doorbird://admin:password@192.168.1.123                       # two-way audio
 ```
 
 #### Source: WebRTC
