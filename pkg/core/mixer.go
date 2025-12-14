@@ -22,6 +22,7 @@ import (
 const (
 	keepaliveInterval    = 20 * time.Millisecond
 	inactiveThreshold    = 100 * time.Millisecond
+	realPacketTimeout    = 500 * time.Millisecond // time window after last real packet to forward FFmpeg output
 	timestampDivisor20ms = 50
 	restartDelay         = 3 * time.Second
 	defaultMTU           = 1472
@@ -52,8 +53,9 @@ type RTPMixer struct {
 	udpServer    *udp.UDPServer
 
 	// Keepalive for inactive parents (prevents FFmpeg from waiting)
-	lastPacketTime map[uint32]int64
-	keepaliveDone  chan struct{}
+	lastPacketTime     map[uint32]int64
+	lastRealPacketTime atomic.Int64 // tracks when last real (non-keepalive) packet arrived
+	keepaliveDone      chan struct{}
 
 	closing            bool
 	intentionalRestart bool
@@ -172,9 +174,14 @@ func (m *RTPMixer) MarshalJSON() ([]byte, error) {
 }
 
 func (m *RTPMixer) handlePacketFromParent(packet *Packet, parentID uint32) {
+	now := time.Now().UnixNano()
+
+	// Track that we received a real packet (not keepalive)
+	m.lastRealPacketTime.Store(now)
+
 	// Update last packet time for keepalive tracking
 	m.mu.Lock()
-	m.lastPacketTime[parentID] = time.Now().UnixNano()
+	m.lastPacketTime[parentID] = now
 	ffmpegRunning := m.ffmpegCmd != nil
 	m.mu.Unlock()
 
@@ -334,7 +341,7 @@ func (m *RTPMixer) monitorFFmpeg() {
 		}
 
 		if wasIntentional {
-			continue
+			continue // Don't restart, handleTopologyChange already did it
 		}
 
 		time.Sleep(restartDelay)
@@ -449,6 +456,13 @@ func (m *RTPMixer) readFromFFmpeg() {
 
 		packet := &Packet{}
 		if err := packet.Unmarshal(buf[:n]); err != nil {
+			continue
+		}
+
+		// Only forward if we received real packets from parents recently
+		// This filters out FFmpeg output that's based purely on keepalive silence
+		lastReal := m.lastRealPacketTime.Load()
+		if time.Now().UnixNano()-lastReal > int64(realPacketTimeout) {
 			continue
 		}
 

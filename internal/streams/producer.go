@@ -158,11 +158,9 @@ func (p *Producer) AddTrack(media *core.Media, codec *core.Codec, track *core.Re
 
 		// Connect mixer to underlying protocol
 		consumer := p.conn.(core.Consumer)
-		if err := consumer.AddTrack(media, codec, &core.Receiver{
-			Node:       core.Node{Codec: codec},
-			ParentNode: &mixer.Node,
-			Media:      media,
-		}); err != nil {
+		mixerReceiver := core.NewReceiver(media, codec)
+		mixerReceiver.ParentNode = &mixer.Node
+		if err := consumer.AddTrack(media, codec, mixerReceiver); err != nil {
 			return err
 		}
 
