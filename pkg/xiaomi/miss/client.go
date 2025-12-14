@@ -23,8 +23,8 @@ func Dial(rawURL string) (*Client, error) {
 	}
 
 	query := u.Query()
-	if query.Get("vendor") != "cs2" {
-		return nil, fmt.Errorf("miss: unsupported vendor")
+	if s := query.Get("vendor"); s != "cs2" {
+		return nil, fmt.Errorf("miss: unsupported vendor %s", s)
 	}
 
 	clientPrivate := query.Get("client_private")
