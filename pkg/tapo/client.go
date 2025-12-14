@@ -20,6 +20,7 @@ import (
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/mpegts"
+	"github.com/AlexxIT/go2rtc/pkg/pcm"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 )
 
@@ -185,6 +186,8 @@ func (c *Client) Handle() error {
 	rd := multipart.NewReader(c.conn1, "--device-stream-boundary--")
 	demux := mpegts.NewDemuxer()
 
+	var transcode func([]byte) []byte
+
 	for {
 		p, err := rd.NextRawPart()
 		if err != nil {
@@ -224,6 +227,23 @@ func (c *Client) Handle() error {
 			}
 			if err2 != nil {
 				return err2
+			}
+
+			if pkt.PayloadType == mpegts.StreamTypePCMUTapo {
+				// TODO: rewrite this part in the future
+				// Some cameras in the new firmware began to use PCMU/16000.
+				// https://github.com/AlexxIT/go2rtc/issues/1954
+				// I don't know why Tapo considers this an improvement. The codec is no better than the previous one.
+				// Unfortunately, we don't know in advance what codec the camera will use.
+				// Therefore, it's easier to transcode to a standard codec that all Tapo cameras have.
+				if transcode == nil {
+					transcode = pcm.Transcode(
+						&core.Codec{Name: core.CodecPCMA, ClockRate: 8000},
+						&core.Codec{Name: core.CodecPCMU, ClockRate: 16000},
+					)
+				}
+				pkt.PayloadType = mpegts.StreamTypePCMATapo
+				pkt.Payload = transcode(pkt.Payload)
 			}
 
 			for _, receiver := range c.receivers {

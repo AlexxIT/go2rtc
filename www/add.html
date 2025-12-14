@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>go2rtc - Add Stream</title>
+    <title>add - go2rtc</title>
     <style>
         main > button {
             background-color: #444;
@@ -330,6 +330,53 @@
     </script>
 
 
+    <button id="tuya">Tuya</button>
+    <div>
+        <form id="tuya-credentials-form">
+            <select name="region" required>
+                <option value="protect-eu.ismartlife.me">EU Central</option>
+                <option value="protect-we.ismartlife.me">EU East</option>
+                <option value="protect-us.ismartlife.me">US West</option>
+                <option value="protect-ue.ismartlife.me">US East</option>
+                <option value="protect.ismartlife.me">China</option>
+                <option value="protect-in.ismartlife.me">India</option>
+            </select>
+            <input type="email" name="email" placeholder="email" required>
+            <input type="password" name="password" placeholder="password" required>
+            <button type="submit">login</button>
+        </form>
+        <table id="tuya-table"></table>
+    </div>
+    <script>
+        document.getElementById('tuya').addEventListener('click', async ev => {
+            ev.target.nextElementSibling.style.display = 'grid';
+        });
+
+        document.getElementById('tuya-credentials-form').addEventListener('submit', async ev => {
+            ev.preventDefault();
+
+            const table = document.getElementById('tuya-table');
+            table.innerText = 'loading...';
+
+            const query = new URLSearchParams(new FormData(ev.target));
+            const url = new URL('api/tuya?' + query.toString(), location.href);
+
+            const r = await fetch(url, {cache: 'no-cache'});
+
+            if (!r.ok) {
+                table.innerText = (await r.text()) || 'Unknown error';
+                return;
+            }
+
+            const data = await r.json();
+
+            table.innerText = '';
+
+            drawTable(table, data);
+        });
+    </script>
+
+
     <button id="roborock">Roborock</button>
     <div>
         <form id="roborock-form">
@@ -362,6 +409,88 @@
         document.getElementById('v4l2').addEventListener('click', async ev => {
             ev.target.nextElementSibling.style.display = 'grid';
             await getSources('v4l2-table', 'api/v4l2');
+        });
+    </script>
+
+
+    <button id="xiaomi">Xiaomi</button>
+    <div>
+        <form id="xiaomi-login-form">
+            <input type="text" name="username" placeholder="username" required>
+            <input type="password" name="password" placeholder="password" required>
+            <button type="submit">login</button>
+        </form>
+        <form id="xiaomi-captcha-form">
+            <img id="xiaomi-captcha">
+            <input type="text" name="captcha" placeholder="captcha" required size="10">
+            <button type="submit">send</button>
+        </form>
+        <form id="xiaomi-verify-form">
+            <label id="xiaomi-verify"></label>
+            <input type="text" name="verify" placeholder="verify" required size="10">
+            <button type="submit">send</button>
+        </form>
+        <form id="xiaomi-devices-form">
+            <select id="xiaomi-id" name="id" required></select>
+            <select name="region" required>
+                <option value="cn">China</option>
+                <option value="de">Europe</option>
+                <option value="i2">India</option>
+                <option value="ru">Russia</option>
+                <option value="sg">Singapore</option>
+                <option value="us">United States</option>
+            </select>
+            <button type="submit">load devices</button>
+        </form>
+        <table id="xiaomi-table"></table>
+    </div>
+    <script>
+        async function xiaomiReload(ev) {
+            if (ev) ev.target.nextElementSibling.style.display = 'grid';
+
+            document.getElementById('xiaomi-login-form').style.display = 'flex';
+            document.getElementById('xiaomi-captcha-form').style.display = 'none';
+            document.getElementById('xiaomi-verify-form').style.display = 'none';
+
+            const r = await fetch('api/xiaomi', {'cache': 'no-cache'});
+            const data = await r.json();
+            const users = document.getElementById('xiaomi-id');
+            users.innerHTML = data.map(item => `<option value="${item}">${item}</option>`).join('');
+        }
+
+        document.getElementById('xiaomi').addEventListener('click', xiaomiReload);
+
+        async function xiaomiLogin(ev) {
+            ev.preventDefault();
+            const params = new URLSearchParams(new FormData(ev.target));
+            const r = await fetch('api/xiaomi', {method: 'POST', body: params});
+            if (r.status === 401) {
+                /** @type {{captcha: string, verify_email: string, verify_phone: string}} */
+                const data = await r.json();
+                document.getElementById('xiaomi-login-form').style.display = 'none';
+                if (data.captcha) {
+                    document.getElementById('xiaomi-captcha-form').style.display = 'flex';
+                    document.getElementById('xiaomi-captcha').src = 'data:image/jpeg;base64,' + data.captcha;
+                } else {
+                    document.getElementById('xiaomi-verify-form').style.display = 'flex';
+                    document.getElementById('xiaomi-verify').innerText = data.verify_email || data.verify_phone;
+                }
+            } else if (r.ok) {
+                alert('OK');
+                xiaomiReload();
+            } else {
+                alert('ERROR: ' + await r.text());
+            }
+        }
+
+        document.getElementById('xiaomi-login-form').addEventListener('submit', xiaomiLogin);
+        document.getElementById('xiaomi-captcha-form').addEventListener('submit', xiaomiLogin);
+        document.getElementById('xiaomi-verify-form').addEventListener('submit', xiaomiLogin);
+
+        document.getElementById('xiaomi-devices-form').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const params = new URLSearchParams(new FormData(ev.target));
+            await getSources('xiaomi-table', 'api/xiaomi?' + params.toString());
         });
     </script>
 
