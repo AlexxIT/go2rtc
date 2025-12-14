@@ -4,10 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>config - go2rtc</title>
-    <script src="https://unpkg.com/ace-builds@1.33.1/src-min/ace.js"></script>
     <style>
-        html, body, #config {
+        html, body {
             height: 100%;
+        }
+
+        #config {
+            flex: 1 1 auto;
+            min-height: 0;
+            border-top: 1px solid #ccc;
+            min-height: 300px;
         }
     </style>
 </head>
@@ -22,44 +28,413 @@
 </main>
 <div id="config"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
 <script>
-    /* global ace */
-    ace.config.set('basePath', 'https://unpkg.com/ace-builds@1.33.1/src-min/');
-    const editor = ace.edit('config', {
-        mode: 'ace/mode/yaml',
-    });
+    /* global require, monaco */
+    const monacoVersion = '0.52.2';
+    const monacoRoot = `https://cdn.jsdelivr.net/npm/monaco-editor@${monacoVersion}/min`;
+    const monacoBase = `${monacoRoot}/vs`;
 
-    let dump;
-
-    document.getElementById('save').addEventListener('click', async () => {
-        let r = await fetch('api/config', {cache: 'no-cache'});
-        if (r.ok && dump !== await r.text()) {
-            alert('Config was changed from another place. Refresh the page and make changes again');
-            return;
+    window.MonacoEnvironment = {
+        getWorkerUrl: function () {
+            return `data:text/javascript;charset=utf-8,${encodeURIComponent(`
+                self.MonacoEnvironment = { baseUrl: '${monacoRoot}/' };
+                importScripts('${monacoBase}/base/worker/workerMain.js');
+            `)}`;
         }
+    };
 
-        r = await fetch('api/config', {method: 'POST', body: editor.getValue()});
-        if (r.ok) {
-            alert('OK');
-            dump = editor.getValue();
-            await fetch('api/restart', {method: 'POST'});
-        } else {
-            alert(await r.text());
-        }
-    });
+    require.config({ paths: { vs: monacoBase } });
 
-    window.addEventListener('load', async () => {
-        const r = await fetch('api/config', {cache: 'no-cache'});
-        if (r.status === 410) {
-            alert('Config file is not set');
-        } else if (r.status === 404) {
-            editor.setValue(''); // config file not exist
-        } else if (r.ok) {
-            dump = await r.text();
-            editor.setValue(dump);
-        } else {
-            alert(`Unknown error: ${r.statusText} (${r.status})`);
-        }
+    require(['vs/editor/editor.main'], () => {
+        const container = document.getElementById('config');
+        container.textContent = '';
+
+        const ensureYamlLanguage = () => {
+            const hasYaml = (monaco.languages.getLanguages?.() || []).some((l) => l.id === 'yaml');
+            if (hasYaml) return;
+
+            monaco.languages.register({
+                id: 'yaml',
+                extensions: ['.yaml', '.yml'],
+                aliases: ['YAML', 'yaml'],
+                mimetypes: ['application/x-yaml', 'text/yaml'],
+            });
+
+            monaco.languages.setLanguageConfiguration('yaml', {
+                comments: {lineComment: '#'},
+                brackets: [['{', '}'], ['[', ']'], ['(', ')']],
+                autoClosingPairs: [
+                    {open: '{', close: '}'},
+                    {open: '[', close: ']'},
+                    {open: '(', close: ')'},
+                    {open: '"', close: '"'},
+                    {open: '\'', close: '\''},
+                ],
+                surroundingPairs: [
+                    {open: '{', close: '}'},
+                    {open: '[', close: ']'},
+                    {open: '(', close: ')'},
+                    {open: '"', close: '"'},
+                    {open: '\'', close: '\''},
+                ],
+            });
+
+            monaco.languages.setMonarchTokensProvider('yaml', {
+                tokenizer: {
+                    root: [
+                        [/^\s*(---|\.\.\.)\s*$/, 'delimiter'],
+                        [/#.*$/, 'comment'],
+                        [/^\s*-\s+/, 'delimiter'],
+                        [/[A-Za-z0-9_-]+(?=\s*:)/, 'key'],
+                        [/:/, 'delimiter'],
+                        [/[{}\[\](),]/, 'delimiter'],
+                        [/\b(true|false|null|~)\b/, 'keyword'],
+                        [/-?\d+(\.\d+)?\b/, 'number'],
+                        [/"/, 'string', '@string_double'],
+                        [/'/, 'string', '@string_single'],
+                        [/[^#\s{}\[\](),]+/, 'string'],
+                        [/\s+/, ''],
+                    ],
+                    string_double: [
+                        [/[^\\"]+/, 'string'],
+                        [/\\./, 'string.escape'],
+                        [/"/, 'string', '@pop'],
+                    ],
+                    string_single: [
+                        [/[^']+/, 'string'],
+                        [/'/, 'string', '@pop'],
+                    ],
+                },
+            });
+        };
+
+        ensureYamlLanguage();
+
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        monaco.editor.setTheme(prefersDark ? 'vs-dark' : 'vs');
+
+        const editor = monaco.editor.create(container, {
+            language: 'yaml',
+            minimap: { enabled: false },
+            automaticLayout: true,
+            tabSize: 2,
+            insertSpaces: true,
+            quickSuggestions: { other: true, comments: false, strings: true },
+            suggestOnTriggerCharacters: true,
+            scrollBeyondLastLine: false,
+        });
+
+        const layout = () => {
+            const top = container.getBoundingClientRect().top;
+            container.style.height = `${Math.max(200, window.innerHeight - top)}px`;
+            editor.layout();
+        };
+        window.addEventListener('resize', layout);
+        layout();
+
+        const stripInlineComment = (line) => {
+            let inSingle = false;
+            let inDouble = false;
+            for (let i = 0; i < line.length; i++) {
+                const ch = line[i];
+                if (ch === '\'' && !inDouble) {
+                    inSingle = !inSingle;
+                    continue;
+                }
+                if (ch === '"' && !inSingle) {
+                    inDouble = !inDouble;
+                    continue;
+                }
+                if (ch === '#' && !inSingle && !inDouble) {
+                    if (i === 0 || /\s/.test(line[i - 1])) return line.slice(0, i);
+                }
+            }
+            return line;
+        };
+
+        const countIndent = (line) => {
+            let indent = 0;
+            for (let i = 0; i < line.length; i++) {
+                if (line[i] === ' ') {
+                    indent++;
+                } else if (line[i] === '\t') {
+                    indent += 2;
+                } else {
+                    break;
+                }
+            }
+            return indent;
+        };
+
+        const parseListItem = (line) => {
+            const m = line.match(/^(\s*)-\s*(.*)$/);
+            if (!m) return null;
+            return {indent: countIndent(m[1]), rest: m[2]};
+        };
+
+        const parseKey = (line) => {
+            const m = line.match(/^(\s*)([A-Za-z0-9_-]+)\s*:(.*)$/);
+            if (!m) return null;
+            const after = m[3] ?? '';
+            const isContainer = after.trim() === '' || after.trim().startsWith('#');
+            return {indent: countIndent(m[1]), key: m[2], isContainer, after};
+        };
+
+        const unique = (arr) => [...new Set(arr)];
+
+        const toYamlScalar = (v) => {
+            if (v === '') return '\'\'';
+            if (typeof v === 'string') return v;
+            if (typeof v === 'number') return String(v);
+            if (typeof v === 'boolean') return v ? 'true' : 'false';
+            return JSON.stringify(v);
+        };
+
+        const setupYamlHints = (schemaRoot) => {
+            const resolveRef = (schema, seen = new Set()) => {
+                if (!schema || typeof schema !== 'object') return schema;
+                if (typeof schema.$ref === 'string') {
+                    const ref = schema.$ref;
+                    if (ref.startsWith('#/definitions/')) {
+                        if (seen.has(ref)) return schema;
+                        seen.add(ref);
+                        const name = ref.slice('#/definitions/'.length);
+                        const def = schemaRoot.definitions?.[name];
+                        if (!def) return schema;
+                        const resolved = resolveRef(def, seen);
+                        const {$ref, ...rest} = schema;
+                        return {...resolved, ...rest};
+                    }
+                }
+                return schema;
+            };
+
+            const mergeProps = (schemas) => {
+                const props = {};
+                for (const s of schemas) {
+                    const schema = resolveRef(s);
+                    if (schema && schema.properties && typeof schema.properties === 'object') {
+                        Object.assign(props, schema.properties);
+                    }
+                }
+                return props;
+            };
+
+            const getObjectProperties = (schema) => {
+                schema = resolveRef(schema);
+                if (!schema) return {};
+                if (schema.properties && typeof schema.properties === 'object') return schema.properties;
+                if (Array.isArray(schema.anyOf)) return mergeProps(schema.anyOf);
+                return {};
+            };
+
+            const getPropertySchema = (schema, key) => {
+                schema = resolveRef(schema);
+                if (!schema) return null;
+
+                if (schema.properties && schema.properties[key]) return resolveRef(schema.properties[key]);
+
+                if (schema.additionalProperties && typeof schema.additionalProperties === 'object') {
+                    return resolveRef(schema.additionalProperties);
+                }
+
+                if (Array.isArray(schema.anyOf)) {
+                    for (const alt of schema.anyOf) {
+                        const res = getPropertySchema(alt, key);
+                        if (res) return res;
+                    }
+                }
+
+                return null;
+            };
+
+            const getValueSuggestions = (schema) => {
+                schema = resolveRef(schema);
+                if (!schema) return [];
+
+                const values = [];
+
+                const addFrom = (s) => {
+                    s = resolveRef(s);
+                    if (!s) return;
+                    if (Array.isArray(s.enum)) values.push(...s.enum);
+                    if ('const' in s) values.push(s.const);
+                    if (Array.isArray(s.examples)) values.push(...s.examples);
+                    if ('default' in s) values.push(s.default);
+                };
+
+                if (Array.isArray(schema.anyOf)) {
+                    for (const alt of schema.anyOf) addFrom(alt);
+                } else {
+                    addFrom(schema);
+                }
+
+                return unique(values);
+            };
+
+            const buildContextStack = (model, upToLineNumber) => {
+                const stack = [{indent: -1, schema: schemaRoot}];
+
+                for (let lineNumber = 1; lineNumber <= upToLineNumber; lineNumber++) {
+                    let line = model.getLineContent(lineNumber);
+                    if (!line.trim()) continue;
+
+                    line = stripInlineComment(line).trimEnd();
+                    if (!line.trim()) continue;
+
+                    const listItem = parseListItem(line);
+                    if (listItem) {
+                        while (stack.length > 1 && listItem.indent <= stack[stack.length - 1].indent) stack.pop();
+                        const parent = resolveRef(stack[stack.length - 1].schema);
+                        if (parent && parent.type === 'array' && parent.items) {
+                            stack.push({indent: listItem.indent, schema: resolveRef(parent.items)});
+                        } else {
+                            stack.push({indent: listItem.indent, schema: null});
+                        }
+
+                        const inline = listItem.rest ? parseKey(' '.repeat(listItem.indent + 2) + listItem.rest) : null;
+                        if (inline && inline.isContainer) {
+                            while (stack.length > 1 && inline.indent <= stack[stack.length - 1].indent) stack.pop();
+                            const ctx = resolveRef(stack[stack.length - 1].schema);
+                            const next = ctx ? getPropertySchema(ctx, inline.key) : null;
+                            stack.push({indent: inline.indent, schema: next});
+                        }
+                        continue;
+                    }
+
+                    const kv = parseKey(line);
+                    if (!kv) continue;
+                    while (stack.length > 1 && kv.indent <= stack[stack.length - 1].indent) stack.pop();
+                    if (!kv.isContainer) continue;
+
+                    const ctx = resolveRef(stack[stack.length - 1].schema);
+                    const next = ctx ? getPropertySchema(ctx, kv.key) : null;
+                    stack.push({indent: kv.indent, schema: next});
+                }
+
+                return stack;
+            };
+
+            monaco.languages.registerCompletionItemProvider('yaml', {
+                triggerCharacters: [':', ' '],
+                provideCompletionItems: (model, position) => {
+                    const line = model.getLineContent(position.lineNumber);
+                    const lineNoComment = stripInlineComment(line).trimEnd();
+                    const listItem = parseListItem(lineNoComment);
+
+                    const {word, startColumn, endColumn} = model.getWordUntilPosition(position);
+                    const range = new monaco.Range(position.lineNumber, startColumn, position.lineNumber, endColumn);
+
+                    const cursorIndex = position.column - 1;
+                    let contentStartIndex = 0;
+                    if (listItem) {
+                        contentStartIndex = listItem.indent;
+                        if (lineNoComment.slice(contentStartIndex, contentStartIndex + 1) === '-') contentStartIndex += 1;
+                        if (lineNoComment.slice(contentStartIndex, contentStartIndex + 1) === ' ') contentStartIndex += 1;
+                    } else {
+                        contentStartIndex = countIndent(lineNoComment);
+                    }
+
+                    if (cursorIndex < contentStartIndex) return {suggestions: []};
+
+                    const text = lineNoComment.slice(contentStartIndex);
+                    const cursorInText = cursorIndex - contentStartIndex;
+                    const colonIndex = text.indexOf(':');
+                    const isValueContext = colonIndex >= 0 && cursorInText > colonIndex;
+
+                    const stack = buildContextStack(model, position.lineNumber - 1);
+
+                    const effectiveIndent = listItem ? listItem.indent + 2 : countIndent(lineNoComment);
+                    while (stack.length > 1 && effectiveIndent <= stack[stack.length - 1].indent) stack.pop();
+
+                    let contextSchema = resolveRef(stack[stack.length - 1].schema);
+
+                    if (listItem && cursorIndex >= listItem.indent + 2 && contextSchema && contextSchema.type === 'array') {
+                        contextSchema = resolveRef(contextSchema.items);
+                    }
+
+                    if (!contextSchema) return {suggestions: []};
+
+                    if (!isValueContext) {
+                        const props = getObjectProperties(contextSchema);
+                        const suggestions = Object.keys(props).map((key) => {
+                            const s = resolveRef(props[key]);
+                            const wantsBlock = s && (s.type === 'object' || s.type === 'array' || s.properties);
+                            const indent = listItem ? ' '.repeat(listItem.indent + 2) : ' '.repeat(countIndent(lineNoComment));
+                            const innerIndent = indent + '  ';
+
+                            const insertText = wantsBlock ? `${key}:\n${innerIndent}` : `${key}: `;
+
+                            return {
+                                label: key,
+                                kind: monaco.languages.CompletionItemKind.Property,
+                                insertText,
+                                insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                                documentation: s?.description,
+                                range,
+                            };
+                        });
+
+                        return {suggestions};
+                    }
+
+                    const keyName = text.slice(0, colonIndex).trim();
+                    const keySchema = getPropertySchema(contextSchema, keyName);
+                    if (!keySchema) return {suggestions: []};
+
+                    const values = getValueSuggestions(keySchema);
+                    const suggestions = values.map((v) => ({
+                        label: toYamlScalar(v),
+                        kind: monaco.languages.CompletionItemKind.Value,
+                        insertText: toYamlScalar(v),
+                        range,
+                    }));
+
+                    return {suggestions};
+                }
+            });
+        };
+
+        let dump;
+
+        document.getElementById('save').addEventListener('click', async () => {
+            let r = await fetch('api/config', {cache: 'no-cache'});
+            if (r.ok && dump !== await r.text()) {
+                alert('Config was changed from another place. Refresh the page and make changes again');
+                return;
+            }
+
+            r = await fetch('api/config', {method: 'POST', body: editor.getValue()});
+            if (r.ok) {
+                alert('OK');
+                dump = editor.getValue();
+                await fetch('api/restart', {method: 'POST'});
+            } else {
+                alert(await r.text());
+            }
+        });
+
+        (async () => {
+            try {
+                const schemaRes = await fetch('schema.json', {cache: 'no-cache'});
+                if (schemaRes.ok) setupYamlHints(await schemaRes.json());
+            } catch (e) {
+                // ignore schema load errors
+            }
+
+            const r = await fetch('api/config', {cache: 'no-cache'});
+            if (r.status === 410) {
+                alert('Config file is not set');
+            } else if (r.status === 404) {
+                editor.setValue(''); // config file not exist
+            } else if (r.ok) {
+                dump = await r.text();
+                editor.setValue(dump);
+            } else {
+                alert(`Unknown error: ${r.statusText} (${r.status})`);
+            }
+        })();
     });
 </script>
 
