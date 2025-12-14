@@ -1,28 +1,24 @@
 package streams
 
 import (
-	"errors"
+	"fmt"
+	"maps"
 	"net/url"
 	"sync"
 
 	"github.com/AlexxIT/go2rtc/pkg/probe"
 )
 
-type preload struct {
-	cons  *probe.Probe
-	query string
+type Preload struct {
+	stream *Stream      // Don't output the stream to JSON to not worry about its secrets.
+	Cons   *probe.Probe `json:"consumer"`
+	Query  string       `json:"query"`
 }
 
-var preloads = map[*Stream]*preload{}
+var preloads = map[string]*Preload{}
 var preloadsMu sync.Mutex
 
-func Preload(stream *Stream, rawQuery string) {
-	if err := AddPreload(stream, rawQuery); err != nil {
-		log.Error().Err(err).Caller().Send()
-	}
-}
-
-func AddPreload(stream *Stream, rawQuery string) error {
+func AddPreload(name, rawQuery string) error {
 	if rawQuery == "" {
 		rawQuery = "video&audio"
 	}
@@ -35,51 +31,39 @@ func AddPreload(stream *Stream, rawQuery string) error {
 	preloadsMu.Lock()
 	defer preloadsMu.Unlock()
 
-	if p := preloads[stream]; p != nil {
-		stream.RemoveConsumer(p.cons)
+	if p := preloads[name]; p != nil {
+		p.stream.RemoveConsumer(p.Cons)
 	}
 
+	stream := Get(name)
+	if stream == nil {
+		return fmt.Errorf("streams: stream not found: %s", name)
+	}
 	cons := probe.Create("preload", query)
 
 	if err = stream.AddConsumer(cons); err != nil {
 		return err
 	}
 
-	preloads[stream] = &preload{cons: cons, query: rawQuery}
+	preloads[name] = &Preload{stream: stream, Cons: cons, Query: rawQuery}
 	return nil
 }
 
-func DelPreload(stream *Stream) error {
+func DelPreload(name string) error {
 	preloadsMu.Lock()
 	defer preloadsMu.Unlock()
 
-	if p := preloads[stream]; p != nil {
-		stream.RemoveConsumer(p.cons)
-		delete(preloads, stream)
+	if p := preloads[name]; p != nil {
+		p.stream.RemoveConsumer(p.Cons)
+		delete(preloads, name)
 		return nil
 	}
 
-	return errors.New("streams: preload not found")
+	return fmt.Errorf("streams: preload not found: %s", name)
 }
 
-func GetPreloads() map[string]string {
-	streamsMu.Lock()
-	defer streamsMu.Unlock()
-
+func GetPreloads() map[string]*Preload {
 	preloadsMu.Lock()
 	defer preloadsMu.Unlock()
-
-	// build reverse lookup: stream -> name
-	streamNames := make(map[*Stream]string, len(streams))
-	for name, stream := range streams {
-		streamNames[stream] = name
-	}
-
-	result := make(map[string]string, len(preloads))
-	for stream, p := range preloads {
-		if name, ok := streamNames[stream]; ok {
-			result[name] = p.query
-		}
-	}
-	return result
+	return maps.Clone(preloads)
 }
