@@ -173,7 +173,7 @@ func apiDeviceList(w http.ResponseWriter, r *http.Request) {
 		var items []*api.Source
 
 		for _, device := range v.List {
-			if !strings.Contains(device.Model, ".camera.") {
+			if !strings.Contains(device.Model, ".camera.") && !strings.Contains(device.Model, ".cateye.") {
 				continue
 			}
 			items = append(items, &api.Source{
