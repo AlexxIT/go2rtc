@@ -27,6 +27,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/mjpeg"
 	"github.com/AlexxIT/go2rtc/internal/mp4"
 	"github.com/AlexxIT/go2rtc/internal/mpegts"
+	"github.com/AlexxIT/go2rtc/internal/multitrans"
 	"github.com/AlexxIT/go2rtc/internal/nest"
 	"github.com/AlexxIT/go2rtc/internal/ngrok"
 	"github.com/AlexxIT/go2rtc/internal/onvif"
@@ -94,6 +95,7 @@ func main() {
 		{"isapi", isapi.Init},
 		{"ivideon", ivideon.Init},
 		{"mpegts", mpegts.Init},
+		{"multitrans", multitrans.Init},
 		{"nest", nest.Init},
 		{"ring", ring.Init},
 		{"roborock", roborock.Init},
