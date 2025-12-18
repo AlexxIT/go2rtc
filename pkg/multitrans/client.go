@@ -28,6 +28,8 @@ type Client struct {
 
 	user string
 	pass string
+
+	closed chan struct{}
 }
 
 func Dial(rawURL string) (*Client, error) {
@@ -45,8 +47,11 @@ func Dial(rawURL string) (*Client, error) {
 		URL:        u,
 		user:       u.User.Username(),
 		clientUUID: uuid.New().String(),
+		closed:     make(chan struct{}),
 	}
 	c.pass, _ = u.User.Password()
+
+	fmt.Printf("[multitrans] Client %p created\n", c)
 
 	if err = c.dial(); err != nil {
 		return nil, err
@@ -56,14 +61,26 @@ func Dial(rawURL string) (*Client, error) {
 }
 
 func (c *Client) Close() error {
+	fmt.Printf("[multitrans] Client %p Close() called\n", c)
+
+	select {
+	case <-c.closed:
+		return nil
+	default:
+		close(c.closed)
+	}
+
 	if c.sender != nil {
 		c.sender.Close()
 	}
-	return c.conn.Close()
+	if c.conn != nil {
+		return c.conn.Close()
+	}
+	return nil
 }
 
 func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver) error {
-	fmt.Printf("[multitrans] AddTrack kind=%s codec=%s direction=%s\n", media.Kind, track.Codec.Name, media.Direction)
+	fmt.Printf("[multitrans] Client %p AddTrack kind=%s codec=%s direction=%s\n", c, media.Kind, track.Codec.Name, media.Direction)
 	if c.sender != nil {
 		return errors.New("multitrans: sender already exists")
 	}
@@ -89,10 +106,10 @@ func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver
 		size := len(b)
 		// Log RTP header (first 12 bytes)
 		if size >= 12 {
-			fmt.Printf("[multitrans] send RTP len=%d pt=%d seq=%d ts=%d header=%X\n",
-				size, packet.PayloadType, packet.SequenceNumber, packet.Timestamp, b[:12])
+			fmt.Printf("[multitrans] Client %p send RTP len=%d pt=%d seq=%d ts=%d header=%X\n",
+				c, size, packet.PayloadType, packet.SequenceNumber, packet.Timestamp, b[:12])
 		} else {
-			fmt.Printf("[multitrans] send RTP len=%d (too short)\n", size)
+			fmt.Printf("[multitrans] Client %p send RTP len=%d (too short)\n", c, size)
 		}
 		// fmt.Printf("[multitrans] sending packet size=%d payload=%d\n", size, len(packet.Payload))
 
@@ -103,11 +120,11 @@ func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver
 		header[3] = byte(size)
 
 		if _, err := c.conn.Write(header); err != nil {
-			fmt.Printf("[multitrans] write header error: %v\n", err)
+			fmt.Printf("[multitrans] Client %p write header error: %v\n", c, err)
 			return
 		}
 		if _, err := c.conn.Write(b); err != nil {
-			fmt.Printf("[multitrans] write body error: %v\n", err)
+			fmt.Printf("[multitrans] Client %p write body error: %v\n", c, err)
 			return
 		}
 	}
@@ -117,13 +134,13 @@ func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver
 }
 
 func (c *Client) dial() error {
-	fmt.Printf("[multitrans] dial() connecting to %s\n", c.URL.Host)
+	fmt.Printf("[multitrans] Client %p dial() connecting to %s\n", c, c.URL.Host)
 	conn, err := net.DialTimeout("tcp", c.URL.Host, time.Second*5)
 	if err != nil {
 		fmt.Printf("[multitrans] dial() tcp connection error: %v\n", err)
 		return err
 	}
-	fmt.Printf("[multitrans] dial() tcp connected\n")
+	fmt.Printf("[multitrans] Client %p dial() tcp connected\n", c)
 
 	c.conn = conn
 	c.reader = bufio.NewReader(conn)
@@ -135,9 +152,13 @@ func (c *Client) dial() error {
 		return err
 	}
 
-	fmt.Printf("[multitrans] dial() handshake success\n")
+	fmt.Printf("[multitrans] Client %p dial() handshake success\n", c)
 	return nil
 }
+
+// handshake ... (no change needed in signature, but internal logging could be updated, but Client %p is not easily passed unless we change method receiver to be logged? It is method receiver. I will leave it mostly as is but maybe add prefix if I edit it.)
+// I will not edit handshake body just for logging to avoid large diff, unless necessary.
+// Actually, I should probably update dial logs.
 
 func (c *Client) handshake() error {
 	// Step 1: Get Challenge
@@ -187,25 +208,16 @@ func (c *Client) handshake() error {
 
 	// Session: 7116520596809429228
 	session := res.Header.Get("Session")
-	fmt.Printf("[multitrans] handshake OK, session=%s\n", session)
+	fmt.Printf("[multitrans] Client %p handshake OK, session=%s\n", c, session)
 	if session == "" {
 		return errors.New("multitrans: no session")
 	}
-
-	// Store cookie/session for next request if needed, but here we just need it for startTalkback
-	// Actually talkback uses the same conn, so we can store it in Client if we want, or just pass it.
-	// We'll store it in Client struct to be safe.
-	// But wait, the python script uses `session_id` from step 2 in step 3.
-	// And the python script sends step 3 in `_connect_and_auth`.
-	// So `Dial` should probably complete all 3 steps?
-	// The python script `_connect_and_auth` does all 3 steps and returns the socket.
-	// So yes, we should do step 3 here as well.
 
 	return c.openTalkChannel(uri, session)
 }
 
 func (c *Client) openTalkChannel(uri, session string) error {
-	payload := `{"type":"request","seq":0,"params":{"method":"get","talk":{"mode":"half_duplex"}}}`
+	payload := `{"type":"request","seq":0,"params":{"method":"get","talk":{"mode":"full_duplex"}}}`
 
 	data := fmt.Sprintf("MULTITRANS %s RTSP/1.0\r\nCSeq: 2\r\nSession: %s\r\nContent-Type: application/json\r\nContent-Length: %d\r\n\r\n%s",
 		uri, session, len(payload), payload)
@@ -225,17 +237,16 @@ func (c *Client) openTalkChannel(uri, session string) error {
 
 	// Python checks for "error_code":0 in body.
 	if !bytes.Contains(res.Body, []byte(`"error_code":0`)) {
-		fmt.Printf("[multitrans] talkback error response: %s\n", string(res.Body))
+		fmt.Printf("[multitrans] Client %p talkback error response: %s\n", c, string(res.Body))
 		return fmt.Errorf("multitrans: talkback error: %s", string(res.Body))
 	}
-	fmt.Printf("[multitrans] talkback channel opened: %s\n", string(res.Body))
+	fmt.Printf("[multitrans] Client %p talkback channel opened: %s\n", c, string(res.Body))
 
 	return nil
 }
 
 func (c *Client) startTalkback() error {
 	// Already connected and channel opened in Dial -> handshake -> openTalkChannel
-	// So we just verify connection is good?
 	if c.conn == nil {
 		return errors.New("multitrans: not connected")
 	}
@@ -257,9 +268,12 @@ func (c *Client) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver,
 }
 
 func (c *Client) Start() error {
+	fmt.Printf("[multitrans] Client %p Start()\n", c)
+	<-c.closed
 	return nil
 }
 
 func (c *Client) Stop() error {
+	fmt.Printf("[multitrans] Client %p Stop()\n", c)
 	return c.Close()
 }
