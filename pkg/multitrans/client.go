@@ -95,22 +95,28 @@ func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver
 	}
 
 	c.sender = core.NewSender(media, track.Codec)
+
 	c.sender.Handler = func(packet *rtp.Packet) {
+		// Clone packet to strip extensions without modifying original
+		pkt := *packet
+		pkt.Header.Extension = false
+		pkt.Header.Extensions = nil
+
 		// Encapsulate in RTSP Interleaved Frame (Channel 1)
 		// $ + Channel(1 byte) + Length(2 bytes) + Packet
-		b, err := packet.Marshal()
+		b, err := pkt.Marshal()
 		if err != nil {
 			return
 		}
 
 		size := len(b)
 		// Log RTP header (first 12 bytes)
-		if size >= 12 {
-			fmt.Printf("[multitrans] Client %p send RTP len=%d pt=%d seq=%d ts=%d header=%X\n",
-				c, size, packet.PayloadType, packet.SequenceNumber, packet.Timestamp, b[:12])
-		} else {
-			fmt.Printf("[multitrans] Client %p send RTP len=%d (too short)\n", c, size)
-		}
+		// if size >= 12 {
+		// 	fmt.Printf("[multitrans] Client %p send RTP len=%d pt=%d seq=%d ts=%d header=%X\n",
+		// 		c, size, packet.PayloadType, packet.SequenceNumber, packet.Timestamp, b[:12])
+		// } else {
+		// 	fmt.Printf("[multitrans] Client %p send RTP len=%d (too short)\n", c, size)
+		// }
 		// fmt.Printf("[multitrans] sending packet size=%d payload=%d\n", size, len(packet.Payload))
 
 		header := make([]byte, 4)
