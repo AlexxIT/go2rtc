@@ -26,7 +26,7 @@ func Init() {
 
 	cfg.Mod.Listen = ":8555"
 	cfg.Mod.IceServers = []pion.ICEServer{
-		{URLs: []string{"stun:stun.l.google.com:19302"}},
+		{URLs: []string{"stun:stun.cloudflare.com:3478", "stun:stun.l.google.com:19302"}},
 	}
 
 	app.LoadConfig(&cfg)
@@ -38,6 +38,16 @@ func Init() {
 	address, network, _ := strings.Cut(cfg.Mod.Listen, "/")
 	for _, candidate := range cfg.Mod.Candidates {
 		AddCandidate(network, candidate)
+
+		if strings.HasPrefix(candidate, "stun:") && stuns == nil {
+			for _, ice := range cfg.Mod.IceServers {
+				for _, url := range ice.URLs {
+					if strings.HasPrefix(url, "stun:") {
+						stuns = append(stuns, url[5:])
+					}
+				}
+			}
+		}
 	}
 
 	var err error
