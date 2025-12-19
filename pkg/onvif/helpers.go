@@ -12,6 +12,12 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
+type DiscoveryDevice struct {
+	URL      string
+	Name     string
+	Hardware string
+}
+
 func FindTagValue(b []byte, tag string) string {
 	re := regexp.MustCompile(`(?s)<(?:\w+:)?` + tag + `\b[^>]*>([^<]+)`)
 	m := re.FindSubmatch(b)
@@ -27,7 +33,8 @@ func UUID() string {
 	return s[:8] + "-" + s[8:12] + "-" + s[12:16] + "-" + s[16:20] + "-" + s[20:]
 }
 
-func DiscoveryStreamingURLs() ([]string, error) {
+// return list of tuple (onvif_url, name, hardware)
+func DiscoveryStreamingDevices() ([]DiscoveryDevice, error) {
 	conn, err := net.ListenUDP("udp4", nil)
 	if err != nil {
 		return nil, err
@@ -65,7 +72,7 @@ func DiscoveryStreamingURLs() ([]string, error) {
 		return nil, err
 	}
 
-	var urls []string
+	var devices []DiscoveryDevice
 
 	b := make([]byte, 8192)
 	for {
@@ -92,10 +99,29 @@ func DiscoveryStreamingURLs() ([]string, error) {
 			url = "http://" + addr.IP.String() + url[14:]
 		}
 
-		urls = append(urls, url)
+		// try to find the camera name and model (hardware)
+		scopes := FindTagValue(b[:n], "Scopes")
+		var name, hardware string
+		for _, scope := range strings.Split(scopes, " ") {
+			if strings.HasPrefix(scope, "onvif://www.onvif.org/name/") {
+				name = strings.TrimPrefix(scope, "onvif://www.onvif.org/name/")
+			} else if strings.HasPrefix(scope, "onvif://www.onvif.org/hardware/") {
+				hardware = strings.TrimPrefix(scope, "onvif://www.onvif.org/hardware/")
+			}
+		}
+		// Some cameras has the hardware copied into the name field or vice versa
+		// this is to avoid duplication
+		if name != "" && hardware != "" {
+			if strings.Contains(hardware, name) {
+				name = ""
+			} else if strings.Contains(name, hardware) {
+				hardware = ""
+			}
+		}
+		devices = append(devices, DiscoveryDevice{URL: url, Name: name, Hardware: hardware})
 	}
 
-	return urls, nil
+	return devices, nil
 }
 
 func atoi(s string) int {
