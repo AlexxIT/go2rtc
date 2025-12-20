@@ -29,6 +29,7 @@
 <div id="config"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs/loader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
 <script>
     /* global require, monaco */
     const monacoVersion = '0.55.1';
@@ -168,17 +169,110 @@
         };
 
         const parseListItem = (line) => {
-            const m = line.match(/^(\s*)-\s*(.*)$/);
+            const m = line.match(/^([ \t]*)-/);
             if (!m) return null;
-            return {indent: countIndent(m[1]), rest: m[2]};
+
+            const dashIndex = m[1].length;
+            if (dashIndex + 1 < line.length && !/\s/.test(line[dashIndex + 1])) return null;
+
+            let afterDashIndex = dashIndex + 1;
+            while (afterDashIndex < line.length && /\s/.test(line[afterDashIndex])) afterDashIndex++;
+
+            const spacesAfterDash = Math.max(1, afterDashIndex - (dashIndex + 1));
+
+            return {
+                indent: countIndent(m[1]),
+                dashIndex,
+                afterDashIndex,
+                rest: line.slice(afterDashIndex),
+                contentIndent: countIndent(m[1]) + 1 + spacesAfterDash,
+            };
         };
 
         const parseKey = (line) => {
-            const m = line.match(/^(\s*)([A-Za-z0-9_-]+)\s*:(.*)$/);
-            if (!m) return null;
-            const after = m[3] ?? '';
+            const m = line.match(/^([ \t]*)/);
+            const indentStr = m ? m[0] : '';
+            const indentIndex = indentStr.length;
+            const indent = countIndent(indentStr);
+
+            if (indentIndex >= line.length) return null;
+
+            let i = indentIndex;
+            let key = '';
+            let rawKey = '';
+            let isQuoted = false;
+            let keyStartIndex = i;
+            let keyEndIndex = i;
+            let colonIndex = -1;
+
+            const parseQuotedKey = (quoteChar) => {
+                isQuoted = true;
+                let j = i + 1;
+                if (quoteChar === '"') {
+                    while (j < line.length) {
+                        if (line[j] === '\\') {
+                            j += 2;
+                            continue;
+                        }
+                        if (line[j] === '"') break;
+                        j++;
+                    }
+                } else {
+                    while (j < line.length) {
+                        if (line[j] === '\'') {
+                            if (line[j + 1] === '\'') {
+                                j += 2;
+                                continue;
+                            }
+                            break;
+                        }
+                        j++;
+                    }
+                }
+
+                if (j >= line.length) return null;
+                rawKey = line.slice(i, j + 1);
+                if (quoteChar === '"') {
+                    key = line.slice(i + 1, j).replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+                } else {
+                    key = line.slice(i + 1, j).replace(/''/g, '\'');
+                }
+                keyStartIndex = i;
+                keyEndIndex = j + 1;
+
+                let k = j + 1;
+                while (k < line.length && /\s/.test(line[k])) k++;
+                if (k >= line.length || line[k] !== ':') return null;
+                colonIndex = k;
+                return colonIndex;
+            };
+
+            if (line[i] === '"' || line[i] === '\'') {
+                if (parseQuotedKey(line[i]) === null) return null;
+            } else {
+                let j = i;
+                while (j < line.length) {
+                    if (line[j] === ':') {
+                        if (j + 1 >= line.length || /\s/.test(line[j + 1])) {
+                            colonIndex = j;
+                            break;
+                        }
+                    }
+                    j++;
+                }
+                if (colonIndex === -1) return null;
+                rawKey = line.slice(i, colonIndex).replace(/\s+$/, '');
+                if (!rawKey) return null;
+                key = rawKey;
+                keyStartIndex = i;
+                keyEndIndex = i + rawKey.length;
+            }
+
+            const after = line.slice(colonIndex + 1) ?? '';
             const isContainer = after.trim() === '' || after.trim().startsWith('#');
-            return {indent: countIndent(m[1]), key: m[2], isContainer, after};
+            const valueStartIndex = colonIndex + 1;
+
+            return {indent, key, rawKey, isQuoted, isContainer, after, keyStartIndex, keyEndIndex, colonIndex, valueStartIndex};
         };
 
         const unique = (arr) => [...new Set(arr)];
@@ -191,7 +285,7 @@
             return JSON.stringify(v);
         };
 
-        const setupYamlHints = (schemaRoot) => {
+        const createSchemaTools = (schemaRoot) => {
             const resolveRef = (schema, seen = new Set()) => {
                 if (!schema || typeof schema !== 'object') return schema;
                 if (typeof schema.$ref === 'string') {
@@ -273,6 +367,383 @@
                 return unique(values);
             };
 
+            const getSchemaTypes = (schema, seen = new Set()) => {
+                schema = resolveRef(schema);
+                if (!schema || typeof schema !== 'object') return new Set();
+
+                if (Array.isArray(schema.anyOf)) {
+                    const types = new Set();
+                    for (const alt of schema.anyOf) {
+                        for (const t of getSchemaTypes(alt, seen)) types.add(t);
+                    }
+                    return types;
+                }
+
+                if (Array.isArray(schema.oneOf)) {
+                    const types = new Set();
+                    for (const alt of schema.oneOf) {
+                        for (const t of getSchemaTypes(alt, seen)) types.add(t);
+                    }
+                    return types;
+                }
+
+                if (Array.isArray(schema.type)) return new Set(schema.type);
+                if (typeof schema.type === 'string') return new Set([schema.type]);
+                if (schema.properties || schema.additionalProperties) return new Set(['object']);
+                if (schema.items) return new Set(['array']);
+                return new Set();
+            };
+
+            const schemaAllowsType = (schema, actualType) => {
+                const types = getSchemaTypes(schema);
+                if (actualType === 'integer' && types.has('number')) return true;
+                return types.has(actualType);
+            };
+
+            const schemaTypesLabel = (schema) => {
+                const types = Array.from(getSchemaTypes(schema));
+                if (types.length === 0) return 'any';
+                return types.sort().join(' | ');
+            };
+
+            const getArrayItemSchema = (schema) => {
+                schema = resolveRef(schema);
+                if (!schema) return null;
+                if (schema.type === 'array' && schema.items) return resolveRef(schema.items);
+                if (Array.isArray(schema.anyOf)) {
+                    for (const alt of schema.anyOf) {
+                        const item = getArrayItemSchema(alt);
+                        if (item) return item;
+                    }
+                }
+                return null;
+            };
+
+            return {
+                schemaRoot,
+                resolveRef,
+                getObjectProperties,
+                getPropertySchema,
+                getValueSuggestions,
+                getSchemaTypes,
+                schemaAllowsType,
+                schemaTypesLabel,
+                getArrayItemSchema,
+            };
+        };
+
+        const isIntLike = (s) => /^[+-]?\d+$/.test(s);
+        const isNumberLike = (s) => (
+            /^[+-]?(?:\d*\.\d+|\d+\.\d*)(?:[eE][+-]?\d+)?$/.test(s) ||
+            /^[+-]?\d+(?:[eE][+-]?\d+)$/.test(s) ||
+            isIntLike(s)
+        );
+
+        const classifyYamlScalar = (raw) => {
+            const v = raw.trim();
+            if (!v) return {type: 'null'};
+            if (/^\$\{[^}{]+\}$/.test(v)) return {type: 'dynamic'};
+            if (v.startsWith('[')) return {type: 'array'};
+            if (v.startsWith('{')) return {type: 'object'};
+            if (v.startsWith('"') || v.startsWith('\'')) return {type: 'string'};
+            if (v === 'true' || v === 'false') return {type: 'boolean'};
+            if (v === 'null' || v === '~') return {type: 'null'};
+            if (isIntLike(v)) return {type: 'integer'};
+            if (isNumberLike(v)) return {type: 'number'};
+            return {type: 'string'};
+        };
+
+        const lintYamlModel = (model, schemaTools) => {
+            const markers = [];
+            const markedLines = new Set();
+
+            const markLineError = (lineNumber, message, startColumn = 1) => {
+                if (markedLines.has(`${lineNumber}:${message}`)) return;
+                markedLines.add(`${lineNumber}:${message}`);
+                const lineText = model.getLineContent(lineNumber);
+                markers.push({
+                    severity: monaco.MarkerSeverity.Error,
+                    message,
+                    startLineNumber: lineNumber,
+                    startColumn,
+                    endLineNumber: lineNumber,
+                    endColumn: Math.max(startColumn + 1, lineText.length + 1),
+                });
+            };
+
+            if (window.jsyaml?.load) {
+                try {
+                    window.jsyaml.load(model.getValue());
+                } catch (e) {
+                    const mark = e?.mark || {};
+                    const line = typeof mark.line === 'number' ? mark.line + 1 : 1;
+                    const column = typeof mark.column === 'number' ? mark.column + 1 : 1;
+                    markLineError(line, e?.reason ? `YAML: ${e.reason}` : `YAML: ${e?.message || 'Invalid YAML'}`, column);
+                }
+            }
+
+            const pushMarker = (m) => markers.push(m);
+
+            const getExpectedContainerType = (schema) => {
+                if (!schemaTools) return null;
+                const types = schemaTools.getSchemaTypes(schema);
+                const wantsObject = types.has('object');
+                const wantsArray = types.has('array');
+                if (wantsObject && !wantsArray) return 'object';
+                if (wantsArray && !wantsObject) return 'array';
+                return null;
+            };
+
+            const stack = [{
+                indent: -1,
+                schema: schemaTools?.schemaRoot || null,
+                expected: 'object',
+                actual: null,
+                keys: new Map(),
+                origin: null,
+                reportedTypeMismatch: false,
+            }];
+
+            let hasTopLevelKey = false;
+            let hasTopLevelList = false;
+            const lineCount = model.getLineCount();
+            for (let lineNumber = 1; lineNumber <= lineCount; lineNumber++) {
+                let line = model.getLineContent(lineNumber);
+                if (!line.trim()) continue;
+                line = stripInlineComment(line).trimEnd();
+                if (!line.trim()) continue;
+                const kv = parseKey(line);
+                if (kv && kv.indent === 0) hasTopLevelKey = true;
+                const li = parseListItem(line);
+                if (li && li.indent === 0) hasTopLevelList = true;
+            }
+
+            const setActualType = (ctx, actual, fallbackLineNumber) => {
+                if (ctx.actual !== null) return;
+                ctx.actual = actual;
+                if (ctx.origin && ctx.expected && ctx.expected !== actual && !ctx.reportedTypeMismatch) {
+                    pushMarker({
+                        severity: monaco.MarkerSeverity.Error,
+                        message: `Type mismatch: expected ${ctx.expected}, got ${actual}`,
+                        startLineNumber: ctx.origin.lineNumber,
+                        startColumn: ctx.origin.startColumn,
+                        endLineNumber: ctx.origin.lineNumber,
+                        endColumn: ctx.origin.endColumn,
+                    });
+                    ctx.reportedTypeMismatch = true;
+                } else if (!ctx.origin && ctx.expected && ctx.expected !== actual && fallbackLineNumber) {
+                    pushMarker({
+                        severity: monaco.MarkerSeverity.Error,
+                        message: `Type mismatch: expected ${ctx.expected}, got ${actual}`,
+                        startLineNumber: fallbackLineNumber,
+                        startColumn: 1,
+                        endLineNumber: fallbackLineNumber,
+                        endColumn: 2,
+                    });
+                    ctx.reportedTypeMismatch = true;
+                }
+            };
+
+            const checkValueType = (schema, actualType, lineNumber, startColumn, endColumn, keyName) => {
+                if (!schemaTools || !schema) return;
+                if (actualType === 'dynamic') return;
+                if (schemaTools.schemaAllowsType(schema, actualType)) return;
+                pushMarker({
+                    severity: monaco.MarkerSeverity.Error,
+                    message: `Type mismatch for ${keyName ? `"${keyName}"` : 'value'}: expected ${schemaTools.schemaTypesLabel(schema)}, got ${actualType}`,
+                    startLineNumber: lineNumber,
+                    startColumn,
+                    endLineNumber: lineNumber,
+                    endColumn: Math.max(startColumn + 1, endColumn),
+                });
+            };
+
+            for (let lineNumber = 1; lineNumber <= lineCount; lineNumber++) {
+                let line = model.getLineContent(lineNumber);
+                if (!line.trim()) continue;
+
+                line = stripInlineComment(line).trimEnd();
+                if (!line.trim()) continue;
+
+                const indent = countIndent(line);
+                if (indent === 0 && (hasTopLevelKey || hasTopLevelList)) {
+                    const trimmed = line.trim();
+                    if (trimmed !== '---' && trimmed !== '...' && !trimmed.startsWith('#')) {
+                        const listItem0 = parseListItem(line);
+                        const kv0 = parseKey(line);
+                        const flow0 = trimmed.startsWith('{') || trimmed.startsWith('[');
+                        if (!flow0 && !listItem0 && !kv0) {
+                            markLineError(lineNumber, 'YAML: unexpected content at document root');
+                            continue;
+                        }
+                    }
+                }
+
+                const listItem = parseListItem(line);
+                if (listItem) {
+                    while (stack.length > 1 && listItem.indent <= stack[stack.length - 1].indent) stack.pop();
+
+                    const parent = stack[stack.length - 1];
+                    setActualType(parent, 'array', lineNumber);
+
+                    const itemSchema = schemaTools ? schemaTools.getArrayItemSchema(parent.schema) : null;
+                    const itemExpected = getExpectedContainerType(itemSchema);
+
+                    const itemCtx = {
+                        indent: listItem.indent,
+                        schema: itemSchema,
+                        expected: itemExpected,
+                        actual: null,
+                        keys: new Map(),
+                        origin: {lineNumber, startColumn: listItem.dashIndex + 1, endColumn: listItem.dashIndex + 2},
+                        reportedTypeMismatch: false,
+                    };
+                    stack.push(itemCtx);
+
+                    if (!listItem.rest) continue;
+
+                    const inline = parseKey(' '.repeat(listItem.afterDashIndex) + listItem.rest);
+                    if (inline) {
+                        // handle inline mapping in the same line: "- key: value"
+                        const kv = inline;
+                        while (stack.length > 1 && kv.indent <= stack[stack.length - 1].indent) stack.pop();
+                        const ctx = stack[stack.length - 1];
+                        setActualType(ctx, 'object', lineNumber);
+
+                        const prev = ctx.keys.get(kv.key);
+                        if (prev) {
+                            pushMarker({
+                                severity: monaco.MarkerSeverity.Warning,
+                                message: `Duplicate key "${kv.key}" (previous at line ${prev.lineNumber})`,
+                                startLineNumber: lineNumber,
+                                startColumn: kv.keyStartIndex + 1,
+                                endLineNumber: lineNumber,
+                                endColumn: kv.keyEndIndex + 1,
+                            });
+                        } else {
+                            ctx.keys.set(kv.key, {lineNumber});
+                        }
+
+                        if (!kv.isQuoted && isNumberLike(kv.rawKey.trim())) {
+                            pushMarker({
+                                severity: monaco.MarkerSeverity.Error,
+                                message: `Map keys must be strings. Quote numeric key as '${kv.rawKey}':`,
+                                startLineNumber: lineNumber,
+                                startColumn: kv.keyStartIndex + 1,
+                                endLineNumber: lineNumber,
+                                endColumn: kv.keyEndIndex + 1,
+                            });
+                        }
+
+                        const propSchema = schemaTools ? schemaTools.getPropertySchema(ctx.schema, kv.key) : null;
+                        if (kv.isContainer) {
+                            stack.push({
+                                indent: kv.indent,
+                                schema: propSchema,
+                                expected: getExpectedContainerType(propSchema),
+                                actual: null,
+                                keys: new Map(),
+                                origin: {lineNumber, startColumn: kv.keyStartIndex + 1, endColumn: kv.keyEndIndex + 1},
+                                reportedTypeMismatch: false,
+                            });
+                        } else if (propSchema) {
+                            const valueText = kv.after.trim();
+                            const actual = classifyYamlScalar(valueText).type;
+                            const valueStartColumn = kv.valueStartIndex + 1 + (kv.after.length - kv.after.trimStart().length);
+                            checkValueType(propSchema, actual, lineNumber, valueStartColumn, line.length + 1, kv.key);
+                        }
+                        continue;
+                    }
+
+                    const scalar = classifyYamlScalar(listItem.rest).type;
+                    checkValueType(itemSchema, scalar, lineNumber, listItem.afterDashIndex + 1, line.length + 1, null);
+                    continue;
+                }
+
+                const kv = parseKey(line);
+                if (!kv) continue;
+
+                while (stack.length > 1 && kv.indent <= stack[stack.length - 1].indent) stack.pop();
+                const ctx = stack[stack.length - 1];
+                setActualType(ctx, 'object', lineNumber);
+
+                const prev = ctx.keys.get(kv.key);
+                if (prev) {
+                    pushMarker({
+                        severity: monaco.MarkerSeverity.Warning,
+                        message: `Duplicate key "${kv.key}" (previous at line ${prev.lineNumber})`,
+                        startLineNumber: lineNumber,
+                        startColumn: kv.keyStartIndex + 1,
+                        endLineNumber: lineNumber,
+                        endColumn: kv.keyEndIndex + 1,
+                    });
+                } else {
+                    ctx.keys.set(kv.key, {lineNumber});
+                }
+
+                if (!kv.isQuoted && isNumberLike(kv.rawKey.trim())) {
+                    pushMarker({
+                        severity: monaco.MarkerSeverity.Error,
+                        message: `Map keys must be strings. Quote numeric key as '${kv.rawKey}':`,
+                        startLineNumber: lineNumber,
+                        startColumn: kv.keyStartIndex + 1,
+                        endLineNumber: lineNumber,
+                        endColumn: kv.keyEndIndex + 1,
+                    });
+                }
+
+                const propSchema = schemaTools ? schemaTools.getPropertySchema(ctx.schema, kv.key) : null;
+                if (kv.isContainer) {
+                    stack.push({
+                        indent: kv.indent,
+                        schema: propSchema,
+                        expected: getExpectedContainerType(propSchema),
+                        actual: null,
+                        keys: new Map(),
+                        origin: {lineNumber, startColumn: kv.keyStartIndex + 1, endColumn: kv.keyEndIndex + 1},
+                        reportedTypeMismatch: false,
+                    });
+                    continue;
+                }
+
+                if (!propSchema) continue;
+
+                const actual = classifyYamlScalar(kv.after).type;
+                const valueStartColumn = kv.valueStartIndex + 1 + (kv.after.length - kv.after.trimStart().length);
+                checkValueType(propSchema, actual, lineNumber, valueStartColumn, line.length + 1, kv.key);
+            }
+
+            return markers;
+        };
+
+        let schemaTools = null;
+        let completionProvider = null;
+
+        const scheduleLint = (() => {
+            let handle = null;
+            return () => {
+                if (handle) clearTimeout(handle);
+                handle = setTimeout(() => {
+                    const model = editor.getModel();
+                    if (!model) return;
+                    monaco.editor.setModelMarkers(model, 'yaml-lint', lintYamlModel(model, schemaTools));
+                }, 250);
+            };
+        })();
+
+        editor.onDidChangeModelContent(() => scheduleLint());
+
+        const setupYamlHints = (schemaRoot) => {
+            schemaTools = createSchemaTools(schemaRoot);
+            scheduleLint();
+
+            const {
+                resolveRef,
+                getObjectProperties,
+                getPropertySchema,
+                getValueSuggestions,
+            } = schemaTools;
+
             const buildContextStack = (model, upToLineNumber) => {
                 const stack = [{indent: -1, schema: schemaRoot}];
 
@@ -293,7 +764,7 @@
                             stack.push({indent: listItem.indent, schema: null});
                         }
 
-                        const inline = listItem.rest ? parseKey(' '.repeat(listItem.indent + 2) + listItem.rest) : null;
+                        const inline = listItem.rest ? parseKey(' '.repeat(listItem.contentIndent) + listItem.rest) : null;
                         if (inline && inline.isContainer) {
                             while (stack.length > 1 && inline.indent <= stack[stack.length - 1].indent) stack.pop();
                             const ctx = resolveRef(stack[stack.length - 1].schema);
@@ -316,12 +787,14 @@
                 return stack;
             };
 
-            monaco.languages.registerCompletionItemProvider('yaml', {
+            if (completionProvider) completionProvider.dispose();
+            completionProvider = monaco.languages.registerCompletionItemProvider('yaml', {
                 triggerCharacters: [':', ' '],
                 provideCompletionItems: (model, position) => {
                     const line = model.getLineContent(position.lineNumber);
-                    const lineNoComment = stripInlineComment(line).trimEnd();
-                    const listItem = parseListItem(lineNoComment);
+                    const lineNoComment = stripInlineComment(line);
+                    const lineNoCommentTrimmedEnd = lineNoComment.trimEnd();
+                    const listItem = parseListItem(lineNoCommentTrimmedEnd);
 
                     const {word, startColumn, endColumn} = model.getWordUntilPosition(position);
                     const range = new monaco.Range(position.lineNumber, startColumn, position.lineNumber, endColumn);
@@ -329,28 +802,26 @@
                     const cursorIndex = position.column - 1;
                     let contentStartIndex = 0;
                     if (listItem) {
-                        contentStartIndex = listItem.indent;
-                        if (lineNoComment.slice(contentStartIndex, contentStartIndex + 1) === '-') contentStartIndex += 1;
-                        if (lineNoComment.slice(contentStartIndex, contentStartIndex + 1) === ' ') contentStartIndex += 1;
+                        contentStartIndex = listItem.afterDashIndex;
                     } else {
                         contentStartIndex = countIndent(lineNoComment);
                     }
 
                     if (cursorIndex < contentStartIndex) return {suggestions: []};
 
-                    const text = lineNoComment.slice(contentStartIndex);
+                    const text = lineNoCommentTrimmedEnd.slice(contentStartIndex);
                     const cursorInText = cursorIndex - contentStartIndex;
                     const colonIndex = text.indexOf(':');
                     const isValueContext = colonIndex >= 0 && cursorInText > colonIndex;
 
                     const stack = buildContextStack(model, position.lineNumber - 1);
 
-                    const effectiveIndent = listItem ? listItem.indent + 2 : countIndent(lineNoComment);
+                    const effectiveIndent = listItem ? listItem.contentIndent : countIndent(lineNoComment);
                     while (stack.length > 1 && effectiveIndent <= stack[stack.length - 1].indent) stack.pop();
 
                     let contextSchema = resolveRef(stack[stack.length - 1].schema);
 
-                    if (listItem && cursorIndex >= listItem.indent + 2 && contextSchema && contextSchema.type === 'array') {
+                    if (listItem && cursorIndex >= listItem.afterDashIndex && contextSchema && contextSchema.type === 'array') {
                         contextSchema = resolveRef(contextSchema.items);
                     }
 
@@ -376,7 +847,7 @@
                         const suggestions = Object.keys(props).map((key) => {
                             const s = resolveRef(props[key]);
                             const wantsBlock = s && (s.type === 'object' || s.type === 'array' || s.properties);
-                            const indent = listItem ? ' '.repeat(listItem.indent + 2) : ' '.repeat(countIndent(lineNoComment));
+                            const indent = listItem ? ' '.repeat(listItem.contentIndent) : ' '.repeat(countIndent(lineNoComment));
                             const innerIndent = indent + '  ';
 
                             const insertText = wantsBlock ? `${key}:\n${innerIndent}` : `${key}: `;
