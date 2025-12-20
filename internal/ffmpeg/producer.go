@@ -96,7 +96,7 @@ func (p *Producer) newURL() string {
 		codec := receiver.Codec
 		switch codec.Name {
 		case core.CodecOpus:
-			s += "#audio=opus"
+			s += "#audio=opus/16000"
 		case core.CodecAAC:
 			s += "#audio=aac/16000"
 		case core.CodecPCML:
