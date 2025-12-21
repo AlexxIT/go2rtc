@@ -92,7 +92,10 @@ func getCameraURL(url *url.URL) (string, error) {
 
 	var v struct {
 		Vendor struct {
-			VendorID byte `json:"vendor"`
+			ID     byte `json:"vendor"`
+			Params struct {
+				UID string `json:"p2p_id"`
+			} `json:"vendor_params"`
 		} `json:"vendor"`
 		PublicKey string `json:"public_key"`
 		Sign      string `json:"sign"`
@@ -105,7 +108,11 @@ func getCameraURL(url *url.URL) (string, error) {
 	query.Set("client_private", hex.EncodeToString(clientPrivate))
 	query.Set("device_public", v.PublicKey)
 	query.Set("sign", v.Sign)
-	query.Set("vendor", getVendorName(v.Vendor.VendorID))
+	query.Set("vendor", getVendorName(v.Vendor.ID))
+
+	if v.Vendor.ID == 1 {
+		query.Set("uid", v.Vendor.Params.UID)
+	}
 
 	url.RawQuery = query.Encode()
 	return url.String(), nil

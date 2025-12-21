@@ -44,7 +44,16 @@ func Dial(rawURL string) (core.Producer, error) {
 		quality = core.ParseByte(s)
 	}
 
-	medias, err := probe(client, channel, quality)
+	// 0 - disabled, 1 - enabled, 2 - enabled (another API)
+	var audio byte
+	switch s := query.Get("audio"); s {
+	case "", "1":
+		audio = 1
+	default:
+		audio = core.ParseByte(s)
+	}
+
+	medias, err := probe(client, channel, quality, audio)
 	if err != nil {
 		_ = client.Close()
 		return nil, err
@@ -54,7 +63,7 @@ func Dial(rawURL string) (core.Producer, error) {
 		Connection: core.Connection{
 			ID:         core.NewID(),
 			FormatName: "xiaomi",
-			Protocol:   "cs2+udp",
+			Protocol:   client.Protocol(),
 			RemoteAddr: client.RemoteAddr().String(),
 			Source:     rawURL,
 			Medias:     medias,
@@ -65,14 +74,18 @@ func Dial(rawURL string) (core.Producer, error) {
 	}, nil
 }
 
-func probe(client *miss.Client, channel, quality uint8) ([]*core.Media, error) {
+func probe(client *miss.Client, channel, quality, audio uint8) ([]*core.Media, error) {
 	_ = client.SetDeadline(time.Now().Add(core.ProbeTimeout))
 
-	if err := client.VideoStart(channel, quality, 1); err != nil {
+	if err := client.VideoStart(channel, quality, audio&1); err != nil {
 		return nil, err
 	}
 
-	var video, audio *core.Codec
+	if audio > 1 {
+		_ = client.AudioStart()
+	}
+
+	var vcodec, acodec *core.Codec
 
 	for {
 		pkt, err := client.ReadPacket()
@@ -82,53 +95,61 @@ func probe(client *miss.Client, channel, quality uint8) ([]*core.Media, error) {
 
 		switch pkt.CodecID {
 		case miss.CodecH264:
-			if video == nil {
+			if vcodec == nil {
 				buf := annexb.EncodeToAVCC(pkt.Payload)
 				if h264.NALUType(buf) == h264.NALUTypeSPS {
-					video = h264.AVCCToCodec(buf)
+					vcodec = h264.AVCCToCodec(buf)
 				}
 			}
 		case miss.CodecH265:
-			if video == nil {
+			if vcodec == nil {
 				buf := annexb.EncodeToAVCC(pkt.Payload)
 				if h265.NALUType(buf) == h265.NALUTypeVPS {
-					video = h265.AVCCToCodec(buf)
+					vcodec = h265.AVCCToCodec(buf)
 				}
 			}
 		case miss.CodecPCMA:
-			if audio == nil {
-				audio = &core.Codec{Name: core.CodecPCMA, ClockRate: 8000}
+			if acodec == nil {
+				acodec = &core.Codec{Name: core.CodecPCMA, ClockRate: 8000}
 			}
 		case miss.CodecOPUS:
-			if audio == nil {
-				audio = &core.Codec{Name: core.CodecOpus, ClockRate: 48000, Channels: 2}
+			if acodec == nil {
+				acodec = &core.Codec{Name: core.CodecOpus, ClockRate: 48000, Channels: 2}
 			}
 		}
 
-		if video != nil && audio != nil {
+		if vcodec != nil && (acodec != nil || audio == 0) {
 			break
 		}
 	}
 
 	_ = client.SetDeadline(time.Time{})
 
-	return []*core.Media{
+	medias := []*core.Media{
 		{
 			Kind:      core.KindVideo,
 			Direction: core.DirectionRecvonly,
-			Codecs:    []*core.Codec{video},
+			Codecs:    []*core.Codec{vcodec},
 		},
-		{
+	}
+
+	if acodec != nil {
+		medias = append(medias, &core.Media{
 			Kind:      core.KindAudio,
 			Direction: core.DirectionRecvonly,
-			Codecs:    []*core.Codec{audio},
-		},
-		{
-			Kind:      core.KindAudio,
-			Direction: core.DirectionSendonly,
-			Codecs:    []*core.Codec{audio.Clone()},
-		},
-	}, nil
+			Codecs:    []*core.Codec{acodec},
+		})
+
+		if client.Protocol() == "cs2+udp" {
+			medias = append(medias, &core.Media{
+				Kind:      core.KindAudio,
+				Direction: core.DirectionSendonly,
+				Codecs:    []*core.Codec{acodec.Clone()},
+			})
+		}
+	}
+
+	return medias, nil
 }
 
 const timestamp40ms = 48000 * 0.040

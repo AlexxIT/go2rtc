@@ -1,17 +1,17 @@
 package miss
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"log"
 	"net"
 	"net/url"
-	"strings"
 	"time"
 
-	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/xiaomi/cs2"
+	"github.com/AlexxIT/go2rtc/pkg/xiaomi/tutk"
 	"golang.org/x/crypto/chacha20"
 	"golang.org/x/crypto/nacl/box"
 )
@@ -23,43 +23,34 @@ func Dial(rawURL string) (*Client, error) {
 	}
 
 	query := u.Query()
-	if s := query.Get("vendor"); s != "cs2" {
+
+	c := &Client{}
+
+	c.key, err = calcSharedKey(query.Get("device_public"), query.Get("client_private"))
+	if err != nil {
+		return nil, err
+	}
+
+	switch s := query.Get("vendor"); s {
+	case "cs2":
+		c.conn, err = cs2.Dial(u.Host)
+	case "tutk":
+		c.conn, err = tutk.Dial(u.Host, query.Get("uid"))
+	default:
 		return nil, fmt.Errorf("miss: unsupported vendor %s", s)
 	}
 
-	clientPrivate := query.Get("client_private")
-	devicePublic := query.Get("device_public")
-
-	key, err := calcSharedKey(devicePublic, clientPrivate)
 	if err != nil {
 		return nil, err
 	}
 
-	conn, err := net.ListenUDP("udp", nil)
+	err = c.login(query.Get("client_public"), query.Get("sign"))
 	if err != nil {
+		_ = c.conn.Close()
 		return nil, err
 	}
 
-	client := &Client{
-		conn: conn,
-		addr: &net.UDPAddr{IP: net.ParseIP(u.Host), Port: 32108},
-		buf:  make([]byte, 1500),
-		key:  key,
-	}
-
-	clientPublic := query.Get("client_public")
-	sign := query.Get("sign")
-
-	if err = client.login(clientPublic, sign); err != nil {
-		_ = conn.Close()
-		return nil, err
-	}
-
-	client.chSeq0 = 1
-	client.chRaw2 = make(chan []byte, 100)
-	go client.worker()
-
-	return client, nil
+	return c, nil
 }
 
 const (
@@ -71,19 +62,23 @@ const (
 	CodecOPUS = 1032
 )
 
-type Client struct {
-	conn *net.UDPConn
-	addr *net.UDPAddr
-	buf  []byte
-	key  []byte // shared key
-
-	chSeq0 uint16
-	chSeq3 uint16
-	chRaw2 chan []byte
+type Conn interface {
+	ReadCommand() (cmd uint16, data []byte, err error)
+	WriteCommand(cmd uint16, data []byte) error
+	ReadPacket() ([]byte, error)
+	WritePacket(data []byte) error
+	RemoteAddr() net.Addr
+	SetDeadline(t time.Time) error
+	Close() error
 }
 
-func (c *Client) RemoteAddr() *net.UDPAddr {
-	return c.addr
+type Client struct {
+	conn Conn
+	key  []byte
+}
+
+func (c *Client) RemoteAddr() net.Addr {
+	return c.conn.RemoteAddr()
 }
 
 func (c *Client) SetDeadline(t time.Time) error {
@@ -94,16 +89,17 @@ func (c *Client) Close() error {
 	return c.conn.Close()
 }
 
-const (
-	magic        = 0xF1
-	magicDrw     = 0xD1
-	msgLanSearch = 0x30
-	msgPunchPkt  = 0x41
-	msgP2PRdy    = 0x42
-	msgDrw       = 0xD0
-	msgDrwAck    = 0xD1
-	msgAlive     = 0xE0
+func (c *Client) Protocol() string {
+	switch c.conn.(type) {
+	case *cs2.Conn:
+		return "cs2+udp"
+	case *tutk.Conn:
+		return "tutk+udp"
+	}
+	return ""
+}
 
+const (
 	cmdAuthReq           = 0x100
 	cmdAuthRes           = 0x101
 	cmdVideoStart        = 0x102
@@ -127,98 +123,57 @@ const (
 )
 
 func (c *Client) login(clientPublic, sign string) error {
-	_ = c.conn.SetDeadline(time.Now().Add(core.ConnDialTimeout))
-
-	buf, err := c.writeAndWait([]byte{magic, msgLanSearch, 0, 0}, msgPunchPkt)
-	if err != nil {
-		return fmt.Errorf("miss: read punch: %w", err)
-	}
-
-	_, err = c.writeAndWait(buf, msgP2PRdy)
-	if err != nil {
-		return fmt.Errorf("miss: read ready: %w", err)
-	}
-
-	_, _ = c.conn.WriteToUDP([]byte{magic, msgAlive, 0, 0}, c.addr)
-
 	s := fmt.Sprintf(`{"public_key":"%s","sign":"%s","uuid":"","support_encrypt":0}`, clientPublic, sign)
-	buf, err = c.writeAndWait(marshalCmd(0, 0, cmdAuthReq, []byte(s)), msgDrw)
+	if err := c.conn.WriteCommand(cmdAuthReq, []byte(s)); err != nil {
+		return err
+	}
+
+	_, data, err := c.conn.ReadCommand()
 	if err != nil {
-		return fmt.Errorf("miss: read auth: %w", err)
+		return err
 	}
 
-	if !strings.Contains(string(buf[16:]), `"result":"success"`) {
-		return fmt.Errorf("miss: read auth: %s", buf[16:])
+	if !bytes.Contains(data, []byte(`"result":"success"`)) {
+		return fmt.Errorf("miss: auth: %s", data)
 	}
-
-	_, _ = c.conn.WriteToUDP([]byte{magic, msgDrwAck, 0, 6, magicDrw, 0, 0, 1, 0, 0}, c.addr)
-
-	_ = c.conn.SetDeadline(time.Time{})
 
 	return nil
 }
 
-func (c *Client) writeAndWait(b []byte, waitMsg uint8) ([]byte, error) {
-	if _, err := c.conn.WriteToUDP(b, c.addr); err != nil {
-		return nil, err
+func (c *Client) WriteCommand(data []byte) error {
+	data, err := encode(c.key, data)
+	if err != nil {
+		return err
 	}
-
-	for {
-		n, addr, err := c.conn.ReadFromUDP(c.buf)
-		if err != nil {
-			return nil, err
-		}
-
-		if string(addr.IP) != string(c.addr.IP) {
-			continue // skip messages from another IP
-		}
-
-		if n >= 16 && c.buf[0] == magic && c.buf[1] == waitMsg {
-			if waitMsg == msgPunchPkt {
-				c.addr.Port = addr.Port
-			}
-			return c.buf[:n], nil
-		}
-	}
+	return c.conn.WriteCommand(cmdEncoded, data)
 }
 
 func (c *Client) VideoStart(channel, quality, audio uint8) error {
-	buf := binary.BigEndian.AppendUint32(nil, cmdVideoStart)
+	data := binary.BigEndian.AppendUint32(nil, cmdVideoStart)
 	if channel == 0 {
-		buf = fmt.Appendf(buf, `{"videoquality":%d,"enableaudio":%d}`, quality, audio)
+		data = fmt.Appendf(data, `{"videoquality":%d,"enableaudio":%d}`, quality, audio)
 	} else {
-		buf = fmt.Appendf(buf, `{"videoquality":-1,"videoquality2":%d,"enableaudio":%d}`, quality, audio)
+		data = fmt.Appendf(data, `{"videoquality":-1,"videoquality2":%d,"enableaudio":%d}`, quality, audio)
 	}
-	buf, err := encode(c.key, buf)
-	if err != nil {
-		return err
-	}
-	buf = marshalCmd(0, c.chSeq0, cmdEncoded, buf)
-	c.chSeq0++
+	return c.WriteCommand(data)
+}
 
-	_, err = c.conn.WriteToUDP(buf, c.addr)
-	return err
+func (c *Client) AudioStart() error {
+	data := binary.BigEndian.AppendUint32(nil, cmdAudioStart)
+	return c.WriteCommand(data)
 }
 
 func (c *Client) SpeakerStart() error {
-	buf := binary.BigEndian.AppendUint32(nil, cmdSpeakerStartReq)
-	buf, err := encode(c.key, buf)
-	if err != nil {
-		return err
-	}
-	buf = marshalCmd(0, c.chSeq0, cmdEncoded, buf)
-	c.chSeq0++
-
-	_, err = c.conn.WriteToUDP(buf, c.addr)
-	return err
+	data := binary.BigEndian.AppendUint32(nil, cmdSpeakerStartReq)
+	return c.WriteCommand(data)
 }
 
 func (c *Client) ReadPacket() (*Packet, error) {
-	b, ok := <-c.chRaw2
-	if !ok {
-		return nil, fmt.Errorf("miss: read raw: i/o timeout")
+	data, err := c.conn.ReadPacket()
+	if err != nil {
+		return nil, fmt.Errorf("miss: read media: %w", err)
 	}
-	return unmarshalPacket(c.key, b)
+	return unmarshalPacket(c.key, data)
 }
 
 func unmarshalPacket(key, b []byte) (*Packet, error) {
@@ -247,141 +202,20 @@ func unmarshalPacket(key, b []byte) (*Packet, error) {
 }
 
 func (c *Client) WriteAudio(codecID uint32, payload []byte) error {
-	payload, err := encode(c.key, payload)
+	payload, err := encode(c.key, payload) // new payload will have new size!
 	if err != nil {
 		return err
 	}
 
+	const hdrSize = 32
 	n := uint32(len(payload))
 
-	const hdrOffset = 12
-	const hdrSize = 32
-
-	buf := make([]byte, n+hdrOffset+hdrSize)
-	buf[0] = magic
-	buf[1] = msgDrw
-	binary.BigEndian.PutUint16(buf[2:], uint16(n+8+hdrSize))
-
-	buf[4] = magicDrw
-	buf[5] = 3 // channel
-	binary.BigEndian.PutUint16(buf[6:], c.chSeq3)
-
-	binary.BigEndian.PutUint32(buf[8:], n+hdrSize)
-
-	binary.LittleEndian.PutUint32(buf[hdrOffset:], n)
-	binary.LittleEndian.PutUint32(buf[hdrOffset+4:], codecID)
-	binary.LittleEndian.PutUint64(buf[hdrOffset+16:], uint64(time.Now().UnixMilli()))
-	copy(buf[hdrOffset+hdrSize:], payload)
-
-	c.chSeq3++
-
-	_, err = c.conn.WriteToUDP(buf, c.addr)
-	return err
-}
-
-func (c *Client) worker() {
-	defer close(c.chRaw2)
-
-	chAck := []uint16{1, 0, 0, 0}
-
-	var ch2WaitSize int
-	var ch2WaitData []byte
-
-	for {
-		n, addr, err := c.conn.ReadFromUDP(c.buf)
-		if err != nil {
-			return
-		}
-
-		//log.Printf("<- %.20x...", c.buf[:n])
-
-		if string(addr.IP) != string(c.addr.IP) || n < 8 || c.buf[0] != magic {
-			//log.Printf("unknown msg: %x", c.buf[:n])
-			continue // skip messages from another IP
-		}
-
-		switch c.buf[1] {
-		case msgDrw:
-			ch := c.buf[5]
-			seqHI := c.buf[6]
-			seqLO := c.buf[7]
-
-			if chAck[ch] != uint16(seqHI)<<8|uint16(seqLO) {
-				continue
-			}
-			chAck[ch]++
-
-			//log.Printf("%.40x", c.buf)
-
-			ack := []byte{magic, msgDrwAck, 0, 6, magicDrw, ch, 0, 1, seqHI, seqLO}
-			if _, err = c.conn.WriteToUDP(ack, c.addr); err != nil {
-				return
-			}
-
-			switch ch {
-			case 0:
-				//log.Printf("data ch0 %x", c.buf[:n])
-				//size := binary.BigEndian.Uint32(c.buf[8:])
-				//if binary.BigEndian.Uint32(c.buf[12:]) == cmdEncoded {
-				//	raw, _ := decode(c.key, c.buf[16:12+size])
-				//	log.Printf("cmd enc %x", raw)
-				//} else {
-				//	log.Printf("cmd raw %x", c.buf[12:12+size])
-				//}
-
-			case 2:
-				ch2WaitData = append(ch2WaitData, c.buf[8:n]...)
-
-				for len(ch2WaitData) > 4 {
-					if ch2WaitSize == 0 {
-						ch2WaitSize = int(binary.BigEndian.Uint32(ch2WaitData))
-						ch2WaitData = ch2WaitData[4:]
-					}
-					if ch2WaitSize <= len(ch2WaitData) {
-						c.chRaw2 <- ch2WaitData[:ch2WaitSize]
-						ch2WaitData = ch2WaitData[ch2WaitSize:]
-						ch2WaitSize = 0
-					} else {
-						break
-					}
-				}
-
-			default:
-				log.Printf("!!! unknown chanel: %x", c.buf[:n])
-			}
-
-		case msgDrwAck: // skip it
-
-		default:
-			log.Printf("!!! unknown msg type: %x", c.buf[:n])
-		}
-	}
-}
-
-func marshalCmd(channel byte, seq uint16, cmd uint32, payload []byte) []byte {
-	size := len(payload)
-	buf := make([]byte, 4+4+4+4+size)
-
-	// 1. message header (4 bytes)
-	buf[0] = magic
-	buf[1] = msgDrw
-	binary.BigEndian.PutUint16(buf[2:], uint16(4+4+4+size))
-
-	// 2. drw? header (4 bytes)
-	buf[4] = magicDrw
-	buf[5] = channel
-	binary.BigEndian.PutUint16(buf[6:], seq)
-
-	// 3. payload size (4 bytes)
-	binary.BigEndian.PutUint32(buf[8:], uint32(4+size))
-
-	// 4. payload command (4 bytes)
-	binary.BigEndian.PutUint32(buf[12:], cmd)
-
-	// 5. payload
-	copy(buf[16:], payload)
-
-	return buf
+	data := make([]byte, hdrSize+n)
+	binary.LittleEndian.PutUint32(data, n)
+	binary.LittleEndian.PutUint32(data[4:], codecID)
+	binary.LittleEndian.PutUint64(data[16:], uint64(time.Now().UnixMilli())) // not really necessary
+	copy(data[hdrSize:], payload)
+	return c.conn.WritePacket(data)
 }
 
 func calcSharedKey(devicePublic, clientPrivate string) ([]byte, error) {
