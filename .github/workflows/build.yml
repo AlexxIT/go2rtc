@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Fetch tags
+        run: git fetch --tags origin
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -118,6 +120,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Fetch tags
+        run: git fetch --tags origin
 
       - name: Docker meta
         id: meta
@@ -175,6 +179,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Fetch tags
+        run: git fetch --tags origin
 
       - name: Docker meta
         id: meta-hw
@@ -230,6 +236,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Fetch tags
+        run: git fetch --tags origin
 
       - name: Docker meta
         id: meta-rk
