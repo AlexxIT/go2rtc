@@ -156,10 +156,6 @@ func (c *Client) dial() error {
 	return nil
 }
 
-// handshake ... (no change needed in signature, but internal logging could be updated, but Client %p is not easily passed unless we change method receiver to be logged? It is method receiver. I will leave it mostly as is but maybe add prefix if I edit it.)
-// I will not edit handshake body just for logging to avoid large diff, unless necessary.
-// Actually, I should probably update dial logs.
-
 func (c *Client) handshake() error {
 	// Step 1: Get Challenge
 	uri := fmt.Sprintf("rtsp://%s/multitrans", c.URL.Host)
