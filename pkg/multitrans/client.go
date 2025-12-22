@@ -110,15 +110,6 @@ func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver
 		}
 
 		size := len(b)
-		// Log RTP header (first 12 bytes)
-		// if size >= 12 {
-		// 	fmt.Printf("[multitrans] Client %p send RTP len=%d pt=%d seq=%d ts=%d header=%X\n",
-		// 		c, size, packet.PayloadType, packet.SequenceNumber, packet.Timestamp, b[:12])
-		// } else {
-		// 	fmt.Printf("[multitrans] Client %p send RTP len=%d (too short)\n", c, size)
-		// }
-		// fmt.Printf("[multitrans] sending packet size=%d payload=%d\n", size, len(packet.Payload))
-
 		header := make([]byte, 4)
 		header[0] = '$'
 		header[1] = 1 // Channel 1 for audio
@@ -161,10 +152,6 @@ func (c *Client) dial() error {
 	fmt.Printf("[multitrans] Client %p dial() handshake success\n", c)
 	return nil
 }
-
-// handshake ... (no change needed in signature, but internal logging could be updated, but Client %p is not easily passed unless we change method receiver to be logged? It is method receiver. I will leave it mostly as is but maybe add prefix if I edit it.)
-// I will not edit handshake body just for logging to avoid large diff, unless necessary.
-// Actually, I should probably update dial logs.
 
 func (c *Client) handshake() error {
 	// Step 1: Get Challenge
