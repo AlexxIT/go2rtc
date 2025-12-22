@@ -16,6 +16,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with: { fetch-tags: true }
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -118,6 +119,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with: { fetch-tags: true }
 
       - name: Docker meta
         id: meta
@@ -175,6 +177,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with: { fetch-tags: true }
 
       - name: Docker meta
         id: meta-hw
@@ -230,6 +233,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with: { fetch-tags: true }
 
       - name: Docker meta
         id: meta-rk
