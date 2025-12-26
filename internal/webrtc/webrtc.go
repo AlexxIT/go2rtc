@@ -57,6 +57,15 @@ func Init() {
 		}
 	}
 
+	webrtc.OnNewListener = func(ln any) {
+		switch ln := ln.(type) {
+		case *net.TCPListener:
+			log.Info().Stringer("addr", ln.Addr()).Msg("[webrtc] listen tcp")
+		case *net.UDPConn:
+			log.Info().Stringer("addr", ln.LocalAddr()).Msg("[webrtc] listen udp")
+		}
+	}
+
 	var err error
 
 	// create pionAPI with custom codecs list and custom network settings
@@ -70,7 +79,6 @@ func Init() {
 	clientAPI = serverAPI
 
 	if address != "" {
-		log.Info().Str("addr", cfg.Mod.Listen).Msg("[webrtc] listen")
 		clientAPI, _ = webrtc.NewAPI()
 	}
 
