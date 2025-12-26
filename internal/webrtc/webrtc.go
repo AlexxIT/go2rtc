@@ -2,6 +2,7 @@ package webrtc
 
 import (
 	"errors"
+	"net"
 	"strings"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
@@ -33,7 +34,13 @@ func Init() {
 
 	log = app.GetLogger("webrtc")
 
-	filters = cfg.Mod.Filters
+	if log.Debug().Enabled() {
+		itfs, _ := net.Interfaces()
+		for _, itf := range itfs {
+			addrs, _ := itf.Addrs()
+			log.Debug().Msgf("[webrtc] interface %+v addrs %v", itf, addrs)
+		}
+	}
 
 	address, network, _ := strings.Cut(cfg.Mod.Listen, "/")
 	for _, candidate := range cfg.Mod.Candidates {
@@ -53,7 +60,7 @@ func Init() {
 	var err error
 
 	// create pionAPI with custom codecs list and custom network settings
-	serverAPI, err = webrtc.NewServerAPI(network, address, &filters)
+	serverAPI, err = webrtc.NewServerAPI(network, address, &cfg.Mod.Filters)
 	if err != nil {
 		log.Error().Err(err).Caller().Send()
 		return
