@@ -175,16 +175,30 @@ func (p *Producer) worker(conn core.Producer, workerID int) {
 
 func (p *Producer) reconnect(workerID, retry int) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
-
 	if p.workerID != workerID {
 		log.Trace().Msgf("[streams] stop reconnect url=%s", p.url)
+		p.mu.Unlock()
 		return
 	}
+	p.mu.Unlock()
 
 	log.Debug().Msgf("[streams] retry=%d to url=%s", retry, p.url)
 
+	// GetProducer can block for a while, don't hold mutex during it
 	conn, err := GetProducer(p.url)
+
+	// Re-acquire mutex and check if stop was requested while we were getting producer
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.workerID != workerID {
+		// Stop was requested while getting producer - cleanup and exit
+		if conn != nil {
+			_ = conn.Stop()
+		}
+		return
+	}
+
 	if err != nil {
 		log.Debug().Msgf("[streams] producer=%s", err)
 

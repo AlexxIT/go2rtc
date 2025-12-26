@@ -29,6 +29,7 @@ func NewReceiver(media *Media, codec *Codec) *Receiver {
 	r.Input = func(packet *Packet) {
 		r.Bytes += len(packet.Payload)
 		r.Packets++
+
 		for _, child := range r.childs {
 			child.Input(packet)
 		}

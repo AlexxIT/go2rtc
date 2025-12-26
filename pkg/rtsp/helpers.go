@@ -2,6 +2,7 @@ package rtsp
 
 import (
 	"bytes"
+	"encoding/hex"
 	"io"
 	"net/url"
 	"regexp"
@@ -89,6 +90,27 @@ func UnmarshalSDP(rawSDP []byte) ([]*core.Media, error) {
 				// fix OPUS for some cameras https://datatracker.ietf.org/doc/html/rfc7587
 				codec.ClockRate = 48000
 				codec.Channels = 2
+			case core.CodecAAC:
+				// Parse AAC config to determine if it's AAC-ELD
+				if codec.FmtpLine != "" && strings.Contains(codec.FmtpLine, "config=") {
+					configStr := core.Between(codec.FmtpLine, "config=", ";")
+					if configStr == "" {
+						configStr = core.Between(codec.FmtpLine, "config=", "")
+					}
+					if configBytes, err := hex.DecodeString(configStr); err == nil && len(configBytes) > 0 {
+						objType := configBytes[0] >> 3 // First 5 bits
+						if objType == 31 {             // ESCAPE type
+							if len(configBytes) > 1 {
+								// Next 6 bits: 3 bits from first byte + 3 bits from second byte
+								objType = 32 + ((configBytes[0]&0x07)<<3 | (configBytes[1] >> 5))
+							}
+						}
+						// TypeAACELD = 39
+						if objType == 39 {
+							codec.Name = core.CodecELD
+						}
+					}
+				}
 			}
 		}
 

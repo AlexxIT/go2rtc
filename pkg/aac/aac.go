@@ -41,7 +41,9 @@ func ConfigToCodec(conf []byte) *core.Codec {
 	}
 
 	switch objType {
-	case TypeAACLC, TypeAACLD, TypeAACELD:
+	case TypeAACELD:
+		codec.Name = core.CodecELD
+	case TypeAACLC, TypeAACLD:
 		codec.Name = core.CodecAAC
 	default:
 		codec.Name = fmt.Sprintf("AAC-%X", objType)

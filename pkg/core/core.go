@@ -69,6 +69,11 @@ type Consumer interface {
 	Stop() error
 }
 
+// ConsumerProvider interface for producers that can provide consumers
+type ConsumerProvider interface {
+	GetConsumers() []Consumer
+}
+
 type Mode byte
 
 const (

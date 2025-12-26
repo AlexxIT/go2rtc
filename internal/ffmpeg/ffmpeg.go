@@ -59,12 +59,12 @@ func Init() {
 
 var defaults = map[string]string{
 	"bin":    "ffmpeg",
-	"global": "-hide_banner",
+	"global": "-hide_banner -nostdin",
 
 	// inputs
 	"file": "-re -i {input}",
 	"http": "-fflags nobuffer -flags low_delay -i {input}",
-	"rtsp": "-fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i {input}",
+	"rtsp": "-fflags nobuffer -flags low_delay -probesize 32 -analyzeduration 0 -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i {input}",
 
 	"rtsp/udp": "-fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -i {input}",
 
@@ -106,6 +106,7 @@ var defaults = map[string]string{
 	"pcma/48000": "-c:a pcm_alaw -ar:a 48000 -ac:a 1",
 	"aac":        "-c:a aac", // keep sample rate and channels
 	"aac/16000":  "-c:a aac -ar:a 16000 -ac:a 1",
+	"aac-eld":    "-c:a aac -profile:a aac_eld -ar:a 16000 -ac:a 1", // AAC-ELD for HomeKit speaker
 	"mp3":        "-c:a libmp3lame -q:a 8",
 	"pcm":        "-c:a pcm_s16be -ar:a 8000 -ac:a 1",
 	"pcm/8000":   "-c:a pcm_s16be -ar:a 8000 -ac:a 1",
@@ -220,11 +221,25 @@ func parseArgs(s string) *ffmpeg.Args {
 		case args.Video > 0 && args.Audio == 0:
 			s += "?video"
 		case args.Audio > 0 && args.Video == 0:
-			s += "?audio"
+			// Check if accept-audio is specified to request specific codec
+			if acceptAudio := query.Get("accept-audio"); acceptAudio != "" {
+				s += "?audio=" + acceptAudio
+			} else {
+				s += "?audio"
+			}
 		default:
 			s += "?video&audio"
 		}
-		s += "&source=ffmpeg:" + url.QueryEscape(source)
+
+		// For accept-audio transcoders, source should point to the accepted audio format producer
+		if acceptAudio := query.Get("accept-audio"); acceptAudio != "" && args.Audio > 0 && args.Video == 0 {
+			// Extract stream name and create source pointing to the accepted audio format
+			streamName := strings.SplitN(source, "#", 2)[0]
+			modifiedSource := streamName + "#audio=" + acceptAudio
+			s += "&source=ffmpeg:" + url.QueryEscape(modifiedSource)
+		} else {
+			s += "&source=ffmpeg:" + url.QueryEscape(source)
+		}
 		for _, v := range query["query"] {
 			s += "&" + v
 		}

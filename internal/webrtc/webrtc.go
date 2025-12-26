@@ -171,6 +171,12 @@ func asyncHandler(tr *ws.Transport, msg *ws.Message) (err error) {
 	conn.Mode = mode
 	conn.Protocol = "ws"
 	conn.UserAgent = tr.Request.UserAgent()
+	// Set source so WebRTC is recognized as external consumer for cleanup
+	if name := query.Get("src"); name != "" {
+		conn.Source = "webrtc:" + name
+	} else if name := query.Get("dst"); name != "" {
+		conn.Source = "webrtc:" + name
+	}
 	conn.Listen(func(msg any) {
 		switch msg := msg.(type) {
 		case pion.PeerConnectionState:
@@ -180,6 +186,7 @@ func asyncHandler(tr *ws.Transport, msg *ws.Message) (err error) {
 			switch mode {
 			case core.ModePassiveConsumer:
 				stream.RemoveConsumer(conn)
+				stream.RemoveProducer(conn) // Also remove backchannel producer
 			case core.ModePassiveProducer:
 				stream.RemoveProducer(conn)
 			}
@@ -206,7 +213,9 @@ func asyncHandler(tr *ws.Transport, msg *ws.Message) (err error) {
 
 	switch mode {
 	case core.ModePassiveConsumer:
-		// 2. AddConsumer, so we get new tracks
+		// 2a. AddProducer for backchannel (WebRTC can provide audio from browser mic)
+		stream.AddProducer(conn)
+		// 2b. AddConsumer, so we get tracks
 		if err = stream.AddConsumer(conn); err != nil {
 			log.Debug().Err(err).Msg("[webrtc] add consumer")
 			_ = conn.Close()
@@ -251,6 +260,7 @@ func ExchangeSDP(stream *streams.Stream, offer, desc, userAgent string) (answer 
 	conn.FormatName = desc
 	conn.UserAgent = userAgent
 	conn.Protocol = "http"
+	conn.Source = "webrtc" // Mark as external consumer for cleanup
 	conn.Listen(func(msg any) {
 		switch msg := msg.(type) {
 		case pion.PeerConnectionState:
@@ -259,6 +269,8 @@ func ExchangeSDP(stream *streams.Stream, offer, desc, userAgent string) (answer 
 			}
 			if conn.Mode == core.ModePassiveConsumer {
 				stream.RemoveConsumer(conn)
+				// Also remove producer if it was added for backchannel
+				stream.RemoveProducer(conn)
 			} else {
 				stream.RemoveProducer(conn)
 			}
