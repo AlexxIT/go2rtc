@@ -204,7 +204,7 @@
 
             if (indentIndex >= line.length) return null;
 
-            let i = indentIndex;
+            const i = indentIndex;
             let key = '';
             let rawKey = '';
             let isQuoted = false;
@@ -275,7 +275,7 @@
                 keyEndIndex = i + rawKey.length;
             }
 
-            const after = line.slice(colonIndex + 1) ?? '';
+            const after = line.slice(colonIndex + 1);
             const isContainer = after.trim() === '' || after.trim().startsWith('#');
             const valueStartIndex = colonIndex + 1;
 
@@ -301,11 +301,12 @@
                         if (seen.has(ref)) return schema;
                         seen.add(ref);
                         const name = ref.slice('#/definitions/'.length);
-                        const def = schemaRoot.definitions?.[name];
+                        const def = schemaRoot.definitions && schemaRoot.definitions[name];
                         if (!def) return schema;
                         const resolved = resolveRef(def, seen);
-                        const {$ref, ...rest} = schema;
-                        return {...resolved, ...rest};
+                        const rest = Object.assign({}, schema);
+                        delete rest.$ref;
+                        return Object.assign({}, resolved, rest);
                     }
                 }
                 return schema;
@@ -466,7 +467,8 @@
             let blockScalarParentIndent = null;
 
             const isBlockScalarHeader = (text) => {
-                const t = (text ?? '').trimStart();
+                const rawText = (text == null) ? '' : text;
+                const t = rawText.trimStart ? rawText.trimStart() : rawText.replace(/^\s+/, '');
                 return t.startsWith('|') || t.startsWith('>');
             };
 
@@ -495,14 +497,16 @@
                 });
             };
 
-            if (window.jsyaml?.load) {
+            if (window.jsyaml && window.jsyaml.load) {
                 try {
                     window.jsyaml.load(model.getValue());
                 } catch (e) {
-                    const mark = e?.mark || {};
+                    const mark = (e && e.mark) || {};
                     const line = typeof mark.line === 'number' ? mark.line + 1 : 1;
                     const column = typeof mark.column === 'number' ? mark.column + 1 : 1;
-                    markLineError(line, e?.reason ? `YAML: ${e.reason}` : `YAML: ${e?.message || 'Invalid YAML'}`, column);
+                    const reason = e && e.reason;
+                    const messageText = e && e.message;
+                    markLineError(line, reason ? `YAML: ${reason}` : `YAML: ${messageText || 'Invalid YAML'}`, column);
                 }
             }
 
@@ -520,7 +524,7 @@
 
             const stack = [{
                 indent: -1,
-                schema: schemaTools?.schemaRoot || null,
+                schema: (schemaTools && schemaTools.schemaRoot) || null,
                 expected: 'object',
                 actual: null,
                 keys: new Map(),
@@ -856,8 +860,8 @@
                     const lineNoCommentTrimmedEnd = lineNoComment.trimEnd();
                     const listItem = parseListItem(lineNoCommentTrimmedEnd);
 
-                    const {word, startColumn, endColumn} = model.getWordUntilPosition(position);
-                    const range = new monaco.Range(position.lineNumber, startColumn, position.lineNumber, endColumn);
+                    const wordUntil = model.getWordUntilPosition(position);
+                    const range = new monaco.Range(position.lineNumber, wordUntil.startColumn, position.lineNumber, wordUntil.endColumn);
 
                     const cursorIndex = position.column - 1;
                     let contentStartIndex = 0;
@@ -917,7 +921,7 @@
                                 kind: monaco.languages.CompletionItemKind.Property,
                                 insertText,
                                 insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                                documentation: s?.description,
+                                documentation: s && s.description,
                                 range,
                             };
                         });
@@ -989,7 +993,7 @@
                     if (!propSchema) return null;
 
                     const resolved = resolveRef(propSchema);
-                    const description = resolved?.description;
+                    const description = resolved && resolved.description;
                     if (!description) return null;
 
                     return {
