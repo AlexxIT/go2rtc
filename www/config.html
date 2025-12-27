@@ -31,20 +31,18 @@
 <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
 <script>
     /* global require, monaco */
-    const monacoVersion = '0.55.1';
-    const monacoRoot = `https://cdn.jsdelivr.net/npm/monaco-editor@${monacoVersion}/min`;
-    const monacoBase = `${monacoRoot}/vs`;
+    const monacoRoot = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min';
 
     window.MonacoEnvironment = {
         getWorkerUrl: function () {
             return `data:text/javascript;charset=utf-8,${encodeURIComponent(`
                 self.MonacoEnvironment = { baseUrl: '${monacoRoot}/' };
-                importScripts('${monacoBase}/base/worker/workerMain.js');
+                importScripts('${monacoRoot}/vs/base/worker/workerMain.js');
             `)}`;
         }
     };
 
-    require.config({ paths: { vs: monacoBase } });
+    require.config({paths: {vs: `${monacoRoot}/vs`}});
 
     require(['vs/editor/editor.main'], () => {
         const container = document.getElementById('config');
@@ -122,24 +120,16 @@
 
         const editor = monaco.editor.create(container, {
             language: 'yaml',
-            minimap: { enabled: false },
+            minimap: {enabled: false},
             automaticLayout: true,
             tabSize: 2,
             insertSpaces: true,
-            quickSuggestions: { other: true, comments: false, strings: true },
+            quickSuggestions: {other: true, comments: false, strings: true},
             suggestOnTriggerCharacters: true,
             wordBasedSuggestions: false,
-            suggest: { showWords: false },
+            suggest: {showWords: false},
             scrollBeyondLastLine: false,
         });
-
-        const layout = () => {
-            const top = container.getBoundingClientRect().top;
-            container.style.height = `${Math.max(200, window.innerHeight - top)}px`;
-            editor.layout();
-        };
-        window.addEventListener('resize', layout);
-        layout();
 
         const stripInlineComment = (line) => {
             let inSingle = false;
@@ -279,7 +269,18 @@
             const isContainer = after.trim() === '' || after.trim().startsWith('#');
             const valueStartIndex = colonIndex + 1;
 
-            return {indent, key, rawKey, isQuoted, isContainer, after, keyStartIndex, keyEndIndex, colonIndex, valueStartIndex};
+            return {
+                indent,
+                key,
+                rawKey,
+                isQuoted,
+                isContainer,
+                after,
+                keyStartIndex,
+                keyEndIndex,
+                colonIndex,
+                valueStartIndex
+            };
         };
 
         const unique = (arr) => [...new Set(arr)];
@@ -754,8 +755,9 @@
                         blockScalarParentIndent = null;
                     } else {
                         continue; // treat as block scalar content
-                    }      
+                    }
                 }
+
                 if (indent === 0 && (hasTopLevelKey || hasTopLevelList)) {
                     const trimmed = line.trim();
                     if (trimmed !== '---' && trimmed !== '...' && !trimmed.startsWith('#')) {
@@ -1169,6 +1171,14 @@
             });
         };
 
+        const layout = () => {
+            const top = container.getBoundingClientRect().top;
+            container.style.height = `${Math.max(200, window.innerHeight - top)}px`;
+            editor.layout();
+        };
+        window.addEventListener('resize', layout);
+        layout();
+
         let dump;
 
         document.getElementById('save').addEventListener('click', async () => {
@@ -1190,8 +1200,8 @@
 
         (async () => {
             try {
-                const schemaRes = await fetch('schema.json', {cache: 'no-cache'});
-                if (schemaRes.ok) setupYamlHints(await schemaRes.json());
+                const r = await fetch('https://go2rtc.org/schema.json', {cache: 'no-cache'});
+                if (r.ok) setupYamlHints(await r.json());
             } catch (e) {
                 // ignore schema load errors
             }
