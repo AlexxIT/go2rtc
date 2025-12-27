@@ -461,6 +461,33 @@
             return {type: 'string'};
         };
 
+        const parseYamlValue = (raw) => {
+            const trimmed = raw.trim();
+            if (!trimmed) return {ok: false};
+            if (/^\$\{[^}{]+\}$/.test(trimmed)) return {ok: false, dynamic: true};
+            if (trimmed.startsWith('|') || trimmed.startsWith('>')) return {ok: false, block: true};
+            if (window.jsyaml && window.jsyaml.load) {
+                try {
+                    return {ok: true, value: window.jsyaml.load(trimmed)};
+                } catch (e) {
+                    // nothing
+                }
+            }
+            if (trimmed.startsWith('"') && trimmed.endsWith('"') && trimmed.length >= 2) {
+                const inner = trimmed.slice(1, -1);
+                return {ok: true, value: inner.replace(/\\"/g, '"').replace(/\\\\/g, '\\')};
+            }
+            if (trimmed.startsWith('\'') && trimmed.endsWith('\'') && trimmed.length >= 2) {
+                const inner = trimmed.slice(1, -1);
+                return {ok: true, value: inner.replace(/''/g, '\'')};
+            }
+            if (trimmed === 'true' || trimmed === 'false') return {ok: true, value: trimmed === 'true'};
+            if (trimmed === 'null' || trimmed === '~') return {ok: true, value: null};
+            if (isIntLike(trimmed)) return {ok: true, value: parseInt(trimmed, 10)};
+            if (isNumberLike(trimmed)) return {ok: true, value: Number(trimmed)};
+            return {ok: true, value: trimmed};
+        };
+
         const lintYamlModel = (model, schemaTools) => {
             const markers = [];
             const markedLines = new Set();
@@ -587,6 +614,133 @@
                 });
             };
 
+            const valueEquals = (a, b) => {
+                if (a === b) return true;
+                if (typeof a !== typeof b) return false;
+                if (a && b && typeof a === 'object') {
+                    const aIsArray = Array.isArray(a);
+                    const bIsArray = Array.isArray(b);
+                    if (aIsArray !== bIsArray) return false;
+                    if (aIsArray) {
+                        if (a.length !== b.length) return false;
+                        for (let i = 0; i < a.length; i++) {
+                            if (!valueEquals(a[i], b[i])) return false;
+                        }
+                        return true;
+                    }
+                    const aKeys = Object.keys(a);
+                    const bKeys = Object.keys(b);
+                    if (aKeys.length !== bKeys.length) return false;
+                    for (const key of aKeys) {
+                        if (!Object.prototype.hasOwnProperty.call(b, key)) return false;
+                        if (!valueEquals(a[key], b[key])) return false;
+                    }
+                    return true;
+                }
+                return false;
+            };
+
+            const schemaAllowsTypeLoose = (schema, actualType) => {
+                if (!schemaTools || !schema) return true;
+                const types = schemaTools.getSchemaTypes(schema);
+                if (types.size === 0) return true;
+                if (actualType === 'integer' && types.has('number')) return true;
+                return types.has(actualType);
+            };
+
+            const collectConstraintSchemas = (schema, actualType) => {
+                if (!schemaTools || !schema) return [];
+                schema = schemaTools.resolveRef(schema);
+                if (!schema) return [];
+                if (Array.isArray(schema.anyOf)) {
+                    const res = [];
+                    for (const alt of schema.anyOf) res.push(...collectConstraintSchemas(alt, actualType));
+                    return res;
+                }
+                if (Array.isArray(schema.oneOf)) {
+                    const res = [];
+                    for (const alt of schema.oneOf) res.push(...collectConstraintSchemas(alt, actualType));
+                    return res;
+                }
+                if (!schemaAllowsTypeLoose(schema, actualType)) return [];
+                return [schema];
+            };
+
+            const getSchemaEnumValues = (schema) => {
+                const values = [];
+                if (Array.isArray(schema.enum)) values.push(...schema.enum);
+                if (Object.prototype.hasOwnProperty.call(schema, 'const')) values.push(schema.const);
+                return values;
+            };
+
+            const checkValueConstraints = (schema, actualType, rawValue, lineNumber, startColumn, endColumn, keyName) => {
+                if (!schemaTools || !schema) return;
+                if (actualType === 'dynamic') return;
+                const parsed = parseYamlValue(rawValue);
+                if (!parsed.ok) return;
+
+                const candidates = collectConstraintSchemas(schema, actualType);
+                if (candidates.length === 0) return;
+
+                const hasConstraints = candidates.some((s) => (
+                    (Array.isArray(s.enum) || Object.prototype.hasOwnProperty.call(s, 'const')) ||
+                    (actualType === 'string' && typeof s.pattern === 'string')
+                ));
+                if (!hasConstraints) return;
+
+                const hasUnconstrained = candidates.some((s) => (
+                    !(Array.isArray(s.enum) || Object.prototype.hasOwnProperty.call(s, 'const')) &&
+                    !(actualType === 'string' && typeof s.pattern === 'string')
+                ));
+                if (hasUnconstrained) return;
+
+                const value = parsed.value;
+                const matchesAny = candidates.some((s) => {
+                    const enums = getSchemaEnumValues(s);
+                    if (enums.length > 0 && !enums.some((v) => valueEquals(v, value))) return false;
+                    if (actualType === 'string' && typeof s.pattern === 'string') {
+                        try {
+                            const re = new RegExp(s.pattern);
+                            if (!re.test(String(value))) return false;
+                        } catch (e) {
+                            return true;
+                        }
+                    }
+                    return true;
+                });
+                if (matchesAny) return;
+
+                const enumValues = [];
+                const patterns = [];
+                for (const s of candidates) {
+                    enumValues.push(...getSchemaEnumValues(s));
+                    if (actualType === 'string' && typeof s.pattern === 'string') patterns.push(s.pattern);
+                }
+                const enumLabel = unique(enumValues).map((v) => toYamlScalar(v)).join(', ');
+                const patternLabel = unique(patterns).join(' | ');
+
+                let message;
+                const label = keyName ? `"${keyName}"` : 'value';
+                if (enumValues.length && patterns.length) {
+                    message = `Value for ${label} must be one of: ${enumLabel}; or match pattern: ${patternLabel}`;
+                } else if (enumValues.length) {
+                    message = `Value for ${label} must be one of: ${enumLabel}`;
+                } else if (patterns.length) {
+                    message = `Value for ${label} must match pattern: ${patternLabel}`;
+                } else {
+                    return;
+                }
+
+                pushMarker({
+                    severity: monaco.MarkerSeverity.Error,
+                    message,
+                    startLineNumber: lineNumber,
+                    startColumn,
+                    endLineNumber: lineNumber,
+                    endColumn: Math.max(startColumn + 1, endColumn),
+                });
+            };
+
             for (let lineNumber = 1; lineNumber <= lineCount; lineNumber++) {
                 let line = model.getLineContent(lineNumber);
                 if (!line.trim()) continue;
@@ -702,12 +856,14 @@
                             const actual = classifyYamlScalar(valueText).type;
                             const valueStartColumn = kv.valueStartIndex + 1 + (kv.after.length - kv.after.trimStart().length);
                             checkValueType(propSchema, actual, lineNumber, valueStartColumn, line.length + 1, kv.key);
+                            checkValueConstraints(propSchema, actual, valueText, lineNumber, valueStartColumn, line.length + 1, kv.key);
                         }
                         continue;
                     }
 
                     const scalar = classifyYamlScalar(listItem.rest).type;
                     checkValueType(itemSchema, scalar, lineNumber, listItem.afterDashIndex + 1, line.length + 1, null);
+                    checkValueConstraints(itemSchema, scalar, listItem.rest, lineNumber, listItem.afterDashIndex + 1, line.length + 1, null);
                     continue;
                 }
 
@@ -774,6 +930,7 @@
                 const actual = classifyYamlScalar(kv.after).type;
                 const valueStartColumn = kv.valueStartIndex + 1 + (kv.after.length - kv.after.trimStart().length);
                 checkValueType(propSchema, actual, lineNumber, valueStartColumn, line.length + 1, kv.key);
+                checkValueConstraints(propSchema, actual, kv.after, lineNumber, valueStartColumn, line.length + 1, kv.key);
             }
 
             return markers;
@@ -910,11 +1067,12 @@
                         const props = getObjectProperties(contextSchema);
                         const suggestions = Object.keys(props).map((key) => {
                             const s = resolveRef(props[key]);
-                            const wantsBlock = s && (s.type === 'object' || s.type === 'array' || s.properties);
+                            const wantsArray = s && s.type === 'array';
+                            const wantsBlock = s && (s.type === 'object' || wantsArray || s.properties);
                             const indent = listItem ? ' '.repeat(listItem.contentIndent) : ' '.repeat(countIndent(lineNoComment));
                             const innerIndent = indent + '  ';
 
-                            const insertText = wantsBlock ? `${key}:\n${innerIndent}` : `${key}: `;
+                            const insertText = wantsArray ? `${key}:\n${indent}` : (wantsBlock ? `${key}:\n${innerIndent}` : `${key}: `);
                             const hasValueSuggestions = !wantsBlock && getValueSuggestions(s).length > 0;
 
                             return {
