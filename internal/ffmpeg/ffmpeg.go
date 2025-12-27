@@ -2,7 +2,6 @@ package ffmpeg
 
 import (
 	"net/url"
-	"strconv"
 	"strings"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
@@ -59,15 +58,14 @@ func Init() {
 }
 
 var defaults = map[string]string{
-	"bin":    "ffmpeg",
-	"global": "-hide_banner",
+	"bin":     "ffmpeg",
+	"global":  "-hide_banner",
 	"timeout": "5",
 
 	// inputs
-	"file":    "-re -i {input}",
-	"http":    "-fflags nobuffer -flags low_delay -i {input}",
-	"rtsp":    "-fflags nobuffer -flags low_delay -timeout {timeout} -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i {input}",
-
+	"file":     "-re -i {input}",
+	"http":     "-fflags nobuffer -flags low_delay -i {input}",
+	"rtsp":     "-fflags nobuffer -flags low_delay -timeout {timeout} -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i {input}",
 	"rtsp/udp": "-fflags nobuffer -flags low_delay -timeout {timeout} -user_agent go2rtc/ffmpeg -i {input}",
 
 	// output
@@ -176,10 +174,7 @@ func inputTemplate(name, s string, query url.Values) string {
 		if timeout == "" {
 			timeout = defaults["timeout"]
 		}
-		if i, _ := strconv.Atoi(timeout); i > 0 {
-			timeout = strconv.Itoa(i * 1000000)
-		}
-		template = strings.Replace(template, "{timeout}", timeout, 1)
+		template = strings.Replace(template, "{timeout}", timeout+"000000", 1)
 	}
 	return strings.Replace(template, "{input}", s, 1)
 }
