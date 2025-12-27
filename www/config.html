@@ -915,12 +915,14 @@
                             const innerIndent = indent + '  ';
 
                             const insertText = wantsBlock ? `${key}:\n${innerIndent}` : `${key}: `;
+                            const hasValueSuggestions = !wantsBlock && getValueSuggestions(s).length > 0;
 
                             return {
                                 label: key,
                                 kind: monaco.languages.CompletionItemKind.Property,
                                 insertText,
                                 insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                                command: (wantsBlock || hasValueSuggestions) ? {id: 'editor.action.triggerSuggest'} : undefined,
                                 documentation: s && s.description,
                                 range,
                             };
