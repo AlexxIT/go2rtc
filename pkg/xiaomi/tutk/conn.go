@@ -249,6 +249,10 @@ func (c *Conn) WriteAndWait(req []byte, ok func(req, res []byte) bool) ([]byte, 
 	}
 }
 
+func (c *Conn) Protocol() string {
+	return "tutk+udp"
+}
+
 func (c *Conn) RemoteAddr() net.Addr {
 	return c.addr
 }
