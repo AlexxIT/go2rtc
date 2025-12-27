@@ -23,6 +23,7 @@
 <main>
     <div>
         <button id="save">Save & Restart</button>
+        <button id="suggest" title="ctrl + space">Suggest</button>
     </div>
 </main>
 <div id="config"></div>
@@ -1196,6 +1197,10 @@
             } else {
                 alert(await r.text());
             }
+        });
+
+        document.getElementById('suggest').addEventListener('click', () => {
+            editor.trigger('source', 'editor.action.triggerSuggest', {});
         });
 
         (async () => {
