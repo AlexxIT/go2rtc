@@ -770,6 +770,7 @@
 
         let schemaTools = null;
         let completionProvider = null;
+        let hoverProvider = null;
 
         const scheduleLint = (() => {
             let handle = null;
@@ -930,6 +931,69 @@
                     }));
 
                     return {suggestions};
+                }
+            });
+
+            if (hoverProvider) hoverProvider.dispose();
+            hoverProvider = monaco.languages.registerHoverProvider('yaml', {
+                provideHover: (model, position) => {
+                    if (!schemaTools) return null;
+
+                    const line = model.getLineContent(position.lineNumber);
+                    const lineNoComment = stripInlineComment(line).trimEnd();
+                    const listItem = parseListItem(lineNoComment);
+
+                    const cursorIndex = position.column - 1;
+                    if (listItem && cursorIndex < listItem.afterDashIndex) return null;
+
+                    let kv;
+                    let effectiveIndent;
+                    let keyStartIndex;
+                    let keyEndIndex;
+
+                    if (listItem) {
+                        if (!listItem.rest) return null;
+                        const synthetic = ' '.repeat(listItem.contentIndent) + listItem.rest;
+                        kv = parseKey(synthetic);
+                        if (!kv) return null;
+                        effectiveIndent = listItem.contentIndent;
+                        keyStartIndex = listItem.afterDashIndex + (kv.keyStartIndex - listItem.contentIndent);
+                        keyEndIndex = listItem.afterDashIndex + (kv.keyEndIndex - listItem.contentIndent);
+                    } else {
+                        kv = parseKey(lineNoComment);
+                        if (!kv) return null;
+                        effectiveIndent = countIndent(lineNoComment);
+                        keyStartIndex = kv.keyStartIndex;
+                        keyEndIndex = kv.keyEndIndex;
+                    }
+
+                    if (cursorIndex < keyStartIndex || cursorIndex >= keyEndIndex) return null;
+
+                    const stack = buildContextStack(model, position.lineNumber - 1);
+                    while (stack.length > 1 && effectiveIndent <= stack[stack.length - 1].indent) stack.pop();
+
+                    let contextSchema = resolveRef(stack[stack.length - 1].schema);
+                    if (listItem && cursorIndex >= listItem.afterDashIndex && contextSchema && contextSchema.type === 'array') {
+                        contextSchema = resolveRef(contextSchema.items);
+                    }
+
+                    if (!contextSchema) return null;
+                    const propSchema = getPropertySchema(contextSchema, kv.key);
+                    if (!propSchema) return null;
+
+                    const resolved = resolveRef(propSchema);
+                    const description = resolved?.description;
+                    if (!description) return null;
+
+                    return {
+                        range: new monaco.Range(
+                            position.lineNumber,
+                            keyStartIndex + 1,
+                            position.lineNumber,
+                            keyEndIndex + 1
+                        ),
+                        contents: [{value: description}],
+                    };
                 }
             });
         };
