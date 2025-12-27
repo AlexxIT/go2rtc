@@ -52,7 +52,13 @@
         container.textContent = '';
 
         const ensureYamlLanguage = () => {
-            const hasYaml = (monaco.languages.getLanguages?.() || []).some((l) => l.id === 'yaml');
+            const languages =
+                (window.monaco &&
+                    monaco.languages &&
+                    typeof monaco.languages.getLanguages === 'function' &&
+                    monaco.languages.getLanguages()) ||
+                [];
+            const hasYaml = languages.some((l) => l.id === 'yaml');
             if (hasYaml) return;
 
             monaco.languages.register({
