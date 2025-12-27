@@ -377,9 +377,11 @@ But you can override them via YAML config. You can also add your own formats to 
 ```yaml
 ffmpeg:
   bin: ffmpeg  # path to ffmpeg binary
+  global: "-hide_banner"
+  timeout: 5  # default timeout in seconds for rtsp inputs
   h264: "-codec:v libx264 -g:v 30 -preset:v superfast -tune:v zerolatency -profile:v main -level:v 4.1"
   mycodec: "-any args that supported by ffmpeg..."
-  myinput: "-fflags nobuffer -flags low_delay -timeout 5000000 -i {input}"
+  myinput: "-fflags nobuffer -flags low_delay -timeout {timeout} -i {input}"
   myraw: "-ss 00:00:20"
 ```
 
@@ -389,9 +391,10 @@ ffmpeg:
 - You can use `width` and/or `height` params, important with transcoding (ex. `#video=h264#width=1280`)
 - You can use `drawtext` to add a timestamp (ex. `drawtext=x=2:y=2:fontsize=12:fontcolor=white:box=1:boxcolor=black`)
   - This will greatly increase the CPU of the server, even with hardware acceleration
+- You can use `timeout` param to set RTSP input timeout in seconds (ex. `#timeout=10`)
 - You can use `raw` param for any additional FFmpeg arguments (ex. `#raw=-vf transpose=1`)
 - You can use `input` param to override default input template (ex. `#input=rtsp/udp` will change RTSP transport from TCP to UDP+TCP)
-  - You can use raw input value (ex. `#input=-timeout 5000000 -i {input}`)
+  - You can use raw input value (ex. `#input=-timeout {timeout} -i {input}`)
   - You can add your own input templates
 
 Read more about [hardware acceleration](https://github.com/AlexxIT/go2rtc/wiki/Hardware-acceleration).
