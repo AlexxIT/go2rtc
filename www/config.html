@@ -456,6 +456,23 @@
         const lintYamlModel = (model, schemaTools) => {
             const markers = [];
             const markedLines = new Set();
+            let blockScalarParentIndent = null;
+
+            const isBlockScalarHeader = (text) => {
+                const t = (text ?? '').trimStart();
+                return t.startsWith('|') || t.startsWith('>');
+            };
+
+            const checkChildIndent = (ctx, childIndent, lineNumber) => {
+                if (!ctx) return;
+                if (ctx.childIndent == null) {
+                    ctx.childIndent = childIndent;
+                    return;
+                }
+                if (childIndent !== ctx.childIndent) {
+                    markLineError(lineNumber, `YAML: inconsistent indentation (expected ${ctx.childIndent} spaces)`, 1);
+                }
+            };
 
             const markLineError = (lineNumber, message, startColumn = 1) => {
                 if (markedLines.has(`${lineNumber}:${message}`)) return;
@@ -500,6 +517,7 @@
                 expected: 'object',
                 actual: null,
                 keys: new Map(),
+                childIndent: null,
                 origin: null,
                 reportedTypeMismatch: false,
             }];
@@ -566,6 +584,13 @@
                 if (!line.trim()) continue;
 
                 const indent = countIndent(line);
+                if (blockScalarParentIndent !== null && indent <= blockScalarParentIndent) {
+                    blockScalarParentIndent = null;
+                }
+                if (blockScalarParentIndent !== null && indent > blockScalarParentIndent) {
+                    continue; // treat as block scalar content
+                }
+
                 if (indent === 0 && (hasTopLevelKey || hasTopLevelList)) {
                     const trimmed = line.trim();
                     if (trimmed !== '---' && trimmed !== '...' && !trimmed.startsWith('#')) {
@@ -581,9 +606,13 @@
 
                 const listItem = parseListItem(line);
                 if (listItem) {
+                    if (listItem.indent > 0 && (hasTopLevelKey || hasTopLevelList) && stack.length === 1) {
+                        markLineError(lineNumber, 'YAML: unexpected indentation at document root', 1);
+                    }
                     while (stack.length > 1 && listItem.indent <= stack[stack.length - 1].indent) stack.pop();
 
                     const parent = stack[stack.length - 1];
+                    checkChildIndent(parent, listItem.indent, lineNumber);
                     setActualType(parent, 'array', lineNumber);
 
                     const itemSchema = schemaTools ? schemaTools.getArrayItemSchema(parent.schema) : null;
@@ -595,12 +624,18 @@
                         expected: itemExpected,
                         actual: null,
                         keys: new Map(),
+                        childIndent: null,
                         origin: {lineNumber, startColumn: listItem.dashIndex + 1, endColumn: listItem.dashIndex + 2},
                         reportedTypeMismatch: false,
                     };
                     stack.push(itemCtx);
 
                     if (!listItem.rest) continue;
+                    if (isBlockScalarHeader(listItem.rest)) {
+                        blockScalarParentIndent = listItem.indent;
+                        checkValueType(itemSchema, 'string', lineNumber, listItem.afterDashIndex + 1, line.length + 1, null);
+                        continue;
+                    }
 
                     const inline = parseKey(' '.repeat(listItem.afterDashIndex) + listItem.rest);
                     if (inline) {
@@ -608,6 +643,7 @@
                         const kv = inline;
                         while (stack.length > 1 && kv.indent <= stack[stack.length - 1].indent) stack.pop();
                         const ctx = stack[stack.length - 1];
+                        checkChildIndent(ctx, kv.indent, lineNumber);
                         setActualType(ctx, 'object', lineNumber);
 
                         const prev = ctx.keys.get(kv.key);
@@ -636,6 +672,9 @@
                         }
 
                         const propSchema = schemaTools ? schemaTools.getPropertySchema(ctx.schema, kv.key) : null;
+                        if (isBlockScalarHeader(kv.after)) {
+                            blockScalarParentIndent = kv.indent;
+                        }
                         if (kv.isContainer) {
                             stack.push({
                                 indent: kv.indent,
@@ -643,6 +682,7 @@
                                 expected: getExpectedContainerType(propSchema),
                                 actual: null,
                                 keys: new Map(),
+                                childIndent: null,
                                 origin: {lineNumber, startColumn: kv.keyStartIndex + 1, endColumn: kv.keyEndIndex + 1},
                                 reportedTypeMismatch: false,
                             });
@@ -661,10 +701,17 @@
                 }
 
                 const kv = parseKey(line);
-                if (!kv) continue;
+                if (!kv) {
+                    markLineError(lineNumber, 'YAML: expected a map key (key:) or list item (-)', indent + 1);
+                    continue;
+                }
+                if (kv.indent > 0 && (hasTopLevelKey || hasTopLevelList) && stack.length === 1) {
+                    markLineError(lineNumber, 'YAML: unexpected indentation at document root', 1);
+                }
 
                 while (stack.length > 1 && kv.indent <= stack[stack.length - 1].indent) stack.pop();
                 const ctx = stack[stack.length - 1];
+                checkChildIndent(ctx, kv.indent, lineNumber);
                 setActualType(ctx, 'object', lineNumber);
 
                 const prev = ctx.keys.get(kv.key);
@@ -700,10 +747,15 @@
                         expected: getExpectedContainerType(propSchema),
                         actual: null,
                         keys: new Map(),
+                        childIndent: null,
                         origin: {lineNumber, startColumn: kv.keyStartIndex + 1, endColumn: kv.keyEndIndex + 1},
                         reportedTypeMismatch: false,
                     });
                     continue;
+                }
+
+                if (isBlockScalarHeader(kv.after)) {
+                    blockScalarParentIndent = kv.indent;
                 }
 
                 if (!propSchema) continue;
