@@ -595,13 +595,13 @@
                 if (!line.trim()) continue;
 
                 const indent = countIndent(line);
-                if (blockScalarParentIndent !== null && indent <= blockScalarParentIndent) {
-                    blockScalarParentIndent = null;
+                if (blockScalarParentIndent !== null) {
+                    if (indent <= blockScalarParentIndent) {
+                        blockScalarParentIndent = null;
+                    } else {
+                        continue; // treat as block scalar content
+                    }      
                 }
-                if (blockScalarParentIndent !== null && indent > blockScalarParentIndent) {
-                    continue; // treat as block scalar content
-                }
-
                 if (indent === 0 && (hasTopLevelKey || hasTopLevelList)) {
                     const trimmed = line.trim();
                     if (trimmed !== '---' && trimmed !== '...' && !trimmed.startsWith('#')) {
