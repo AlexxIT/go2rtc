@@ -31,22 +31,44 @@ type Producer struct {
 	receivers []*core.Receiver
 	senders   []*core.Receiver
 
-	state    state
-	mu       sync.Mutex
-	workerID int
+	// Mixers for backchannel - one per codec
+	mixers []*core.RTPMixer
+
+	state         state
+	mu            sync.Mutex
+	workerID      int
+	mixingEnabled bool // Whether to enable audio mixing for multiple backchannel consumers (default: false)
 }
 
 const SourceTemplate = "{input}"
 
 func NewProducer(source string) *Producer {
-	if strings.Contains(source, SourceTemplate) {
-		return &Producer{template: source}
+	// Parse #mix flag
+	mixingEnabled := strings.Contains(source, "#mix")
+	if mixingEnabled {
+		source = strings.ReplaceAll(source, "#mix", "")
 	}
 
-	return &Producer{url: source}
+	if strings.Contains(source, SourceTemplate) {
+		return &Producer{
+			template:      source,
+			mixingEnabled: mixingEnabled,
+		}
+	}
+
+	return &Producer{
+		url:           source,
+		mixingEnabled: mixingEnabled,
+	}
 }
 
 func (p *Producer) SetSource(s string) {
+	// Parse #mix flag
+	p.mixingEnabled = strings.Contains(s, "#mix")
+	if p.mixingEnabled {
+		s = strings.ReplaceAll(s, "#mix", "")
+	}
+
 	if p.template == "" {
 		p.url = s
 	} else {
@@ -118,11 +140,40 @@ func (p *Producer) AddTrack(media *core.Media, codec *core.Codec, track *core.Re
 		return errors.New("add track from none state")
 	}
 
-	if err := p.conn.(core.Consumer).AddTrack(media, codec, track); err != nil {
-		return err
-	}
+	// If mixing is enabled, use mixer for multiple backchannel consumers
+	if p.mixingEnabled {
+		// Check if we already have a mixer for this codec
+		for _, mixer := range p.mixers {
+			if mixer.Codec.Match(codec) {
+				// Register this consumer receiver as a parent
+				mixer.AddParent(&track.Node)
+				p.senders = append(p.senders, track)
+				return nil
+			}
+		}
 
-	p.senders = append(p.senders, track)
+		// No mixer exists yet, create one
+		mixer := core.NewRTPMixer(ffmpegBin, media, codec)
+		mixer.AddParent(&track.Node)
+
+		// Connect mixer to underlying protocol
+		consumer := p.conn.(core.Consumer)
+		mixerReceiver := core.NewReceiver(media, codec)
+		mixerReceiver.ParentNode = &mixer.Node
+		if err := consumer.AddTrack(media, codec, mixerReceiver); err != nil {
+			return err
+		}
+
+		p.mixers = append(p.mixers, mixer)
+		p.senders = append(p.senders, track)
+	} else {
+		// Without mixing, directly pass track to underlying protocol
+		if err := p.conn.(core.Consumer).AddTrack(media, codec, track); err != nil {
+			return err
+		}
+
+		p.senders = append(p.senders, track)
+	}
 
 	if p.state == stateMedias {
 		p.state = stateTracks
@@ -132,9 +183,36 @@ func (p *Producer) AddTrack(media *core.Media, codec *core.Codec, track *core.Re
 }
 
 func (p *Producer) MarshalJSON() ([]byte, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	if conn := p.conn; conn != nil {
-		return json.Marshal(conn)
+		connData, err := json.Marshal(conn)
+		if err != nil {
+			return nil, err
+		}
+
+		// If no mixers, return as-is
+		if len(p.mixers) == 0 {
+			return connData, nil
+		}
+
+		// Marshal mixers
+		mixersData, err := json.Marshal(p.mixers)
+		if err != nil {
+			return nil, err
+		}
+
+		// Simply append mixers field at the end
+		// Remove closing } and add mixers field
+		result := connData[:len(connData)-1] // Remove }
+		result = append(result, []byte(`,"mixers":`)...)
+		result = append(result, mixersData...)
+		result = append(result, '}')
+
+		return result, nil
 	}
+
 	info := map[string]string{"url": p.url}
 	return json.Marshal(info)
 }
