@@ -38,7 +38,7 @@ Ultimate camera streaming application with support for RTSP, WebRTC, HomeKit, FF
 - creator of the project's logo [@v_novoseltsev](https://www.instagram.com/v_novoseltsev) 
 
 > [!CAUTION]
-> There is NO existing website for go2rtc project other than this GitHub repository. The website go2rtc[.]com is in no way associated with the authors of this project.
+> The official website of the project is this GitHub repository and go2rtc.org (hosted on GitHub Pages). The website go2rtc[.]com is in no way associated with the authors of this project.
 
 ---
 
@@ -1120,7 +1120,7 @@ webtorrent:
       src: rtsp-dahua1   # stream name from streams section
 ```
 
-Link example: https://alexxit.github.io/go2rtc/#share=02SNtgjKXY&pwd=wznEQqznxW&media=video+audio
+Link example: https://go2rtc.org/webtorrent/#share=02SNtgjKXY&pwd=wznEQqznxW&media=video+audio
 
 ### Module: ngrok
 
