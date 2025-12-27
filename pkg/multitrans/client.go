@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
@@ -17,23 +16,13 @@ import (
 )
 
 type Client struct {
-	core.Listener
-
-	URL *url.URL
-
-	conn       net.Conn
-	reader     *bufio.Reader
-	sender     *core.Sender
-	clientUUID string
-
-	user string
-	pass string
-
-	closed chan struct{}
+	core.Connection
+	conn   net.Conn
+	rd     *bufio.Reader
+	closed core.Waiter
 }
 
-func Dial(rawURL string) (*Client, error) {
-	fmt.Printf("[multitrans] Dial called with URL: %s\n", rawURL)
+func Dial(rawURL string) (core.Producer, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, err
@@ -43,126 +32,87 @@ func Dial(rawURL string) (*Client, error) {
 		u.Host += ":554"
 	}
 
-	c := &Client{
-		URL:        u,
-		user:       u.User.Username(),
-		clientUUID: uuid.New().String(),
-		closed:     make(chan struct{}),
-	}
-	c.pass, _ = u.User.Password()
-
-	fmt.Printf("[multitrans] Client %p created\n", c)
-
-	if err = c.dial(); err != nil {
+	conn, err := net.DialTimeout("tcp", u.Host, core.ConnDialTimeout)
+	if err != nil {
 		return nil, err
+	}
+
+	c := &Client{
+		conn: conn,
+		rd:   bufio.NewReader(conn),
+	}
+
+	if err = c.handshake(u); err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+
+	c.Connection = core.Connection{
+		ID:         core.NewID(),
+		FormatName: "multitrans",
+		Protocol:   "rtsp",
+		RemoteAddr: conn.RemoteAddr().String(),
+		Source:     rawURL,
+		Medias: []*core.Media{
+			{
+				Kind:      core.KindAudio,
+				Direction: core.DirectionSendonly,
+				Codecs:    []*core.Codec{{Name: core.CodecPCMA, ClockRate: 8000, PayloadType: 8}},
+			},
+		},
+		Transport: conn,
 	}
 
 	return c, nil
 }
 
-func (c *Client) Close() error {
-	fmt.Printf("[multitrans] Client %p Close() called\n", c)
-
-	select {
-	case <-c.closed:
-		return nil
-	default:
-		close(c.closed)
-	}
-
-	if c.sender != nil {
-		c.sender.Close()
-	}
-	if c.conn != nil {
-		return c.conn.Close()
-	}
-	return nil
-}
-
 func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver) error {
-	fmt.Printf("[multitrans] Client %p AddTrack kind=%s codec=%s direction=%s\n", c, media.Kind, track.Codec.Name, media.Direction)
-	if c.sender != nil {
-		return errors.New("multitrans: sender already exists")
-	}
-
-	if track.Codec.Name != core.CodecPCMA {
-		fmt.Printf("[multitrans] unsupported codec: %s\n", track.Codec.Name)
-		return errors.New("multitrans: only PCMA supported")
-	}
-
-	if err := c.startTalkback(); err != nil {
-		return err
-	}
-
-	c.sender = core.NewSender(media, track.Codec)
-
-	c.sender.Handler = func(packet *rtp.Packet) {
-		// Clone packet to strip extensions without modifying original
-		pkt := *packet
-		pkt.Header.Extension = false
-		pkt.Header.Extensions = nil
+	sender := core.NewSender(media, track.Codec)
+	sender.Handler = func(packet *rtp.Packet) {
+		clone := rtp.Packet{
+			Header: rtp.Header{
+				Version:        2,
+				Marker:         packet.Marker,
+				PayloadType:    8,
+				SequenceNumber: packet.SequenceNumber,
+				Timestamp:      packet.Timestamp,
+				SSRC:           packet.SSRC,
+			},
+			Payload: packet.Payload,
+		}
 
 		// Encapsulate in RTSP Interleaved Frame (Channel 1)
 		// $ + Channel(1 byte) + Length(2 bytes) + Packet
-		b, err := pkt.Marshal()
-		if err != nil {
-			return
-		}
-
-		size := len(b)
-		header := make([]byte, 4)
-		header[0] = '$'
-		header[1] = 1 // Channel 1 for audio
-		header[2] = byte(size >> 8)
-		header[3] = byte(size)
-
-		if _, err := c.conn.Write(header); err != nil {
-			fmt.Printf("[multitrans] Client %p write header error: %v\n", c, err)
+		size := 12 + len(clone.Payload)
+		b := make([]byte, 4+size)
+		b[0] = '$'
+		b[1] = 1 // Channel 1 for audio
+		b[2] = byte(size >> 8)
+		b[3] = byte(size)
+		if _, err := clone.MarshalTo(b[4:]); err != nil {
 			return
 		}
 		if _, err := c.conn.Write(b); err != nil {
-			fmt.Printf("[multitrans] Client %p write body error: %v\n", c, err)
 			return
 		}
 	}
-
-	c.sender.HandleRTP(track)
+	sender.HandleRTP(track)
+	c.Senders = append(c.Senders, sender)
 	return nil
 }
 
-func (c *Client) dial() error {
-	fmt.Printf("[multitrans] Client %p dial() connecting to %s\n", c, c.URL.Host)
-	conn, err := net.DialTimeout("tcp", c.URL.Host, time.Second*5)
-	if err != nil {
-		fmt.Printf("[multitrans] dial() tcp connection error: %v\n", err)
-		return err
-	}
-	fmt.Printf("[multitrans] Client %p dial() tcp connected\n", c)
-
-	c.conn = conn
-	c.reader = bufio.NewReader(conn)
-
-	// Handshake
-	if err = c.handshake(); err != nil {
-		fmt.Printf("[multitrans] dial() handshake error: %v\n", err)
-		c.conn.Close()
-		return err
-	}
-
-	fmt.Printf("[multitrans] Client %p dial() handshake success\n", c)
-	return nil
-}
-
-func (c *Client) handshake() error {
+func (c *Client) handshake(u *url.URL) error {
 	// Step 1: Get Challenge
-	uri := fmt.Sprintf("rtsp://%s/multitrans", c.URL.Host)
-	data := fmt.Sprintf("MULTITRANS %s RTSP/1.0\r\nCSeq: 0\r\nX-Client-UUID: %s\r\n\r\n", uri, c.clientUUID)
+	uid := uuid.New().String()
+
+	uri := fmt.Sprintf("rtsp://%s/multitrans", u.Host)
+	data := fmt.Sprintf("MULTITRANS %s RTSP/1.0\r\nCSeq: 0\r\nX-Client-UUID: %s\r\n\r\n", uri, uid)
 
 	if _, err := c.conn.Write([]byte(data)); err != nil {
 		return err
 	}
 
-	res, err := tcp.ReadResponse(c.reader)
+	res, err := tcp.ReadResponse(c.rd)
 	if err != nil {
 		return err
 	}
@@ -176,21 +126,24 @@ func (c *Client) handshake() error {
 	nonce := tcp.Between(auth, `nonce="`, `"`)
 
 	// Step 2: Send Auth
-	ha1 := tcp.HexMD5(c.user, realm, c.pass)
+	user := u.User.Username()
+	pass, _ := u.User.Password()
+
+	ha1 := tcp.HexMD5(user, realm, pass)
 	ha2 := tcp.HexMD5("MULTITRANS", uri)
 	response := tcp.HexMD5(ha1, nonce, ha2)
 
 	authHeader := fmt.Sprintf(`Digest username="%s", realm="%s", nonce="%s", uri="%s", response="%s"`,
-		c.user, realm, nonce, uri, response)
+		user, realm, nonce, uri, response)
 
 	data = fmt.Sprintf("MULTITRANS %s RTSP/1.0\r\nCSeq: 1\r\nAuthorization: %s\r\nX-Client-UUID: %s\r\n\r\n",
-		uri, authHeader, c.clientUUID)
+		uri, authHeader, uid)
 
-	if _, err := c.conn.Write([]byte(data)); err != nil {
+	if _, err = c.conn.Write([]byte(data)); err != nil {
 		return err
 	}
 
-	res, err = tcp.ReadResponse(c.reader)
+	res, err = tcp.ReadResponse(c.rd)
 	if err != nil {
 		return err
 	}
@@ -201,7 +154,6 @@ func (c *Client) handshake() error {
 
 	// Session: 7116520596809429228
 	session := res.Header.Get("Session")
-	fmt.Printf("[multitrans] Client %p handshake OK, session=%s\n", c, session)
 	if session == "" {
 		return errors.New("multitrans: no session")
 	}
@@ -219,7 +171,7 @@ func (c *Client) openTalkChannel(uri, session string) error {
 		return err
 	}
 
-	res, err := tcp.ReadResponse(c.reader)
+	res, err := tcp.ReadResponse(c.rd)
 	if err != nil {
 		return err
 	}
@@ -230,43 +182,22 @@ func (c *Client) openTalkChannel(uri, session string) error {
 
 	// Python checks for "error_code":0 in body.
 	if !bytes.Contains(res.Body, []byte(`"error_code":0`)) {
-		fmt.Printf("[multitrans] Client %p talkback error response: %s\n", c, string(res.Body))
 		return fmt.Errorf("multitrans: talkback error: %s", string(res.Body))
 	}
-	fmt.Printf("[multitrans] Client %p talkback channel opened: %s\n", c, string(res.Body))
 
 	return nil
-}
-
-func (c *Client) startTalkback() error {
-	// Already connected and channel opened in Dial -> handshake -> openTalkChannel
-	if c.conn == nil {
-		return errors.New("multitrans: not connected")
-	}
-	return nil
-}
-
-func (c *Client) GetMedias() []*core.Media {
-	return []*core.Media{
-		{
-			Kind:      core.KindAudio,
-			Direction: core.DirectionSendonly,
-			Codecs:    []*core.Codec{{Name: core.CodecPCMA, ClockRate: 8000, PayloadType: 8}},
-		},
-	}
 }
 
 func (c *Client) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
-	return nil, errors.New("multitrans: not supported")
+	return nil, core.ErrCantGetTrack
 }
 
 func (c *Client) Start() error {
-	fmt.Printf("[multitrans] Client %p Start()\n", c)
-	<-c.closed
+	_ = c.closed.Wait()
 	return nil
 }
 
 func (c *Client) Stop() error {
-	fmt.Printf("[multitrans] Client %p Stop()\n", c)
-	return c.Close()
+	c.closed.Done(nil)
+	return c.Connection.Stop()
 }
