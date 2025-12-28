@@ -259,9 +259,9 @@ func ParseCodecString(s string) *Codec {
 		codec.Name = CodecPCM
 	case "pcm_s16le", "s16le", "pcml":
 		codec.Name = CodecPCML
-	case "pcm_alaw", "alaw", "pcma":
+	case "pcm_alaw", "alaw", "pcma", "g711a":
 		codec.Name = CodecPCMA
-	case "pcm_mulaw", "mulaw", "pcmu":
+	case "pcm_mulaw", "mulaw", "pcmu", "g711u":
 		codec.Name = CodecPCMU
 	case "aac", "mpeg4-generic":
 		codec.Name = CodecAAC

@@ -103,9 +103,19 @@ func readRevisionTime() (revision, vcsTime string) {
 				vcsTime = setting.Value
 			case "vcs.modified":
 				if setting.Value == "true" {
-					revision = "mod." + revision
+					revision += ".dirty"
 				}
 			}
+		}
+
+		// Check version from -buildvcs info
+		// Format for tagged version : v1.9.13
+		// Format for modified code:   v1.9.14-0.20251215184105-753d6617ab58+dirty
+		if info.Main.Version != "v"+Version {
+			// Format: 1.9.13+dev.753d661[.dirty]
+			// Compatible with "awesomeversion" and "packaging.version" from python.
+			// Version will be larger than the previous release, but smaller than the next release.
+			Version += "+dev." + revision
 		}
 	}
 	return

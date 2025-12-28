@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
@@ -41,6 +42,11 @@ func streamOnvif(rawURL string) (core.Producer, error) {
 	uri, err := client.GetURI()
 	if err != nil {
 		return nil, err
+	}
+
+	// Append hash-based arguments to the retrieved URI
+	if i := strings.IndexByte(rawURL, '#'); i > 0 {
+		uri += rawURL[i:]
 	}
 
 	log.Debug().Msgf("[onvif] new uri=%s", uri)
