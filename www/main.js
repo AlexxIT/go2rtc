@@ -171,7 +171,7 @@ document.body.innerHTML = `
         <a href="config.html">config</a>
         <a href="log.html">log</a>
         <a href="net.html">net</a>
-        <a href="#" id="theme-toggle" title="Toggle theme" style="float: right"></a>
+        <a href="#" id="theme-toggle" style="float: right"></a>
     </nav>
 </header>
 ` + document.body.innerHTML;
@@ -187,7 +187,7 @@ document.body.innerHTML = `
     function update() {
         const dark = mode === 'dark' || (mode === 'auto' && media.matches);
         document.documentElement.classList.toggle('dark', dark);
-        toggle.innerText = mode.charAt(0).toUpperCase() + mode.slice(1);
+        toggle.innerText = 'theme: ' + mode;
         window.dispatchEvent(new Event('themeChanged'));
     }
 
