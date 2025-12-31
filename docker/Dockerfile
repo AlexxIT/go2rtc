@@ -47,6 +47,7 @@ RUN if [ "${TARGETARCH}" = "amd64" ]; then apk add --no-cache libva-intel-driver
 
 COPY --from=build /build/go2rtc /usr/local/bin/
 
+EXPOSE 1984 8554
 ENTRYPOINT ["/sbin/tini", "--"]
 VOLUME /config
 WORKDIR /config
