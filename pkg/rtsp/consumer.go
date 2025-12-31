@@ -51,6 +51,8 @@ func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiv
 
 	// save original codec to sender (can have Codec.Name = ANY)
 	sender := core.NewSender(media, codec)
+	sender.UseGOP = c.GOP
+
 	// important to send original codec for valid IsRTP check
 	sender.Handler = c.packetWriter(track.Codec, channel, codec.PayloadType)
 
@@ -59,7 +61,8 @@ func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiv
 		sender.Handler = pcm.RepackG711(true, sender.Handler)
 	}
 
-	sender.HandleRTP(track)
+	// Bind here, start sender after Play
+	sender.Bind(track)
 
 	c.Senders = append(c.Senders, sender)
 	return nil
@@ -161,7 +164,7 @@ func (c *Conn) packetWriter(codec *core.Codec, channel, payloadType uint8) core.
 		}
 	} else if codec.Name == core.CodecPCML {
 		handlerFunc = pcm.LittleToBig(handlerFunc)
-	} else if c.PacketSize != 0 {
+	} else {
 		switch codec.Name {
 		case core.CodecH264:
 			handlerFunc = h264.RTPPay(c.PacketSize, handlerFunc)
