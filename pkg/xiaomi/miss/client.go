@@ -271,6 +271,24 @@ type Packet struct {
 	Payload []byte
 }
 
+func (p *Packet) SampleRate() uint32 {
+	// flag:         1 0011 000 - sample rate 16000
+	// flag: 100 00 01 0000 000 - sample rate  8000
+	v := (p.Flags >> 3) & 0b1111
+	if v != 0 {
+		return 16000
+	}
+	return 8000
+}
+
+//func (p *Packet) AudioUnknown1() byte {
+//	return byte((p.Flags >> 7) & 0b11)
+//}
+//
+//func (p *Packet) AudioUnknown2() byte {
+//	return byte((p.Flags >> 9) & 0b11)
+//}
+
 func GenerateKey() ([]byte, []byte, error) {
 	public, private, err := box.GenerateKey(rand.Reader)
 	if err != nil {
