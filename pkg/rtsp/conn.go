@@ -17,6 +17,15 @@ import (
 	"github.com/pion/rtp"
 )
 
+// udpBufferPool reduces memory allocations for UDP reads
+// TP-Link Tapo camera has crazy 10000 bytes packet size, so we use 10240
+var udpBufferPool = sync.Pool{
+	New: func() interface{} {
+		buf := make([]byte, 10240)
+		return &buf
+	},
+}
+
 type Conn struct {
 	core.Connection
 	core.Listener
@@ -171,15 +180,23 @@ func (c *Conn) handleUDPData(channel byte) {
 	conn := c.udpConn[channel]
 
 	for {
-		// TP-Link Tapo camera has crazy 10000 bytes packet size
-		buf := make([]byte, 10240)
+		// Use buffer pool to reduce allocations
+		bufPtr := udpBufferPool.Get().(*[]byte)
+		buf := *bufPtr
 
 		n, _, err := conn.ReadFromUDP(buf)
 		if err != nil {
+			udpBufferPool.Put(bufPtr)
 			return
 		}
 
-		if err = c.handleRawPacket(channel, buf[:n]); err != nil {
+		// Copy the data before returning buffer to pool
+		// This is necessary because handleRawPacket may hold references
+		data := make([]byte, n)
+		copy(data, buf[:n])
+		udpBufferPool.Put(bufPtr)
+
+		if err = c.handleRawPacket(channel, data); err != nil {
 			return
 		}
 	}
