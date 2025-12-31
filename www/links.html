@@ -4,26 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>links - go2rtc</title>
-    <style>
-        div > li {
-            list-style-type: none;
-            padding-left: 10px;
-            position: relative;
-        }
-
-        div > li:before {
-            content: "-";
-            position: absolute;
-            left: 0;
-        }
-    </style>
+    <link rel="stylesheet" href="main.css">
 </head>
-<body>
+<body class="app page-links">
 
 <script src="main.js"></script>
 
-<main>
-    <div id="links"></div>
+<main class="container">
+    <div id="links" class="card"></div>
     <script>
         const src = new URLSearchParams(location.search).get('src').replace(/[<">]/g, ''); // sanitize
 
@@ -71,7 +59,7 @@
         });
     </script>
 
-    <div id="homekit" style="display: none">
+    <div id="homekit" class="card" style="display: none">
         <h2>HomeKit server</h2>
     </div>
     <script>
@@ -107,7 +95,7 @@ Setup Code: ${data.setup_code}</pre>
         });
     </script>
 
-    <div>
+    <div class="card">
         <h2>Play audio</h2>
         <label><input type="radio" name="play" value="file" checked>
             file - play remote (https://example.com/song.mp3) or local (/media/song.mp3) file
@@ -135,7 +123,7 @@ Setup Code: ${data.setup_code}</pre>
         });
     </script>
 
-    <div>
+    <div class="card">
         <h2>Publish stream</h2>
         <pre>YouTube:  rtmps://xxx.rtmp.youtube.com/live2/xxxx-xxxx-xxxx-xxxx-xxxx
 Telegram: rtmps://xxx-x.rtmp.t.me/s/xxxxxxxxxx:xxxxxxxxxxxxxxxxxxxxxx</pre>
@@ -153,7 +141,7 @@ Telegram: rtmps://xxx-x.rtmp.t.me/s/xxxxxxxxxx:xxxxxxxxxxxxxxxxxxxxxx</pre>
         });
     </script>
 
-    <div id="webrtc">
+    <div id="webrtc" class="card">
         <h2>WebRTC Magic</h2>
         <label><input type="radio" name="webrtc" value="video+audio" checked>
             video+audio = simple viewer

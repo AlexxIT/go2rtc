@@ -5,17 +5,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>net - go2rtc</title>
     <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
+    <link rel="stylesheet" href="main.css">
     <style>
-        html, body, #network {
-            height: 100%;
+        .page-net main.container--full {
+            padding: 0;
+        }
+
+        .page-net #network {
+            flex: 1;
+            min-height: 0;
+            background: var(--surface);
         }
     </style>
 </head>
-<body>
+<body class="app page-net">
 
 <script src="main.js"></script>
 
-<div id="network"></div>
+<main class="container container--full">
+    <div id="network"></div>
+</main>
 
 <script>
     /* global vis */
