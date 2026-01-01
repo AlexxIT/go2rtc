@@ -2,6 +2,7 @@ package webrtc
 
 import (
 	"errors"
+	"net"
 	"strings"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
@@ -33,7 +34,13 @@ func Init() {
 
 	log = app.GetLogger("webrtc")
 
-	filters = cfg.Mod.Filters
+	if log.Debug().Enabled() {
+		itfs, _ := net.Interfaces()
+		for _, itf := range itfs {
+			addrs, _ := itf.Addrs()
+			log.Debug().Msgf("[webrtc] interface %+v addrs %v", itf, addrs)
+		}
+	}
 
 	address, network, _ := strings.Cut(cfg.Mod.Listen, "/")
 	for _, candidate := range cfg.Mod.Candidates {
@@ -50,10 +57,19 @@ func Init() {
 		}
 	}
 
+	webrtc.OnNewListener = func(ln any) {
+		switch ln := ln.(type) {
+		case *net.TCPListener:
+			log.Info().Stringer("addr", ln.Addr()).Msg("[webrtc] listen tcp")
+		case *net.UDPConn:
+			log.Info().Stringer("addr", ln.LocalAddr()).Msg("[webrtc] listen udp")
+		}
+	}
+
 	var err error
 
 	// create pionAPI with custom codecs list and custom network settings
-	serverAPI, err = webrtc.NewServerAPI(network, address, &filters)
+	serverAPI, err = webrtc.NewServerAPI(network, address, &cfg.Mod.Filters)
 	if err != nil {
 		log.Error().Err(err).Caller().Send()
 		return
@@ -63,7 +79,6 @@ func Init() {
 	clientAPI = serverAPI
 
 	if address != "" {
-		log.Info().Str("addr", cfg.Mod.Listen).Msg("[webrtc] listen")
 		clientAPI, _ = webrtc.NewAPI()
 	}
 

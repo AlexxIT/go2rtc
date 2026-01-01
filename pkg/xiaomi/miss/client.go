@@ -33,7 +33,7 @@ func Dial(rawURL string) (*Client, error) {
 
 	switch s := query.Get("vendor"); s {
 	case "cs2":
-		c.conn, err = cs2.Dial(u.Host)
+		c.conn, err = cs2.Dial(u.Host, query.Get("transport"))
 	case "tutk":
 		c.conn, err = tutk.Dial(u.Host, query.Get("uid"))
 	default:
@@ -63,6 +63,7 @@ const (
 )
 
 type Conn interface {
+	Protocol() string
 	ReadCommand() (cmd uint16, data []byte, err error)
 	WriteCommand(cmd uint16, data []byte) error
 	ReadPacket() ([]byte, error)
@@ -77,6 +78,10 @@ type Client struct {
 	key  []byte
 }
 
+func (c *Client) Protocol() string {
+	return c.conn.Protocol()
+}
+
 func (c *Client) RemoteAddr() net.Addr {
 	return c.conn.RemoteAddr()
 }
@@ -87,16 +92,6 @@ func (c *Client) SetDeadline(t time.Time) error {
 
 func (c *Client) Close() error {
 	return c.conn.Close()
-}
-
-func (c *Client) Protocol() string {
-	switch c.conn.(type) {
-	case *cs2.Conn:
-		return "cs2+udp"
-	case *tutk.Conn:
-		return "tutk+udp"
-	}
-	return ""
 }
 
 const (
@@ -275,6 +270,24 @@ type Packet struct {
 	//Reserved uint32
 	Payload []byte
 }
+
+func (p *Packet) SampleRate() uint32 {
+	// flag:         1 0011 000 - sample rate 16000
+	// flag: 100 00 01 0000 000 - sample rate  8000
+	v := (p.Flags >> 3) & 0b1111
+	if v != 0 {
+		return 16000
+	}
+	return 8000
+}
+
+//func (p *Packet) AudioUnknown1() byte {
+//	return byte((p.Flags >> 7) & 0b11)
+//}
+//
+//func (p *Packet) AudioUnknown2() byte {
+//	return byte((p.Flags >> 9) & 0b11)
+//}
 
 func GenerateKey() ([]byte, []byte, error) {
 	public, private, err := box.GenerateKey(rand.Reader)
