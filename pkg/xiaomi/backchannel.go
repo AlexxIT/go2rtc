@@ -31,6 +31,7 @@ func (p *Producer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 				buf = append(buf, transcode(pkt.Payload)...)
 				const size = 2 * 8000 * 0.040 // 16bit 40ms
 				for len(buf) >= size {
+					p.Send += size
 					_ = p.client.WriteAudio(miss.CodecPCM, buf[:size])
 					buf = buf[size:]
 				}
@@ -40,6 +41,7 @@ func (p *Producer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 				buf = append(buf, pkt.Payload...)
 				const size = 8000 * 0.040 // 8bit 40 ms
 				for len(buf) >= size {
+					p.Send += size
 					_ = p.client.WriteAudio(miss.CodecPCMA, buf[:size])
 					buf = buf[size:]
 				}
@@ -54,12 +56,14 @@ func (p *Producer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 				} else {
 					// convert two 20ms to one 40ms
 					buf = opus.JoinFrames(buf, pkt.Payload)
+					p.Send += len(buf)
 					_ = p.client.WriteAudio(miss.CodecOPUS, buf)
 					buf = nil
 				}
 			}
 		} else {
 			sender.Handler = func(pkt *rtp.Packet) {
+				p.Send += len(pkt.Payload)
 				_ = p.client.WriteAudio(miss.CodecOPUS, pkt.Payload)
 			}
 		}

@@ -164,6 +164,8 @@ func (p *Producer) Start() error {
 			return err
 		}
 
+		p.Recv += len(pkt.Payload)
+
 		// TODO: rewrite this
 		var name string
 		var pkt2 *core.Packet
