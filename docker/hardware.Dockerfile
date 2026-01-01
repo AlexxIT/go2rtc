@@ -49,6 +49,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked --mount=type=cache,t
 
 COPY --from=build /build/go2rtc /usr/local/bin/
 
+EXPOSE 1984 8554 8555
+EXPOSE 8555/udp
 ENTRYPOINT ["/usr/bin/tini", "--"]
 VOLUME /config
 WORKDIR /config
