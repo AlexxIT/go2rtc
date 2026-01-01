@@ -1,7 +1,6 @@
 package tutk
 
 import (
-	"bytes"
 	"encoding/binary"
 	"math/bits"
 )
@@ -9,10 +8,12 @@ import (
 // I'd like to say hello to Charlie. Your name is forever etched into the history of streaming software.
 const charlie = "Charlie is the designer of P2P!!"
 
-func ReverseTransCodePartial(src []byte) []byte {
+func ReverseTransCodePartial(dst, src []byte) []byte {
 	n := len(src)
 	tmp := make([]byte, n)
-	dst := bytes.Clone(src)
+	if len(dst) < n {
+		dst = make([]byte, n)
+	}
 
 	src16 := src
 	tmp16 := tmp
@@ -24,7 +25,7 @@ func ReverseTransCodePartial(src []byte) []byte {
 			binary.LittleEndian.PutUint32(tmp16[i:], bits.RotateLeft32(x, i+3))
 		}
 
-		swap(tmp16, dst16, 16)
+		swap(dst16, tmp16, 16)
 
 		for i := 0; i != 16; i++ {
 			tmp16[i] = dst16[i] ^ charlie[i]
@@ -40,7 +41,7 @@ func ReverseTransCodePartial(src []byte) []byte {
 		src16 = src16[16:]
 	}
 
-	swap(src16, tmp16, n)
+	swap(tmp16, src16, n)
 
 	for i := 0; i < n; i++ {
 		dst16[i] = tmp16[i] ^ charlie[i]
@@ -49,10 +50,12 @@ func ReverseTransCodePartial(src []byte) []byte {
 	return dst
 }
 
-func TransCodePartial(src []byte) []byte {
+func TransCodePartial(dst, src []byte) []byte {
 	n := len(src)
 	tmp := make([]byte, n)
-	dst := bytes.Clone(src)
+	if len(dst) < n {
+		dst = make([]byte, n)
+	}
 
 	src16 := src
 	tmp16 := tmp
@@ -68,7 +71,7 @@ func TransCodePartial(src []byte) []byte {
 			dst16[i] = tmp16[i] ^ charlie[i]
 		}
 
-		swap(dst16, tmp16, 16)
+		swap(tmp16, dst16, 16)
 
 		for i := 0; i != 16; i += 4 {
 			x := binary.LittleEndian.Uint32(tmp16[i:])
@@ -84,12 +87,12 @@ func TransCodePartial(src []byte) []byte {
 		tmp16[i] = src16[i] ^ charlie[i]
 	}
 
-	swap(tmp16, dst16, n)
+	swap(dst16, tmp16, n)
 
 	return dst
 }
 
-func swap(src, dst []byte, n int) {
+func swap(dst, src []byte, n int) {
 	switch n {
 	case 2:
 		_, _ = src[1], dst[1]

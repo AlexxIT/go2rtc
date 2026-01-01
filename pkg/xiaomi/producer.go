@@ -75,7 +75,7 @@ func Dial(rawURL string) (core.Producer, error) {
 }
 
 func probe(client *miss.Client, channel, quality, audio uint8) ([]*core.Media, error) {
-	_ = client.SetDeadline(time.Now().Add(core.ProbeTimeout))
+	_ = client.SetDeadline(time.Now().Add(10 * time.Second))
 
 	if err := client.VideoStart(channel, quality, audio&1); err != nil {
 		return nil, err
@@ -158,7 +158,7 @@ func (p *Producer) Start() error {
 	var audioTS uint32
 
 	for {
-		_ = p.client.SetDeadline(time.Now().Add(core.ConnDeadline))
+		_ = p.client.SetDeadline(time.Now().Add(10 * time.Second))
 		pkt, err := p.client.ReadPacket()
 		if err != nil {
 			return err

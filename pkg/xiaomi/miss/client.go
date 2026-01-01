@@ -35,7 +35,7 @@ func Dial(rawURL string) (*Client, error) {
 	case "cs2":
 		c.conn, err = cs2.Dial(u.Host, query.Get("transport"))
 	case "tutk":
-		c.conn, err = tutk.Dial(u.Host, query.Get("uid"))
+		c.conn, err = tutk.Dial(u.Host, query.Get("uid"), query.Get("model"))
 	default:
 		return nil, fmt.Errorf("miss: unsupported vendor %s", s)
 	}
