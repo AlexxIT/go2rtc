@@ -258,8 +258,8 @@ export class VideoRTC extends HTMLElement {
                 4: 'MEDIA_ERR_SRC_NOT_SUPPORTED'
             };
             console.error('[VideoRTC] Video error:', {
-                error: MEDIA_ERRORS[err?.code] || 'unknown',
-                message: err?.message || 'unknown',
+                error: err ? MEDIA_ERRORS[err.code] : 'unknown',
+                message: err ? err.message : 'unknown',
                 codecs: this.mseCodecs || 'not set',
                 readyState: this.video.readyState,
                 networkState: this.video.networkState,
