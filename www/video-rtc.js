@@ -250,18 +250,20 @@ export class VideoRTC extends HTMLElement {
 
         this.video.addEventListener('error', ev => {
             const err = this.video.error;
+            // https://developer.mozilla.org/en-US/docs/Web/API/MediaError/code
+            const MEDIA_ERRORS = {
+                1: 'MEDIA_ERR_ABORTED',
+                2: 'MEDIA_ERR_NETWORK',
+                3: 'MEDIA_ERR_DECODE',
+                4: 'MEDIA_ERR_SRC_NOT_SUPPORTED'
+            };
             console.error('[VideoRTC] Video error:', {
-                code: err ? err.code : 'unknown',
-                message: err ? err.message : 'unknown',
-                MEDIA_ERR_ABORTED: 1,
-                MEDIA_ERR_NETWORK: 2,
-                MEDIA_ERR_DECODE: 3,
-                MEDIA_ERR_SRC_NOT_SUPPORTED: 4,
+                error: MEDIA_ERRORS[err?.code] || 'unknown',
+                message: err?.message || 'unknown',
                 codecs: this.mseCodecs || 'not set',
                 readyState: this.video.readyState,
                 networkState: this.video.networkState,
-                currentTime: this.video.currentTime,
-                event: ev
+                currentTime: this.video.currentTime
             });
             if (this.ws) this.ws.close(); // run reconnect for broken MSE stream
         });
