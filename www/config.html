@@ -1,0 +1,1230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>config - go2rtc</title>
+    <style>
+        html, body {
+            height: 100%;
+        }
+
+        #config {
+            flex: 1 1 auto;
+            border-top: 1px solid #ccc;
+            min-height: 300px;
+        }
+    </style>
+</head>
+<body>
+
+<script src="main.js"></script>
+
+<main>
+    <div>
+        <button id="save">Save & Restart</button>
+        <button id="suggest" title="ctrl + space">Suggest</button>
+    </div>
+</main>
+<div id="config"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs/loader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+<script>
+    /* global require, monaco */
+    const monacoRoot = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min';
+
+    window.MonacoEnvironment = {
+        getWorkerUrl: function () {
+            return `data:text/javascript;charset=utf-8,${encodeURIComponent(`
+                self.MonacoEnvironment = { baseUrl: '${monacoRoot}/' };
+                importScripts('${monacoRoot}/vs/base/worker/workerMain.js');
+            `)}`;
+        }
+    };
+
+    require.config({paths: {vs: `${monacoRoot}/vs`}});
+
+    require(['vs/editor/editor.main'], () => {
+        const container = document.getElementById('config');
+        container.textContent = '';
+
+        const ensureYamlLanguage = () => {
+            const languages =
+                (window.monaco &&
+                    monaco.languages &&
+                    typeof monaco.languages.getLanguages === 'function' &&
+                    monaco.languages.getLanguages()) ||
+                [];
+            const hasYaml = languages.some((l) => l.id === 'yaml');
+            if (hasYaml) return;
+
+            monaco.languages.register({
+                id: 'yaml',
+                extensions: ['.yaml', '.yml'],
+                aliases: ['YAML', 'yaml'],
+                mimetypes: ['application/x-yaml', 'text/yaml'],
+            });
+
+            monaco.languages.setLanguageConfiguration('yaml', {
+                comments: {lineComment: '#'},
+                brackets: [['{', '}'], ['[', ']'], ['(', ')']],
+                autoClosingPairs: [
+                    {open: '{', close: '}'},
+                    {open: '[', close: ']'},
+                    {open: '(', close: ')'},
+                    {open: '"', close: '"'},
+                    {open: '\'', close: '\''},
+                ],
+                surroundingPairs: [
+                    {open: '{', close: '}'},
+                    {open: '[', close: ']'},
+                    {open: '(', close: ')'},
+                    {open: '"', close: '"'},
+                    {open: '\'', close: '\''},
+                ],
+            });
+
+            monaco.languages.setMonarchTokensProvider('yaml', {
+                tokenizer: {
+                    root: [
+                        [/^\s*(---|\.\.\.)\s*$/, 'delimiter'],
+                        [/#.*$/, 'comment'],
+                        [/^\s*-\s+/, 'delimiter'],
+                        [/[A-Za-z0-9_-]+(?=\s*:)/, 'key'],
+                        [/:/, 'delimiter'],
+                        [/[{}\[\](),]/, 'delimiter'],
+                        [/\b(true|false|null|~)\b/, 'keyword'],
+                        [/-?\d+(\.\d+)?\b/, 'number'],
+                        [/"/, 'string', '@string_double'],
+                        [/'/, 'string', '@string_single'],
+                        [/[^#\s{}\[\](),]+/, 'string'],
+                        [/\s+/, ''],
+                    ],
+                    string_double: [
+                        [/[^\\"]+/, 'string'],
+                        [/\\./, 'string.escape'],
+                        [/"/, 'string', '@pop'],
+                    ],
+                    string_single: [
+                        [/[^']+/, 'string'],
+                        [/'/, 'string', '@pop'],
+                    ],
+                },
+            });
+        };
+
+        ensureYamlLanguage();
+
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        monaco.editor.setTheme(prefersDark ? 'vs-dark' : 'vs');
+
+        const editor = monaco.editor.create(container, {
+            language: 'yaml',
+            minimap: {enabled: false},
+            automaticLayout: true,
+            tabSize: 2,
+            insertSpaces: true,
+            quickSuggestions: {other: true, comments: false, strings: true},
+            suggestOnTriggerCharacters: true,
+            wordBasedSuggestions: false,
+            suggest: {showWords: false},
+            scrollBeyondLastLine: false,
+        });
+
+        const stripInlineComment = (line) => {
+            let inSingle = false;
+            let inDouble = false;
+            for (let i = 0; i < line.length; i++) {
+                const ch = line[i];
+                if (ch === '\'' && !inDouble) {
+                    inSingle = !inSingle;
+                    continue;
+                }
+                if (ch === '"' && !inSingle) {
+                    inDouble = !inDouble;
+                    continue;
+                }
+                if (ch === '#' && !inSingle && !inDouble) {
+                    if (i === 0 || /\s/.test(line[i - 1])) return line.slice(0, i);
+                }
+            }
+            return line;
+        };
+
+        const countIndent = (line) => {
+            let indent = 0;
+            for (let i = 0; i < line.length; i++) {
+                if (line[i] === ' ') {
+                    indent++;
+                } else if (line[i] === '\t') {
+                    indent += 2;
+                } else {
+                    break;
+                }
+            }
+            return indent;
+        };
+
+        const parseListItem = (line) => {
+            const m = line.match(/^([ \t]*)-/);
+            if (!m) return null;
+
+            const dashIndex = m[1].length;
+            if (dashIndex + 1 < line.length && !/\s/.test(line[dashIndex + 1])) return null;
+
+            let afterDashIndex = dashIndex + 1;
+            while (afterDashIndex < line.length && /\s/.test(line[afterDashIndex])) afterDashIndex++;
+
+            const spacesAfterDash = Math.max(1, afterDashIndex - (dashIndex + 1));
+
+            return {
+                indent: countIndent(m[1]),
+                dashIndex,
+                afterDashIndex,
+                rest: line.slice(afterDashIndex),
+                contentIndent: countIndent(m[1]) + 1 + spacesAfterDash,
+            };
+        };
+
+        const parseKey = (line) => {
+            const m = line.match(/^([ \t]*)/);
+            const indentStr = m ? m[0] : '';
+            const indentIndex = indentStr.length;
+            const indent = countIndent(indentStr);
+
+            if (indentIndex >= line.length) return null;
+
+            const i = indentIndex;
+            let key = '';
+            let rawKey = '';
+            let isQuoted = false;
+            let keyStartIndex = i;
+            let keyEndIndex = i;
+            let colonIndex = -1;
+
+            const parseQuotedKey = (quoteChar) => {
+                isQuoted = true;
+                let j = i + 1;
+                if (quoteChar === '"') {
+                    while (j < line.length) {
+                        if (line[j] === '\\') {
+                            j += 2;
+                            continue;
+                        }
+                        if (line[j] === '"') break;
+                        j++;
+                    }
+                } else {
+                    while (j < line.length) {
+                        if (line[j] === '\'') {
+                            if (line[j + 1] === '\'') {
+                                j += 2;
+                                continue;
+                            }
+                            break;
+                        }
+                        j++;
+                    }
+                }
+
+                if (j >= line.length) return null;
+                rawKey = line.slice(i, j + 1);
+                if (quoteChar === '"') {
+                    key = line.slice(i + 1, j).replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+                } else {
+                    key = line.slice(i + 1, j).replace(/''/g, '\'');
+                }
+                keyStartIndex = i;
+                keyEndIndex = j + 1;
+
+                let k = j + 1;
+                while (k < line.length && /\s/.test(line[k])) k++;
+                if (k >= line.length || line[k] !== ':') return null;
+                colonIndex = k;
+                return colonIndex;
+            };
+
+            if (line[i] === '"' || line[i] === '\'') {
+                if (parseQuotedKey(line[i]) === null) return null;
+            } else {
+                let j = i;
+                while (j < line.length) {
+                    if (line[j] === ':') {
+                        if (j + 1 >= line.length || /\s/.test(line[j + 1])) {
+                            colonIndex = j;
+                            break;
+                        }
+                    }
+                    j++;
+                }
+                if (colonIndex === -1) return null;
+                rawKey = line.slice(i, colonIndex).replace(/\s+$/, '');
+                if (!rawKey) return null;
+                key = rawKey;
+                keyStartIndex = i;
+                keyEndIndex = i + rawKey.length;
+            }
+
+            const after = line.slice(colonIndex + 1);
+            const isContainer = after.trim() === '' || after.trim().startsWith('#');
+            const valueStartIndex = colonIndex + 1;
+
+            return {
+                indent,
+                key,
+                rawKey,
+                isQuoted,
+                isContainer,
+                after,
+                keyStartIndex,
+                keyEndIndex,
+                colonIndex,
+                valueStartIndex
+            };
+        };
+
+        const unique = (arr) => [...new Set(arr)];
+
+        const toYamlScalar = (v) => {
+            if (v === '') return '\'\'';
+            if (typeof v === 'string') return v;
+            if (typeof v === 'number') return String(v);
+            if (typeof v === 'boolean') return v ? 'true' : 'false';
+            return JSON.stringify(v);
+        };
+
+        const createSchemaTools = (schemaRoot) => {
+            const resolveRef = (schema, seen = new Set()) => {
+                if (!schema || typeof schema !== 'object') return schema;
+                if (typeof schema.$ref === 'string') {
+                    const ref = schema.$ref;
+                    if (ref.startsWith('#/definitions/')) {
+                        if (seen.has(ref)) return schema;
+                        seen.add(ref);
+                        const name = ref.slice('#/definitions/'.length);
+                        const def = schemaRoot.definitions && schemaRoot.definitions[name];
+                        if (!def) return schema;
+                        const resolved = resolveRef(def, seen);
+                        const rest = Object.assign({}, schema);
+                        delete rest.$ref;
+                        return Object.assign({}, resolved, rest);
+                    }
+                }
+                return schema;
+            };
+
+            const mergeProps = (schemas) => {
+                const props = {};
+                for (const s of schemas) {
+                    const schema = resolveRef(s);
+                    if (schema && schema.properties && typeof schema.properties === 'object') {
+                        Object.assign(props, schema.properties);
+                    }
+                }
+                return props;
+            };
+
+            const getObjectProperties = (schema) => {
+                schema = resolveRef(schema);
+                if (!schema) return {};
+                if (schema.properties && typeof schema.properties === 'object') return schema.properties;
+                if (Array.isArray(schema.anyOf)) return mergeProps(schema.anyOf);
+                return {};
+            };
+
+            const getPropertySchema = (schema, key) => {
+                schema = resolveRef(schema);
+                if (!schema) return null;
+
+                if (schema.properties && schema.properties[key]) return resolveRef(schema.properties[key]);
+
+                if (schema.additionalProperties && typeof schema.additionalProperties === 'object') {
+                    return resolveRef(schema.additionalProperties);
+                }
+
+                if (Array.isArray(schema.anyOf)) {
+                    for (const alt of schema.anyOf) {
+                        const res = getPropertySchema(alt, key);
+                        if (res) return res;
+                    }
+                }
+
+                return null;
+            };
+
+            const getValueSuggestions = (schema) => {
+                schema = resolveRef(schema);
+                if (!schema) return [];
+
+                const values = [];
+
+                const addFrom = (s) => {
+                    s = resolveRef(s);
+                    if (!s) return;
+                    if (Array.isArray(s.enum)) values.push(...s.enum);
+                    if ('const' in s) values.push(s.const);
+                    if (Array.isArray(s.examples)) values.push(...s.examples);
+                    if ('default' in s) values.push(s.default);
+                };
+
+                if (Array.isArray(schema.anyOf)) {
+                    for (const alt of schema.anyOf) addFrom(alt);
+                } else {
+                    addFrom(schema);
+                }
+
+                return unique(values);
+            };
+
+            const getSchemaTypes = (schema, seen = new Set()) => {
+                schema = resolveRef(schema);
+                if (!schema || typeof schema !== 'object') return new Set();
+
+                if (Array.isArray(schema.anyOf)) {
+                    const types = new Set();
+                    for (const alt of schema.anyOf) {
+                        for (const t of getSchemaTypes(alt, seen)) types.add(t);
+                    }
+                    return types;
+                }
+
+                if (Array.isArray(schema.oneOf)) {
+                    const types = new Set();
+                    for (const alt of schema.oneOf) {
+                        for (const t of getSchemaTypes(alt, seen)) types.add(t);
+                    }
+                    return types;
+                }
+
+                if (Array.isArray(schema.type)) return new Set(schema.type);
+                if (typeof schema.type === 'string') return new Set([schema.type]);
+                if (schema.properties || schema.additionalProperties) return new Set(['object']);
+                if (schema.items) return new Set(['array']);
+                return new Set();
+            };
+
+            const schemaAllowsType = (schema, actualType) => {
+                const types = getSchemaTypes(schema);
+                if (actualType === 'integer' && types.has('number')) return true;
+                return types.has(actualType);
+            };
+
+            const schemaTypesLabel = (schema) => {
+                const types = Array.from(getSchemaTypes(schema));
+                if (types.length === 0) return 'any';
+                return types.sort().join(' | ');
+            };
+
+            const getArrayItemSchema = (schema) => {
+                schema = resolveRef(schema);
+                if (!schema) return null;
+                if (schema.type === 'array' && schema.items) return resolveRef(schema.items);
+                if (Array.isArray(schema.anyOf)) {
+                    for (const alt of schema.anyOf) {
+                        const item = getArrayItemSchema(alt);
+                        if (item) return item;
+                    }
+                }
+                return null;
+            };
+
+            return {
+                schemaRoot,
+                resolveRef,
+                getObjectProperties,
+                getPropertySchema,
+                getValueSuggestions,
+                getSchemaTypes,
+                schemaAllowsType,
+                schemaTypesLabel,
+                getArrayItemSchema,
+            };
+        };
+
+        const isIntLike = (s) => /^[+-]?\d+$/.test(s);
+        const isNumberLike = (s) => (
+            /^[+-]?(?:\d*\.\d+|\d+\.\d*)(?:[eE][+-]?\d+)?$/.test(s) ||
+            /^[+-]?\d+(?:[eE][+-]?\d+)$/.test(s) ||
+            isIntLike(s)
+        );
+
+        const classifyYamlScalar = (raw) => {
+            const v = raw.trim();
+            if (!v) return {type: 'null'};
+            if (/^\$\{[^}{]+\}$/.test(v)) return {type: 'dynamic'};
+            if (v.startsWith('[')) return {type: 'array'};
+            if (v.startsWith('{')) return {type: 'object'};
+            if (v.startsWith('"') || v.startsWith('\'')) return {type: 'string'};
+            if (v === 'true' || v === 'false') return {type: 'boolean'};
+            if (v === 'null' || v === '~') return {type: 'null'};
+            if (isIntLike(v)) return {type: 'integer'};
+            if (isNumberLike(v)) return {type: 'number'};
+            return {type: 'string'};
+        };
+
+        const parseYamlValue = (raw) => {
+            const trimmed = raw.trim();
+            if (!trimmed) return {ok: false};
+            if (/^\$\{[^}{]+\}$/.test(trimmed)) return {ok: false, dynamic: true};
+            if (trimmed.startsWith('|') || trimmed.startsWith('>')) return {ok: false, block: true};
+            if (window.jsyaml && window.jsyaml.load) {
+                try {
+                    return {ok: true, value: window.jsyaml.load(trimmed)};
+                } catch (e) {
+                    // nothing
+                }
+            }
+            if (trimmed.startsWith('"') && trimmed.endsWith('"') && trimmed.length >= 2) {
+                const inner = trimmed.slice(1, -1);
+                return {ok: true, value: inner.replace(/\\"/g, '"').replace(/\\\\/g, '\\')};
+            }
+            if (trimmed.startsWith('\'') && trimmed.endsWith('\'') && trimmed.length >= 2) {
+                const inner = trimmed.slice(1, -1);
+                return {ok: true, value: inner.replace(/''/g, '\'')};
+            }
+            if (trimmed === 'true' || trimmed === 'false') return {ok: true, value: trimmed === 'true'};
+            if (trimmed === 'null' || trimmed === '~') return {ok: true, value: null};
+            if (isIntLike(trimmed)) return {ok: true, value: parseInt(trimmed, 10)};
+            if (isNumberLike(trimmed)) return {ok: true, value: Number(trimmed)};
+            return {ok: true, value: trimmed};
+        };
+
+        const lintYamlModel = (model, schemaTools) => {
+            const markers = [];
+            const markedLines = new Set();
+            let blockScalarParentIndent = null;
+
+            const isBlockScalarHeader = (text) => {
+                const rawText = (text == null) ? '' : text;
+                const t = rawText.trimStart ? rawText.trimStart() : rawText.replace(/^\s+/, '');
+                return t.startsWith('|') || t.startsWith('>');
+            };
+
+            const checkChildIndent = (ctx, childIndent, lineNumber) => {
+                if (!ctx) return;
+                if (ctx.childIndent == null) {
+                    ctx.childIndent = childIndent;
+                    return;
+                }
+                if (childIndent !== ctx.childIndent) {
+                    markLineError(lineNumber, `YAML: inconsistent indentation (expected ${ctx.childIndent} spaces)`, 1);
+                }
+            };
+
+            const markLineError = (lineNumber, message, startColumn = 1) => {
+                if (markedLines.has(`${lineNumber}:${message}`)) return;
+                markedLines.add(`${lineNumber}:${message}`);
+                const lineText = model.getLineContent(lineNumber);
+                markers.push({
+                    severity: monaco.MarkerSeverity.Error,
+                    message,
+                    startLineNumber: lineNumber,
+                    startColumn,
+                    endLineNumber: lineNumber,
+                    endColumn: Math.max(startColumn + 1, lineText.length + 1),
+                });
+            };
+
+            if (window.jsyaml && window.jsyaml.load) {
+                try {
+                    window.jsyaml.load(model.getValue());
+                } catch (e) {
+                    const mark = (e && e.mark) || {};
+                    const line = typeof mark.line === 'number' ? mark.line + 1 : 1;
+                    const column = typeof mark.column === 'number' ? mark.column + 1 : 1;
+                    const reason = e && e.reason;
+                    const messageText = e && e.message;
+                    markLineError(line, reason ? `YAML: ${reason}` : `YAML: ${messageText || 'Invalid YAML'}`, column);
+                }
+            }
+
+            const pushMarker = (m) => markers.push(m);
+
+            const getExpectedContainerType = (schema) => {
+                if (!schemaTools) return null;
+                const types = schemaTools.getSchemaTypes(schema);
+                const wantsObject = types.has('object');
+                const wantsArray = types.has('array');
+                if (wantsObject && !wantsArray) return 'object';
+                if (wantsArray && !wantsObject) return 'array';
+                return null;
+            };
+
+            const stack = [{
+                indent: -1,
+                schema: (schemaTools && schemaTools.schemaRoot) || null,
+                expected: 'object',
+                actual: null,
+                keys: new Map(),
+                childIndent: null,
+                origin: null,
+                reportedTypeMismatch: false,
+            }];
+
+            let hasTopLevelKey = false;
+            let hasTopLevelList = false;
+            const lineCount = model.getLineCount();
+            for (let lineNumber = 1; lineNumber <= lineCount; lineNumber++) {
+                let line = model.getLineContent(lineNumber);
+                if (!line.trim()) continue;
+                line = stripInlineComment(line).trimEnd();
+                if (!line.trim()) continue;
+                const kv = parseKey(line);
+                if (kv && kv.indent === 0) hasTopLevelKey = true;
+                const li = parseListItem(line);
+                if (li && li.indent === 0) hasTopLevelList = true;
+            }
+
+            const setActualType = (ctx, actual, fallbackLineNumber) => {
+                if (ctx.actual !== null) return;
+                ctx.actual = actual;
+                if (ctx.origin && ctx.expected && ctx.expected !== actual && !ctx.reportedTypeMismatch) {
+                    pushMarker({
+                        severity: monaco.MarkerSeverity.Error,
+                        message: `Type mismatch: expected ${ctx.expected}, got ${actual}`,
+                        startLineNumber: ctx.origin.lineNumber,
+                        startColumn: ctx.origin.startColumn,
+                        endLineNumber: ctx.origin.lineNumber,
+                        endColumn: ctx.origin.endColumn,
+                    });
+                    ctx.reportedTypeMismatch = true;
+                } else if (!ctx.origin && ctx.expected && ctx.expected !== actual && fallbackLineNumber) {
+                    pushMarker({
+                        severity: monaco.MarkerSeverity.Error,
+                        message: `Type mismatch: expected ${ctx.expected}, got ${actual}`,
+                        startLineNumber: fallbackLineNumber,
+                        startColumn: 1,
+                        endLineNumber: fallbackLineNumber,
+                        endColumn: 2,
+                    });
+                    ctx.reportedTypeMismatch = true;
+                }
+            };
+
+            const checkValueType = (schema, actualType, lineNumber, startColumn, endColumn, keyName) => {
+                if (!schemaTools || !schema) return;
+                if (actualType === 'dynamic') return;
+                if (schemaTools.schemaAllowsType(schema, actualType)) return;
+                pushMarker({
+                    severity: monaco.MarkerSeverity.Error,
+                    message: `Type mismatch for ${keyName ? `"${keyName}"` : 'value'}: expected ${schemaTools.schemaTypesLabel(schema)}, got ${actualType}`,
+                    startLineNumber: lineNumber,
+                    startColumn,
+                    endLineNumber: lineNumber,
+                    endColumn: Math.max(startColumn + 1, endColumn),
+                });
+            };
+
+            const valueEquals = (a, b) => {
+                if (a === b) return true;
+                if (typeof a !== typeof b) return false;
+                if (a && b && typeof a === 'object') {
+                    const aIsArray = Array.isArray(a);
+                    const bIsArray = Array.isArray(b);
+                    if (aIsArray !== bIsArray) return false;
+                    if (aIsArray) {
+                        if (a.length !== b.length) return false;
+                        for (let i = 0; i < a.length; i++) {
+                            if (!valueEquals(a[i], b[i])) return false;
+                        }
+                        return true;
+                    }
+                    const aKeys = Object.keys(a);
+                    const bKeys = Object.keys(b);
+                    if (aKeys.length !== bKeys.length) return false;
+                    for (const key of aKeys) {
+                        if (!Object.prototype.hasOwnProperty.call(b, key)) return false;
+                        if (!valueEquals(a[key], b[key])) return false;
+                    }
+                    return true;
+                }
+                return false;
+            };
+
+            const schemaAllowsTypeLoose = (schema, actualType) => {
+                if (!schemaTools || !schema) return true;
+                const types = schemaTools.getSchemaTypes(schema);
+                if (types.size === 0) return true;
+                if (actualType === 'integer' && types.has('number')) return true;
+                return types.has(actualType);
+            };
+
+            const collectConstraintSchemas = (schema, actualType) => {
+                if (!schemaTools || !schema) return [];
+                schema = schemaTools.resolveRef(schema);
+                if (!schema) return [];
+                if (Array.isArray(schema.anyOf)) {
+                    const res = [];
+                    for (const alt of schema.anyOf) res.push(...collectConstraintSchemas(alt, actualType));
+                    return res;
+                }
+                if (Array.isArray(schema.oneOf)) {
+                    const res = [];
+                    for (const alt of schema.oneOf) res.push(...collectConstraintSchemas(alt, actualType));
+                    return res;
+                }
+                if (!schemaAllowsTypeLoose(schema, actualType)) return [];
+                return [schema];
+            };
+
+            const getSchemaEnumValues = (schema) => {
+                const values = [];
+                if (Array.isArray(schema.enum)) values.push(...schema.enum);
+                if (Object.prototype.hasOwnProperty.call(schema, 'const')) values.push(schema.const);
+                return values;
+            };
+
+            const checkValueConstraints = (schema, actualType, rawValue, lineNumber, startColumn, endColumn, keyName) => {
+                if (!schemaTools || !schema) return;
+                if (actualType === 'dynamic') return;
+                const parsed = parseYamlValue(rawValue);
+                if (!parsed.ok) return;
+
+                const candidates = collectConstraintSchemas(schema, actualType);
+                if (candidates.length === 0) return;
+
+                const hasConstraints = candidates.some((s) => (
+                    (Array.isArray(s.enum) || Object.prototype.hasOwnProperty.call(s, 'const')) ||
+                    (actualType === 'string' && typeof s.pattern === 'string')
+                ));
+                if (!hasConstraints) return;
+
+                const hasUnconstrained = candidates.some((s) => (
+                    !(Array.isArray(s.enum) || Object.prototype.hasOwnProperty.call(s, 'const')) &&
+                    !(actualType === 'string' && typeof s.pattern === 'string')
+                ));
+                if (hasUnconstrained) return;
+
+                const value = parsed.value;
+                const matchesAny = candidates.some((s) => {
+                    const enums = getSchemaEnumValues(s);
+                    if (enums.length > 0 && !enums.some((v) => valueEquals(v, value))) return false;
+                    if (actualType === 'string' && typeof s.pattern === 'string') {
+                        try {
+                            const re = new RegExp(s.pattern);
+                            if (!re.test(String(value))) return false;
+                        } catch (e) {
+                            return true;
+                        }
+                    }
+                    return true;
+                });
+                if (matchesAny) return;
+
+                const enumValues = [];
+                const patterns = [];
+                for (const s of candidates) {
+                    enumValues.push(...getSchemaEnumValues(s));
+                    if (actualType === 'string' && typeof s.pattern === 'string') patterns.push(s.pattern);
+                }
+                const enumLabel = unique(enumValues).map((v) => toYamlScalar(v)).join(', ');
+                const patternLabel = unique(patterns).join(' | ');
+
+                let message;
+                const label = keyName ? `"${keyName}"` : 'value';
+                if (enumValues.length && patterns.length) {
+                    message = `Value for ${label} must be one of: ${enumLabel}; or match pattern: ${patternLabel}`;
+                } else if (enumValues.length) {
+                    message = `Value for ${label} must be one of: ${enumLabel}`;
+                } else if (patterns.length) {
+                    message = `Value for ${label} must match pattern: ${patternLabel}`;
+                } else {
+                    return;
+                }
+
+                pushMarker({
+                    severity: monaco.MarkerSeverity.Error,
+                    message,
+                    startLineNumber: lineNumber,
+                    startColumn,
+                    endLineNumber: lineNumber,
+                    endColumn: Math.max(startColumn + 1, endColumn),
+                });
+            };
+
+            for (let lineNumber = 1; lineNumber <= lineCount; lineNumber++) {
+                let line = model.getLineContent(lineNumber);
+                if (!line.trim()) continue;
+
+                line = stripInlineComment(line).trimEnd();
+                if (!line.trim()) continue;
+
+                const indent = countIndent(line);
+                if (blockScalarParentIndent !== null) {
+                    if (indent <= blockScalarParentIndent) {
+                        blockScalarParentIndent = null;
+                    } else {
+                        continue; // treat as block scalar content
+                    }
+                }
+
+                if (indent === 0 && (hasTopLevelKey || hasTopLevelList)) {
+                    const trimmed = line.trim();
+                    if (trimmed !== '---' && trimmed !== '...' && !trimmed.startsWith('#')) {
+                        const listItem0 = parseListItem(line);
+                        const kv0 = parseKey(line);
+                        const flow0 = trimmed.startsWith('{') || trimmed.startsWith('[');
+                        if (!flow0 && !listItem0 && !kv0) {
+                            markLineError(lineNumber, 'YAML: unexpected content at document root');
+                            continue;
+                        }
+                    }
+                }
+
+                const listItem = parseListItem(line);
+                if (listItem) {
+                    if (listItem.indent > 0 && (hasTopLevelKey || hasTopLevelList) && stack.length === 1) {
+                        markLineError(lineNumber, 'YAML: unexpected indentation at document root', 1);
+                    }
+                    while (stack.length > 1 && listItem.indent <= stack[stack.length - 1].indent) stack.pop();
+
+                    const parent = stack[stack.length - 1];
+                    checkChildIndent(parent, listItem.indent, lineNumber);
+                    setActualType(parent, 'array', lineNumber);
+
+                    const itemSchema = schemaTools ? schemaTools.getArrayItemSchema(parent.schema) : null;
+                    const itemExpected = getExpectedContainerType(itemSchema);
+
+                    const itemCtx = {
+                        indent: listItem.indent,
+                        schema: itemSchema,
+                        expected: itemExpected,
+                        actual: null,
+                        keys: new Map(),
+                        childIndent: null,
+                        origin: {lineNumber, startColumn: listItem.dashIndex + 1, endColumn: listItem.dashIndex + 2},
+                        reportedTypeMismatch: false,
+                    };
+                    stack.push(itemCtx);
+
+                    if (!listItem.rest) continue;
+                    if (isBlockScalarHeader(listItem.rest)) {
+                        blockScalarParentIndent = listItem.indent;
+                        checkValueType(itemSchema, 'string', lineNumber, listItem.afterDashIndex + 1, line.length + 1, null);
+                        continue;
+                    }
+
+                    const inline = parseKey(' '.repeat(listItem.afterDashIndex) + listItem.rest);
+                    if (inline) {
+                        // handle inline mapping in the same line: "- key: value"
+                        const kv = inline;
+                        while (stack.length > 1 && kv.indent <= stack[stack.length - 1].indent) stack.pop();
+                        const ctx = stack[stack.length - 1];
+                        checkChildIndent(ctx, kv.indent, lineNumber);
+                        setActualType(ctx, 'object', lineNumber);
+
+                        const prev = ctx.keys.get(kv.key);
+                        if (prev) {
+                            pushMarker({
+                                severity: monaco.MarkerSeverity.Warning,
+                                message: `Duplicate key "${kv.key}" (previous at line ${prev.lineNumber})`,
+                                startLineNumber: lineNumber,
+                                startColumn: kv.keyStartIndex + 1,
+                                endLineNumber: lineNumber,
+                                endColumn: kv.keyEndIndex + 1,
+                            });
+                        } else {
+                            ctx.keys.set(kv.key, {lineNumber});
+                        }
+
+                        if (!kv.isQuoted && isNumberLike(kv.rawKey.trim())) {
+                            pushMarker({
+                                severity: monaco.MarkerSeverity.Error,
+                                message: `Map keys must be strings. Quote numeric key as '${kv.rawKey}':`,
+                                startLineNumber: lineNumber,
+                                startColumn: kv.keyStartIndex + 1,
+                                endLineNumber: lineNumber,
+                                endColumn: kv.keyEndIndex + 1,
+                            });
+                        }
+
+                        const propSchema = schemaTools ? schemaTools.getPropertySchema(ctx.schema, kv.key) : null;
+                        if (isBlockScalarHeader(kv.after)) {
+                            blockScalarParentIndent = kv.indent;
+                        }
+                        if (kv.isContainer) {
+                            stack.push({
+                                indent: kv.indent,
+                                schema: propSchema,
+                                expected: getExpectedContainerType(propSchema),
+                                actual: null,
+                                keys: new Map(),
+                                childIndent: null,
+                                origin: {lineNumber, startColumn: kv.keyStartIndex + 1, endColumn: kv.keyEndIndex + 1},
+                                reportedTypeMismatch: false,
+                            });
+                        } else if (propSchema) {
+                            const valueText = kv.after.trim();
+                            const actual = classifyYamlScalar(valueText).type;
+                            const valueStartColumn = kv.valueStartIndex + 1 + (kv.after.length - kv.after.trimStart().length);
+                            checkValueType(propSchema, actual, lineNumber, valueStartColumn, line.length + 1, kv.key);
+                            checkValueConstraints(propSchema, actual, valueText, lineNumber, valueStartColumn, line.length + 1, kv.key);
+                        }
+                        continue;
+                    }
+
+                    const scalar = classifyYamlScalar(listItem.rest).type;
+                    checkValueType(itemSchema, scalar, lineNumber, listItem.afterDashIndex + 1, line.length + 1, null);
+                    checkValueConstraints(itemSchema, scalar, listItem.rest, lineNumber, listItem.afterDashIndex + 1, line.length + 1, null);
+                    continue;
+                }
+
+                const kv = parseKey(line);
+                if (!kv) {
+                    markLineError(lineNumber, 'YAML: expected a map key (key:) or list item (-)', indent + 1);
+                    continue;
+                }
+                if (kv.indent > 0 && (hasTopLevelKey || hasTopLevelList) && stack.length === 1) {
+                    markLineError(lineNumber, 'YAML: unexpected indentation at document root', 1);
+                }
+
+                while (stack.length > 1 && kv.indent <= stack[stack.length - 1].indent) stack.pop();
+                const ctx = stack[stack.length - 1];
+                checkChildIndent(ctx, kv.indent, lineNumber);
+                setActualType(ctx, 'object', lineNumber);
+
+                const prev = ctx.keys.get(kv.key);
+                if (prev) {
+                    pushMarker({
+                        severity: monaco.MarkerSeverity.Warning,
+                        message: `Duplicate key "${kv.key}" (previous at line ${prev.lineNumber})`,
+                        startLineNumber: lineNumber,
+                        startColumn: kv.keyStartIndex + 1,
+                        endLineNumber: lineNumber,
+                        endColumn: kv.keyEndIndex + 1,
+                    });
+                } else {
+                    ctx.keys.set(kv.key, {lineNumber});
+                }
+
+                if (!kv.isQuoted && isNumberLike(kv.rawKey.trim())) {
+                    pushMarker({
+                        severity: monaco.MarkerSeverity.Error,
+                        message: `Map keys must be strings. Quote numeric key as '${kv.rawKey}':`,
+                        startLineNumber: lineNumber,
+                        startColumn: kv.keyStartIndex + 1,
+                        endLineNumber: lineNumber,
+                        endColumn: kv.keyEndIndex + 1,
+                    });
+                }
+
+                const propSchema = schemaTools ? schemaTools.getPropertySchema(ctx.schema, kv.key) : null;
+                if (kv.isContainer) {
+                    stack.push({
+                        indent: kv.indent,
+                        schema: propSchema,
+                        expected: getExpectedContainerType(propSchema),
+                        actual: null,
+                        keys: new Map(),
+                        childIndent: null,
+                        origin: {lineNumber, startColumn: kv.keyStartIndex + 1, endColumn: kv.keyEndIndex + 1},
+                        reportedTypeMismatch: false,
+                    });
+                    continue;
+                }
+
+                if (isBlockScalarHeader(kv.after)) {
+                    blockScalarParentIndent = kv.indent;
+                }
+
+                if (!propSchema) continue;
+
+                const actual = classifyYamlScalar(kv.after).type;
+                const valueStartColumn = kv.valueStartIndex + 1 + (kv.after.length - kv.after.trimStart().length);
+                checkValueType(propSchema, actual, lineNumber, valueStartColumn, line.length + 1, kv.key);
+                checkValueConstraints(propSchema, actual, kv.after, lineNumber, valueStartColumn, line.length + 1, kv.key);
+            }
+
+            return markers;
+        };
+
+        let schemaTools = null;
+        let completionProvider = null;
+        let hoverProvider = null;
+
+        const scheduleLint = (() => {
+            let handle = null;
+            return () => {
+                if (handle) clearTimeout(handle);
+                handle = setTimeout(() => {
+                    const model = editor.getModel();
+                    if (!model) return;
+                    monaco.editor.setModelMarkers(model, 'yaml-lint', lintYamlModel(model, schemaTools));
+                }, 250);
+            };
+        })();
+
+        editor.onDidChangeModelContent(() => scheduleLint());
+
+        const setupYamlHints = (schemaRoot) => {
+            schemaTools = createSchemaTools(schemaRoot);
+            scheduleLint();
+
+            const {
+                resolveRef,
+                getObjectProperties,
+                getPropertySchema,
+                getValueSuggestions,
+            } = schemaTools;
+
+            const buildContextStack = (model, upToLineNumber) => {
+                const stack = [{indent: -1, schema: schemaRoot}];
+
+                for (let lineNumber = 1; lineNumber <= upToLineNumber; lineNumber++) {
+                    let line = model.getLineContent(lineNumber);
+                    if (!line.trim()) continue;
+
+                    line = stripInlineComment(line).trimEnd();
+                    if (!line.trim()) continue;
+
+                    const listItem = parseListItem(line);
+                    if (listItem) {
+                        while (stack.length > 1 && listItem.indent <= stack[stack.length - 1].indent) stack.pop();
+                        const parent = resolveRef(stack[stack.length - 1].schema);
+                        if (parent && parent.type === 'array' && parent.items) {
+                            stack.push({indent: listItem.indent, schema: resolveRef(parent.items)});
+                        } else {
+                            stack.push({indent: listItem.indent, schema: null});
+                        }
+
+                        const inline = listItem.rest ? parseKey(' '.repeat(listItem.contentIndent) + listItem.rest) : null;
+                        if (inline && inline.isContainer) {
+                            while (stack.length > 1 && inline.indent <= stack[stack.length - 1].indent) stack.pop();
+                            const ctx = resolveRef(stack[stack.length - 1].schema);
+                            const next = ctx ? getPropertySchema(ctx, inline.key) : null;
+                            stack.push({indent: inline.indent, schema: next});
+                        }
+                        continue;
+                    }
+
+                    const kv = parseKey(line);
+                    if (!kv) continue;
+                    while (stack.length > 1 && kv.indent <= stack[stack.length - 1].indent) stack.pop();
+                    if (!kv.isContainer) continue;
+
+                    const ctx = resolveRef(stack[stack.length - 1].schema);
+                    const next = ctx ? getPropertySchema(ctx, kv.key) : null;
+                    stack.push({indent: kv.indent, schema: next});
+                }
+
+                return stack;
+            };
+
+            if (completionProvider) completionProvider.dispose();
+            completionProvider = monaco.languages.registerCompletionItemProvider('yaml', {
+                triggerCharacters: [':', ' '],
+                provideCompletionItems: (model, position) => {
+                    const line = model.getLineContent(position.lineNumber);
+                    const lineNoComment = stripInlineComment(line);
+                    const lineNoCommentTrimmedEnd = lineNoComment.trimEnd();
+                    const listItem = parseListItem(lineNoCommentTrimmedEnd);
+
+                    const wordUntil = model.getWordUntilPosition(position);
+                    const range = new monaco.Range(position.lineNumber, wordUntil.startColumn, position.lineNumber, wordUntil.endColumn);
+
+                    const cursorIndex = position.column - 1;
+                    let contentStartIndex = 0;
+                    if (listItem) {
+                        contentStartIndex = listItem.afterDashIndex;
+                    } else {
+                        contentStartIndex = countIndent(lineNoComment);
+                    }
+
+                    if (cursorIndex < contentStartIndex) return {suggestions: []};
+
+                    const text = lineNoCommentTrimmedEnd.slice(contentStartIndex);
+                    const cursorInText = cursorIndex - contentStartIndex;
+                    const colonIndex = text.indexOf(':');
+                    const isValueContext = colonIndex >= 0 && cursorInText > colonIndex;
+
+                    const stack = buildContextStack(model, position.lineNumber - 1);
+
+                    const effectiveIndent = listItem ? listItem.contentIndent : countIndent(lineNoComment);
+                    while (stack.length > 1 && effectiveIndent <= stack[stack.length - 1].indent) stack.pop();
+
+                    let contextSchema = resolveRef(stack[stack.length - 1].schema);
+
+                    if (listItem && cursorIndex >= listItem.afterDashIndex && contextSchema && contextSchema.type === 'array') {
+                        contextSchema = resolveRef(contextSchema.items);
+                    }
+
+                    if (!contextSchema) return {suggestions: []};
+
+                    // Scalar array item (e.g. "- tcp4") - suggest values (enum/examples/default)
+                    if (listItem && colonIndex === -1 && !isValueContext) {
+                        const props = getObjectProperties(contextSchema);
+                        if (!props || Object.keys(props).length === 0) {
+                            const values = getValueSuggestions(contextSchema);
+                            const suggestions = values.map((v) => ({
+                                label: toYamlScalar(v),
+                                kind: monaco.languages.CompletionItemKind.Value,
+                                insertText: toYamlScalar(v),
+                                range,
+                            }));
+                            return {suggestions};
+                        }
+                    }
+
+                    if (!isValueContext) {
+                        const props = getObjectProperties(contextSchema);
+                        const suggestions = Object.keys(props).map((key) => {
+                            const s = resolveRef(props[key]);
+                            const wantsArray = s && s.type === 'array';
+                            const wantsBlock = s && (s.type === 'object' || wantsArray || s.properties);
+                            const indent = listItem ? ' '.repeat(listItem.contentIndent) : ' '.repeat(countIndent(lineNoComment));
+                            const innerIndent = indent + '  ';
+
+                            const insertText = wantsArray ? `${key}:\n${indent}` : (wantsBlock ? `${key}:\n${innerIndent}` : `${key}: `);
+                            const hasValueSuggestions = !wantsBlock && getValueSuggestions(s).length > 0;
+
+                            return {
+                                label: key,
+                                kind: monaco.languages.CompletionItemKind.Property,
+                                insertText,
+                                insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                                command: (wantsBlock || hasValueSuggestions) ? {id: 'editor.action.triggerSuggest'} : undefined,
+                                documentation: s && s.description,
+                                range,
+                            };
+                        });
+
+                        return {suggestions};
+                    }
+
+                    const keyName = text.slice(0, colonIndex).trim();
+                    const keySchema = getPropertySchema(contextSchema, keyName);
+                    if (!keySchema) return {suggestions: []};
+
+                    const values = getValueSuggestions(keySchema);
+                    const suggestions = values.map((v) => ({
+                        label: toYamlScalar(v),
+                        kind: monaco.languages.CompletionItemKind.Value,
+                        insertText: toYamlScalar(v),
+                        range,
+                    }));
+
+                    return {suggestions};
+                }
+            });
+
+            if (hoverProvider) hoverProvider.dispose();
+            hoverProvider = monaco.languages.registerHoverProvider('yaml', {
+                provideHover: (model, position) => {
+                    if (!schemaTools) return null;
+
+                    const line = model.getLineContent(position.lineNumber);
+                    const lineNoComment = stripInlineComment(line).trimEnd();
+                    const listItem = parseListItem(lineNoComment);
+
+                    const cursorIndex = position.column - 1;
+                    if (listItem && cursorIndex < listItem.afterDashIndex) return null;
+
+                    let kv;
+                    let effectiveIndent;
+                    let keyStartIndex;
+                    let keyEndIndex;
+
+                    if (listItem) {
+                        if (!listItem.rest) return null;
+                        const synthetic = ' '.repeat(listItem.contentIndent) + listItem.rest;
+                        kv = parseKey(synthetic);
+                        if (!kv) return null;
+                        effectiveIndent = listItem.contentIndent;
+                        keyStartIndex = listItem.afterDashIndex + (kv.keyStartIndex - listItem.contentIndent);
+                        keyEndIndex = listItem.afterDashIndex + (kv.keyEndIndex - listItem.contentIndent);
+                    } else {
+                        kv = parseKey(lineNoComment);
+                        if (!kv) return null;
+                        effectiveIndent = countIndent(lineNoComment);
+                        keyStartIndex = kv.keyStartIndex;
+                        keyEndIndex = kv.keyEndIndex;
+                    }
+
+                    if (cursorIndex < keyStartIndex || cursorIndex >= keyEndIndex) return null;
+
+                    const stack = buildContextStack(model, position.lineNumber - 1);
+                    while (stack.length > 1 && effectiveIndent <= stack[stack.length - 1].indent) stack.pop();
+
+                    let contextSchema = resolveRef(stack[stack.length - 1].schema);
+                    if (listItem && cursorIndex >= listItem.afterDashIndex && contextSchema && contextSchema.type === 'array') {
+                        contextSchema = resolveRef(contextSchema.items);
+                    }
+
+                    if (!contextSchema) return null;
+                    const propSchema = getPropertySchema(contextSchema, kv.key);
+                    if (!propSchema) return null;
+
+                    const resolved = resolveRef(propSchema);
+                    const description = resolved && resolved.description;
+                    if (!description) return null;
+
+                    return {
+                        range: new monaco.Range(
+                            position.lineNumber,
+                            keyStartIndex + 1,
+                            position.lineNumber,
+                            keyEndIndex + 1
+                        ),
+                        contents: [{value: description}],
+                    };
+                }
+            });
+        };
+
+        const layout = () => {
+            const top = container.getBoundingClientRect().top;
+            container.style.height = `${Math.max(200, window.innerHeight - top)}px`;
+            editor.layout();
+        };
+        window.addEventListener('resize', layout);
+        layout();
+
+        let dump;
+
+        document.getElementById('save').addEventListener('click', async () => {
+            let r = await fetch('api/config', {cache: 'no-cache'});
+            if (r.ok && dump !== await r.text()) {
+                alert('Config was changed from another place. Refresh the page and make changes again');
+                return;
+            }
+
+            r = await fetch('api/config', {method: 'POST', body: editor.getValue()});
+            if (r.ok) {
+                alert('OK');
+                dump = editor.getValue();
+                await fetch('api/restart', {method: 'POST'});
+            } else {
+                alert(await r.text());
+            }
+        });
+
+        document.getElementById('suggest').addEventListener('click', () => {
+            editor.trigger('source', 'editor.action.triggerSuggest', {});
+        });
+
+        (async () => {
+            try {
+                const r = await fetch('https://go2rtc.org/schema.json', {cache: 'no-cache'});
+                if (r.ok) setupYamlHints(await r.json());
+            } catch (e) {
+                // ignore schema load errors
+            }
+
+            const r = await fetch('api/config', {cache: 'no-cache'});
+            if (r.status === 410) {
+                alert('Config file is not set');
+            } else if (r.status === 404) {
+                editor.setValue(''); // config file not exist
+            } else if (r.ok) {
+                dump = await r.text();
+                editor.setValue(dump);
+            } else {
+                alert(`Unknown error: ${r.statusText} (${r.status})`);
+            }
+        })();
+    });
+</script>
+
+</body>
+</html>

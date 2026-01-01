@@ -2,6 +2,7 @@ package webrtc
 
 import (
 	"errors"
+	"net"
 	"strings"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
@@ -10,7 +11,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
-	pion "github.com/pion/webrtc/v3"
+	pion "github.com/pion/webrtc/v4"
 	"github.com/rs/zerolog"
 )
 
@@ -24,34 +25,60 @@ func Init() {
 		} `yaml:"webrtc"`
 	}
 
-	cfg.Mod.Listen = ":8555/tcp"
+	cfg.Mod.Listen = ":8555"
 	cfg.Mod.IceServers = []pion.ICEServer{
-		{URLs: []string{"stun:stun.l.google.com:19302"}},
+		{URLs: []string{"stun:stun.cloudflare.com:3478", "stun:stun.l.google.com:19302"}},
 	}
 
 	app.LoadConfig(&cfg)
 
 	log = app.GetLogger("webrtc")
 
-	filters = cfg.Mod.Filters
+	if log.Debug().Enabled() {
+		itfs, _ := net.Interfaces()
+		for _, itf := range itfs {
+			addrs, _ := itf.Addrs()
+			log.Debug().Msgf("[webrtc] interface %+v addrs %v", itf, addrs)
+		}
+	}
 
 	address, network, _ := strings.Cut(cfg.Mod.Listen, "/")
 	for _, candidate := range cfg.Mod.Candidates {
 		AddCandidate(network, candidate)
+
+		if strings.HasPrefix(candidate, "stun:") && stuns == nil {
+			for _, ice := range cfg.Mod.IceServers {
+				for _, url := range ice.URLs {
+					if strings.HasPrefix(url, "stun:") {
+						stuns = append(stuns, url[5:])
+					}
+				}
+			}
+		}
 	}
 
+	webrtc.OnNewListener = func(ln any) {
+		switch ln := ln.(type) {
+		case *net.TCPListener:
+			log.Info().Stringer("addr", ln.Addr()).Msg("[webrtc] listen tcp")
+		case *net.UDPConn:
+			log.Info().Stringer("addr", ln.LocalAddr()).Msg("[webrtc] listen udp")
+		}
+	}
+
+	var err error
+
 	// create pionAPI with custom codecs list and custom network settings
-	serverAPI, err := webrtc.NewServerAPI(network, address, &filters)
+	serverAPI, err = webrtc.NewServerAPI(network, address, &cfg.Mod.Filters)
 	if err != nil {
 		log.Error().Err(err).Caller().Send()
 		return
 	}
 
 	// use same API for WebRTC server and client if no address
-	clientAPI := serverAPI
+	clientAPI = serverAPI
 
 	if address != "" {
-		log.Info().Str("addr", cfg.Mod.Listen).Msg("[webrtc] listen")
 		clientAPI, _ = webrtc.NewAPI()
 	}
 
@@ -81,17 +108,19 @@ func Init() {
 	streams.HandleFunc("webrtc", streamsHandler)
 }
 
+var serverAPI, clientAPI *pion.API
+
 var log zerolog.Logger
 
 var PeerConnection func(active bool) (*pion.PeerConnection, error)
 
-func asyncHandler(tr *ws.Transport, msg *ws.Message) error {
+func asyncHandler(tr *ws.Transport, msg *ws.Message) (err error) {
 	var stream *streams.Stream
 	var mode core.Mode
 
 	query := tr.Request.URL.Query()
 	if name := query.Get("src"); name != "" {
-		stream = streams.GetOrPatch(query)
+		stream, _ = streams.GetOrPatch(query)
 		mode = core.ModePassiveConsumer
 		log.Debug().Str("src", name).Msg("[webrtc] new consumer")
 	} else if name = query.Get("dst"); name != "" {
@@ -104,8 +133,30 @@ func asyncHandler(tr *ws.Transport, msg *ws.Message) error {
 		return errors.New(api.StreamNotFound)
 	}
 
+	var offer struct {
+		Type       string           `json:"type"`
+		SDP        string           `json:"sdp"`
+		ICEServers []pion.ICEServer `json:"ice_servers"`
+	}
+
+	// V2 - json/object exchange, V1 - raw SDP exchange
+	apiV2 := msg.Type == "webrtc"
+
+	if apiV2 {
+		if err = msg.Unmarshal(&offer); err != nil {
+			return err
+		}
+	} else {
+		offer.SDP = msg.String()
+	}
+
 	// create new PeerConnection instance
-	pc, err := PeerConnection(false)
+	var pc *pion.PeerConnection
+	if offer.ICEServers == nil {
+		pc, err = PeerConnection(false)
+	} else {
+		pc, err = serverAPI.NewPeerConnection(pion.Configuration{ICEServers: offer.ICEServers})
+	}
 	if err != nil {
 		log.Error().Err(err).Caller().Send()
 		return err
@@ -117,8 +168,8 @@ func asyncHandler(tr *ws.Transport, msg *ws.Message) error {
 	defer sendAnswer.Done(nil)
 
 	conn := webrtc.NewConn(pc)
-	conn.Desc = "WebRTC/WebSocket async"
 	conn.Mode = mode
+	conn.Protocol = "ws"
 	conn.UserAgent = tr.Request.UserAgent()
 	conn.Listen(func(msg any) {
 		switch msg := msg.(type) {
@@ -145,20 +196,10 @@ func asyncHandler(tr *ws.Transport, msg *ws.Message) error {
 		}
 	})
 
-	// V2 - json/object exchange, V1 - raw SDP exchange
-	apiV2 := msg.Type == "webrtc"
+	log.Trace().Msgf("[webrtc] offer:\n%s", offer.SDP)
 
 	// 1. SetOffer, so we can get remote client codecs
-	var offer string
-	if apiV2 {
-		offer = msg.GetString("sdp")
-	} else {
-		offer = msg.String()
-	}
-
-	log.Trace().Msgf("[webrtc] offer:\n%s", offer)
-
-	if err = conn.SetOffer(offer); err != nil {
+	if err = conn.SetOffer(offer.SDP); err != nil {
 		log.Warn().Err(err).Caller().Send()
 		return err
 	}
@@ -207,8 +248,9 @@ func ExchangeSDP(stream *streams.Stream, offer, desc, userAgent string) (answer 
 
 	// create new webrtc instance
 	conn := webrtc.NewConn(pc)
-	conn.Desc = desc
+	conn.FormatName = desc
 	conn.UserAgent = userAgent
+	conn.Protocol = "http"
 	conn.Listen(func(msg any) {
 		switch msg := msg.(type) {
 		case pion.PeerConnectionState:

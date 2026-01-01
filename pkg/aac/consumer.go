@@ -8,15 +8,12 @@ import (
 )
 
 type Consumer struct {
-	core.SuperConsumer
+	core.Connection
 	wr *core.WriteBuffer
 }
 
 func NewConsumer() *Consumer {
-	cons := &Consumer{
-		wr: core.NewWriteBuffer(nil),
-	}
-	cons.Medias = []*core.Media{
+	medias := []*core.Media{
 		{
 			Kind:      core.KindAudio,
 			Direction: core.DirectionSendonly,
@@ -25,7 +22,16 @@ func NewConsumer() *Consumer {
 			},
 		},
 	}
-	return cons
+	wr := core.NewWriteBuffer(nil)
+	return &Consumer{
+		Connection: core.Connection{
+			ID:         core.NewID(),
+			FormatName: "adts",
+			Medias:     medias,
+			Transport:  wr,
+		},
+		wr: wr,
+	}
 }
 
 func (c *Consumer) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
@@ -50,9 +56,4 @@ func (c *Consumer) AddTrack(media *core.Media, codec *core.Codec, track *core.Re
 
 func (c *Consumer) WriteTo(wr io.Writer) (int64, error) {
 	return c.wr.WriteTo(wr)
-}
-
-func (c *Consumer) Stop() error {
-	_ = c.SuperConsumer.Close()
-	return c.wr.Close()
 }

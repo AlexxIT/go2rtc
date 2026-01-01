@@ -8,17 +8,22 @@ func Dial(url string) (core.Producer, error) {
 		return nil, err
 	}
 
+	conn := core.Connection{
+		ID:         core.NewID(),
+		FormatName: "dvrip",
+		Protocol:   "tcp",
+		RemoteAddr: client.conn.RemoteAddr().String(),
+		Transport:  client.conn,
+	}
+
 	if client.stream != "" {
-		prod := &Producer{client: client}
-		prod.Type = "DVRIP active producer"
+		prod := &Producer{Connection: conn, client: client}
 		if err := prod.probe(); err != nil {
 			return nil, err
 		}
 		return prod, nil
 	} else {
-		cons := &Consumer{client: client}
-		cons.Type = "DVRIP active consumer"
-		cons.Medias = []*core.Media{
+		conn.Medias = []*core.Media{
 			{
 				Kind:      core.KindAudio,
 				Direction: core.DirectionSendonly,
@@ -29,6 +34,6 @@ func Dial(url string) (core.Producer, error) {
 				},
 			},
 		}
-		return cons, nil
+		return &Backchannel{Connection: conn, client: client}, nil
 	}
 }

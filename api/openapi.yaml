@@ -2,14 +2,36 @@ openapi: 3.1.0
 
 info:
   title: go2rtc
+  version: 1.9.13
   license: { name: MIT,url: https://opensource.org/licenses/MIT }
-  version: 1.0.0
   contact: { url: https://github.com/AlexxIT/go2rtc }
   description: |
     Ultimate camera streaming application with support RTSP, RTMP, HTTP-FLV, WebRTC, MSE, HLS, MP4, MJPEG, HomeKit, FFmpeg, etc.
 
 servers:
   - url: http://localhost:1984
+
+tags:
+  - name: Application
+    description: "[Module: API](https://github.com/AlexxIT/go2rtc#module-api)"
+  - name: Config
+    description: "[Configuration](https://github.com/AlexxIT/go2rtc#configuration)"
+  - name: Streams list
+    description: "[Module: Streams](https://github.com/AlexxIT/go2rtc#module-streams)"
+  - name: Consume stream
+  - name: HLS
+  - name: Snapshot
+  - name: Produce stream
+  - name: WebSocket
+    description: "WebSocket API endpoint: `/api/ws` (see `api/README.md`)"
+  - name: Discovery
+  - name: HomeKit
+  - name: ONVIF
+  - name: RTSPtoWebRTC
+  - name: WebTorrent
+    description: "[Module: WebTorrent](https://github.com/AlexxIT/go2rtc#module-webtorrent)"
+  - name: FFmpeg
+  - name: Debug
 
 components:
   parameters:
@@ -20,6 +42,7 @@ components:
       required: true
       schema: { type: string }
       example: camera1
+
     stream_dst_path:
       name: dst
       in: path
@@ -27,6 +50,7 @@ components:
       required: true
       schema: { type: string }
       example: camera1
+
     stream_src_query:
       name: src
       in: query
@@ -34,6 +58,15 @@ components:
       required: true
       schema: { type: string }
       example: camera1
+
+    hls_session_id_path:
+      name: id
+      in: path
+      description: HLS session ID (passed as query param `id`)
+      required: true
+      schema: { type: string }
+      example: DvmHdd9w
+
     mp4_filter:
       name: mp4
       in: query
@@ -43,6 +76,7 @@ components:
         type: string
         enum: [ "", flac, all ]
       example: flac
+
     video_filter:
       name: video
       in: query
@@ -51,6 +85,7 @@ components:
         type: string
         enum: [ "", all, h264, h265, mjpeg ]
       example: h264,h265
+
     audio_filter:
       name: audio
       in: query
@@ -59,34 +94,19 @@ components:
         type: string
         enum: [ "", all, aac, opus, pcm, pcmu, pcma ]
       example: aac
+
   responses:
     discovery:
       description: ""
       content:
         application/json:
           example: { streams: [ { "name": "Camera 1","url": "..." } ] }
+
     webtorrent:
       description: ""
       content:
         application/json:
           example: { share: AKDypPy4zz, pwd: H0Km1HLTTP }
-
-tags:
-  - name: Application
-    description: "[Module: API](https://github.com/AlexxIT/go2rtc#module-api)"
-  - name: Config
-    description: "[Configuration](https://github.com/AlexxIT/go2rtc#configuration)"
-  - name: Streams list
-    description: "[Module: Streams](https://github.com/AlexxIT/go2rtc#module-streams)"
-  - name: Consume stream
-  - name: Snapshot
-  - name: Produce stream
-  - name: Discovery
-  - name: ONVIF
-  - name: RTSPtoWebRTC
-  - name: WebTorrent
-    description: "[Module: WebTorrent](https://github.com/AlexxIT/go2rtc#module-webtorrent)"
-  - name: Debug
 
 paths:
   /api:
@@ -98,7 +118,17 @@ paths:
           description: ""
           content:
             application/json:
-              example: { config_path: "/config/go2rtc.yaml",host: "192.168.1.123:1984",rtsp: { listen: ":8554",default_query: "video&audio" },version: "1.5.0" }
+              schema:
+                type: object
+                properties:
+                  config_path: { type: string, example: "/config/go2rtc.yaml" }
+                  host: { type: string, example: "192.168.1.123:1984" }
+                  rtsp:
+                    type: object
+                    properties:
+                      listen: { type: string, example: ":8554" }
+                      default_query: { type: string, example: "video&audio" }
+                  version: { type: string, example: "1.9.12" }
 
   /api/exit:
     post:
@@ -113,16 +143,38 @@ paths:
           example: 100
       responses:
         default:
-          description: Default response
+          description: ""
 
   /api/restart:
     post:
-      summary: Restart Daemon
+      summary: Restart daemon
       description: Restarts the daemon.
       tags: [ Application ]
       responses:
         default:
-          description: Default response
+          description: ""
+
+  /api/log:
+    get:
+      summary: Get in-memory logs buffer
+      description: |
+        Returns current log output from the in-memory circular buffer.
+      tags: [ Application ]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/jsonlines:
+              example: |
+                {"level":"info","version":"1.9.13","platform":"linux/amd64","revision":"dfe4755","time":1766841087331,"message":"go2rtc"}
+    delete:
+      summary: Clear in-memory logs buffer
+      tags: [ Application ]
+      responses:
+        "200":
+          description: ""
+          content:
+            text/plain: { example: "" }
 
   /api/config:
     get:
@@ -133,6 +185,8 @@ paths:
           description: ""
           content:
             application/yaml: { example: "streams:..." }
+        "404":
+          description: Config file not found
     post:
       summary: Rewrite main config file
       tags: [ Config ]
@@ -141,7 +195,7 @@ paths:
           "*/*": { example: "streams:..." }
       responses:
         default:
-          description: Default response
+          description: ""
     patch:
       summary: Merge changes to main config file
       tags: [ Config ]
@@ -150,7 +204,7 @@ paths:
           "*/*": { example: "streams:..." }
       responses:
         default:
-          description: Default response
+          description: ""
 
 
 
@@ -162,7 +216,16 @@ paths:
         "200":
           description: ""
           content:
-            application/json: { example: { camera1: { producers: [ ],consumers: [ ] } } }
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: object
+                  properties:
+                    producers:
+                      type: array
+                    consumers:
+                      type: array
     put:
       summary: Create new stream
       tags: [ Streams list ]
@@ -181,7 +244,7 @@ paths:
           example: camera1
       responses:
         default:
-          description: Default response
+          description: ""
     patch:
       summary: Update stream source
       tags: [ Streams list ]
@@ -200,7 +263,7 @@ paths:
           example: camera1
       responses:
         default:
-          description: Default response
+          description: ""
     delete:
       summary: Delete stream
       tags: [ Streams list ]
@@ -213,7 +276,7 @@ paths:
           example: camera1
       responses:
         default:
-          description: Default response
+          description: ""
     post:
       summary: Send stream from source to destination
       description: "[Stream to camera](https://github.com/AlexxIT/go2rtc#stream-to-camera)"
@@ -233,8 +296,103 @@ paths:
           example: camera1
       responses:
         default:
-          description: Default response
+          description: ""
 
+  /api/streams.dot:
+    get:
+      summary: Get streams graph in Graphviz DOT format
+      tags: [ Streams list ]
+      parameters:
+        - name: src
+          in: query
+          description: Stream name filter. Repeat `src` to include multiple streams.
+          required: false
+          schema: { type: string }
+          example: camera1
+      responses:
+        "200":
+          description: OK
+          content:
+            text/vnd.graphviz:
+              example: "digraph { ... }"
+
+  /api/preload:
+    get:
+      summary: Get all preloaded streams
+      tags: [ Streams list ]
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: object
+                  properties:
+                    consumer:
+                      type: object
+                    query:
+                      type: string
+                      example: "video&audio"
+    put:
+      summary: Preload new stream
+      tags: [ Streams list ]
+      parameters:
+        - name: src
+          in: query
+          description: Stream source (name)
+          required: true
+          schema: { type: string }
+          example: "camera1"
+        - name: video
+          in: query
+          description: Video codecs filter
+          required: false
+          schema: { type: string }
+          example: all,h264,h265,...
+        - name: audio
+          in: query
+          description: Audio codecs filter
+          required: false
+          schema: { type: string }
+          example: all,aac,opus,...
+        - name: microphone
+          in: query
+          description: Microphone codecs filter
+          required: false
+          schema: { type: string }
+          example: all,aac,opus,...
+      responses:
+        default:
+          description: ""
+    delete:
+      summary: Delete preloaded stream
+      tags: [ Streams list ]
+      parameters:
+        - name: src
+          in: query
+          description: Stream source (name)
+          required: true
+          schema: { type: string }
+          example: "camera1"
+      responses:
+        default:
+          description: ""
+
+  /api/schemes:
+    get:
+      summary: Get supported source URL schemes
+      tags: [ Streams list ]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: string }
+              example: [ rtsp, rtmp, webrtc, ffmpeg, hass ]
 
 
   /api/streams?src={src}:
@@ -248,7 +406,17 @@ paths:
           description: ""
           content:
             application/json:
-              example: { producers: [ { url: "rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0" } ], consumers: [ ] }
+              schema:
+                type: object
+                additionalProperties:
+                  type: object
+                  properties:
+                    producers:
+                      type: array
+                      items: { type: object }
+                    consumers:
+                      type: array
+                      items: { type: object }
 
   /api/webrtc?src={src}:
     post:
@@ -268,7 +436,6 @@ paths:
           application/json: { example: { type: offer, sdp: "v=0..." } }
           "application/sdp": { example: "v=0..." }
           "*/*": { example: "v=0..." }
-
       responses:
         "200":
           description: "Response on JSON or raw SDP"
@@ -299,6 +466,16 @@ paths:
           required: false
           schema: { type: string }
           example: camera1.mp4
+        - name: rotate
+          in: query
+          description: "Rotate video (degrees). Supported values: 90, 180, 270."
+          required: false
+          schema: { type: integer, enum: [ 90, 180, 270 ] }
+        - name: scale
+          in: query
+          description: Scale video in format `width:height`
+          required: false
+          schema: { type: string, example: "1280:720" }
         - $ref: "#/components/parameters/mp4_filter"
         - $ref: "#/components/parameters/video_filter"
         - $ref: "#/components/parameters/audio_filter"
@@ -311,7 +488,7 @@ paths:
     get:
       summary: Get stream in HLS format
       description: "[Module: HLS](https://github.com/AlexxIT/go2rtc#module-hls)"
-      tags: [ Consume stream ]
+      tags: [ Consume stream, HLS ]
       parameters:
         - $ref: "#/components/parameters/stream_src_path"
         - $ref: "#/components/parameters/mp4_filter"
@@ -321,6 +498,62 @@ paths:
         200:
           description: ""
           content: { application/vnd.apple.mpegurl: { example: "" } }
+
+  /api/hls/playlist.m3u8?id={id}:
+    get:
+      summary: Get HLS media playlist for an active session
+      tags: [ HLS ]
+      parameters:
+        - $ref: "#/components/parameters/hls_session_id_path"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/vnd.apple.mpegurl: { example: "" }
+        "404":
+          description: Session not found
+
+  /api/hls/segment.ts?id={id}:
+    get:
+      summary: Get HLS MPEG-TS segment for an active session
+      tags: [ HLS ]
+      parameters:
+        - $ref: "#/components/parameters/hls_session_id_path"
+      responses:
+        "200":
+          description: OK
+          content:
+            video/mp2t: { example: "" }
+        "404":
+          description: Segment or session not found
+
+  /api/hls/init.mp4?id={id}:
+    get:
+      summary: Get HLS fMP4 init segment for an active session
+      tags: [ HLS ]
+      parameters:
+        - $ref: "#/components/parameters/hls_session_id_path"
+      responses:
+        "200":
+          description: OK
+          content:
+            video/mp4: { example: "" }
+        "404":
+          description: Segment or session not found
+
+  /api/hls/segment.m4s?id={id}:
+    get:
+      summary: Get HLS fMP4 media segment for an active session
+      tags: [ HLS ]
+      parameters:
+        - $ref: "#/components/parameters/hls_session_id_path"
+      responses:
+        "200":
+          description: OK
+          content:
+            video/iso.segment: { example: "" }
+        "404":
+          description: Segment or session not found
 
   /api/stream.mjpeg?src={src}:
     get:
@@ -408,10 +641,37 @@ paths:
       tags: [ Snapshot ]
       parameters:
         - $ref: "#/components/parameters/stream_src_path"
+        - name: name
+          in: query
+          description: Optional stream name to create/update if `src` is a URL
+          required: false
+          schema: { type: string }
+        - name: width
+          in: query
+          description: "Scale output width (alias: `w`)"
+          required: false
+          schema: { type: integer, minimum: 1 }
+        - name: height
+          in: query
+          description: "Scale output height (alias: `h`)"
+          required: false
+          schema: { type: integer, minimum: 1 }
+        - name: rotate
+          in: query
+          description: "Rotate output (degrees). Supported values: 90, 180, 270."
+          required: false
+          schema: { type: integer, enum: [ 90, 180, 270 ] }
+        - name: hardware
+          in: query
+          description: "Hardware acceleration engine for FFmpeg snapshot transcoding (alias: `hw`)"
+          required: false
+          schema: { type: string }
       responses:
-        200:
+        "200":
           description: ""
-          content: { image/jpeg: { example: "" } }
+          content:
+            image/jpeg: { example: "" }
+
   /api/frame.mp4?src={src}:
     get:
       summary: Get snapshot in MP4 format
@@ -419,23 +679,51 @@ paths:
       tags: [ Snapshot ]
       parameters:
         - $ref: "#/components/parameters/stream_src_path"
+        - name: filename
+          in: query
+          description: Download as a file with this name
+          required: false
+          schema: { type: string }
+          example: camera1.mp4
       responses:
         200:
           description: ""
-          content: { video/mp4: { example: "" } }
+          content:
+            video/mp4: { example: "" }
 
 
 
   /api/webrtc?dst={dst}:
     post:
-      summary: Post stream in WebRTC format
+      summary: Post stream in WebRTC format (WHIP)
       description: "[Incoming: WebRTC/WHIP](https://github.com/AlexxIT/go2rtc#incoming-webrtcwhip)"
       tags: [ Produce stream ]
       parameters:
         - $ref: "#/components/parameters/stream_dst_path"
       responses:
+        "201":
+          description: Created
+          headers:
+            Location:
+              description: Resource URL for session
+              schema: { type: string }
+          content:
+            application/sdp: { example: "v=0..." }
+        "404":
+          description: Stream not found
+
+  /api/stream?dst={dst}:
+    post:
+      summary: Post stream in auto-detected format
+      description: |
+        Incoming source with automatic format detection. Use for pushing a stream into an existing `dst` stream.
+      tags: [ Produce stream ]
+      parameters:
+        - $ref: "#/components/parameters/stream_dst_path"
+      responses:
         default:
-          description: Default response
+          description: ""
+
   /api/stream.flv?dst={dst}:
     post:
       summary: Post stream in FLV format
@@ -445,7 +733,8 @@ paths:
         - $ref: "#/components/parameters/stream_dst_path"
       responses:
         default:
-          description: Default response
+          description: ""
+
   /api/stream.ts?dst={dst}:
     post:
       summary: Post stream in MPEG-TS format
@@ -455,7 +744,8 @@ paths:
         - $ref: "#/components/parameters/stream_dst_path"
       responses:
         default:
-          description: Default response
+          description: ""
+
   /api/stream.mjpeg?dst={dst}:
     post:
       summary: Post stream in MJPEG format
@@ -465,8 +755,53 @@ paths:
         - $ref: "#/components/parameters/stream_dst_path"
       responses:
         default:
-          description: Default response
+          description: ""
 
+
+  /api/ffmpeg:
+    post:
+      summary: Play file/live/TTS into a stream via FFmpeg
+      description: |
+        Helper endpoint for "stream to camera" scenarios.
+        Exactly one of `file`, `live`, `text` should be provided.
+      tags: [ FFmpeg ]
+      parameters:
+        - name: dst
+          in: query
+          description: Destination stream name
+          required: true
+          schema: { type: string }
+          example: camera1
+        - name: file
+          in: query
+          description: Input URL to treat as file (`#input=file`)
+          required: false
+          schema: { type: string }
+          example: "http://example.com/song.mp3"
+        - name: live
+          in: query
+          description: Live input URL
+          required: false
+          schema: { type: string }
+          example: "http://example.com/live.mp3"
+        - name: text
+          in: query
+          description: Text-to-speech phrase
+          required: false
+          schema: { type: string }
+          example: "Hello"
+        - name: voice
+          in: query
+          description: Optional TTS voice (engine-dependent)
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Invalid parameters
+        "404":
+          description: Stream not found
 
 
   /api/dvrip:
@@ -475,8 +810,7 @@ paths:
       description: "[Source: DVRIP](https://github.com/AlexxIT/go2rtc#source-dvrip)"
       tags: [ Discovery ]
       responses:
-        default:
-          description: Default response
+        "200": { $ref: "#/components/responses/discovery" }
 
   /api/ffmpeg/devices:
     get:
@@ -484,56 +818,275 @@ paths:
       description: "[Source: FFmpeg Device](https://github.com/AlexxIT/go2rtc#source-ffmpeg-device)"
       tags: [ Discovery ]
       responses:
-        default:
-          description: Default response
+        "200": { $ref: "#/components/responses/discovery" }
+  
   /api/ffmpeg/hardware:
     get:
       summary: FFmpeg hardware transcoding discovery
       description: "[Hardware acceleration](https://github.com/AlexxIT/go2rtc/wiki/Hardware-acceleration)"
       tags: [ Discovery ]
       responses:
-        default:
-          description: Default response
+        "200": { $ref: "#/components/responses/discovery" }
+  
+  /api/v4l2:
+    get:
+      summary: V4L2 video devices discovery (Linux)
+      tags: [ Discovery ]
+      responses:
+        "200": { $ref: "#/components/responses/discovery" }
+  
+  /api/alsa:
+    get:
+      summary: ALSA audio devices discovery (Linux)
+      tags: [ Discovery ]
+      responses:
+        "200": { $ref: "#/components/responses/discovery" }
+  
+  /api/gopro:
+    get:
+      summary: GoPro cameras discovery
+      tags: [ Discovery ]
+      responses:
+        "200": { $ref: "#/components/responses/discovery" }
+
+  /api/ring:
+    get:
+      summary: Ring cameras discovery
+      description: |
+        Provide either `email`/`password` (and optional `code` for 2FA) or `refresh_token`.
+        If 2FA is required, returns a JSON prompt instead of sources.
+      tags: [ Discovery ]
+      parameters:
+        - name: email
+          in: query
+          required: false
+          schema: { type: string }
+        - name: password
+          in: query
+          required: false
+          schema: { type: string }
+        - name: code
+          in: query
+          required: false
+          schema: { type: string }
+        - name: refresh_token
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json: { example: "" }
+
+  /api/tuya:
+    get:
+      summary: Tuya cameras discovery
+      tags: [ Discovery ]
+      parameters:
+        - name: region
+          in: query
+          description: Tuya API host (region)
+          required: true
+          schema: { type: string }
+          example: "openapi.tuyaus.com"
+        - name: email
+          in: query
+          required: true
+          schema: { type: string }
+        - name: password
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/discovery" }
+        "400":
+          description: Invalid parameters
+        "404":
+          description: No cameras found
+  
   /api/hass:
     get:
       summary: Home Assistant cameras discovery
       description: "[Source: Hass](https://github.com/AlexxIT/go2rtc#source-hass)"
       tags: [ Discovery ]
       responses:
-        default:
-          description: Default response
-  /api/homekit:
+        "200": { $ref: "#/components/responses/discovery" }
+        "404": { description: No Hass config }
+
+  /api/discovery/homekit:
     get:
       summary: HomeKit cameras discovery
       description: "[Source: HomeKit](https://github.com/AlexxIT/go2rtc#source-homekit)"
       tags: [ Discovery ]
       responses:
-        default:
-          description: Default response
+        "200": { $ref: "#/components/responses/discovery" }
+
   /api/nest:
     get:
       summary: Nest cameras discovery
       tags: [ Discovery ]
+      parameters:
+        - name: client_id
+          in: query
+          required: true
+          schema: { type: string }
+        - name: client_secret
+          in: query
+          required: true
+          schema: { type: string }
+        - name: refresh_token
+          in: query
+          required: true
+          schema: { type: string }
+        - name: project_id
+          in: query
+          required: true
+          schema: { type: string }
       responses:
-        default:
-          description: Default response
+        "200": { $ref: "#/components/responses/discovery" }
+
   /api/onvif:
     get:
       summary: ONVIF cameras discovery
       description: "[Source: ONVIF](https://github.com/AlexxIT/go2rtc#source-onvif)"
       tags: [ Discovery ]
+      parameters:
+        - name: src
+          in: query
+          description: Optional ONVIF device URL to enumerate profiles
+          required: false
+          schema: { type: string }
+          example: "onvif://user:pass@192.168.1.50:80"
       responses:
-        default:
-          description: Default response
+        "200": { $ref: "#/components/responses/discovery" }
+
   /api/roborock:
     get:
-      summary: Roborock vacuums discovery
+      summary: Roborock vacuums discovery (requires prior auth)
       description: "[Source: Roborock](https://github.com/AlexxIT/go2rtc#source-roborock)"
       tags: [ Discovery ]
       responses:
-        default:
-          description: Default response
+        "200": { $ref: "#/components/responses/discovery" }
+        "404":
+          description: No auth
+    post:
+      summary: Roborock login and discovery
+      tags: [ Discovery ]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                username: { type: string }
+                password: { type: string }
+              required: [ username, password ]
+      responses:
+        "200": { $ref: "#/components/responses/discovery" }
 
+  /api/homekit:
+    get:
+      summary: Get HomeKit servers state
+      tags: [ HomeKit ]
+      parameters:
+        - name: id
+          in: query
+          description: Optional stream name (server ID)
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json: { example: "" }
+        "404":
+          description: Server not found
+    post:
+      summary: Pair HomeKit camera and create/update stream
+      tags: [ HomeKit ]
+      parameters:
+        - name: id
+          in: query
+          description: Stream name to create/update
+          required: true
+          schema: { type: string }
+        - name: src
+          in: query
+          description: HomeKit URL (without pin)
+          required: true
+          schema: { type: string }
+        - name: pin
+          in: query
+          description: HomeKit PIN
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+    delete:
+      summary: Unpair HomeKit camera and delete stream
+      tags: [ HomeKit ]
+      parameters:
+        - name: id
+          in: query
+          description: Stream name / server ID
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Stream not found
+
+  /api/homekit/accessories:
+    get:
+      summary: Get HomeKit accessories JSON for a stream
+      tags: [ HomeKit ]
+      parameters:
+        - name: id
+          in: query
+          description: Stream name
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json: { example: { } }
+        "404":
+          description: Stream not found
+
+  /pair-setup:
+    post:
+      summary: HomeKit Pair Setup (HAP)
+      description: HomeKit Accessory Protocol endpoint (TLV8).
+      tags: [ HomeKit ]
+      requestBody:
+        required: true
+        content:
+          application/pairing+tlv8: { example: "" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/pairing+tlv8: { example: "" }
+
+  /pair-verify:
+    post:
+      summary: HomeKit Pair Verify (HAP)
+      description: HomeKit Accessory Protocol endpoint (TLV8).
+      tags: [ HomeKit ]
+      requestBody:
+        required: true
+        content:
+          application/pairing+tlv8: { example: "" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/pairing+tlv8: { example: "" }
 
 
   /onvif/:
@@ -543,7 +1096,7 @@ paths:
       tags: [ ONVIF ]
       responses:
         default:
-          description: Default response
+          description: ""
 
 
 
@@ -554,7 +1107,32 @@ paths:
       tags: [ RTSPtoWebRTC ]
       responses:
         default:
-          description: Default response
+          description: ""
+
+
+  /api/ws:
+    get:
+      summary: WebSocket endpoint
+      description: |
+        Upgrade to WebSocket and exchange JSON messages:
+        - Request: `{ "type": "...", "value": ... }`
+        - Response: `{ "type": "...", "value": ... }`
+        
+        Supported message types depend on enabled modules (see `api/README.md`).
+      tags: [ WebSocket ]
+      parameters:
+        - name: src
+          in: query
+          description: Stream name (consumer)
+          required: false
+          schema: { type: string }
+        - name: dst
+          in: query
+          description: Stream name (producer)
+          required: false
+          schema: { type: string }
+      responses:
+        "101": { description: Switching Protocols }
 
 
 
@@ -573,15 +1151,13 @@ paths:
         - $ref: "#/components/parameters/stream_src_path"
       responses:
         200: { $ref: "#/components/responses/webtorrent" }
-
     delete:
       summary: Delete WebTorrent share
       tags: [ WebTorrent ]
       parameters:
         - $ref: "#/components/parameters/stream_src_path"
       responses:
-        default:
-          description: Default response
+        default: { description: "" }
 
   /api/webtorrent:
     get:

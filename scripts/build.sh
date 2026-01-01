@@ -1,82 +1,47 @@
 #!/bin/sh
 
+set -e  # Exit immediately if a command exits with a non-zero status.
+set -u  # Treat unset variables as an error when substituting.
+
 check_command() {
-    if ! command -v $1 &> /dev/null
+    if ! command -v "$1" >/dev/null
     then
-        echo "Error: $1 could not be found. Please install it."
-        exit 1
+        echo "Error: $1 could not be found. Please install it." >&2
+        return 1
     fi
 }
 
-# Check for required commands
+build_zip() {
+  go build -ldflags "-s -w" -trimpath -o $2
+  7z a -mx9 -sdel $1 $2
+}
+
+build_upx() {
+  go build -ldflags "-s -w" -trimpath -o $1
+  upx --best --lzma $1
+}
+
 check_command go
 check_command 7z
 check_command upx
 
-# Windows amd64
-export GOOS=windows
-export GOARCH=amd64
-FILENAME="go2rtc_win64.zip"
-go build -ldflags "-s -w" -trimpath && 7z a -mx9 -bso0 -sdel $FILENAME go2rtc.exe
+export CGO_ENABLED=0
 
-# Windows 386
-export GOOS=windows
-export GOARCH=386
-FILENAME="go2rtc_win32.zip"
-go build -ldflags "-s -w" -trimpath && 7z a -mx9 -bso0 -sdel $FILENAME go2rtc.exe
+set -x  # Print commands and their arguments as they are executed.
 
-# Windows arm64
-export GOOS=windows
-export GOARCH=arm64
-FILENAME="go2rtc_win_arm64.zip"
-go build -ldflags "-s -w" -trimpath && 7z a -mx9 -bso0 -sdel $FILENAME go2rtc.exe
+GOOS=windows  GOARCH=amd64        build_zip go2rtc_win64.zip     go2rtc.exe
+GOOS=windows  GOARCH=386          build_zip go2rtc_win32.zip     go2rtc.exe
+GOOS=windows  GOARCH=arm64        build_zip go2rtc_win_arm64.zip go2rtc.exe
 
-# Linux amd64
-export GOOS=linux
-export GOARCH=amd64
-FILENAME="go2rtc_linux_amd64"
-go build -ldflags "-s -w" -trimpath -o $FILENAME && upx --lzma --force-overwrite -q --no-progress $FILENAME
+GOOS=linux    GOARCH=amd64        build_upx go2rtc_linux_amd64
+GOOS=linux    GOARCH=386          build_upx go2rtc_linux_i386
+GOOS=linux    GOARCH=arm64        build_upx go2rtc_linux_arm64
+GOOS=linux    GOARCH=mipsle       build_upx go2rtc_linux_mipsel
+GOOS=linux    GOARCH=arm GOARM=7  build_upx go2rtc_linux_arm
+GOOS=linux    GOARCH=arm GOARM=6  build_upx go2rtc_linux_armv6
 
-# Linux 386
-export GOOS=linux
-export GOARCH=386
-FILENAME="go2rtc_linux_i386"
-go build -ldflags "-s -w" -trimpath -o $FILENAME && upx --lzma --force-overwrite -q --no-progress $FILENAME
+GOOS=darwin   GOARCH=amd64        build_zip go2rtc_mac_amd64.zip go2rtc
+GOOS=darwin   GOARCH=arm64        build_zip go2rtc_mac_arm64.zip go2rtc
 
-# Linux arm64
-export GOOS=linux
-export GOARCH=arm64
-FILENAME="go2rtc_linux_arm64"
-go build -ldflags "-s -w" -trimpath -o $FILENAME && upx --lzma --force-overwrite -q --no-progress $FILENAME
-
-# Linux arm v7
-export GOOS=linux
-export GOARCH=arm
-export GOARM=7
-FILENAME="go2rtc_linux_arm"
-go build -ldflags "-s -w" -trimpath -o $FILENAME && upx --lzma --force-overwrite -q --no-progress $FILENAME
-
-# Linux arm v6
-export GOOS=linux
-export GOARCH=arm
-export GOARM=6
-FILENAME="go2rtc_linux_armv6"
-go build -ldflags "-s -w" -trimpath -o $FILENAME && upx --lzma --force-overwrite -q --no-progress $FILENAME
-
-# Linux mipsle
-export GOOS=linux
-export GOARCH=mipsle
-FILENAME="go2rtc_linux_mipsel"
-go build -ldflags "-s -w" -trimpath -o $FILENAME && upx --lzma --force-overwrite -q --no-progress $FILENAME
-
-# Darwin amd64
-export GOOS=darwin
-export GOARCH=amd64
-FILENAME="go2rtc_mac_amd64.zip"
-go build -ldflags "-s -w" -trimpath && 7z a -mx9 -bso0 -sdel $FILENAME go2rtc
-
-# Darwin arm64
-export GOOS=darwin
-export GOARCH=arm64
-FILENAME="go2rtc_mac_arm64.zip"
-go build -ldflags "-s -w" -trimpath && 7z a -mx9 -bso0 -sdel $FILENAME go2rtc
+GOOS=freebsd  GOARCH=amd64        build_zip go2rtc_freebsd_amd64.zip go2rtc
+GOOS=freebsd  GOARCH=arm64        build_zip go2rtc_freebsd_arm64.zip go2rtc

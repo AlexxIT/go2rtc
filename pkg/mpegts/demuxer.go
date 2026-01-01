@@ -330,6 +330,7 @@ const (
 	StreamTypeH264        = 0x1B
 	StreamTypeH265        = 0x24
 	StreamTypePCMATapo    = 0x90
+	StreamTypePCMUTapo    = 0x91
 	StreamTypePrivateOPUS = 0xEB
 )
 
@@ -364,7 +365,7 @@ func (p *PES) GetPacket() (pkt *rtp.Packet) {
 			Header: rtp.Header{
 				PayloadType: p.StreamType,
 			},
-			Payload: annexb.EncodeToAVCC(p.Payload, false),
+			Payload: annexb.EncodeToAVCC(p.Payload),
 		}
 
 		if p.DTS != 0 {
@@ -392,7 +393,7 @@ func (p *PES) GetPacket() (pkt *rtp.Packet) {
 
 		//p.Timestamp += aac.RTPTimeSize(pkt.Payload) // update next timestamp!
 
-	case StreamTypePCMATapo:
+	case StreamTypePCMATapo, StreamTypePCMUTapo:
 		p.Sequence++
 
 		pkt = &rtp.Packet{

@@ -34,7 +34,7 @@ func (m *Muxer) GetInit() []byte {
 		switch codec.Name {
 		case core.CodecH264:
 			b[4] |= FlagsVideo
-			obj["videocodecid"] = CodecAVC
+			obj["videocodecid"] = CodecH264
 
 		case core.CodecAAC:
 			b[4] |= FlagsAudio

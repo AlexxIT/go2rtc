@@ -11,17 +11,13 @@ import (
 )
 
 type Consumer struct {
-	core.SuperConsumer
+	core.Connection
 	muxer *Muxer
 	wr    *core.WriteBuffer
 }
 
 func NewConsumer() *Consumer {
-	c := &Consumer{
-		muxer: NewMuxer(),
-		wr:    core.NewWriteBuffer(nil),
-	}
-	c.Medias = []*core.Media{
+	medias := []*core.Media{
 		{
 			Kind:      core.KindVideo,
 			Direction: core.DirectionSendonly,
@@ -38,7 +34,17 @@ func NewConsumer() *Consumer {
 			},
 		},
 	}
-	return c
+	wr := core.NewWriteBuffer(nil)
+	return &Consumer{
+		core.Connection{
+			ID:         core.NewID(),
+			FormatName: "mpegts",
+			Medias:     medias,
+			Transport:  wr,
+		},
+		NewMuxer(),
+		wr,
+	}
 }
 
 func (c *Consumer) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
@@ -110,14 +116,9 @@ func (c *Consumer) WriteTo(wr io.Writer) (int64, error) {
 	return c.wr.WriteTo(wr)
 }
 
-func (c *Consumer) Stop() error {
-	_ = c.SuperConsumer.Close()
-	return c.wr.Close()
-}
-
-func TimestampFromRTP(rtp *rtp.Packet, codec *core.Codec) {
-	if codec.ClockRate == ClockRate {
-		return
-	}
-	rtp.Timestamp = uint32(float64(rtp.Timestamp) / float64(codec.ClockRate) * ClockRate)
-}
+//func TimestampFromRTP(rtp *rtp.Packet, codec *core.Codec) {
+//	if codec.ClockRate == ClockRate {
+//		return
+//	}
+//	rtp.Timestamp = uint32(float64(rtp.Timestamp) / float64(codec.ClockRate) * ClockRate)
+//}

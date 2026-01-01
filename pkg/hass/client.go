@@ -6,7 +6,7 @@ import (
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
-	pion "github.com/pion/webrtc/v3"
+	pion "github.com/pion/webrtc/v4"
 )
 
 type Client struct {
@@ -61,8 +61,10 @@ func NewClient(rawURL string) (*Client, error) {
 	}
 
 	conn := webrtc.NewConn(pc)
-	conn.Desc = "Hass"
+	conn.FormatName = "hass/webrtc"
 	conn.Mode = core.ModeActiveProducer
+	conn.Protocol = "ws"
+	conn.URL = rawURL
 
 	// https://developers.google.com/nest/device-access/traits/device/camera-live-stream#generatewebrtcstream-request-fields
 	medias := []*core.Media{

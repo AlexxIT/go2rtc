@@ -30,10 +30,10 @@ func apiStream(w http.ResponseWriter, r *http.Request) {
 		// 1. link to go2rtc stream: rtsp://...:8554/{stream_name}
 		// 2. static link to Hass camera
 		// 3. dynamic link to Hass camera
-		if streams.Patch(v.Name, v.Channels.First.Url) != nil {
+		if _, err := streams.Patch(v.Name, v.Channels.First.Url); err == nil {
 			apiOK(w, r)
 		} else {
-			http.Error(w, "", http.StatusBadRequest)
+			http.Error(w, err.Error(), http.StatusBadRequest)
 		}
 
 	// /stream/{id}/channel/0/webrtc
@@ -63,7 +63,7 @@ func apiStream(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		s, err = webrtc.ExchangeSDP(stream, string(offer), "WebRTC/Hass sync", r.UserAgent())
+		s, err = webrtc.ExchangeSDP(stream, string(offer), "hass/webrtc", r.UserAgent())
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

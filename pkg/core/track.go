@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/json"
 	"errors"
 
 	"github.com/pion/rtp"
@@ -22,7 +23,7 @@ type Receiver struct {
 
 func NewReceiver(media *Media, codec *Codec) *Receiver {
 	r := &Receiver{
-		Node:  Node{Codec: codec},
+		Node:  Node{id: NewID(), Codec: codec},
 		Media: media,
 	}
 	r.Input = func(packet *Packet) {
@@ -91,13 +92,13 @@ func NewSender(media *Media, codec *Codec) *Sender {
 
 	buf := make(chan *Packet, bufSize)
 	s := &Sender{
-		Node:  Node{Codec: codec},
+		Node:  Node{id: NewID(), Codec: codec},
 		Media: media,
 		buf:   buf,
 	}
 	s.Input = func(packet *Packet) {
-		// writing to nil chan - OK, writing to closed chan - panic
 		s.mu.Lock()
+		// unblock write to nil chan - OK, write to closed chan - panic
 		select {
 		case s.buf <- packet:
 			s.Bytes += len(packet.Payload)
@@ -138,16 +139,17 @@ func (s *Sender) Start() {
 	}
 	s.done = make(chan struct{})
 
-	go func() {
-		for packet := range s.buf {
+	// pass buf directly so that it's impossible for buf to be nil
+	go func(buf chan *Packet) {
+		for packet := range buf {
 			s.Output(packet)
 		}
 		close(s.done)
-	}()
+	}(s.buf)
 }
 
 func (s *Sender) Wait() {
-	if done := s.done; s.done != nil {
+	if done := s.done; done != nil {
 		<-done
 	}
 }
@@ -164,10 +166,52 @@ func (s *Sender) State() string {
 
 func (s *Sender) Close() {
 	// close buffer if exists
-	if buf := s.buf; buf != nil {
-		s.buf = nil
-		defer close(buf)
+	s.mu.Lock()
+	if s.buf != nil {
+		close(s.buf) // exit from for range loop
+		s.buf = nil  // prevent writing to closed chan
 	}
+	s.mu.Unlock()
 
 	s.Node.Close()
+}
+
+func (r *Receiver) MarshalJSON() ([]byte, error) {
+	v := struct {
+		ID      uint32   `json:"id"`
+		Codec   *Codec   `json:"codec"`
+		Childs  []uint32 `json:"childs,omitempty"`
+		Bytes   int      `json:"bytes,omitempty"`
+		Packets int      `json:"packets,omitempty"`
+	}{
+		ID:      r.Node.id,
+		Codec:   r.Node.Codec,
+		Bytes:   r.Bytes,
+		Packets: r.Packets,
+	}
+	for _, child := range r.childs {
+		v.Childs = append(v.Childs, child.id)
+	}
+	return json.Marshal(v)
+}
+
+func (s *Sender) MarshalJSON() ([]byte, error) {
+	v := struct {
+		ID      uint32 `json:"id"`
+		Codec   *Codec `json:"codec"`
+		Parent  uint32 `json:"parent,omitempty"`
+		Bytes   int    `json:"bytes,omitempty"`
+		Packets int    `json:"packets,omitempty"`
+		Drops   int    `json:"drops,omitempty"`
+	}{
+		ID:      s.Node.id,
+		Codec:   s.Node.Codec,
+		Bytes:   s.Bytes,
+		Packets: s.Packets,
+		Drops:   s.Drops,
+	}
+	if s.parent != nil {
+		v.Parent = s.parent.id
+	}
+	return json.Marshal(v)
 }

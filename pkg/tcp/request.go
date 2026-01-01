@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 )
@@ -69,10 +68,7 @@ func Do(req *http.Request) (*http.Response, error) {
 			return tlsConn, err
 		}
 
-		client = &http.Client{
-			Timeout:   time.Second * 5000,
-			Transport: transport,
-		}
+		client = &http.Client{Transport: transport}
 	}
 
 	user := req.URL.User

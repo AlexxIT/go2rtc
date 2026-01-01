@@ -28,8 +28,10 @@ func UnmarshalSDP(rawSDP []byte) ([]*core.Media, error) {
 	sd := &sdp.SessionDescription{}
 	if err := sd.Unmarshal(rawSDP); err != nil {
 		// fix multiple `s=` https://github.com/AlexxIT/WebRTC/issues/417
-		re, _ := regexp.Compile("\ns=[^\n]+")
-		rawSDP = re.ReplaceAll(rawSDP, nil)
+		rawSDP = regexp.MustCompile("\ns=[^\n]+").ReplaceAll(rawSDP, nil)
+
+		// fix broken `c=` https://github.com/AlexxIT/go2rtc/issues/1426
+		rawSDP = regexp.MustCompile("\nc=[^\n]+").ReplaceAll(rawSDP, nil)
 
 		// fix SDP header for some cameras
 		if i := bytes.Index(rawSDP, []byte("\nm=")); i > 0 {
@@ -38,8 +40,13 @@ func UnmarshalSDP(rawSDP []byte) ([]*core.Media, error) {
 
 		// Fix invalid media type (errSDPInvalidValue) caused by
 		// some TP-LINK IP camera, e.g. TL-IPC44GW
-		m := regexp.MustCompile("m=application/[^ ]+")
-		rawSDP = m.ReplaceAll(rawSDP, []byte("m=application"))
+		for _, b := range regexp.MustCompile("m=[^ ]+ ").FindAll(rawSDP, -1) {
+			switch string(b[2 : len(b)-1]) {
+			case "audio", "video", "application":
+			default:
+				rawSDP = bytes.Replace(rawSDP, b, []byte("m=application "), 1)
+			}
+		}
 
 		if err == io.EOF {
 			rawSDP = append(rawSDP, '\n')
@@ -63,8 +70,25 @@ func UnmarshalSDP(rawSDP []byte) ([]*core.Media, error) {
 		// Check buggy SDP with fmtp for H264 on another track
 		// https://github.com/AlexxIT/WebRTC/issues/419
 		for _, codec := range media.Codecs {
-			if codec.Name == core.CodecH264 && codec.FmtpLine == "" {
-				codec.FmtpLine = findFmtpLine(codec.PayloadType, sd.MediaDescriptions)
+			switch codec.Name {
+			case core.CodecH264:
+				if codec.FmtpLine == "" {
+					codec.FmtpLine = findFmtpLine(codec.PayloadType, sd.MediaDescriptions)
+				}
+			case core.CodecH265:
+				if codec.FmtpLine != "" {
+					// all three parameters are needed for a valid fmtp line
+					// https://github.com/AlexxIT/go2rtc/pull/1588
+					if !strings.Contains(codec.FmtpLine, "sprop-vps=") ||
+						!strings.Contains(codec.FmtpLine, "sprop-sps=") ||
+						!strings.Contains(codec.FmtpLine, "sprop-pps=") {
+						codec.FmtpLine = ""
+					}
+				}
+			case core.CodecOpus:
+				// fix OPUS for some cameras https://datatracker.ietf.org/doc/html/rfc7587
+				codec.ClockRate = 48000
+				codec.Channels = 2
 			}
 		}
 
@@ -92,19 +116,39 @@ func findFmtpLine(payloadType uint8, descriptions []*sdp.MediaDescription) strin
 // urlParse fix bugs:
 // 1. Content-Base: rtsp://::ffff:192.168.1.123/onvif/profile.1/
 // 2. Content-Base: rtsp://rtsp://turret2-cam.lan:554/stream1/
+// 3. Content-Base: 192.168.253.220:1935/
 func urlParse(rawURL string) (*url.URL, error) {
+	// fix https://github.com/AlexxIT/go2rtc/issues/830
 	if strings.HasPrefix(rawURL, "rtsp://rtsp://") {
 		rawURL = rawURL[7:]
 	}
 
+	// fix https://github.com/AlexxIT/go2rtc/issues/1852
+	if !strings.Contains(rawURL, "://") {
+		rawURL = "rtsp://" + rawURL
+	}
+
 	u, err := url.Parse(rawURL)
 	if err != nil && strings.HasSuffix(err.Error(), "after host") {
-		if i1 := strings.Index(rawURL, "://"); i1 > 0 {
-			if i2 := strings.IndexByte(rawURL[i1+3:], '/'); i2 > 0 {
-				return urlParse(rawURL[:i1+3+i2] + ":" + rawURL[i1+3+i2:])
-			}
+		if i := indexN(rawURL, '/', 3); i > 0 {
+			return urlParse(rawURL[:i] + ":" + rawURL[i:])
 		}
 	}
 
 	return u, err
+}
+
+func indexN(s string, c byte, n int) int {
+	var offset int
+	for {
+		i := strings.IndexByte(s[offset:], c)
+		if i < 0 {
+			break
+		}
+		if n--; n == 0 {
+			return offset + i
+		}
+		offset += i + 1
+	}
+	return -1
 }

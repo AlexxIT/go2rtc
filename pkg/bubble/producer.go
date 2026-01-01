@@ -65,11 +65,16 @@ func (c *Client) Stop() error {
 }
 
 func (c *Client) MarshalJSON() ([]byte, error) {
-	info := &core.Info{
-		Type:      "Bubble active producer",
-		Medias:    c.medias,
-		Recv:      c.recv,
-		Receivers: c.receivers,
+	info := &core.Connection{
+		ID:         core.ID(c),
+		FormatName: "bubble",
+		Protocol:   "http",
+		Medias:     c.medias,
+		Recv:       c.recv,
+		Receivers:  c.receivers,
+	}
+	if c.conn != nil {
+		info.RemoteAddr = c.conn.RemoteAddr().String()
 	}
 	return json.Marshal(info)
 }

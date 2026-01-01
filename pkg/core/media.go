@@ -92,7 +92,7 @@ func (m *Media) Equal(media *Media) bool {
 
 func GetKind(name string) string {
 	switch name {
-	case CodecH264, CodecH265, CodecVP8, CodecVP9, CodecAV1, CodecJPEG:
+	case CodecH264, CodecH265, CodecVP8, CodecVP9, CodecAV1, CodecJPEG, CodecRAW:
 		return KindVideo
 	case CodecPCMU, CodecPCMA, CodecAAC, CodecOpus, CodecG722, CodecMP3, CodecPCM, CodecPCML, CodecELD, CodecFLAC:
 		return KindAudio
@@ -124,9 +124,13 @@ func MarshalSDP(name string, medias []*Media) ([]byte, error) {
 
 		codec := media.Codecs[0]
 
-		name := codec.Name
-		if name == CodecELD {
+		switch codec.Name {
+		case CodecELD:
 			name = CodecAAC
+		case CodecPCML:
+			name = CodecPCM // beacuse we using pcm.LittleToBig for RTSP server
+		default:
+			name = codec.Name
 		}
 
 		md := &sdp.MediaDescription{
@@ -135,7 +139,11 @@ func MarshalSDP(name string, medias []*Media) ([]byte, error) {
 				Protos: []string{"RTP", "AVP"},
 			},
 		}
-		md.WithCodec(codec.PayloadType, name, codec.ClockRate, codec.Channels, codec.FmtpLine)
+		md.WithCodec(codec.PayloadType, name, codec.ClockRate, uint16(codec.Channels), codec.FmtpLine)
+
+		if media.Direction != "" {
+			md.WithPropertyAttribute(media.Direction)
+		}
 
 		if media.ID != "" {
 			md.WithValueAttribute("control", media.ID)

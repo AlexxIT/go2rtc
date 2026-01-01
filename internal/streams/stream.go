@@ -21,6 +21,12 @@ func NewStream(source any) *Stream {
 		return &Stream{
 			producers: []*Producer{NewProducer(source)},
 		}
+	case []string:
+		s := new(Stream)
+		for _, str := range source {
+			s.producers = append(s.producers, NewProducer(str))
+		}
+		return s
 	case []any:
 		s := new(Stream)
 		for _, src := range source {
@@ -41,11 +47,12 @@ func NewStream(source any) *Stream {
 	}
 }
 
-func (s *Stream) Sources() (sources []string) {
+func (s *Stream) Sources() []string {
+	sources := make([]string, 0, len(s.producers))
 	for _, prod := range s.producers {
 		sources = append(sources, prod.url)
 	}
-	return
+	return sources
 }
 
 func (s *Stream) SetSource(source string) {
@@ -70,7 +77,7 @@ func (s *Stream) RemoveConsumer(cons core.Consumer) {
 }
 
 func (s *Stream) AddProducer(prod core.Producer) {
-	producer := &Producer{conn: prod, state: stateExternal}
+	producer := &Producer{conn: prod, state: stateExternal, url: "external"}
 	s.mu.Lock()
 	s.producers = append(s.producers, producer)
 	s.mu.Unlock()
@@ -112,19 +119,12 @@ producers:
 }
 
 func (s *Stream) MarshalJSON() ([]byte, error) {
-	if !s.mu.TryLock() {
-		log.Warn().Msgf("[streams] json locked")
-		return json.Marshal(nil)
-	}
-
-	var info struct {
+	var info = struct {
 		Producers []*Producer     `json:"producers"`
 		Consumers []core.Consumer `json:"consumers"`
+	}{
+		Producers: s.producers,
+		Consumers: s.consumers,
 	}
-	info.Producers = s.producers
-	info.Consumers = s.consumers
-
-	s.mu.Unlock()
-
 	return json.Marshal(info)
 }

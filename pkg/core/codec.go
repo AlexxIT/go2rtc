@@ -13,7 +13,7 @@ import (
 type Codec struct {
 	Name        string // H264, PCMU, PCMA, opus...
 	ClockRate   uint32 // 90000, 8000, 16000...
-	Channels    uint16 // 0, 1, 2
+	Channels    uint8  // 0, 1, 2
 	FmtpLine    string
 	PayloadType uint8
 }
@@ -46,7 +46,7 @@ func FFmpegCodecName(name string) string {
 	case CodecH264:
 		return "h264"
 	case CodecH265:
-		return "h265"
+		return "hevc"
 	case CodecJPEG:
 		return "mjpeg"
 	case CodecRAW:
@@ -69,8 +69,14 @@ func FFmpegCodecName(name string) string {
 		return "vp9"
 	case CodecAV1:
 		return "av1"
+	case CodecELD:
+		return "aac/eld"
+	case CodecFLAC:
+		return "flac"
+	case CodecMP3:
+		return "mp3"
 	}
-	return ""
+	return name
 }
 
 func (c *Codec) String() (s string) {
@@ -151,7 +157,12 @@ func UnmarshalCodec(md *sdp.MediaDescription, payloadType string) *Codec {
 		}
 	}
 
-	if c.Name == "" {
+	switch c.Name {
+	case "PCM":
+		// https://www.reddit.com/r/Hikvision/comments/17elxex/comment/k642g2r/
+		// check pkg/rtsp/rtsp_test.go TestHikvisionPCM
+		c.Name = CodecPCML
+	case "":
 		// https://en.wikipedia.org/wiki/RTP_payload_formats
 		switch payloadType {
 		case "0":
@@ -237,4 +248,37 @@ func DecodeH264(fmtp string) (profile string, level byte) {
 		}
 	}
 	return
+}
+
+func ParseCodecString(s string) *Codec {
+	var codec Codec
+
+	ss := strings.Split(s, "/")
+	switch strings.ToLower(ss[0]) {
+	case "pcm_s16be", "s16be", "pcm":
+		codec.Name = CodecPCM
+	case "pcm_s16le", "s16le", "pcml":
+		codec.Name = CodecPCML
+	case "pcm_alaw", "alaw", "pcma", "g711a":
+		codec.Name = CodecPCMA
+	case "pcm_mulaw", "mulaw", "pcmu", "g711u":
+		codec.Name = CodecPCMU
+	case "aac", "mpeg4-generic":
+		codec.Name = CodecAAC
+	case "opus":
+		codec.Name = CodecOpus
+	case "flac":
+		codec.Name = CodecFLAC
+	default:
+		return nil
+	}
+
+	if len(ss) >= 2 {
+		codec.ClockRate = uint32(Atoi(ss[1]))
+	}
+	if len(ss) >= 3 {
+		codec.Channels = uint8(Atoi(ss[1]))
+	}
+
+	return &codec
 }

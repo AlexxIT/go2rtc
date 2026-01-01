@@ -2,6 +2,7 @@ package core
 
 import (
 	"crypto/rand"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -10,9 +11,9 @@ import (
 
 const (
 	BufferSize      = 64 * 1024 // 64K
-	ConnDialTimeout = time.Second * 3
-	ConnDeadline    = time.Second * 5
-	ProbeTimeout    = time.Second * 3
+	ConnDialTimeout = 5 * time.Second
+	ConnDeadline    = 5 * time.Second
+	ProbeTimeout    = 5 * time.Second
 )
 
 // Now90000 - timestamp for Video (clock rate = 90000 samples per second)
@@ -66,6 +67,21 @@ func Atoi(s string) (i int) {
 	return
 }
 
+// ParseByte - fast parsing string to byte function
+func ParseByte(s string) (b byte) {
+	for i, ch := range []byte(s) {
+		ch -= '0'
+		if ch > 9 {
+			return 0
+		}
+		if i > 0 {
+			b *= 10
+		}
+		b += ch
+	}
+	return
+}
+
 func Assert(ok bool) {
 	if !ok {
 		_, file, line, _ := runtime.Caller(1)
@@ -76,4 +92,15 @@ func Assert(ok bool) {
 func Caller() string {
 	_, file, line, _ := runtime.Caller(1)
 	return file + ":" + strconv.Itoa(line)
+}
+
+const (
+	unreserved = `A-Za-z0-9-._~`
+	subdelims  = `!$&'()*+,;=`
+	userinfo   = unreserved + subdelims + `%:`
+)
+
+func StripUserinfo(s string) string {
+	sanitizer := regexp.MustCompile(`://[` + userinfo + `]+@`)
+	return sanitizer.ReplaceAllString(s, `://***@`)
 }

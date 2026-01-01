@@ -1,31 +1,65 @@
 package wav
 
 import (
-	"bufio"
 	"encoding/binary"
-	"errors"
 	"io"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/pion/rtp"
 )
 
-const FourCC = "RIFF"
+func Header(codec *core.Codec) []byte {
+	var fmt, size, extra byte
 
-func Open(r io.Reader) (*Producer, error) {
-	// https://en.wikipedia.org/wiki/WAV
-	// https://www.mmsp.ece.mcgill.ca/Documents/AudioFormats/WAVE/WAVE.html
-	rd := bufio.NewReaderSize(r, core.BufferSize)
+	switch codec.Name {
+	case core.CodecPCML:
+		fmt = 1
+		size = 2
+	case core.CodecPCMA:
+		fmt = 6
+		size = 1
+		extra = 2
+	case core.CodecPCMU:
+		fmt = 7
+		size = 1
+		extra = 2
+	default:
+		return nil
+	}
 
+	channels := byte(codec.Channels)
+	if channels == 0 {
+		channels = 1
+	}
+
+	b := make([]byte, 0, 46) // cap with extra
+	b = append(b, "RIFF\xFF\xFF\xFF\xFFWAVEfmt "...)
+
+	b = append(b, 0x10+extra, 0, 0, 0)
+	b = append(b, fmt, 0)
+	b = append(b, channels, 0)
+	b = binary.LittleEndian.AppendUint32(b, codec.ClockRate)
+	b = binary.LittleEndian.AppendUint32(b, uint32(size*channels)*codec.ClockRate)
+	b = append(b, size*channels, 0)
+	b = append(b, size*8, 0)
+	if extra > 0 {
+		b = append(b, 0, 0) // ExtraParamSize (if PCM, then doesn't exist)
+	}
+
+	b = append(b, "data\xFF\xFF\xFF\xFF"...)
+
+	return b
+}
+
+func ReadHeader(r io.Reader) (*core.Codec, error) {
 	// skip Master RIFF chunk
-	if _, err := rd.Discard(12); err != nil {
+	if _, err := io.ReadFull(r, make([]byte, 12)); err != nil {
 		return nil, err
 	}
 
-	codec := &core.Codec{}
+	var codec core.Codec
 
 	for {
-		chunkID, data, err := readChunk(rd)
+		chunkID, data, err := readChunk(r)
 		if err != nil {
 			return nil, err
 		}
@@ -45,70 +79,12 @@ func Open(r io.Reader) (*Producer, error) {
 				codec.Name = core.CodecPCMU
 			}
 
-			codec.Channels = uint16(data[2])
+			codec.Channels = data[2]
 			codec.ClockRate = binary.LittleEndian.Uint32(data[4:])
 		}
 	}
 
-	if codec.Name == "" {
-		return nil, errors.New("waw: unsupported codec")
-	}
-
-	prod := &Producer{rd: rd, cl: r.(io.Closer)}
-	prod.Type = "WAV producer"
-	prod.Medias = []*core.Media{
-		{
-			Kind:      core.KindAudio,
-			Direction: core.DirectionRecvonly,
-			Codecs:    []*core.Codec{codec},
-		},
-	}
-	return prod, nil
-}
-
-type Producer struct {
-	core.SuperProducer
-	rd *bufio.Reader
-	cl io.Closer
-}
-
-func (c *Producer) Start() error {
-	var seq uint16
-	var ts uint32
-
-	const PacketSize = 0.040 * 8000 // 40ms
-
-	for {
-		payload := make([]byte, PacketSize)
-		if _, err := io.ReadFull(c.rd, payload); err != nil {
-			return err
-		}
-
-		c.Recv += PacketSize
-
-		if len(c.Receivers) == 0 {
-			continue
-		}
-
-		pkt := &rtp.Packet{
-			Header: rtp.Header{
-				Version:        2,
-				Marker:         true,
-				SequenceNumber: seq,
-				Timestamp:      ts,
-			},
-			Payload: payload,
-		}
-		c.Receivers[0].WriteRTP(pkt)
-
-		seq++
-		ts += PacketSize
-	}
-}
-
-func (c *Producer) Stop() error {
-	_ = c.SuperProducer.Close()
-	return c.cl.Close()
+	return &codec, nil
 }
 
 func readChunk(r io.Reader) (chunkID string, data []byte, err error) {

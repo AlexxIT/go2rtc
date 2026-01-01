@@ -85,14 +85,14 @@ func (a *Auth) Write(req *Request) {
 	}
 }
 
-func (a *Auth) Validate(req *Request) bool {
+func (a *Auth) Validate(req *Request) (valid, empty bool) {
 	if a == nil {
-		return true
+		return true, true
 	}
 
 	header := req.Header.Get("Authorization")
 	if header == "" {
-		return false
+		return false, true
 	}
 
 	if a.Method == AuthUnknown {
@@ -100,7 +100,7 @@ func (a *Auth) Validate(req *Request) bool {
 		a.header = "Basic " + B64(a.user, a.pass)
 	}
 
-	return header == a.header
+	return header == a.header, false
 }
 
 func (a *Auth) ReadNone(res *Response) bool {
@@ -110,6 +110,10 @@ func (a *Auth) ReadNone(res *Response) bool {
 		return true
 	}
 	return false
+}
+
+func (a *Auth) UserInfo() *url.Userinfo {
+	return url.UserPassword(a.user, a.pass)
 }
 
 func Between(s, sub1, sub2 string) string {

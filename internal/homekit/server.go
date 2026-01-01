@@ -4,10 +4,16 @@ import (
 	"crypto/ed25519"
 	"crypto/sha512"
 	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
 	"net/url"
+	"slices"
 	"strings"
+	"sync"
 
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg"
@@ -16,23 +22,142 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/hap"
 	"github.com/AlexxIT/go2rtc/pkg/hap/camera"
+	"github.com/AlexxIT/go2rtc/pkg/hap/hds"
 	"github.com/AlexxIT/go2rtc/pkg/hap/tlv8"
 	"github.com/AlexxIT/go2rtc/pkg/homekit"
 	"github.com/AlexxIT/go2rtc/pkg/magic"
 	"github.com/AlexxIT/go2rtc/pkg/mdns"
-	"github.com/AlexxIT/go2rtc/pkg/srtp"
 )
 
 type server struct {
-	stream    string      // stream name from YAML
-	hap       *hap.Server // server for HAP connection and encryption
-	mdns      *mdns.ServiceEntry
-	srtp      *srtp.Server
-	accessory *hap.Accessory // HAP accessory
-	pairings  []string       // pairings list
+	hap  *hap.Server // server for HAP connection and encryption
+	mdns *mdns.ServiceEntry
 
-	streams  map[string]*homekit.Consumer
-	consumer *homekit.Consumer
+	pairings []string // pairings list
+	conns    []any
+	mu       sync.Mutex
+
+	accessory *hap.Accessory // HAP accessory
+	consumer  *homekit.Consumer
+	proxyURL  string
+	setupID   string
+	stream    string // stream name from YAML
+}
+
+func (s *server) MarshalJSON() ([]byte, error) {
+	v := struct {
+		Name       string `json:"name"`
+		DeviceID   string `json:"device_id"`
+		Paired     int    `json:"paired,omitempty"`
+		CategoryID string `json:"category_id,omitempty"`
+		SetupCode  string `json:"setup_code,omitempty"`
+		SetupID    string `json:"setup_id,omitempty"`
+		Conns      []any  `json:"connections,omitempty"`
+	}{
+		Name:       s.mdns.Name,
+		DeviceID:   s.mdns.Info[hap.TXTDeviceID],
+		CategoryID: s.mdns.Info[hap.TXTCategory],
+		Paired:     len(s.pairings),
+		Conns:      s.conns,
+	}
+	if v.Paired == 0 {
+		v.SetupCode = s.hap.Pin
+		v.SetupID = s.setupID
+	}
+	return json.Marshal(v)
+}
+
+func (s *server) Handle(w http.ResponseWriter, r *http.Request) {
+	conn, rw, err := w.(http.Hijacker).Hijack()
+	if err != nil {
+		return
+	}
+
+	defer conn.Close()
+
+	// Fix reading from Body after Hijack.
+	r.Body = io.NopCloser(rw)
+
+	switch r.RequestURI {
+	case hap.PathPairSetup:
+		id, key, err := s.hap.PairSetup(r, rw)
+		if err != nil {
+			log.Error().Err(err).Caller().Send()
+			return
+		}
+
+		s.AddPair(id, key, hap.PermissionAdmin)
+
+	case hap.PathPairVerify:
+		id, key, err := s.hap.PairVerify(r, rw)
+		if err != nil {
+			log.Debug().Err(err).Caller().Send()
+			return
+		}
+
+		log.Debug().Str("stream", s.stream).Str("client_id", id).Msgf("[homekit] %s: new conn", conn.RemoteAddr())
+
+		controller, err := hap.NewConn(conn, rw, key, false)
+		if err != nil {
+			log.Error().Err(err).Caller().Send()
+			return
+		}
+
+		s.AddConn(controller)
+		defer s.DelConn(controller)
+
+		var handler homekit.HandlerFunc
+
+		switch {
+		case s.accessory != nil:
+			handler = homekit.ServerHandler(s)
+		case s.proxyURL != "":
+			client, err := hap.Dial(s.proxyURL)
+			if err != nil {
+				log.Error().Err(err).Caller().Send()
+				return
+			}
+			handler = homekit.ProxyHandler(s, client.Conn)
+		}
+
+		// If your iPhone goes to sleep, it will be an EOF error.
+		if err = handler(controller); err != nil && !errors.Is(err, io.EOF) {
+			log.Error().Err(err).Caller().Send()
+			return
+		}
+	}
+}
+
+type logger struct {
+	v any
+}
+
+func (l logger) String() string {
+	switch v := l.v.(type) {
+	case *hap.Conn:
+		return "hap " + v.RemoteAddr().String()
+	case *hds.Conn:
+		return "hds " + v.RemoteAddr().String()
+	case *homekit.Consumer:
+		return "rtp " + v.RemoteAddr
+	}
+	return "unknown"
+}
+
+func (s *server) AddConn(v any) {
+	log.Trace().Str("stream", s.stream).Msgf("[homekit] add conn %s", logger{v})
+	s.mu.Lock()
+	s.conns = append(s.conns, v)
+	s.mu.Unlock()
+}
+
+func (s *server) DelConn(v any) {
+	log.Trace().Str("stream", s.stream).Msgf("[homekit] del conn %s", logger{v})
+	s.mu.Lock()
+	if i := slices.Index(s.conns, v); i >= 0 {
+		s.conns = slices.Delete(s.conns, i, i+1)
+	}
+	s.mu.Unlock()
 }
 
 func (s *server) UpdateStatus() {
@@ -44,12 +169,68 @@ func (s *server) UpdateStatus() {
 	}
 }
 
+func (s *server) pairIndex(id string) int {
+	id = "client_id=" + id
+	for i, pairing := range s.pairings {
+		if strings.HasPrefix(pairing, id) {
+			return i
+		}
+	}
+	return -1
+}
+
+func (s *server) GetPair(id string) []byte {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if i := s.pairIndex(id); i >= 0 {
+		query, _ := url.ParseQuery(s.pairings[i])
+		b, _ := hex.DecodeString(query.Get("client_public"))
+		return b
+	}
+	return nil
+}
+
+func (s *server) AddPair(id string, public []byte, permissions byte) {
+	log.Debug().Str("stream", s.stream).Msgf("[homekit] add pair id=%s public=%x perm=%d", id, public, permissions)
+
+	s.mu.Lock()
+	if s.pairIndex(id) < 0 {
+		s.pairings = append(s.pairings, fmt.Sprintf(
+			"client_id=%s&client_public=%x&permissions=%d", id, public, permissions,
+		))
+		s.UpdateStatus()
+		s.PatchConfig()
+	}
+	s.mu.Unlock()
+}
+
+func (s *server) DelPair(id string) {
+	log.Debug().Str("stream", s.stream).Msgf("[homekit] del pair id=%s", id)
+
+	s.mu.Lock()
+	if i := s.pairIndex(id); i >= 0 {
+		s.pairings = append(s.pairings[:i], s.pairings[i+1:]...)
+		s.UpdateStatus()
+		s.PatchConfig()
+	}
+	s.mu.Unlock()
+}
+
+func (s *server) PatchConfig() {
+	if err := app.PatchConfig([]string{"homekit", s.stream, "pairings"}, s.pairings); err != nil {
+		log.Error().Err(err).Msgf(
+			"[homekit] can't save %s pairings=%v", s.stream, s.pairings,
+		)
+	}
+}
+
 func (s *server) GetAccessories(_ net.Conn) []*hap.Accessory {
 	return []*hap.Accessory{s.accessory}
 }
 
 func (s *server) GetCharacteristic(conn net.Conn, aid uint8, iid uint64) any {
-	log.Trace().Msgf("[homekit] %s: get char aid=%d iid=0x%x", conn.RemoteAddr(), aid, iid)
+	log.Trace().Str("stream", s.stream).Msgf("[homekit] get char aid=%d iid=0x%x", aid, iid)
 
 	char := s.accessory.GetCharacterByID(iid)
 	if char == nil {
@@ -59,11 +240,12 @@ func (s *server) GetCharacteristic(conn net.Conn, aid uint8, iid uint64) any {
 
 	switch char.Type {
 	case camera.TypeSetupEndpoints:
-		if s.consumer == nil {
+		consumer := s.consumer
+		if consumer == nil {
 			return nil
 		}
 
-		answer := s.consumer.GetAnswer()
+		answer := consumer.GetAnswer()
 		v, err := tlv8.MarshalBase64(answer)
 		if err != nil {
 			return nil
@@ -76,7 +258,7 @@ func (s *server) GetCharacteristic(conn net.Conn, aid uint8, iid uint64) any {
 }
 
 func (s *server) SetCharacteristic(conn net.Conn, aid uint8, iid uint64, value any) {
-	log.Trace().Msgf("[homekit] %s: set char aid=%d iid=0x%x value=%v", conn.RemoteAddr(), aid, iid, value)
+	log.Trace().Str("stream", s.stream).Msgf("[homekit] set char aid=%d iid=0x%x value=%v", aid, iid, value)
 
 	char := s.accessory.GetCharacterByID(iid)
 	if char == nil {
@@ -86,61 +268,64 @@ func (s *server) SetCharacteristic(conn net.Conn, aid uint8, iid uint64, value a
 
 	switch char.Type {
 	case camera.TypeSetupEndpoints:
-		var offer camera.SetupEndpoints
-		if err := tlv8.UnmarshalBase64(value.(string), &offer); err != nil {
+		var offer camera.SetupEndpointsRequest
+		if err := tlv8.UnmarshalBase64(value, &offer); err != nil {
 			return
 		}
 
-		s.consumer = homekit.NewConsumer(conn, srtp2.Server)
-		s.consumer.SetOffer(&offer)
+		consumer := homekit.NewConsumer(conn, srtp2.Server)
+		consumer.SetOffer(&offer)
+		s.consumer = consumer
 
 	case camera.TypeSelectedStreamConfiguration:
-		var conf camera.SelectedStreamConfig
-		if err := tlv8.UnmarshalBase64(value.(string), &conf); err != nil {
+		var conf camera.SelectedStreamConfiguration
+		if err := tlv8.UnmarshalBase64(value, &conf); err != nil {
 			return
 		}
 
-		log.Trace().Msgf("[homekit] %s stream id=%x cmd=%d", conn.RemoteAddr(), conf.Control.SessionID, conf.Control.Command)
+		log.Trace().Str("stream", s.stream).Msgf("[homekit] stream id=%x cmd=%d", conf.Control.SessionID, conf.Control.Command)
 
 		switch conf.Control.Command {
 		case camera.SessionCommandEnd:
-			if consumer := s.streams[conf.Control.SessionID]; consumer != nil {
-				_ = consumer.Stop()
+			for _, consumer := range s.conns {
+				if consumer, ok := consumer.(*homekit.Consumer); ok {
+					if consumer.SessionID() == conf.Control.SessionID {
+						_ = consumer.Stop()
+						return
+					}
+				}
 			}
 
 		case camera.SessionCommandStart:
-			if s.consumer == nil {
+			consumer := s.consumer
+			if consumer == nil {
 				return
 			}
 
-			if !s.consumer.SetConfig(&conf) {
+			if !consumer.SetConfig(&conf) {
 				log.Warn().Msgf("[homekit] wrong config")
 				return
 			}
 
-			if s.streams == nil {
-				s.streams = map[string]*homekit.Consumer{}
-			}
-
-			s.streams[conf.Control.SessionID] = s.consumer
+			s.AddConn(consumer)
 
 			stream := streams.Get(s.stream)
-			if err := stream.AddConsumer(s.consumer); err != nil {
+			if err := stream.AddConsumer(consumer); err != nil {
 				return
 			}
 
 			go func() {
-				_, _ = s.consumer.WriteTo(nil)
-				stream.RemoveConsumer(s.consumer)
+				_, _ = consumer.WriteTo(nil)
+				stream.RemoveConsumer(consumer)
 
-				delete(s.streams, conf.Control.SessionID)
+				s.DelConn(consumer)
 			}()
 		}
 	}
 }
 
 func (s *server) GetImage(conn net.Conn, width, height int) []byte {
-	log.Trace().Msgf("[homekit] %s: get image width=%d height=%d", conn.RemoteAddr(), width, height)
+	log.Trace().Str("stream", s.stream).Msgf("[homekit] get image width=%d height=%d", width, height)
 
 	stream := streams.Get(s.stream)
 	cons := magic.NewKeyframe()
@@ -164,69 +349,6 @@ func (s *server) GetImage(conn net.Conn, width, height int) []byte {
 	}
 
 	return b
-}
-
-func (s *server) GetPair(conn net.Conn, id string) []byte {
-	log.Trace().Msgf("[homekit] %s: get pair id=%s", conn.RemoteAddr(), id)
-
-	for _, pairing := range s.pairings {
-		if !strings.Contains(pairing, id) {
-			continue
-		}
-
-		query, err := url.ParseQuery(pairing)
-		if err != nil {
-			continue
-		}
-
-		if query.Get("client_id") != id {
-			continue
-		}
-
-		s := query.Get("client_public")
-		b, _ := hex.DecodeString(s)
-		return b
-	}
-	return nil
-}
-
-func (s *server) AddPair(conn net.Conn, id string, public []byte, permissions byte) {
-	log.Trace().Msgf("[homekit] %s: add pair id=%s public=%x perm=%d", conn.RemoteAddr(), id, public, permissions)
-
-	query := url.Values{
-		"client_id":     []string{id},
-		"client_public": []string{hex.EncodeToString(public)},
-		"permissions":   []string{string('0' + permissions)},
-	}
-	if s.GetPair(conn, id) == nil {
-		s.pairings = append(s.pairings, query.Encode())
-		s.UpdateStatus()
-		s.PatchConfig()
-	}
-}
-
-func (s *server) DelPair(conn net.Conn, id string) {
-	log.Trace().Msgf("[homekit] %s: del pair id=%s", conn.RemoteAddr(), id)
-
-	id = "client_id=" + id
-	for i, pairing := range s.pairings {
-		if !strings.Contains(pairing, id) {
-			continue
-		}
-
-		s.pairings = append(s.pairings[:i], s.pairings[i+1:]...)
-		s.UpdateStatus()
-		s.PatchConfig()
-		break
-	}
-}
-
-func (s *server) PatchConfig() {
-	if err := app.PatchConfig("pairings", s.pairings, "homekit", s.stream); err != nil {
-		log.Error().Err(err).Msgf(
-			"[homekit] can't save %s pairings=%v", s.stream, s.pairings,
-		)
-	}
 }
 
 func calcName(name, seed string) string {
@@ -262,4 +384,22 @@ func calcDevicePrivate(private, seed string) []byte {
 	}
 	b := sha512.Sum512([]byte(seed))
 	return ed25519.NewKeyFromSeed(b[:ed25519.SeedSize])
+}
+
+func calcSetupID(seed string) string {
+	b := sha512.Sum512([]byte(seed))
+	return fmt.Sprintf("%02X%02X", b[44], b[46])
+}
+
+func calcCategoryID(categoryID string) string {
+	switch categoryID {
+	case "bridge":
+		return hap.CategoryBridge
+	case "doorbell":
+		return hap.CategoryDoorbell
+	}
+	if core.Atoi(categoryID) > 0 {
+		return categoryID
+	}
+	return hap.CategoryCamera
 }

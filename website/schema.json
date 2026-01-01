@@ -24,7 +24,26 @@
         "debug",
         "info",
         "warn",
-        "error"
+        "error",
+        "fatal",
+        "panic",
+        "disabled"
+      ]
+    },
+    "source": {
+      "type": "string",
+      "examples": [
+        "rtsp://username:password@192.168.1.123/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif",
+        "rtsp://username:password@192.168.1.123/stream1",
+        "rtsp://username:password@192.168.1.123/h264Preview_01_main",
+        "rtmp://192.168.1.123/bcs/channel0_main.bcs?channel=0&stream=0&user=username&password=password",
+        "http://192.168.1.123/flv?port=1935&app=bcs&stream=channel0_main.bcs&user=username&password=password",
+        "http://username:password@192.168.1.123/cgi-bin/snapshot.cgi?channel=1",
+        "ffmpeg:media.mp4#video=h264#hardware#width=1920#height=1080#rotate=180#audio=copy",
+        "ffmpeg:virtual?video=testsrc&size=4K#video=h264#hardware#bitrate=50M",
+        "exec:ffmpeg -re -i media.mp4 -c copy -rtsp_transport tcp -f rtsp {output}",
+        "onvif://username:password@192.168.1.123:80?subtype=0",
+        "tapo://password@192.168.1.123:8800?channel=0&subtype=0"
       ]
     }
   },
@@ -33,13 +52,14 @@
       "type": "object",
       "properties": {
         "listen": {
+          "type": "string",
           "default": ":1984",
           "examples": [
-            "127.0.0.1:8080"
-          ],
-          "$ref": "#/definitions/listen"
+            "127.0.0.1:1984"
+          ]
         },
         "username": {
+          "description": "Basic auth for WebUI",
           "type": "string",
           "examples": [
             "admin"
@@ -48,24 +68,35 @@
         "password": {
           "type": "string"
         },
+        "local_auth": {
+          "description": "Enable auth check for localhost requests",
+          "type": "boolean",
+          "default": false
+        },
         "base_path": {
+          "description": "API prefix for serving on suburl (/api => /rtc/api)",
           "type": "string",
           "examples": [
-            "/go2rtc"
+            "/rtc"
           ]
         },
         "static_dir": {
+          "description": "Folder for static files (custom web interface)",
           "type": "string",
           "examples": [
-            "/var/www"
+            "www"
           ]
         },
         "origin": {
+          "description": "Allow CORS requests (only * supported)",
           "type": "string",
-          "const": "*"
+          "enum": [
+            "*",
+            ""
+          ]
         },
         "tls_listen": {
-          "$ref": "#/definitions/listen"
+          "type": "string"
         },
         "tls_cert": {
           "type": "string",
@@ -86,6 +117,111 @@
           "examples": [
             "/tmp/go2rtc.sock"
           ]
+        },
+        "allow_paths": {
+          "description": "Allow only these HTTP paths (full paths, including base_path)",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "examples": [
+            [
+              "/api",
+              "/api/streams",
+              "/api/webrtc"
+            ]
+          ]
+        }
+      }
+    },
+    "app": {
+      "type": "object",
+      "properties": {
+        "modules": {
+          "description": "Enable only these modules (empty / omitted means all)",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "api",
+              "ws",
+              "http",
+              "rtsp",
+              "webrtc",
+              "mp4",
+              "hls",
+              "mjpeg",
+              "hass",
+              "homekit",
+              "onvif",
+              "rtmp",
+              "webtorrent",
+              "wyoming",
+              "echo",
+              "exec",
+              "expr",
+              "ffmpeg",
+              "alsa",
+              "v4l2",
+              "bubble",
+              "doorbird",
+              "dvrip",
+              "eseecloud",
+              "flussonic",
+              "gopro",
+              "isapi",
+              "ivideon",
+              "mpegts",
+              "nest",
+              "ring",
+              "roborock",
+              "tapo",
+              "tuya",
+              "xiaomi",
+              "yandex",
+              "debug",
+              "ngrok",
+              "pinggy",
+              "srtp"
+            ]
+          }
+        }
+      }
+    },
+    "env": {
+      "description": "Config variables that can be referenced as ${NAME} / ${NAME:default}",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "echo": {
+      "type": "object",
+      "properties": {
+        "allow_paths": {
+          "description": "Allow only these binaries for echo: URLs (exact cmd name/path)",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "exec": {
+      "type": "object",
+      "properties": {
+        "allow_paths": {
+          "description": "Allow only these binaries for exec: URLs (exact cmd name/path)",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "examples": [
+            [
+              "ffmpeg",
+              "/usr/bin/ffmpeg"
+            ]
+          ]
         }
       }
     },
@@ -95,6 +231,26 @@
         "bin": {
           "type": "string",
           "default": "ffmpeg"
+        },
+        "global": {
+          "type": "string",
+          "default": "-hide_banner"
+        },
+        "file": {
+          "type": "string",
+          "default": "-re -i {input}"
+        },
+        "http": {
+          "type": "string",
+          "default": "-fflags nobuffer -flags low_delay -i {input}"
+        },
+        "rtsp": {
+          "type": "string",
+          "default": "-fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i {input}"
+        },
+        "rtsp/udp": {
+          "type": "string",
+          "default": "-fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -i {input}"
         }
       },
       "additionalProperties": {
@@ -117,12 +273,25 @@
     "homekit": {
       "type": "object",
       "additionalProperties": {
-        "type": "object",
+        "type": [
+          "object",
+          "null"
+        ],
         "properties": {
           "pin": {
+            "description": "HomeKit pairing PIN",
             "type": "string",
             "default": "19550224",
-            "pattern": "^[0-9]{8}$"
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9]{8}$"
+              },
+              {
+                "type": "string",
+                "pattern": "^[0-9]{3}-[0-9]{2}-[0-9]{3}$"
+              }
+            ]
           },
           "name": {
             "type": "string"
@@ -132,6 +301,29 @@
           },
           "device_private": {
             "type": "string"
+          },
+          "category_id": {
+            "description": "Accessory category: `bridge`, `doorbell` or numeric ID",
+            "type": "string",
+            "default": "camera",
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "bridge",
+                  "camera",
+                  "doorbell"
+                ]
+              },
+              {
+                "type": "string",
+                "pattern": "^[0-9]+$"
+              },
+              {
+                "type": "string",
+                "const": ""
+              }
+            ]
           },
           "pairings": {
             "type": "array",
@@ -146,9 +338,11 @@
       "type": "object",
       "properties": {
         "format": {
+          "description": "Log format: color/json/text or empty for autodetect",
           "type": "string",
           "default": "color",
           "enum": [
+            "",
             "color",
             "json",
             "text"
@@ -160,12 +354,26 @@
           "$ref": "#/definitions/log_level"
         },
         "output": {
+          "description": "Log output: stdout/stderr/file[:path] or empty (memory only)",
           "type": "string",
           "default": "stdout",
-          "enum": [
-            "",
-            "stdout",
-            "stderr"
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "",
+                "stdout",
+                "stderr"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^file(:.+)?$",
+              "examples": [
+                "file",
+                "file:go2rtc.log"
+              ]
+            }
           ]
         },
         "time": {
@@ -215,6 +423,9 @@
         "homekit": {
           "$ref": "#/definitions/log_level"
         },
+        "mjpeg": {
+          "$ref": "#/definitions/log_level"
+        },
         "mp4": {
           "$ref": "#/definitions/log_level"
         },
@@ -238,6 +449,9 @@
         },
         "webtorrent": {
           "$ref": "#/definitions/log_level"
+        },
+        "wyoming": {
+          "$ref": "#/definitions/log_level"
         }
       }
     },
@@ -251,6 +465,30 @@
             "ngrok start --all --config ngrok.yaml"
           ]
         }
+      }
+    },
+    "pinggy": {
+      "type": "object",
+      "properties": {
+        "tunnel": {
+          "description": "Expose local address via Pinggy",
+          "type": "string",
+          "examples": [
+            "http://127.0.0.1:1984",
+            "tcp://192.168.1.123:554"
+          ]
+        }
+      }
+    },
+    "preload": {
+      "description": "Preload streams on startup (map stream name => probe query, default `video&audio`)",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "examples": [
+          "video&audio",
+          "video"
+        ]
       }
     },
     "publish": {
@@ -277,10 +515,10 @@
       "type": "object",
       "properties": {
         "listen": {
+          "type": "string",
           "examples": [
             ":1935"
-          ],
-          "$ref": "#/definitions/listen"
+          ]
         }
       }
     },
@@ -288,8 +526,8 @@
       "type": "object",
       "properties": {
         "listen": {
-          "default": ":8554",
-          "$ref": "#/definitions/listen"
+          "type": "string",
+          "default": ":8554"
         },
         "username": {
           "type": "string",
@@ -314,75 +552,56 @@
       "type": "object",
       "properties": {
         "listen": {
-          "default": ":8443",
-          "$ref": "#/definitions/listen"
+          "type": "string",
+          "default": ":8443"
         }
       }
     },
     "streams": {
       "type": "object",
       "additionalProperties": {
-        "title": "Stream",
         "anyOf": [
           {
-            "description": "Source",
-            "type": "string",
-            "examples": [
-              "rtsp://username:password@192.168.1.123/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif",
-              "rtsp://username:password@192.168.1.123/stream1",
-              "rtsp://username:password@192.168.1.123/h264Preview_01_main",
-              "rtmp://192.168.1.123/bcs/channel0_main.bcs?channel=0&stream=0&user=username&password=password",
-              "http://192.168.1.123/flv?port=1935&app=bcs&stream=channel0_main.bcs&user=username&password=password",
-              "http://username:password@192.168.1.123/cgi-bin/snapshot.cgi?channel=1",
-              "ffmpeg:media.mp4#video=h264#hadware#width=1920#height=1080#rotate=180#audio=copy",
-              "ffmpeg:virtual?video=testsrc&size=4K#video=h264#hardware#bitrate=50M",
-              "bubble://username:password@192.168.1.123:34567/bubble/live?ch=0&stream=0",
-              "dvrip://username:password@192.168.1.123:34567?channel=0&subtype=0",
-              "exec:ffmpeg -re -i media.mp4 -c copy -rtsp_transport tcp -f rtsp {output}",
-              "isapi://username:password@192.168.1.123:80/",
-              "kasa://username:password@192.168.1.123:19443/https/stream/mixed",
-              "onvif://username:password@192.168.1.123:80?subtype=0",
-              "tapo://password@192.168.1.123:8800?channel=0&subtype=0",
-              "webtorrent:?share=xxx&pwd=xxx"
-            ]
+            "$ref": "#/definitions/source"
           },
           {
             "type": "array",
             "items": {
-              "description": "Source",
-              "type": "string"
+              "$ref": "#/definitions/source"
             }
+          },
+          {
+            "type": "null"
           }
         ]
+      }
+    },
+    "xiaomi": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
       }
     },
     "webrtc": {
       "type": "object",
       "properties": {
         "listen": {
-          "default": ":8555/tcp",
           "type": "string",
-          "anyOf": [
-            {
-              "type": "string",
-              "pattern": ":[0-9]{1,5}(/tcp|/udp)?$"
-            },
-            {
-              "type": "string",
-              "const": ""
-            }
+          "default": ":8555",
+          "examples": [
+            ":8555/udp"
           ]
         },
         "candidates": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/listen/anyOf/0"
-          },
-          "examples": [
-            "216.58.210.174:8555",
-            "stun:8555",
-            "home.duckdns.org:8555"
-          ]
+            "type": "string",
+            "examples": [
+              "216.58.210.174:8555",
+              "stun:8555",
+              "home.duckdns.org:8555"
+            ]
+          }
         },
         "ice_servers": {
           "type": "array",
@@ -436,13 +655,13 @@
               "description": "Use only these network types",
               "type": "array",
               "items": {
+                "type": "string",
                 "enum": [
                   "tcp4",
                   "tcp6",
                   "udp4",
                   "udp6"
-                ],
-                "type": "string"
+                ]
               }
             },
             "udp_ports": {
@@ -472,12 +691,56 @@
             "type": "object",
             "properties": {
               "pwd": {
-                "type": "string"
+                "type": "string",
+                "minLength": 4
               },
               "src": {
                 "type": "string"
               }
             }
+          }
+        }
+      }
+    },
+    "wyoming": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "listen": {
+            "description": "Listen address for Wyoming server",
+            "type": "string"
+          },
+          "name": {
+            "description": "Optional satellite name (default: stream name)",
+            "type": "string"
+          },
+          "mode": {
+            "description": "Optional mode: mic / snd / default",
+            "type": "string",
+            "enum": [
+              "",
+              "mic",
+              "snd"
+            ]
+          },
+          "event": {
+            "description": "Event handlers (map event type => expr script)",
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "wake_uri": {
+            "description": "Optional WAKE service URI (ex. tcp://host:port?name=...)",
+            "type": "string",
+            "examples": [
+              "tcp://192.168.1.23:10400"
+            ]
+          },
+          "vad_threshold": {
+            "description": "Optional VAD threshold (0.1..3.5 typical)",
+            "type": "number"
           }
         }
       }

@@ -10,23 +10,14 @@ import (
 
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/streams"
-	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/dvrip"
 )
 
 func Init() {
-	streams.HandleFunc("dvrip", handle)
+	streams.HandleFunc("dvrip", dvrip.Dial)
 
 	// DVRIP client autodiscovery
 	api.HandleFunc("api/dvrip", apiDvrip)
-}
-
-func handle(url string) (core.Producer, error) {
-	client, err := dvrip.Dial(url)
-	if err != nil {
-		return nil, err
-	}
-	return client, nil
 }
 
 const Port = 34569 // UDP port number for dvrip discovery

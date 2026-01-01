@@ -14,7 +14,7 @@ import (
 )
 
 type Consumer struct {
-	core.SuperConsumer
+	core.Connection
 	wr    *core.WriteBuffer
 	muxer *Muxer
 	mu    sync.Mutex
@@ -47,12 +47,17 @@ func NewConsumer(medias []*core.Media) *Consumer {
 		}
 	}
 
-	cons := &Consumer{
+	wr := core.NewWriteBuffer(nil)
+	return &Consumer{
+		Connection: core.Connection{
+			ID:         core.NewID(),
+			FormatName: "mp4",
+			Medias:     medias,
+			Transport:  wr,
+		},
 		muxer: &Muxer{},
-		wr:    core.NewWriteBuffer(nil),
+		wr:    wr,
 	}
-	cons.Medias = medias
-	return cons
 }
 
 func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver) error {
@@ -181,9 +186,4 @@ func (c *Consumer) WriteTo(wr io.Writer) (int64, error) {
 	}
 
 	return c.wr.WriteTo(wr)
-}
-
-func (c *Consumer) Stop() error {
-	_ = c.SuperConsumer.Close()
-	return c.wr.Close()
 }

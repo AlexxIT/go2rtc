@@ -12,7 +12,6 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/mp4"
 	"github.com/AlexxIT/go2rtc/pkg/mpegts"
-	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/rs/zerolog"
 )
 
@@ -63,15 +62,13 @@ func handlerStream(w http.ResponseWriter, r *http.Request) {
 	medias := mp4.ParseQuery(r.URL.Query())
 	if medias != nil {
 		c := mp4.NewConsumer(medias)
-		c.Type = "HLS/fMP4 consumer"
-		c.RemoteAddr = tcp.RemoteAddr(r)
-		c.UserAgent = r.UserAgent()
+		c.FormatName = "hls/fmp4"
+		c.WithRequest(r)
 		cons = c
 	} else {
 		c := mpegts.NewConsumer()
-		c.Type = "HLS/TS consumer"
-		c.RemoteAddr = tcp.RemoteAddr(r)
-		c.UserAgent = r.UserAgent()
+		c.FormatName = "hls/mpegts"
+		c.WithRequest(r)
 		cons = c
 	}
 

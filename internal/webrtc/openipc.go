@@ -9,7 +9,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	"github.com/gorilla/websocket"
-	pion "github.com/pion/webrtc/v3"
+	pion "github.com/pion/webrtc/v4"
 )
 
 func openIPCClient(rawURL string, query url.Values) (core.Producer, error) {
@@ -53,8 +53,10 @@ func openIPCClient(rawURL string, query url.Values) (core.Producer, error) {
 	var connState core.Waiter
 
 	prod := webrtc.NewConn(pc)
-	prod.Desc = "WebRTC/OpenIPC"
+	prod.FormatName = "webrtc/openipc"
 	prod.Mode = core.ModeActiveProducer
+	prod.Protocol = "ws"
+	prod.URL = rawURL
 	prod.Listen(func(msg any) {
 		switch msg := msg.(type) {
 		case *pion.ICECandidate:

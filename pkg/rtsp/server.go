@@ -13,11 +13,19 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 )
 
+var FailedAuth = errors.New("failed authentication")
+
 func NewServer(conn net.Conn) *Conn {
-	c := new(Conn)
-	c.conn = conn
-	c.reader = bufio.NewReader(conn)
-	return c
+	return &Conn{
+		Connection: core.Connection{
+			ID:         core.NewID(),
+			FormatName: "rtsp",
+			Protocol:   "rtsp+tcp",
+			RemoteAddr: conn.RemoteAddr().String(),
+		},
+		conn:   conn,
+		reader: bufio.NewReader(conn),
+	}
 }
 
 func (c *Conn) Auth(username, password string) {
@@ -39,7 +47,7 @@ func (c *Conn) Accept() error {
 
 		c.Fire(req)
 
-		if !c.auth.Validate(req) {
+		if valid, empty := c.auth.Validate(req); !valid {
 			res := &tcp.Response{
 				Status:  "401 Unauthorized",
 				Header:  map[string][]string{"Www-Authenticate": {`Basic realm="go2rtc"`}},
@@ -48,7 +56,12 @@ func (c *Conn) Accept() error {
 			if err = c.WriteResponse(res); err != nil {
 				return err
 			}
-			continue
+			if empty {
+				// eliminate false positive: ffmpeg sends first request without
+				// authorization header even if the user provides credentials
+				continue
+			}
+			return FailedAuth
 		}
 
 		// Receiver: OPTIONS > DESCRIBE > SETUP... > PLAY > TEARDOWN
@@ -70,7 +83,7 @@ func (c *Conn) Accept() error {
 				return errors.New("wrong content type")
 			}
 
-			c.sdp = string(req.Body) // for info
+			c.SDP = string(req.Body) // for info
 
 			c.Medias, err = UnmarshalSDP(req.Body)
 			if err != nil {
@@ -81,7 +94,7 @@ func (c *Conn) Accept() error {
 			for i, media := range c.Medias {
 				track := core.NewReceiver(media, media.Codecs[0])
 				track.ID = byte(i * 2)
-				c.receivers = append(c.receivers, track)
+				c.Receivers = append(c.Receivers, track)
 			}
 
 			c.mode = core.ModePassiveProducer
@@ -96,7 +109,7 @@ func (c *Conn) Accept() error {
 			c.mode = core.ModePassiveConsumer
 			c.Fire(MethodDescribe)
 
-			if c.senders == nil {
+			if c.Senders == nil {
 				res := &tcp.Response{
 					Status:  "404 Not Found",
 					Request: req,
@@ -113,7 +126,7 @@ func (c *Conn) Accept() error {
 
 			// convert tracks to real output medias medias
 			var medias []*core.Media
-			for i, track := range c.senders {
+			for i, track := range c.Senders {
 				media := &core.Media{
 					Kind:      core.GetKind(track.Codec.Name),
 					Direction: core.DirectionRecvonly,
@@ -123,41 +136,53 @@ func (c *Conn) Accept() error {
 				medias = append(medias, media)
 			}
 
+			for i, track := range c.Receivers {
+				media := &core.Media{
+					Kind:      core.GetKind(track.Codec.Name),
+					Direction: core.DirectionSendonly,
+					Codecs:    []*core.Codec{track.Codec},
+					ID:        "trackID=" + strconv.Itoa(i+len(c.Senders)),
+				}
+				medias = append(medias, media)
+			}
+
 			res.Body, err = core.MarshalSDP(c.SessionName, medias)
 			if err != nil {
 				return err
 			}
 
-			c.sdp = string(res.Body) // for info
+			c.SDP = string(res.Body) // for info
 
 			if err = c.WriteResponse(res); err != nil {
 				return err
 			}
 
 		case MethodSetup:
-			tr := req.Header.Get("Transport")
-
 			res := &tcp.Response{
 				Header:  map[string][]string{},
 				Request: req,
 			}
 
-			const transport = "RTP/AVP/TCP;unicast;interleaved="
-			if strings.HasPrefix(tr, transport) {
+			// Test if client requests TCP transport, otherwise return 461 Transport not supported
+			// This allows smart clients who initially requested UDP to fall back on TCP transport
+			if tr := req.Header.Get("Transport"); strings.HasPrefix(tr, "RTP/AVP/TCP") {
 				c.session = core.RandString(8, 10)
 				c.state = StateSetup
 
 				if c.mode == core.ModePassiveConsumer {
-					if i := reqTrackID(req); i >= 0 && i < len(c.senders) {
-						// mark sender as SETUP
-						c.senders[i].Media.ID = MethodSetup
+					if i := reqTrackID(req); i >= 0 && i < len(c.Senders)+len(c.Receivers) {
+						if i < len(c.Senders) {
+							c.Senders[i].Media.ID = MethodSetup
+						} else {
+							c.Receivers[i-len(c.Senders)].Media.ID = MethodSetup
+						}
 						tr = fmt.Sprintf("RTP/AVP/TCP;unicast;interleaved=%d-%d", i*2, i*2+1)
 						res.Header.Set("Transport", tr)
 					} else {
 						res.Status = "400 Bad Request"
 					}
 				} else {
-					res.Header.Set("Transport", tr[:len(transport)+3])
+					res.Header.Set("Transport", tr)
 				}
 			} else {
 				res.Status = "461 Unsupported transport"
@@ -170,7 +195,7 @@ func (c *Conn) Accept() error {
 		case MethodRecord, MethodPlay:
 			if c.mode == core.ModePassiveConsumer {
 				// stop unconfigured senders
-				for _, track := range c.senders {
+				for _, track := range c.Senders {
 					if track.Media.ID != MethodSetup {
 						track.Close()
 					}

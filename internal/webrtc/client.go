@@ -15,7 +15,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	"github.com/gorilla/websocket"
-	pion "github.com/pion/webrtc/v3"
+	pion "github.com/pion/webrtc/v4"
 )
 
 // streamsHandler supports:
@@ -41,9 +41,11 @@ func streamsHandler(rawURL string) (core.Producer, error) {
 				// https://aws.amazon.com/kinesis/video-streams/
 				// https://docs.aws.amazon.com/kinesisvideostreams-webrtc-dg/latest/devguide/what-is-kvswebrtc.html
 				// https://github.com/orgs/awslabs/repositories?q=kinesis+webrtc
-				return kinesisClient(rawURL, query, "WebRTC/Kinesis")
+				return kinesisClient(rawURL, query, "webrtc/kinesis", nil)
 			} else if format == "openipc" {
 				return openIPCClient(rawURL, query)
+			} else if format == "switchbot" {
+				return switchbotClient(rawURL, query)
 			} else {
 				return go2rtcClient(rawURL)
 			}
@@ -54,6 +56,8 @@ func streamsHandler(rawURL string) (core.Producer, error) {
 			} else if format == "wyze" {
 				// https://github.com/mrlt8/docker-wyze-bridge
 				return wyzeClient(rawURL)
+			} else if format == "creality" {
+				return crealityClient(rawURL)
 			} else {
 				return whepClient(rawURL)
 			}
@@ -77,17 +81,23 @@ func go2rtcClient(url string) (core.Producer, error) {
 	// 2. Create PeerConnection
 	pc, err := PeerConnection(true)
 	if err != nil {
-		log.Error().Err(err).Caller().Send()
 		return nil, err
 	}
+
+	defer func() {
+		if err != nil {
+			_ = pc.Close()
+		}
+	}()
 
 	// waiter will wait PC error or WS error or nil (connection OK)
 	var connState core.Waiter
 	var connMu sync.Mutex
 
 	prod := webrtc.NewConn(pc)
-	prod.Desc = "WebRTC/WebSocket async"
 	prod.Mode = core.ModeActiveProducer
+	prod.Protocol = "ws"
+	prod.URL = url
 	prod.Listen(func(msg any) {
 		switch msg := msg.(type) {
 		case *pion.ICECandidate:
@@ -132,7 +142,8 @@ func go2rtcClient(url string) (core.Producer, error) {
 	}
 
 	if msg.Type != "webrtc/answer" {
-		return nil, errors.New("wrong answer: " + msg.Type)
+		err = errors.New("wrong answer: " + msg.String())
+		return nil, err
 	}
 
 	answer := msg.String()
@@ -180,8 +191,9 @@ func whepClient(url string) (core.Producer, error) {
 	}
 
 	prod := webrtc.NewConn(pc)
-	prod.Desc = "WebRTC/WHEP sync"
 	prod.Mode = core.ModeActiveProducer
+	prod.Protocol = "http"
+	prod.URL = url
 
 	medias := []*core.Media{
 		{Kind: core.KindVideo, Direction: core.DirectionRecvonly},

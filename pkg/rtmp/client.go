@@ -8,10 +8,11 @@ import (
 	"strings"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/flv"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 )
 
-func DialPlay(rawURL string) (core.Producer, error) {
+func DialPlay(rawURL string) (*flv.Producer, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, err
@@ -22,19 +23,19 @@ func DialPlay(rawURL string) (core.Producer, error) {
 		return nil, err
 	}
 
-	rtmpConn, err := NewClient(conn, u)
+	client, err := NewClient(conn, u)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = rtmpConn.play(); err != nil {
+	if err = client.play(); err != nil {
 		return nil, err
 	}
 
-	return rtmpConn.Producer()
+	return client.Producer()
 }
 
-func DialPublish(rawURL string) (io.Writer, error) {
+func DialPublish(rawURL string, cons *flv.Consumer) (io.Writer, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, err
@@ -53,6 +54,11 @@ func DialPublish(rawURL string) (io.Writer, error) {
 	if err = client.publish(); err != nil {
 		return nil, err
 	}
+
+	cons.FormatName = "rtmp"
+	cons.Protocol = "rtmp"
+	cons.RemoteAddr = conn.RemoteAddr().String()
+	cons.URL = rawURL
 
 	return client, nil
 }
