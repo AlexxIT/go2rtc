@@ -249,7 +249,20 @@ export class VideoRTC extends HTMLElement {
         this.appendChild(this.video);
 
         this.video.addEventListener('error', ev => {
-            console.warn(ev);
+            const err = this.video.error;
+            console.error('[VideoRTC] Video error:', {
+                code: err ? err.code : 'unknown',
+                message: err ? err.message : 'unknown',
+                MEDIA_ERR_ABORTED: 1,
+                MEDIA_ERR_NETWORK: 2,
+                MEDIA_ERR_DECODE: 3,
+                MEDIA_ERR_SRC_NOT_SUPPORTED: 4,
+                codecs: this.mseCodecs || 'not set',
+                readyState: this.video.readyState,
+                networkState: this.video.networkState,
+                currentTime: this.video.currentTime,
+                event: ev
+            });
             if (this.ws) this.ws.close(); // run reconnect for broken MSE stream
         });
 

@@ -10,6 +10,13 @@ import (
 
 const ADTSHeaderSize = 7
 
+func ADTSHeaderLen(b []byte) int {
+	if HasCRC(b) {
+		return 9 // 7 bytes header + 2 bytes CRC
+	}
+	return ADTSHeaderSize
+}
+
 func IsADTS(b []byte) bool {
 	// AAAAAAAA AAAABCCD EEFFFFGH HHIJKLMM MMMMMMMM MMMOOOOO OOOOOOPP (QQQQQQQQ QQQQQQQQ)
 	// A	12	Syncword, all bits must be set to 1.

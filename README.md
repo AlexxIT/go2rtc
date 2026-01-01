@@ -67,6 +67,7 @@ Ultimate camera streaming application with support for RTSP, WebRTC, HomeKit, FF
     * [Source: Kasa](#source-kasa)
     * [Source: Tuya](#source-tuya)
     * [Source: Xiaomi](#source-xiaomi)
+    * [Source: Wyze](#source-wyze)
     * [Source: GoPro](#source-gopro)
     * [Source: Ivideon](#source-ivideon)
     * [Source: Hass](#source-hass)
@@ -604,6 +605,10 @@ Tested: KD110, KC200, KC401, KC420WS, EC71.
 *[New in v1.9.13](https://github.com/AlexxIT/go2rtc/releases/tag/v1.9.13)*
 
 This source allows you to view cameras from the [Xiaomi Mi Home](https://home.mi.com/) ecosystem. [Read more](https://github.com/AlexxIT/go2rtc/blob/master/internal/xiaomi/README.md).
+
+#### Source: Wyze
+
+This source allows you to stream from [Wyze](https://wyze.com/) cameras using native P2P protocol. Supports H.264/H.265 video, AAC/G.711 audio, and two-way audio. [Read more](https://github.com/AlexxIT/go2rtc/blob/master/pkg/wyze/README.md).
 
 #### Source: GoPro
 
