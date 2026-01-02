@@ -123,7 +123,7 @@ func (c *Client) SetResolution(sd bool) error {
 		return fmt.Errorf("wyze: K10056 send failed: %w", err)
 	}
 
-	// Wait for response (SDK-style: accept any IOCtrl)
+	// Wait for K10057 response
 	cmdID, data, err := c.conn.RecvIOCtrl(1 * time.Second)
 	if err != nil {
 		return err
