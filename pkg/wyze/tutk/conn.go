@@ -108,13 +108,13 @@ func Dial(host, uid, authKey, enr string, verbose bool) (*Conn, error) {
 		verbose:        verbose,
 		ctx:            ctx,
 		cancel:         cancel,
-		mainBuf:    make(chan []byte, 64),
-		speakerBuf: make(chan []byte, 64),
-		packetQueue: make(chan *Packet, 128),
-		done:        make(chan struct{}),
-		ioctrl:      make(chan []byte, 16),
-		ackReceived: make(chan struct{}, 1),
-		errors:      make(chan error, 1),
+		mainBuf:        make(chan []byte, 64),
+		speakerBuf:     make(chan []byte, 64),
+		packetQueue:    make(chan *Packet, 128),
+		done:           make(chan struct{}),
+		ioctrl:         make(chan []byte, 16),
+		ackReceived:    make(chan struct{}, 1),
+		errors:         make(chan error, 1),
 	}
 
 	if err = c.discovery(); err != nil {
@@ -169,7 +169,6 @@ func (c *Conn) AVClientStart(timeout time.Duration) error {
 				return io.EOF
 			}
 			if len(data) >= 32 && binary.LittleEndian.Uint16(data[0:2]) == MagicAVLoginResp {
-				// Parse response inline
 				c.avLoginResp = &AVLoginResponse{
 					ServerType:      binary.LittleEndian.Uint32(data[4:8]),
 					Resend:          int32(data[29]),
@@ -265,7 +264,6 @@ func (c *Conn) AVSendAudioData(codec uint16, payload []byte, timestampUS uint32,
 		return fmt.Errorf("speaker channel not connected")
 	}
 
-	// Build frame with 36-byte header + audio + 16-byte FrameInfo (FrameInfo inside payload!)
 	frame := c.buildAudioFrame(payload, timestampUS, codec, sampleRate, channels)
 
 	if c.verbose {
@@ -290,7 +288,6 @@ func (c *Conn) SendIOCtrl(cmdID uint16, payload []byte) error {
 		return err
 	}
 
-	// Block until ACK received (like SDK)
 	select {
 	case <-c.ackReceived:
 		if c.verbose {
@@ -350,14 +347,12 @@ func (c *Conn) SetDeadline(t time.Time) error {
 }
 
 func (c *Conn) Close() error {
-	// Signal done to stop goroutines
 	select {
 	case <-c.done:
 	default:
 		close(c.done)
 	}
 
-	// Close DTLS connections
 	c.mu.Lock()
 	if c.mainConn != nil {
 		c.mainConn.Close()
@@ -370,8 +365,6 @@ func (c *Conn) Close() error {
 	c.mu.Unlock()
 
 	c.cancel()
-
-	// Wait for goroutines
 	c.wg.Wait()
 
 	close(c.ioctrl)
@@ -544,7 +537,6 @@ func (c *Conn) iotcReader() {
 		default:
 		}
 
-		// Inline receive with timeout
 		c.udpConn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 		n, addr, err := c.udpConn.ReadFromUDP(buf)
 		if err != nil {
@@ -763,7 +755,7 @@ func (c *Conn) handleSpeakerAVLogin() error {
 		return fmt.Errorf("AV login too short: %d bytes", n)
 	}
 
-	// Extract checksum from incoming request (bytes 20-23) - MUST echo this back!
+	// Extract checksum from incoming request (bytes 20-23)
 	checksum := binary.LittleEndian.Uint32(buf[20:24])
 
 	// Build AV Login response (60 bytes like SDK)
@@ -877,7 +869,7 @@ func (c *Conn) extractPayload(data []byte, channel byte) ([]byte, *FrameInfo) {
 		headerSize = 36
 		frameInfoSize = FrameInfoSize
 	default:
-		// Unknown frame type - use 28-byte header as fallback (most common)
+		// Unknown frame type - use 28-byte header as fallback
 		headerSize = 28
 	}
 
