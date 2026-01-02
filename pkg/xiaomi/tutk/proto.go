@@ -75,7 +75,10 @@ const (
 	msgMediaFrame
 	msgMediaLost
 	msgCh5
+	msgUnknown0007
+	msgUnknown0008
 	msgUnknown0010
+	msgUnknown0013
 	msgUnknown0a08
 	msgDafang0012
 	msgDafang0071
@@ -110,16 +113,29 @@ func (c *Conn) handleMsg(msg []byte) int8 {
 }
 
 func (c *Conn) handleCh1(cmd []byte) int8 {
+	// Channel 1 used for two-way audio. It's important:
+	// - answer on 0000 command with exact config response (can't set simple proto)
+	// - send 0012 command at start
+	// - respond on every 0008 command for smooth playback
 	switch cid := string(cmd[:2]); cid {
-	case "\x00\x00":
+	case "\x00\x00": // client start
 		_ = c.WriteCh1(c.msgAck0000(cmd))
+		_ = c.WriteCh1(c.msg0012())
 		return msgClientStart00
-	case "\x00\x20":
+	case "\x00\x07": // time sync without data
+		_ = c.WriteCh1(c.msgAck0007(cmd))
+		return msgUnknown0007
+	case "\x00\x08": // time sync with data
+		_ = c.WriteCh1(c.msgAck0008(cmd))
+		return msgUnknown0008
+	case "\x00\x13": // ack for 0012
+		return msgUnknown0013
+	case "\x00\x20": // client start2
 		//_ = c.WriteCh1(c.msgAck0020(cmd))
 		return msgClientStart20
-	case "\x09\x00": // skip
+	case "\x09\x00": // counters sync
 		return msgCounters
-	case "\x0a\x08":
+	case "\x0a\x08": // unknown
 		_ = c.WriteCh1(c.msgAck0A08(cmd))
 		return msgUnknown0a08
 	}
@@ -143,8 +159,9 @@ const msgHhrSize = 28
 const cmdHdrSize = 24
 
 func (c *Conn) msgAck0000(msg28 []byte) []byte {
-	const cmdDataSize = 36
-
+	// <- 000008000000000000000000000000001a0200004f47c714 ... 00000000000000000100000004000000fb071f00000000000000000000000300
+	// -> 00140b00000000000000000000000000200000004f47c714     00000000000000000100000004000000fb071f00000000000000000000000300
+	const cmdDataSize = 32
 	msg := c.msg(msgHhrSize + cmdHdrSize + cmdDataSize)
 
 	cmd := msg[msgHhrSize:]
@@ -152,9 +169,9 @@ func (c *Conn) msgAck0000(msg28 []byte) []byte {
 	cmd[16] = cmdDataSize
 	copy(cmd[20:], msg28[20:24]) // request id (random)
 
-	// It's better not to answer anything, so camera won't send anything to this channel.
-	//data := cmd[cmdHdrSize:]
-	//copy(data, msg28[len(msg28)-32:])
+	// Important to answer with same data.
+	data := cmd[cmdHdrSize:]
+	copy(data, msg28[len(msg28)-32:])
 	return msg
 }
 
@@ -179,8 +196,46 @@ func (c *Conn) msgAck0000(msg28 []byte) []byte {
 //	return msg
 //}
 
+func (c *Conn) msg0012() []byte {
+	// -> 00120b000000000000000000000000000c00000000000000020000000100000001000000
+	const dataSize = 12
+	msg := c.msg(msgHhrSize + cmdHdrSize + dataSize)
+	cmd := msg[msgHhrSize:]
+
+	copy(cmd, "\x00\x12\x0b\x00")
+	cmd[16] = dataSize
+	data := cmd[cmdHdrSize:]
+
+	data[0] = 2
+	data[4] = 1
+	data[9] = 1
+	return msg
+}
+
+func (c *Conn) msgAck0007(msg28 []byte) []byte {
+	// <- 000708000000000000000000000000000c00000001000000000000001c551f7a00000000
+	// -> 010a0b00000000000000000000000000000000000100000000000000
+	msg := c.msg(msgHhrSize + 28)
+	cmd := msg[msgHhrSize:]
+	copy(cmd, "\x01\x0a\x0b\x00")
+	cmd[20] = 1
+	return msg
+}
+
+func (c *Conn) msgAck0008(msg28 []byte) []byte {
+	// <- 000808000000000000000000000000000000f9f0010000000200000050f31f7a
+	// -> 01090b0000000000000000000000000000000000010000000200000050f31f7a
+	msg := c.msg(msgHhrSize + 28)
+	cmd := msg[msgHhrSize:]
+	copy(cmd, "\x01\x09\x0b\x00")
+	copy(cmd[20:], msg28[20:])
+	return msg
+}
+
 func (c *Conn) msgAck0A08(msg28 []byte) []byte {
-	msg := c.msg(48)
+	// <- 0a080b005b0000000b51590002000000
+	// -> 0b000b00000001000b5103000300000000000000
+	msg := c.msg(msgHhrSize + 20)
 	cmd := msg[msgHhrSize:]
 	copy(cmd, "\x0b\x00\x0b\x00")
 	copy(cmd[8:], msg28[8:10])

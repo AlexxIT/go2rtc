@@ -65,6 +65,7 @@ type Conn struct {
 	seqSendCmd1 uint16
 	seqSendCmd2 uint16
 	seqSendCnt  uint16
+	seqSendAud  uint16
 
 	seqRecvPkt0 uint16
 	seqRecvPkt1 uint16
@@ -249,7 +250,7 @@ func (c *Conn) ReadPacket() ([]byte, error) {
 }
 
 func (c *Conn) WritePacket(data []byte) error {
-	panic("not implemented")
+	return c.WriteCh1(c.oldMsgAud(data))
 }
 
 func genSID() []byte {

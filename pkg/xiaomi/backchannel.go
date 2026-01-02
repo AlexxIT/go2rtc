@@ -23,7 +23,8 @@ func (p *Producer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 	case core.CodecPCMA:
 		var buf []byte
 
-		if p.model == "isa.camera.hlc6" {
+		switch p.model {
+		case "isa.camera.hlc6", "isa.camera.df3":
 			dst := &core.Codec{Name: core.CodecPCML, ClockRate: 8000}
 			transcode := pcm.Transcode(dst, track.Codec)
 
@@ -36,7 +37,7 @@ func (p *Producer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 					buf = buf[size:]
 				}
 			}
-		} else {
+		default:
 			sender.Handler = func(pkt *rtp.Packet) {
 				buf = append(buf, pkt.Payload...)
 				const size = 8000 * 0.040 // 8bit 40 ms

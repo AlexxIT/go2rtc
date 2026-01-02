@@ -186,6 +186,6 @@ func (c *Conn) msgAckCounters() []byte {
 
 	binary.LittleEndian.PutUint16(cmd[18:], c.seqSendCnt)
 	c.seqSendCnt++
-	binary.LittleEndian.PutUint16(cmd[20:], uint16(time.Now().UnixNano()))
+	binary.LittleEndian.PutUint16(cmd[20:], uint16(time.Now().UnixMilli()))
 	return msg
 }

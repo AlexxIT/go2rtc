@@ -140,13 +140,11 @@ func probe(client *miss.Client, channel, quality, audio uint8) ([]*core.Media, e
 			Codecs:    []*core.Codec{acodec},
 		})
 
-		if client.Protocol() == "cs2+udp" {
-			medias = append(medias, &core.Media{
-				Kind:      core.KindAudio,
-				Direction: core.DirectionSendonly,
-				Codecs:    []*core.Codec{acodec.Clone()},
-			})
-		}
+		medias = append(medias, &core.Media{
+			Kind:      core.KindAudio,
+			Direction: core.DirectionSendonly,
+			Codecs:    []*core.Codec{acodec.Clone()},
+		})
 	}
 
 	return medias, nil
