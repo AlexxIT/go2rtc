@@ -39,6 +39,11 @@ func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
 				continue
 			}
 
+			if cons.IsClosed() {
+				log.Trace().Msgf("[streams] consumer closed during dial cons=%d prod=%d", consN, prodN)
+				break producers
+			}
+
 			// Step 2. Get producer medias (not tracks yet)
 			for _, prodMedia := range prod.GetMedias() {
 				log.Trace().Msgf("[streams] check cons=%d prod=%d media=%s", consN, prodN, prodMedia)
@@ -96,6 +101,11 @@ func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
 	// stop producers if they don't have readers
 	if s.pending.Add(-1) == 0 {
 		s.stopProducers()
+	}
+
+	// Check if consumer was closed during dial
+	if cons.IsClosed() {
+		return errors.New("streams: consumer closed during dial")
 	}
 
 	if len(prodStarts) == 0 {
