@@ -55,8 +55,6 @@ func NewProducer(rawURL string) (*Producer, error) {
 }
 
 func (p *Producer) Start() error {
-	defer p.client.Close()
-
 	for {
 		_ = p.client.SetDeadline(time.Now().Add(core.ConnDeadline))
 		pkt, err := p.client.ReadPacket()
