@@ -201,6 +201,10 @@ func (c *Conn) Protocol() string {
 	return "cs2+udp"
 }
 
+func (c *Conn) Version() string {
+	return "CS2"
+}
+
 func (c *Conn) RemoteAddr() net.Addr {
 	return c.conn.RemoteAddr()
 }
@@ -220,21 +224,19 @@ func (c *Conn) Error() error {
 	return io.EOF
 }
 
-func (c *Conn) ReadCommand() (cmd uint16, data []byte, err error) {
+func (c *Conn) ReadCommand() (cmd uint32, data []byte, err error) {
 	buf, ok := <-c.rawCh0
 	if !ok {
 		return 0, nil, c.Error()
 	}
-	cmd = binary.LittleEndian.Uint16(buf[:2])
-	data = buf[4:]
-	return
+	return binary.LittleEndian.Uint32(buf), buf[4:], nil
 }
 
-func (c *Conn) WriteCommand(cmd uint16, data []byte) error {
+func (c *Conn) WriteCommand(cmd uint32, data []byte) error {
 	c.cmdMu.Lock()
 	defer c.cmdMu.Unlock()
 
-	req := marshalCmd(0, c.seqCh0, uint32(cmd), data)
+	req := marshalCmd(0, c.seqCh0, cmd, data)
 	c.seqCh0++
 
 	if c.isTCP {
@@ -268,18 +270,18 @@ func (c *Conn) WriteCommand(cmd uint16, data []byte) error {
 	}
 }
 
-func (c *Conn) ReadPacket() ([]byte, error) {
+func (c *Conn) ReadPacket() (hdr, payload []byte, err error) {
 	data, ok := <-c.rawCh2
 	if !ok {
-		return nil, c.Error()
+		return nil, nil, c.Error()
 	}
-	return data, nil
+	return data[:32], data[32:], nil
 }
 
-func (c *Conn) WritePacket(data []byte) error {
+func (c *Conn) WritePacket(hdr, payload []byte) error {
 	const offset = 12
 
-	n := uint32(len(data))
+	n := 32 + uint32(len(payload))
 	req := make([]byte, n+offset)
 	req[0] = magic
 	req[1] = msgDrw
@@ -290,7 +292,8 @@ func (c *Conn) WritePacket(data []byte) error {
 	binary.BigEndian.PutUint16(req[6:], c.seqCh3)
 	c.seqCh3++
 	binary.BigEndian.PutUint32(req[8:], n)
-	copy(req[offset:], data)
+	copy(req[offset:], hdr)
+	copy(req[offset+32:], payload)
 
 	_, err := c.conn.Write(req)
 	return err

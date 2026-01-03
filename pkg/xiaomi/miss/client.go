@@ -2,96 +2,83 @@ package miss
 
 import (
 	"bytes"
-	"crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
 	"time"
 
-	"github.com/AlexxIT/go2rtc/pkg/xiaomi/cs2"
-	"github.com/AlexxIT/go2rtc/pkg/xiaomi/tutk"
-	"golang.org/x/crypto/chacha20"
-	"golang.org/x/crypto/nacl/box"
+	"github.com/AlexxIT/go2rtc/pkg/tutk"
+	"github.com/AlexxIT/go2rtc/pkg/xiaomi/crypto"
+	"github.com/AlexxIT/go2rtc/pkg/xiaomi/miss/cs2"
 )
 
-func Dial(rawURL string) (*Client, error) {
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return nil, err
-	}
-
-	query := u.Query()
-
-	c := &Client{}
-
-	c.key, err = calcSharedKey(query.Get("device_public"), query.Get("client_private"))
-	if err != nil {
-		return nil, err
-	}
-
-	switch s := query.Get("vendor"); s {
-	case "cs2":
-		c.conn, err = cs2.Dial(u.Host, query.Get("transport"))
-	case "tutk":
-		c.conn, err = tutk.Dial(u.Host, query.Get("uid"), query.Get("model"))
-	default:
-		return nil, fmt.Errorf("miss: unsupported vendor %s", s)
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	err = c.login(query.Get("client_public"), query.Get("sign"))
-	if err != nil {
-		_ = c.conn.Close()
-		return nil, err
-	}
-
-	return c, nil
-}
-
 const (
-	CodecH264 = 4
-	CodecH265 = 5
-	CodecPCM  = 1024
-	CodecPCMU = 1026
-	CodecPCMA = 1027
-	CodecOPUS = 1032
+	codecH264 = 4
+	codecH265 = 5
+	codecPCM  = 1024
+	codecPCMU = 1026
+	codecPCMA = 1027
+	codecOPUS = 1032
 )
 
 type Conn interface {
 	Protocol() string
-	ReadCommand() (cmd uint16, data []byte, err error)
-	WriteCommand(cmd uint16, data []byte) error
-	ReadPacket() ([]byte, error)
-	WritePacket(data []byte) error
+	Version() string
+	ReadCommand() (cmd uint32, data []byte, err error)
+	WriteCommand(cmd uint32, data []byte) error
+	ReadPacket() (hdr, payload []byte, err error)
+	WritePacket(hdr, payload []byte) error
 	RemoteAddr() net.Addr
 	SetDeadline(t time.Time) error
 	Close() error
 }
 
+func NewClient(rawURL string) (*Client, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, err
+	}
+
+	// 1. Check if we can create shared key.
+	query := u.Query()
+	key, err := crypto.CalcSharedKey(query.Get("device_public"), query.Get("client_private"))
+	if err != nil {
+		return nil, err
+	}
+
+	model := query.Get("model")
+
+	// 2. Check if this vendor supported.
+	var conn Conn
+	switch s := query.Get("vendor"); s {
+	case "cs2":
+		conn, err = cs2.Dial(u.Host, query.Get("transport"))
+	case "tutk":
+		conn, err = tutk.Dial(u.Host, query.Get("uid"), "Miss", "client")
+	default:
+		err = fmt.Errorf("miss: unsupported vendor %s", s)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	err = login(conn, query.Get("client_public"), query.Get("sign"))
+	if err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+
+	return &Client{Conn: conn, key: key, model: model}, nil
+}
+
 type Client struct {
-	conn Conn
-	key  []byte
-}
-
-func (c *Client) Protocol() string {
-	return c.conn.Protocol()
-}
-
-func (c *Client) RemoteAddr() net.Addr {
-	return c.conn.RemoteAddr()
-}
-
-func (c *Client) SetDeadline(t time.Time) error {
-	return c.conn.SetDeadline(t)
-}
-
-func (c *Client) Close() error {
-	return c.conn.Close()
+	Conn
+	key   []byte
+	model string
 }
 
 const (
@@ -117,13 +104,13 @@ const (
 	cmdEncoded           = 0x1001
 )
 
-func (c *Client) login(clientPublic, sign string) error {
+func login(conn Conn, clientPublic, sign string) error {
 	s := fmt.Sprintf(`{"public_key":"%s","sign":"%s","uuid":"","support_encrypt":0}`, clientPublic, sign)
-	if err := c.conn.WriteCommand(cmdAuthReq, []byte(s)); err != nil {
+	if err := conn.WriteCommand(cmdAuthReq, []byte(s)); err != nil {
 		return err
 	}
 
-	_, data, err := c.conn.ReadCommand()
+	_, data, err := conn.ReadCommand()
 	if err != nil {
 		return err
 	}
@@ -135,129 +122,148 @@ func (c *Client) login(clientPublic, sign string) error {
 	return nil
 }
 
+func (c *Client) Version() string {
+	return fmt.Sprintf("%s (%s)", c.Conn.Version(), c.model)
+}
+
 func (c *Client) WriteCommand(data []byte) error {
-	data, err := encode(c.key, data)
+	data, err := crypto.Encode(data, c.key)
 	if err != nil {
 		return err
 	}
-	return c.conn.WriteCommand(cmdEncoded, data)
+	return c.Conn.WriteCommand(cmdEncoded, data)
 }
 
-func (c *Client) VideoStart(channel, quality, audio uint8) error {
+const (
+	ModelDafang  = "isa.camera.df3"
+	ModelLoockV2 = "loock.cateye.v02"
+	ModelC200    = "chuangmi.camera.046c04"
+	ModelC300    = "chuangmi.camera.72ac1"
+)
+
+func (c *Client) StartMedia(channel, quality, audio string) error {
+	switch c.model {
+	case ModelDafang:
+		var q, a byte
+		if quality == "sd" {
+			q = 1 // 0 - hd, 1 - sd, default - hd
+		}
+		if audio != "0" {
+			a = 1 // 0 - off, 1 - on, default - on
+		}
+
+		return errors.Join(
+			c.WriteCommand(dafangVideoQuality(q)),
+			c.WriteCommand(dafangVideoStart(1, a)),
+		)
+	}
+
+	// 0 - auto, 1 - sd, 2 - hd, default - hd
+	switch quality {
+	case "", "hd":
+		// Some models have broken codec settings in quality 3.
+		// Some models have low quality in quality 2.
+		// Different models require different default quality settings.
+		switch c.model {
+		case ModelC200, ModelC300:
+			quality = "3"
+		default:
+			quality = "2"
+		}
+	case "sd":
+		quality = "1"
+	case "auto":
+		quality = "0"
+	}
+
+	if audio == "" {
+		audio = "1"
+	}
+
 	data := binary.BigEndian.AppendUint32(nil, cmdVideoStart)
-	if channel == 0 {
-		data = fmt.Appendf(data, `{"videoquality":%d,"enableaudio":%d}`, quality, audio)
+	if channel == "" {
+		data = fmt.Appendf(data, `{"videoquality":%s,"enableaudio":%s}`, quality, audio)
 	} else {
-		data = fmt.Appendf(data, `{"videoquality":-1,"videoquality2":%d,"enableaudio":%d}`, quality, audio)
+		data = fmt.Appendf(data, `{"videoquality":-1,"videoquality2":%s,"enableaudio":%s}`, quality, audio)
 	}
 	return c.WriteCommand(data)
 }
 
-func (c *Client) AudioStart() error {
+func (c *Client) StopMedia() error {
+	data := binary.BigEndian.AppendUint32(nil, cmdVideoStop)
+	return c.WriteCommand(data)
+}
+
+func (c *Client) StartAudio() error {
 	data := binary.BigEndian.AppendUint32(nil, cmdAudioStart)
 	return c.WriteCommand(data)
 }
 
-func (c *Client) SpeakerStart() error {
+func (c *Client) StartSpeaker() error {
 	data := binary.BigEndian.AppendUint32(nil, cmdSpeakerStartReq)
 	return c.WriteCommand(data)
 }
 
+// SpeakerCodec if the camera model has a non-standard two-way codec.
+func (c *Client) SpeakerCodec() uint32 {
+	switch c.model {
+	case ModelDafang, "isa.camera.hlc6":
+		return codecPCM
+	case "chuangmi.camera.72ac1":
+		return codecOPUS
+	}
+	return 0
+}
+
+const hdrSize = 32
+
 func (c *Client) ReadPacket() (*Packet, error) {
-	data, err := c.conn.ReadPacket()
+	hdr, payload, err := c.Conn.ReadPacket()
 	if err != nil {
 		return nil, fmt.Errorf("miss: read media: %w", err)
 	}
-	return unmarshalPacket(c.key, data)
-}
 
-func unmarshalPacket(key, b []byte) (*Packet, error) {
-	n := uint32(len(b))
-
-	if n < 32 {
+	if len(hdr) < hdrSize {
 		return nil, fmt.Errorf("miss: packet header too small")
 	}
 
-	if l := binary.LittleEndian.Uint32(b); l+32 != n {
-		return nil, fmt.Errorf("miss: packet payload has wrong length")
-	}
-
-	payload, err := decode(key, b[32:])
+	payload, err = crypto.Decode(payload, c.key)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Packet{
-		CodecID:   binary.LittleEndian.Uint32(b[4:]),
-		Sequence:  binary.LittleEndian.Uint32(b[8:]),
-		Flags:     binary.LittleEndian.Uint32(b[12:]),
-		Timestamp: binary.LittleEndian.Uint64(b[16:]),
-		Payload:   payload,
-	}, nil
+	pkt := &Packet{
+		CodecID:  binary.LittleEndian.Uint32(hdr[4:]),
+		Sequence: binary.LittleEndian.Uint32(hdr[8:]),
+		Flags:    binary.LittleEndian.Uint32(hdr[12:]),
+		Payload:  payload,
+	}
+
+	switch c.model {
+	case ModelDafang, ModelLoockV2:
+		// Dafang has ts in sec
+		// LoockV2 has ts in msec for video, but zero ts for audio
+		pkt.Timestamp = uint64(time.Now().UnixMilli())
+	default:
+		pkt.Timestamp = binary.LittleEndian.Uint64(hdr[16:])
+	}
+
+	return pkt, nil
 }
 
 func (c *Client) WriteAudio(codecID uint32, payload []byte) error {
-	payload, err := encode(c.key, payload) // new payload will have new size!
+	payload, err := crypto.Encode(payload, c.key) // new payload will have new size!
 	if err != nil {
 		return err
 	}
 
-	const hdrSize = 32
 	n := uint32(len(payload))
 
-	data := make([]byte, hdrSize+n)
-	binary.LittleEndian.PutUint32(data, n)
-	binary.LittleEndian.PutUint32(data[4:], codecID)
-	binary.LittleEndian.PutUint64(data[16:], uint64(time.Now().UnixMilli())) // not really necessary
-	copy(data[hdrSize:], payload)
-	return c.conn.WritePacket(data)
-}
-
-func calcSharedKey(devicePublic, clientPrivate string) ([]byte, error) {
-	var sharedKey, publicKey, privateKey [32]byte
-	if _, err := hex.Decode(publicKey[:], []byte(devicePublic)); err != nil {
-		return nil, err
-	}
-	if _, err := hex.Decode(privateKey[:], []byte(clientPrivate)); err != nil {
-		return nil, err
-	}
-	box.Precompute(&sharedKey, &publicKey, &privateKey)
-	return sharedKey[:], nil
-}
-
-func encode(key, src []byte) ([]byte, error) {
-	dst := make([]byte, len(src)+8)
-
-	if _, err := rand.Read(dst[:8]); err != nil {
-		return nil, err
-	}
-
-	nonce := make([]byte, 12)
-	copy(nonce[4:], dst[:8])
-
-	c, err := chacha20.NewUnauthenticatedCipher(key, nonce)
-	if err != nil {
-		return nil, err
-	}
-
-	c.XORKeyStream(dst[8:], src)
-
-	return dst, nil
-}
-
-func decode(key, src []byte) ([]byte, error) {
-	nonce := make([]byte, 12)
-	copy(nonce[4:], src[:8])
-
-	c, err := chacha20.NewUnauthenticatedCipher(key, nonce)
-	if err != nil {
-		return nil, err
-	}
-
-	dst := make([]byte, len(src)-8)
-	c.XORKeyStream(dst, src[8:])
-
-	return dst, nil
+	header := make([]byte, hdrSize)
+	binary.LittleEndian.PutUint32(header, n)
+	binary.LittleEndian.PutUint32(header[4:], codecID)
+	binary.LittleEndian.PutUint64(header[16:], uint64(time.Now().UnixMilli())) // not really necessary
+	return c.Conn.WritePacket(header, payload)
 }
 
 type Packet struct {
@@ -271,10 +277,40 @@ type Packet struct {
 	Payload []byte
 }
 
-func GenerateKey() ([]byte, []byte, error) {
-	public, private, err := box.GenerateKey(rand.Reader)
-	if err != nil {
-		return nil, nil, err
-	}
-	return public[:], private[:], err
+func dafangRaw(cmd uint32, args ...byte) []byte {
+	payload := tutk.ICAM(cmd, args...)
+
+	data := make([]byte, 4+len(payload)*2)
+	copy(data, "\x7f\xff\xff\xff")
+	hex.Encode(data[4:], payload)
+	return data
 }
+
+// DafangVideoQuality 0 - hd, 1 - sd
+func dafangVideoQuality(quality uint8) []byte {
+	return dafangRaw(0xff07d5, quality)
+}
+
+func dafangVideoStart(video, audio uint8) []byte {
+	return dafangRaw(0xff07d8, video, audio)
+}
+
+//func dafangLeft() []byte {
+//	return dafangRaw(0xff2404, 2, 0, 5)
+//}
+//
+//func dafangRight() []byte {
+//	return dafangRaw(0xff2404, 1, 0, 5)
+//}
+//
+//func dafangUp() []byte {
+//	return dafangRaw(0xff2404, 0, 2, 5)
+//}
+//
+//func dafangDown() []byte {
+//	return dafangRaw(0xff2404, 0, 1, 5)
+//}
+//
+//func dafangStop() []byte {
+//	return dafangRaw(0xff2404, 0, 0, 5)
+//}

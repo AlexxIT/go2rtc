@@ -15,7 +15,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/xiaomi"
-	"github.com/AlexxIT/go2rtc/pkg/xiaomi/miss"
+	"github.com/AlexxIT/go2rtc/pkg/xiaomi/crypto"
 )
 
 func Init() {
@@ -65,28 +65,96 @@ func getCloud(userID string) (*xiaomi.Cloud, error) {
 	return cloud, nil
 }
 
+func cloudRequest(userID, region, apiURL, params string) ([]byte, error) {
+	cloud, err := getCloud(userID)
+	if err != nil {
+		return nil, err
+	}
+	return cloud.Request(GetBaseURL(region), apiURL, params, nil)
+}
+
+func cloudUserRequest(user *url.Userinfo, apiURL, params string) ([]byte, error) {
+	userID := user.Username()
+	region, _ := user.Password()
+	return cloudRequest(userID, region, apiURL, params)
+}
+
 func getCameraURL(url *url.URL) (string, error) {
-	clientPublic, clientPrivate, err := miss.GenerateKey()
+	model := url.Query().Get("model")
+
+	// It is not known which models need to be awakened.
+	// Probably all the doorbells and all the battery cameras.
+	if strings.Contains(model, ".cateye.") {
+		_ = wakeUpCamera(url)
+	}
+
+	// The getMissURL request has a fallback to getP2PURL.
+	// But for known models we can save one request to the cloud.
+	if xiaomi.IsLegacy(model) {
+		return getP2PURL(url)
+	}
+	return getMissURL(url)
+}
+
+func getP2PURL(url *url.URL) (string, error) {
+	query := url.Query()
+
+	clientPublic, clientPrivate, err := crypto.GenerateKey()
+	if err != nil {
+		return "", err
+	}
+
+	params := fmt.Sprintf(`{"did":"%s","toSignAppData":"%x"}`, query.Get("did"), clientPublic)
+
+	userID := url.User.Username()
+	region, _ := url.User.Password()
+	res, err := cloudRequest(userID, region, "/device/devicepass", params)
+	if err != nil {
+		return "", err
+	}
+
+	var v struct {
+		UID       string `json:"p2p_id"`
+		Password  string `json:"password"`
+		PublicKey string `json:"p2p_dev_public_key"`
+		Sign      string `json:"signForAppData"`
+	}
+	if err = json.Unmarshal(res, &v); err != nil {
+		return "", err
+	}
+
+	query.Set("uid", v.UID)
+
+	if v.Sign != "" {
+		query.Set("client_public", hex.EncodeToString(clientPublic))
+		query.Set("client_private", hex.EncodeToString(clientPrivate))
+		query.Set("device_public", v.PublicKey)
+		query.Set("sign", v.Sign)
+	} else {
+		query.Set("password", v.Password)
+	}
+
+	url.RawQuery = query.Encode()
+	return url.String(), nil
+}
+
+func getMissURL(url *url.URL) (string, error) {
+	clientPublic, clientPrivate, err := crypto.GenerateKey()
 	if err != nil {
 		return "", err
 	}
 
 	query := url.Query()
-
 	params := fmt.Sprintf(
-		`{"app_pubkey":"%x","did":"%s","support_vendors":"CS2"}`,
+		`{"app_pubkey":"%x","did":"%s","support_vendors":"TUTK_CS2_MTP"}`,
 		clientPublic, query.Get("did"),
 	)
 
-	cloud, err := getCloud(url.User.Username())
+	res, err := cloudUserRequest(url.User, "/v2/device/miss_get_vendor", params)
 	if err != nil {
-		return "", err
-	}
-
-	region, _ := url.User.Password()
-
-	res, err := cloud.Request(GetBaseURL(region), "/v2/device/miss_get_vendor", params, nil)
-	if err != nil {
+		if strings.Contains(err.Error(), "no available vendor support") {
+			return getP2PURL(url)
+		}
 		return "", err
 	}
 
@@ -132,6 +200,13 @@ func getVendorName(i byte) string {
 	return fmt.Sprintf("%d", i)
 }
 
+func wakeUpCamera(url *url.URL) error {
+	const params = `{"id":1,"method":"wakeup","params":{"video":"1"}}`
+	did := url.Query().Get("did")
+	_, err := cloudUserRequest(url.User, "/home/rpc/"+did, params)
+	return err
+}
+
 func apiXiaomi(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
@@ -158,14 +233,8 @@ func apiDeviceList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	err := func() error {
-		cloud, err := getCloud(user)
-		if err != nil {
-			return err
-		}
-
 		region := query.Get("region")
-
-		res, err := cloud.Request(GetBaseURL(region), "/v2/home/device_list_page", "{}", nil)
+		res, err := cloudRequest(user, region, "/v2/home/device_list_page", "{}")
 		if err != nil {
 			return err
 		}
