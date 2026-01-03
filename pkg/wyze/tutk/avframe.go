@@ -93,17 +93,17 @@ func ParseFrameInfo(data []byte) *FrameInfo {
 	fi := data[offset:]
 
 	return &FrameInfo{
-		CodecID:     binary.LittleEndian.Uint16(fi[0:2]),
+		CodecID:     binary.LittleEndian.Uint16(fi),
 		Flags:       fi[2],
 		CamIndex:    fi[3],
 		OnlineNum:   fi[4],
 		Framerate:   fi[5],
 		FrameSize:   fi[6],
 		Bitrate:     fi[7],
-		TimestampUS: binary.LittleEndian.Uint32(fi[8:12]),
-		Timestamp:   binary.LittleEndian.Uint32(fi[12:16]),
-		PayloadSize: binary.LittleEndian.Uint32(fi[16:20]),
-		FrameNo:     binary.LittleEndian.Uint32(fi[20:24]),
+		TimestampUS: binary.LittleEndian.Uint32(fi[8:]),
+		Timestamp:   binary.LittleEndian.Uint32(fi[12:]),
+		PayloadSize: binary.LittleEndian.Uint32(fi[16:]),
+		FrameNo:     binary.LittleEndian.Uint32(fi[20:]),
 	}
 }
 

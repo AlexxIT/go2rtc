@@ -409,7 +409,7 @@ func (c *Client) buildK10000() []byte {
 	buf[0] = 'H'
 	buf[1] = 'L'
 	buf[2] = 5
-	binary.LittleEndian.PutUint16(buf[4:6], tutk.KCmdAuth)
+	binary.LittleEndian.PutUint16(buf[4:], tutk.KCmdAuth)
 	return buf
 }
 
@@ -420,15 +420,15 @@ func (c *Client) buildK10002(challenge []byte, status byte) []byte {
 	buf[0] = 'H'
 	buf[1] = 'L'
 	buf[2] = 5
-	binary.LittleEndian.PutUint16(buf[4:6], tutk.KCmdChallengeResp)
+	binary.LittleEndian.PutUint16(buf[4:], tutk.KCmdChallengeResp)
 	buf[6] = 22 // Payload length
 
 	if len(response) >= 16 {
-		copy(buf[16:32], response[:16])
+		copy(buf[16:], response[:16])
 	}
 
 	if len(c.uid) >= 4 {
-		copy(buf[32:36], c.uid[:4])
+		copy(buf[32:], c.uid[:4])
 	}
 
 	buf[36] = 1 // Video flag (0 = disabled, 1 = enabled > will start video stream immediately)
@@ -444,10 +444,10 @@ func (c *Client) buildK10010(mediaType byte, enabled bool) []byte {
 	buf := make([]byte, 18)
 	buf[0] = 'H'
 	buf[1] = 'L'
-	buf[2] = 5                                                       // Version
-	binary.LittleEndian.PutUint16(buf[4:6], tutk.KCmdControlChannel) // 0x271a = 10010
-	binary.LittleEndian.PutUint16(buf[6:8], 2)                       // Payload length = 2
-	buf[16] = mediaType                                              // 1=Video, 2=Audio, 3=ReturnAudio
+	buf[2] = 5                                                      // Version
+	binary.LittleEndian.PutUint16(buf[4:], tutk.KCmdControlChannel) // 0x271a = 10010
+	binary.LittleEndian.PutUint16(buf[6:], 2)                       // Payload length = 2
+	buf[16] = mediaType                                             // 1=Video, 2=Audio, 3=ReturnAudio
 	if enabled {
 		buf[17] = 1
 	} else {
@@ -463,11 +463,11 @@ func (c *Client) buildK10056(frameSize uint8, bitrate uint16) []byte {
 	buf := make([]byte, 21)
 	buf[0] = 'H'
 	buf[1] = 'L'
-	buf[2] = 5                                                      // Version
-	binary.LittleEndian.PutUint16(buf[4:6], tutk.KCmdSetResolution) // 0x2748 = 10056
-	binary.LittleEndian.PutUint16(buf[6:8], 5)                      // Payload length = 5
-	buf[16] = frameSize + 1                                         // 4 = HD
-	binary.LittleEndian.PutUint16(buf[17:19], bitrate)              // 0x00f0 = 240
+	buf[2] = 5                                                     // Version
+	binary.LittleEndian.PutUint16(buf[4:], tutk.KCmdSetResolution) // 0x2748 = 10056
+	binary.LittleEndian.PutUint16(buf[6:], 5)                      // Payload length = 5
+	buf[16] = frameSize + 1                                        // 4 = HD
+	binary.LittleEndian.PutUint16(buf[17:], bitrate)               // 0x00f0 = 240
 	// buf[19], buf[20] = FPS (0 = auto)
 	return buf
 }
@@ -485,7 +485,7 @@ func (c *Client) parseK10001(data []byte) (challenge []byte, status byte, err er
 		return nil, 0, fmt.Errorf("invalid HL magic: %x %x", data[0], data[1])
 	}
 
-	cmdID := binary.LittleEndian.Uint16(data[4:6])
+	cmdID := binary.LittleEndian.Uint16(data[4:])
 	if cmdID != tutk.KCmdChallenge {
 		return nil, 0, fmt.Errorf("expected cmdID 10001, got %d", cmdID)
 	}
@@ -510,8 +510,8 @@ func (c *Client) parseK10003(data []byte) (*tutk.AuthResponse, error) {
 		return &tutk.AuthResponse{}, nil
 	}
 
-	cmdID := binary.LittleEndian.Uint16(data[4:6])
-	textLen := binary.LittleEndian.Uint16(data[6:8])
+	cmdID := binary.LittleEndian.Uint16(data[4:])
+	textLen := binary.LittleEndian.Uint16(data[6:])
 
 	if cmdID != tutk.KCmdAuthResult {
 		return &tutk.AuthResponse{}, nil

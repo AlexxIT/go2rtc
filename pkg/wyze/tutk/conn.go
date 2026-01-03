@@ -168,9 +168,9 @@ func (c *Conn) AVClientStart(timeout time.Duration) error {
 			if !ok {
 				return io.EOF
 			}
-			if len(data) >= 32 && binary.LittleEndian.Uint16(data[0:2]) == MagicAVLoginResp {
+			if len(data) >= 32 && binary.LittleEndian.Uint16(data) == MagicAVLoginResp {
 				c.avLoginResp = &AVLoginResponse{
-					ServerType:      binary.LittleEndian.Uint32(data[4:8]),
+					ServerType:      binary.LittleEndian.Uint32(data[4:]),
 					Resend:          int32(data[29]),
 					TwoWayStreaming: int32(data[31]),
 				}
@@ -309,7 +309,7 @@ func (c *Conn) RecvIOCtrl(timeout time.Duration) (cmdID uint16, data []byte, err
 		}
 		// Parse cmdID from HL header at offset 4-5
 		if len(data) >= 6 {
-			cmdID = binary.LittleEndian.Uint16(data[4:6])
+			cmdID = binary.LittleEndian.Uint16(data[4:])
 		}
 		// Send ACK after receiving
 		_ = c.sendACK()
@@ -428,7 +428,7 @@ func (c *Conn) discoStage1() error {
 			continue
 		}
 
-		cmd := binary.LittleEndian.Uint16(data[8:10])
+		cmd := binary.LittleEndian.Uint16(data[8:])
 		if c.verbose {
 			fmt.Printf("[IOTC] Disco Stage 1: received cmd=0x%04x from %s\n", cmd, addr)
 		}
@@ -479,7 +479,7 @@ func (c *Conn) sessionSetup() error {
 			continue
 		}
 
-		cmd := binary.LittleEndian.Uint16(data[8:10])
+		cmd := binary.LittleEndian.Uint16(data[8:])
 		if c.verbose {
 			fmt.Printf("[IOTC] Session setup: received cmd=0x%04x from %s\n", cmd, addr)
 		}
@@ -555,7 +555,7 @@ func (c *Conn) iotcReader() {
 			continue
 		}
 
-		cmd := binary.LittleEndian.Uint16(data[8:10])
+		cmd := binary.LittleEndian.Uint16(data[8:])
 
 		if cmd == CmdKeepaliveRes && len(data) > 16 {
 			payload := data[16:]
@@ -680,7 +680,7 @@ func (c *Conn) route(data []byte) {
 	}
 
 	// Check for control frame magic values first (uint16 LE)
-	magic := binary.LittleEndian.Uint16(data[0:2])
+	magic := binary.LittleEndian.Uint16(data)
 
 	switch magic {
 	case MagicAVLoginResp:
@@ -756,7 +756,7 @@ func (c *Conn) handleSpeakerAVLogin() error {
 	}
 
 	// Extract checksum from incoming request (bytes 20-23)
-	checksum := binary.LittleEndian.Uint32(buf[20:24])
+	checksum := binary.LittleEndian.Uint32(buf[20:])
 
 	// Build AV Login response (60 bytes like SDK)
 	resp := c.buildAVLoginResponse(checksum)
@@ -852,7 +852,7 @@ func (c *Conn) extractPayload(data []byte, channel byte) ([]byte, *FrameInfo) {
 		// Has FrameInfo only if pkt_total == 1 (single-packet frame)
 		headerSize = 36
 		if len(data) >= 22 {
-			pktTotal := uint16(data[20]) | uint16(data[21])<<8
+			pktTotal := binary.LittleEndian.Uint16(data[20:])
 			if pktTotal == 1 {
 				frameInfoSize = FrameInfoSize
 			}
@@ -1148,31 +1148,31 @@ func (c *Conn) buildAudioFrame(payload []byte, timestampUS uint32, codec uint16,
 	}
 
 	// Type 0x09 "Single" - 36-byte header with full timestamp
-	frame[0] = ChannelAudio                                    // 0x03
-	frame[1] = FrameTypeStartAlt                               // 0x09
-	binary.LittleEndian.PutUint16(frame[2:4], ProtocolVersion) // 0x000c
+	frame[0] = ChannelAudio                                   // 0x03
+	frame[1] = FrameTypeStartAlt                              // 0x09
+	binary.LittleEndian.PutUint16(frame[2:], ProtocolVersion) // 0x000c
 
-	binary.LittleEndian.PutUint32(frame[4:8], c.audioTxSeq)
-	binary.LittleEndian.PutUint32(frame[8:12], timestampUS) // Timestamp in header
+	binary.LittleEndian.PutUint32(frame[4:], c.audioTxSeq)
+	binary.LittleEndian.PutUint32(frame[8:], timestampUS) // Timestamp in header
 
 	// Flags at [12-15]: first frame uses 0x00000001, subsequent use 0x00100001
 	if c.audioTxFrameNo == 1 {
-		binary.LittleEndian.PutUint32(frame[12:16], 0x00000001)
+		binary.LittleEndian.PutUint32(frame[12:], 0x00000001)
 	} else {
-		binary.LittleEndian.PutUint32(frame[12:16], 0x00100001)
+		binary.LittleEndian.PutUint32(frame[12:], 0x00100001)
 	}
 
 	// Inner header
-	frame[16] = ChannelAudio                                         // 0x03
-	frame[17] = FrameTypeEndSingle                                   // 0x01
-	binary.LittleEndian.PutUint16(frame[18:20], uint16(prevFrameNo)) // prev_frame_no (16-bit)
+	frame[16] = ChannelAudio                                       // 0x03
+	frame[17] = FrameTypeEndSingle                                 // 0x01
+	binary.LittleEndian.PutUint16(frame[18:], uint16(prevFrameNo)) // prev_frame_no (16-bit)
 
-	binary.LittleEndian.PutUint16(frame[20:22], 0x0001) // pkt_total = 1
-	binary.LittleEndian.PutUint16(frame[22:24], 0x0010) // flags
+	binary.LittleEndian.PutUint16(frame[20:], 0x0001) // pkt_total = 1
+	binary.LittleEndian.PutUint16(frame[22:], 0x0010) // flags
 
-	binary.LittleEndian.PutUint32(frame[24:28], uint32(totalPayload)) // payload size
-	binary.LittleEndian.PutUint32(frame[28:32], prevFrameNo)          // prev_frame_no again (32-bit)
-	binary.LittleEndian.PutUint32(frame[32:36], c.audioTxFrameNo)     // frame_no
+	binary.LittleEndian.PutUint32(frame[24:], uint32(totalPayload)) // payload size
+	binary.LittleEndian.PutUint32(frame[28:], prevFrameNo)          // prev_frame_no again (32-bit)
+	binary.LittleEndian.PutUint32(frame[32:], c.audioTxFrameNo)     // frame_no
 
 	// Audio payload
 	copy(frame[headerSize:], payload)
@@ -1182,17 +1182,17 @@ func (c *Conn) buildAudioFrame(payload []byte, timestampUS uint32, codec uint16,
 	frameDurationMs := samplesPerFrame * 1000 / sampleRate
 
 	fi := frame[headerSize+len(payload):]
-	binary.LittleEndian.PutUint16(fi[0:2], codec)            // codec_id
+	binary.LittleEndian.PutUint16(fi[:], codec)              // codec_id
 	fi[2] = BuildAudioFlags(sampleRate, true, channels == 2) // flags
 	fi[3] = 0                                                // cam_index
 	fi[4] = 1                                                // onlineNum = 1
 	fi[5] = 0                                                // tags
 	// fi[6:12] = reserved (already 0)
-	binary.LittleEndian.PutUint32(fi[12:16], (c.audioTxFrameNo-1)*frameDurationMs)
+	binary.LittleEndian.PutUint32(fi[12:], (c.audioTxFrameNo-1)*frameDurationMs)
 
 	if c.verbose {
 		fmt.Printf("[AUDIO TX] FrameInfo: codec=0x%04x flags=0x%02x online=%d ts=%d\n",
-			codec, fi[2], fi[4], binary.LittleEndian.Uint32(fi[12:16]))
+			codec, fi[2], fi[4], binary.LittleEndian.Uint32(fi[12:]))
 	}
 
 	return frame
@@ -1205,25 +1205,25 @@ func (c *Conn) buildDisco(stage byte) []byte {
 	frame := make([]byte, frameSize)
 
 	// IOTC Frame Header [0-15]
-	frame[0] = 0x04                                         // [0] Marker1
-	frame[1] = 0x02                                         // [1] Marker2
-	frame[2] = 0x1a                                         // [2] Marker3
-	frame[3] = 0x02                                         // [3] Mode = Disco
-	binary.LittleEndian.PutUint16(frame[4:6], bodySize)     // [4-5] BodySize
-	binary.LittleEndian.PutUint16(frame[8:10], CmdDiscoReq) // [8-9] Command = 0x0601
-	binary.LittleEndian.PutUint16(frame[10:12], 0x0021)     // [10-11] Flags
+	frame[0] = 0x04                                       // [0] Marker1
+	frame[1] = 0x02                                       // [1] Marker2
+	frame[2] = 0x1a                                       // [2] Marker3
+	frame[3] = 0x02                                       // [3] Mode = Disco
+	binary.LittleEndian.PutUint16(frame[4:], bodySize)    // [4-5] BodySize
+	binary.LittleEndian.PutUint16(frame[8:], CmdDiscoReq) // [8-9] Command = 0x0601
+	binary.LittleEndian.PutUint16(frame[10:], 0x0021)     // [10-11] Flags
 
 	// Body [16-87]
 	body := frame[16:]
-	copy(body[0:20], c.uid) // [0-19] UID (20 bytes)
+	copy(body[:20], c.uid) // [0-19] UID (20 bytes)
 
 	body[36] = 0x01 // [36] Unknown1
 	body[37] = 0x01 // [37] Unknown2
 	body[38] = 0x02 // [38] Unknown3
 	body[39] = 0x04 // [39] Unknown4
 
-	copy(body[40:48], c.randomID) // [40-47] RandomID
-	body[48] = stage              // [48] Stage (1=broadcast, 2=direct)
+	copy(body[40:], c.randomID) // [40-47] RandomID
+	body[48] = stage            // [48] Stage (1=broadcast, 2=direct)
 
 	if stage == 1 && len(c.authKey) > 0 {
 		copy(body[58:], c.authKey) // [58-65] AuthKey
@@ -1239,21 +1239,21 @@ func (c *Conn) buildSession() []byte {
 	frame := make([]byte, frameSize)
 
 	// IOTC Frame Header [0-15]
-	frame[0] = 0x04                                           // [0] Marker1
-	frame[1] = 0x02                                           // [1] Marker2
-	frame[2] = 0x1a                                           // [2] Marker3
-	frame[3] = 0x02                                           // [3] Mode
-	binary.LittleEndian.PutUint16(frame[4:6], bodySize)       // [4-5] BodySize
-	binary.LittleEndian.PutUint16(frame[8:10], CmdSessionReq) // [8-9] Command = 0x0402
-	binary.LittleEndian.PutUint16(frame[10:12], 0x0033)       // [10-11] Flags
+	frame[0] = 0x04                                         // [0] Marker1
+	frame[1] = 0x02                                         // [1] Marker2
+	frame[2] = 0x1a                                         // [2] Marker3
+	frame[3] = 0x02                                         // [3] Mode
+	binary.LittleEndian.PutUint16(frame[4:], bodySize)      // [4-5] BodySize
+	binary.LittleEndian.PutUint16(frame[8:], CmdSessionReq) // [8-9] Command = 0x0402
+	binary.LittleEndian.PutUint16(frame[10:], 0x0033)       // [10-11] Flags
 
 	// Body [16-51]
 	body := frame[16:]
-	copy(body[0:20], c.uid)       // [0-19] UID (20 bytes)
-	copy(body[20:28], c.randomID) // [20-27] RandomID
+	copy(body[:20], c.uid)      // [0-19] UID (20 bytes)
+	copy(body[20:], c.randomID) // [20-27] RandomID
 
 	ts := uint32(time.Now().Unix())
-	binary.LittleEndian.PutUint32(body[32:36], ts) // [32-35] Timestamp
+	binary.LittleEndian.PutUint32(body[32:], ts) // [32-35] Timestamp
 
 	return frame
 }
@@ -1291,22 +1291,22 @@ func (c *Conn) buildDataTXChannel(payload []byte, channel byte) []byte {
 	frame := make([]byte, frameSize)
 
 	// IOTC Frame Header [0-15]
-	frame[0] = 0x04                                             // [0] Marker1
-	frame[1] = 0x02                                             // [1] Marker2
-	frame[2] = 0x1a                                             // [2] Marker3
-	frame[3] = 0x0b                                             // [3] Mode = Data
-	binary.LittleEndian.PutUint16(frame[4:6], uint16(bodySize)) // [4-5] BodySize
-	binary.LittleEndian.PutUint16(frame[6:8], c.iotcTxSeq)      // [6-7] Sequence
+	frame[0] = 0x04                                            // [0] Marker1
+	frame[1] = 0x02                                            // [1] Marker2
+	frame[2] = 0x1a                                            // [2] Marker3
+	frame[3] = 0x0b                                            // [3] Mode = Data
+	binary.LittleEndian.PutUint16(frame[4:], uint16(bodySize)) // [4-5] BodySize
+	binary.LittleEndian.PutUint16(frame[6:], c.iotcTxSeq)      // [6-7] Sequence
 	c.iotcTxSeq++
-	binary.LittleEndian.PutUint16(frame[8:10], CmdDataTX) // [8-9] Command = 0x0407
-	binary.LittleEndian.PutUint16(frame[10:12], 0x0021)   // [10-11] Flags
-	copy(frame[12:14], c.randomID[:2])                    // [12-13] RandomID[0:2]
-	frame[14] = channel                                   // [14] Channel (0=Main, 1=Back)
-	frame[15] = 0x01                                      // [15] Marker
+	binary.LittleEndian.PutUint16(frame[8:], CmdDataTX) // [8-9] Command = 0x0407
+	binary.LittleEndian.PutUint16(frame[10:], 0x0021)   // [10-11] Flags
+	copy(frame[12:], c.randomID[:2])                    // [12-13] RandomID[0:2]
+	frame[14] = channel                                 // [14] Channel (0=Main, 1=Back)
+	frame[15] = 0x01                                    // [15] Marker
 
 	// Sub-Header [16-27]
-	binary.LittleEndian.PutUint32(frame[16:20], 0x0000000c) // [16-19] Const
-	copy(frame[20:28], c.randomID[:8])                      // [20-27] RandomID
+	binary.LittleEndian.PutUint32(frame[16:], 0x0000000c) // [16-19] Const
+	copy(frame[20:], c.randomID[:8])                      // [20-27] RandomID
 
 	// Payload [28+]
 	copy(frame[28:], payload)
@@ -1322,13 +1322,13 @@ func (c *Conn) buildACK() []byte {
 	}
 
 	ack := make([]byte, 24)
-	binary.LittleEndian.PutUint16(ack[0:2], MagicACK)        // [0-1] Magic = 0x0009
-	binary.LittleEndian.PutUint16(ack[2:4], ProtocolVersion) // [2-3] Version = 0x000C
-	binary.LittleEndian.PutUint32(ack[4:8], c.avTxSeq)       // [4-7] TxSeq
+	binary.LittleEndian.PutUint16(ack[0:], MagicACK)        // [0-1] Magic = 0x0009
+	binary.LittleEndian.PutUint16(ack[2:], ProtocolVersion) // [2-3] Version = 0x000C
+	binary.LittleEndian.PutUint32(ack[4:], c.avTxSeq)       // [4-7] TxSeq
 	c.avTxSeq++
-	binary.LittleEndian.PutUint32(ack[8:12], 0xffffffff)              // [8-11] RxSeq (not used)
-	binary.LittleEndian.PutUint16(ack[12:14], c.ackFlags)             // [12-13] AckFlags
-	binary.LittleEndian.PutUint32(ack[16:20], uint32(c.ackFlags)<<16) // [16-19] AckCounter
+	binary.LittleEndian.PutUint32(ack[8:], 0xffffffff)              // [8-11] RxSeq (not used)
+	binary.LittleEndian.PutUint16(ack[12:], c.ackFlags)             // [12-13] AckFlags
+	binary.LittleEndian.PutUint32(ack[16:], uint32(c.ackFlags)<<16) // [16-19] AckCounter
 
 	return ack
 }
@@ -1337,17 +1337,17 @@ func (c *Conn) buildKeepaliveResponse(incomingPayload []byte) []byte {
 	frame := make([]byte, 24)
 
 	// IOTC Frame Header [0-15]
-	frame[0] = 0x04                                             // [0] Marker1
-	frame[1] = 0x02                                             // [1] Marker2
-	frame[2] = 0x1a                                             // [2] Marker3
-	frame[3] = 0x0a                                             // [3] Mode
-	binary.LittleEndian.PutUint16(frame[4:6], 8)                // [4-5] BodySize = 8
-	binary.LittleEndian.PutUint16(frame[8:10], CmdKeepaliveReq) // [8-9] Command = 0x0427
-	binary.LittleEndian.PutUint16(frame[10:12], 0x0021)         // [10-11] Flags
+	frame[0] = 0x04                                           // [0] Marker1
+	frame[1] = 0x02                                           // [1] Marker2
+	frame[2] = 0x1a                                           // [2] Marker3
+	frame[3] = 0x0a                                           // [3] Mode
+	binary.LittleEndian.PutUint16(frame[4:], 8)               // [4-5] BodySize = 8
+	binary.LittleEndian.PutUint16(frame[8:], CmdKeepaliveReq) // [8-9] Command = 0x0427
+	binary.LittleEndian.PutUint16(frame[10:], 0x0021)         // [10-11] Flags
 
 	// Body [16-23]: Echo back incoming payload
 	if len(incomingPayload) >= 8 {
-		copy(frame[16:24], incomingPayload[:8]) // [16-23] EchoPayload
+		copy(frame[16:], incomingPayload[:8]) // [16-23] EchoPayload
 	}
 
 	return frame
@@ -1357,15 +1357,15 @@ func (c *Conn) buildAVLoginPacket(magic uint16, size int, flags uint16, randomID
 	pkt := make([]byte, size)
 
 	// Header
-	binary.LittleEndian.PutUint16(pkt[0:2], magic)
-	binary.LittleEndian.PutUint16(pkt[2:4], ProtocolVersion)
+	binary.LittleEndian.PutUint16(pkt, magic)
+	binary.LittleEndian.PutUint16(pkt[2:], ProtocolVersion)
 	// bytes 4-15: reserved (zeros)
 
 	// Payload info at offset 16
 	payloadSize := uint16(size - 24) // total - header(16) - random(4) - padding(4)
-	binary.LittleEndian.PutUint16(pkt[16:18], payloadSize)
-	binary.LittleEndian.PutUint16(pkt[18:20], flags)
-	copy(pkt[20:24], randomID[:4])
+	binary.LittleEndian.PutUint16(pkt[16:], payloadSize)
+	binary.LittleEndian.PutUint16(pkt[18:], flags)
+	copy(pkt[20:], randomID[:4])
 
 	// Credentials (each field is 256 bytes)
 	copy(pkt[24:], DefaultUser) // username at offset 24 (payload byte 0)
@@ -1373,13 +1373,13 @@ func (c *Conn) buildAVLoginPacket(magic uint16, size int, flags uint16, randomID
 
 	// Config section (AVClientStartInConfig) starts at offset 536 (= 24 + 256 + 256)
 	// Layout: resend(4) + security_mode(4) + auth_type(4) + sync_recv_data(4) + ...
-	binary.LittleEndian.PutUint32(pkt[536:540], 0)                   // resend=0
-	binary.LittleEndian.PutUint32(pkt[540:544], 2)                   // security_mode=2 (AV_SECURITY_AUTO)
-	binary.LittleEndian.PutUint32(pkt[544:548], 0)                   // auth_type=0 (AV_AUTH_PASSWORD)
-	binary.LittleEndian.PutUint32(pkt[548:552], 0)                   // sync_recv_data=0
-	binary.LittleEndian.PutUint32(pkt[552:556], DefaultCapabilities) // capabilities
-	binary.LittleEndian.PutUint16(pkt[556:558], 0)                   // request_video_on_connect=0
-	binary.LittleEndian.PutUint16(pkt[558:560], 0)                   // request_audio_on_connect=0
+	binary.LittleEndian.PutUint32(pkt[536:], 0)                   // resend=0
+	binary.LittleEndian.PutUint32(pkt[540:], 2)                   // security_mode=2 (AV_SECURITY_AUTO)
+	binary.LittleEndian.PutUint32(pkt[544:], 0)                   // auth_type=0 (AV_AUTH_PASSWORD)
+	binary.LittleEndian.PutUint32(pkt[548:], 0)                   // sync_recv_data=0
+	binary.LittleEndian.PutUint32(pkt[552:], DefaultCapabilities) // capabilities
+	binary.LittleEndian.PutUint16(pkt[556:], 0)                   // request_video_on_connect=0
+	binary.LittleEndian.PutUint16(pkt[558:], 0)                   // request_audio_on_connect=0
 
 	return pkt
 }
@@ -1388,23 +1388,23 @@ func (c *Conn) buildAVLoginResponse(checksum uint32) []byte {
 	resp := make([]byte, 60)
 
 	// Header
-	binary.LittleEndian.PutUint16(resp[0:2], 0x2100) // Magic
-	binary.LittleEndian.PutUint16(resp[2:4], 0x000c) // Version
-	resp[4] = 0x10                                   // Response type (success)
+	binary.LittleEndian.PutUint16(resp, 0x2100)     // Magic
+	binary.LittleEndian.PutUint16(resp[2:], 0x000c) // Version
+	resp[4] = 0x10                                  // Response type (success)
 
 	// Payload info
-	binary.LittleEndian.PutUint32(resp[16:20], 0x24)     // Payload size = 36
-	binary.LittleEndian.PutUint32(resp[20:24], checksum) // Echo checksum from request!
+	binary.LittleEndian.PutUint32(resp[16:], 0x24)     // Payload size = 36
+	binary.LittleEndian.PutUint32(resp[20:], checksum) // Echo checksum from request!
 
 	// Payload (36 bytes starting at offset 24)
 	resp[29] = 0x01 // EnableFlag
 	resp[31] = 0x01 // TwoWayStreaming
 
-	binary.LittleEndian.PutUint32(resp[36:40], 0x04)       // BufferConfig
-	binary.LittleEndian.PutUint32(resp[40:44], 0x001f07fb) // Capabilities
+	binary.LittleEndian.PutUint32(resp[36:], 0x04)       // BufferConfig
+	binary.LittleEndian.PutUint32(resp[40:], 0x001f07fb) // Capabilities
 
-	binary.LittleEndian.PutUint16(resp[54:56], 0x0003) // ChannelInfo1
-	binary.LittleEndian.PutUint16(resp[56:58], 0x0002) // ChannelInfo2
+	binary.LittleEndian.PutUint16(resp[54:], 0x0003) // ChannelInfo1
+	binary.LittleEndian.PutUint16(resp[56:], 0x0002) // ChannelInfo2
 
 	return resp
 }
@@ -1414,32 +1414,32 @@ func (c *Conn) buildIOCtrlFrame(payload []byte) []byte {
 	frame := make([]byte, headerSize+len(payload))
 
 	// Magic (same as protocol version for IOCtrl frames)
-	binary.LittleEndian.PutUint16(frame[0:2], ProtocolVersion)
+	binary.LittleEndian.PutUint16(frame, ProtocolVersion)
 
 	// Version
-	binary.LittleEndian.PutUint16(frame[2:4], ProtocolVersion)
+	binary.LittleEndian.PutUint16(frame[2:], ProtocolVersion)
 
 	// AVSeq (4-7)
 	seq := c.avTxSeq
 	c.avTxSeq++
-	binary.LittleEndian.PutUint32(frame[4:8], seq)
+	binary.LittleEndian.PutUint32(frame[4:], seq)
 
 	// Bytes 8-15: reserved
 
 	// Channel: MagicIOCtrl (0x7000) for IOCtrl frames
-	binary.LittleEndian.PutUint16(frame[16:18], MagicIOCtrl)
+	binary.LittleEndian.PutUint16(frame[16:], MagicIOCtrl)
 
 	// SubChannel (18-19): increments with each IOCtrl command sent
-	binary.LittleEndian.PutUint16(frame[18:20], c.ioctrlSeq)
+	binary.LittleEndian.PutUint16(frame[18:], c.ioctrlSeq)
 
 	// IOCTLSeq (20-23): always 1
-	binary.LittleEndian.PutUint32(frame[20:24], 1)
+	binary.LittleEndian.PutUint32(frame[20:], 1)
 
 	// PayloadSize (24-27): payload + 4 bytes padding
-	binary.LittleEndian.PutUint32(frame[24:28], uint32(len(payload)+4))
+	binary.LittleEndian.PutUint32(frame[24:], uint32(len(payload)+4))
 
 	// Flag (28-31): matches subChannel in SDK
-	binary.LittleEndian.PutUint32(frame[28:32], uint32(c.ioctrlSeq))
+	binary.LittleEndian.PutUint32(frame[28:], uint32(c.ioctrlSeq))
 
 	// Bytes 32-36: reserved
 	// Byte 37: 0x01

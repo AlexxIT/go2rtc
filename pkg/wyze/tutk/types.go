@@ -1,5 +1,7 @@
 package tutk
 
+import "encoding/binary"
+
 const (
 	// Start packets - first fragment of a frame
 	// 0x08: Extended start (36-byte header, no FrameInfo)
@@ -114,10 +116,10 @@ func ParsePacketHeader(data []byte) *PacketHeader {
 		// [14-15] pkt_idx OR 0x0028 (FrameInfo marker) - ONLY 0x0028 in End packets!
 		// [16-17] payload_size
 		// [24-27] frame_no (uint32)
-		hdr.PktTotal = uint16(data[12]) | uint16(data[13])<<8
-		pktIdxOrMarker := uint16(data[14]) | uint16(data[15])<<8
-		hdr.PayloadSize = uint16(data[16]) | uint16(data[17])<<8
-		hdr.FrameNo = uint32(data[24]) | uint32(data[25])<<8 | uint32(data[26])<<16 | uint32(data[27])<<24
+		hdr.PktTotal = binary.LittleEndian.Uint16(data[12:])
+		pktIdxOrMarker := binary.LittleEndian.Uint16(data[14:])
+		hdr.PayloadSize = binary.LittleEndian.Uint16(data[16:])
+		hdr.FrameNo = binary.LittleEndian.Uint32(data[24:])
 
 		// 0x0028 is FrameInfo marker ONLY in End packets, otherwise it's pkt_idx=40
 		if IsEndFrame(hdr.FrameType) && pktIdxOrMarker == 0x0028 {
@@ -135,10 +137,10 @@ func ParsePacketHeader(data []byte) *PacketHeader {
 		// [24-25] payload_size
 		// [32-35] frame_no (uint32) - GLOBAL frame counter, matches 28-byte [24-27]
 		// NOTE: [18-19] is channel-specific frame index, NOT used for reassembly!
-		hdr.PktTotal = uint16(data[20]) | uint16(data[21])<<8
-		pktIdxOrMarker := uint16(data[22]) | uint16(data[23])<<8
-		hdr.PayloadSize = uint16(data[24]) | uint16(data[25])<<8
-		hdr.FrameNo = uint32(data[32]) | uint32(data[33])<<8 | uint32(data[34])<<16 | uint32(data[35])<<24
+		hdr.PktTotal = binary.LittleEndian.Uint16(data[20:])
+		pktIdxOrMarker := binary.LittleEndian.Uint16(data[22:])
+		hdr.PayloadSize = binary.LittleEndian.Uint16(data[24:])
+		hdr.FrameNo = binary.LittleEndian.Uint32(data[32:])
 
 		// 0x0028 is FrameInfo marker ONLY in End packets, otherwise it's pkt_idx=40
 		if IsEndFrame(hdr.FrameType) && pktIdxOrMarker == 0x0028 {
