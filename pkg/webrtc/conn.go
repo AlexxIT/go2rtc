@@ -157,7 +157,6 @@ func (c *Conn) Close() error {
 	return c.pc.Close()
 }
 
-// IsClosed returns true if the WebRTC connection is no longer active
 func (c *Conn) IsClosed() bool {
 	if c.transportClosed {
 		return true
@@ -168,7 +167,6 @@ func (c *Conn) IsClosed() bool {
 		state == webrtc.PeerConnectionStateClosed
 }
 
-// CloseTransport marks the transport (e.g. WebSocket) as closed
 func (c *Conn) CloseTransport() {
 	c.transportClosed = true
 }
