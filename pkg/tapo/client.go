@@ -405,3 +405,7 @@ func securityEncode(s string) string {
 
 	return string(b)
 }
+
+func (c *Client) IsClosed() bool {
+	return c.conn1 == nil
+}
