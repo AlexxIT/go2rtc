@@ -27,6 +27,20 @@ Ultimate camera streaming application with support for RTSP, WebRTC, HomeKit, FF
    - [two-way audio](#two-way-audio) for some cameras
 - can be [integrated to](#module-api) any smart home platform or be used as [standalone app](#go2rtc-binary)
 
+**Supported Formats** - describes the communication API: authorization, encryption, command set, structure of media packets
+
+- devices: `alsa` (Linux audio), `v4l2` (Linux video)
+- files: `adts`, `flv`, `h264`, `hevc`, `hls`, `mjpeg`, `mpegts`, `mp4`, `wav`
+- network (public and well known): `mpjpeg`, `onvif`, `rtmp`, `rtp`, `rtsp`, `webrtc`, `y2m` (yuv4mpegpipe)
+- network (private and exclusive): `bubble`, `doorbird`, `dvrip`, `eseecloud`, `gopro`, `hass` (Home Assistant), `homekit` (Apple), `isapi` (Hikvision), `kasa` (TP-Link), `nest` (Google), `ring`, `roborock`, `tapo` and `vigi` (TP-Link), `tuya`, `webtorrent`, `xiaomi` (Mi Home)
+- webrtc related: `creality`, `kinesis` (Amazon), `openipc`, `switchbot`, `whep`, `whip`, `wyze`
+- other: `ascii`, `echo`, `exec`, `expr`, `ffmpeg`
+
+**Supported Protocols** - describes the transport for data transmission
+
+- public: `http`, `pipe`, `rtmp`, `rtsp`, `tcp`, `udp`, `webrtc`, `ws` (WebSocket)
+- private: `cs2` (PPPP), `hap` and `hds` (HomeKit), `tutk` (P2P)
+
 **Inspired by:**
 
 - series of streaming projects from [@deepch](https://github.com/deepch)

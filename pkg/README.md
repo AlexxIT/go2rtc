@@ -10,35 +10,51 @@ Some formats and protocols go2rtc supports exclusively. They have no equivalent 
 - Codecs can be incoming - **Recevers codecs**
 - Codecs can be outgoing (two way audio) - **Senders codecs**
 
-| Format       | Source protocols | Ingress protocols | Recevers codecs              | Senders codecs     | Example       |
-|--------------|------------------|-------------------|------------------------------|--------------------|---------------|
-| adts         | http,tcp,pipe    | http              | aac                          |                    | `http:`       |
-| alsa         | pipe             |                   |                              | pcm                | `alsa:`       |
-| bubble       | http             |                   | h264,hevc,pcm_alaw           |                    | `bubble:`     |
-| dvrip        | tcp              |                   | h264,hevc,pcm_alaw,pcm_mulaw | pcm_alaw           | `dvrip:`      |
-| flv          | http,tcp,pipe    | http              | h264,aac                     |                    | `http:`       |
-| gopro        | http+udp         |                   | TODO                         |                    | `gopro:`      |
-| hass/webrtc  | ws+udp,tcp       |                   | TODO                         |                    | `hass:`       |
-| hls/mpegts   | http             |                   | h264,h265,aac,opus           |                    | `http:`       |
-| homekit      | homekit+udp      |                   | h264,eld*                    |                    | `homekit:`    |
-| isapi        | http             |                   |                              | pcm_alaw,pcm_mulaw | `isapi:`      |
-| ivideon      | ws               |                   | h264                         |                    | `ivideon:`    |
-| kasa         | http             |                   | h264,pcm_mulaw               |                    | `kasa:`       |
-| h264         | http,tcp,pipe    | http              | h264                         |                    | `http:`       |
-| hevc         | http,tcp,pipe    | http              | hevc                         |                    | `http:`       |
-| mjpeg        | http,tcp,pipe    | http              | mjpeg                        |                    | `http:`       |
-| mpjpeg       | http,tcp,pipe    | http              | mjpeg                        |                    | `http:`       |
-| mpegts       | http,tcp,pipe    | http              | h264,hevc,aac,opus           |                    | `http:`       |
-| nest/webrtc  | http+udp         |                   | TODO                         |                    | `nest:`       |
-| roborock     | mqtt+udp         |                   | h264,opus                    | opus               | `roborock:`   |
-| rtmp         | rtmp             | rtmp              | h264,aac                     |                    | `rtmp:`       |
-| rtsp         | rtsp+tcp,ws      | rtsp+tcp          | h264,hevc,aac,pcm*,opus      | pcm*,opus          | `rtsp:`       |
-| stdin        | pipe             |                   |                              | pcm_alaw,pcm_mulaw | `stdin:`      |
-| tapo         | http             |                   | h264,pcma                    | pcm_alaw           | `tapo:`       |
-| wav          | http,tcp,pipe    | http              | pcm_alaw,pcm_mulaw           |                    | `http:`       |
-| webrtc*      | TODO             | TODO              | h264,pcm_alaw,pcm_mulaw,opus | pcm_alaw,pcm_mulaw | `webrtc:`     |
-| webtorrent   | TODO             | TODO              | TODO                         | TODO               | `webtorrent:` |
-| yuv4mpegpipe | http,tcp,pipe    | http              | rawvideo                     |                    | `http:`       |
+| Group      | Format     | Protocols     | Ingress | Recevers codecs              | Senders codecs     | Example       |
+|------------|------------|---------------|---------|------------------------------|--------------------|---------------|
+| Devices    | alsa       | pipe          |         |                              | pcm                | `alsa:`       |
+| Devices    | v4l2       | pipe          |         |                              |                    |               |
+| Files      | adts       | http,tcp,pipe | http    | aac                          |                    | `http:`       |
+| Files      | flv        | http,tcp,pipe | http    | h264,aac                     |                    | `http:`       |
+| Files      | h264       | http,tcp,pipe | http    | h264                         |                    | `http:`       |
+| Files      | hevc       | http,tcp,pipe | http    | hevc                         |                    | `http:`       |
+| Files      | hls        | http          |         | h264,h265,aac,opus           |                    | `http:`       |
+| Files      | mjpeg      | http,tcp,pipe | http    | mjpeg                        |                    | `http:`       |
+| Files      | mpegts     | http,tcp,pipe | http    | h264,hevc,aac,opus           |                    | `http:`       |
+| Files      | mp4        |               |         |                              |                    |               |
+| Files      | wav        | http,tcp,pipe | http    | pcm_alaw,pcm_mulaw           |                    | `http:`       |
+| Net (pub)  | mpjpeg     | http,tcp,pipe | http    | mjpeg                        |                    | `http:`       |
+| Net (pub)  | onvif      | rtsp          |         |                              |                    |               |
+| Net (pub)  | rtmp       | rtmp          | rtmp    | h264,aac                     |                    | `rtmp:`       |
+| Net (pub)  | rtsp       | rtsp,ws       | rtsp    | h264,hevc,aac,pcm*,opus      | pcm*,opus          | `rtsp:`       |
+| Net (pub)  | webrtc*    | webrtc        | webrtc  | h264,pcm_alaw,pcm_mulaw,opus | pcm_alaw,pcm_mulaw | `webrtc:`     |
+| Net (pub)  | y4m        | http,tcp,pipe | http    | rawvideo                     |                    | `http:`       |
+| Net (priv) | bubble     | http          |         | h264,hevc,pcm_alaw           |                    | `bubble:`     |
+| Net (priv) | doorbird   | http          |         |                              |                    |               |
+| Net (priv) | dvrip      | tcp           |         | h264,hevc,pcm_alaw,pcm_mulaw | pcm_alaw           | `dvrip:`      |
+| Net (priv) | eseecloud  | http          |         |                              |                    |               |
+| Net (priv) | gopro      | udp           |         | TODO                         |                    | `gopro:`      |
+| Net (priv) | hass       | webrtc        |         | TODO                         |                    | `hass:`       |
+| Net (priv) | homekit    | hap           |         | h264,eld*                    |                    | `homekit:`    |
+| Net (priv) | isapi      | http          |         |                              | pcm_alaw,pcm_mulaw | `isapi:`      |
+| Net (priv) | kasa       | http          |         | h264,pcm_mulaw               |                    | `kasa:`       |
+| Net (priv) | nest       | rtsp,webrtc   |         | TODO                         |                    | `nest:`       |
+| Net (priv) | ring       | webrtc        |         |                              |                    |               |
+| Net (priv) | roborock   | webrtc        |         | h264,opus                    | opus               | `roborock:`   |
+| Net (priv) | tapo       | http          |         | h264,pcma                    | pcm_alaw           | `tapo:`       |
+| Net (priv) | tuya       | webrtc        |         |                              |                    |               |
+| Net (priv) | vigi       | http          |         |                              |                    |               |
+| Net (priv) | webtorrent | webrtc        | TODO    | TODO                         | TODO               | `webtorrent:` |
+| Net (priv) | xiaomi*    | cs2,tutk      |         |                              |                    |               |
+| Services   | flussonic  | ws            |         |                              |                    |               |
+| Services   | ivideon    | ws            |         | h264                         |                    | `ivideon:`    |
+| Services   | yandex     | webrtc        |         |                              |                    |               |
+| Other      | ascii      | http          |         |                              |                    |               |
+| Other      | echo       | *             |         |                              |                    |               |
+| Other      | exec       | pipe,rtsp     |         |                              |                    |               |
+| Other      | expr       | *             |         |                              |                    |               |
+| Other      | ffmpeg     | pipe,rtsp     |         |                              |                    |               |
+| Other      | stdin      | pipe          |         |                              | pcm_alaw,pcm_mulaw | `stdin:`      |
 
 - **eld** - rare variant of aac codec
 - **pcm** - pcm_alaw pcm_mulaw pcm_s16be pcm_s16le
