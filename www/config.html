@@ -4,7 +4,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>config - go2rtc</title>
+    <link rel="stylesheet" href="main.css">
     <style>
+        .page-config main.container--full {
+            padding: 16px;
+            gap: 12px;
+        }
+
+        .page-config #config {
+            flex: 1;
+            min-height: 0;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+            box-shadow: var(--shadow-sm);
+            background: var(--surface);
+        }
+
         html, body {
             height: 100%;
         }
@@ -16,17 +32,18 @@
         }
     </style>
 </head>
-<body>
+<body class="app page-config">
 
 <script src="main.js"></script>
 
-<main>
-    <div>
-        <button id="save">Save & Restart</button>
-        <button id="suggest" title="ctrl + space">Suggest</button>
+<main class="container container--full">
+    <div class="toolbar">
+        <button class="btn btn-primary" id="save">Save & Restart</button>
+        <span class="muted">Edits config and restarts go2rtc</span>
+        <button class="btn btn-primary" id="suggest" title="ctrl + space">Suggest</button>
     </div>
+    <div id="config"></div>
 </main>
-<div id="config"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs/loader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>

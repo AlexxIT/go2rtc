@@ -4,44 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>log - go2rtc</title>
-    <style>
-        main > div {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-
-        table tbody {
-            font-size: 13px;
-        }
-
-        .trace {
-            color: #585858 !important;
-        }
-
-        .debug {
-            color: #808080 !important;
-        }
-
-        .info {
-            color: #0174DF !important;
-        }
-
-        .warn {
-            color: #FF9966 !important;
-        }
-
-        .error {
-            color: #DF0101 !important;
-        }
-    </style>
+    <link rel="stylesheet" href="main.css">
 </head>
-<body>
+<body class="app page-log">
 
 <script src="main.js"></script>
 
-<main>
-    <div>
+<main class="container">
+    <div class="toolbar">
         <button id="clean">Clean</button>
         <button id="update">Auto Update: ON</button>
         <button id="reverse">Reverse Log Order: OFF</button>
