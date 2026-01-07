@@ -11,7 +11,7 @@ import (
 )
 
 func (p *Producer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver) error {
-	if err := p.client.SpeakerStart(); err != nil {
+	if err := p.stream.SpeakerStart(); err != nil {
 		return err
 	}
 	// TODO: check this!!!
@@ -31,7 +31,7 @@ func (p *Producer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 				buf = append(buf, transcode(pkt.Payload)...)
 				const size = 2 * 8000 * 0.040 // 16bit 40ms
 				for len(buf) >= size {
-					_ = p.client.WriteAudio(miss.CodecPCM, buf[:size])
+					_ = p.stream.WriteAudio(miss.CodecPCM, buf[:size])
 					buf = buf[size:]
 				}
 			}
@@ -40,7 +40,7 @@ func (p *Producer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 				buf = append(buf, pkt.Payload...)
 				const size = 8000 * 0.040 // 8bit 40 ms
 				for len(buf) >= size {
-					_ = p.client.WriteAudio(miss.CodecPCMA, buf[:size])
+					_ = p.stream.WriteAudio(miss.CodecPCMA, buf[:size])
 					buf = buf[size:]
 				}
 			}
@@ -54,13 +54,13 @@ func (p *Producer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 				} else {
 					// convert two 20ms to one 40ms
 					buf = opus.JoinFrames(buf, pkt.Payload)
-					_ = p.client.WriteAudio(miss.CodecOPUS, buf)
+					_ = p.stream.WriteAudio(miss.CodecOPUS, buf)
 					buf = nil
 				}
 			}
 		} else {
 			sender.Handler = func(pkt *rtp.Packet) {
-				_ = p.client.WriteAudio(miss.CodecOPUS, pkt.Payload)
+				_ = p.stream.WriteAudio(miss.CodecOPUS, pkt.Payload)
 			}
 		}
 	}

@@ -52,6 +52,17 @@ func Init() {
 var tokens map[string]string
 var tokensMu sync.Mutex
 
+type missCred struct {
+	clientPublic  string
+	clientPrivate string
+	devicePublic  string
+	sign          string
+	vendor        string
+}
+
+var missCredsMu sync.Mutex
+var missCreds = map[string]missCred{}
+
 func getCloud(userID string) (*xiaomi.Cloud, error) {
 	tokensMu.Lock()
 	defer tokensMu.Unlock()
@@ -66,12 +77,29 @@ func getCloud(userID string) (*xiaomi.Cloud, error) {
 }
 
 func getCameraURL(url *url.URL) (string, error) {
+	query := url.Query()
+	region, _ := url.User.Password()
+	cacheKey := url.User.Username() + ":" + region + ":" + query.Get("did")
+
+	missCredsMu.Lock()
+	if cred, ok := missCreds[cacheKey]; ok {
+		missCredsMu.Unlock()
+
+		query.Set("client_public", cred.clientPublic)
+		query.Set("client_private", cred.clientPrivate)
+		query.Set("device_public", cred.devicePublic)
+		query.Set("sign", cred.sign)
+		query.Set("vendor", cred.vendor)
+
+		url.RawQuery = query.Encode()
+		return url.String(), nil
+	}
+	missCredsMu.Unlock()
+
 	clientPublic, clientPrivate, err := miss.GenerateKey()
 	if err != nil {
 		return "", err
 	}
-
-	query := url.Query()
 
 	params := fmt.Sprintf(
 		`{"app_pubkey":"%x","did":"%s","support_vendors":"CS2"}`,
@@ -82,8 +110,6 @@ func getCameraURL(url *url.URL) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
-	region, _ := url.User.Password()
 
 	res, err := cloud.Request(GetBaseURL(region), "/v2/device/miss_get_vendor", params, nil)
 	if err != nil {
@@ -105,7 +131,18 @@ func getCameraURL(url *url.URL) (string, error) {
 	query.Set("client_private", hex.EncodeToString(clientPrivate))
 	query.Set("device_public", v.PublicKey)
 	query.Set("sign", v.Sign)
-	query.Set("vendor", getVendorName(v.Vendor.VendorID))
+	vendor := getVendorName(v.Vendor.VendorID)
+	query.Set("vendor", vendor)
+
+	missCredsMu.Lock()
+	missCreds[cacheKey] = missCred{
+		clientPublic:  hex.EncodeToString(clientPublic),
+		clientPrivate: hex.EncodeToString(clientPrivate),
+		devicePublic:  v.PublicKey,
+		sign:          v.Sign,
+		vendor:        vendor,
+	}
+	missCredsMu.Unlock()
 
 	url.RawQuery = query.Encode()
 	return url.String(), nil

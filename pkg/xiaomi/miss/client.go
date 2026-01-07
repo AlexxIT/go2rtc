@@ -200,6 +200,20 @@ func (c *Client) VideoStart(channel, quality, audio uint8) error {
 	return err
 }
 
+func (c *Client) VideoStartDual(qualityMain, qualitySub, audio uint8) error {
+	buf := binary.BigEndian.AppendUint32(nil, cmdVideoStart)
+	buf = fmt.Appendf(buf, `{"videoquality":%d,"videoquality2":%d,"enableaudio":%d}`, qualityMain, qualitySub, audio)
+	buf, err := encode(c.key, buf)
+	if err != nil {
+		return err
+	}
+	buf = marshalCmd(0, c.chSeq0, cmdEncoded, buf)
+	c.chSeq0++
+
+	_, err = c.conn.WriteToUDP(buf, c.addr)
+	return err
+}
+
 func (c *Client) SpeakerStart() error {
 	buf := binary.BigEndian.AppendUint32(nil, cmdSpeakerStartReq)
 	buf, err := encode(c.key, buf)

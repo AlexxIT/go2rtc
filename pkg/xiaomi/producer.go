@@ -1,6 +1,7 @@
 package xiaomi
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"time"
@@ -15,12 +16,12 @@ import (
 
 type Producer struct {
 	core.Connection
-	client *miss.Client
+	stream *stream
 	model  string
 }
 
 func Dial(rawURL string) (core.Producer, error) {
-	client, err := miss.Dial(rawURL)
+	sess, err := getSession(rawURL)
 	if err != nil {
 		return nil, err
 	}
@@ -44,9 +45,10 @@ func Dial(rawURL string) (core.Producer, error) {
 		quality = core.ParseByte(s)
 	}
 
-	medias, err := probe(client, channel, quality)
+	st := sess.openStream(channel)
+	medias, err := probe(st, quality)
 	if err != nil {
-		_ = client.Close()
+		_ = st.Close()
 		return nil, err
 	}
 
@@ -55,28 +57,32 @@ func Dial(rawURL string) (core.Producer, error) {
 			ID:         core.NewID(),
 			FormatName: "xiaomi",
 			Protocol:   "cs2+udp",
-			RemoteAddr: client.RemoteAddr().String(),
+			RemoteAddr: st.RemoteAddr().String(),
 			Source:     rawURL,
 			Medias:     medias,
-			Transport:  client,
+			Transport:  st,
 		},
-		client: client,
+		stream: st,
 		model:  query.Get("model"),
 	}, nil
 }
 
-func probe(client *miss.Client, channel, quality uint8) ([]*core.Media, error) {
-	_ = client.SetDeadline(time.Now().Add(core.ProbeTimeout))
+func probe(st *stream, quality uint8) ([]*core.Media, error) {
+	_ = st.SetDeadline(time.Now().Add(core.ProbeTimeout))
 
-	if err := client.VideoStart(channel, quality, 1); err != nil {
+	if err := st.VideoStart(quality, 1); err != nil {
 		return nil, err
 	}
 
 	var video, audio *core.Codec
+	needAudio := st.wantsAudio()
 
 	for {
-		pkt, err := client.ReadPacket()
+		pkt, err := st.ReadPacket()
 		if err != nil {
+			if errors.Is(err, errTimeout) && video != nil {
+				break
+			}
 			return nil, fmt.Errorf("xiaomi: probe: %w", err)
 		}
 
@@ -105,30 +111,35 @@ func probe(client *miss.Client, channel, quality uint8) ([]*core.Media, error) {
 			}
 		}
 
-		if video != nil && audio != nil {
+		if video != nil && (audio != nil || !needAudio) {
 			break
 		}
 	}
 
-	_ = client.SetDeadline(time.Time{})
+	_ = st.SetDeadline(time.Time{})
 
-	return []*core.Media{
+	medias := []*core.Media{
 		{
 			Kind:      core.KindVideo,
 			Direction: core.DirectionRecvonly,
 			Codecs:    []*core.Codec{video},
 		},
-		{
+	}
+
+	if audio != nil {
+		medias = append(medias, &core.Media{
 			Kind:      core.KindAudio,
 			Direction: core.DirectionRecvonly,
 			Codecs:    []*core.Codec{audio},
-		},
-		{
+		})
+		medias = append(medias, &core.Media{
 			Kind:      core.KindAudio,
 			Direction: core.DirectionSendonly,
 			Codecs:    []*core.Codec{audio.Clone()},
-		},
-	}, nil
+		})
+	}
+
+	return medias, nil
 }
 
 const timestamp40ms = 48000 * 0.040
@@ -137,8 +148,8 @@ func (p *Producer) Start() error {
 	var audioTS uint32
 
 	for {
-		_ = p.client.SetDeadline(time.Now().Add(core.ConnDeadline))
-		pkt, err := p.client.ReadPacket()
+		_ = p.stream.SetDeadline(time.Now().Add(core.ConnDeadline))
+		pkt, err := p.stream.ReadPacket()
 		if err != nil {
 			return err
 		}
