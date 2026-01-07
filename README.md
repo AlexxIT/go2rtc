@@ -728,6 +728,9 @@ If you have a graphic PIN for your vacuum, add it as a numeric PIN (lines: 123, 
 *[New in v1.9.11](https://github.com/AlexxIT/go2rtc/releases/tag/v1.9.11)*
 
 This source type supports Doorbird devices including MJPEG stream, audio stream as well as two-way audio.
+It is recommended to create a sepearate user within your doorbird setup for go2rtc. Minimum permissions for the user are:
+- Watch always
+- API operator
 
 ```yaml
 streams:
