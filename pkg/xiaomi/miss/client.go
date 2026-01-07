@@ -5,16 +5,77 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/url"
+	"os"
+	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"golang.org/x/crypto/chacha20"
 	"golang.org/x/crypto/nacl/box"
 )
+
+var (
+	debugHeaderEnv  = os.Getenv("XIAOMI_DEBUG_HEADER")
+	debugHeaderFile = os.Getenv("XIAOMI_DEBUG_HEADER_FILE")
+
+	debugHeader      = debugHeaderEnv != "" || debugHeaderFile != ""
+	debugHeaderLimit int32 = 50
+	debugHeaderCount atomic.Int32
+
+	debugHeaderOnce sync.Once
+	debugHeaderErr  error
+	debugHeaderOut  io.Writer
+	debugHeaderMu   sync.Mutex
+	debugHeaderLogf func(string)
+)
+
+// SetDebugHeader enables header logging unless env override is set.
+func SetDebugHeader(enabled bool) {
+	if debugHeaderEnv != "" || debugHeaderFile != "" {
+		return
+	}
+	debugHeader = enabled
+}
+
+// SetDebugHeaderLogger sets a logger for header debug lines.
+func SetDebugHeaderLogger(logf func(string)) {
+	debugHeaderLogf = logf
+}
+
+func init() {
+	if v := os.Getenv("XIAOMI_DEBUG_HEADER_LIMIT"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 32); err == nil && n > 0 {
+			debugHeaderLimit = int32(n)
+		}
+	}
+}
+
+func debugHeaderWrite(line string) {
+	if debugHeaderLogf != nil {
+		debugHeaderLogf(line)
+	} else {
+		log.Printf("%s", line)
+	}
+	if debugHeaderFile == "" {
+		return
+	}
+	debugHeaderOnce.Do(func() {
+		debugHeaderOut, debugHeaderErr = os.OpenFile(debugHeaderFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	})
+	if debugHeaderErr != nil || debugHeaderOut == nil {
+		return
+	}
+	debugHeaderMu.Lock()
+	_, _ = fmt.Fprintln(debugHeaderOut, line)
+	debugHeaderMu.Unlock()
+}
 
 func Dial(rawURL string) (*Client, error) {
 	u, err := url.Parse(rawURL)
@@ -246,25 +307,49 @@ func unmarshalPacket(key, b []byte) (*Packet, error) {
 		return nil, fmt.Errorf("miss: packet payload has wrong length")
 	}
 
+	codecID := binary.LittleEndian.Uint32(b[4:])
+	flags := binary.LittleEndian.Uint32(b[12:])
+	frameType := binary.LittleEndian.Uint32(b[24:28])
+	channel := b[28]
+	flagCh, flagOK := channelFromFlags(flags)
+
+	if debugHeader && (codecID == CodecH264 || codecID == CodecH265) {
+		if debugHeaderCount.Add(1) <= debugHeaderLimit {
+			seq := binary.LittleEndian.Uint32(b[8:])
+			ts := binary.LittleEndian.Uint64(b[16:])
+			debugHeaderWrite(fmt.Sprintf("miss: hdr codec=%d seq=%d flags=%d ts=%d fch=%d raw=%x", codecID, seq, flags, ts, flagCh, b[:32]))
+		}
+	}
+
 	payload, err := decode(key, b[32:])
 	if err != nil {
 		return nil, err
 	}
 
-	frameType := binary.LittleEndian.Uint32(b[24:28])
-	channel := b[28]
 	channelOK := channel <= 1 && frameType <= 3
+	if !channelOK && flagOK {
+		channel = flagCh
+		channelOK = true
+	}
 
 	return &Packet{
-		CodecID:   binary.LittleEndian.Uint32(b[4:]),
+		CodecID:   codecID,
 		Sequence:  binary.LittleEndian.Uint32(b[8:]),
-		Flags:     binary.LittleEndian.Uint32(b[12:]),
+		Flags:     flags,
 		Timestamp: binary.LittleEndian.Uint64(b[16:]),
 		FrameType: frameType,
 		Channel:   channel,
 		ChannelOK: channelOK,
 		Payload:   payload,
 	}, nil
+}
+
+func channelFromFlags(flags uint32) (uint8, bool) {
+	ch := uint8((flags >> 24) & 0x01)
+	if ch > 1 {
+		return 0, false
+	}
+	return ch, true
 }
 
 func (c *Client) WriteAudio(codecID uint32, payload []byte) error {

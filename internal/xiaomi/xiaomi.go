@@ -27,6 +27,10 @@ func Init() {
 	tokens = v.Cfg
 
 	log := app.GetLogger("xiaomi")
+	miss.SetDebugHeader(log.Debug().Enabled())
+	miss.SetDebugHeaderLogger(func(msg string) {
+		log.Debug().Msg(msg)
+	})
 
 	streams.HandleFunc("xiaomi", func(rawURL string) (core.Producer, error) {
 		u, err := url.Parse(rawURL)
