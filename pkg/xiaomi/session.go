@@ -175,14 +175,8 @@ func (s *session) dispatch(pkt *miss.Packet) {
 	s.mu.Unlock()
 
 	if isAudioCodec(pkt.CodecID) {
-		targetMask := mask
-		if mask == 0b11 {
-			targetMask = 0b01
-		}
 		for _, st := range streams {
-			if targetMask&(1<<st.channel) != 0 {
-				st.push(pkt)
-			}
+			st.push(pkt)
 		}
 		return
 	}
@@ -411,13 +405,7 @@ func (s *stream) SetDeadline(t time.Time) error {
 }
 
 func (s *stream) wantsAudio() bool {
-	if s.channel == 0 {
-		return true
-	}
-
-	s.session.mu.Lock()
-	defer s.session.mu.Unlock()
-	return s.session.activeMask == 0b10
+	return true
 }
 
 func (s *stream) ReadPacket() (*miss.Packet, error) {
