@@ -251,11 +251,18 @@ func unmarshalPacket(key, b []byte) (*Packet, error) {
 		return nil, err
 	}
 
+	frameType := binary.LittleEndian.Uint32(b[24:28])
+	channel := b[28]
+	channelOK := channel <= 1 && frameType <= 3
+
 	return &Packet{
 		CodecID:   binary.LittleEndian.Uint32(b[4:]),
 		Sequence:  binary.LittleEndian.Uint32(b[8:]),
 		Flags:     binary.LittleEndian.Uint32(b[12:]),
 		Timestamp: binary.LittleEndian.Uint64(b[16:]),
+		FrameType: frameType,
+		Channel:   channel,
+		ChannelOK: channelOK,
 		Payload:   payload,
 	}, nil
 }
@@ -451,6 +458,9 @@ type Packet struct {
 	Sequence  uint32
 	Flags     uint32
 	Timestamp uint64 // msec
+	FrameType uint32
+	Channel   uint8
+	ChannelOK bool
 	//TimestampS uint32
 	//Reserved uint32
 	Payload []byte

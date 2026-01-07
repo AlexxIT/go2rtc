@@ -44,6 +44,9 @@ type session struct {
 	lastSeq [2]uint32
 	lastTS  [2]uint64
 	seqInit [2]bool
+
+	chanSeen  [2]bool
+	useChannel bool
 }
 
 type stream struct {
@@ -143,6 +146,11 @@ func (s *session) updateActiveMaskLocked() {
 	if mask != 0b11 {
 		s.resMap = make(map[videoRes]uint8)
 		s.seqInit = [2]bool{}
+		s.chanSeen = [2]bool{}
+		s.useChannel = false
+	} else {
+		s.chanSeen = [2]bool{}
+		s.useChannel = false
 	}
 }
 
@@ -181,12 +189,30 @@ func (s *session) dispatch(pkt *miss.Packet) {
 		return
 	}
 
-	ch := s.classifyVideo(pkt, mask)
+	ch := s.pickChannel(pkt, mask)
 	for _, st := range streams {
 		if st.channel == ch {
 			st.push(pkt)
 		}
 	}
+}
+
+func (s *session) pickChannel(pkt *miss.Packet, mask uint8) uint8 {
+	if pkt.ChannelOK && pkt.Channel <= 1 {
+		s.mu.Lock()
+		s.chanSeen[pkt.Channel] = true
+		if s.chanSeen[0] && s.chanSeen[1] {
+			s.useChannel = true
+		}
+		use := s.useChannel
+		s.mu.Unlock()
+
+		if use && (mask&(1<<pkt.Channel)) != 0 {
+			return pkt.Channel
+		}
+	}
+
+	return s.classifyVideo(pkt, mask)
 }
 
 func (s *session) classifyVideo(pkt *miss.Packet, mask uint8) uint8 {
