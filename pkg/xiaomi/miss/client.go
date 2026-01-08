@@ -5,14 +5,10 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"net/url"
-	"os"
-	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -22,25 +18,13 @@ import (
 )
 
 var (
-	debugHeaderEnv  = os.Getenv("XIAOMI_DEBUG_HEADER")
-	debugHeaderFile = os.Getenv("XIAOMI_DEBUG_HEADER_FILE")
-
-	debugHeader      = debugHeaderEnv != "" || debugHeaderFile != ""
-	debugHeaderLimit int32 = 50
+	debugHeader bool
 	debugHeaderCount atomic.Int32
-
-	debugHeaderOnce sync.Once
-	debugHeaderErr  error
-	debugHeaderOut  io.Writer
-	debugHeaderMu   sync.Mutex
 	debugHeaderLogf func(string)
 )
 
-// SetDebugHeader enables header logging unless env override is set.
+// SetDebugHeader enables header logging.
 func SetDebugHeader(enabled bool) {
-	if debugHeaderEnv != "" || debugHeaderFile != "" {
-		return
-	}
 	debugHeader = enabled
 }
 
@@ -49,33 +33,7 @@ func SetDebugHeaderLogger(logf func(string)) {
 	debugHeaderLogf = logf
 }
 
-func init() {
-	if v := os.Getenv("XIAOMI_DEBUG_HEADER_LIMIT"); v != "" {
-		if n, err := strconv.ParseInt(v, 10, 32); err == nil && n > 0 {
-			debugHeaderLimit = int32(n)
-		}
-	}
-}
-
-func debugHeaderWrite(line string) {
-	if debugHeaderLogf != nil {
-		debugHeaderLogf(line)
-	} else {
-		log.Printf("%s", line)
-	}
-	if debugHeaderFile == "" {
-		return
-	}
-	debugHeaderOnce.Do(func() {
-		debugHeaderOut, debugHeaderErr = os.OpenFile(debugHeaderFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-	})
-	if debugHeaderErr != nil || debugHeaderOut == nil {
-		return
-	}
-	debugHeaderMu.Lock()
-	_, _ = fmt.Fprintln(debugHeaderOut, line)
-	debugHeaderMu.Unlock()
-}
+const debugHeaderEvery int32 = 120
 
 func Dial(rawURL string) (*Client, error) {
 	u, err := url.Parse(rawURL)
@@ -313,11 +271,11 @@ func unmarshalPacket(key, b []byte) (*Packet, error) {
 	channel := b[28]
 	flagCh, flagOK := channelFromFlags(flags)
 
-	if debugHeader && (codecID == CodecH264 || codecID == CodecH265) {
-		if debugHeaderCount.Add(1) <= debugHeaderLimit {
+	if debugHeader && debugHeaderLogf != nil && (codecID == CodecH264 || codecID == CodecH265) {
+		if debugHeaderCount.Add(1)%debugHeaderEvery == 0 {
 			seq := binary.LittleEndian.Uint32(b[8:])
 			ts := binary.LittleEndian.Uint64(b[16:])
-			debugHeaderWrite(fmt.Sprintf("miss: hdr codec=%d seq=%d flags=%d ts=%d fch=%d raw=%x", codecID, seq, flags, ts, flagCh, b[:32]))
+			debugHeaderLogf(fmt.Sprintf("miss: hdr codec=%d seq=%d flags=%d ts=%d fch=%d raw=%x", codecID, seq, flags, ts, flagCh, b[:32]))
 		}
 	}
 
