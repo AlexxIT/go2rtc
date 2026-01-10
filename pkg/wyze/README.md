@@ -5,7 +5,7 @@ This source allows you to stream from [Wyze](https://wyze.com/) cameras using na
 **Important:**
 
 1. **Requires Wyze account**. You need to login once via the WebUI to load your cameras.
-2. **Requires newer firmware with DTLS**. Only cameras with DTLS-enabled firmware are currently supported.
+2. **Requires firmware with DTLS**. Only cameras with DTLS-enabled firmware are supported.
 3. Internet access is only needed when loading cameras from your account. After that, all streaming is local P2P.
 4. Connection to the camera is local only (direct P2P to camera IP).
 
@@ -33,7 +33,7 @@ wyze:
     password: "yourpassword"    # or MD5 triple-hash with "md5:" prefix
 
 streams:
-  wyze_cam: wyze://192.168.1.123?uid=WYZEUID1234567890AB&enr=xxx&mac=AABBCCDDEEFF
+  wyze_cam: wyze://192.168.1.123?uid=WYZEUID1234567890AB&enr=xxx&mac=AABBCCDDEEFF&dtls=true
 ```
 
 ## Stream URL Format
@@ -60,30 +60,44 @@ You can change the camera's resolution using the `quality` parameter:
 
 ```yaml
 streams:
-  wyze_hd: wyze://...&quality=hd    # 1080P/2K (default)
-  wyze_sd: wyze://...&quality=sd    # 360P
+  wyze_hd: wyze://...&quality=hd
+  wyze_sd: wyze://...&quality=sd
 ```
 
 ### Two-Way Audio
 
 Two-way audio (intercom) is supported automatically. When a consumer sends audio to the stream, it will be transmitted to the camera's speaker.
 
-## Supported Cameras
+## Camera Compatibility
 
-Cameras using the TUTK P2P protocol:
-
-| Model | Name | Tested |
-|-------|------|--------|
-| WYZE_CAKP2JFUS | Wyze Cam v3 | |
-| HL_CAM3P | Wyze Cam v3 Pro | |
-| HL_CAM4 | Wyze Cam v4 | Yes |
-| WYZECP1_JEF | Wyze Cam Pan | |
-| HL_PANP | Wyze Cam Pan v2 | |
-| HL_PAN3 | Wyze Cam Pan v3 | |
-| WVOD1 | Wyze Video Doorbell | |
-| WVOD2 | Wyze Video Doorbell v2 | |
-| AN_RSCW | Wyze Video Doorbell Pro | |
-| GW_BE1 | Wyze Cam Floodlight | |
-| HL_WCO2 | Wyze Cam Outdoor | |
-| HL_CFL2 | Wyze Cam Floodlight v2 | |
-| LD_CFP | Wyze Battery Cam Pro | |
+| Name | Model | Firmware | Protocol | Encryption | Codecs |
+|------|-------|----------|----------|------------|--------|
+| Wyze Cam v4 | HL_CAM4 | 4.52.9.4188 | TUTK | TransCode | hevc, aac |
+| | | 4.52.9.5332 | TUTK | HMAC-SHA1 | hevc, aac |
+| Wyze Cam v3 Pro | | | | | |
+| Wyze Cam v3 | | | | | |
+| Wyze Cam v2 | | | | | |
+| Wyze Cam v1 | | | | | |
+| Wyze Cam Pan v4 | | | | | |
+| Wyze Cam Pan v3 | | | | | |
+| Wyze Cam Pan v2 | | | | | |
+| Wyze Cam Pan v1 | | | | | |
+| Wyze Cam OG | | | | | |
+| Wyze Cam OG Telephoto | | | | | |
+| Wyze Cam OG (2025) | | | | | |
+| Wyze Cam Outdoor v2 | | | | | |
+| Wyze Cam Outdoor v1 | | | | | |
+| Wyze Cam Outdoor Base Station | | | | | |
+| Wyze Cam Floodlight Pro | | | | | |
+| Wyze Cam Floodlight v2 | | | | | |
+| Wyze Cam Floodlight | | | | | |
+| Wyze Video Doorbell v2 | | | | | |
+| Wyze Video Doorbell v1 | | | | | |
+| Wyze Video Doorbell Pro | | | | | |
+| Wyze Battery Video Doorbell | | | | | |
+| Wyze Duo Cam Doorbell | | | | | |
+| Wyze Battery Cam Pro | | | | | |
+| Wyze Solar Cam Pan | | | | | |
+| Wyze Duo Cam Pan | | | | | |
+| Wyze Window Cam | | | | | |
+| Wyze Bulb Cam | | | | | |
