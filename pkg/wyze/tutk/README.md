@@ -20,10 +20,22 @@ This document provides a complete reverse-engineering reference for the ThroughT
 14. [Wyze Cloud API](#14-wyze-cloud-api)
 15. [Cryptography Details](#15-cryptography-details)
 16. [Constants Reference](#16-constants-reference)
+17. [NEW Protocol (0xCC51) Overview](#17-new-protocol-0xcc51-overview)
+18. [NEW Protocol Discovery](#18-new-protocol-discovery)
+19. [NEW Protocol DTLS Wrapper](#19-new-protocol-dtls-wrapper)
 
 ---
 
 ## 1. Protocol Stack Overview
+
+Wyze cameras support two protocol variants depending on firmware version:
+
+| Protocol | Firmware | Magic | Discovery | Encryption |
+|----------|----------|-------|-----------|------------|
+| OLD | Cam v4 ≤ 4.52.9.4188 | TransCode | 0x0601/0x0602 | TransCode + DTLS |
+| NEW | Cam v4 ≥ 4.52.9.5332 | 0xCC51 | 0x1002 | HMAC-SHA1 + DTLS |
+
+### OLD Protocol Stack (TransCode-based)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -59,6 +71,45 @@ This document provides a complete reverse-engineering reference for the ThroughT
 ┌──────────────────────────▼──────────────────────────────────┐
 │              TransCode Cipher ("Charlie")                   │
 │            XOR + Bit Rotation Obfuscation                   │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+┌──────────────────────────▼──────────────────────────────────┐
+│                      UDP Transport                          │
+│                    Port 32761 (default)                     │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### NEW Protocol Stack (0xCC51-based)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Application Layer                        │
+│         Video (H.264/H.265) + Audio (AAC/G.711/Opus)        │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+┌──────────────────────────▼──────────────────────────────────┐
+│                    AV Frame Layer                           │
+│    Frame Types, Channels, FRAMEINFO, Packet Reassembly      │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+┌──────────────────────────▼──────────────────────────────────┐
+│                K-Command Authentication                     │
+│      K10000-K10003 (XXTEA Challenge-Response)               │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+┌──────────────────────────▼──────────────────────────────────┐
+│                    AV Login Layer                           │
+│              Credentials + Capabilities Exchange            │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+┌──────────────────────────▼──────────────────────────────────┐
+│                 DTLS 1.2 Encryption                         │
+│      PSK = SHA256(ENR), ChaCha20-Poly1305 AEAD              │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+┌──────────────────────────▼──────────────────────────────────┐
+│              NEW Protocol Wrapper (0xCC51)                  │
+│    Discovery (0x1002) + DTLS Wrapper (0x1502) + HMAC-SHA1   │
 └──────────────────────────┬──────────────────────────────────┘
                            │
 ┌──────────────────────────▼──────────────────────────────────┐
@@ -131,6 +182,8 @@ Used for K-Command challenge-response authentication.
 
 ## 3. Connection Flow
 
+### 3.1 OLD Protocol Flow (TransCode-based)
+
 ```
 Client                                                 Camera
    │                                                      │
@@ -174,6 +227,53 @@ Client                                                 Camera
    │  ◄───────────────────────────────  Video/Audio Data  │
    │                       ...                            │
 ```
+
+### 3.2 NEW Protocol Flow (0xCC51-based)
+
+```
+Client                                                 Camera
+   │                                                      │
+   │  ═══════════ Phase 1: Discovery (0x1002) ═══════════ │
+   │                                                      │
+   │  seq=0, ticket=0 (broadcast) ────────────────────►   │
+   │  ◄───────────────  seq=1, ticket=T (response)        │
+   │  seq=2, ticket=T (echo) ─────────────────────────►   │
+   │  ◄─────────────────────────────  seq=3, ticket=T     │
+   │                                                      │
+   │  ═══════════ Phase 2: DTLS Handshake (0x1502) ══════ │
+   │                                                      │
+   │  ClientHello (wrapped in 0x1502) ────────────────►   │
+   │  ◄─────────────────────  ServerHello + KeyExchange   │
+   │  ClientKeyExchange + Finished ───────────────────►   │
+   │  ◄─────────────────────────────────  DTLS Finished   │
+   │                                                      │
+   │  ═══════════ Phase 3: AV Login ═════════════════════ │
+   │                                                      │
+   │  AV Login #1 (magic=0x0000) ──────────────────────►  │
+   │  AV Login #2 (magic=0x2000) ──────────────────────►  │
+   │  ◄─────────────────────  AV Login Response (0x2100)  │
+   │  ACK (0x0009) ────────────────────────────────────►  │
+   │                                                      │
+   │  ═══════════ Phase 4: K-Authentication ═════════════ │
+   │                                                      │
+   │  K10000 (Auth Request) ───────────────────────────►  │
+   │  ◄─────────────────────────  K10001 (Challenge 16B)  │
+   │  ACK (0x0009) ────────────────────────────────────►  │
+   │  K10002 (Response 38B) ───────────────────────────►  │
+   │  ◄─────────────────────────  K10003 (Result, JSON)   │
+   │  ACK (0x0009) ────────────────────────────────────►  │
+   │                                                      │
+   │  ═══════════ Phase 5: Streaming ════════════════════ │
+   │                                                      │
+   │  ◄───────────────────────────────  Video/Audio Data  │
+   │  ◄───────────────────────────────  Video/Audio Data  │
+   │                       ...                            │
+```
+
+**Key Differences from OLD Protocol:**
+- Discovery uses 4-packet handshake (seq 0→1→2→3) instead of 2-stage discovery + session setup
+- No TransCode encryption layer - packets use HMAC-SHA1 authentication instead
+- DTLS records wrapped in 0x1502 frames with auth bytes appended
 
 ---
 
@@ -1063,3 +1163,139 @@ authkey = b64.replace('+', 'Z').replace('/', '9').replace('=', 'A')
 | MaxPacketSize | 2048 | Max UDP packet |
 | IOTCChannelMain | 0 | Main channel (DTLS client) |
 | IOTCChannelBack | 1 | Backchannel (DTLS server) |
+
+### 16.6 NEW Protocol Constants
+
+| Constant | Value | Description |
+|----------|-------|-------------|
+| MagicNewProto | 0xCC51 | NEW protocol magic (LE) |
+| CmdNewProtoDiscovery | 0x1002 | Discovery command |
+| CmdNewProtoDTLS | 0x1502 | DTLS data command |
+| NewProtoPayloadSize | 0x0028 | 40 bytes payload |
+| NewProtoPacketSize | 52 | Total discovery packet size |
+| NewProtoHeaderSize | 28 | DTLS packet header size |
+| NewProtoAuthSize | 20 | Auth bytes (HMAC-SHA1) |
+
+---
+
+## 17. NEW Protocol (0xCC51) Overview
+
+The NEW protocol (magic 0xCC51) is used by Wyze Cam v4 with firmware 4.52.9.5332 and later. It replaces the TransCode cipher layer with HMAC-SHA1 authentication and simplifies the discovery process.
+
+### Key Differences from OLD Protocol
+
+| Aspect | OLD Protocol | NEW Protocol |
+|--------|--------------|--------------|
+| Magic | TransCode encoded | 0xCC51 |
+| Discovery | 0x0601/0x0602 + 0x0402/0x0404 | 0x1002 (4-packet handshake) |
+| Encryption | TransCode + DTLS | HMAC-SHA1 + DTLS |
+| DTLS Wrapper | DATA_TX 0x0407 | 0x1502 with auth bytes |
+| P2P Servers | Required for relay | Not required (LAN only) |
+
+### Authentication
+
+All NEW protocol packets include a 20-byte HMAC-SHA1 authentication field:
+
+```go
+// Key derivation
+authKey := CalculateAuthKey(enr, mac)  // 8-byte key from ENR + MAC
+key := append([]byte(uid), authKey...) // UID (20 bytes) + AuthKey (8 bytes)
+
+// HMAC-SHA1 calculation
+h := hmac.New(sha1.New, key)
+h.Write(packetHeader)  // Header bytes before auth field
+authBytes := h.Sum(nil) // 20 bytes
+```
+
+---
+
+## 18. NEW Protocol Discovery
+
+Discovery uses command 0x1002 with a 4-packet handshake sequence.
+
+### 18.1 Discovery Packet Structure (52 bytes)
+
+```
+Offset  Size  Field          Description
+──────────────────────────────────────────────────────────────
+[0-1]   2     Magic          0xCC51 (little-endian)
+[2-3]   2     Flags          0x0000 (constant)
+[4-5]   2     Command        0x1002 (Discovery)
+[6-7]   2     PayloadSize    0x0028 (40 bytes)
+[8-9]   2     Direction      0x0000=Request, 0xFFFF=Response
+[10-11] 2     Reserved       0x0000
+[12-13] 2     Sequence       0, 1, 2, or 3
+[14-15] 2     Ticket         0x0000 initially, then from camera
+[16-23] 8     SessionID      Random[2] + Constant[6]
+[24-31] 8     Capabilities   0x00 08 03 04 1d 00 00 00
+[32-51] 20    AuthBytes      HMAC-SHA1(key, header[0:32])
+```
+
+### 18.2 Handshake Sequence
+
+```
+Step  Direction    Seq  Ticket  Description
+────────────────────────────────────────────────────────────────
+1     Client→Cam   0    0x0000  Discovery request (broadcast)
+2     Cam→Client   1    T       Discovery response (ticket assigned)
+3     Client→Cam   2    T       Echo request (confirms ticket)
+4     Cam→Client   3    T       Echo ACK (handshake complete)
+```
+
+### 18.3 SessionID Generation
+
+```go
+sessionID := make([]byte, 8)
+rand.Read(sessionID[:2])                              // Random prefix
+copy(sessionID[2:], []byte{0x76, 0x0a, 0x9d, 0x24, 0x88, 0xba}) // Constant suffix
+```
+
+---
+
+## 19. NEW Protocol DTLS Wrapper
+
+After discovery, DTLS records are wrapped in command 0x1502 frames with HMAC-SHA1 authentication.
+
+### 19.1 DTLS Wrapper Structure (variable size)
+
+```
+Offset  Size  Field          Description
+──────────────────────────────────────────────────────────────
+[0-1]   2     Magic          0xCC51 (little-endian)
+[2-3]   2     Flags          0x0000
+[4-5]   2     Command        0x1502 (DTLS)
+[6-7]   2     PayloadSize    16 + dtls_len + 20
+[8-9]   2     Direction      0x0000=Request
+[10-11] 2     Reserved       0x0000
+[12-13] 2     Sequence       0x0010 (fixed for DTLS)
+[14-15] 2     Ticket         From discovery handshake
+[16-23] 8     SessionID      8 bytes from discovery
+[24-27] 4     Channel        1=Main (client), 2=Back (server)
+[28-N]  var   DTLSPayload    Raw DTLS record
+[N:N+20] 20   AuthBytes      HMAC-SHA1(key, bytes[0:N])
+```
+
+### 19.2 PayloadSize Calculation
+
+```
+PayloadSize = 16 + len(DTLSPayload) + 20
+
+Where:
+  16 = seq(2) + ticket(2) + sessionID(8) + channel(4)
+  20 = AuthBytes (HMAC-SHA1)
+```
+
+### 19.3 TX/RX Processing
+
+**Transmit (TX):**
+1. Build header with magic, command, payload size
+2. Append session fields (seq, ticket, sessionID, channel)
+3. Append DTLS payload
+4. Calculate HMAC-SHA1 over entire packet (excluding auth bytes position)
+5. Append auth bytes
+
+**Receive (RX):**
+1. Verify magic == 0xCC51
+2. Extract DTLS payload from position 28 to (length - 20)
+3. Strip 20 auth bytes from end
+4. Pass DTLS payload to DTLS layer
