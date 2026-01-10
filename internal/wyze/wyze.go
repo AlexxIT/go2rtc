@@ -13,6 +13,14 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/wyze"
 )
 
+type AccountConfig struct {
+	APIKey   string `yaml:"api_key"`
+	APIID    string `yaml:"api_id"`
+	Password string `yaml:"password"`
+}
+
+var accounts map[string]AccountConfig
+
 func Init() {
 	var v struct {
 		Cfg map[string]AccountConfig `yaml:"wyze"`
@@ -31,26 +39,17 @@ func Init() {
 	api.HandleFunc("api/wyze", apiWyze)
 }
 
-type AccountConfig struct {
-	APIKey   string `yaml:"api_key"`
-	APIID    string `yaml:"api_id"`
-	Password string `yaml:"password"`
-}
-
-var accounts map[string]AccountConfig
-
 func getCloud(email string) (*wyze.Cloud, error) {
 	cfg, ok := accounts[email]
 	if !ok {
 		return nil, fmt.Errorf("wyze: account not found: %s", email)
 	}
 
-	var cloud *wyze.Cloud
-	if cfg.APIKey != "" && cfg.APIID != "" {
-		cloud = wyze.NewCloudWithAPIKey(cfg.APIKey, cfg.APIID)
-	} else {
-		cloud = wyze.NewCloud()
+	if cfg.APIKey == "" || cfg.APIID == "" {
+		return nil, fmt.Errorf("wyze: api_key and api_id required for account: %s", email)
 	}
+
+	cloud := wyze.NewCloud(cfg.APIKey, cfg.APIID)
 
 	if err := cloud.Login(email, cfg.Password); err != nil {
 		return nil, err
@@ -73,7 +72,6 @@ func apiDeviceList(w http.ResponseWriter, r *http.Request) {
 
 	email := query.Get("id")
 	if email == "" {
-		// Return list of configured accounts
 		accountList := make([]string, 0, len(accounts))
 		for id := range accounts {
 			accountList = append(accountList, id)
@@ -99,7 +97,7 @@ func apiDeviceList(w http.ResponseWriter, r *http.Request) {
 
 			items = append(items, &api.Source{
 				Name: cam.Nickname,
-				Info: fmt.Sprintf("%s | %s | %s", cam.ModelName(), cam.MAC, cam.IP),
+				Info: fmt.Sprintf("%s | %s | %s", cam.ProductModel, cam.MAC, cam.IP),
 				URL:  streamURL,
 			})
 		}
@@ -113,25 +111,6 @@ func apiDeviceList(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func buildStreamURL(cam *wyze.Camera) string {
-	// Use IP if available, otherwise use P2P_ID as host
-	host := cam.IP
-	if host == "" {
-		host = cam.P2PID
-	}
-
-	query := url.Values{}
-	query.Set("uid", cam.P2PID)
-	query.Set("enr", cam.ENR)
-	query.Set("mac", cam.MAC)
-
-	if cam.DTLS == 1 {
-		query.Set("dtls", "true")
-	}
-
-	return fmt.Sprintf("wyze://%s?%s", host, query.Encode())
-}
-
 func apiAuth(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -143,18 +122,13 @@ func apiAuth(w http.ResponseWriter, r *http.Request) {
 	apiKey := r.Form.Get("api_key")
 	apiID := r.Form.Get("api_id")
 
-	if email == "" || password == "" {
-		http.Error(w, "email and password required", http.StatusBadRequest)
+	if email == "" || password == "" || apiKey == "" || apiID == "" {
+		http.Error(w, "email, password, api_key and api_id required", http.StatusBadRequest)
 		return
 	}
 
 	// Try to login
-	var cloud *wyze.Cloud
-	if apiKey != "" && apiID != "" {
-		cloud = wyze.NewCloudWithAPIKey(apiKey, apiID)
-	} else {
-		cloud = wyze.NewCloud()
-	}
+	cloud := wyze.NewCloud(apiKey, apiID)
 
 	if err := cloud.Login(email, password); err != nil {
 		// Check for MFA error
@@ -169,15 +143,10 @@ func apiAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Save credentials to config (not tokens!)
 	cfg := map[string]string{
 		"password": password,
-	}
-	if apiKey != "" {
-		cfg["api_key"] = apiKey
-	}
-	if apiID != "" {
-		cfg["api_id"] = apiID
+		"api_key":  apiKey,
+		"api_id":   apiID,
 	}
 
 	if err := app.PatchConfig([]string{"wyze", email}, cfg); err != nil {
@@ -185,7 +154,6 @@ func apiAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update in-memory config
 	if accounts == nil {
 		accounts = make(map[string]AccountConfig)
 	}
@@ -195,7 +163,6 @@ func apiAuth(w http.ResponseWriter, r *http.Request) {
 		Password: password,
 	}
 
-	// Return camera list with direct URLs
 	cameras, err := cloud.GetCameraList()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -208,12 +175,25 @@ func apiAuth(w http.ResponseWriter, r *http.Request) {
 
 		items = append(items, &api.Source{
 			Name: cam.Nickname,
-			Info: fmt.Sprintf("%s | %s | %s", cam.ModelName(), cam.MAC, cam.IP),
+			Info: fmt.Sprintf("%s | %s | %s", cam.ProductModel, cam.MAC, cam.IP),
 			URL:  streamURL,
 		})
 	}
 
 	api.ResponseSources(w, items)
+}
+
+func buildStreamURL(cam *wyze.Camera) string {
+	query := url.Values{}
+	query.Set("uid", cam.P2PID)
+	query.Set("enr", cam.ENR)
+	query.Set("mac", cam.MAC)
+
+	if cam.DTLS == 1 {
+		query.Set("dtls", "true")
+	}
+
+	return fmt.Sprintf("wyze://%s?%s", cam.IP, query.Encode())
 }
 
 func isAuthError(err error, target **wyze.AuthError) bool {

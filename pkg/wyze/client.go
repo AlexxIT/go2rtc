@@ -438,9 +438,6 @@ func (c *Client) buildK10002(challenge []byte, status byte) []byte {
 }
 
 func (c *Client) buildK10010(mediaType byte, enabled bool) []byte {
-	// SDK format: 18 bytes total
-	// Header: 16 bytes, Payload: 2 bytes (media_type + enabled)
-	// TX K10010: 48 4c 05 00 1a 27 02 00 00 00 00 00 00 00 00 00 01 01
 	buf := make([]byte, 18)
 	buf[0] = 'H'
 	buf[1] = 'L'
@@ -457,9 +454,6 @@ func (c *Client) buildK10010(mediaType byte, enabled bool) []byte {
 }
 
 func (c *Client) buildK10056(frameSize uint8, bitrate uint16) []byte {
-	// SDK format: 21 bytes total
-	// Header: 16 bytes, Payload: 5 bytes
-	// TX K10056: 48 4c 05 00 48 27 05 00 00 00 00 00 00 00 00 00 04 f0 00 00 00
 	buf := make([]byte, 21)
 	buf[0] = 'H'
 	buf[1] = 'L'

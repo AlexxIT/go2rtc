@@ -22,14 +22,12 @@ const (
 )
 
 type Cloud struct {
-	client       *http.Client
-	apiKey       string
-	keyID        string
-	accessToken  string
-	refreshToken string
-	phoneID      string
-	openUserID   string
-	cameras      []*Camera
+	client      *http.Client
+	apiKey      string
+	keyID       string
+	accessToken string
+	phoneID     string
+	cameras     []*Camera
 }
 
 type Camera struct {
@@ -45,46 +43,36 @@ type Camera struct {
 	IsOnline     bool   `json:"is_online"`
 }
 
-func (c *Camera) ModelName() string {
-	models := map[string]string{
-		"WYZEC1":         "Wyze Cam v1",
-		"WYZEC1-JZ":      "Wyze Cam v2",
-		"WYZE_CAKP2JFUS": "Wyze Cam v3",
-		"HL_CAM3P":       "Wyze Cam v3 Pro",
-		"HL_CAM4":        "Wyze Cam v4",
-		"WYZECP1_JEF":    "Wyze Cam Pan",
-		"HL_PANP":        "Wyze Cam Pan v2",
-		"HL_PAN3":        "Wyze Cam Pan v3",
-		"WVOD1":          "Wyze Video Doorbell",
-		"WVOD2":          "Wyze Video Doorbell v2",
-		"AN_RSCW":        "Wyze Video Doorbell Pro",
-		"GW_BE1":         "Wyze Cam Floodlight",
-		"HL_WCO2":        "Wyze Cam Outdoor",
-		"HL_CFL2":        "Wyze Cam Floodlight v2",
-		"LD_CFP":         "Wyze Battery Cam Pro",
-	}
-	if name, ok := models[c.ProductModel]; ok {
-		return name
-	}
-	return c.ProductModel
+type deviceListResponse struct {
+	Code string `json:"code"`
+	Msg  string `json:"msg"`
+	Data struct {
+		DeviceList []deviceInfo `json:"device_list"`
+	} `json:"data"`
 }
 
-func NewCloud() *Cloud {
-	return &Cloud{
-		client:  &http.Client{Timeout: 30 * time.Second},
-		phoneID: generatePhoneID(),
-	}
+type deviceInfo struct {
+	MAC          string       `json:"mac"`
+	ENR          string       `json:"enr"`
+	Nickname     string       `json:"nickname"`
+	ProductModel string       `json:"product_model"`
+	ProductType  string       `json:"product_type"`
+	FirmwareVer  string       `json:"firmware_ver"`
+	ConnState    int          `json:"conn_state"`
+	DeviceParams deviceParams `json:"device_params"`
 }
 
-func NewCloudWithAPIKey(apiKey, keyID string) *Cloud {
-	c := NewCloud()
-	c.apiKey = apiKey
-	c.keyID = keyID
-	return c
+type deviceParams struct {
+	P2PID   string `json:"p2p_id"`
+	P2PType int    `json:"p2p_type"`
+	IP      string `json:"ip"`
+	DTLS    int    `json:"dtls"`
 }
 
-func generatePhoneID() string {
-	return core.RandString(16, 16) // 16 hex chars
+type p2pInfoResponse struct {
+	Code string         `json:"code"`
+	Msg  string         `json:"msg"`
+	Data map[string]any `json:"data"`
 }
 
 type loginResponse struct {
@@ -96,35 +84,13 @@ type loginResponse struct {
 	EmailSessionID string   `json:"email_session_id"`
 }
 
-type apiError struct {
-	Code        string `json:"code"`
-	ErrorCode   int    `json:"errorCode"`
-	Msg         string `json:"msg"`
-	Description string `json:"description"`
-}
-
-func (e *apiError) hasError() bool {
-	if e.Code == "1" || e.Code == "0" {
-		return false
+func NewCloud(apiKey, keyID string) *Cloud {
+	return &Cloud{
+		client:  &http.Client{Timeout: 30 * time.Second},
+		phoneID: generatePhoneID(),
+		apiKey:  apiKey,
+		keyID:   keyID,
 	}
-	if e.Code == "" && e.ErrorCode == 0 {
-		return false
-	}
-	return e.Code != "" || e.ErrorCode != 0
-}
-
-func (e *apiError) message() string {
-	if e.Msg != "" {
-		return e.Msg
-	}
-	return e.Description
-}
-
-func (e *apiError) code() string {
-	if e.Code != "" {
-		return e.Code
-	}
-	return fmt.Sprintf("%d", e.ErrorCode)
 }
 
 func (c *Cloud) Login(email, password string) error {
@@ -141,15 +107,9 @@ func (c *Cloud) Login(email, password string) error {
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	if c.apiKey != "" && c.keyID != "" {
-		req.Header.Set("Apikey", c.apiKey)
-		req.Header.Set("Keyid", c.keyID)
-		req.Header.Set("User-Agent", "go2rtc")
-	} else {
-		req.Header.Set("X-API-Key", "WMXHYf79Nr5gIlt3r0r7p9Tcw5bvs6BB4U8O8nGJ")
-		req.Header.Set("Phone-Id", c.phoneID)
-		req.Header.Set("User-Agent", "wyze_ios_"+appVersion)
-	}
+	req.Header.Set("Apikey", c.apiKey)
+	req.Header.Set("Keyid", c.keyID)
+	req.Header.Set("User-Agent", "go2rtc")
 
 	resp, err := c.client.Do(req)
 	if err != nil {
@@ -186,53 +146,8 @@ func (c *Cloud) Login(email, password string) error {
 	}
 
 	c.accessToken = result.AccessToken
-	c.refreshToken = result.RefreshToken
-	c.openUserID = result.UserID
 
 	return nil
-}
-
-func (c *Cloud) LoginWithToken(accessToken, phoneID string) error {
-	c.accessToken = accessToken
-	if phoneID != "" {
-		c.phoneID = phoneID
-	}
-	_, err := c.GetCameraList()
-	return err
-}
-
-func (c *Cloud) Credentials() (phoneID, openUserID string) {
-	return c.phoneID, c.openUserID
-}
-
-func (c *Cloud) AccessToken() string {
-	return c.accessToken
-}
-
-type deviceListResponse struct {
-	Code string `json:"code"`
-	Msg  string `json:"msg"`
-	Data struct {
-		DeviceList []deviceInfo `json:"device_list"`
-	} `json:"data"`
-}
-
-type deviceInfo struct {
-	MAC          string       `json:"mac"`
-	ENR          string       `json:"enr"`
-	Nickname     string       `json:"nickname"`
-	ProductModel string       `json:"product_model"`
-	ProductType  string       `json:"product_type"`
-	FirmwareVer  string       `json:"firmware_ver"`
-	ConnState    int          `json:"conn_state"`
-	DeviceParams deviceParams `json:"device_params"`
-}
-
-type deviceParams struct {
-	P2PID   string `json:"p2p_id"`
-	P2PType int    `json:"p2p_type"`
-	IP      string `json:"ip"`
-	DTLS    int    `json:"dtls"`
 }
 
 func (c *Cloud) GetCameraList() ([]*Camera, error) {
@@ -316,12 +231,6 @@ func (c *Cloud) GetCamera(id string) (*Camera, error) {
 	return nil, fmt.Errorf("wyze: camera not found: %s", id)
 }
 
-type p2pInfoResponse struct {
-	Code string         `json:"code"`
-	Msg  string         `json:"msg"`
-	Data map[string]any `json:"data"`
-}
-
 func (c *Cloud) GetP2PInfo(mac string) (map[string]any, error) {
 	payload := map[string]any{
 		"access_token":      c.accessToken,
@@ -367,6 +276,37 @@ func (c *Cloud) GetP2PInfo(mac string) (map[string]any, error) {
 	return result.Data, nil
 }
 
+type apiError struct {
+	Code        string `json:"code"`
+	ErrorCode   int    `json:"errorCode"`
+	Msg         string `json:"msg"`
+	Description string `json:"description"`
+}
+
+func (e *apiError) hasError() bool {
+	if e.Code == "1" || e.Code == "0" {
+		return false
+	}
+	if e.Code == "" && e.ErrorCode == 0 {
+		return false
+	}
+	return e.Code != "" || e.ErrorCode != 0
+}
+
+func (e *apiError) message() string {
+	if e.Msg != "" {
+		return e.Msg
+	}
+	return e.Description
+}
+
+func (e *apiError) code() string {
+	if e.Code != "" {
+		return e.Code
+	}
+	return fmt.Sprintf("%d", e.ErrorCode)
+}
+
 type AuthError struct {
 	Message  string `json:"message"`
 	NeedsMFA bool   `json:"needs_mfa,omitempty"`
@@ -375,6 +315,10 @@ type AuthError struct {
 
 func (e *AuthError) Error() string {
 	return e.Message
+}
+
+func generatePhoneID() string {
+	return core.RandString(16, 16) // 16 hex chars
 }
 
 func hashPassword(password string) string {
