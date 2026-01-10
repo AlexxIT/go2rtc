@@ -4,9 +4,9 @@ const (
 	CodecUnknown uint16 = 0x00 // Unknown codec
 	CodecMPEG4   uint16 = 0x4C // 76 - MPEG4
 	CodecH263    uint16 = 0x4D // 77 - H.263
-	CodecH264    uint16 = 0x4E // 78 - H.264/AVC (common for Wyze)
+	CodecH264    uint16 = 0x4E // 78 - H.264/AVC
 	CodecMJPEG   uint16 = 0x4F // 79 - MJPEG
-	CodecH265    uint16 = 0x50 // 80 - H.265/HEVC (common for Wyze)
+	CodecH265    uint16 = 0x50 // 80 - H.265/HEVC
 )
 
 const (
@@ -20,7 +20,6 @@ const (
 	AudioCodecSPEEX   uint16 = 0x8D // 141 - Speex
 	AudioCodecMP3     uint16 = 0x8E // 142 - MP3
 	AudioCodecG726    uint16 = 0x8F // 143 - G.726
-	// Wyze extensions (not in official SDK)
 	AudioCodecAACWyze uint16 = 0x90 // 144 - Wyze AAC
 	AudioCodecOpus    uint16 = 0x92 // 146 - Opus codec
 )
@@ -109,15 +108,38 @@ const (
 	IOTypeGetMotionDetectRes   = 0x0309
 )
 
+// OLD DTLS Protocol (IOTC/TransCode) commands and sizes
 const (
-	CmdDiscoReq     uint16 = 0x0601
-	CmdDiscoRes     uint16 = 0x0602
-	CmdSessionReq   uint16 = 0x0402
-	CmdSessionRes   uint16 = 0x0404
-	CmdDataTX       uint16 = 0x0407
-	CmdDataRX       uint16 = 0x0408
-	CmdKeepaliveReq uint16 = 0x0427
-	CmdKeepaliveRes uint16 = 0x0428
+	CmdDiscoReq               uint16 = 0x0601
+	CmdDiscoRes               uint16 = 0x0602
+	CmdSessionReq             uint16 = 0x0402
+	CmdSessionRes             uint16 = 0x0404
+	CmdDataTX                 uint16 = 0x0407
+	CmdDataRX                 uint16 = 0x0408
+	CmdKeepaliveReq           uint16 = 0x0427
+	CmdKeepaliveRes           uint16 = 0x0428
+	OldProtoHeaderSize               = 16
+	OldProtoMinPacketSize            = 16
+	OldProtoDiscoBodySize            = 72
+	OldProtoDiscoPacketSize          = OldProtoHeaderSize + OldProtoDiscoBodySize
+	OldProtoSessionBodySize          = 36
+	OldProtoSessionPacketSize        = OldProtoHeaderSize + OldProtoSessionBodySize
+)
+
+// NEW DTLS Protocol (0xCC51) commands and sizes
+const (
+	MagicNewProto        uint16 = 0xCC51
+	CmdNewProtoDiscovery uint16 = 0x1002
+	CmdNewProtoDTLS      uint16 = 0x1502
+	NewProtoPayloadSize  uint16 = 0x0028
+	NewProtoPacketSize          = 52
+	NewProtoHeaderSize          = 28
+	NewProtoAuthSize            = 20
+)
+
+const (
+	UIDSize      = 20
+	RandomIDSize = 8
 )
 
 const (

@@ -2,7 +2,9 @@ package tutk
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
@@ -44,9 +46,14 @@ type Conn struct {
 	uid            string
 	authKey        string
 	enr            string
+	mac            string // MAC address for auth key calculation
 	psk            []byte
 	iotcTxSeq      uint16
 	avLoginResp    *AVLoginResponse
+
+	useNewProto    bool   // true if camera uses NEW protocol
+	newProtoTicket uint16 // ticket from camera response
+	sessionID      []byte // 8-byte session ID for NEW protocol
 
 	// DTLS - Main Channel (we = Client)
 	mainConn *dtls.Conn
@@ -83,7 +90,7 @@ type Conn struct {
 	verbose bool
 }
 
-func Dial(host, uid, authKey, enr string, verbose bool) (*Conn, error) {
+func Dial(host, uid, authKey, enr, mac string, verbose bool) (*Conn, error) {
 	conn, err := net.ListenUDP("udp", nil)
 	if err != nil {
 		return nil, err
@@ -104,6 +111,7 @@ func Dial(host, uid, authKey, enr string, verbose bool) (*Conn, error) {
 		uid:            uid,
 		authKey:        authKey,
 		enr:            enr,
+		mac:            mac,
 		psk:            psk,
 		verbose:        verbose,
 		ctx:            ctx,
@@ -376,27 +384,21 @@ func (c *Conn) Close() error {
 func (c *Conn) discovery() error {
 	_ = c.udpConn.SetDeadline(time.Now().Add(10 * time.Second))
 
-	if err := c.discoStage1(); err != nil {
-		return fmt.Errorf("disco stage 1: %w", err)
-	}
+	// Generate 8-byte session ID for NEW protocol
+	c.sessionID = make([]byte, 8)
+	rand.Read(c.sessionID[:2])
+	copy(c.sessionID[2:], []byte{0x76, 0x0a, 0x9d, 0x24, 0x88, 0xba})
 
-	c.discoStage2()
-
-	if err := c.sessionSetup(); err != nil {
-		return fmt.Errorf("session setup: %w", err)
-	}
-
-	_ = c.udpConn.SetDeadline(time.Time{})
-	return nil
-}
-
-func (c *Conn) discoStage1() error {
-	pkt := c.buildDisco(1)
-	encrypted := crypto.TransCodeBlob(pkt)
+	// Build discovery packets for both protocols
+	oldDiscoPkt := crypto.TransCodeBlob(c.buildDisco(1)) // OLD protocol (TransCode encoded)
+	newDiscoPkt := c.buildNewProtoPacket(0, 0, false)    // NEW protocol (0xCC51, cmd=0x1002)
 
 	if c.verbose {
-		fmt.Printf("[IOTC] Disco Stage 1: timeout=%v interval=%v broadcasts=%d\n",
+		fmt.Printf("[DISCO] Unified discovery: timeout=%v interval=%v broadcasts=%d\n",
 			DiscoTimeout, DiscoInterval, len(c.broadcastAddrs))
+		fmt.Printf("[DISCO] SessionID=%s\n", hex.EncodeToString(c.sessionID))
+		fmt.Printf("[OLD] TX Discovery packet (%d bytes):\n%s", len(oldDiscoPkt), hexDump(crypto.ReverseTransCodeBlob(oldDiscoPkt)))
+		fmt.Printf("[NEW] TX Discovery packet (%d bytes):\n%s", len(newDiscoPkt), hexDump(newDiscoPkt))
 	}
 
 	deadline := time.Now().Add(DiscoTimeout)
@@ -404,16 +406,106 @@ func (c *Conn) discoStage1() error {
 	buf := make([]byte, MaxPacketSize)
 
 	for time.Now().Before(deadline) {
+		// Send both discovery packets periodically
 		if time.Since(lastSend) >= DiscoInterval {
 			for _, bcast := range c.broadcastAddrs {
-				c.udpConn.WriteToUDP(encrypted, bcast)
-				if c.verbose {
-					fmt.Printf("[IOTC] Disco Stage 1: sent to %s\n", bcast)
-				}
+				c.udpConn.WriteToUDP(oldDiscoPkt, bcast) // OLD protocol
+				c.udpConn.WriteToUDP(newDiscoPkt, bcast) // NEW protocol
 			}
 			lastSend = time.Now()
 		}
 
+		c.udpConn.SetReadDeadline(time.Now().Add(ReadWaitInterval))
+		n, addr, err := c.udpConn.ReadFromUDP(buf)
+		if err != nil {
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				continue
+			}
+			return err
+		}
+
+		// Check for NEW protocol response (0xCC51 magic)
+		if n >= 12 && binary.LittleEndian.Uint16(buf[:2]) == MagicNewProto {
+			cmd := binary.LittleEndian.Uint16(buf[4:])
+			dir := binary.LittleEndian.Uint16(buf[8:])
+
+			if c.verbose {
+				fmt.Printf("[NEW] RX %d bytes <- %s (cmd=0x%04x dir=0x%04x)\n", n, addr, cmd, dir)
+			}
+
+			// Handle cmd=0x1002 seq=1 discovery response
+			if cmd == CmdNewProtoDiscovery && n >= NewProtoPacketSize && dir == 0xFFFF {
+				seq := binary.LittleEndian.Uint16(buf[12:])
+				ticket := binary.LittleEndian.Uint16(buf[14:])
+
+				if seq == 1 {
+					c.addr = addr
+					c.newProtoTicket = ticket
+					c.useNewProto = true
+
+					if n >= 24 {
+						copy(c.sessionID, buf[16:24])
+					}
+
+					if c.verbose {
+						fmt.Printf("[NEW] Camera detected! ticket=0x%04x sessionID=%s\n",
+							ticket, hex.EncodeToString(c.sessionID))
+					}
+
+					_ = c.udpConn.SetDeadline(time.Time{})
+					return c.newProtoComplete()
+				}
+			}
+			continue
+		}
+
+		// Check for OLD protocol response (TransCode encoded)
+		data := crypto.ReverseTransCodeBlob(buf[:n])
+		if len(data) >= 16 {
+			cmd := binary.LittleEndian.Uint16(data[8:])
+
+			if c.verbose {
+				fmt.Printf("[OLD] RX %d bytes <- %s (cmd=0x%04x)\n%s", n, addr, cmd, hexDump(data))
+			}
+
+			if cmd == CmdDiscoRes {
+				c.addr = addr
+				c.useNewProto = false
+
+				if c.verbose {
+					fmt.Printf("[OLD] Camera detected at %s\n", addr)
+				}
+
+				_ = c.udpConn.SetDeadline(time.Time{})
+				return c.oldProtoComplete()
+			}
+		}
+	}
+
+	_ = c.udpConn.SetDeadline(time.Time{})
+	return fmt.Errorf("discovery timeout - no camera response")
+}
+
+func (c *Conn) oldProtoComplete() error {
+	// Stage 2
+	pkt := c.buildDisco(2)
+	if c.verbose {
+		fmt.Printf("[OLD] TX Stage 2 Discovery (%d bytes):\n%s", len(pkt), hexDump(pkt))
+	}
+	encrypted := crypto.TransCodeBlob(pkt)
+	c.udpConn.WriteToUDP(encrypted, c.addr)
+	time.Sleep(100 * time.Millisecond)
+
+	// Session setup
+	sessionPkt := c.buildSession()
+	if _, err := c.sendEncrypted(sessionPkt); err != nil {
+		return err
+	}
+
+	buf := make([]byte, MaxPacketSize)
+	deadline := time.Now().Add(SessionTimeout)
+
+	for time.Now().Before(deadline) {
 		c.udpConn.SetReadDeadline(time.Now().Add(ReadWaitInterval))
 		n, addr, err := c.udpConn.ReadFromUDP(buf)
 		if err != nil {
@@ -430,68 +522,64 @@ func (c *Conn) discoStage1() error {
 
 		cmd := binary.LittleEndian.Uint16(data[8:])
 		if c.verbose {
-			fmt.Printf("[IOTC] Disco Stage 1: received cmd=0x%04x from %s\n", cmd, addr)
+			fmt.Printf("[OLD] RX %d bytes (cmd=0x%04x)\n%s", len(data), cmd, hexDump(data))
 		}
-
-		if cmd == CmdDiscoRes {
-			c.addr = addr
-			if c.verbose {
-				fmt.Printf("[IOTC] Disco Stage 1: success! Camera at %s\n", addr)
-			}
-			return nil
-		}
-	}
-
-	return fmt.Errorf("timeout after %v", DiscoTimeout)
-}
-
-func (c *Conn) discoStage2() {
-	pkt := c.buildDisco(2)
-	encrypted := crypto.TransCodeBlob(pkt)
-	_, _ = c.udpConn.WriteToUDP(encrypted, c.addr)
-	time.Sleep(100 * time.Millisecond)
-}
-
-func (c *Conn) sessionSetup() error {
-	pkt := c.buildSession()
-
-	if c.verbose {
-		fmt.Printf("[IOTC] Session setup: target=%s\n", c.addr)
-	}
-
-	// Send request
-	if _, err := c.sendEncrypted(pkt); err != nil {
-		return err
-	}
-
-	// Wait for response
-	buf := make([]byte, MaxPacketSize)
-	c.udpConn.SetReadDeadline(time.Now().Add(SessionTimeout))
-
-	for {
-		n, addr, err := c.udpConn.ReadFromUDP(buf)
-		if err != nil {
-			return fmt.Errorf("timeout: %w", err)
-		}
-
-		data := crypto.ReverseTransCodeBlob(buf[:n])
-		if len(data) < 16 {
-			continue
-		}
-
-		cmd := binary.LittleEndian.Uint16(data[8:])
-		if c.verbose {
-			fmt.Printf("[IOTC] Session setup: received cmd=0x%04x from %s\n", cmd, addr)
-		}
-
 		if cmd == CmdSessionRes {
 			c.addr = addr
 			if c.verbose {
-				fmt.Printf("[IOTC] Session setup: success!\n")
+				fmt.Printf("[OLD] Session setup complete!\n")
 			}
 			return nil
 		}
 	}
+
+	return fmt.Errorf("OLD protocol session timeout")
+}
+
+func (c *Conn) newProtoComplete() error {
+	pkt2 := c.buildNewProtoPacket(2, c.newProtoTicket, false)
+
+	if c.verbose {
+		fmt.Printf("[NEW] TX seq=2 with ticket=0x%04x (%d bytes):\n%s", c.newProtoTicket, len(pkt2), hexDump(pkt2))
+	}
+
+	c.udpConn.WriteToUDP(pkt2, c.addr)
+
+	buf := make([]byte, MaxPacketSize)
+	deadline := time.Now().Add(SessionTimeout)
+	lastSend := time.Now()
+
+	for time.Now().Before(deadline) {
+		if time.Since(lastSend) >= DiscoInterval {
+			c.udpConn.WriteToUDP(pkt2, c.addr)
+			lastSend = time.Now()
+		}
+
+		c.udpConn.SetReadDeadline(time.Now().Add(ReadWaitInterval))
+		n, addr, err := c.udpConn.ReadFromUDP(buf)
+		if err != nil {
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				continue
+			}
+			return err
+		}
+
+		if n >= NewProtoPacketSize && binary.LittleEndian.Uint16(buf[:2]) == MagicNewProto {
+			cmd := binary.LittleEndian.Uint16(buf[4:])
+			dir := binary.LittleEndian.Uint16(buf[8:])
+			seq := binary.LittleEndian.Uint16(buf[12:])
+
+			if cmd == CmdNewProtoDiscovery && dir == 0xFFFF && seq == 3 {
+				if c.verbose {
+					fmt.Printf("[NEW] seq=3 received, discovery complete!\n")
+				}
+				c.addr = addr
+				return nil
+			}
+		}
+	}
+
+	return fmt.Errorf("NEW protocol handshake timeout waiting for seq=3")
 }
 
 func (c *Conn) connect() error {
@@ -511,7 +599,7 @@ func (c *Conn) connect() error {
 
 	conn, err := dtls.Client(adapter, c.addr, config)
 	if err != nil {
-		return fmt.Errorf("dtls: client handshake failed: %w", err)
+		return fmt.Errorf("dtls: client create failed: %w", err)
 	}
 
 	c.mu.Lock()
@@ -519,7 +607,7 @@ func (c *Conn) connect() error {
 	c.mu.Unlock()
 
 	if c.verbose {
-		fmt.Printf("[DTLS] Client handshake complete on channel %d\n", IOTCChannelMain)
+		fmt.Printf("[DTLS] Client created for channel %d\n", IOTCChannelMain)
 	}
 
 	return nil
@@ -546,10 +634,18 @@ func (c *Conn) iotcReader() {
 			return
 		}
 
-		data := crypto.ReverseTransCodeBlob(buf[:n])
 		if addr.Port != c.addr.Port || !addr.IP.Equal(c.addr.IP) {
 			c.addr = addr
 		}
+
+		// Check for NEW protocol (0xCC51 magic at start)
+		if c.useNewProto && n >= 2 && binary.LittleEndian.Uint16(buf[:2]) == MagicNewProto {
+			c.handleNewProtoPacket(buf[:n])
+			continue
+		}
+
+		// OLD protocol: TransCode decode
+		data := crypto.ReverseTransCodeBlob(buf[:n])
 
 		if len(data) < 16 {
 			continue
@@ -603,25 +699,84 @@ func (c *Conn) iotcReader() {
 			copy(dataCopy, dtlsPayload)
 
 			// Route based on channel
-			var buf chan []byte
+			var chBuf chan []byte
 			switch channel {
 			case IOTCChannelMain:
-				buf = c.mainBuf
+				chBuf = c.mainBuf
 			case IOTCChannelBack:
-				buf = c.speakerBuf
+				chBuf = c.speakerBuf
 			}
 
-			if buf != nil {
+			if chBuf != nil {
 				select {
-				case buf <- dataCopy:
+				case chBuf <- dataCopy:
 				default:
 					// Drop oldest if full
 					select {
-					case <-buf:
+					case <-chBuf:
 					default:
 					}
-					buf <- dataCopy
+					chBuf <- dataCopy
 				}
+			}
+		}
+	}
+}
+
+func (c *Conn) handleNewProtoPacket(data []byte) {
+	if len(data) < 16 {
+		return
+	}
+
+	cmd := binary.LittleEndian.Uint16(data[4:])
+	seq := binary.LittleEndian.Uint16(data[12:])
+	ticket := binary.LittleEndian.Uint16(data[14:])
+
+	if c.verbose {
+		fmt.Printf("[NEW] RX cmd=0x%04x seq=%d ticket=0x%04x len=%d\n", cmd, seq, ticket, len(data))
+		fmt.Printf("[NEW] RX full packet:\n%s", hexDump(data))
+	}
+
+	// Handle DTLS data (cmd=0x1502)
+	if cmd == CmdNewProtoDTLS && len(data) > NewProtoHeaderSize+NewProtoAuthSize {
+		// Packet structure: [0:28] header, [28:N-20] DTLS payload, [N-20:N] auth bytes
+		// We need to strip the auth bytes at the end
+		dtlsPayload := data[NewProtoHeaderSize : len(data)-NewProtoAuthSize]
+
+		// Channel is in the 4-byte field at offset 24 (value 1=main, 2=back)
+		channelFlag := binary.LittleEndian.Uint32(data[24:])
+		var channel byte
+		if channelFlag >= 1 {
+			channel = byte(channelFlag - 1) // Convert back to 0=main, 1=back
+		}
+
+		if c.verbose && len(dtlsPayload) >= 1 {
+			fmt.Printf("[NEW] DTLS RX ch=%d contentType=%d len=%d (stripped 20 auth bytes)\n%s", channel, dtlsPayload[0], len(dtlsPayload), hexDump(dtlsPayload))
+		}
+
+		// Copy data since buffer is reused
+		dataCopy := make([]byte, len(dtlsPayload))
+		copy(dataCopy, dtlsPayload)
+
+		// Route based on channel
+		var chBuf chan []byte
+		switch channel {
+		case IOTCChannelMain:
+			chBuf = c.mainBuf
+		case IOTCChannelBack:
+			chBuf = c.speakerBuf
+		}
+
+		if chBuf != nil {
+			select {
+			case chBuf <- dataCopy:
+			default:
+				// Drop oldest if full
+				select {
+				case <-chBuf:
+				default:
+				}
+				chBuf <- dataCopy
 			}
 		}
 	}
@@ -1122,13 +1277,95 @@ func (c *Conn) sendACK() error {
 }
 
 func (c *Conn) sendIOTC(payload []byte, channel byte) (int, error) {
+	if c.useNewProto {
+		// NEW Protocol: send DTLS data in 0xCC51 frame with cmd=0x1502
+		frame := c.buildNewProtoDTLS(payload, channel)
+		if c.verbose {
+			fmt.Printf("\n>>> TX %d bytes (DTLS cmd=0x1502 ch=%d)\n%s",
+				len(frame), channel, hexDump(frame))
+		}
+		return c.udpConn.WriteToUDP(frame, c.addr)
+	}
+	// OLD Protocol: TransCode encrypted 0x0407 frame
 	frame := c.buildDataTXChannel(payload, channel)
 	return c.sendEncrypted(frame)
 }
 
 func (c *Conn) sendEncrypted(data []byte) (int, error) {
+	if c.verbose {
+		fmt.Printf("[OLD] TX %d bytes\n%s", len(data), hexDump(data))
+	}
 	encrypted := crypto.TransCodeBlob(data)
 	return c.udpConn.WriteToUDP(encrypted, c.addr)
+}
+
+func (c *Conn) buildNewProtoPacket(seq, ticket uint16, isResponse bool) []byte {
+	pkt := make([]byte, NewProtoPacketSize)
+
+	// Header [0:12]
+	binary.LittleEndian.PutUint16(pkt[0:], MagicNewProto)        // Magic 0xCC51
+	binary.LittleEndian.PutUint16(pkt[2:], 0x0000)               // Flags
+	binary.LittleEndian.PutUint16(pkt[4:], CmdNewProtoDiscovery) // Command 0x1002
+	binary.LittleEndian.PutUint16(pkt[6:], NewProtoPayloadSize)  // Payload size (40 bytes)
+
+	if isResponse {
+		binary.LittleEndian.PutUint16(pkt[8:], 0xFFFF) // Direction (response)
+	} else {
+		binary.LittleEndian.PutUint16(pkt[8:], 0x0000) // Direction (request)
+	}
+
+	binary.LittleEndian.PutUint16(pkt[10:], 0x0000) // Reserved
+	binary.LittleEndian.PutUint16(pkt[12:], seq)    // Sequence
+	binary.LittleEndian.PutUint16(pkt[14:], ticket) // Ticket
+
+	// SessionID [16:24]
+	copy(pkt[16:24], c.sessionID)
+
+	// Capabilities [24:32] - SDK version 4.3.8.0
+	copy(pkt[24:32], []byte{0x00, 0x08, 0x03, 0x04, 0x1d, 0x00, 0x00, 0x00})
+
+	// Auth Bytes [32:52] - HMAC-SHA1(UID+AuthKey, header[0:32])
+	authKey := crypto.CalculateAuthKey(c.enr, c.mac)
+	key := append([]byte(c.uid), authKey...)
+
+	h := hmac.New(sha1.New, key)
+	h.Write(pkt[:32])
+	authBytes := h.Sum(nil)
+	copy(pkt[32:52], authBytes)
+
+	return pkt
+}
+
+func (c *Conn) buildNewProtoDTLS(payload []byte, channel byte) []byte {
+	payloadSize := uint16(16 + len(payload) + NewProtoAuthSize)
+	pkt := make([]byte, NewProtoHeaderSize+len(payload)+NewProtoAuthSize)
+
+	if c.verbose {
+		fmt.Printf("[DTLS PKT] payload=%d, payloadSize=%d (0x%04x), pktLen=%d\n",
+			len(payload), payloadSize, payloadSize, len(pkt))
+	}
+
+	binary.LittleEndian.PutUint16(pkt[0:], MagicNewProto)
+	binary.LittleEndian.PutUint16(pkt[2:], 0x0000)
+	binary.LittleEndian.PutUint16(pkt[4:], CmdNewProtoDTLS)
+	binary.LittleEndian.PutUint16(pkt[6:], payloadSize)
+	binary.LittleEndian.PutUint16(pkt[8:], 0x0000)  // Direction (request)
+	binary.LittleEndian.PutUint16(pkt[10:], 0x0000) // Reserved
+	binary.LittleEndian.PutUint16(pkt[12:], 0x0010) // DTLS uses fixed seq=16 (0x10)
+	binary.LittleEndian.PutUint16(pkt[14:], c.newProtoTicket)
+	copy(pkt[16:24], c.sessionID)
+	binary.LittleEndian.PutUint32(pkt[24:], uint32(channel)+1) // Channel flag (main=1, back=2)
+	copy(pkt[NewProtoHeaderSize:], payload)
+
+	// Add Auth bytes at the end: HMAC-SHA1(UID+AuthKey, packet_header)
+	authKey := crypto.CalculateAuthKey(c.enr, c.mac)
+	key := append([]byte(c.uid), authKey...)
+	h := hmac.New(sha1.New, key)
+	h.Write(pkt[:NewProtoHeaderSize]) // Hash the header portion
+	authBytes := h.Sum(nil)
+	copy(pkt[NewProtoHeaderSize+len(payload):], authBytes)
+
+	return pkt
 }
 
 func (c *Conn) buildAudioFrame(payload []byte, timestampUS uint32, codec uint16, sampleRate uint32, channels uint8) []byte {
@@ -1199,23 +1436,20 @@ func (c *Conn) buildAudioFrame(payload []byte, timestampUS uint32, codec uint16,
 }
 
 func (c *Conn) buildDisco(stage byte) []byte {
-	const bodySize = 72
-	const frameSize = 16 + bodySize
-
-	frame := make([]byte, frameSize)
+	frame := make([]byte, OldProtoDiscoPacketSize)
 
 	// IOTC Frame Header [0-15]
-	frame[0] = 0x04                                       // [0] Marker1
-	frame[1] = 0x02                                       // [1] Marker2
-	frame[2] = 0x1a                                       // [2] Marker3
-	frame[3] = 0x02                                       // [3] Mode = Disco
-	binary.LittleEndian.PutUint16(frame[4:], bodySize)    // [4-5] BodySize
-	binary.LittleEndian.PutUint16(frame[8:], CmdDiscoReq) // [8-9] Command = 0x0601
-	binary.LittleEndian.PutUint16(frame[10:], 0x0021)     // [10-11] Flags
+	frame[0] = 0x04                                                 // [0] Marker1
+	frame[1] = 0x02                                                 // [1] Marker2
+	frame[2] = 0x1a                                                 // [2] Marker3
+	frame[3] = 0x02                                                 // [3] Mode = Disco
+	binary.LittleEndian.PutUint16(frame[4:], OldProtoDiscoBodySize) // [4-5] BodySize
+	binary.LittleEndian.PutUint16(frame[8:], CmdDiscoReq)           // [8-9] Command = 0x0601
+	binary.LittleEndian.PutUint16(frame[10:], 0x0021)               // [10-11] Flags
 
 	// Body [16-87]
-	body := frame[16:]
-	copy(body[:20], c.uid) // [0-19] UID (20 bytes)
+	body := frame[OldProtoHeaderSize:]
+	copy(body[:UIDSize], c.uid) // [0-19] UID (20 bytes)
 
 	body[36] = 0x01 // [36] Unknown1
 	body[37] = 0x01 // [37] Unknown2
@@ -1233,24 +1467,21 @@ func (c *Conn) buildDisco(stage byte) []byte {
 }
 
 func (c *Conn) buildSession() []byte {
-	const bodySize = 36
-	const frameSize = 16 + bodySize
-
-	frame := make([]byte, frameSize)
+	frame := make([]byte, OldProtoSessionPacketSize)
 
 	// IOTC Frame Header [0-15]
-	frame[0] = 0x04                                         // [0] Marker1
-	frame[1] = 0x02                                         // [1] Marker2
-	frame[2] = 0x1a                                         // [2] Marker3
-	frame[3] = 0x02                                         // [3] Mode
-	binary.LittleEndian.PutUint16(frame[4:], bodySize)      // [4-5] BodySize
-	binary.LittleEndian.PutUint16(frame[8:], CmdSessionReq) // [8-9] Command = 0x0402
-	binary.LittleEndian.PutUint16(frame[10:], 0x0033)       // [10-11] Flags
+	frame[0] = 0x04                                                   // [0] Marker1
+	frame[1] = 0x02                                                   // [1] Marker2
+	frame[2] = 0x1a                                                   // [2] Marker3
+	frame[3] = 0x02                                                   // [3] Mode
+	binary.LittleEndian.PutUint16(frame[4:], OldProtoSessionBodySize) // [4-5] BodySize
+	binary.LittleEndian.PutUint16(frame[8:], CmdSessionReq)           // [8-9] Command = 0x0402
+	binary.LittleEndian.PutUint16(frame[10:], 0x0033)                 // [10-11] Flags
 
 	// Body [16-51]
-	body := frame[16:]
-	copy(body[:20], c.uid)      // [0-19] UID (20 bytes)
-	copy(body[20:], c.randomID) // [20-27] RandomID
+	body := frame[OldProtoHeaderSize:]
+	copy(body[:UIDSize], c.uid)      // [0-19] UID (20 bytes)
+	copy(body[UIDSize:], c.randomID) // [20-27] RandomID
 
 	ts := uint32(time.Now().Unix())
 	binary.LittleEndian.PutUint32(body[32:], ts) // [32-35] Timestamp
@@ -1279,6 +1510,11 @@ func (c *Conn) buildDTLSConfig(isServer bool) *dtls.Config {
 		config.CipherSuites = []dtls.CipherSuiteID{dtls.TLS_PSK_WITH_AES_128_CBC_SHA256}
 	} else {
 		config.CustomCipherSuites = CustomCipherSuites
+	}
+
+	if c.verbose {
+		fmt.Printf("[DTLS] Config: isServer=%v, MTU=%d, FlightInterval=%v\n",
+			isServer, config.MTU, config.FlightInterval)
 	}
 
 	return config
@@ -1573,4 +1809,20 @@ func getBroadcastAddrs(port int, verbose bool) []*net.UDPAddr {
 	}
 
 	return addrs
+}
+
+func hexDump(data []byte) string {
+	var result string
+	for i := 0; i < len(data); i += 16 {
+		end := i + 16
+		if end > len(data) {
+			end = len(data)
+		}
+		line := fmt.Sprintf("    %04x:", i)
+		for j := i; j < end; j++ {
+			line += fmt.Sprintf(" %02x", data[j])
+		}
+		result += line + "\n"
+	}
+	return result
 }

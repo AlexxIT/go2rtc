@@ -295,7 +295,7 @@ func (c *Client) connect() error {
 		host = host[:idx]
 	}
 
-	conn, err := tutk.Dial(host, c.uid, c.authKey, c.enr, c.verbose)
+	conn, err := tutk.Dial(host, c.uid, c.authKey, c.enr, c.mac, c.verbose)
 	if err != nil {
 		return fmt.Errorf("wyze: connect failed: %w", err)
 	}
