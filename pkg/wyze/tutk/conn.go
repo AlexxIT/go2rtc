@@ -743,12 +743,9 @@ func (c *Conn) handleNewProtoPacket(data []byte) {
 		// We need to strip the auth bytes at the end
 		dtlsPayload := data[NewProtoHeaderSize : len(data)-NewProtoAuthSize]
 
-		// Channel is in the 4-byte field at offset 24 (value 1=main, 2=back)
-		channelFlag := binary.LittleEndian.Uint32(data[24:])
-		var channel byte
-		if channelFlag >= 1 {
-			channel = byte(channelFlag - 1) // Convert back to 0=main, 1=back
-		}
+		// Channel is encoded in the high byte of the sequence field:
+		// seq=0x0010 -> channel 0 (main), seq=0x0110 -> channel 1 (back)
+		channel := byte(seq >> 8)
 
 		if c.verbose && len(dtlsPayload) >= 1 {
 			fmt.Printf("[NEW] DTLS RX ch=%d contentType=%d len=%d (stripped 20 auth bytes)\n%s", channel, dtlsPayload[0], len(dtlsPayload), hexDump(dtlsPayload))
@@ -894,6 +891,10 @@ func (c *Conn) route(data []byte) {
 
 func (c *Conn) handleSpeakerAVLogin() error {
 	// Read AV Login request from camera (SDK receives 570 bytes)
+	if c.verbose {
+		fmt.Printf("[SPEAK] Waiting for AV Login request from camera...\n")
+	}
+
 	buf := make([]byte, 1024)
 	c.speakerConn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	n, err := c.speakerConn.Read(buf)
@@ -1351,10 +1352,12 @@ func (c *Conn) buildNewProtoDTLS(payload []byte, channel byte) []byte {
 	binary.LittleEndian.PutUint16(pkt[6:], payloadSize)
 	binary.LittleEndian.PutUint16(pkt[8:], 0x0000)  // Direction (request)
 	binary.LittleEndian.PutUint16(pkt[10:], 0x0000) // Reserved
-	binary.LittleEndian.PutUint16(pkt[12:], 0x0010) // DTLS uses fixed seq=16 (0x10)
+	// Channel is encoded in high byte of sequence: 0x0010=main, 0x0110=back
+	seq := uint16(0x0010) | (uint16(channel) << 8)
+	binary.LittleEndian.PutUint16(pkt[12:], seq)
 	binary.LittleEndian.PutUint16(pkt[14:], c.newProtoTicket)
 	copy(pkt[16:24], c.sessionID)
-	binary.LittleEndian.PutUint32(pkt[24:], uint32(channel)+1) // Channel flag (main=1, back=2)
+	binary.LittleEndian.PutUint32(pkt[24:], 1) // Always 1 for DTLS wrapper
 	copy(pkt[NewProtoHeaderSize:], payload)
 
 	// Add Auth bytes at the end: HMAC-SHA1(UID+AuthKey, packet_header)
