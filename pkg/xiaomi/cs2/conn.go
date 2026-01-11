@@ -24,8 +24,16 @@ func Dial(host, transport string) (*Conn, error) {
 		isTCP:  isTCP,
 		rawCh0: make(chan []byte, 10),
 		rawCh2: make(chan []byte, 100),
+		done:   make(chan struct{}),
 	}
 	go c.worker()
+
+	// For TCP connections, start independent keepalive goroutine
+	// Official Mi Home app sends PING every 1 second bidirectionally
+	if isTCP {
+		go c.keepalive()
+	}
+
 	return c, nil
 }
 
@@ -38,6 +46,7 @@ type Conn struct {
 	seqCh3 uint16
 	rawCh0 chan []byte
 	rawCh2 chan []byte
+	done   chan struct{} // signals connection close to keepalive goroutine
 
 	cmdMu  sync.Mutex
 	cmdAck func()
@@ -54,6 +63,7 @@ const (
 	msgDrwAck    = 0xD1
 	msgPing      = 0xE0
 	msgPong      = 0xE1
+	msgAlive     = 0xF0 // Camera heartbeat/alive signal
 	msgClose     = 0xF1
 )
 
@@ -102,17 +112,38 @@ func handshake(host, transport string) (net.Conn, error) {
 	return conn, nil
 }
 
+// keepalive sends PING every 1 second for TCP connections.
+// Based on PCAP analysis of official Mi Home app: both sides send PING bidirectionally,
+// neither responds with PONG. This keeps the connection alive.
+func (c *Conn) keepalive() {
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	ping := []byte{magic, msgPing, 0, 0}
+
+	for {
+		select {
+		case <-c.done:
+			return
+		case <-ticker.C:
+			if _, err := c.conn.Write(ping); err != nil {
+				return
+			}
+		}
+	}
+}
+
 func (c *Conn) worker() {
 	defer func() {
 		close(c.rawCh0)
 		close(c.rawCh2)
+		close(c.done) // signal keepalive goroutine to stop
 	}()
 
 	chAck := make([]uint16, 4) // only for UDP
 	buf := make([]byte, 1200)
 	var ch2WaitSize int
 	var ch2WaitData []byte
-	var keepaliveTS time.Time
 
 	for {
 		n, err := c.conn.Read(buf)
@@ -125,13 +156,7 @@ func (c *Conn) worker() {
 		case msgDrw:
 			ch := buf[5]
 
-			if c.isTCP {
-				// For TCP we should using ping/pong.
-				if now := time.Now(); now.After(keepaliveTS) {
-					_, _ = c.conn.Write([]byte{magic, msgPing, 0, 0})
-					keepaliveTS = now.Add(5 * time.Second)
-				}
-			} else {
+			if !c.isTCP {
 				// For UDP we should using ack.
 				seqHI := buf[6]
 				seqLO := buf[7]
@@ -179,7 +204,11 @@ func (c *Conn) worker() {
 			}
 
 		case msgPing:
-			_, _ = c.conn.Write([]byte{magic, msgPong, 0, 0})
+			// Official Mi Home app: both sides send PING, neither responds with PONG
+			// Just acknowledge receipt, don't send PONG
+			continue
+		case msgAlive:
+			// Some cameras may send 0xF0 as heartbeat - just ignore like PING
 			continue
 		case msgPong, msgP2PRdyUDP, msgP2PRdyTCP, msgClose:
 			continue // skip it
