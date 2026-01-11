@@ -126,10 +126,11 @@ func (c *Conn) worker() {
 			ch := buf[5]
 
 			if c.isTCP {
-				// For TCP we should using ping/pong.
+				// For TCP we should send ping every second to keep connection alive.
+				// Based on PCAP analysis: official Mi Home app sends PING every ~1s.
 				if now := time.Now(); now.After(keepaliveTS) {
 					_, _ = c.conn.Write([]byte{magic, msgPing, 0, 0})
-					keepaliveTS = now.Add(5 * time.Second)
+					keepaliveTS = now.Add(time.Second)
 				}
 			} else {
 				// For UDP we should using ack.
