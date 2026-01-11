@@ -151,6 +151,8 @@ Download binary for your OS from [latest release](https://github.com/AlexxIT/go2
 
 Don't forget to fix the rights `chmod +x go2rtc_xxx_xxx` on Linux and Mac.
 
+PS. The application is compiled with the latest versions of the Go language for maximum speed and security. Therefore, the [minimum OS versions](https://go.dev/wiki/MinimumRequirements) depend on the Go language.
+
 ### go2rtc: Docker
 
 The Docker container [`alexxit/go2rtc`](https://hub.docker.com/r/alexxit/go2rtc) supports multiple architectures including `amd64`, `386`, `arm64`, and `arm`. This container offers the same functionality as the [Home Assistant Add-on](#go2rtc-home-assistant-add-on) but is designed to operate independently of Home Assistant. It comes preinstalled with [FFmpeg](#source-ffmpeg) and [Python](#source-echo).
