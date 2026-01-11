@@ -126,7 +126,10 @@ func (c *Conn) keepalive() {
 		case <-c.done:
 			return
 		case <-ticker.C:
-			if _, err := c.conn.Write(ping); err != nil {
+			c.cmdMu.Lock()
+			_, err := c.conn.Write(ping)
+			c.cmdMu.Unlock()
+			if err != nil {
 				return
 			}
 		}
