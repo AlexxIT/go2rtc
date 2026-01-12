@@ -48,8 +48,6 @@ const (
 	KCmdChallenge          = 10001
 	KCmdChallengeResp      = 10002
 	KCmdAuthResult         = 10003
-	KCmdAuthWithPayload    = 10008
-	KCmdAuthSuccess        = 10009
 	KCmdControlChannel     = 10010
 	KCmdControlChannelResp = 10011
 	KCmdSetResolutionDB    = 10052
@@ -376,24 +374,6 @@ func (c *Client) buildK10002(challenge []byte, status byte) []byte {
 	return b
 }
 
-func (c *Client) buildK10008(challenge []byte, status byte) []byte {
-	resp := crypto.GenerateChallengeResponse(challenge, c.enr, status)
-	userID := []byte(c.enr)
-	payloadLen := 16 + 4 + 1 + 1 + 1 + len(userID)
-	b := make([]byte, 16+payloadLen)
-	copy(b, "HL")                                             // magic
-	b[2] = 5                                                  // version
-	binary.LittleEndian.PutUint16(b[4:], KCmdAuthWithPayload) // 10008
-	binary.LittleEndian.PutUint16(b[6:], uint16(payloadLen))  // payload len
-	copy(b[16:], resp[:16])                                   // challenge response
-	copy(b[32:], c.uid[:4])                                   // UID prefix
-	b[36] = 1                                                 // video enabled
-	b[37] = 1                                                 // audio enabled
-	b[38] = byte(len(userID))                                 // userID len
-	copy(b[39:], userID)                                      // userID
-	return b
-}
-
 func (c *Client) buildK10010(mediaType byte, enabled bool) []byte {
 	b := make([]byte, 18)
 	copy(b, "HL")                                            // magic
@@ -485,45 +465,6 @@ func (c *Client) parseK10003(data []byte) (*AuthResponse, error) {
 				if err := json.Unmarshal(jsonData[i:], &resp); err == nil {
 					if c.verbose {
 						fmt.Printf("[Wyze] parseK10003: parsed JSON\n")
-					}
-					return &resp, nil
-				}
-				break
-			}
-		}
-	}
-
-	return &AuthResponse{}, nil
-}
-
-func (c *Client) parseK10009(data []byte) (*AuthResponse, error) {
-	if c.verbose {
-		fmt.Printf("[Wyze] parseK10009: received %d bytes\n", len(data))
-	}
-
-	if len(data) < 16 {
-		return &AuthResponse{}, nil
-	}
-
-	if data[0] != 'H' || data[1] != 'L' {
-		return &AuthResponse{}, nil
-	}
-
-	cmdID := binary.LittleEndian.Uint16(data[4:])
-	textLen := binary.LittleEndian.Uint16(data[6:])
-
-	if cmdID != KCmdAuthSuccess {
-		return &AuthResponse{}, nil
-	}
-
-	if len(data) > 16 && textLen > 0 {
-		jsonData := data[16:]
-		for i := range jsonData {
-			if jsonData[i] == '{' {
-				var resp AuthResponse
-				if err := json.Unmarshal(jsonData[i:], &resp); err == nil {
-					if c.verbose {
-						fmt.Printf("[Wyze] parseK10009: parsed JSON\n")
 					}
 					return &resp, nil
 				}
