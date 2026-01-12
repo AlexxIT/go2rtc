@@ -403,8 +403,7 @@ func (c *Conn) Error() error {
 
 func (c *Conn) discovery() error {
 	c.sid = make([]byte, 8)
-	rand.Read(c.sid[:2])
-	copy(c.sid[2:], []byte{0x76, 0x0a, 0x9d, 0x24, 0x88, 0xba})
+	rand.Read(c.sid)
 
 	oldPkt := crypto.TransCodeBlob(c.buildDisco(1))
 	newPkt := c.buildNewDisco(0, 0, false)
