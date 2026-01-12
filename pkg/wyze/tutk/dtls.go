@@ -47,9 +47,9 @@ type ChannelAdapter struct {
 func (a *ChannelAdapter) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 	var buf chan []byte
 	if a.channel == IOTCChannelMain {
-		buf = a.conn.mainBuf
+		buf = a.conn.clientBuf
 	} else {
-		buf = a.conn.speakBuf
+		buf = a.conn.serverBuf
 	}
 
 	select {

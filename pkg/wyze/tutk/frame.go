@@ -258,17 +258,9 @@ func (h *FrameHandler) Handle(data []byte) {
 		return
 	}
 
-	if h.verbose {
-		h.logWireHeader(data, hdr)
-	}
-
 	payload, fi := h.extractPayload(data, hdr.Channel)
 	if payload == nil {
 		return
-	}
-
-	if h.verbose {
-		h.logAVPacket(hdr.Channel, hdr.FrameType, payload, fi)
 	}
 
 	switch hdr.Channel {
@@ -484,22 +476,4 @@ func (h *FrameHandler) queue(pkt *Packet) {
 		}
 		h.output <- pkt
 	}
-}
-
-func (h *FrameHandler) logWireHeader(data []byte, hdr *PacketHeader) {
-	fmt.Printf("[WIRE] ch=0x%02x type=0x%02x len=%d pkt=%d/%d frame=%d\n",
-		hdr.Channel, hdr.FrameType, len(data), hdr.PktIdx, hdr.PktTotal, hdr.FrameNo)
-	fmt.Printf("       RAW[0..35]: ")
-	for i := 0; i < 36 && i < len(data); i++ {
-		fmt.Printf("%02x ", data[i])
-	}
-	fmt.Printf("\n")
-}
-
-func (h *FrameHandler) logAVPacket(channel, frameType byte, payload []byte, fi *FrameInfo) {
-	fmt.Printf("[AV] ch=0x%02x type=0x%02x len=%d", channel, frameType, len(payload))
-	if fi != nil {
-		fmt.Printf(" fi={codec=0x%04x flags=0x%02x ts=%d}", fi.CodecID, fi.Flags, fi.Timestamp)
-	}
-	fmt.Printf("\n")
 }

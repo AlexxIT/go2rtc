@@ -33,7 +33,7 @@ wyze:
     password: "yourpassword"    # or MD5 triple-hash with "md5:" prefix
 
 streams:
-  wyze_cam: wyze://192.168.1.123?uid=WYZEUID1234567890AB&enr=xxx&mac=AABBCCDDEEFF&dtls=true
+  wyze_cam: wyze://192.168.1.123?uid=WYZEUID1234567890AB&enr=xxx&mac=AABBCCDDEEFF&model=HL_CAM4&dtls=true
 ```
 
 ## Stream URL Format
@@ -41,7 +41,7 @@ streams:
 The stream URL is automatically generated when you add cameras via the WebUI:
 
 ```
-wyze://[IP]?uid=[P2P_ID]&enr=[ENR]&mac=[MAC]&dtls=true
+wyze://[IP]?uid=[P2P_ID]&enr=[ENR]&mac=[MAC]&model=[MODEL]&subtype=[hd|sd]&dtls=true
 ```
 
 | Parameter | Description |
@@ -50,18 +50,20 @@ wyze://[IP]?uid=[P2P_ID]&enr=[ENR]&mac=[MAC]&dtls=true
 | `uid` | P2P identifier (20 chars) |
 | `enr` | Encryption key for DTLS |
 | `mac` | Device MAC address |
+| `model` | Camera model (e.g., HL_CAM4) |
 | `dtls` | Enable DTLS encryption (default: true) |
+| `subtype` | Camera resolution: `hd` or `sd` (default: `hd`) |
 
 ## Configuration
 
 ### Resolution
 
-You can change the camera's resolution using the `quality` parameter:
+You can change the camera's resolution using the `subtype` parameter:
 
 ```yaml
 streams:
-  wyze_hd: wyze://...&quality=hd
-  wyze_sd: wyze://...&quality=sd
+  wyze_hd: wyze://...&subtype=hd
+  wyze_sd: wyze://...&subtype=sd
 ```
 
 ### Two-Way Audio
@@ -74,30 +76,29 @@ Two-way audio (intercom) is supported automatically. When a consumer sends audio
 |------|-------|----------|----------|------------|--------|
 | Wyze Cam v4 | HL_CAM4 | 4.52.9.4188 | TUTK | TransCode | hevc, aac |
 | | | 4.52.9.5332 | TUTK | HMAC-SHA1 | hevc, aac |
-| Wyze Cam v3 Pro | | | | | |
-| Wyze Cam v3 | | | | | |
-| Wyze Cam v2 | | | | | |
-| Wyze Cam v1 | | | | | |
-| Wyze Cam Pan v4 | | | | | |
-| Wyze Cam Pan v3 | | | | | |
-| Wyze Cam Pan v2 | | | | | |
-| Wyze Cam Pan v1 | | | | | |
-| Wyze Cam OG | | | | | |
-| Wyze Cam OG Telephoto | | | | | |
-| Wyze Cam OG (2025) | | | | | |
-| Wyze Cam Outdoor v2 | | | | | |
-| Wyze Cam Outdoor v1 | | | | | |
-| Wyze Cam Outdoor Base Station | | | | | |
-| Wyze Cam Floodlight Pro | | | | | |
-| Wyze Cam Floodlight v2 | | | | | |
-| Wyze Cam Floodlight | | | | | |
-| Wyze Video Doorbell v2 | | | | | |
-| Wyze Video Doorbell v1 | | | | | |
-| Wyze Video Doorbell Pro | | | | | |
-| Wyze Battery Video Doorbell | | | | | |
-| Wyze Duo Cam Doorbell | | | | | |
-| Wyze Battery Cam Pro | | | | | |
-| Wyze Solar Cam Pan | | | | | |
-| Wyze Duo Cam Pan | | | | | |
-| Wyze Window Cam | | | | | |
-| Wyze Bulb Cam | | | | | |
+| Wyze Cam v3 Pro | | | TUTK | | |
+| Wyze Cam v3 | | | TUTK | | |
+| Wyze Cam v2 | | | TUTK | | |
+| Wyze Cam v1 | | | TUTK | | |
+| Wyze Cam Pan v4 | | | Gwell | | |
+| Wyze Cam Pan v3 | | | TUTK | | |
+| Wyze Cam Pan v2 | | | TUTK | | |
+| Wyze Cam Pan v1 | | | TUTK | | |
+| Wyze Cam OG | | | Gwell | | |
+| Wyze Cam OG Telephoto | | | Gwell | | |
+| Wyze Cam OG (2025) | | | Gwell | | |
+| Wyze Cam Outdoor v2 | | | TUTK | | |
+| Wyze Cam Outdoor v1 | | | TUTK | | |
+| Wyze Cam Floodlight Pro | | | ? | | |
+| Wyze Cam Floodlight v2 | | | TUTK | | |
+| Wyze Cam Floodlight | | | TUTK | | |
+| Wyze Video Doorbell v2 | | | TUTK | | |
+| Wyze Video Doorbell v1 | | | TUTK | | |
+| Wyze Video Doorbell Pro | | | ? | | |
+| Wyze Battery Video Doorbell | | | ? | | |
+| Wyze Duo Cam Doorbell | | | ? | | |
+| Wyze Battery Cam Pro | | | ? | | |
+| Wyze Solar Cam Pan | | | ? | | |
+| Wyze Duo Cam Pan | | | ? | | |
+| Wyze Window Cam | | | ? | | |
+| Wyze Bulb Cam | | | ? | | |

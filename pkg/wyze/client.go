@@ -300,7 +300,7 @@ func (c *Client) doAVLogin() error {
 	}
 
 	if err := c.conn.AVClientStart(5 * time.Second); err != nil {
-		return fmt.Errorf("wyze: AV login failed: %w", err)
+		return fmt.Errorf("wyze: av login failed: %w", err)
 	}
 
 	if c.verbose {

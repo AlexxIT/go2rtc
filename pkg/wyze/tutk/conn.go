@@ -31,6 +31,12 @@ type Conn struct {
 	conn *net.UDPConn
 	addr *net.UDPAddr
 
+	// DTLS
+	clientConn *dtls.Conn
+	serverConn *dtls.Conn
+	clientBuf  chan []byte
+	serverBuf  chan []byte
+
 	// Identity
 	uid     string
 	authKey string
@@ -45,24 +51,16 @@ type Conn struct {
 	avResp *AVLoginResponse
 
 	// Protocol
-	newProto bool
-	seq      uint16
-	seqCmd   uint16
-	avSeq    uint32
-	kaSeq    uint32
-
-	// DTLS
-	main     *dtls.Conn
-	speaker  *dtls.Conn
-	mainBuf  chan []byte
-	speakBuf chan []byte
+	newProto     bool
+	seq          uint16
+	seqCmd       uint16
+	avSeq        uint32
+	kaSeq        uint32
+	audioSeq     uint32
+	audioFrameNo uint32
 
 	// Channels
 	rawCmd chan []byte
-
-	// Audio TX
-	audioSeq   uint32
-	audioFrame uint32
 
 	// Frame assembly
 	frames   *FrameHandler
@@ -91,12 +89,6 @@ func Dial(host, uid, authKey, enr, mac string, verbose bool) (*Conn, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	psk := derivePSK(enr)
 
-	if verbose {
-		hash := sha256.Sum256([]byte(enr))
-		fmt.Printf("[PSK] ENR: %q → SHA256: %x\n", enr, hash)
-		fmt.Printf("[PSK] PSK: %x\n", psk)
-	}
-
 	c := &Conn{
 		conn:    udp,
 		addr:    &net.UDPAddr{IP: net.ParseIP(host), Port: DefaultPort},
@@ -116,8 +108,8 @@ func Dial(host, uid, authKey, enr, mac string, verbose bool) (*Conn, error) {
 		return nil, err
 	}
 
-	c.mainBuf = make(chan []byte, 64)
-	c.speakBuf = make(chan []byte, 64)
+	c.clientBuf = make(chan []byte, 64)
+	c.serverBuf = make(chan []byte, 64)
 	c.rawCmd = make(chan []byte, 16)
 	c.frames = NewFrameHandler(c.verbose)
 
@@ -141,14 +133,14 @@ func (c *Conn) AVClientStart(timeout time.Duration) error {
 	pkt2 := c.buildAVLoginPacket(MagicAVLogin2, 572, 0x0000, randomID)
 	pkt2[20]++ // pkt2 has randomID incremented by 1
 
-	if _, err := c.main.Write(pkt1); err != nil {
-		return fmt.Errorf("AV login 1 failed: %w", err)
+	if _, err := c.clientConn.Write(pkt1); err != nil {
+		return fmt.Errorf("av login 1 failed: %w", err)
 	}
 
 	time.Sleep(50 * time.Millisecond)
 
-	if _, err := c.main.Write(pkt2); err != nil {
-		return fmt.Errorf("AV login 2 failed: %w", err)
+	if _, err := c.clientConn.Write(pkt2); err != nil {
+		return fmt.Errorf("av login 2 failed: %w", err)
 	}
 
 	// Wait for response
@@ -167,12 +159,8 @@ func (c *Conn) AVClientStart(timeout time.Duration) error {
 					TwoWayStreaming: int32(data[31]),
 				}
 
-				if c.verbose {
-					fmt.Printf("[TUTK] AV Login Response: two_way_streaming=%d\n", c.avResp.TwoWayStreaming)
-				}
-
 				ack := c.buildACK()
-				c.main.Write(ack)
+				c.clientConn.Write(ack)
 
 				return nil
 			}
@@ -195,7 +183,7 @@ func (c *Conn) AVServStart() error {
 	}
 
 	c.mu.Lock()
-	c.speaker = conn
+	c.serverConn = conn
 	c.mu.Unlock()
 
 	if c.verbose {
@@ -204,7 +192,7 @@ func (c *Conn) AVServStart() error {
 
 	// Wait for and respond to AV Login request from camera
 	if err := c.handleSpeakerAVLogin(); err != nil {
-		return fmt.Errorf("speaker AV login failed: %w", err)
+		return fmt.Errorf("speaker av login failed: %w", err)
 	}
 
 	return nil
@@ -216,11 +204,11 @@ func (c *Conn) AVServStop() error {
 
 	// Reset audio TX state
 	c.audioSeq = 0
-	c.audioFrame = 0
+	c.audioFrameNo = 0
 
-	if c.speaker != nil {
-		err := c.speaker.Close()
-		c.speaker = nil
+	if c.serverConn != nil {
+		err := c.serverConn.Close()
+		c.serverConn = nil
 		return err
 	}
 	return nil
@@ -240,7 +228,7 @@ func (c *Conn) AVRecvFrameData() (*Packet, error) {
 
 func (c *Conn) AVSendAudioData(codec uint16, payload []byte, timestampUS uint32, sampleRate uint32, channels uint8) error {
 	c.mu.Lock()
-	conn := c.speaker
+	conn := c.serverConn
 	if conn == nil {
 		c.mu.Unlock()
 		return fmt.Errorf("speaker channel not connected")
@@ -253,15 +241,19 @@ func (c *Conn) AVSendAudioData(codec uint16, payload []byte, timestampUS uint32,
 	n, err := conn.Write(frame)
 	if c.verbose {
 		if err != nil {
-			fmt.Printf("[AUDIO TX] DTLS Write ERROR: %v\n", err)
+			fmt.Printf("[SPEAKER TX] DTLS Write ERROR: %v\n", err)
 		} else {
-			fmt.Printf("[AUDIO TX] DTLS Write OK: %d bytes\n", n)
+			fmt.Printf("[SPEAKER TX] len=%d, data:\n%s", n, hexDump(frame))
 		}
 	}
 	return err
 }
 
 func (c *Conn) Write(data []byte) error {
+	if c.verbose {
+		fmt.Printf("[UDP TX] to=%s, len=%d, data:\n%s", c.addr.String(), len(data), hexDump(data))
+	}
+
 	if c.newProto {
 		_, err := c.conn.WriteToUDP(data, c.addr)
 		return err
@@ -277,6 +269,11 @@ func (c *Conn) WriteDTLS(payload []byte, channel byte) error {
 	} else {
 		frame = c.buildTxData(payload, channel)
 	}
+
+	if c.verbose {
+		fmt.Printf("[DTLS TX] to=%s, len=%d, channel=%d, data:\n%s", c.addr.String(), len(frame), channel, hexDump(frame))
+	}
+
 	return c.Write(frame)
 }
 
@@ -320,7 +317,7 @@ func (c *Conn) WriteAndWaitIOCtrl(cmd uint16, payload []byte, expectCmd uint16, 
 	frame := c.buildIOCtrlFrame(payload)
 	var t *time.Timer
 	t = time.AfterFunc(1, func() {
-		if _, err := c.main.Write(frame); err == nil && t != nil {
+		if _, err := c.clientConn.Write(frame); err == nil && t != nil {
 			t.Reset(time.Second)
 		}
 	})
@@ -337,7 +334,7 @@ func (c *Conn) WriteAndWaitIOCtrl(cmd uint16, payload []byte, expectCmd uint16, 
 			}
 
 			ack := c.buildACK()
-			c.main.Write(ack)
+			c.clientConn.Write(ack)
 
 			if len(data) >= 6 {
 				if binary.LittleEndian.Uint16(data[4:]) == expectCmd {
@@ -357,7 +354,7 @@ func (c *Conn) GetAVLoginResponse() *AVLoginResponse {
 func (c *Conn) IsBackchannelReady() bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.speaker != nil
+	return c.serverConn != nil
 }
 
 func (c *Conn) RemoteAddr() *net.UDPAddr {
@@ -376,13 +373,13 @@ func (c *Conn) Close() error {
 	c.cancel()
 
 	c.mu.Lock()
-	if c.main != nil {
-		c.main.Close()
-		c.main = nil
+	if c.clientConn != nil {
+		c.clientConn.Close()
+		c.clientConn = nil
 	}
-	if c.speaker != nil {
-		c.speaker.Close()
-		c.speaker = nil
+	if c.serverConn != nil {
+		c.serverConn.Close()
+		c.serverConn = nil
 	}
 	if c.frames != nil {
 		c.frames.Close()
@@ -449,7 +446,6 @@ func (c *Conn) discovery() error {
 func (c *Conn) oldDiscoDone() error {
 	c.Write(c.buildDisco(2))
 	time.Sleep(100 * time.Millisecond)
-
 	_, err := c.WriteAndWait(c.buildSession(), SessionTimeout, func(res []byte) bool {
 		return len(res) >= 16 && binary.LittleEndian.Uint16(res[8:]) == CmdSessionRes
 	})
@@ -482,7 +478,7 @@ func (c *Conn) connect() error {
 	}
 
 	c.mu.Lock()
-	c.main = conn
+	c.clientConn = conn
 	c.mu.Unlock()
 
 	if c.verbose {
@@ -504,7 +500,7 @@ func (c *Conn) worker() {
 		default:
 		}
 
-		n, err := c.main.Read(buf)
+		n, err := c.clientConn.Read(buf)
 		if err != nil {
 			c.err = err
 			return
@@ -516,6 +512,10 @@ func (c *Conn) worker() {
 
 		data := buf[:n]
 		magic := binary.LittleEndian.Uint16(data)
+
+		if c.verbose {
+			fmt.Printf("[DTLS RX] from=%s, len=%d, data:\n%s", c.addr.String(), n, hexDump(data))
+		}
 
 		switch magic {
 		case MagicAVLoginResp:
@@ -578,7 +578,14 @@ func (c *Conn) reader() {
 			return
 		}
 
+		if c.verbose {
+			fmt.Printf("[UDP RX] from=%s, len=%d, data:\n%s", addr.String(), n, hexDump(buf[:n]))
+		}
+
 		if !addr.IP.Equal(c.addr.IP) {
+			if c.verbose {
+				fmt.Printf("Ignored packet from unknown IP: %s\n", addr.IP.String())
+			}
 			continue
 		}
 		if addr.Port != c.addr.Port {
@@ -599,9 +606,9 @@ func (c *Conn) reader() {
 					dtls := buf[NewHeaderSize : n-NewAuthSize]
 					switch ch {
 					case IOTCChannelMain:
-						c.queue(c.mainBuf, dtls)
+						c.queue(c.clientBuf, dtls)
 					case IOTCChannelBack:
-						c.queue(c.speakBuf, dtls)
+						c.queue(c.serverBuf, dtls)
 					}
 				}
 			}
@@ -624,9 +631,9 @@ func (c *Conn) reader() {
 				ch := data[14]
 				switch ch {
 				case IOTCChannelMain:
-					c.queue(c.mainBuf, data[28:])
+					c.queue(c.clientBuf, data[28:])
 				case IOTCChannelBack:
-					c.queue(c.speakBuf, data[28:])
+					c.queue(c.serverBuf, data[28:])
 				}
 			}
 		}
@@ -653,18 +660,18 @@ func (c *Conn) handleSpeakerAVLogin() error {
 	}
 
 	buf := make([]byte, 1024)
-	c.speaker.SetReadDeadline(time.Now().Add(5 * time.Second))
-	n, err := c.speaker.Read(buf)
+	c.serverConn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	n, err := c.serverConn.Read(buf)
 	if err != nil {
-		return fmt.Errorf("read AV login: %w", err)
+		return fmt.Errorf("read av login: %w", err)
 	}
 
 	if c.verbose {
-		fmt.Printf("[SPEAK] Received AV Login request: %d bytes\n", n)
+		fmt.Printf("[SPEAK] AV Login request len=%d data:\n%s", n, hexDump(buf[:n]))
 	}
 
 	if n < 24 {
-		return fmt.Errorf("AV login too short: %d bytes", n)
+		return fmt.Errorf("av login too short: %d bytes", n)
 	}
 
 	checksum := binary.LittleEndian.Uint32(buf[20:])
@@ -674,20 +681,20 @@ func (c *Conn) handleSpeakerAVLogin() error {
 		fmt.Printf("[SPEAK] Sending AV Login response: %d bytes\n", len(resp))
 	}
 
-	if _, err = c.speaker.Write(resp); err != nil {
+	if _, err = c.serverConn.Write(resp); err != nil {
 		return fmt.Errorf("write AV login response: %w", err)
 	}
 
 	// Camera may resend, respond again
-	c.speaker.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
-	if n, _ = c.speaker.Read(buf); n > 0 {
+	c.serverConn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	if n, _ = c.serverConn.Read(buf); n > 0 {
 		if c.verbose {
 			fmt.Printf("[SPEAK] Received AV Login resend: %d bytes\n", n)
 		}
-		c.speaker.Write(resp)
+		c.serverConn.Write(resp)
 	}
 
-	c.speaker.SetReadDeadline(time.Time{})
+	c.serverConn.SetReadDeadline(time.Time{})
 
 	if c.verbose {
 		fmt.Printf("[SPEAK] AV Login complete, ready for audio\n")
@@ -767,9 +774,10 @@ func (c *Conn) buildAVLoginPacket(magic uint16, size int, flags uint16, randomID
 	binary.LittleEndian.PutUint16(b[16:], uint16(size-24)) // payload size
 	binary.LittleEndian.PutUint16(b[18:], flags)
 	copy(b[20:], randomID[:4])
-	copy(b[24:], DefaultUser)                           // username
-	copy(b[280:], c.enr)                                // password (ENR)
-	binary.LittleEndian.PutUint32(b[540:], 2)           // security_mode=AV_SECURITY_AUTO
+	copy(b[24:], DefaultUser) // username
+	copy(b[280:], c.enr)      // password/ENR
+	// binary.LittleEndian.PutUint32(b[536:], 1)           // resend
+	binary.LittleEndian.PutUint32(b[540:], 4)           // security_mode ?
 	binary.LittleEndian.PutUint32(b[552:], DefaultCaps) // capabilities
 	return b
 }
@@ -792,10 +800,10 @@ func (c *Conn) buildAVLoginResponse(checksum uint32) []byte {
 
 func (c *Conn) buildAudioFrame(payload []byte, timestampUS uint32, codec uint16, sampleRate uint32, channels uint8) []byte {
 	c.audioSeq++
-	c.audioFrame++
+	c.audioFrameNo++
 	prevFrame := uint32(0)
-	if c.audioFrame > 1 {
-		prevFrame = c.audioFrame - 1
+	if c.audioFrameNo > 1 {
+		prevFrame = c.audioFrameNo - 1
 	}
 
 	totalPayload := len(payload) + 16 // payload + frameinfo
@@ -807,7 +815,7 @@ func (c *Conn) buildAudioFrame(payload []byte, timestampUS uint32, codec uint16,
 	binary.LittleEndian.PutUint16(b[2:], ProtoVersion)
 	binary.LittleEndian.PutUint32(b[4:], c.audioSeq)
 	binary.LittleEndian.PutUint32(b[8:], timestampUS)
-	if c.audioFrame == 1 {
+	if c.audioFrameNo == 1 {
 		binary.LittleEndian.PutUint32(b[12:], 0x00000001)
 	} else {
 		binary.LittleEndian.PutUint32(b[12:], 0x00100001)
@@ -821,13 +829,13 @@ func (c *Conn) buildAudioFrame(payload []byte, timestampUS uint32, codec uint16,
 	binary.LittleEndian.PutUint16(b[22:], 0x0010) // flags
 	binary.LittleEndian.PutUint32(b[24:], uint32(totalPayload))
 	binary.LittleEndian.PutUint32(b[28:], prevFrame)
-	binary.LittleEndian.PutUint32(b[32:], c.audioFrame)
+	binary.LittleEndian.PutUint32(b[32:], c.audioFrameNo)
 	copy(b[36:], payload) // Payload + FrameInfo
 	fi := b[36+len(payload):]
 	binary.LittleEndian.PutUint16(fi, codec)
 	fi[2] = BuildAudioFlags(sampleRate, true, channels == 2)
 	fi[4] = 1 // online
-	binary.LittleEndian.PutUint32(fi[12:], (c.audioFrame-1)*GetSamplesPerFrame(codec)*1000/sampleRate)
+	binary.LittleEndian.PutUint32(fi[12:], (c.audioFrameNo-1)*GetSamplesPerFrame(codec)*1000/sampleRate)
 	return b
 }
 
@@ -916,10 +924,8 @@ func (c *Conn) buildIOCtrlFrame(payload []byte) []byte {
 func derivePSK(enr string) []byte {
 	// TUTK SDK treats the PSK as a NULL-terminated C string, so if SHA256(ENR)
 	// contains a 0x00 byte, the PSK is truncated at that position.
-	// This matches iOS Wyze app behavior discovered via Frida instrumentation.
-
+	// bytes after the first 0x00 are padded with zeros to make a 32-byte key.
 	hash := sha256.Sum256([]byte(enr))
-
 	pskLen := 32
 	for i := range 32 {
 		if hash[i] == 0x00 {
@@ -928,7 +934,6 @@ func derivePSK(enr string) []byte {
 		}
 	}
 
-	// bytes up to first 0x00, rest padded with zeros
 	psk := make([]byte, 32)
 	copy(psk[:pskLen], hash[:pskLen])
 	return psk
@@ -938,4 +943,28 @@ func genRandomID() []byte {
 	b := make([]byte, 8)
 	_, _ = rand.Read(b)
 	return b
+}
+
+func hexDump(data []byte) string {
+	const maxBytes = 650
+	totalLen := len(data)
+	truncated := totalLen > maxBytes
+	if truncated {
+		data = data[:maxBytes]
+	}
+
+	var result string
+	for i := 0; i < len(data); i += 16 {
+		end := min(i+16, len(data))
+		line := fmt.Sprintf("    %04x:", i)
+		for j := i; j < end; j++ {
+			line += fmt.Sprintf(" %02x", data[j])
+		}
+		result += line + "\n"
+	}
+
+	if truncated {
+		result += fmt.Sprintf("    ... (truncated, showing %d of %d bytes)\n", maxBytes, totalLen)
+	}
+	return result
 }
