@@ -29,9 +29,18 @@ func NewProducer(rawURL string) (*Producer, error) {
 	u, _ := url.Parse(rawURL)
 	query := u.Query()
 
-	sd := query.Get("subtype") == "sd"
+	// 0 = HD (default), 1 = SD/360P, 2 = 720P, 3 = 2K, 4 = Floodlight
+	var quality byte
+	switch s := query.Get("subtype"); s {
+	case "", "hd":
+		quality = 0
+	case "sd":
+		quality = FrameSize360P
+	default:
+		quality = core.ParseByte(s)
+	}
 
-	medias, err := probe(client, sd)
+	medias, err := probe(client, quality)
 	if err != nil {
 		_ = client.Close()
 		return nil, err
@@ -132,8 +141,8 @@ func (p *Producer) Start() error {
 	}
 }
 
-func probe(client *Client, sd bool) ([]*core.Media, error) {
-	_ = client.SetResolution(sd)
+func probe(client *Client, quality byte) ([]*core.Media, error) {
+	_ = client.SetResolution(quality)
 	_ = client.SetDeadline(time.Now().Add(core.ProbeTimeout))
 
 	var vcodec, acodec *core.Codec

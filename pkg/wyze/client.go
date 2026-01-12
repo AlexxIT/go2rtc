@@ -15,10 +15,11 @@ import (
 )
 
 const (
-	FrameSize1080P = 0
-	FrameSize360P  = 1
-	FrameSize720P  = 2
-	FrameSize2K    = 3
+	FrameSize1080P      = 0
+	FrameSize360P       = 1
+	FrameSize720P       = 2
+	FrameSize2K         = 3
+	FrameSizeFloodlight = 4
 )
 
 const (
@@ -51,6 +52,8 @@ const (
 	KCmdAuthSuccess        = 10009
 	KCmdControlChannel     = 10010
 	KCmdControlChannelResp = 10011
+	KCmdSetResolutionDB    = 10052
+	KCmdSetResolutionDBRes = 10053
 	KCmdSetResolution      = 10056
 	KCmdSetResolutionResp  = 10057
 )
@@ -58,10 +61,11 @@ const (
 type Client struct {
 	conn *tutk.Conn
 
-	host string
-	uid  string
-	enr  string
-	mac  string
+	host  string
+	uid   string
+	enr   string
+	mac   string
+	model string
 
 	authKey string
 	verbose bool
@@ -99,6 +103,7 @@ func Dial(rawURL string) (*Client, error) {
 		uid:     query.Get("uid"),
 		enr:     query.Get("enr"),
 		mac:     query.Get("mac"),
+		model:   query.Get("model"),
 		verbose: query.Get("verbose") == "true",
 	}
 
@@ -148,20 +153,44 @@ func (c *Client) GetBackchannelCodec() (codecID uint16, sampleRate uint32, chann
 	return c.audioCodecID, c.audioSampleRate, c.audioChannels
 }
 
-func (c *Client) SetResolution(sd bool) error {
+func (c *Client) SetResolution(quality byte) error {
 	var frameSize uint8
 	var bitrate uint16
 
-	if sd {
+	switch quality {
+	case 0: // Auto/HD - use model's best
+		frameSize = c.hdFrameSize()
+		bitrate = BitrateMax
+	case FrameSize360P: // 1 = SD/360P
 		frameSize = FrameSize360P
 		bitrate = BitrateSD
-	} else {
-		frameSize = FrameSize2K
+	case FrameSize720P: // 2 = 720P
+		frameSize = FrameSize720P
+		bitrate = BitrateMax
+	case FrameSize2K: // 3 = 2K
+		if c.is2K() {
+			frameSize = FrameSize2K
+		} else {
+			frameSize = c.hdFrameSize()
+		}
+		bitrate = BitrateMax
+	case FrameSizeFloodlight: // 4 = Floodlight
+		frameSize = c.hdFrameSize()
+		bitrate = BitrateMax
+	default:
+		frameSize = quality
 		bitrate = BitrateMax
 	}
 
 	if c.verbose {
-		fmt.Printf("[Wyze] SetResolution: sd=%v frameSize=%d bitrate=%d\n", sd, frameSize, bitrate)
+		fmt.Printf("[Wyze] SetResolution: quality=%d frameSize=%d bitrate=%d model=%s\n", quality, frameSize, bitrate, c.model)
+	}
+
+	// Use K10052 (doorbell format) for certain models
+	if c.useDoorbellResolution() {
+		k10052 := c.buildK10052(frameSize, bitrate)
+		_, err := c.conn.WriteAndWaitIOCtrl(KCmdSetResolutionDB, k10052, KCmdSetResolutionDBRes, 5*time.Second)
+		return err
 	}
 
 	k10056 := c.buildK10056(frameSize, bitrate)
@@ -379,6 +408,18 @@ func (c *Client) buildK10010(mediaType byte, enabled bool) []byte {
 	return b
 }
 
+func (c *Client) buildK10052(frameSize uint8, bitrate uint16) []byte {
+	b := make([]byte, 22)
+	copy(b, "HL")                                             // magic
+	b[2] = 5                                                  // version
+	binary.LittleEndian.PutUint16(b[4:], KCmdSetResolutionDB) // 10052
+	binary.LittleEndian.PutUint16(b[6:], 6)                   // payload len
+	binary.LittleEndian.PutUint16(b[16:], bitrate)            // bitrate (2 bytes)
+	b[18] = frameSize + 1                                     // frame size (1 byte)
+	// b[19] = fps, b[20:22] = zeros
+	return b
+}
+
 func (c *Client) buildK10056(frameSize uint8, bitrate uint16) []byte {
 	b := make([]byte, 21)
 	copy(b, "HL")                                           // magic
@@ -492,4 +533,34 @@ func (c *Client) parseK10009(data []byte) (*AuthResponse, error) {
 	}
 
 	return &AuthResponse{}, nil
+}
+
+func (c *Client) useDoorbellResolution() bool {
+	switch c.model {
+	case "WYZEDB3", "WVOD1", "HL_WCO2", "WYZEC1":
+		return true
+	}
+	return false
+}
+
+func (c *Client) hdFrameSize() uint8 {
+	if c.isFloodlight() {
+		return FrameSizeFloodlight
+	}
+	if c.is2K() {
+		return FrameSize2K
+	}
+	return FrameSize1080P
+}
+
+func (c *Client) is2K() bool {
+	switch c.model {
+	case "HL_CAM3P", "HL_PANP", "HL_CAM4", "HL_DB2", "HL_CFL2":
+		return true
+	}
+	return false
+}
+
+func (c *Client) isFloodlight() bool {
+	return c.model == "HL_CFL2"
 }

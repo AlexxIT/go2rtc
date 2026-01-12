@@ -188,6 +188,7 @@ func buildStreamURL(cam *wyze.Camera) string {
 	query.Set("uid", cam.P2PID)
 	query.Set("enr", cam.ENR)
 	query.Set("mac", cam.MAC)
+	query.Set("model", cam.ProductModel)
 
 	if cam.DTLS == 1 {
 		query.Set("dtls", "true")
