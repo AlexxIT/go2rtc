@@ -49,6 +49,7 @@ type Conn struct {
 	seq      uint16
 	seqCmd   uint16
 	avSeq    uint32
+	kaSeq    uint32
 
 	// DTLS
 	main     *dtls.Conn
@@ -317,8 +318,6 @@ func (c *Conn) WriteAndWait(req []byte, timeout time.Duration, ok func(res []byt
 
 func (c *Conn) WriteAndWaitIOCtrl(cmd uint16, payload []byte, expectCmd uint16, timeout time.Duration) ([]byte, error) {
 	frame := c.buildIOCtrlFrame(payload)
-
-	// Retry send every second
 	var t *time.Timer
 	t = time.AfterFunc(1, func() {
 		if _, err := c.main.Write(frame); err == nil && t != nil {
@@ -588,15 +587,23 @@ func (c *Conn) reader() {
 		}
 
 		// NEW protocol (0xCC51)
-		if c.newProto && n >= NewHeaderSize+NewAuthSize && binary.LittleEndian.Uint16(buf[:2]) == MagicNewProto {
-			if binary.LittleEndian.Uint16(buf[4:]) == CmdNewDTLS {
-				ch := byte(binary.LittleEndian.Uint16(buf[12:]) >> 8)
-				dtls := buf[NewHeaderSize : n-NewAuthSize]
-				switch ch {
-				case IOTCChannelMain:
-					c.queue(c.mainBuf, dtls)
-				case IOTCChannelBack:
-					c.queue(c.speakBuf, dtls)
+		if c.newProto && n >= 12 && binary.LittleEndian.Uint16(buf[:2]) == MagicNewProto {
+			cmd := binary.LittleEndian.Uint16(buf[4:])
+			switch cmd {
+			case CmdNewKeepalive:
+				if n >= NewKeepaliveSize {
+					_ = c.Write(c.buildNewKeepalive())
+				}
+			case CmdNewDTLS:
+				if n >= NewHeaderSize+NewAuthSize {
+					ch := byte(binary.LittleEndian.Uint16(buf[12:]) >> 8)
+					dtls := buf[NewHeaderSize : n-NewAuthSize]
+					switch ch {
+					case IOTCChannelMain:
+						c.queue(c.mainBuf, dtls)
+					case IOTCChannelBack:
+						c.queue(c.speakBuf, dtls)
+					}
 				}
 			}
 			continue
@@ -696,7 +703,6 @@ func (c *Conn) buildDisco(stage byte) []byte {
 	binary.LittleEndian.PutUint16(b[4:], OldDiscoBodySize) // body size
 	binary.LittleEndian.PutUint16(b[8:], CmdDiscoReq)      // 0x0601
 	binary.LittleEndian.PutUint16(b[10:], 0x0021)          // flags
-
 	body := b[OldHeaderSize:]
 	copy(body[:UIDSize], c.uid)
 	copy(body[36:], "\x01\x01\x02\x04") // unknown
@@ -720,12 +726,25 @@ func (c *Conn) buildNewDisco(seq, ticket uint16, isResponse bool) []byte {
 	binary.LittleEndian.PutUint16(b[14:], ticket)
 	copy(b[16:24], c.sid)
 	copy(b[24:32], "\x00\x08\x03\x04\x1d\x00\x00\x00") // SDK 4.3.8.0
-
-	// HMAC-SHA1(UID+AuthKey, header)
 	authKey := crypto.CalculateAuthKey(c.enr, c.mac)
 	h := hmac.New(sha1.New, append([]byte(c.uid), authKey...))
 	h.Write(b[:32])
 	copy(b[32:52], h.Sum(nil))
+	return b
+}
+
+func (c *Conn) buildNewKeepalive() []byte {
+	c.kaSeq += 2
+	b := make([]byte, NewKeepaliveSize)
+	binary.LittleEndian.PutUint16(b[0:], MagicNewProto)   // 0xCC51
+	binary.LittleEndian.PutUint16(b[4:], CmdNewKeepalive) // 0x1202
+	binary.LittleEndian.PutUint16(b[6:], 0x0024)          // 36 bytes payload
+	binary.LittleEndian.PutUint32(b[16:], c.kaSeq)        // counter
+	copy(b[20:28], c.sid)                                 // session ID
+	authKey := crypto.CalculateAuthKey(c.enr, c.mac)
+	h := hmac.New(sha1.New, append([]byte(c.uid), authKey...))
+	h.Write(b[:28])
+	copy(b[28:48], h.Sum(nil))
 	return b
 }
 
@@ -735,7 +754,6 @@ func (c *Conn) buildSession() []byte {
 	binary.LittleEndian.PutUint16(b[4:], OldSessionBody) // body size
 	binary.LittleEndian.PutUint16(b[8:], CmdSessionReq)  // 0x0402
 	binary.LittleEndian.PutUint16(b[10:], 0x0033)        // flags
-
 	body := b[OldHeaderSize:]
 	copy(body[:UIDSize], c.uid)
 	copy(body[UIDSize:], c.rid)
@@ -805,9 +823,7 @@ func (c *Conn) buildAudioFrame(payload []byte, timestampUS uint32, codec uint16,
 	binary.LittleEndian.PutUint32(b[24:], uint32(totalPayload))
 	binary.LittleEndian.PutUint32(b[28:], prevFrame)
 	binary.LittleEndian.PutUint32(b[32:], c.audioFrame)
-
-	// Payload + FrameInfo
-	copy(b[36:], payload)
+	copy(b[36:], payload) // Payload + FrameInfo
 	fi := b[36+len(payload):]
 	binary.LittleEndian.PutUint16(fi, codec)
 	fi[2] = BuildAudioFlags(sampleRate, true, channels == 2)
@@ -845,8 +861,6 @@ func (c *Conn) buildNewTxData(payload []byte, channel byte) []byte {
 	copy(b[16:24], c.sid)
 	binary.LittleEndian.PutUint32(b[24:], 1) // const
 	copy(b[NewHeaderSize:], payload)
-
-	// HMAC-SHA1(UID+AuthKey, header)
 	authKey := crypto.CalculateAuthKey(c.enr, c.mac)
 	h := hmac.New(sha1.New, append([]byte(c.uid), authKey...))
 	h.Write(b[:NewHeaderSize])

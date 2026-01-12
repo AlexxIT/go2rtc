@@ -138,13 +138,16 @@ const (
 
 // NEW Protocol (0xCC51)
 const (
-	MagicNewProto  uint16 = 0xCC51
-	CmdNewDisco    uint16 = 0x1002
-	CmdNewDTLS     uint16 = 0x1502
-	NewPayloadSize uint16 = 0x0028
-	NewPacketSize         = 52
-	NewHeaderSize         = 28
-	NewAuthSize           = 20
+	MagicNewProto    uint16 = 0xCC51
+	CmdNewDisco      uint16 = 0x1002
+	CmdNewKeepalive  uint16 = 0x1202
+	CmdNewClose      uint16 = 0x1302
+	CmdNewDTLS       uint16 = 0x1502
+	NewPayloadSize   uint16 = 0x0028
+	NewPacketSize           = 52
+	NewHeaderSize           = 28
+	NewAuthSize             = 20
+	NewKeepaliveSize        = 48
 )
 
 const (
