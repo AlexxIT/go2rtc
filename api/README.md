@@ -4,7 +4,7 @@ Fill free to make any API design proposals.
 
 ## HTTP API
 
-Interactive [OpenAPI](https://alexxit.github.io/go2rtc/api/).
+Interactive [OpenAPI](https://go2rtc.org/api/).
 
 `www/stream.html` - universal viewer with support params in URL:
 

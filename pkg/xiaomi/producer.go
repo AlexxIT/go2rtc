@@ -110,7 +110,7 @@ func probe(client *miss.Client, channel, quality, audio uint8) ([]*core.Media, e
 			}
 		case miss.CodecPCMA:
 			if acodec == nil {
-				acodec = &core.Codec{Name: core.CodecPCMA, ClockRate: 8000}
+				acodec = &core.Codec{Name: core.CodecPCMA, ClockRate: pkt.SampleRate()}
 			}
 		case miss.CodecOPUS:
 			if acodec == nil {
