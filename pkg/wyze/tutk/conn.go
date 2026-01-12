@@ -39,10 +39,9 @@ type FrameAssembler struct {
 }
 
 type Conn struct {
-	udpConn        *net.UDPConn
-	addr           *net.UDPAddr
-	broadcastAddrs []*net.UDPAddr
-	randomID       []byte
+	udpConn  *net.UDPConn
+	addr     *net.UDPAddr
+	randomID []byte
 	uid            string
 	authKey        string
 	enr            string
@@ -100,14 +99,18 @@ func Dial(host, uid, authKey, enr, mac string, verbose bool) (*Conn, error) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	hash := sha256.Sum256([]byte(enr))
-	psk := hash[:]
+	psk := derivePSK(enr)
+
+	if verbose {
+		hash := sha256.Sum256([]byte(enr))
+		fmt.Printf("[PSK] ENR: %q → SHA256: %x\n", enr, hash)
+		fmt.Printf("[PSK] PSK: %x\n", psk)
+	}
 
 	c := &Conn{
-		udpConn:        conn,
-		addr:           &net.UDPAddr{IP: net.ParseIP(host), Port: DefaultPort},
-		broadcastAddrs: getBroadcastAddrs(DefaultPort, verbose),
-		randomID:       genRandomID(),
+		udpConn:  conn,
+		addr:     &net.UDPAddr{IP: net.ParseIP(host), Port: DefaultPort},
+		randomID: genRandomID(),
 		uid:            uid,
 		authKey:        authKey,
 		enr:            enr,
@@ -394,8 +397,8 @@ func (c *Conn) discovery() error {
 	newDiscoPkt := c.buildNewProtoPacket(0, 0, false)    // NEW protocol (0xCC51, cmd=0x1002)
 
 	if c.verbose {
-		fmt.Printf("[DISCO] Unified discovery: timeout=%v interval=%v broadcasts=%d\n",
-			DiscoTimeout, DiscoInterval, len(c.broadcastAddrs))
+		fmt.Printf("[DISCO] Discovery: target=%s timeout=%v interval=%v\n",
+			c.addr, DiscoTimeout, DiscoInterval)
 		fmt.Printf("[DISCO] SessionID=%s\n", hex.EncodeToString(c.sessionID))
 		fmt.Printf("[OLD] TX Discovery packet (%d bytes):\n%s", len(oldDiscoPkt), hexDump(crypto.ReverseTransCodeBlob(oldDiscoPkt)))
 		fmt.Printf("[NEW] TX Discovery packet (%d bytes):\n%s", len(newDiscoPkt), hexDump(newDiscoPkt))
@@ -406,12 +409,9 @@ func (c *Conn) discovery() error {
 	buf := make([]byte, MaxPacketSize)
 
 	for time.Now().Before(deadline) {
-		// Send both discovery packets periodically
 		if time.Since(lastSend) >= DiscoInterval {
-			for _, bcast := range c.broadcastAddrs {
-				c.udpConn.WriteToUDP(oldDiscoPkt, bcast) // OLD protocol
-				c.udpConn.WriteToUDP(newDiscoPkt, bcast) // NEW protocol
-			}
+			c.udpConn.WriteToUDP(oldDiscoPkt, c.addr)
+			c.udpConn.WriteToUDP(newDiscoPkt, c.addr)
 			lastSend = time.Now()
 		}
 
@@ -422,6 +422,10 @@ func (c *Conn) discovery() error {
 				continue
 			}
 			return err
+		}
+
+		if !addr.IP.Equal(c.addr.IP) {
+			continue
 		}
 
 		// Check for NEW protocol response (0xCC51 magic)
@@ -448,8 +452,7 @@ func (c *Conn) discovery() error {
 					}
 
 					if c.verbose {
-						fmt.Printf("[NEW] Camera detected! ticket=0x%04x sessionID=%s\n",
-							ticket, hex.EncodeToString(c.sessionID))
+						fmt.Printf("[NEW] RX Discovery Response seq=1 (%d bytes):\n%s", n, hexDump(buf[:n]))
 					}
 
 					_ = c.udpConn.SetDeadline(time.Time{})
@@ -571,7 +574,8 @@ func (c *Conn) newProtoComplete() error {
 
 			if cmd == CmdNewProtoDiscovery && dir == 0xFFFF && seq == 3 {
 				if c.verbose {
-					fmt.Printf("[NEW] seq=3 received, discovery complete!\n")
+					fmt.Printf("[NEW] RX Echo Response seq=3 (%d bytes):\n%s", n, hexDump(buf[:n]))
+					fmt.Printf("[NEW] Discovery complete!\n")
 				}
 				c.addr = addr
 				return nil
@@ -634,8 +638,13 @@ func (c *Conn) iotcReader() {
 			return
 		}
 
-		if addr.Port != c.addr.Port || !addr.IP.Equal(c.addr.IP) {
-			c.addr = addr
+		if !addr.IP.Equal(c.addr.IP) {
+			continue
+		}
+
+		// Update port if camera responds from different port
+		if addr.Port != c.addr.Port {
+			c.addr.Port = addr.Port
 		}
 
 		// Check for NEW protocol (0xCC51 magic at start)
@@ -823,10 +832,6 @@ func (c *Conn) worker() {
 }
 
 func (c *Conn) route(data []byte) {
-	//	[channel][frameType][version_lo][version_hi][seq_lo][seq_hi]...
-	//	channel: 0x03=Audio, 0x05=I-Video, 0x07=P-Video
-	//	frameType: 0x00=cont, 0x05=end, 0x08=I-start, 0x0d=end-44
-
 	if len(data) < 2 {
 		return
 	}
@@ -1334,6 +1339,17 @@ func (c *Conn) buildNewProtoPacket(seq, ticket uint16, isResponse bool) []byte {
 	authBytes := h.Sum(nil)
 	copy(pkt[32:52], authBytes)
 
+	if c.verbose {
+		fmt.Printf("[AUTH] Discovery Auth Debug:\n")
+		fmt.Printf("[AUTH]   ENR: %s\n", c.enr)
+		fmt.Printf("[AUTH]   MAC: %s\n", c.mac)
+		fmt.Printf("[AUTH]   UID: %s\n", c.uid)
+		fmt.Printf("[AUTH]   AuthKey: %x\n", authKey)
+		fmt.Printf("[AUTH]   HMAC Key (UID+AuthKey): %x\n", key)
+		fmt.Printf("[AUTH]   Hash Input (32 bytes): %x\n", pkt[:32])
+		fmt.Printf("[AUTH]   Auth Bytes: %x\n", authBytes)
+	}
+
 	return pkt
 }
 
@@ -1360,13 +1376,24 @@ func (c *Conn) buildNewProtoDTLS(payload []byte, channel byte) []byte {
 	binary.LittleEndian.PutUint32(pkt[24:], 1) // Always 1 for DTLS wrapper
 	copy(pkt[NewProtoHeaderSize:], payload)
 
-	// Add Auth bytes at the end: HMAC-SHA1(UID+AuthKey, packet_header)
+	// Add Auth bytes at the end: HMAC-SHA1(UID+AuthKey, header only)
 	authKey := crypto.CalculateAuthKey(c.enr, c.mac)
 	key := append([]byte(c.uid), authKey...)
 	h := hmac.New(sha1.New, key)
-	h.Write(pkt[:NewProtoHeaderSize]) // Hash the header portion
+	h.Write(pkt[:NewProtoHeaderSize]) // Hash the header portion only
 	authBytes := h.Sum(nil)
 	copy(pkt[NewProtoHeaderSize+len(payload):], authBytes)
+
+	if c.verbose {
+		fmt.Printf("[AUTH] DTLS Auth Debug:\n")
+		fmt.Printf("[AUTH]   ENR: %s\n", c.enr)
+		fmt.Printf("[AUTH]   MAC: %s\n", c.mac)
+		fmt.Printf("[AUTH]   UID: %s\n", c.uid)
+		fmt.Printf("[AUTH]   AuthKey: %x\n", authKey)
+		fmt.Printf("[AUTH]   HMAC Key (UID+AuthKey): %x\n", key)
+		fmt.Printf("[AUTH]   Hash Input (Header 28 bytes): %x\n", pkt[:NewProtoHeaderSize])
+		fmt.Printf("[AUTH]   Auth Bytes: %x\n", authBytes)
+	}
 
 	return pkt
 }
@@ -1742,76 +1769,32 @@ func (c *Conn) logAudioTX(frame []byte, codec uint16, payloadLen int, timestampU
 	}
 }
 
+func derivePSK(enr string) []byte {
+	// TUTK SDK treats the PSK as a NULL-terminated C string, so if SHA256(ENR)
+	// contains a 0x00 byte, the PSK is truncated at that position.
+	// This matches iOS Wyze app behavior discovered via Frida instrumentation.
+
+	hash := sha256.Sum256([]byte(enr))
+
+	// Find first NULL byte - TUTK uses strlen() on binary PSK
+	pskLen := 32
+	for i := range 32 {
+		if hash[i] == 0x00 {
+			pskLen = i
+			break
+		}
+	}
+
+	// Create PSK: bytes up to first 0x00, rest padded with zeros
+	psk := make([]byte, 32)
+	copy(psk[:pskLen], hash[:pskLen])
+	return psk
+}
+
 func genRandomID() []byte {
 	b := make([]byte, 8)
 	_, _ = rand.Read(b)
 	return b
-}
-
-func getBroadcastAddrs(port int, verbose bool) []*net.UDPAddr {
-	var addrs []*net.UDPAddr
-
-	ifaces, err := net.Interfaces()
-	if err != nil {
-		if verbose {
-			fmt.Printf("[IOTC] Failed to get interfaces: %v\n", err)
-		}
-		// Fallback to limited broadcast
-		return []*net.UDPAddr{{IP: net.IPv4(255, 255, 255, 255), Port: port}}
-	}
-
-	for _, iface := range ifaces {
-		// Skip loopback and down interfaces
-		if iface.Flags&net.FlagLoopback != 0 || iface.Flags&net.FlagUp == 0 {
-			continue
-		}
-
-		ifAddrs, err := iface.Addrs()
-		if err != nil {
-			continue
-		}
-
-		for _, addr := range ifAddrs {
-			ipNet, ok := addr.(*net.IPNet)
-			if !ok {
-				continue
-			}
-
-			// Only IPv4
-			ip4 := ipNet.IP.To4()
-			if ip4 == nil {
-				continue
-			}
-
-			// Calculate broadcast address: IP | ~mask
-			mask := ipNet.Mask
-			if len(mask) != 4 {
-				continue
-			}
-
-			broadcast := make(net.IP, 4)
-			for i := 0; i < 4; i++ {
-				broadcast[i] = ip4[i] | ^mask[i]
-			}
-
-			bcastAddr := &net.UDPAddr{IP: broadcast, Port: port}
-			addrs = append(addrs, bcastAddr)
-
-			if verbose {
-				fmt.Printf("[IOTC] Found broadcast address: %s (iface: %s)\n", bcastAddr, iface.Name)
-			}
-		}
-	}
-
-	if len(addrs) == 0 {
-		// Fallback to limited broadcast
-		if verbose {
-			fmt.Printf("[IOTC] No broadcast addresses found, using 255.255.255.255\n")
-		}
-		return []*net.UDPAddr{{IP: net.IPv4(255, 255, 255, 255), Port: port}}
-	}
-
-	return addrs
 }
 
 func hexDump(data []byte) string {

@@ -349,7 +349,33 @@ DTLS records are wrapped in IOTC DATA_TX (0x0407) packets for transmission and e
 
 ```
 Identity: "AUTHPWD_admin"
-PSK: SHA256(ENR_string) → 32 bytes
+PSK: SHA256(ENR_string) → variable length (see below)
+```
+
+#### PSK Length Determination
+
+**CRITICAL**: The TUTK SDK treats the binary PSK as a NULL-terminated C string.
+This means the effective PSK length is determined by the first `0x00` byte in the SHA256 hash:
+
+```
+hash = SHA256(ENR)
+psk_length = position of first 0x00 byte in hash (or 32 if no 0x00)
+psk = hash[0:psk_length] + zeros[psk_length:32]
+```
+
+**Example 1** - No NULL byte in hash (full 32-byte PSK):
+```
+ENR: "aKzdqckqZ8HUHFe5"
+SHA256: 3e5b96b8d6fc7264b531e1633de9526929d453cb47606c55d574a6e0ef5eb95f
+        ^^ No 0x00 byte → PSK length = 32
+```
+
+**Example 2** - NULL byte at position 11 (11-byte PSK):
+```
+ENR: "GkB9S7cX38GgzSC6"
+SHA256: 16549c533b4e9812808f91|00|95f6edf00365266f09ea1e0328df3eee1ce127ed
+                            ^^ 0x00 at position 11 → PSK length = 11
+PSK:    16549c533b4e9812808f91000000000000000000000000000000000000000000
 ```
 
 ### Nonce Construction

@@ -164,6 +164,8 @@ const (
 	KCmdChallenge          = 10001
 	KCmdChallengeResp      = 10002
 	KCmdAuthResult         = 10003
+	KCmdAuthWithPayload    = 10008
+	KCmdAuthSuccess        = 10009
 	KCmdControlChannel     = 10010
 	KCmdControlChannelResp = 10011
 	KCmdSetResolution      = 10056

@@ -56,6 +56,10 @@ func NewProducer(rawURL string) (*Producer, error) {
 
 func (p *Producer) Start() error {
 	for {
+		if p.client.verbose {
+			fmt.Println("[Wyze] Reading packet...")
+		}
+
 		_ = p.client.SetDeadline(time.Now().Add(core.ConnDeadline))
 		pkt, err := p.client.ReadPacket()
 		if err != nil {
@@ -136,6 +140,10 @@ func probe(client *Client, sd bool) ([]*core.Media, error) {
 	var tutkAudioCodec uint16
 
 	for {
+		if client.verbose {
+			fmt.Println("[Wyze] Probing for codecs...")
+		}
+
 		pkt, err := client.ReadPacket()
 		if err != nil {
 			return nil, fmt.Errorf("wyze: probe: %w", err)
