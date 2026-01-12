@@ -14,6 +14,47 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/wyze/tutk"
 )
 
+const (
+	FrameSize1080P = 0
+	FrameSize360P  = 1
+	FrameSize720P  = 2
+	FrameSize2K    = 3
+)
+
+const (
+	BitrateMax uint16 = 0xF0
+	BitrateSD  uint16 = 0x3C
+)
+
+const (
+	QualityUnknown = 0
+	QualityMax     = 1
+	QualityHigh    = 2
+	QualityMiddle  = 3
+	QualityLow     = 4
+	QualityMin     = 5
+)
+
+const (
+	MediaTypeVideo       = 1
+	MediaTypeAudio       = 2
+	MediaTypeReturnAudio = 3
+	MediaTypeRDT         = 4
+)
+
+const (
+	KCmdAuth               = 10000
+	KCmdChallenge          = 10001
+	KCmdChallengeResp      = 10002
+	KCmdAuthResult         = 10003
+	KCmdAuthWithPayload    = 10008
+	KCmdAuthSuccess        = 10009
+	KCmdControlChannel     = 10010
+	KCmdControlChannelResp = 10011
+	KCmdSetResolution      = 10056
+	KCmdSetResolutionResp  = 10057
+)
+
 type Client struct {
 	conn *tutk.Conn
 
@@ -34,6 +75,11 @@ type Client struct {
 	audioCodecID    uint16
 	audioSampleRate uint32
 	audioChannels   uint8
+}
+
+type AuthResponse struct {
+	ConnectionRes string         `json:"connectionRes"`
+	CameraInfo    map[string]any `json:"cameraInfo"`
 }
 
 func Dial(rawURL string) (*Client, error) {
@@ -107,11 +153,11 @@ func (c *Client) SetResolution(sd bool) error {
 	var bitrate uint16
 
 	if sd {
-		frameSize = tutk.FrameSize360P
-		bitrate = tutk.BitrateSD
+		frameSize = FrameSize360P
+		bitrate = BitrateSD
 	} else {
-		frameSize = tutk.FrameSize2K
-		bitrate = tutk.BitrateMax
+		frameSize = FrameSize2K
+		bitrate = BitrateMax
 	}
 
 	if c.verbose {
@@ -119,120 +165,33 @@ func (c *Client) SetResolution(sd bool) error {
 	}
 
 	k10056 := c.buildK10056(frameSize, bitrate)
-	if err := c.conn.SendIOCtrl(tutk.KCmdSetResolution, k10056); err != nil {
-		return fmt.Errorf("wyze: K10056 send failed: %w", err)
-	}
-
-	// Wait for K10057 response
-	cmdID, data, err := c.conn.RecvIOCtrl(1 * time.Second)
-	if err != nil {
-		return err
-	}
-
-	if c.verbose {
-		fmt.Printf("[Wyze] SetResolution response: K%d (%d bytes)\n", cmdID, len(data))
-	}
-
-	if cmdID == tutk.KCmdSetResolutionResp && len(data) >= 17 {
-		result := data[16]
-		if c.verbose {
-			fmt.Printf("[Wyze] K10057 result: %d\n", result)
-		}
-	}
-
-	return nil
+	_, err := c.conn.WriteAndWaitIOCtrl(KCmdSetResolution, k10056, KCmdSetResolutionResp, 5*time.Second)
+	return err
 }
 
 func (c *Client) StartVideo() error {
-	k10010 := c.buildK10010(tutk.MediaTypeVideo, true)
-	if c.verbose {
-		fmt.Printf("[Wyze] TX K10010 video (%d bytes): % x\n", len(k10010), k10010)
-	}
-
-	if err := c.conn.SendIOCtrl(tutk.KCmdControlChannel, k10010); err != nil {
-		return fmt.Errorf("K10010 video send failed: %w", err)
-	}
-
-	// Wait for K10011 response
-	cmdID, data, err := c.conn.RecvIOCtrl(5 * time.Second)
-	if err != nil {
-		return fmt.Errorf("K10011 video recv failed: %w", err)
-	}
-
-	if c.verbose {
-		fmt.Printf("[Wyze] K10011 video response: cmdID=%d, len=%d\n", cmdID, len(data))
-		if len(data) >= 18 {
-			fmt.Printf("[Wyze] K10011 video: media=%d status=%d\n", data[16], data[17])
-		}
-	}
-
-	return nil
+	k10010 := c.buildK10010(MediaTypeVideo, true)
+	_, err := c.conn.WriteAndWaitIOCtrl(KCmdControlChannel, k10010, KCmdControlChannelResp, 5*time.Second)
+	return err
 }
 
 func (c *Client) StartAudio() error {
-	k10010 := c.buildK10010(tutk.MediaTypeAudio, true)
-	if c.verbose {
-		fmt.Printf("[Wyze] TX K10010 audio (%d bytes): % x\n", len(k10010), k10010)
-	}
-
-	if err := c.conn.SendIOCtrl(tutk.KCmdControlChannel, k10010); err != nil {
-		return fmt.Errorf("K10010 audio send failed: %w", err)
-	}
-
-	// Wait for K10011 response
-	cmdID, data, err := c.conn.RecvIOCtrl(5 * time.Second)
-	if err != nil {
-		return fmt.Errorf("K10011 audio recv failed: %w", err)
-	}
-
-	if c.verbose {
-		fmt.Printf("[Wyze] K10011 audio response: cmdID=%d, len=%d\n", cmdID, len(data))
-		if len(data) >= 18 {
-			fmt.Printf("[Wyze] K10011 audio: media=%d status=%d\n", data[16], data[17])
-		}
-	}
-
-	return nil
+	k10010 := c.buildK10010(MediaTypeAudio, true)
+	_, err := c.conn.WriteAndWaitIOCtrl(KCmdControlChannel, k10010, KCmdControlChannelResp, 5*time.Second)
+	return err
 }
 
 func (c *Client) StartIntercom() error {
 	if c.conn.IsBackchannelReady() {
-		return nil // Already enabled
+		return nil
 	}
 
-	if c.verbose {
-		fmt.Printf("[Wyze] Sending K10010 (enable return audio)\n")
+	k10010 := c.buildK10010(MediaTypeReturnAudio, true)
+	if _, err := c.conn.WriteAndWaitIOCtrl(KCmdControlChannel, k10010, KCmdControlChannelResp, 5*time.Second); err != nil {
+		return err
 	}
 
-	k10010 := c.buildK10010(tutk.MediaTypeReturnAudio, true)
-	if err := c.conn.SendIOCtrl(tutk.KCmdControlChannel, k10010); err != nil {
-		return fmt.Errorf("K10010 send failed: %w", err)
-	}
-
-	// Wait for K10011 response
-	cmdID, data, err := c.conn.RecvIOCtrl(5 * time.Second)
-	if err != nil {
-		return fmt.Errorf("K10011 recv failed: %w", err)
-	}
-
-	if c.verbose {
-		fmt.Printf("[Wyze] K10011 response: cmdID=%d, len=%d\n", cmdID, len(data))
-	}
-
-	// Perform DTLS server handshake on backchannel (camera connects to us)
-	if c.verbose {
-		fmt.Printf("[Wyze] Starting speaker channel DTLS handshake\n")
-	}
-
-	if err := c.conn.AVServStart(); err != nil {
-		return fmt.Errorf("speaker channel handshake failed: %w", err)
-	}
-
-	if c.verbose {
-		fmt.Printf("[Wyze] Backchannel ready\n")
-	}
-
-	return nil
+	return c.conn.AVServStart()
 }
 
 func (c *Client) ReadPacket() (*tutk.Packet, error) {
@@ -324,23 +283,10 @@ func (c *Client) doAVLogin() error {
 }
 
 func (c *Client) doKAuth() error {
-	if c.verbose {
-		fmt.Printf("[Wyze] Starting K-command authentication\n")
-	}
-
-	// Step 1: Send K10000
-	k10000 := c.buildK10000()
-	if err := c.conn.SendIOCtrl(tutk.KCmdAuth, k10000); err != nil {
-		return fmt.Errorf("wyze: K10000 send failed: %w", err)
-	}
-
-	// Step 2: Wait for K10001
-	cmdID, data, err := c.conn.RecvIOCtrl(10 * time.Second)
+	// Step 1: K10000 -> K10001
+	data, err := c.conn.WriteAndWaitIOCtrl(KCmdAuth, c.buildK10000(), KCmdChallenge, 10*time.Second)
 	if err != nil {
-		return fmt.Errorf("wyze: K10001 recv failed: %w", err)
-	}
-	if cmdID != tutk.KCmdChallenge {
-		return fmt.Errorf("wyze: expected K10001, got K%d", cmdID)
+		return fmt.Errorf("wyze: K10001 failed: %w", err)
 	}
 
 	challenge, status, err := c.parseK10001(data)
@@ -348,45 +294,18 @@ func (c *Client) doKAuth() error {
 		return fmt.Errorf("wyze: K10001 parse failed: %w", err)
 	}
 
-	if c.verbose {
-		fmt.Printf("[Wyze] K10001 received, status=%d\n", status)
-	}
-
-	// Step 3: Send K10008
-	k10008 := c.buildK10008(challenge, status)
-
-	if err := c.conn.SendIOCtrl(tutk.KCmdChallengeResp, k10008); err != nil {
-		return fmt.Errorf("wyze: K10008 send failed: %w", err)
-	}
-
-	// Step 4: Wait for K10009
-	cmdID, data, err = c.conn.RecvIOCtrl(10 * time.Second)
+	// Step 2: K10002 -> K10009
+	data, err = c.conn.WriteAndWaitIOCtrl(KCmdChallengeResp, c.buildK10002(challenge, status), KCmdAuthResult, 10*time.Second)
 	if err != nil {
-		return fmt.Errorf("wyze: K10009 recv failed: %w", err)
+		return fmt.Errorf("wyze: K10009 failed: %w", err)
 	}
 
-	if cmdID != tutk.KCmdAuthSuccess {
-		return fmt.Errorf("wyze: expected K10009, got K%d", cmdID)
-	}
-
-	authResp, err := c.parseK10009(data)
-	if err != nil {
-		return fmt.Errorf("wyze: K10009 parse failed: %w", err)
-	}
-
-	// Parse capabilities
+	authResp, _ := c.parseK10003(data)
 	if authResp != nil && authResp.CameraInfo != nil {
-		if c.verbose {
-			fmt.Printf("[Wyze] CameraInfo authResp: ")
-			b, _ := json.Marshal(authResp)
-			fmt.Printf("%s\n", b)
-		}
-
-		// Audio receiving support
 		if audio, ok := authResp.CameraInfo["audio"].(bool); ok {
 			c.hasAudio = audio
 		} else {
-			c.hasAudio = true // Default to true
+			c.hasAudio = true
 		}
 	} else {
 		c.hasAudio = true
@@ -394,9 +313,6 @@ func (c *Client) doKAuth() error {
 
 	if avResp := c.conn.GetAVLoginResponse(); avResp != nil {
 		c.hasIntercom = avResp.TwoWayStreaming == 1
-		if c.verbose {
-			fmt.Printf("[Wyze] two_way_streaming=%d (from AV Login Response)\n", avResp.TwoWayStreaming)
-		}
 	}
 
 	if c.verbose {
@@ -407,94 +323,72 @@ func (c *Client) doKAuth() error {
 }
 
 func (c *Client) buildK10000() []byte {
-	// 137 = G.711 μ-law (PCMU)
-	// 138 = G.711 A-law (PCMA)
-	// 140 = PCM 16-bit
-	jsonPayload := []byte(`{"cameraInfo":{"audioEncoderList":[137,138,140]}}`)
-
-	buf := make([]byte, 16+len(jsonPayload))
-	buf[0] = 'H'
-	buf[1] = 'L'
-	buf[2] = 5
-	binary.LittleEndian.PutUint16(buf[4:], tutk.KCmdAuth)
-	binary.LittleEndian.PutUint16(buf[6:], uint16(len(jsonPayload)))
-	copy(buf[16:], jsonPayload)
-	return buf
+	json := []byte(`{"cameraInfo":{"audioEncoderList":[137,138,140]}}`) // 137=PCMU, 138=PCMA, 140=PCM
+	b := make([]byte, 16+len(json))
+	copy(b, "HL")                                           // magic
+	b[2] = 5                                                // version
+	binary.LittleEndian.PutUint16(b[4:], KCmdAuth)          // 10000
+	binary.LittleEndian.PutUint16(b[6:], uint16(len(json))) // payload len
+	copy(b[16:], json)
+	return b
 }
 
 func (c *Client) buildK10002(challenge []byte, status byte) []byte {
-	response := crypto.GenerateChallengeResponse(challenge, c.enr, status)
-
-	buf := make([]byte, 38)
-	buf[0] = 'H'
-	buf[1] = 'L'
-	buf[2] = 5
-	binary.LittleEndian.PutUint16(buf[4:], tutk.KCmdChallengeResp)
-	buf[6] = 22 // Payload length
-
-	if len(response) >= 16 {
-		copy(buf[16:], response[:16])
-	}
-
-	if len(c.uid) >= 4 {
-		copy(buf[32:], c.uid[:4])
-	}
-
-	buf[36] = 1 // Video flag (0 = disabled, 1 = enabled > will start video stream immediately)
-	buf[37] = 1 // Audio flag (0 = disabled, 1 = enabled > will start audio stream immediately)
-
-	return buf
+	resp := crypto.GenerateChallengeResponse(challenge, c.enr, status)
+	b := make([]byte, 38)
+	copy(b, "HL")                                           // magic
+	b[2] = 5                                                // version
+	binary.LittleEndian.PutUint16(b[4:], KCmdChallengeResp) // 10002
+	b[6] = 22                                               // payload len
+	copy(b[16:], resp[:16])                                 // challenge response
+	copy(b[32:], c.uid[:4])                                 // UID prefix
+	b[36] = 1                                               // video enabled
+	b[37] = 1                                               // audio enabled
+	return b
 }
 
 func (c *Client) buildK10008(challenge []byte, status byte) []byte {
-	response := crypto.GenerateChallengeResponse(challenge, c.enr, status)
-	openUserID := []byte(c.enr)
-	payloadLen := 16 + 4 + 1 + 1 + 1 + len(openUserID)
-
-	buf := make([]byte, 16+payloadLen)
-	buf[0] = 'H'
-	buf[1] = 'L'
-	buf[2] = 5                                                       // Protocol version
-	binary.LittleEndian.PutUint16(buf[4:], tutk.KCmdAuthWithPayload) // 10008
-	binary.LittleEndian.PutUint16(buf[6:], uint16(payloadLen))
-
-	copy(buf[16:], response[:16]) // Challenge response
-	copy(buf[32:], c.uid[:4])     // UID prefix
-	buf[36] = 1                   // Video enabled
-	buf[37] = 1                   // Audio enabled
-	buf[38] = byte(len(openUserID))
-	copy(buf[39:], openUserID)
-
-	return buf
+	resp := crypto.GenerateChallengeResponse(challenge, c.enr, status)
+	userID := []byte(c.enr)
+	payloadLen := 16 + 4 + 1 + 1 + 1 + len(userID)
+	b := make([]byte, 16+payloadLen)
+	copy(b, "HL")                                             // magic
+	b[2] = 5                                                  // version
+	binary.LittleEndian.PutUint16(b[4:], KCmdAuthWithPayload) // 10008
+	binary.LittleEndian.PutUint16(b[6:], uint16(payloadLen))  // payload len
+	copy(b[16:], resp[:16])                                   // challenge response
+	copy(b[32:], c.uid[:4])                                   // UID prefix
+	b[36] = 1                                                 // video enabled
+	b[37] = 1                                                 // audio enabled
+	b[38] = byte(len(userID))                                 // userID len
+	copy(b[39:], userID)                                      // userID
+	return b
 }
 
 func (c *Client) buildK10010(mediaType byte, enabled bool) []byte {
-	buf := make([]byte, 18)
-	buf[0] = 'H'
-	buf[1] = 'L'
-	buf[2] = 5                                                      // Version
-	binary.LittleEndian.PutUint16(buf[4:], tutk.KCmdControlChannel) // 0x271a = 10010
-	binary.LittleEndian.PutUint16(buf[6:], 2)                       // Payload length = 2
-	buf[16] = mediaType                                             // 1=Video, 2=Audio, 3=ReturnAudio
-	if enabled {
-		buf[17] = 1
-	} else {
-		buf[17] = 2
+	b := make([]byte, 18)
+	copy(b, "HL")                                            // magic
+	b[2] = 5                                                 // version
+	binary.LittleEndian.PutUint16(b[4:], KCmdControlChannel) // 10010
+	binary.LittleEndian.PutUint16(b[6:], 2)                  // payload len
+	b[16] = mediaType                                        // 1=video, 2=audio, 3=return audio
+	b[17] = 1                                                // 1=enable, 2=disable
+	if !enabled {
+		b[17] = 2
 	}
-	return buf
+	return b
 }
 
 func (c *Client) buildK10056(frameSize uint8, bitrate uint16) []byte {
-	buf := make([]byte, 21)
-	buf[0] = 'H'
-	buf[1] = 'L'
-	buf[2] = 5                                                     // Version
-	binary.LittleEndian.PutUint16(buf[4:], tutk.KCmdSetResolution) // 0x2748 = 10056
-	binary.LittleEndian.PutUint16(buf[6:], 5)                      // Payload length = 5
-	buf[16] = frameSize + 1                                        // 4 = HD
-	binary.LittleEndian.PutUint16(buf[17:], bitrate)               // 0x00f0 = 240
-	// buf[19], buf[20] = FPS (0 = auto)
-	return buf
+	b := make([]byte, 21)
+	copy(b, "HL")                                           // magic
+	b[2] = 5                                                // version
+	binary.LittleEndian.PutUint16(b[4:], KCmdSetResolution) // 10056
+	binary.LittleEndian.PutUint16(b[6:], 5)                 // payload len
+	b[16] = frameSize + 1                                   // frame size
+	binary.LittleEndian.PutUint16(b[17:], bitrate)          // bitrate
+	// b[19:21] = FPS (0 = auto)
+	return b
 }
 
 func (c *Client) parseK10001(data []byte) (challenge []byte, status byte, err error) {
@@ -511,7 +405,7 @@ func (c *Client) parseK10001(data []byte) (challenge []byte, status byte, err er
 	}
 
 	cmdID := binary.LittleEndian.Uint16(data[4:])
-	if cmdID != tutk.KCmdChallenge {
+	if cmdID != KCmdChallenge {
 		return nil, 0, fmt.Errorf("expected cmdID 10001, got %d", cmdID)
 	}
 
@@ -522,31 +416,31 @@ func (c *Client) parseK10001(data []byte) (challenge []byte, status byte, err er
 	return challenge, status, nil
 }
 
-func (c *Client) parseK10003(data []byte) (*tutk.AuthResponse, error) {
+func (c *Client) parseK10003(data []byte) (*AuthResponse, error) {
 	if c.verbose {
 		fmt.Printf("[Wyze] parseK10003: received %d bytes\n", len(data))
 	}
 
 	if len(data) < 16 {
-		return &tutk.AuthResponse{}, nil
+		return &AuthResponse{}, nil
 	}
 
 	if data[0] != 'H' || data[1] != 'L' {
-		return &tutk.AuthResponse{}, nil
+		return &AuthResponse{}, nil
 	}
 
 	cmdID := binary.LittleEndian.Uint16(data[4:])
 	textLen := binary.LittleEndian.Uint16(data[6:])
 
-	if cmdID != tutk.KCmdAuthResult {
-		return &tutk.AuthResponse{}, nil
+	if cmdID != KCmdAuthResult {
+		return &AuthResponse{}, nil
 	}
 
 	if len(data) > 16 && textLen > 0 {
 		jsonData := data[16:]
 		for i := range jsonData {
 			if jsonData[i] == '{' {
-				var resp tutk.AuthResponse
+				var resp AuthResponse
 				if err := json.Unmarshal(jsonData[i:], &resp); err == nil {
 					if c.verbose {
 						fmt.Printf("[Wyze] parseK10003: parsed JSON\n")
@@ -558,34 +452,34 @@ func (c *Client) parseK10003(data []byte) (*tutk.AuthResponse, error) {
 		}
 	}
 
-	return &tutk.AuthResponse{}, nil
+	return &AuthResponse{}, nil
 }
 
-func (c *Client) parseK10009(data []byte) (*tutk.AuthResponse, error) {
+func (c *Client) parseK10009(data []byte) (*AuthResponse, error) {
 	if c.verbose {
 		fmt.Printf("[Wyze] parseK10009: received %d bytes\n", len(data))
 	}
 
 	if len(data) < 16 {
-		return &tutk.AuthResponse{}, nil
+		return &AuthResponse{}, nil
 	}
 
 	if data[0] != 'H' || data[1] != 'L' {
-		return &tutk.AuthResponse{}, nil
+		return &AuthResponse{}, nil
 	}
 
 	cmdID := binary.LittleEndian.Uint16(data[4:])
 	textLen := binary.LittleEndian.Uint16(data[6:])
 
-	if cmdID != tutk.KCmdAuthSuccess {
-		return &tutk.AuthResponse{}, nil
+	if cmdID != KCmdAuthSuccess {
+		return &AuthResponse{}, nil
 	}
 
 	if len(data) > 16 && textLen > 0 {
 		jsonData := data[16:]
 		for i := range jsonData {
 			if jsonData[i] == '{' {
-				var resp tutk.AuthResponse
+				var resp AuthResponse
 				if err := json.Unmarshal(jsonData[i:], &resp); err == nil {
 					if c.verbose {
 						fmt.Printf("[Wyze] parseK10009: parsed JSON\n")
@@ -597,5 +491,5 @@ func (c *Client) parseK10009(data []byte) (*tutk.AuthResponse, error) {
 		}
 	}
 
-	return &tutk.AuthResponse{}, nil
+	return &AuthResponse{}, nil
 }
