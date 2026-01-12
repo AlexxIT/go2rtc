@@ -78,12 +78,9 @@ func (c *Cloud) Login(username, password string) error {
 	}
 
 	req := Request{
-		Method:  "POST",
-		URL:     "https://account.xiaomi.com/pass/serviceLoginAuth2",
-		RawBody: form.Encode(),
-		Headers: url.Values{
-			"Content-Type": {"application/x-www-form-urlencoded"},
-		},
+		Method:     "POST",
+		URL:        "https://account.xiaomi.com/pass/serviceLoginAuth2",
+		Body:       form,
 		RawCookies: cookies,
 	}.Encode()
 
@@ -105,7 +102,7 @@ func (c *Cloud) Login(username, password string) error {
 		return err
 	}
 
-	// save auth for two step verification
+	// save auth for two-step verification
 	c.auth = map[string]string{
 		"username": username,
 		"password": password,
@@ -265,11 +262,17 @@ func (c *Cloud) sendTicket() error {
 		cookies += "; ick=" + c.auth["ick"]
 	}
 
+	form := url.Values{
+		"_json": {"true"},
+		"icode": {captCode},
+		"retry": {"0"},
+	}
+
 	req = Request{
 		Method:     "POST",
 		URL:        "https://account.xiaomi.com/identity/auth/send" + name + "Ticket",
+		Body:       form,
 		RawCookies: cookies,
-		RawBody:    `{"retry":0,"icode":"` + captCode + `","_json":"true"}`,
 	}.Encode()
 
 	res, err = c.client.Do(req)
@@ -531,7 +534,7 @@ type Request struct {
 	Method     string
 	URL        string
 	RawParams  string
-	RawBody    string
+	Body       url.Values
 	Headers    url.Values
 	RawCookies string
 }
@@ -542,8 +545,8 @@ func (r Request) Encode() *http.Request {
 	}
 
 	var body io.Reader
-	if r.RawBody != "" {
-		body = strings.NewReader(r.RawBody)
+	if r.Body != nil {
+		body = strings.NewReader(r.Body.Encode())
 	}
 
 	req, err := http.NewRequest(r.Method, r.URL, body)
@@ -554,7 +557,9 @@ func (r Request) Encode() *http.Request {
 	if r.Headers != nil {
 		req.Header = http.Header(r.Headers)
 	}
-
+	if r.Body != nil {
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
 	if r.RawCookies != "" {
 		req.Header.Set("Cookie", r.RawCookies)
 	}
