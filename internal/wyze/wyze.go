@@ -93,12 +93,10 @@ func apiDeviceList(w http.ResponseWriter, r *http.Request) {
 
 		var items []*api.Source
 		for _, cam := range cameras {
-			streamURL := buildStreamURL(cam)
-
 			items = append(items, &api.Source{
 				Name: cam.Nickname,
 				Info: fmt.Sprintf("%s | %s | %s", cam.ProductModel, cam.MAC, cam.IP),
-				URL:  streamURL,
+				URL:  buildStreamURL(cam),
 			})
 		}
 
@@ -171,12 +169,10 @@ func apiAuth(w http.ResponseWriter, r *http.Request) {
 
 	var items []*api.Source
 	for _, cam := range cameras {
-		streamURL := buildStreamURL(cam)
-
 		items = append(items, &api.Source{
 			Name: cam.Nickname,
 			Info: fmt.Sprintf("%s | %s | %s", cam.ProductModel, cam.MAC, cam.IP),
-			URL:  streamURL,
+			URL:  buildStreamURL(cam),
 		})
 	}
 

@@ -196,6 +196,9 @@ func (c *Cloud) GetCameraList() ([]*Camera, error) {
 		if dev.ProductType != "Camera" {
 			continue
 		}
+		if dev.DeviceParams.IP == "" {
+			continue // skip cameras without IP (gwell protocol)
+		}
 
 		c.cameras = append(c.cameras, &Camera{
 			MAC:          dev.MAC,
