@@ -32,7 +32,7 @@ Ultimate camera streaming application with support for RTSP, WebRTC, HomeKit, FF
 - devices: `alsa` (Linux audio), `v4l2` (Linux video)
 - files: `adts`, `flv`, `h264`, `hevc`, `hls`, `mjpeg`, `mpegts`, `mp4`, `wav`
 - network (public and well known): `mpjpeg`, `onvif`, `rtmp`, `rtp`, `rtsp`, `webrtc`, `y2m` (yuv4mpegpipe)
-- network (private and exclusive): `bubble`, `doorbird`, `dvrip`, `eseecloud`, `gopro`, `hass` (Home Assistant), `homekit` (Apple), `isapi` (Hikvision), `kasa` (TP-Link), `nest` (Google), `ring`, `roborock`, `tapo` and `vigi` (TP-Link), `tuya`, `webtorrent`, `xiaomi` (Mi Home)
+- network (private and exclusive): `bubble`, `doorbird`, `dvrip`, `eseecloud`, `gopro`, `hass` (Home Assistant), `homekit` (Apple), `isapi` (Hikvision), `kasa` (TP-Link), `nest` (Google), `ring`, `roborock`, `tapo` and `vigi` (TP-Link), `tuya`, `webtorrent`, `wyze`, `xiaomi` (Mi Home)
 - webrtc related: `creality`, `kinesis` (Amazon), `openipc`, `switchbot`, `whep`, `whip`, `wyze`
 - other: `ascii`, `echo`, `exec`, `expr`, `ffmpeg`
 
@@ -235,6 +235,7 @@ Available source types:
 - [doorbird](#source-doorbird) - Doorbird cameras with [two way audio](#two-way-audio) support
 - [webrtc](#source-webrtc) - WebRTC/WHEP sources
 - [webtorrent](#source-webtorrent) - WebTorrent source from another go2rtc
+- [wyze](#source-wyze) - Wyze cameras with [two way audio](#two-way-audio) support
 
 Read more about [incoming sources](#incoming-sources)
 
@@ -251,6 +252,7 @@ Supported sources:
 - [Exec](#source-exec) audio on server
 - [Ring](#source-ring) cameras
 - [Tuya](#source-tuya) cameras
+- [Wyze](#source-wyze) cameras
 - [Xiaomi](#source-xiaomi) cameras
 - [Any Browser](#incoming-browser) as IP-camera
 
@@ -627,7 +629,7 @@ This source allows you to view cameras from the [Xiaomi Mi Home](https://home.mi
 
 #### Source: Wyze
 
-This source allows you to stream from [Wyze](https://wyze.com/) cameras using native P2P protocol. Supports H.264/H.265 video, AAC/G.711 audio, and two-way audio. [Read more](https://github.com/AlexxIT/go2rtc/blob/master/pkg/wyze/README.md).
+This source allows you to stream from [Wyze](https://wyze.com/) cameras using native P2P protocol - no docker-wyze-bridge required. Supports H.264/H.265 video, AAC/G.711 audio, and two-way audio. [Read more](https://github.com/AlexxIT/go2rtc/blob/master/internal/wyze/README.md).
 
 #### Source: GoPro
 
@@ -763,9 +765,9 @@ This format is only supported in go2rtc. Unlike WHEP, it supports asynchronous W
 
 Support connection to [OpenIPC](https://openipc.org/) cameras.
 
-**wyze** (*from [v1.6.1](https://github.com/AlexxIT/go2rtc/releases/tag/v1.6.1)*)
+**wyze (via docker-wyze-bridge)** (*from [v1.6.1](https://github.com/AlexxIT/go2rtc/releases/tag/v1.6.1)*)
 
-Supports connection to [Wyze](https://www.wyze.com/) cameras, using WebRTC protocol. You can use the [docker-wyze-bridge](https://github.com/mrlt8/docker-wyze-bridge) project to get connection credentials.
+Legacy method to connect to [Wyze](https://www.wyze.com/) cameras using WebRTC protocol via [docker-wyze-bridge](https://github.com/mrlt8/docker-wyze-bridge). For native P2P support without docker-wyze-bridge, see [Source: Wyze](#source-wyze).
 
 **kinesis** (*from [v1.6.1](https://github.com/AlexxIT/go2rtc/releases/tag/v1.6.1)*)
 
