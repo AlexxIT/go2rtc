@@ -2,6 +2,7 @@ package cs2
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -46,6 +47,7 @@ type Conn struct {
 const (
 	magic        = 0xF1
 	magicDrw     = 0xD1
+	magicTCP     = 0x68
 	msgLanSearch = 0x30
 	msgPunchPkt  = 0x41
 	msgP2PRdyUDP = 0x42
@@ -121,6 +123,11 @@ func (c *Conn) worker() {
 			return
 		}
 
+		// 0  f1d0  magic
+		// 2  005d  size = total size + 4
+		// 4  d1    magic
+		// 5  00    channel
+		// 6  0000  seq
 		switch buf[1] {
 		case msgDrw:
 			ch := buf[5]
@@ -134,22 +141,27 @@ func (c *Conn) worker() {
 				}
 			} else {
 				// For UDP we should using ack.
-				seqHI := buf[6]
-				seqLO := buf[7]
+				seq := binary.BigEndian.Uint16(buf[6:])
+				diff := int16(seq - chAck[ch])
 
-				if chAck[ch] != uint16(seqHI)<<8|uint16(seqLO) {
-					continue
+				if diff > 0 {
+					continue // new seq - skip before ack
 				}
-				chAck[ch]++
 
-				ack := []byte{magic, msgDrwAck, 0, 6, magicDrw, ch, 0, 1, seqHI, seqLO}
+				ack := []byte{magic, msgDrwAck, 0, 6, magicDrw, ch, 0, 1, buf[6], buf[7]}
 				_, _ = c.conn.Write(ack)
+
+				if diff < 0 {
+					continue // old seq - skip after ack
+				}
+
+				chAck[ch]++ // expected seq - OK
 			}
 
 			switch ch {
 			case 0:
 				select {
-				case c.rawCh0 <- buf[12:]:
+				case c.rawCh0 <- bytes.Clone(buf[12:n]):
 				default:
 				}
 				continue
@@ -343,23 +355,24 @@ type udpConn struct {
 	addr *net.UDPAddr
 }
 
-func (c *udpConn) Read(p []byte) (n int, err error) {
+func (c *udpConn) Read(b []byte) (n int, err error) {
 	var addr *net.UDPAddr
 	for {
-		n, addr, err = c.UDPConn.ReadFromUDP(p)
+		n, addr, err = c.UDPConn.ReadFromUDP(b)
 		if err != nil {
 			return 0, err
 		}
 
 		if string(addr.IP) == string(c.addr.IP) || n >= 8 {
+			//log.Printf("<- %x", b[:n])
 			return
 		}
 	}
 }
 
-func (c *udpConn) Write(req []byte) (n int, err error) {
-	//log.Printf("-> %x", req)
-	return c.UDPConn.WriteToUDP(req, c.addr)
+func (c *udpConn) Write(b []byte) (n int, err error) {
+	//log.Printf("-> %x", b)
+	return c.UDPConn.WriteToUDP(b, c.addr)
 }
 
 func (c *udpConn) RemoteAddr() net.Addr {
@@ -425,7 +438,7 @@ func (c *tcpConn) Write(req []byte) (n int, err error) {
 	n = len(req)
 	buf := make([]byte, 8+n)
 	binary.BigEndian.PutUint16(buf, uint16(n))
-	buf[2] = 0x68
+	buf[2] = magicTCP
 	copy(buf[8:], req)
 	//log.Printf("-> %x", buf)
 	_, err = c.TCPConn.Write(buf)
