@@ -1,6 +1,7 @@
 package wyze
 
 import (
+	"crypto/rand"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -310,7 +311,7 @@ func (c *Client) doAVLogin() error {
 }
 
 func (c *Client) doKAuth() error {
-	// Step 1: K10000 -> K10001
+	// Step 1: K10000 -> K10001 (Challenge)
 	data, err := c.conn.WriteAndWaitIOCtrl(KCmdAuth, c.buildK10000(), KCmdChallenge, 10*time.Second)
 	if err != nil {
 		return fmt.Errorf("wyze: K10001 failed: %w", err)
@@ -321,21 +322,45 @@ func (c *Client) doKAuth() error {
 		return fmt.Errorf("wyze: K10001 parse failed: %w", err)
 	}
 
-	// Step 2: K10002 -> K10009
-	data, err = c.conn.WriteAndWaitIOCtrl(KCmdChallengeResp, c.buildK10002(challenge, status), KCmdAuthResult, 10*time.Second)
-	if err != nil {
-		return fmt.Errorf("wyze: K10009 failed: %w", err)
+	if c.verbose {
+		fmt.Printf("[Wyze] K10001 challenge received, status=%d\n", status)
 	}
 
-	authResp, _ := c.parseK10003(data)
+	// Step 2: K10002 -> K10003 (Auth)
+	data, err = c.conn.WriteAndWaitIOCtrl(KCmdChallengeResp, c.buildK10002(challenge, status), KCmdAuthResult, 10*time.Second)
+	if err != nil {
+		return fmt.Errorf("wyze: K10002 failed: %w", err)
+	}
+
+	// Parse K10003 response
+	authResp, err := c.parseK10003(data)
+	if err != nil {
+		return fmt.Errorf("wyze: K10003 parse failed: %w", err)
+	}
+
+	if c.verbose && authResp != nil {
+		if jsonBytes, err := json.MarshalIndent(authResp, "", "  "); err == nil {
+			fmt.Printf("[Wyze] K10003 response:\n%s\n", jsonBytes)
+		}
+	}
+
+	// Extract audio capability from cameraInfo
 	if authResp != nil && authResp.CameraInfo != nil {
-		if audio, ok := authResp.CameraInfo["audio"].(bool); ok {
-			c.hasAudio = audio
+		if channelResult, ok := authResp.CameraInfo["channelRequestResult"].(map[string]any); ok {
+			if audio, ok := channelResult["audio"].(string); ok {
+				c.hasAudio = audio == "1"
+			} else {
+				c.hasAudio = true
+			}
 		} else {
 			c.hasAudio = true
 		}
 	} else {
 		c.hasAudio = true
+	}
+
+	if c.verbose {
+		fmt.Printf("[Wyze] K10003 auth success\n")
 	}
 
 	if avResp := c.conn.GetAVLoginResponse(); avResp != nil {
@@ -362,13 +387,15 @@ func (c *Client) buildK10000() []byte {
 
 func (c *Client) buildK10002(challenge []byte, status byte) []byte {
 	resp := crypto.GenerateChallengeResponse(challenge, c.enr, status)
+	sessionID := make([]byte, 4)
+	rand.Read(sessionID)
 	b := make([]byte, 38)
 	copy(b, "HL")                                           // magic
 	b[2] = 5                                                // version
 	binary.LittleEndian.PutUint16(b[4:], KCmdChallengeResp) // 10002
 	b[6] = 22                                               // payload len
 	copy(b[16:], resp[:16])                                 // challenge response
-	copy(b[32:], c.uid[:4])                                 // UID prefix
+	copy(b[32:], sessionID)                                 // random session ID
 	b[36] = 1                                               // video enabled
 	b[37] = 1                                               // audio enabled
 	return b
