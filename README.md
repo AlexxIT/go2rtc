@@ -834,6 +834,10 @@ You can turn the browser of any PC or mobile into an IP camera with support for 
 4. Select `camera+microphone` or `display+speaker` option
 5. Open `webrtc` local page (your go2rtc **should work over HTTPS!**) or `share link` via [WebTorrent](#module-webtorrent) technology (work over HTTPS by default)
 
+You can optionally specify camera resolution via URL parameter:
+- `?resolution=1280x720` - request 720p
+- `?resolution=1920x1080@30` - request 1080p at 30fps
+
 #### Incoming: WebRTC/WHIP
 
 *[New in v1.3.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.3.0)*
