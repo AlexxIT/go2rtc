@@ -106,6 +106,7 @@ Ultimate camera streaming application with support for RTSP, WebRTC, HomeKit, FF
   * [Module: MP4](#module-mp4)
   * [Module: HLS](#module-hls)
   * [Module: MJPEG](#module-mjpeg)
+  * [Module: ONVIF](#module-onvif)
   * [Module: Log](#module-log)
 * [Security](#security)
 * [Codecs filters](#codecs-filters)
@@ -197,6 +198,7 @@ Available modules:
 - [mp4](#module-mp4) - MSE, MP4 stream and MP4 snapshot Server
 - [hls](#module-hls) - HLS TS or fMP4 stream Server
 - [mjpeg](#module-mjpeg) - MJPEG Server
+- [onvif](#module-onvif) - ONVIF server
 - [ffmpeg](#source-ffmpeg) - FFmpeg integration
 - [ngrok](#module-ngrok) - ngrok integration (external access for private network)
 - [hass](#module-hass) - Home Assistant integration
@@ -1154,7 +1156,7 @@ You have several options on how to add a camera to Home Assistant:
 2. Camera [any source](#module-streams) => [go2rtc config](#configuration) => [Generic Camera](https://www.home-assistant.io/integrations/generic/)
    - Install any [go2rtc](#fast-start)
    - Add your stream to [go2rtc config](#configuration)
-   - Hass > Settings > Integrations > Add Integration > [ONVIF](https://my.home-assistant.io/redirect/config_flow_start/?domain=onvif) > Host: `127.0.0.1`, Port: `1984`
+   - Hass > Settings > Integrations > Add Integration > [ONVIF](https://my.home-assistant.io/redirect/config_flow_start/?domain=onvif) > Host: `127.0.0.1`, Port: `1984` (using [Module: ONVIF](#module-onvif))
    - Hass > Settings > Integrations > Add Integration > [Generic Camera](https://my.home-assistant.io/redirect/config_flow_start/?domain=generic) > Stream Source URL: `rtsp://127.0.0.1:8554/camera1` (change to your stream name, leave everything else as is)
 
 You have several options on how to watch the stream from the cameras in Home Assistant:
@@ -1249,6 +1251,53 @@ API examples:
 **PS.** This module also supports streaming to the server console (terminal) in the **animated ASCII art** format ([read more](https://github.com/AlexxIT/go2rtc/blob/master/internal/mjpeg/README.md)):
 
 [![](https://img.youtube.com/vi/sHj_3h_sX7M/mqdefault.jpg)](https://www.youtube.com/watch?v=sHj_3h_sX7M)
+
+### Module: ONVIF
+
+This module provides an **ONVIF server** that allows go2rtc to act as an ONVIF-compatible device, making it easier to integrate cameras with ONVIF-supported software like Dahua NVRs or Home Assistant.
+
+With ONVIF support, go2rtc can:
+- Expose configured streams as ONVIF profiles.
+- Provide additional ONVIF functionalities like `GetOSDs` to show camera name in Dahua NVR.
+- Maintain a **consistent camera order** to prevent issues with NVRs that rely on `GetProfilesResponse` for identification.
+
+**Example Configuration**
+
+```yaml
+onvif:
+  profiles:
+    - name: Camera 1  
+      streams:
+        - camera1#codec=H265
+        - camera1_lq#res=1270x720#codec=H265
+    - name: Camera 2
+      streams:
+        - camera2
+        - camera2_lq#res=640x360
+
+streams:
+  camera1:
+    - rtsp://admin:admin@192.168.1.1/cam/realmonitor?channel=1&subtype=0&unicast=true
+  camera1_lq:
+    - ffmpeg:camera1#video=h265#height=720
+  camera2:
+    - rtsp://admin:admin@192.168.1.2/cam/realmonitor?channel=1&subtype=0&unicast=true
+  camera2_lq:
+    - ffmpeg:camera2#video=h264#height=360
+```
+
+Default params for `streams`:
+- `res=1920x1080`
+- `codec=H264`
+
+**Example Dahua NVR configuration:**
+- **Channel**: <camera channel on NVR>
+- **Manufacturer**: ONVIF
+- **IP Address**: <go2rtc IP>
+- **RTSP Port**: Self-adaptive
+- **HTTP Port**: <go2rtc http api port, eg. 1984>
+- **Username / Password**: Currently auth is not supported by go2rtc
+- **Remote CH No.**: <camera index from onvif array, counting from 1>
 
 ### Module: Log
 
