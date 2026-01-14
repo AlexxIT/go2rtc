@@ -128,6 +128,27 @@ func (p *Producer) Start() error {
 				Payload: pkt.Payload,
 			}
 
+		case tutk.AudioCodecPCM:
+			name = core.CodecPCM
+			pkt2 = &core.Packet{
+				Header:  rtp.Header{Version: 2, Marker: true, SequenceNumber: uint16(pkt.FrameNo), Timestamp: pkt.Timestamp},
+				Payload: pkt.Payload,
+			}
+
+		case tutk.AudioCodecMP3:
+			name = core.CodecMP3
+			pkt2 = &core.Packet{
+				Header:  rtp.Header{Version: 2, Marker: true, SequenceNumber: uint16(pkt.FrameNo), Timestamp: pkt.Timestamp},
+				Payload: pkt.Payload,
+			}
+
+		case tutk.CodecMJPEG:
+			name = core.CodecJPEG
+			pkt2 = &core.Packet{
+				Header:  rtp.Header{SequenceNumber: uint16(pkt.FrameNo), Timestamp: pkt.Timestamp},
+				Payload: pkt.Payload,
+			}
+
 		default:
 			continue
 		}
@@ -201,6 +222,15 @@ func probe(client *Client, quality byte) ([]*core.Media, error) {
 			if acodec == nil {
 				acodec = &core.Codec{Name: core.CodecPCM, ClockRate: pkt.SampleRate, Channels: pkt.Channels}
 				tutkAudioCodec = pkt.Codec
+			}
+		case tutk.AudioCodecMP3:
+			if acodec == nil {
+				acodec = &core.Codec{Name: core.CodecMP3, ClockRate: pkt.SampleRate, Channels: pkt.Channels}
+				tutkAudioCodec = pkt.Codec
+			}
+		case tutk.CodecMJPEG:
+			if vcodec == nil {
+				vcodec = &core.Codec{Name: core.CodecJPEG, ClockRate: 90000, PayloadType: core.PayloadTypeRAW}
 			}
 		}
 
