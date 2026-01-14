@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -278,11 +279,16 @@ func (c *Client) Close() error {
 
 func (c *Client) connect() error {
 	host := c.host
+	port := 0
+
 	if idx := strings.Index(host, ":"); idx > 0 {
+		if p, err := strconv.Atoi(host[idx+1:]); err == nil {
+			port = p
+		}
 		host = host[:idx]
 	}
 
-	conn, err := tutk.Dial(host, c.uid, c.authKey, c.enr, c.mac, c.verbose)
+	conn, err := tutk.Dial(host, port, c.uid, c.authKey, c.enr, c.mac, c.verbose)
 	if err != nil {
 		return fmt.Errorf("wyze: connect failed: %w", err)
 	}

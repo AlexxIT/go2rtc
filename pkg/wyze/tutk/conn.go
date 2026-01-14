@@ -78,7 +78,7 @@ type Conn struct {
 	cmdAck func()
 }
 
-func Dial(host, uid, authKey, enr, mac string, verbose bool) (*Conn, error) {
+func Dial(host string, port int, uid, authKey, enr, mac string, verbose bool) (*Conn, error) {
 	udp, err := net.ListenUDP("udp", nil)
 	if err != nil {
 		return nil, err
@@ -89,9 +89,13 @@ func Dial(host, uid, authKey, enr, mac string, verbose bool) (*Conn, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	psk := derivePSK(enr)
 
+	if port == 0 {
+		port = DefaultPort
+	}
+
 	c := &Conn{
 		conn:    udp,
-		addr:    &net.UDPAddr{IP: net.ParseIP(host), Port: DefaultPort},
+		addr:    &net.UDPAddr{IP: net.ParseIP(host), Port: port},
 		rid:     genRandomID(),
 		uid:     uid,
 		authKey: authKey,
