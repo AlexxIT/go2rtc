@@ -31,7 +31,7 @@
             const resolution = new URLSearchParams(location.search).get('resolution');
             const match = resolution && resolution.match(/(\d+)x(\d+)(?:@(\d+))?/);
             const video = media.indexOf('camera') < 0 ? false : match ? {
-                width: {ideal: +match[1]}, height: {ideal: +match[2]}, ...(match[3] && {frameRate: {ideal: +match[3]}})
+                width: {min: +match[1]}, height: {min: +match[2]}, ...(match[3] && {frameRate: {min: +match[3]}})
             } : true;
             const tracks = await getMediaTracks('user', {video, audio: media.indexOf('microphone') >= 0});
             tracks.forEach(track => {
