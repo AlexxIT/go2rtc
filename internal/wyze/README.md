@@ -92,7 +92,7 @@ Two-way audio (intercom) is supported automatically. When a consumer sends audio
 | Wyze Cam Floodlight Pro | | | ? | | |
 | Wyze Cam Floodlight v2 | | | TUTK | | |
 | Wyze Cam Floodlight | | | TUTK | | |
-| Wyze Video Doorbell v2 | | | TUTK | | |
+| Wyze Video Doorbell v2 | HL_DB2 | 4.51.3.4992 | TUTK | TransCode | h264, pcm |
 | Wyze Video Doorbell v1 | | | TUTK | | |
 | Wyze Video Doorbell Pro | | | ? | | |
 | Wyze Battery Video Doorbell | | | ? | | |
