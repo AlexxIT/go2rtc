@@ -402,8 +402,8 @@ func (c *Client) buildK10002(challenge []byte, status byte) []byte {
 	b[6] = 22                                               // payload len
 	copy(b[16:], resp[:16])                                 // challenge response
 	copy(b[32:], sessionID)                                 // random session ID
-	b[36] = 0                                               // video disabled (start with K10010 later)
-	b[37] = 0                                               // audio disabled (start with K10010 later)
+	b[36] = 1                                               // video enabled/disabled
+	b[37] = 1                                               // audio enabled/disabled
 	return b
 }
 
