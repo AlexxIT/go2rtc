@@ -74,19 +74,19 @@ Two-way audio (intercom) is supported automatically. When a consumer sends audio
 
 | Name | Model | Firmware | Protocol | Encryption | Codecs |
 |------|-------|----------|----------|------------|--------|
-| Wyze Cam v4 | HL_CAM4 | 4.52.9.4188 | TUTK | TransCode | hevc, aac |
-| | | 4.52.9.5332 | TUTK | HMAC-SHA1 | hevc, aac |
+| Wyze Cam v4 | HL_CAM4 | 4.52.9.4188 | TUTK | TransCode | h264, aac |
+| | | 4.52.9.5332 | TUTK | HMAC-SHA1 | h264, aac |
 | Wyze Cam v3 Pro | | | TUTK | | |
-| Wyze Cam v3 | | | TUTK | | |
-| Wyze Cam v2 | | | TUTK | | |
+| Wyze Cam v3 | WYZE_CAKP2JFUS | 4.36.14.3497 | TUTK | TransCode | h264, pcm |
+| Wyze Cam v2 | WYZEC1-JZ | 4.9.9.3006 | TUTK | TransCode | h264, pcmu |
 | Wyze Cam v1 | | | TUTK | | |
-| Wyze Cam Pan v4 | | | Gwell | | |
+| Wyze Cam Pan v4 | | | Gwell* | | |
 | Wyze Cam Pan v3 | | | TUTK | | |
 | Wyze Cam Pan v2 | | | TUTK | | |
 | Wyze Cam Pan v1 | | | TUTK | | |
-| Wyze Cam OG | | | Gwell | | |
-| Wyze Cam OG Telephoto | | | Gwell | | |
-| Wyze Cam OG (2025) | | | Gwell | | |
+| Wyze Cam OG | | | Gwell* | | |
+| Wyze Cam OG Telephoto | | | Gwell* | | |
+| Wyze Cam OG (2025) | | | Gwell* | | |
 | Wyze Cam Outdoor v2 | | | TUTK | | |
 | Wyze Cam Outdoor v1 | | | TUTK | | |
 | Wyze Cam Floodlight Pro | | | ? | | |
@@ -102,3 +102,5 @@ Two-way audio (intercom) is supported automatically. When a consumer sends audio
 | Wyze Duo Cam Pan | | | ? | | |
 | Wyze Window Cam | | | ? | | |
 | Wyze Bulb Cam | | | ? | | |
+
+_* Gwell based protocols are not yet supported._
