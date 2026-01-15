@@ -163,8 +163,11 @@ func (p *Producer) Start() error {
 }
 
 func probe(client *Client, quality byte) ([]*core.Media, error) {
-	_ = client.SetResolution(quality)
-	_ = client.SetDeadline(time.Now().Add(core.ProbeTimeout))
+	client.SetResolution(quality)
+	client.StartVideo()
+	client.StartAudio()
+
+	client.SetDeadline(time.Now().Add(core.ProbeTimeout))
 
 	var vcodec, acodec *core.Codec
 	var tutkAudioCodec uint16
