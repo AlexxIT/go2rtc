@@ -129,7 +129,7 @@ func (p *Producer) Start() error {
 			}
 
 		case tutk.AudioCodecPCM:
-			name = core.CodecPCM
+			name = core.CodecPCML
 			pkt2 = &core.Packet{
 				Header:  rtp.Header{Version: 2, Marker: true, SequenceNumber: uint16(pkt.FrameNo), Timestamp: pkt.Timestamp},
 				Payload: pkt.Payload,
@@ -220,7 +220,7 @@ func probe(client *Client, quality byte) ([]*core.Media, error) {
 			}
 		case tutk.AudioCodecPCM:
 			if acodec == nil {
-				acodec = &core.Codec{Name: core.CodecPCM, ClockRate: pkt.SampleRate, Channels: pkt.Channels}
+				acodec = &core.Codec{Name: core.CodecPCML, ClockRate: pkt.SampleRate, Channels: pkt.Channels}
 				tutkAudioCodec = pkt.Codec
 			}
 		case tutk.AudioCodecMP3:
