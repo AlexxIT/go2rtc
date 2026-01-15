@@ -247,30 +247,41 @@ func (cs *channelState) reset() {
 	cs.lastPktIdx = 0
 }
 
-func ParseAudioParams(payload []byte, fi *FrameInfo) (sampleRate uint32, channels uint8) {
-	if aac.IsADTS(payload) {
-		codec := aac.ADTSToCodec(payload)
-		if codec != nil {
-			return codec.ClockRate, codec.Channels
-		}
-	}
-
-	if fi != nil {
-		return fi.SampleRate(), fi.Channels()
-	}
-
-	return 16000, 1
-}
-
 const tsWrapPeriod uint32 = 1000000
 
-type FrameHandler struct {
-	channels  map[byte]*channelState
+type tsTracker struct {
 	lastRawTS uint32
 	accumUS   uint64
 	firstTS   bool
-	output    chan *Packet
-	verbose   bool
+}
+
+func (t *tsTracker) update(rawTS uint32) uint64 {
+	if !t.firstTS {
+		t.firstTS = true
+		t.lastRawTS = rawTS
+		return 0
+	}
+
+	var delta uint32
+	if rawTS >= t.lastRawTS {
+		delta = rawTS - t.lastRawTS
+	} else {
+		// Wrapped: delta = (wrap - last) + new
+		delta = (tsWrapPeriod - t.lastRawTS) + rawTS
+	}
+
+	t.accumUS += uint64(delta)
+	t.lastRawTS = rawTS
+
+	return t.accumUS
+}
+
+type FrameHandler struct {
+	channels map[byte]*channelState
+	videoTS  tsTracker
+	audioTS  tsTracker
+	output   chan *Packet
+	verbose  bool
 }
 
 func NewFrameHandler(verbose bool) *FrameHandler {
@@ -287,27 +298,6 @@ func (h *FrameHandler) Recv() <-chan *Packet {
 
 func (h *FrameHandler) Close() {
 	close(h.output)
-}
-
-func (h *FrameHandler) updateTimestamp(rawTS uint32) uint64 {
-	if !h.firstTS {
-		h.firstTS = true
-		h.lastRawTS = rawTS
-		return 0
-	}
-
-	var delta uint32
-	if rawTS >= h.lastRawTS {
-		delta = rawTS - h.lastRawTS
-	} else {
-		// Wrapped: delta = (wrap - last) + new
-		delta = (tsWrapPeriod - h.lastRawTS) + rawTS
-	}
-
-	h.accumUS += uint64(delta)
-	h.lastRawTS = rawTS
-
-	return h.accumUS
 }
 
 func (h *FrameHandler) Handle(data []byte) {
@@ -464,7 +454,7 @@ func (h *FrameHandler) emitVideo(channel byte, cs *channelState) {
 		return
 	}
 
-	accumUS := h.updateTimestamp(fi.Timestamp)
+	accumUS := h.videoTS.update(fi.Timestamp)
 	rtpTS := uint32(accumUS * 90000 / 1000000)
 
 	// Copy payload (buffer will be reused)
@@ -510,13 +500,13 @@ func (h *FrameHandler) handleAudio(payload []byte, fi *FrameInfo) {
 
 	switch fi.CodecID {
 	case AudioCodecAACRaw, AudioCodecAACADTS, AudioCodecAACLATM, AudioCodecAACWyze:
-		sampleRate, channels = ParseAudioParams(payload, fi)
+		sampleRate, channels = parseAudioParams(payload, fi)
 	default:
 		sampleRate = fi.SampleRate()
 		channels = fi.Channels()
 	}
 
-	accumUS := h.updateTimestamp(fi.Timestamp)
+	accumUS := h.audioTS.update(fi.Timestamp)
 	rtpTS := uint32(accumUS * uint64(sampleRate) / 1000000)
 
 	pkt := &Packet{
@@ -557,6 +547,21 @@ func (h *FrameHandler) queue(pkt *Packet) {
 		}
 		h.output <- pkt
 	}
+}
+
+func parseAudioParams(payload []byte, fi *FrameInfo) (sampleRate uint32, channels uint8) {
+	if aac.IsADTS(payload) {
+		codec := aac.ADTSToCodec(payload)
+		if codec != nil {
+			return codec.ClockRate, codec.Channels
+		}
+	}
+
+	if fi != nil {
+		return fi.SampleRate(), fi.Channels()
+	}
+
+	return 16000, 1
 }
 
 func dumpHex(fi *FrameInfo) string {
