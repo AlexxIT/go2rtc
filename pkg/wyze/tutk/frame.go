@@ -509,9 +509,12 @@ func (h *FrameHandler) handleAudio(payload []byte, fi *FrameInfo) {
 	accumUS := h.audioTS.update(fi.Timestamp)
 	rtpTS := uint32(accumUS * uint64(sampleRate) / 1000000)
 
+	payloadCopy := make([]byte, len(payload))
+	copy(payloadCopy, payload)
+
 	pkt := &Packet{
 		Channel:    ChannelAudio,
-		Payload:    payload,
+		Payload:    payloadCopy,
 		Codec:      fi.CodecID,
 		Timestamp:  rtpTS,
 		SampleRate: sampleRate,
