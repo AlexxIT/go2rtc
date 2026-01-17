@@ -1,7 +1,6 @@
 package tutk
 
 import (
-	"bytes"
 	"encoding/binary"
 	"math/bits"
 )
@@ -9,10 +8,12 @@ import (
 // I'd like to say hello to Charlie. Your name is forever etched into the history of streaming software.
 const charlie = "Charlie is the designer of P2P!!"
 
-func ReverseTransCodePartial(src []byte) []byte {
+func ReverseTransCodePartial(dst, src []byte) []byte {
 	n := len(src)
 	tmp := make([]byte, n)
-	dst := bytes.Clone(src)
+	if len(dst) < n {
+		dst = make([]byte, n)
+	}
 
 	src16 := src
 	tmp16 := tmp
@@ -24,7 +25,7 @@ func ReverseTransCodePartial(src []byte) []byte {
 			binary.LittleEndian.PutUint32(tmp16[i:], bits.RotateLeft32(x, i+3))
 		}
 
-		swap(tmp16, dst16, 16)
+		swap(dst16, tmp16, 16)
 
 		for i := 0; i != 16; i++ {
 			tmp16[i] = dst16[i] ^ charlie[i]
@@ -40,7 +41,7 @@ func ReverseTransCodePartial(src []byte) []byte {
 		src16 = src16[16:]
 	}
 
-	swap(src16, tmp16, n)
+	swap(tmp16, src16, n)
 
 	for i := 0; i < n; i++ {
 		dst16[i] = tmp16[i] ^ charlie[i]
@@ -49,10 +50,12 @@ func ReverseTransCodePartial(src []byte) []byte {
 	return dst
 }
 
-func TransCodePartial(src []byte) []byte {
+func TransCodePartial(dst, src []byte) []byte {
 	n := len(src)
 	tmp := make([]byte, n)
-	dst := bytes.Clone(src)
+	if len(dst) < n {
+		dst = make([]byte, n)
+	}
 
 	src16 := src
 	tmp16 := tmp
@@ -68,7 +71,7 @@ func TransCodePartial(src []byte) []byte {
 			dst16[i] = tmp16[i] ^ charlie[i]
 		}
 
-		swap(dst16, tmp16, 16)
+		swap(tmp16, dst16, 16)
 
 		for i := 0; i != 16; i += 4 {
 			x := binary.LittleEndian.Uint32(tmp16[i:])
@@ -84,12 +87,12 @@ func TransCodePartial(src []byte) []byte {
 		tmp16[i] = src16[i] ^ charlie[i]
 	}
 
-	swap(tmp16, dst16, n)
+	swap(dst16, tmp16, n)
 
 	return dst
 }
 
-func swap(src, dst []byte, n int) {
+func swap(dst, src []byte, n int) {
 	switch n {
 	case 2:
 		_, _ = src[1], dst[1]
@@ -135,4 +138,40 @@ func swap(src, dst []byte, n int) {
 		return
 	}
 	copy(dst, src[:n])
+}
+
+const delta = 0x9e3779b9
+
+func XXTEADecrypt(dst, src, key []byte) {
+	const n = int8(4) // support only 16 bytes src
+
+	var w, k [n]uint32
+	for i := int8(0); i < n; i++ {
+		w[i] = binary.LittleEndian.Uint32(src)
+		k[i] = binary.LittleEndian.Uint32(key)
+		src = src[4:]
+		key = key[4:]
+	}
+
+	rounds := 52/n + 6
+	sum := uint32(rounds) * delta
+	for ; rounds > 0; rounds-- {
+		w0 := w[0]
+		i2 := int8((sum >> 2) & 3)
+		for i := n - 1; i >= 0; i-- {
+			wi := w[(i-1)&3]
+			ki := k[i^i2]
+			t1 := (w0 ^ sum) + (wi ^ ki)
+			t2 := (wi >> 5) ^ (w0 << 2)
+			t3 := (w0 >> 3) ^ (wi << 4)
+			w[i] -= t1 ^ (t2 + t3)
+			w0 = w[i]
+		}
+		sum -= delta
+	}
+
+	for _, i := range w {
+		binary.LittleEndian.PutUint32(dst, i)
+		dst = dst[4:]
+	}
 }
