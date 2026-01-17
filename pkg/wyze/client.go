@@ -201,7 +201,11 @@ func (c *Client) StartAudio() error {
 }
 
 func (c *Client) StartIntercom() error {
-	if c.conn == nil || !c.conn.IsBackchannelReady() {
+	if c.conn == nil {
+		return fmt.Errorf("connection is nil")
+	}
+
+	if c.conn.IsBackchannelReady() {
 		return nil
 	}
 
