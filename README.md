@@ -31,8 +31,8 @@ Ultimate camera streaming application with support for RTSP, WebRTC, HomeKit, FF
 
 - devices: `alsa` (Linux audio), `v4l2` (Linux video)
 - files: `adts`, `flv`, `h264`, `hevc`, `hls`, `mjpeg`, `mpegts`, `mp4`, `wav`
-- network (public and well known): `mpjpeg`, `onvif`, `rtmp`, `rtp`, `rtsp`, `webrtc`, `y2m` (yuv4mpegpipe)
-- network (private and exclusive): `bubble`, `doorbird`, `dvrip`, `eseecloud`, `gopro`, `hass` (Home Assistant), `homekit` (Apple), `isapi` (Hikvision), `kasa` (TP-Link), `nest` (Google), `ring`, `roborock`, `tapo` and `vigi` (TP-Link), `tuya`, `webtorrent`, `xiaomi` (Mi Home)
+- network (public and well known): `mpjpeg`, `onvif`, `rtmp`, `rtp`, `rtsp`, `webrtc`, `yuv4mpegpipe`
+- network (private and exclusive): `bubble`, `doorbird`, `dvrip`, `eseecloud`, `gopro`, `hass` (Home Assistant), `homekit` (Apple), `isapi` (Hikvision), `kasa` (TP-Link), `multitrans` (TP-Link), `nest` (Google), `ring`, `roborock`, `tapo` and `vigi` (TP-Link), `tuya`, `webtorrent`, `xiaomi` (Mi Home)
 - webrtc related: `creality`, `kinesis` (Amazon), `openipc`, `switchbot`, `whep`, `whip`, `wyze`
 - other: `ascii`, `echo`, `exec`, `expr`, `ffmpeg`
 
@@ -79,6 +79,7 @@ Ultimate camera streaming application with support for RTSP, WebRTC, HomeKit, FF
   * [Source: DVRIP](#source-dvrip)
   * [Source: Tapo](#source-tapo)
   * [Source: Kasa](#source-kasa)
+  * [Source: Multitrans](#source-multitrans)
   * [Source: Tuya](#source-tuya)
   * [Source: Xiaomi](#source-xiaomi)
   * [Source: GoPro](#source-gopro)
@@ -612,6 +613,12 @@ streams:
 ```
 
 Tested: KD110, KC200, KC401, KC420WS, EC71.
+
+## Source: Multitrans
+
+Two-way audio support for Chinese version of [TP-Link cameras](https://www.tp-link.com.cn/list_2549.html).
+
+*[read more](internal/multitrans/README.md)*
 
 ## Source: Tuya
 
