@@ -50,18 +50,26 @@ func Init() {
 }
 
 var tokens map[string]string
-var tokensMu sync.Mutex
+var clouds map[string]*xiaomi.Cloud
+var cloudsMu sync.Mutex
 
 func getCloud(userID string) (*xiaomi.Cloud, error) {
-	tokensMu.Lock()
-	defer tokensMu.Unlock()
+	cloudsMu.Lock()
+	defer cloudsMu.Unlock()
 
-	token := tokens[userID]
-	cloud := xiaomi.NewCloud(AppXiaomiHome)
-	if err := cloud.LoginWithToken(userID, token); err != nil {
-		return nil, err
+	if cloud := clouds[userID]; cloud != nil {
+		return cloud, nil
 	}
 
+	cloud := xiaomi.NewCloud(AppXiaomiHome)
+	if err := cloud.LoginWithToken(userID, tokens[userID]); err != nil {
+		return nil, err
+	}
+	if clouds == nil {
+		clouds = map[string]*xiaomi.Cloud{userID: cloud}
+	} else {
+		clouds[userID] = cloud
+	}
 	return cloud, nil
 }
 
@@ -221,12 +229,12 @@ func apiDeviceList(w http.ResponseWriter, r *http.Request) {
 
 	user := query.Get("id")
 	if user == "" {
-		tokensMu.Lock()
+		cloudsMu.Lock()
 		users := make([]string, 0, len(tokens))
 		for s := range tokens {
 			users = append(users, s)
 		}
-		tokensMu.Unlock()
+		cloudsMu.Unlock()
 
 		api.ResponseJSON(w, users)
 		return
@@ -308,13 +316,13 @@ func apiAuth(w http.ResponseWriter, r *http.Request) {
 		userID, token := auth.UserToken()
 		auth = nil
 
-		tokensMu.Lock()
+		cloudsMu.Lock()
 		if tokens == nil {
 			tokens = map[string]string{userID: token}
 		} else {
 			tokens[userID] = token
 		}
-		tokensMu.Unlock()
+		cloudsMu.Unlock()
 
 		err = app.PatchConfig([]string{"xiaomi", userID}, token)
 	}
