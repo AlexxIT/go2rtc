@@ -1,4 +1,3 @@
-// Package h265 - AVCC format related functions
 package h265
 
 import (
@@ -12,15 +11,21 @@ import (
 )
 
 func RepairAVCC(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
-	vds, sps, pps := GetParameterSet(codec.FmtpLine)
-	ps := h264.JoinNALU(vds, sps, pps)
+	vps, sps, pps := GetParameterSet(codec.FmtpLine)
+	ps := h264.JoinNALU(vps, sps, pps)
 
 	return func(packet *rtp.Packet) {
 		switch NALUType(packet.Payload) {
 		case NALUTypeIFrame, NALUTypeIFrame2, NALUTypeIFrame3:
-			clone := *packet
-			clone.Payload = h264.Join(ps, packet.Payload)
-			handler(&clone)
+			hasPS := ContainsParameterSets(packet.Payload)
+
+			if !hasPS {
+				clone := *packet
+				clone.Payload = h264.Join(ps, packet.Payload)
+				handler(&clone)
+			} else {
+				handler(packet)
+			}
 		default:
 			handler(packet)
 		}
