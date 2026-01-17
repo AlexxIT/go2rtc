@@ -443,36 +443,8 @@ Offset  Size  Field            Description
 [31]    1     TwoWayAudio      0x01 if intercom supported
 [32-35] 4     Reserved
 [36-39] 4     BufferConfig     0x00000004
-[40-43] 4     Capabilities     0x001F07FB (see below)
+[40-43] 4     Capabilities     0x001F07FB
 [44-57] 14    Reserved
-```
-
-### Capabilities Bitmask (0x001F07FB)
-
-```
-Bit   Hex        Name                    Description
-──────────────────────────────────────────────────────────────
-0     0x00000001 CYCLIC_FRAME_NUMBERING  Frame numbers wrap around
-1     0x00000002 CLEAN_BUF_ON_RESET      Clear buffer on stream reset
-3     0x00000008 TIMESTAMP_IN_FRAMEINFO  Timestamps in FRAMEINFO struct
-4     0x00000010 MULTI_CHANNEL           Multiple AV channels supported
-5     0x00000020 EXTENDED_FRAMEINFO      40-byte FRAMEINFO (vs 16-byte SDK)
-6     0x00000040 RESEND_TIMEOUT          Packet resend with timeout
-7     0x00000080 DTLS_SUPPORT            DTLS encryption supported
-8     0x00000100 SPEAKER_CHANNEL         Two-way audio / intercom
-9     0x00000200 PTZ_CHANNEL             PTZ control channel
-10    0x00000400 PLAYBACK_CHANNEL        SD card playback channel
-16    0x00010000 AV_SECURITY_ENABLED     Encrypted AV stream
-17    0x00020000 RESEND_ENABLED          Packet resend mechanism
-18    0x00040000 DTLS_PSK                DTLS with Pre-Shared Key
-19    0x00080000 DTLS_ECDHE              DTLS with ECDHE key exchange
-20    0x00100000 CHACHA20_POLY1305       ChaCha20-Poly1305 cipher support
-```
-
-**0x001F07FB breakdown:**
-```
-0x001F07FB = 0b0000_0000_0001_1111_0000_0111_1111_1011
-           = Bits: 0,1,3,4,5,6,7,8,9,10,16,17,18,19,20
 ```
 
 ---
@@ -515,9 +487,21 @@ Offset  Size  Field          Description
 [16+]   var   Payload        Command-specific data
 ```
 
-### K10000 - Auth Request (16 bytes)
+### K10000 - Auth Request (16 + JSON bytes)
 
-Header only, no payload. Initiates authentication.
+```
+Offset  Size  Field          Description
+──────────────────────────────────────────────────────────────
+[0-15]  16    HLHeader       CommandID = 10000, PayloadLen = len(JSON)
+[16+]   var   JSONPayload    Audio codec preferences
+```
+
+**JSON Payload:**
+```json
+{"cameraInfo":{"audioEncoderList":[137,138,140]}}
+```
+
+Where audioEncoderList contains supported codec IDs: 137=PCMU, 138=PCMA, 140=PCM.
 
 ### K10001 - Challenge (33+ bytes)
 
@@ -543,7 +527,7 @@ Offset  Size  Field          Description
 ──────────────────────────────────────────────────────────────
 [0-15]  16    HLHeader       CommandID = 10002, PayloadLen = 22
 [16-31] 16    Response       XXTEA-decrypted challenge
-[32-35] 4     UIDPrefix      First 4 bytes of UID
+[32-35] 4     SessionID      Random 4-byte session identifier
 [36]    1     VideoFlag      1 = enable video stream
 [37]    1     AudioFlag      1 = enable audio stream
 ```
@@ -619,6 +603,22 @@ Offset  Size  Field          Description
 |-------|------|
 | 0xF0 (240) | Maximum |
 | 0x3C (60) | SD quality |
+
+### K10052 - Set Resolution Doorbell (22 bytes)
+
+Used by doorbell models (WYZEDB3, WVOD1, HL_WCO2, WYZEC1) instead of K10056:
+
+```
+Offset  Size  Field          Description
+──────────────────────────────────────────────────────────────
+[0-15]  16    HLHeader       CommandID = 10052, PayloadLen = 6
+[16-17] 2     Bitrate        KB/s value (LE)
+[18]    1     FrameSize      Resolution + 1 (see table above)
+[19]    1     FPS            Frames per second, 0 = auto
+[20-21] 2     Reserved       Zero-filled
+```
+
+**Note:** K10052 has a different field order than K10056 (bitrate before frameSize).
 
 ---
 
@@ -1155,12 +1155,14 @@ authkey = b64.replace('+', 'Z').replace('/', '9').replace('=', 'A')
 
 | Command | ID | Description |
 |---------|-----|-------------|
-| KCmdAuth | 10000 | Auth request |
+| KCmdAuth | 10000 | Auth request (with JSON) |
 | KCmdChallenge | 10001 | Challenge from camera |
 | KCmdChallengeResp | 10002 | Challenge response |
 | KCmdAuthResult | 10003 | Auth result (JSON) |
 | KCmdControlChannel | 10010 | Start/stop media |
 | KCmdControlChannelResp | 10011 | Control response |
+| KCmdSetResolutionDB | 10052 | Set resolution (doorbell) |
+| KCmdSetResolutionDBResp | 10053 | Resolution response (doorbell) |
 | KCmdSetResolution | 10056 | Set resolution/bitrate |
 | KCmdSetResolutionResp | 10057 | Resolution response |
 

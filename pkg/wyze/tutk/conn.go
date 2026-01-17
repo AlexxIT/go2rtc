@@ -222,17 +222,19 @@ func (c *Conn) AVServStart() error {
 
 func (c *Conn) AVServStop() error {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-
+	serverConn := c.serverConn
+	c.serverConn = nil
 	// Reset audio TX state
 	c.audioSeq = 0
 	c.audioFrameNo = 0
+	c.mu.Unlock()
 
-	if c.serverConn != nil {
-		err := c.serverConn.Close()
-		c.serverConn = nil
-		return err
+	if serverConn == nil {
+		return nil
 	}
+
+	go serverConn.Close()
+
 	return nil
 }
 
@@ -339,8 +341,13 @@ func (c *Conn) WriteAndWaitIOCtrl(cmd uint16, payload []byte, expectCmd uint16, 
 	frame := c.buildIOCtrlFrame(payload)
 	var t *time.Timer
 	t = time.AfterFunc(1, func() {
-		if _, err := c.clientConn.Write(frame); err == nil && t != nil {
-			t.Reset(time.Second)
+		c.mu.RLock()
+		conn := c.clientConn
+		c.mu.RUnlock()
+		if conn != nil {
+			if _, err := conn.Write(frame); err == nil && t != nil {
+				t.Reset(time.Second)
+			}
 		}
 	})
 	defer t.Stop()
@@ -398,10 +405,6 @@ func (c *Conn) Close() error {
 	if c.clientConn != nil {
 		c.clientConn.Close()
 		c.clientConn = nil
-	}
-	if c.serverConn != nil {
-		c.serverConn.Close()
-		c.serverConn = nil
 	}
 	if c.frames != nil {
 		c.frames.Close()
@@ -705,7 +708,7 @@ func (c *Conn) handleSpeakerAVLogin() error {
 	}
 
 	buf := make([]byte, 1024)
-	c.serverConn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	c.serverConn.SetReadDeadline(time.Now().Add(2 * time.Second))
 	n, err := c.serverConn.Read(buf)
 	if err != nil {
 		return fmt.Errorf("read av login: %w", err)

@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"sync"
 
 	"github.com/AlexxIT/go2rtc/pkg/aac"
 )
@@ -282,6 +283,8 @@ type FrameHandler struct {
 	audioTS  tsTracker
 	output   chan *Packet
 	verbose  bool
+	closed   bool
+	closeMu  sync.Mutex
 }
 
 func NewFrameHandler(verbose bool) *FrameHandler {
@@ -297,6 +300,13 @@ func (h *FrameHandler) Recv() <-chan *Packet {
 }
 
 func (h *FrameHandler) Close() {
+	h.closeMu.Lock()
+	defer h.closeMu.Unlock()
+
+	if h.closed {
+		return
+	}
+	h.closed = true
 	close(h.output)
 }
 
@@ -540,6 +550,13 @@ func (h *FrameHandler) handleAudio(payload []byte, fi *FrameInfo) {
 }
 
 func (h *FrameHandler) queue(pkt *Packet) {
+	h.closeMu.Lock()
+	defer h.closeMu.Unlock()
+
+	if h.closed {
+		return
+	}
+
 	select {
 	case h.output <- pkt:
 	default:
@@ -548,7 +565,11 @@ func (h *FrameHandler) queue(pkt *Packet) {
 		case <-h.output:
 		default:
 		}
-		h.output <- pkt
+		select {
+		case h.output <- pkt:
+		default:
+			// Queue still full, drop this packet
+		}
 	}
 }
 

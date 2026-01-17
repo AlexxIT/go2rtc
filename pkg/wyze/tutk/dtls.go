@@ -2,6 +2,7 @@ package tutk
 
 import (
 	"net"
+	"sync"
 	"time"
 
 	"github.com/pion/dtls/v3"
@@ -42,6 +43,9 @@ func buildDtlsConfig(psk []byte, isServer bool) *dtls.Config {
 type ChannelAdapter struct {
 	conn    *Conn
 	channel uint8
+
+	mu           sync.Mutex
+	readDeadline time.Time
 }
 
 func (a *ChannelAdapter) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
@@ -50,6 +54,29 @@ func (a *ChannelAdapter) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 		buf = a.conn.clientBuf
 	} else {
 		buf = a.conn.serverBuf
+	}
+
+	a.mu.Lock()
+	deadline := a.readDeadline
+	a.mu.Unlock()
+
+	if !deadline.IsZero() {
+		timeout := time.Until(deadline)
+		if timeout <= 0 {
+			return 0, nil, &timeoutError{}
+		}
+
+		timer := time.NewTimer(timeout)
+		defer timer.Stop()
+
+		select {
+		case data := <-buf:
+			return copy(p, data), a.conn.addr, nil
+		case <-timer.C:
+			return 0, nil, &timeoutError{}
+		case <-a.conn.ctx.Done():
+			return 0, nil, net.ErrClosed
+		}
 	}
 
 	select {
@@ -67,8 +94,27 @@ func (a *ChannelAdapter) WriteTo(p []byte, _ net.Addr) (int, error) {
 	return len(p), nil
 }
 
-func (a *ChannelAdapter) Close() error                     { return nil }
-func (a *ChannelAdapter) LocalAddr() net.Addr              { return &net.UDPAddr{} }
-func (a *ChannelAdapter) SetDeadline(time.Time) error      { return nil }
-func (a *ChannelAdapter) SetReadDeadline(time.Time) error  { return nil }
+func (a *ChannelAdapter) Close() error        { return nil }
+func (a *ChannelAdapter) LocalAddr() net.Addr { return &net.UDPAddr{} }
+
+func (a *ChannelAdapter) SetDeadline(t time.Time) error {
+	a.mu.Lock()
+	a.readDeadline = t
+	a.mu.Unlock()
+	return nil
+}
+
+func (a *ChannelAdapter) SetReadDeadline(t time.Time) error {
+	a.mu.Lock()
+	a.readDeadline = t
+	a.mu.Unlock()
+	return nil
+}
+
 func (a *ChannelAdapter) SetWriteDeadline(time.Time) error { return nil }
+
+type timeoutError struct{}
+
+func (e *timeoutError) Error() string   { return "i/o timeout" }
+func (e *timeoutError) Timeout() bool   { return true }
+func (e *timeoutError) Temporary() bool { return true }

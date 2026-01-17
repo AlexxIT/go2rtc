@@ -211,7 +211,7 @@ func (c *Client) StartAudio() error {
 }
 
 func (c *Client) StartIntercom() error {
-	if c.conn.IsBackchannelReady() {
+	if c.conn == nil || !c.conn.IsBackchannelReady() {
 		return nil
 	}
 
@@ -221,6 +221,17 @@ func (c *Client) StartIntercom() error {
 	}
 
 	return c.conn.AVServStart()
+}
+
+func (c *Client) StopIntercom() error {
+	if c.conn == nil || !c.conn.IsBackchannelReady() {
+		return nil
+	}
+
+	k10010 := c.buildK10010(MediaTypeReturnAudio, false)
+	c.conn.WriteAndWaitIOCtrl(KCmdControlChannel, k10010, KCmdControlChannelResp, 5*time.Second)
+
+	return c.conn.AVServStop()
 }
 
 func (c *Client) ReadPacket() (*tutk.Packet, error) {
@@ -270,8 +281,14 @@ func (c *Client) Close() error {
 		fmt.Printf("[Wyze] Closing connection\n")
 	}
 
+	c.StopIntercom()
+
 	if c.conn != nil {
 		c.conn.Close()
+	}
+
+	if c.verbose {
+		fmt.Printf("[Wyze] Connection closed\n")
 	}
 
 	return nil
