@@ -226,8 +226,7 @@ func (c *DTLSConn) AVClientStart(timeout time.Duration) error {
 }
 
 func (c *DTLSConn) AVServStart() error {
-	adapter := NewChannelAdapter(c.ctx, iotcChannelBack, c.addr, c.WriteDTLS, c.serverBuf)
-	conn, err := NewDTLSServer(adapter, c.addr, c.psk)
+	conn, err := NewDTLSServer(c.ctx, iotcChannelBack, c.addr, c.WriteDTLS, c.serverBuf, c.psk)
 	if err != nil {
 		return fmt.Errorf("dtls: server handshake failed: %w", err)
 	}
@@ -564,10 +563,9 @@ func (c *DTLSConn) discoDoneCC51() error {
 }
 
 func (c *DTLSConn) connect() error {
-	adapter := NewChannelAdapter(c.ctx, iotcChannelMain, c.addr, c.WriteDTLS, c.clientBuf)
-	conn, err := NewDTLSClient(adapter, c.addr, c.psk)
+	conn, err := NewDTLSClient(c.ctx, iotcChannelMain, c.addr, c.WriteDTLS, c.clientBuf, c.psk)
 	if err != nil {
-		return fmt.Errorf("dtls: client create failed: %w", err)
+		return fmt.Errorf("dtls: client handshake failed: %w", err)
 	}
 
 	c.mu.Lock()
@@ -575,7 +573,7 @@ func (c *DTLSConn) connect() error {
 	c.mu.Unlock()
 
 	if c.verbose {
-		fmt.Printf("[DTLS] Client created for channel %d\n", iotcChannelMain)
+		fmt.Printf("[DTLS] Client handshake complete on channel %d\n", iotcChannelMain)
 	}
 
 	return nil
