@@ -25,18 +25,7 @@ const (
 	ChannelPVideo uint8 = 0x07
 )
 
-const (
-	ResTierLow  uint8 = 1 // 360P/SD
-	ResTierHigh uint8 = 4 // HD/2K
-)
-
-const (
-	Bitrate360P uint8 = 30
-	BitrateHD   uint8 = 100
-	Bitrate2K   uint8 = 200
-)
-
-const FrameInfoSize = 40
+const frameInfoSize = 40
 
 // FrameInfo - Wyze extended FRAMEINFO (40 bytes at end of packet)
 // Video: 40 bytes, Audio: 16 bytes (uses same struct, fields 16+ are zero)
@@ -56,7 +45,7 @@ const FrameInfoSize = 40
 // 24-35   12    DeviceID    - MAC address (ASCII) - video only
 // 36-39   4     Padding     - Always 0 - video only
 type FrameInfo struct {
-	CodecID     uint16 // 0-1
+	CodecID     byte   // 0 (only low byte used)
 	Flags       uint8  // 2
 	CamIndex    uint8  // 3
 	OnlineNum   uint8  // 4
@@ -73,22 +62,12 @@ func (fi *FrameInfo) IsKeyframe() bool {
 	return fi.Flags == 0x01
 }
 
-func (fi *FrameInfo) Resolution() string {
-	switch fi.Bitrate {
-	case Bitrate360P:
-		return "360P"
-	case BitrateHD:
-		return "HD"
-	case Bitrate2K:
-		return "2K"
-	default:
-		return "unknown"
-	}
-}
-
 func (fi *FrameInfo) SampleRate() uint32 {
 	idx := (fi.Flags >> 2) & 0x0F
-	return uint32(SampleRateValue(idx))
+	if idx < uint8(len(sampleRates)) {
+		return sampleRates[idx]
+	}
+	return 16000
 }
 
 func (fi *FrameInfo) Channels() uint8 {
@@ -98,24 +77,16 @@ func (fi *FrameInfo) Channels() uint8 {
 	return 1
 }
 
-func (fi *FrameInfo) IsVideo() bool {
-	return IsVideoCodec(fi.CodecID)
-}
-
-func (fi *FrameInfo) IsAudio() bool {
-	return IsAudioCodec(fi.CodecID)
-}
-
 func ParseFrameInfo(data []byte) *FrameInfo {
-	if len(data) < FrameInfoSize {
+	if len(data) < frameInfoSize {
 		return nil
 	}
 
-	offset := len(data) - FrameInfoSize
+	offset := len(data) - frameInfoSize
 	fi := data[offset:]
 
 	return &FrameInfo{
-		CodecID:     binary.LittleEndian.Uint16(fi),
+		CodecID:     fi[0],
 		Flags:       fi[2],
 		CamIndex:    fi[3],
 		OnlineNum:   fi[4],
@@ -131,21 +102,13 @@ func ParseFrameInfo(data []byte) *FrameInfo {
 
 type Packet struct {
 	Channel    uint8
-	Codec      uint16
+	Codec      byte
 	Timestamp  uint32
 	Payload    []byte
 	IsKeyframe bool
 	FrameNo    uint32
 	SampleRate uint32
 	Channels   uint8
-}
-
-func (p *Packet) IsVideo() bool {
-	return p.Channel == ChannelIVideo || p.Channel == ChannelPVideo
-}
-
-func (p *Packet) IsAudio() bool {
-	return p.Channel == ChannelAudio
 }
 
 type PacketHeader struct {
@@ -347,7 +310,7 @@ func (h *FrameHandler) extractPayload(data []byte, channel byte) ([]byte, *Frame
 	frameType := data[1]
 
 	headerSize := 28
-	frameInfoSize := 0
+	fiSize := 0
 
 	switch frameType {
 	case FrameTypeStart:
@@ -357,17 +320,17 @@ func (h *FrameHandler) extractPayload(data []byte, channel byte) ([]byte, *Frame
 		if len(data) >= 22 {
 			pktTotal := binary.LittleEndian.Uint16(data[20:])
 			if pktTotal == 1 {
-				frameInfoSize = FrameInfoSize
+				fiSize = frameInfoSize
 			}
 		}
 	case FrameTypeCont, FrameTypeContAlt:
 		headerSize = 28
 	case FrameTypeEndSingle, FrameTypeEndMulti:
 		headerSize = 28
-		frameInfoSize = FrameInfoSize
+		fiSize = frameInfoSize
 	case FrameTypeEndExt:
 		headerSize = 36
-		frameInfoSize = FrameInfoSize
+		fiSize = frameInfoSize
 	default:
 		headerSize = 28
 	}
@@ -376,11 +339,11 @@ func (h *FrameHandler) extractPayload(data []byte, channel byte) ([]byte, *Frame
 		return nil, nil
 	}
 
-	if frameInfoSize == 0 {
+	if fiSize == 0 {
 		return data[headerSize:], nil
 	}
 
-	if len(data) < headerSize+frameInfoSize {
+	if len(data) < headerSize+fiSize {
 		return data[headerSize:], nil
 	}
 
@@ -395,7 +358,7 @@ func (h *FrameHandler) extractPayload(data []byte, channel byte) ([]byte, *Frame
 	}
 
 	if validCodec {
-		payload := data[headerSize : len(data)-frameInfoSize]
+		payload := data[headerSize : len(data)-fiSize]
 		return payload, fi
 	}
 
@@ -421,7 +384,7 @@ func (h *FrameHandler) handleVideo(channel byte, hdr *PacketHeader, payload []by
 		cs.pktTotal = hdr.PktTotal
 	}
 
-	// Sequential check: if packet index doesn't match expected, reset (data loss)
+	// If packet index doesn't match expected, reset (data loss)
 	if hdr.PktIdx != cs.waitSeq {
 		fmt.Printf("[OOO] ch=0x%02x #%d frameType=0x%02x pktTotal=%d expected pkt %d, got %d - reset\n",
 			channel, hdr.FrameNo, hdr.FrameType, hdr.PktTotal, cs.waitSeq, hdr.PktIdx)
@@ -434,7 +397,6 @@ func (h *FrameHandler) handleVideo(channel byte, hdr *PacketHeader, payload []by
 		cs.hasStarted = true
 	}
 
-	// Append payload (simple sequential accumulation)
 	cs.waitData = append(cs.waitData, payload...)
 	cs.waitSeq++
 
@@ -444,16 +406,13 @@ func (h *FrameHandler) handleVideo(channel byte, hdr *PacketHeader, payload []by
 	}
 
 	// Check if frame is complete
-	if cs.waitSeq == cs.pktTotal && cs.frameInfo != nil {
-		h.emitVideo(channel, cs)
-		cs.reset()
+	if cs.waitSeq != cs.pktTotal || cs.frameInfo == nil {
+		return
 	}
-}
 
-func (h *FrameHandler) emitVideo(channel byte, cs *channelState) {
-	fi := cs.frameInfo
+	fi = cs.frameInfo
+	defer cs.reset()
 
-	// Size validation
 	if fi.PayloadSize > 0 && uint32(len(cs.waitData)) != fi.PayloadSize {
 		fmt.Printf("[SIZE] ch=0x%02x #%d mismatch: expected %d, got %d\n",
 			channel, cs.frameNo, fi.PayloadSize, len(cs.waitData))
@@ -467,13 +426,9 @@ func (h *FrameHandler) emitVideo(channel byte, cs *channelState) {
 	accumUS := h.videoTS.update(fi.Timestamp)
 	rtpTS := uint32(accumUS * 90000 / 1000000)
 
-	// Copy payload (buffer will be reused)
-	payload := make([]byte, len(cs.waitData))
-	copy(payload, cs.waitData)
-
 	pkt := &Packet{
 		Channel:    channel,
-		Payload:    payload,
+		Payload:    append([]byte{}, cs.waitData...),
 		Codec:      fi.CodecID,
 		Timestamp:  rtpTS,
 		IsKeyframe: fi.IsKeyframe(),
@@ -485,10 +440,10 @@ func (h *FrameHandler) emitVideo(channel byte, cs *channelState) {
 		if fi.IsKeyframe() {
 			frameType = "KEY"
 		}
-		fmt.Printf("[OK] ch=0x%02x #%d %s %s size=%d\n",
-			channel, fi.FrameNo, CodecName(fi.CodecID), frameType, len(payload))
-		fmt.Printf("  [0-1]codec=0x%x(%s) [2]flags=0x%x [3]=%d [4]=%d\n",
-			fi.CodecID, CodecName(fi.CodecID), fi.Flags, fi.CamIndex, fi.OnlineNum)
+		fmt.Printf("[OK] ch=0x%02x #%d codec=0x%02x %s size=%d\n",
+			channel, fi.FrameNo, fi.CodecID, frameType, len(pkt.Payload))
+		fmt.Printf("  [0-1]codec=0x%02x [2]flags=0x%x [3]=%d [4]=%d\n",
+			fi.CodecID, fi.Flags, fi.CamIndex, fi.OnlineNum)
 		fmt.Printf("  [5]=%d [6]=%d [7]=%d [8-11]ts=%d\n",
 			fi.FPS, fi.ResTier, fi.Bitrate, fi.Timestamp)
 		fmt.Printf("  [12-15]=0x%x [16-19]payload=%d [20-23]frameNo=%d\n",
@@ -509,7 +464,7 @@ func (h *FrameHandler) handleAudio(payload []byte, fi *FrameInfo) {
 	var channels uint8
 
 	switch fi.CodecID {
-	case AudioCodecAACRaw, AudioCodecAACADTS, AudioCodecAACLATM, AudioCodecAACWyze:
+	case CodecAACRaw, CodecAACADTS, CodecAACLATM, CodecAACAlt:
 		sampleRate, channels = parseAudioParams(payload, fi)
 	default:
 		sampleRate = fi.SampleRate()
@@ -537,10 +492,10 @@ func (h *FrameHandler) handleAudio(payload []byte, fi *FrameInfo) {
 		if fi.Flags&0x02 != 0 {
 			bits = 16
 		}
-		fmt.Printf("[OK] Audio #%d %s size=%d\n",
-			fi.FrameNo, AudioCodecName(fi.CodecID), len(payload))
-		fmt.Printf("  [0-1]codec=0x%x(%s) [2]flags=0x%x(%dHz/%dbit/%dch)\n",
-			fi.CodecID, AudioCodecName(fi.CodecID), fi.Flags, sampleRate, bits, channels)
+		fmt.Printf("[OK] Audio #%d codec=0x%02x size=%d\n",
+			fi.FrameNo, fi.CodecID, len(payload))
+		fmt.Printf("  [0-1]codec=0x%02x [2]flags=0x%x(%dHz/%dbit/%dch)\n",
+			fi.CodecID, fi.Flags, sampleRate, bits, channels)
 		fmt.Printf("  [8-11]ts=%d [12-15]=0x%x rtp_ts=%d\n",
 			fi.Timestamp, fi.SessionID, rtpTS)
 		fmt.Printf("  hex: %s\n", dumpHex(fi))
@@ -589,8 +544,9 @@ func parseAudioParams(payload []byte, fi *FrameInfo) (sampleRate uint32, channel
 }
 
 func dumpHex(fi *FrameInfo) string {
-	b := make([]byte, FrameInfoSize)
-	binary.LittleEndian.PutUint16(b[0:], fi.CodecID)
+	b := make([]byte, frameInfoSize)
+	b[0] = fi.CodecID
+	b[1] = 0 // High byte (unused)
 	b[2] = fi.Flags
 	b[3] = fi.CamIndex
 	b[4] = fi.OnlineNum

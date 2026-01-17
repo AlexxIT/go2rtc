@@ -10,7 +10,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h264/annexb"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
-	"github.com/AlexxIT/go2rtc/pkg/wyze/tutk"
+	"github.com/AlexxIT/go2rtc/pkg/tutk"
 	"github.com/pion/rtp"
 )
 
@@ -96,21 +96,21 @@ func (p *Producer) Start() error {
 				Payload: annexb.EncodeToAVCC(pkt.Payload),
 			}
 
-		case tutk.AudioCodecG711U:
+		case tutk.CodecPCMU:
 			name = core.CodecPCMU
 			pkt2 = &core.Packet{
 				Header:  rtp.Header{Version: 2, Marker: true, SequenceNumber: uint16(pkt.FrameNo), Timestamp: pkt.Timestamp},
 				Payload: pkt.Payload,
 			}
 
-		case tutk.AudioCodecG711A:
+		case tutk.CodecPCMA:
 			name = core.CodecPCMA
 			pkt2 = &core.Packet{
 				Header:  rtp.Header{Version: 2, Marker: true, SequenceNumber: uint16(pkt.FrameNo), Timestamp: pkt.Timestamp},
 				Payload: pkt.Payload,
 			}
 
-		case tutk.AudioCodecAACADTS, tutk.AudioCodecAACWyze, tutk.AudioCodecAACRaw, tutk.AudioCodecAACLATM:
+		case tutk.CodecAACADTS, tutk.CodecAACAlt, tutk.CodecAACRaw, tutk.CodecAACLATM:
 			name = core.CodecAAC
 			payload := pkt.Payload
 			if aac.IsADTS(payload) {
@@ -121,21 +121,21 @@ func (p *Producer) Start() error {
 				Payload: payload,
 			}
 
-		case tutk.AudioCodecOpus:
+		case tutk.CodecOpus:
 			name = core.CodecOpus
 			pkt2 = &core.Packet{
 				Header:  rtp.Header{Version: 2, Marker: true, SequenceNumber: uint16(pkt.FrameNo), Timestamp: pkt.Timestamp},
 				Payload: pkt.Payload,
 			}
 
-		case tutk.AudioCodecPCM:
+		case tutk.CodecPCML:
 			name = core.CodecPCML
 			pkt2 = &core.Packet{
 				Header:  rtp.Header{Version: 2, Marker: true, SequenceNumber: uint16(pkt.FrameNo), Timestamp: pkt.Timestamp},
 				Payload: pkt.Payload,
 			}
 
-		case tutk.AudioCodecMP3:
+		case tutk.CodecMP3:
 			name = core.CodecMP3
 			pkt2 = &core.Packet{
 				Header:  rtp.Header{Version: 2, Marker: true, SequenceNumber: uint16(pkt.FrameNo), Timestamp: pkt.Timestamp},
@@ -167,7 +167,7 @@ func probe(client *Client, quality byte) ([]*core.Media, error) {
 	client.SetDeadline(time.Now().Add(core.ProbeTimeout))
 
 	var vcodec, acodec *core.Codec
-	var tutkAudioCodec uint16
+	var tutkAudioCodec byte
 
 	for {
 		if client.verbose {
@@ -197,33 +197,33 @@ func probe(client *Client, quality byte) ([]*core.Media, error) {
 					vcodec = h265.AVCCToCodec(buf)
 				}
 			}
-		case tutk.AudioCodecG711U:
+		case tutk.CodecPCMU:
 			if acodec == nil {
 				acodec = &core.Codec{Name: core.CodecPCMU, ClockRate: pkt.SampleRate, Channels: pkt.Channels}
 				tutkAudioCodec = pkt.Codec
 			}
-		case tutk.AudioCodecG711A:
+		case tutk.CodecPCMA:
 			if acodec == nil {
 				acodec = &core.Codec{Name: core.CodecPCMA, ClockRate: pkt.SampleRate, Channels: pkt.Channels}
 				tutkAudioCodec = pkt.Codec
 			}
-		case tutk.AudioCodecAACWyze, tutk.AudioCodecAACADTS, tutk.AudioCodecAACRaw, tutk.AudioCodecAACLATM:
+		case tutk.CodecAACAlt, tutk.CodecAACADTS, tutk.CodecAACRaw, tutk.CodecAACLATM:
 			if acodec == nil {
 				config := aac.EncodeConfig(aac.TypeAACLC, pkt.SampleRate, pkt.Channels, false)
 				acodec = aac.ConfigToCodec(config)
 				tutkAudioCodec = pkt.Codec
 			}
-		case tutk.AudioCodecOpus:
+		case tutk.CodecOpus:
 			if acodec == nil {
 				acodec = &core.Codec{Name: core.CodecOpus, ClockRate: 48000, Channels: 2}
 				tutkAudioCodec = pkt.Codec
 			}
-		case tutk.AudioCodecPCM:
+		case tutk.CodecPCML:
 			if acodec == nil {
 				acodec = &core.Codec{Name: core.CodecPCML, ClockRate: pkt.SampleRate, Channels: pkt.Channels}
 				tutkAudioCodec = pkt.Codec
 			}
-		case tutk.AudioCodecMP3:
+		case tutk.CodecMP3:
 			if acodec == nil {
 				acodec = &core.Codec{Name: core.CodecMP3, ClockRate: pkt.SampleRate, Channels: pkt.Channels}
 				tutkAudioCodec = pkt.Codec

@@ -72,7 +72,7 @@ func computeNonce(iv []byte, epoch uint16, sequenceNumber uint64) []byte {
 	binary.BigEndian.PutUint64(nonce[4:], sequenceNumber)
 	binary.BigEndian.PutUint16(nonce[4:], epoch)
 
-	for i := 0; i < chachaNonceLength; i++ {
+	for i := range chachaNonceLength {
 		nonce[i] ^= iv[i]
 	}
 

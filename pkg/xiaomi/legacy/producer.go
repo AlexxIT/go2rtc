@@ -98,7 +98,7 @@ func probe(client *Client) ([]*core.Media, error) {
 			if acodec == nil {
 				acodec = &core.Codec{Name: core.CodecPCML, ClockRate: 8000}
 			}
-		case tutk.CodecAAC:
+		case tutk.CodecAACLATM:
 			if acodec == nil {
 				acodec = aac.ADTSToCodec(payload)
 				if acodec != nil {
@@ -187,7 +187,7 @@ func (c *Producer) Start() error {
 				audioTS += uint32(n / 2) // because 16bit
 			}
 
-		case tutk.CodecAAC:
+		case tutk.CodecAACLATM:
 			pkt = &core.Packet{
 				Header: rtp.Header{
 					SequenceNumber: audioSeq,

@@ -3,31 +3,71 @@ package tutk
 import (
 	"context"
 	"crypto/hmac"
-	"crypto/rand"
 	"crypto/sha1"
-	"crypto/sha256"
 	"encoding/binary"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"net"
 	"sync"
 	"time"
 
-	"github.com/AlexxIT/go2rtc/pkg/wyze/crypto"
 	"github.com/pion/dtls/v3"
 )
 
 const (
-	MaxPacketSize    = 2048
-	ReadBufferSize   = 2 * 1024 * 1024
-	DiscoTimeout     = 5000 * time.Millisecond
-	DiscoInterval    = 100 * time.Millisecond
-	SessionTimeout   = 5000 * time.Millisecond
-	ReadWaitInterval = 50 * time.Millisecond
+	magicCC51    = "\x51\xcc"         // (wyze specific?)
+	sdkVersion42 = "\x01\x01\x02\x04" // 4.2.1.1
+	sdkVersion43 = "\x00\x08\x03\x04" // 4.3.8.0
 )
 
-type Conn struct {
+const (
+	cmdDiscoReq     uint16 = 0x0601
+	cmdDiscoRes     uint16 = 0x0602
+	cmdSessionReq   uint16 = 0x0402
+	cmdSessionRes   uint16 = 0x0404
+	cmdDataTX       uint16 = 0x0407
+	cmdDataRX       uint16 = 0x0408
+	cmdKeepaliveReq uint16 = 0x0427
+	cmdKeepaliveRes uint16 = 0x0428
+
+	headerSize    = 16
+	discoBodySize = 72
+	discoSize     = headerSize + discoBodySize
+	sessionBody   = 36
+	sessionSize   = headerSize + sessionBody
+)
+
+const (
+	cmdDiscoCC51      uint16 = 0x1002
+	cmdKeepaliveCC51  uint16 = 0x1202
+	cmdDTLSCC51       uint16 = 0x1502
+	payloadSizeCC51   uint16 = 0x0028
+	packetSizeCC51           = 52
+	headerSizeCC51           = 28
+	authSizeCC51             = 20
+	keepaliveSizeCC51        = 48
+)
+
+const (
+	magicAVLoginResp uint16 = 0x2100
+	magicIOCtrl      uint16 = 0x7000
+	magicChannelMsg  uint16 = 0x1000
+	magicACK         uint16 = 0x0009
+	magicAVLogin1    uint16 = 0x0000
+	magicAVLogin2    uint16 = 0x2000
+)
+
+const (
+	protoVersion uint16 = 0x000c
+	defaultCaps  uint32 = 0x001f07fb
+)
+
+const (
+	iotcChannelMain = 0 // Main AV (we = DTLS Client)
+	iotcChannelBack = 1 // Backchannel (we = DTLS Server)
+)
+
+type DTLSConn struct {
 	conn    *net.UDPConn
 	addr    *net.UDPAddr
 	frames  *FrameHandler
@@ -49,17 +89,15 @@ type Conn struct {
 	uid     string
 	authKey string
 	enr     string
-	mac     string
 	psk     []byte
-	rid     []byte
 
 	// Session
-	sid    []byte
-	ticket uint16
-	avResp *AVLoginResponse
+	sid                []byte
+	ticket             uint16
+	hasTwoWayStreaming bool
 
 	// Protocol
-	newProto     bool
+	isCC51       bool
 	seq          uint16
 	seqCmd       uint16
 	avSeq        uint32
@@ -75,34 +113,32 @@ type Conn struct {
 	cmdAck     func()
 }
 
-func Dial(host string, port int, uid, authKey, enr, mac string, verbose bool) (*Conn, error) {
+func DialDTLS(host string, port int, uid, authKey, enr string, verbose bool) (*DTLSConn, error) {
 	udp, err := net.ListenUDP("udp", nil)
 	if err != nil {
 		return nil, err
 	}
 
-	_ = udp.SetReadBuffer(ReadBufferSize)
+	_ = udp.SetReadBuffer(2 * 1024 * 1024)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	psk := derivePSK(enr)
+	psk := DerivePSK(enr)
 
 	if port == 0 {
-		port = DefaultPort
+		port = 32761
 	}
 
-	c := &Conn{
+	c := &DTLSConn{
 		conn:       udp,
 		addr:       &net.UDPAddr{IP: net.ParseIP(host), Port: port},
-		rid:        genRandomID(),
 		uid:        uid,
 		authKey:    authKey,
 		enr:        enr,
-		mac:        mac,
 		psk:        psk,
 		verbose:    verbose,
 		ctx:        ctx,
 		cancel:     cancel,
-		rxSeqStart: 0xffff, // Initialize RX seq for ACK
+		rxSeqStart: 0xffff,
 		rxSeqEnd:   0xffff,
 	}
 
@@ -130,10 +166,10 @@ func Dial(host string, port int, uid, authKey, enr, mac string, verbose bool) (*
 	return c, nil
 }
 
-func (c *Conn) AVClientStart(timeout time.Duration) error {
-	randomID := genRandomID()
-	pkt1 := c.buildAVLoginPacket(MagicAVLogin1, 570, 0x0001, randomID)
-	pkt2 := c.buildAVLoginPacket(MagicAVLogin2, 572, 0x0000, randomID)
+func (c *DTLSConn) AVClientStart(timeout time.Duration) error {
+	randomID := GenSessionID()
+	pkt1 := c.msgAVLogin(magicAVLogin1, 570, 0x0001, randomID)
+	pkt2 := c.msgAVLogin(magicAVLogin2, 572, 0x0000, randomID)
 	pkt2[20]++ // pkt2 has randomID incremented by 1
 
 	if _, err := c.clientConn.Write(pkt1); err != nil {
@@ -155,16 +191,13 @@ func (c *Conn) AVClientStart(timeout time.Duration) error {
 			if !ok {
 				return io.EOF
 			}
-			if len(data) >= 32 && binary.LittleEndian.Uint16(data) == MagicAVLoginResp {
-				c.avResp = &AVLoginResponse{
-					ServerType:      binary.LittleEndian.Uint32(data[4:]),
-					Resend:          int32(data[29]),
-					TwoWayStreaming: int32(data[31]),
-				}
+			if len(data) >= 32 && binary.LittleEndian.Uint16(data) == magicAVLoginResp {
+				c.hasTwoWayStreaming = data[31] == 1
 
-				ack := c.buildACK()
+				ack := c.msgACK()
 				c.clientConn.Write(ack)
 
+				// Start ACK sender for continuous streaming
 				c.wg.Add(1)
 				go func() {
 					defer c.wg.Done()
@@ -177,7 +210,7 @@ func (c *Conn) AVClientStart(timeout time.Duration) error {
 							return
 						case <-ackTicker.C:
 							if c.clientConn != nil {
-								ack := c.buildACK()
+								ack := c.msgACK()
 								c.clientConn.Write(ack)
 							}
 						}
@@ -192,14 +225,9 @@ func (c *Conn) AVClientStart(timeout time.Duration) error {
 	}
 }
 
-func (c *Conn) AVServStart() error {
-	if c.verbose {
-		fmt.Printf("[DTLS] Waiting for client handshake on channel %d\n", IOTCChannelBack)
-		fmt.Printf("[DTLS] PSK Identity: %s\n", PSKIdentity)
-		fmt.Printf("[DTLS] PSK Key: %s\n", hex.EncodeToString(c.psk))
-	}
-
-	conn, err := NewDtlsServer(c, IOTCChannelBack, c.psk)
+func (c *DTLSConn) AVServStart() error {
+	adapter := NewChannelAdapter(c.ctx, iotcChannelBack, c.addr, c.WriteDTLS, c.serverBuf)
+	conn, err := NewDTLSServer(adapter, c.addr, c.psk)
 	if err != nil {
 		return fmt.Errorf("dtls: server handshake failed: %w", err)
 	}
@@ -209,7 +237,7 @@ func (c *Conn) AVServStart() error {
 	c.mu.Unlock()
 
 	if c.verbose {
-		fmt.Printf("[DTLS] Server handshake complete on channel %d\n", IOTCChannelBack)
+		fmt.Printf("[DTLS] Server handshake complete on channel %d\n", iotcChannelBack)
 	}
 
 	// Wait for and respond to AV Login request from camera
@@ -220,10 +248,11 @@ func (c *Conn) AVServStart() error {
 	return nil
 }
 
-func (c *Conn) AVServStop() error {
+func (c *DTLSConn) AVServStop() error {
 	c.mu.Lock()
 	serverConn := c.serverConn
 	c.serverConn = nil
+
 	// Reset audio TX state
 	c.audioSeq = 0
 	c.audioFrameNo = 0
@@ -238,7 +267,7 @@ func (c *Conn) AVServStop() error {
 	return nil
 }
 
-func (c *Conn) AVRecvFrameData() (*Packet, error) {
+func (c *DTLSConn) AVRecvFrameData() (*Packet, error) {
 	select {
 	case pkt, ok := <-c.frames.Recv():
 		if !ok {
@@ -250,7 +279,7 @@ func (c *Conn) AVRecvFrameData() (*Packet, error) {
 	}
 }
 
-func (c *Conn) AVSendAudioData(codec uint16, payload []byte, timestampUS uint32, sampleRate uint32, channels uint8) error {
+func (c *DTLSConn) AVSendAudioData(codec byte, payload []byte, timestampUS uint32, sampleRate uint32, channels uint8) error {
 	c.mu.Lock()
 	conn := c.serverConn
 	if conn == nil {
@@ -258,7 +287,7 @@ func (c *Conn) AVSendAudioData(codec uint16, payload []byte, timestampUS uint32,
 		return fmt.Errorf("speaker channel not connected")
 	}
 
-	frame := c.buildAudioFrame(payload, timestampUS, codec, sampleRate, channels)
+	frame := c.msgAudioFrame(payload, timestampUS, codec, sampleRate, channels)
 
 	c.mu.Unlock()
 
@@ -273,35 +302,27 @@ func (c *Conn) AVSendAudioData(codec uint16, payload []byte, timestampUS uint32,
 	return err
 }
 
-func (c *Conn) Write(data []byte) error {
-	// if c.verbose {
-	// 	fmt.Printf("[UDP TX] to=%s, len=%d, data:\n%s", c.addr.String(), len(data), hexDump(data))
-	// }
-
-	if c.newProto {
+func (c *DTLSConn) Write(data []byte) error {
+	if c.isCC51 {
 		_, err := c.conn.WriteToUDP(data, c.addr)
 		return err
 	}
-	_, err := c.conn.WriteToUDP(crypto.TransCodeBlob(data), c.addr)
+	_, err := c.conn.WriteToUDP(TransCodeBlob(data), c.addr)
 	return err
 }
 
-func (c *Conn) WriteDTLS(payload []byte, channel byte) error {
+func (c *DTLSConn) WriteDTLS(payload []byte, channel byte) error {
 	var frame []byte
-	if c.newProto {
-		frame = c.buildNewTxData(payload, channel)
+	if c.isCC51 {
+		frame = c.msgTxDataCC51(payload, channel)
 	} else {
-		frame = c.buildTxData(payload, channel)
+		frame = c.msgTxData(payload, channel)
 	}
-
-	// if c.verbose {
-	// 	fmt.Printf("[DTLS TX] to=%s, len=%d, channel=%d, data:\n%s", c.addr.String(), len(frame), channel, hexDump(frame))
-	// }
 
 	return c.Write(frame)
 }
 
-func (c *Conn) WriteAndWait(req []byte, timeout time.Duration, ok func(res []byte) bool) ([]byte, error) {
+func (c *DTLSConn) WriteAndWait(req []byte, ok func(res []byte) bool) ([]byte, error) {
 	var t *time.Timer
 	t = time.AfterFunc(1, func() {
 		if err := c.Write(req); err == nil && t != nil {
@@ -310,10 +331,10 @@ func (c *Conn) WriteAndWait(req []byte, timeout time.Duration, ok func(res []byt
 	})
 	defer t.Stop()
 
-	_ = c.conn.SetDeadline(time.Now().Add(timeout))
+	_ = c.conn.SetDeadline(time.Now().Add(5000 * time.Millisecond))
 	defer c.conn.SetDeadline(time.Time{})
 
-	buf := make([]byte, MaxPacketSize)
+	buf := make([]byte, 2048)
 	for {
 		n, addr, err := c.conn.ReadFromUDP(buf)
 		if err != nil {
@@ -324,10 +345,10 @@ func (c *Conn) WriteAndWait(req []byte, timeout time.Duration, ok func(res []byt
 		}
 
 		var res []byte
-		if c.newProto {
+		if c.isCC51 {
 			res = buf[:n]
 		} else {
-			res = crypto.ReverseTransCodeBlob(buf[:n])
+			res = ReverseTransCodeBlob(buf[:n])
 		}
 
 		if ok(res) {
@@ -337,8 +358,8 @@ func (c *Conn) WriteAndWait(req []byte, timeout time.Duration, ok func(res []byt
 	}
 }
 
-func (c *Conn) WriteAndWaitIOCtrl(cmd uint16, payload []byte, expectCmd uint16, timeout time.Duration) ([]byte, error) {
-	frame := c.buildIOCtrlFrame(payload)
+func (c *DTLSConn) WriteAndWaitIOCtrl(cmd uint16, payload []byte, expectCmd uint16, timeout time.Duration) ([]byte, error) {
+	frame := c.msgIOCtrl(payload)
 	var t *time.Timer
 	t = time.AfterFunc(1, func() {
 		c.mu.RLock()
@@ -362,7 +383,7 @@ func (c *Conn) WriteAndWaitIOCtrl(cmd uint16, payload []byte, expectCmd uint16, 
 				return nil, io.EOF
 			}
 
-			ack := c.buildACK()
+			ack := c.msgACK()
 			c.clientConn.Write(ack)
 
 			if len(data) >= 6 {
@@ -376,29 +397,29 @@ func (c *Conn) WriteAndWaitIOCtrl(cmd uint16, payload []byte, expectCmd uint16, 
 	}
 }
 
-func (c *Conn) GetAVLoginResponse() *AVLoginResponse {
-	return c.avResp
+func (c *DTLSConn) HasTwoWayStreaming() bool {
+	return c.hasTwoWayStreaming
 }
 
-func (c *Conn) IsBackchannelReady() bool {
+func (c *DTLSConn) IsBackchannelReady() bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.serverConn != nil
 }
 
-func (c *Conn) RemoteAddr() *net.UDPAddr {
+func (c *DTLSConn) RemoteAddr() *net.UDPAddr {
 	return c.addr
 }
 
-func (c *Conn) LocalAddr() *net.UDPAddr {
+func (c *DTLSConn) LocalAddr() *net.UDPAddr {
 	return c.conn.LocalAddr().(*net.UDPAddr)
 }
 
-func (c *Conn) SetDeadline(t time.Time) error {
+func (c *DTLSConn) SetDeadline(t time.Time) error {
 	return c.conn.SetDeadline(t)
 }
 
-func (c *Conn) Close() error {
+func (c *DTLSConn) Close() error {
 	c.cancel()
 
 	c.mu.Lock()
@@ -416,27 +437,27 @@ func (c *Conn) Close() error {
 	return c.conn.Close()
 }
 
-func (c *Conn) Error() error {
+func (c *DTLSConn) Error() error {
 	if c.err != nil {
 		return c.err
 	}
 	return io.EOF
 }
 
-func (c *Conn) discovery() error {
-	c.sid = make([]byte, 8)
-	rand.Read(c.sid)
+func (c *DTLSConn) discovery() error {
+	c.sid = GenSessionID()
 
-	oldPkt := crypto.TransCodeBlob(c.buildDisco(1))
-	newPkt := c.buildNewDisco(0, 0, false)
-	buf := make([]byte, MaxPacketSize)
-	deadline := time.Now().Add(DiscoTimeout)
+	pktIOTC := TransCodeBlob(c.msgDisco(1))
+	pktCC51 := c.msgDiscoCC51(0, 0, false)
+
+	buf := make([]byte, 2048)
+	deadline := time.Now().Add(5000 * time.Millisecond)
 
 	for time.Now().Before(deadline) {
-		c.conn.WriteToUDP(oldPkt, c.addr)
-		c.conn.WriteToUDP(newPkt, c.addr)
+		c.conn.WriteToUDP(pktIOTC, c.addr)
+		c.conn.WriteToUDP(pktCC51, c.addr)
 
-		c.conn.SetReadDeadline(time.Now().Add(DiscoInterval))
+		c.conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 		n, addr, err := c.conn.ReadFromUDP(buf)
 		if err != nil {
 			continue
@@ -445,59 +466,54 @@ func (c *Conn) discovery() error {
 			continue
 		}
 
-		// NEW protocol
-		if n >= NewPacketSize && binary.LittleEndian.Uint16(buf[:2]) == MagicNewProto {
-			if binary.LittleEndian.Uint16(buf[4:]) == CmdNewDisco {
-				c.addr, c.newProto, c.ticket = addr, true, binary.LittleEndian.Uint16(buf[14:])
+		// CC51 protocol
+		if n >= packetSizeCC51 && string(buf[:2]) == magicCC51 {
+			if binary.LittleEndian.Uint16(buf[4:]) == cmdDiscoCC51 {
+				c.addr, c.isCC51, c.ticket = addr, true, binary.LittleEndian.Uint16(buf[14:])
 				if n >= 24 {
 					copy(c.sid, buf[16:24])
 				}
-				return c.newDiscoDone()
+				return c.discoDoneCC51()
 			}
 			continue
 		}
 
-		// OLD protocol
-		data := crypto.ReverseTransCodeBlob(buf[:n])
-		if len(data) >= 16 && binary.LittleEndian.Uint16(data[8:]) == CmdDiscoRes {
-			c.addr, c.newProto = addr, false
-			return c.oldDiscoDone()
+		// IOTC Protocol (Basis)
+		data := ReverseTransCodeBlob(buf[:n])
+		if len(data) >= 16 && binary.LittleEndian.Uint16(data[8:]) == cmdDiscoRes {
+			c.addr, c.isCC51 = addr, false
+			return c.discoDone()
 		}
 	}
 
 	return fmt.Errorf("discovery timeout")
 }
 
-func (c *Conn) oldDiscoDone() error {
-	c.Write(c.buildDisco(2))
+func (c *DTLSConn) discoDone() error {
+	c.Write(c.msgDisco(2))
 	time.Sleep(100 * time.Millisecond)
-	_, err := c.WriteAndWait(c.buildSession(), SessionTimeout, func(res []byte) bool {
-		return len(res) >= 16 && binary.LittleEndian.Uint16(res[8:]) == CmdSessionRes
+	_, err := c.WriteAndWait(c.msgSession(), func(res []byte) bool {
+		return len(res) >= 16 && binary.LittleEndian.Uint16(res[8:]) == cmdSessionRes
 	})
 	return err
 }
 
-func (c *Conn) newDiscoDone() error {
-	_, err := c.WriteAndWait(c.buildNewDisco(2, c.ticket, false), SessionTimeout, func(res []byte) bool {
-		if len(res) < NewPacketSize || binary.LittleEndian.Uint16(res[:2]) != MagicNewProto {
+func (c *DTLSConn) discoDoneCC51() error {
+	_, err := c.WriteAndWait(c.msgDiscoCC51(2, c.ticket, false), func(res []byte) bool {
+		if len(res) < packetSizeCC51 || string(res[:2]) != magicCC51 {
 			return false
 		}
 		cmd := binary.LittleEndian.Uint16(res[4:])
 		dir := binary.LittleEndian.Uint16(res[8:])
 		seq := binary.LittleEndian.Uint16(res[12:])
-		return cmd == CmdNewDisco && dir == 0xFFFF && seq == 3
+		return cmd == cmdDiscoCC51 && dir == 0xFFFF && seq == 3
 	})
 	return err
 }
 
-func (c *Conn) connect() error {
-	if c.verbose {
-		fmt.Printf("[DTLS] Starting client handshake on channel %d\n", IOTCChannelMain)
-		fmt.Printf("[DTLS] PSK Identity: %s\n", PSKIdentity)
-		fmt.Printf("[DTLS] PSK Key: %s\n", hex.EncodeToString(c.psk))
-	}
-
-	conn, err := NewDtlsClient(c, IOTCChannelMain, c.psk)
+func (c *DTLSConn) connect() error {
+	adapter := NewChannelAdapter(c.ctx, iotcChannelMain, c.addr, c.WriteDTLS, c.clientBuf)
+	conn, err := NewDTLSClient(adapter, c.addr, c.psk)
 	if err != nil {
 		return fmt.Errorf("dtls: client create failed: %w", err)
 	}
@@ -507,13 +523,13 @@ func (c *Conn) connect() error {
 	c.mu.Unlock()
 
 	if c.verbose {
-		fmt.Printf("[DTLS] Client created for channel %d\n", IOTCChannelMain)
+		fmt.Printf("[DTLS] Client created for channel %d\n", iotcChannelMain)
 	}
 
 	return nil
 }
 
-func (c *Conn) worker() {
+func (c *DTLSConn) worker() {
 	defer c.wg.Done()
 
 	buf := make([]byte, 2048)
@@ -538,15 +554,11 @@ func (c *Conn) worker() {
 		data := buf[:n]
 		magic := binary.LittleEndian.Uint16(data)
 
-		// if c.verbose {
-		// 	fmt.Printf("[DTLS RX] from=%s, len=%d, data:\n%s", c.addr.String(), n, hexDump(data))
-		// }
-
 		switch magic {
-		case MagicAVLoginResp:
+		case magicAVLoginResp:
 			c.queue(c.rawCmd, data)
 
-		case MagicIOCtrl:
+		case magicIOCtrl:
 			if len(data) >= 32 {
 				for i := 32; i+2 < len(data); i++ {
 					if data[i] == 'H' && data[i+1] == 'L' {
@@ -556,7 +568,7 @@ func (c *Conn) worker() {
 				}
 			}
 
-		case MagicChannelMsg:
+		case magicChannelMsg:
 			if len(data) >= 36 && data[16] == 0x00 {
 				for i := 36; i+2 < len(data); i++ {
 					if data[i] == 'H' && data[i+1] == 'L' {
@@ -566,7 +578,7 @@ func (c *Conn) worker() {
 				}
 			}
 
-		case ProtoVersion:
+		case protoVersion:
 			if len(data) >= 8 {
 				// Extract seq number at byte 4-5 (uint16 of uint32 AVSeq)
 				seq := binary.LittleEndian.Uint16(data[4:])
@@ -589,7 +601,7 @@ func (c *Conn) worker() {
 				}
 			}
 
-		case MagicACK:
+		case magicACK:
 			c.mu.RLock()
 			ack := c.cmdAck
 			c.mu.RUnlock()
@@ -606,9 +618,10 @@ func (c *Conn) worker() {
 	}
 }
 
-func (c *Conn) reader() {
+func (c *DTLSConn) reader() {
 	defer c.wg.Done()
-	buf := make([]byte, MaxPacketSize)
+
+	buf := make([]byte, 2048)
 
 	for {
 		select {
@@ -626,10 +639,6 @@ func (c *Conn) reader() {
 			return
 		}
 
-		// if c.verbose {
-		// 	fmt.Printf("[UDP RX] from=%s, len=%d, data:\n%s", addr.String(), n, hexDump(buf[:n]))
-		// }
-
 		if !addr.IP.Equal(c.addr.IP) {
 			if c.verbose {
 				fmt.Printf("Ignored packet from unknown IP: %s\n", addr.IP.String())
@@ -640,47 +649,47 @@ func (c *Conn) reader() {
 			c.addr.Port = addr.Port
 		}
 
-		// NEW protocol (0xCC51)
-		if c.newProto && n >= 12 && binary.LittleEndian.Uint16(buf[:2]) == MagicNewProto {
+		// CC51 Protocol
+		if c.isCC51 && n >= 12 && string(buf[:2]) == magicCC51 {
 			cmd := binary.LittleEndian.Uint16(buf[4:])
 			switch cmd {
-			case CmdNewKeepalive:
-				if n >= NewKeepaliveSize {
-					_ = c.Write(c.buildNewKeepalive())
+			case cmdKeepaliveCC51:
+				if n >= keepaliveSizeCC51 {
+					_ = c.Write(c.msgKeepaliveCC51())
 				}
-			case CmdNewDTLS:
-				if n >= NewHeaderSize+NewAuthSize {
+			case cmdDTLSCC51:
+				if n >= headerSizeCC51+authSizeCC51 {
 					ch := byte(binary.LittleEndian.Uint16(buf[12:]) >> 8)
-					dtls := buf[NewHeaderSize : n-NewAuthSize]
+					dtlsData := buf[headerSizeCC51 : n-authSizeCC51]
 					switch ch {
-					case IOTCChannelMain:
-						c.queue(c.clientBuf, dtls)
-					case IOTCChannelBack:
-						c.queue(c.serverBuf, dtls)
+					case iotcChannelMain:
+						c.queue(c.clientBuf, dtlsData)
+					case iotcChannelBack:
+						c.queue(c.serverBuf, dtlsData)
 					}
 				}
 			}
 			continue
 		}
 
-		// OLD protocol (TransCode)
-		data := crypto.ReverseTransCodeBlob(buf[:n])
+		// IOTC Protocol (Basis)
+		data := ReverseTransCodeBlob(buf[:n])
 		if len(data) < 16 {
 			continue
 		}
 
 		switch binary.LittleEndian.Uint16(data[8:]) {
-		case CmdKeepaliveRes:
+		case cmdKeepaliveRes:
 			if len(data) > 24 {
-				_ = c.Write(c.buildKeepAlive(data[16:]))
+				_ = c.Write(c.msgKeepalive(data[16:]))
 			}
-		case CmdDataRX:
+		case cmdDataRX:
 			if len(data) > 28 {
 				ch := data[14]
 				switch ch {
-				case IOTCChannelMain:
+				case iotcChannelMain:
 					c.queue(c.clientBuf, data[28:])
-				case IOTCChannelBack:
+				case iotcChannelBack:
 					c.queue(c.serverBuf, data[28:])
 				}
 			}
@@ -688,7 +697,7 @@ func (c *Conn) reader() {
 	}
 }
 
-func (c *Conn) queue(ch chan []byte, data []byte) {
+func (c *DTLSConn) queue(ch chan []byte, data []byte) {
 	b := make([]byte, len(data))
 	copy(b, data)
 	select {
@@ -702,7 +711,7 @@ func (c *Conn) queue(ch chan []byte, data []byte) {
 	}
 }
 
-func (c *Conn) handleSpeakerAVLogin() error {
+func (c *DTLSConn) handleSpeakerAVLogin() error {
 	if c.verbose {
 		fmt.Printf("[SPEAK] Waiting for AV Login request from camera...\n")
 	}
@@ -723,7 +732,7 @@ func (c *Conn) handleSpeakerAVLogin() error {
 	}
 
 	checksum := binary.LittleEndian.Uint32(buf[20:])
-	resp := c.buildAVLoginResponse(checksum)
+	resp := c.msgAVLoginResponse(checksum)
 
 	if c.verbose {
 		fmt.Printf("[SPEAK] Sending AV Login response: %d bytes\n", len(resp))
@@ -751,16 +760,16 @@ func (c *Conn) handleSpeakerAVLogin() error {
 	return nil
 }
 
-func (c *Conn) buildDisco(stage byte) []byte {
-	b := make([]byte, OldDiscoSize)
-	copy(b, "\x04\x02\x1a\x02")                            // marker + mode
-	binary.LittleEndian.PutUint16(b[4:], OldDiscoBodySize) // body size
-	binary.LittleEndian.PutUint16(b[8:], CmdDiscoReq)      // 0x0601
-	binary.LittleEndian.PutUint16(b[10:], 0x0021)          // flags
-	body := b[OldHeaderSize:]
-	copy(body[:UIDSize], c.uid)
-	copy(body[36:], "\x01\x01\x02\x04") // unknown
-	copy(body[40:], c.rid)
+func (c *DTLSConn) msgDisco(stage byte) []byte {
+	b := make([]byte, discoSize)
+	copy(b, "\x04\x02\x1a\x02")                         // marker + mode
+	binary.LittleEndian.PutUint16(b[4:], discoBodySize) // body size
+	binary.LittleEndian.PutUint16(b[8:], cmdDiscoReq)   // 0x0601
+	binary.LittleEndian.PutUint16(b[10:], 0x0021)       // flags
+	body := b[headerSize:]
+	copy(body[:20], c.uid)
+	copy(body[36:], sdkVersion42) // SDK 4.2.1.1
+	copy(body[40:], c.sid)
 	body[48] = stage
 	if stage == 1 && len(c.authKey) > 0 {
 		copy(body[58:], c.authKey)
@@ -768,69 +777,67 @@ func (c *Conn) buildDisco(stage byte) []byte {
 	return b
 }
 
-func (c *Conn) buildNewDisco(seq, ticket uint16, isResponse bool) []byte {
-	b := make([]byte, NewPacketSize)
-	binary.LittleEndian.PutUint16(b[0:], MagicNewProto)  // 0xCC51
-	binary.LittleEndian.PutUint16(b[4:], CmdNewDisco)    // 0x1002
-	binary.LittleEndian.PutUint16(b[6:], NewPayloadSize) // 40 bytes
+func (c *DTLSConn) msgDiscoCC51(seq, ticket uint16, isResponse bool) []byte {
+	b := make([]byte, packetSizeCC51)
+	copy(b[:2], magicCC51)
+	binary.LittleEndian.PutUint16(b[4:], cmdDiscoCC51)    // 0x1002
+	binary.LittleEndian.PutUint16(b[6:], payloadSizeCC51) // 40 bytes
 	if isResponse {
 		binary.LittleEndian.PutUint16(b[8:], 0xFFFF) // response
 	}
 	binary.LittleEndian.PutUint16(b[12:], seq)
 	binary.LittleEndian.PutUint16(b[14:], ticket)
 	copy(b[16:24], c.sid)
-	copy(b[24:32], "\x00\x08\x03\x04\x1d\x00\x00\x00") // SDK 4.3.8.0
-	authKey := crypto.CalculateAuthKey(c.enr, c.mac)
-	h := hmac.New(sha1.New, append([]byte(c.uid), authKey...))
+	copy(b[24:28], sdkVersion43) // SDK 4.3.8.0
+	b[28] = 0x1d                 // unknown field (capability/build flag?)
+	h := hmac.New(sha1.New, append([]byte(c.uid), c.authKey...))
 	h.Write(b[:32])
 	copy(b[32:52], h.Sum(nil))
 	return b
 }
 
-func (c *Conn) buildNewKeepalive() []byte {
+func (c *DTLSConn) msgKeepaliveCC51() []byte {
 	c.kaSeq += 2
-	b := make([]byte, NewKeepaliveSize)
-	binary.LittleEndian.PutUint16(b[0:], MagicNewProto)   // 0xCC51
-	binary.LittleEndian.PutUint16(b[4:], CmdNewKeepalive) // 0x1202
-	binary.LittleEndian.PutUint16(b[6:], 0x0024)          // 36 bytes payload
-	binary.LittleEndian.PutUint32(b[16:], c.kaSeq)        // counter
-	copy(b[20:28], c.sid)                                 // session ID
-	authKey := crypto.CalculateAuthKey(c.enr, c.mac)
-	h := hmac.New(sha1.New, append([]byte(c.uid), authKey...))
+	b := make([]byte, keepaliveSizeCC51)
+	copy(b[:2], magicCC51)
+	binary.LittleEndian.PutUint16(b[4:], cmdKeepaliveCC51) // 0x1202
+	binary.LittleEndian.PutUint16(b[6:], 0x0024)           // 36 bytes payload
+	binary.LittleEndian.PutUint32(b[16:], c.kaSeq)         // counter
+	copy(b[20:28], c.sid)                                  // session ID
+	h := hmac.New(sha1.New, append([]byte(c.uid), c.authKey...))
 	h.Write(b[:28])
 	copy(b[28:48], h.Sum(nil))
 	return b
 }
 
-func (c *Conn) buildSession() []byte {
-	b := make([]byte, OldSessionSize)
-	copy(b, "\x04\x02\x1a\x02")                          // marker + mode
-	binary.LittleEndian.PutUint16(b[4:], OldSessionBody) // body size
-	binary.LittleEndian.PutUint16(b[8:], CmdSessionReq)  // 0x0402
-	binary.LittleEndian.PutUint16(b[10:], 0x0033)        // flags
-	body := b[OldHeaderSize:]
-	copy(body[:UIDSize], c.uid)
-	copy(body[UIDSize:], c.rid)
+func (c *DTLSConn) msgSession() []byte {
+	b := make([]byte, sessionSize)
+	copy(b, "\x04\x02\x1a\x02")                         // marker + mode
+	binary.LittleEndian.PutUint16(b[4:], sessionBody)   // body size
+	binary.LittleEndian.PutUint16(b[8:], cmdSessionReq) // 0x0402
+	binary.LittleEndian.PutUint16(b[10:], 0x0033)       // flags
+	body := b[headerSize:]
+	copy(body[:20], c.uid)
+	copy(body[20:], c.sid)
 	binary.LittleEndian.PutUint32(body[32:], uint32(time.Now().Unix()))
 	return b
 }
 
-func (c *Conn) buildAVLoginPacket(magic uint16, size int, flags uint16, randomID []byte) []byte {
+func (c *DTLSConn) msgAVLogin(magic uint16, size int, flags uint16, randomID []byte) []byte {
 	b := make([]byte, size)
 	binary.LittleEndian.PutUint16(b, magic)
-	binary.LittleEndian.PutUint16(b[2:], ProtoVersion)
+	binary.LittleEndian.PutUint16(b[2:], protoVersion)
 	binary.LittleEndian.PutUint16(b[16:], uint16(size-24)) // payload size
 	binary.LittleEndian.PutUint16(b[18:], flags)
 	copy(b[20:], randomID[:4])
-	copy(b[24:], DefaultUser) // username
-	copy(b[280:], c.enr)      // password/ENR
-	// binary.LittleEndian.PutUint32(b[536:], 1)           // resend enabled
+	copy(b[24:], "admin")                               // username
+	copy(b[280:], c.enr)                                // password/ENR
 	binary.LittleEndian.PutUint32(b[540:], 4)           // security_mode ?
-	binary.LittleEndian.PutUint32(b[552:], DefaultCaps) // capabilities
+	binary.LittleEndian.PutUint32(b[552:], defaultCaps) // capabilities
 	return b
 }
 
-func (c *Conn) buildAVLoginResponse(checksum uint32) []byte {
+func (c *DTLSConn) msgAVLoginResponse(checksum uint32) []byte {
 	b := make([]byte, 60)
 	binary.LittleEndian.PutUint16(b, 0x2100)        // magic
 	binary.LittleEndian.PutUint16(b[2:], 0x000c)    // version
@@ -840,13 +847,13 @@ func (c *Conn) buildAVLoginResponse(checksum uint32) []byte {
 	b[29] = 0x01                                    // enable flag
 	b[31] = 0x01                                    // two-way streaming
 	binary.LittleEndian.PutUint32(b[36:], 0x04)     // buffer config
-	binary.LittleEndian.PutUint32(b[40:], DefaultCaps)
+	binary.LittleEndian.PutUint32(b[40:], defaultCaps)
 	binary.LittleEndian.PutUint16(b[54:], 0x0003) // channel info
 	binary.LittleEndian.PutUint16(b[56:], 0x0002)
 	return b
 }
 
-func (c *Conn) buildAudioFrame(payload []byte, timestampUS uint32, codec uint16, sampleRate uint32, channels uint8) []byte {
+func (c *DTLSConn) msgAudioFrame(payload []byte, timestampUS uint32, codec byte, sampleRate uint32, channels uint8) []byte {
 	c.audioSeq++
 	c.audioFrameNo++
 	prevFrame := uint32(0)
@@ -860,7 +867,7 @@ func (c *Conn) buildAudioFrame(payload []byte, timestampUS uint32, codec uint16,
 	// Outer header (36 bytes)
 	b[0] = ChannelAudio      // 0x03
 	b[1] = FrameTypeStartAlt // 0x09
-	binary.LittleEndian.PutUint16(b[2:], ProtoVersion)
+	binary.LittleEndian.PutUint16(b[2:], protoVersion)
 	binary.LittleEndian.PutUint32(b[4:], c.audioSeq)
 	binary.LittleEndian.PutUint32(b[8:], timestampUS)
 	if c.audioFrameNo == 1 {
@@ -880,54 +887,65 @@ func (c *Conn) buildAudioFrame(payload []byte, timestampUS uint32, codec uint16,
 	binary.LittleEndian.PutUint32(b[32:], c.audioFrameNo)
 	copy(b[36:], payload) // Payload + FrameInfo
 	fi := b[36+len(payload):]
-	binary.LittleEndian.PutUint16(fi, codec)
-	fi[2] = BuildAudioFlags(sampleRate, true, channels == 2)
+	fi[0] = codec // Codec ID (low byte)
+	fi[1] = 0     // Codec ID (high byte, unused)
+	// Audio flags: [3:2]=sampleRateIdx [1]=16bit [0]=stereo
+	var srIdx uint8 = 3 // default 16kHz
+	for i, rate := range sampleRates {
+		if rate == sampleRate {
+			srIdx = uint8(i)
+			break
+		}
+	}
+	fi[2] = (srIdx << 2) | 0x02 // 16-bit always set
+	if channels == 2 {
+		fi[2] |= 0x01
+	}
 	fi[4] = 1 // online
 	binary.LittleEndian.PutUint32(fi[12:], (c.audioFrameNo-1)*GetSamplesPerFrame(codec)*1000/sampleRate)
 	return b
 }
 
-func (c *Conn) buildTxData(payload []byte, channel byte) []byte {
+func (c *DTLSConn) msgTxData(payload []byte, channel byte) []byte {
 	bodySize := 12 + len(payload)
 	b := make([]byte, 16+bodySize)
 	copy(b, "\x04\x02\x1a\x0b")                            // marker + mode=data
 	binary.LittleEndian.PutUint16(b[4:], uint16(bodySize)) // body size
 	binary.LittleEndian.PutUint16(b[6:], c.seq)            // sequence
 	c.seq++
-	binary.LittleEndian.PutUint16(b[8:], CmdDataTX)   // 0x0407
+	binary.LittleEndian.PutUint16(b[8:], cmdDataTX)   // 0x0407
 	binary.LittleEndian.PutUint16(b[10:], 0x0021)     // flags
-	copy(b[12:], c.rid[:2])                           // rid[0:2]
+	copy(b[12:], c.sid[:2])                           // rid[0:2]
 	b[14] = channel                                   // channel
 	b[15] = 0x01                                      // marker
 	binary.LittleEndian.PutUint32(b[16:], 0x0000000c) // const
-	copy(b[20:], c.rid[:8])                           // rid
+	copy(b[20:], c.sid[:8])                           // rid
 	copy(b[28:], payload)
 	return b
 }
 
-func (c *Conn) buildNewTxData(payload []byte, channel byte) []byte {
-	payloadSize := uint16(16 + len(payload) + NewAuthSize)
-	b := make([]byte, NewHeaderSize+len(payload)+NewAuthSize)
-	binary.LittleEndian.PutUint16(b[0:], MagicNewProto) // 0xCC51
-	binary.LittleEndian.PutUint16(b[4:], CmdNewDTLS)    // 0x1502
+func (c *DTLSConn) msgTxDataCC51(payload []byte, channel byte) []byte {
+	payloadSize := uint16(16 + len(payload) + authSizeCC51)
+	b := make([]byte, headerSizeCC51+len(payload)+authSizeCC51)
+	copy(b[:2], magicCC51)
+	binary.LittleEndian.PutUint16(b[4:], cmdDTLSCC51) // 0x1502
 	binary.LittleEndian.PutUint16(b[6:], payloadSize)
 	binary.LittleEndian.PutUint16(b[12:], uint16(0x0010)|(uint16(channel)<<8)) // channel in high byte
 	binary.LittleEndian.PutUint16(b[14:], c.ticket)
 	copy(b[16:24], c.sid)
 	binary.LittleEndian.PutUint32(b[24:], 1) // const
-	copy(b[NewHeaderSize:], payload)
-	authKey := crypto.CalculateAuthKey(c.enr, c.mac)
-	h := hmac.New(sha1.New, append([]byte(c.uid), authKey...))
-	h.Write(b[:NewHeaderSize])
-	copy(b[NewHeaderSize+len(payload):], h.Sum(nil))
+	copy(b[headerSizeCC51:], payload)
+	h := hmac.New(sha1.New, append([]byte(c.uid), c.authKey...))
+	h.Write(b[:headerSizeCC51])
+	copy(b[headerSizeCC51+len(payload):], h.Sum(nil))
 	return b
 }
 
-func (c *Conn) buildACK() []byte {
+func (c *DTLSConn) msgACK() []byte {
 	c.ackFlags++
 	b := make([]byte, 24)
-	binary.LittleEndian.PutUint16(b[0:], MagicACK)     // 0x0009
-	binary.LittleEndian.PutUint16(b[2:], ProtoVersion) // 0x000c
+	binary.LittleEndian.PutUint16(b[0:], magicACK)     // 0x0009
+	binary.LittleEndian.PutUint16(b[2:], protoVersion) // 0x000c
 	binary.LittleEndian.PutUint32(b[4:], c.avSeq)      // TX seq
 	c.avSeq++
 	binary.LittleEndian.PutUint16(b[8:], c.rxSeqStart) // RX start (last acked)
@@ -942,11 +960,11 @@ func (c *Conn) buildACK() []byte {
 	return b
 }
 
-func (c *Conn) buildKeepAlive(incoming []byte) []byte {
+func (c *DTLSConn) msgKeepalive(incoming []byte) []byte {
 	b := make([]byte, 24)
 	copy(b, "\x04\x02\x1a\x0a")                           // marker + mode
 	binary.LittleEndian.PutUint16(b[4:], 8)               // body size
-	binary.LittleEndian.PutUint16(b[8:], CmdKeepaliveReq) // 0x0427
+	binary.LittleEndian.PutUint16(b[8:], cmdKeepaliveReq) // 0x0427
 	binary.LittleEndian.PutUint16(b[10:], 0x0021)         // flags
 	if len(incoming) >= 8 {
 		copy(b[16:], incoming[:8]) // echo payload
@@ -954,13 +972,13 @@ func (c *Conn) buildKeepAlive(incoming []byte) []byte {
 	return b
 }
 
-func (c *Conn) buildIOCtrlFrame(payload []byte) []byte {
+func (c *DTLSConn) msgIOCtrl(payload []byte) []byte {
 	b := make([]byte, 40+len(payload))
-	binary.LittleEndian.PutUint16(b, ProtoVersion)     // magic
-	binary.LittleEndian.PutUint16(b[2:], ProtoVersion) // version
+	binary.LittleEndian.PutUint16(b, protoVersion)     // magic
+	binary.LittleEndian.PutUint16(b[2:], protoVersion) // version
 	binary.LittleEndian.PutUint32(b[4:], c.avSeq)      // av seq
 	c.avSeq++
-	binary.LittleEndian.PutUint16(b[16:], MagicIOCtrl)            // 0x7000
+	binary.LittleEndian.PutUint16(b[16:], magicIOCtrl)            // 0x7000
 	binary.LittleEndian.PutUint16(b[18:], c.seqCmd)               // sub channel
 	binary.LittleEndian.PutUint32(b[20:], 1)                      // ioctl seq
 	binary.LittleEndian.PutUint32(b[24:], uint32(len(payload)+4)) // payload size
@@ -968,30 +986,6 @@ func (c *Conn) buildIOCtrlFrame(payload []byte) []byte {
 	b[37] = 0x01
 	copy(b[40:], payload)
 	c.seqCmd++
-	return b
-}
-
-func derivePSK(enr string) []byte {
-	// TUTK SDK treats the PSK as a NULL-terminated C string, so if SHA256(ENR)
-	// contains a 0x00 byte, the PSK is truncated at that position.
-	// bytes after the first 0x00 are padded with zeros to make a 32-byte key.
-	hash := sha256.Sum256([]byte(enr))
-	pskLen := 32
-	for i := range 32 {
-		if hash[i] == 0x00 {
-			pskLen = i
-			break
-		}
-	}
-
-	psk := make([]byte, 32)
-	copy(psk[:pskLen], hash[:pskLen])
-	return psk
-}
-
-func genRandomID() []byte {
-	b := make([]byte, 8)
-	_, _ = rand.Read(b)
 	return b
 }
 

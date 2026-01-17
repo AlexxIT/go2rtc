@@ -12,8 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/AlexxIT/go2rtc/pkg/wyze/crypto"
-	"github.com/AlexxIT/go2rtc/pkg/wyze/tutk"
+	"github.com/AlexxIT/go2rtc/pkg/tutk"
 )
 
 const (
@@ -27,15 +26,6 @@ const (
 const (
 	BitrateMax uint16 = 0xF0
 	BitrateSD  uint16 = 0x3C
-)
-
-const (
-	QualityUnknown = 0
-	QualityMax     = 1
-	QualityHigh    = 2
-	QualityMiddle  = 3
-	QualityLow     = 4
-	QualityMin     = 5
 )
 
 const (
@@ -59,7 +49,7 @@ const (
 )
 
 type Client struct {
-	conn *tutk.Conn
+	conn *tutk.DTLSConn
 
 	host  string
 	uid   string
@@ -76,7 +66,7 @@ type Client struct {
 	hasAudio    bool
 	hasIntercom bool
 
-	audioCodecID    uint16
+	audioCodecID    byte
 	audioSampleRate uint32
 	audioChannels   uint8
 }
@@ -107,7 +97,7 @@ func Dial(rawURL string) (*Client, error) {
 		verbose: query.Get("verbose") == "true",
 	}
 
-	c.authKey = string(crypto.CalculateAuthKey(c.enr, c.mac))
+	c.authKey = string(tutk.CalculateAuthKey(c.enr, c.mac))
 
 	if c.verbose {
 		fmt.Printf("[Wyze] Connecting to %s (UID: %s)\n", c.host, c.uid)
@@ -143,13 +133,13 @@ func (c *Client) SupportsIntercom() bool {
 	return c.hasIntercom
 }
 
-func (c *Client) SetBackchannelCodec(codecID uint16, sampleRate uint32, channels uint8) {
+func (c *Client) SetBackchannelCodec(codecID byte, sampleRate uint32, channels uint8) {
 	c.audioCodecID = codecID
 	c.audioSampleRate = sampleRate
 	c.audioChannels = channels
 }
 
-func (c *Client) GetBackchannelCodec() (codecID uint16, sampleRate uint32, channels uint8) {
+func (c *Client) GetBackchannelCodec() (codecID byte, sampleRate uint32, channels uint8) {
 	return c.audioCodecID, c.audioSampleRate, c.audioChannels
 }
 
@@ -238,13 +228,13 @@ func (c *Client) ReadPacket() (*tutk.Packet, error) {
 	return c.conn.AVRecvFrameData()
 }
 
-func (c *Client) WriteAudio(codec uint16, payload []byte, timestamp uint32, sampleRate uint32, channels uint8) error {
+func (c *Client) WriteAudio(codec byte, payload []byte, timestamp uint32, sampleRate uint32, channels uint8) error {
 	if !c.conn.IsBackchannelReady() {
 		return fmt.Errorf("speaker channel not connected")
 	}
 
 	if c.verbose {
-		fmt.Printf("[Wyze] WriteAudio: codec=0x%04x, payload=%d bytes, rate=%d, ch=%d\n", codec, len(payload), sampleRate, channels)
+		fmt.Printf("[Wyze] WriteAudio: codec=0x%02x, payload=%d bytes, rate=%d, ch=%d\n", codec, len(payload), sampleRate, channels)
 	}
 
 	return c.conn.AVSendAudioData(codec, payload, timestamp, sampleRate, channels)
@@ -305,7 +295,7 @@ func (c *Client) connect() error {
 		host = host[:idx]
 	}
 
-	conn, err := tutk.Dial(host, port, c.uid, c.authKey, c.enr, c.mac, c.verbose)
+	conn, err := tutk.DialDTLS(host, port, c.uid, c.authKey, c.enr, c.verbose)
 	if err != nil {
 		return fmt.Errorf("wyze: connect failed: %w", err)
 	}
@@ -386,9 +376,7 @@ func (c *Client) doKAuth() error {
 		fmt.Printf("[Wyze] K10003 auth success\n")
 	}
 
-	if avResp := c.conn.GetAVLoginResponse(); avResp != nil {
-		c.hasIntercom = avResp.TwoWayStreaming == 1
-	}
+	c.hasIntercom = c.conn.HasTwoWayStreaming()
 
 	if c.verbose {
 		fmt.Printf("[Wyze] K-auth complete\n")
@@ -409,7 +397,7 @@ func (c *Client) buildK10000() []byte {
 }
 
 func (c *Client) buildK10002(challenge []byte, status byte) []byte {
-	resp := crypto.GenerateChallengeResponse(challenge, c.enr, status)
+	resp := generateChallengeResponse(challenge, c.enr, status)
 	sessionID := make([]byte, 4)
 	rand.Read(sessionID)
 	b := make([]byte, 38)
@@ -554,4 +542,43 @@ func (c *Client) is2K() bool {
 
 func (c *Client) isFloodlight() bool {
 	return c.model == "HL_CFL2"
+}
+
+const (
+	statusDefault byte = 1
+	statusENR16   byte = 3
+	statusENR32   byte = 6
+)
+
+func generateChallengeResponse(challengeBytes []byte, enr string, status byte) []byte {
+	var secretKey []byte
+
+	switch status {
+	case statusDefault:
+		secretKey = []byte("FFFFFFFFFFFFFFFF")
+	case statusENR16:
+		if len(enr) >= 16 {
+			secretKey = []byte(enr[:16])
+		} else {
+			secretKey = make([]byte, 16)
+			copy(secretKey, enr)
+		}
+	case statusENR32:
+		if len(enr) >= 16 {
+			firstKey := []byte(enr[:16])
+			challengeBytes = tutk.XXTEADecryptVar(challengeBytes, firstKey)
+		}
+		if len(enr) >= 32 {
+			secretKey = []byte(enr[16:32])
+		} else if len(enr) > 16 {
+			secretKey = make([]byte, 16)
+			copy(secretKey, []byte(enr[16:]))
+		} else {
+			secretKey = []byte("FFFFFFFFFFFFFFFF")
+		}
+	default:
+		secretKey = []byte("FFFFFFFFFFFFFFFF")
+	}
+
+	return tutk.XXTEADecryptVar(challengeBytes, secretKey)
 }

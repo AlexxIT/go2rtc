@@ -107,7 +107,7 @@ func (c *Client) ReadPacket() (hdr, payload []byte, err error) {
 		switch hdr[0] {
 		case tutk.CodecH264, tutk.CodecH265:
 			payload, err = DecodeVideo(payload, c.key)
-		case tutk.CodecAAC:
+		case tutk.CodecAACLATM:
 			payload, err = crypto.Decode(payload, c.key)
 		}
 	}

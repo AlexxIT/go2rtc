@@ -5,7 +5,7 @@ import (
 
 	"github.com/AlexxIT/go2rtc/pkg/aac"
 	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/wyze/tutk"
+	"github.com/AlexxIT/go2rtc/pkg/tutk"
 	"github.com/pion/rtp"
 )
 

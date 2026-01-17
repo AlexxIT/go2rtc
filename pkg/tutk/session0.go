@@ -155,9 +155,3 @@ func ConnectByUID(stage byte, uid string, sid8 []byte) []byte {
 
 	return b
 }
-
-func GenSessionID() []byte {
-	b := make([]byte, 8)
-	binary.LittleEndian.PutUint64(b, uint64(time.Now().UnixNano()))
-	return b
-}
