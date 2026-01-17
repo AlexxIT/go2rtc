@@ -27,10 +27,13 @@
         const localTracks = [];
 
         if (/camera|microphone/.test(media)) {
-            const tracks = await getMediaTracks('user', {
-                video: media.indexOf('camera') >= 0,
-                audio: media.indexOf('microphone') >= 0,
-            });
+            // Resolution via URL param: ?resolution=1280x720 or ?resolution=1280x720@30
+            const resolution = new URLSearchParams(location.search).get('resolution');
+            const match = resolution && resolution.match(/(\d+)x(\d+)(?:@(\d+))?/);
+            const video = media.indexOf('camera') < 0 ? false : match ? {
+                width: {min: +match[1]}, height: {min: +match[2]}, ...(match[3] && {frameRate: {min: +match[3]}})
+            } : true;
+            const tracks = await getMediaTracks('user', {video, audio: media.indexOf('microphone') >= 0});
             tracks.forEach(track => {
                 pc.addTransceiver(track, {direction: 'sendonly'});
                 if (track.kind === 'video') localTracks.push(track);
