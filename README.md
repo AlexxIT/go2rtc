@@ -386,7 +386,7 @@ streams:
   rotate: ffmpeg:rtsp://12345678@192.168.1.123/av_stream/ch0#video=h264#rotate=90
 ```
 
-All transcoding formats have [built-in templates](https://github.com/AlexxIT/go2rtc/blob/master/internal/ffmpeg/ffmpeg.go): `h264`, `h265`, `opus`, `pcmu`, `pcmu/16000`, `pcmu/48000`, `pcma`, `pcma/16000`, `pcma/48000`, `aac`, `aac/16000`.
+All transcoding formats have [built-in templates](internal/ffmpeg/ffmpeg.go): `h264`, `h265`, `opus`, `pcmu`, `pcmu/16000`, `pcmu/48000`, `pcma`, `pcma/16000`, `pcma/48000`, `aac`, `aac/16000`.
 
 But you can override them via YAML config. You can also add your own formats to the config and use them with source params.
 
@@ -488,7 +488,9 @@ streams:
 
 *[New in v1.8.2](https://github.com/AlexxIT/go2rtc/releases/tag/v1.8.2)*
 
-Like `echo` source, but uses the built-in [expr](https://github.com/antonmedv/expr) expression language ([read more](https://github.com/AlexxIT/go2rtc/blob/master/internal/expr/README.md)).
+Like `echo` source, but uses the built-in [expr](https://github.com/antonmedv/expr) expression language.
+
+*[read more](internal/expr/README.md)*
 
 #### Source: HomeKit
 
@@ -616,19 +618,25 @@ Tested: KD110, KC200, KC401, KC420WS, EC71.
 
 *[New in v1.9.13](https://github.com/AlexxIT/go2rtc/releases/tag/v1.9.13)*
 
-[Tuya](https://www.tuya.com/) proprietary camera protocol with **two way audio** support. Go2rtc supports `Tuya Smart API` and `Tuya Cloud API`. [Read more](https://github.com/AlexxIT/go2rtc/blob/master/internal/tuya/README.md).
+[Tuya](https://www.tuya.com/) proprietary camera protocol with **two way audio** support. Go2rtc supports `Tuya Smart API` and `Tuya Cloud API`.
+
+*[read more](internal/tuya/README.md)*
 
 #### Source: Xiaomi
 
 *[New in v1.9.13](https://github.com/AlexxIT/go2rtc/releases/tag/v1.9.13)*
 
-This source allows you to view cameras from the [Xiaomi Mi Home](https://home.mi.com/) ecosystem. [Read more](https://github.com/AlexxIT/go2rtc/blob/master/internal/xiaomi/README.md).
+This source allows you to view cameras from the [Xiaomi Mi Home](https://home.mi.com/) ecosystem.
+
+*[read more](internal/xiaomi/README.md)*
 
 #### Source: GoPro
 
 *[New in v1.8.3](https://github.com/AlexxIT/go2rtc/releases/tag/v1.8.3)*
 
-Support streaming from [GoPro](https://gopro.com/) cameras, connected via USB or Wi-Fi to Linux, Mac, Windows. [Read more](https://github.com/AlexxIT/go2rtc/tree/master/internal/gopro).
+Support streaming from [GoPro](https://gopro.com/) cameras, connected via USB or Wi-Fi to Linux, Mac, Windows.
+
+*[read more](internal/gopro/README.md)*
 
 #### Source: Ivideon
 
@@ -928,7 +936,7 @@ The HTTP API is the main part for interacting with the application. Default addr
 
 **Important!** go2rtc passes requests from localhost and from Unix sockets without HTTP authorisation, even if you have it configured! It is your responsibility to set up secure external access to the API. If not properly configured, an attacker can gain access to your cameras and even your server.
 
-[API description](https://github.com/AlexxIT/go2rtc/tree/master/api).
+[API description](api/README.md).
 
 **Module config**
 
@@ -1140,7 +1148,9 @@ Link example: https://go2rtc.org/webtorrent/#share=02SNtgjKXY&pwd=wznEQqznxW&med
 
 ### Module: ngrok
 
-With [ngrok](https://ngrok.com/) integration, you can get external access to your streams in situations when you have Internet with a private IP address ([read more](https://github.com/AlexxIT/go2rtc/blob/master/internal/ngrok/README.md)).
+With [ngrok](https://ngrok.com/) integration, you can get external access to your streams in situations when you have Internet with a private IP address.
+
+*[read more](internal/ngrok/README.md)*
 
 ### Module: Hass
 
@@ -1246,7 +1256,7 @@ API examples:
   - You can use `rotate` param with `90`, `180`, `270` or `-90` values
   - You can use `hardware`/`hw` param [read more](https://github.com/AlexxIT/go2rtc/wiki/Hardware-acceleration)
 
-**PS.** This module also supports streaming to the server console (terminal) in the **animated ASCII art** format ([read more](https://github.com/AlexxIT/go2rtc/blob/master/internal/mjpeg/README.md)):
+**PS.** This module also supports streaming to the server console (terminal) in the **animated ASCII art** format ([read more](internal/mjpeg/README.md)).
 
 [![](https://img.youtube.com/vi/sHj_3h_sX7M/mqdefault.jpg)](https://www.youtube.com/watch?v=sHj_3h_sX7M)
 
