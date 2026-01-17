@@ -60,3 +60,12 @@ func ParseHL(data []byte) (cmdID uint16, payload []byte, ok bool) {
 	}
 	return cmdID, payload, true
 }
+
+func FindHL(data []byte, offset int) []byte {
+	for i := offset; i+16 <= len(data); i++ {
+		if data[i] == 'H' && data[i+1] == 'L' {
+			return data[i:]
+		}
+	}
+	return nil
+}

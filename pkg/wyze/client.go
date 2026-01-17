@@ -211,7 +211,7 @@ func (c *Client) StartIntercom() error {
 
 	k10010 := c.buildK10010(MediaTypeReturnAudio, true)
 	if _, err := c.conn.WriteAndWaitIOCtrl(KCmdControlChannel, k10010, KCmdControlChannelResp, 5*time.Second); err != nil {
-		return err
+		return fmt.Errorf("enable return audio: %w", err)
 	}
 
 	return c.conn.AVServStart()
@@ -223,7 +223,7 @@ func (c *Client) StopIntercom() error {
 	}
 
 	k10010 := c.buildK10010(MediaTypeReturnAudio, false)
-	c.conn.WriteAndWaitIOCtrl(KCmdControlChannel, k10010, KCmdControlChannelResp, 5*time.Second)
+	c.conn.WriteIOCtrl(k10010)
 
 	return c.conn.AVServStop()
 }

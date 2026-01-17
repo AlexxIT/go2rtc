@@ -232,18 +232,59 @@ func (c *DTLSConn) AVServStart() error {
 		return fmt.Errorf("dtls: server handshake failed: %w", err)
 	}
 
+	if c.verbose {
+		fmt.Printf("[DTLS] Server handshake complete on channel %d\n", iotcChannelBack)
+		fmt.Printf("[SERVER] Waiting for AV Login request from camera...\n")
+	}
+
+	// Wait for AV Login request from camera
+	buf := make([]byte, 1024)
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	n, err := conn.Read(buf)
+	if err != nil {
+		go conn.Close()
+		return fmt.Errorf("read av login: %w", err)
+	}
+
+	if c.verbose {
+		fmt.Printf("[SERVER] AV Login request len=%d data:\n%s", n, hexDump(buf[:n]))
+	}
+
+	if n < 24 {
+		go conn.Close()
+		return fmt.Errorf("av login too short: %d bytes", n)
+	}
+
+	checksum := binary.LittleEndian.Uint32(buf[20:])
+	resp := c.msgAVLoginResponse(checksum)
+
+	if c.verbose {
+		fmt.Printf("[SERVER] Sending AV Login response: %d bytes\n", len(resp))
+	}
+
+	if _, err = conn.Write(resp); err != nil {
+		go conn.Close()
+		return fmt.Errorf("write av login response: %w", err)
+	}
+
+	// Camera may resend, respond again
+	conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	if n, _ = conn.Read(buf); n > 0 {
+		if c.verbose {
+			fmt.Printf("[SERVER] Received AV Login resend: %d bytes\n", n)
+		}
+		conn.Write(resp)
+	}
+
+	conn.SetReadDeadline(time.Time{})
+
+	if c.verbose {
+		fmt.Printf("[SERVER] AV Login complete, ready for two way streaming\n")
+	}
+
 	c.mu.Lock()
 	c.serverConn = conn
 	c.mu.Unlock()
-
-	if c.verbose {
-		fmt.Printf("[DTLS] Server handshake complete on channel %d\n", iotcChannelBack)
-	}
-
-	// Wait for and respond to AV Login request from camera
-	if err := c.handleSpeakerAVLogin(); err != nil {
-		return fmt.Errorf("speaker av login failed: %w", err)
-	}
 
 	return nil
 }
@@ -284,7 +325,7 @@ func (c *DTLSConn) AVSendAudioData(codec byte, payload []byte, timestampUS uint3
 	conn := c.serverConn
 	if conn == nil {
 		c.mu.Unlock()
-		return fmt.Errorf("speaker channel not connected")
+		return fmt.Errorf("av server not ready")
 	}
 
 	frame := c.msgAudioFrame(payload, timestampUS, codec, sampleRate, channels)
@@ -294,9 +335,9 @@ func (c *DTLSConn) AVSendAudioData(codec byte, payload []byte, timestampUS uint3
 	n, err := conn.Write(frame)
 	if c.verbose {
 		if err != nil {
-			fmt.Printf("[SPEAKER TX] DTLS Write ERROR: %v\n", err)
+			fmt.Printf("[SERVER TX] DTLS Write ERROR: %v\n", err)
 		} else {
-			fmt.Printf("[SPEAKER TX] len=%d, data:\n%s", n, hexDump(frame))
+			fmt.Printf("[SERVER TX] len=%d, data:\n%s", n, hexDump(frame))
 		}
 	}
 	return err
@@ -320,6 +361,11 @@ func (c *DTLSConn) WriteDTLS(payload []byte, channel byte) error {
 	}
 
 	return c.Write(frame)
+}
+
+func (c *DTLSConn) WriteIOCtrl(payload []byte) error {
+	_, err := c.conn.Write(c.msgIOCtrl(payload))
+	return err
 }
 
 func (c *DTLSConn) WriteAndWait(req []byte, ok func(res []byte) bool) ([]byte, error) {
@@ -386,8 +432,14 @@ func (c *DTLSConn) WriteAndWaitIOCtrl(cmd uint16, payload []byte, expectCmd uint
 			ack := c.msgACK()
 			c.clientConn.Write(ack)
 
-			if len(data) >= 6 {
-				if binary.LittleEndian.Uint16(data[4:]) == expectCmd {
+			if gotCmd, payload, ok := ParseHL(data); ok {
+				if c.verbose {
+					fmt.Printf("[DTLS RX] Got rawCmd K%d, expecting K%d, payload=%d bytes\n", gotCmd, expectCmd, len(payload))
+					if gotCmd != expectCmd && len(payload) > 0 {
+						fmt.Printf("[DTLS RX] K%d payload:\n%s", gotCmd, hexDump(payload))
+					}
+				}
+				if gotCmd == expectCmd {
 					return data, nil
 				}
 			}
@@ -423,9 +475,13 @@ func (c *DTLSConn) Close() error {
 	c.cancel()
 
 	c.mu.Lock()
-	if c.clientConn != nil {
-		c.clientConn.Close()
+	if conn := c.serverConn; conn != nil {
+		c.serverConn = nil
+		go conn.Close()
+	}
+	if conn := c.clientConn; conn != nil {
 		c.clientConn = nil
+		go conn.Close()
 	}
 	if c.frames != nil {
 		c.frames.Close()
@@ -554,27 +610,33 @@ func (c *DTLSConn) worker() {
 		data := buf[:n]
 		magic := binary.LittleEndian.Uint16(data)
 
+		if c.verbose {
+			fmt.Printf("[DTLS RX] magic=0x%04x len=%d\n", magic, n)
+		}
+
 		switch magic {
 		case magicAVLoginResp:
 			c.queue(c.rawCmd, data)
 
 		case magicIOCtrl:
-			if len(data) >= 32 {
-				for i := 32; i+2 < len(data); i++ {
-					if data[i] == 'H' && data[i+1] == 'L' {
-						c.queue(c.rawCmd, data[i:])
-						break
+			if hlData := FindHL(data, 32); hlData != nil {
+				if c.verbose {
+					if cmd, _, ok := ParseHL(hlData); ok {
+						fmt.Printf("[DTLS RX] IOCtrl HL command K%d\n", cmd)
 					}
 				}
+				c.queue(c.rawCmd, hlData)
 			}
 
 		case magicChannelMsg:
 			if len(data) >= 36 && data[16] == 0x00 {
-				for i := 36; i+2 < len(data); i++ {
-					if data[i] == 'H' && data[i+1] == 'L' {
-						c.queue(c.rawCmd, data[i:])
-						break
+				if hlData := FindHL(data, 36); hlData != nil {
+					if c.verbose {
+						if cmd, _, ok := ParseHL(hlData); ok {
+							fmt.Printf("[DTLS RX] ChannelMsg HL command K%d\n", cmd)
+						}
 					}
+					c.queue(c.rawCmd, hlData)
 				}
 			}
 
@@ -591,13 +653,13 @@ func (c *DTLSConn) worker() {
 				}
 
 				// Check for HL command response
-				if len(data) >= 36 {
-					for i := 32; i+2 < len(data); i++ {
-						if data[i] == 'H' && data[i+1] == 'L' {
-							c.queue(c.rawCmd, data[i:])
-							break
+				if hlData := FindHL(data, 32); hlData != nil {
+					if c.verbose {
+						if cmd, _, ok := ParseHL(hlData); ok {
+							fmt.Printf("[DTLS RX] ProtoVersion HL command K%d\n", cmd)
 						}
 					}
+					c.queue(c.rawCmd, hlData)
 				}
 			}
 
@@ -709,55 +771,6 @@ func (c *DTLSConn) queue(ch chan []byte, data []byte) {
 		}
 		ch <- b
 	}
-}
-
-func (c *DTLSConn) handleSpeakerAVLogin() error {
-	if c.verbose {
-		fmt.Printf("[SPEAK] Waiting for AV Login request from camera...\n")
-	}
-
-	buf := make([]byte, 1024)
-	c.serverConn.SetReadDeadline(time.Now().Add(2 * time.Second))
-	n, err := c.serverConn.Read(buf)
-	if err != nil {
-		return fmt.Errorf("read av login: %w", err)
-	}
-
-	if c.verbose {
-		fmt.Printf("[SPEAK] AV Login request len=%d data:\n%s", n, hexDump(buf[:n]))
-	}
-
-	if n < 24 {
-		return fmt.Errorf("av login too short: %d bytes", n)
-	}
-
-	checksum := binary.LittleEndian.Uint32(buf[20:])
-	resp := c.msgAVLoginResponse(checksum)
-
-	if c.verbose {
-		fmt.Printf("[SPEAK] Sending AV Login response: %d bytes\n", len(resp))
-	}
-
-	if _, err = c.serverConn.Write(resp); err != nil {
-		return fmt.Errorf("write AV login response: %w", err)
-	}
-
-	// Camera may resend, respond again
-	c.serverConn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
-	if n, _ = c.serverConn.Read(buf); n > 0 {
-		if c.verbose {
-			fmt.Printf("[SPEAK] Received AV Login resend: %d bytes\n", n)
-		}
-		c.serverConn.Write(resp)
-	}
-
-	c.serverConn.SetReadDeadline(time.Time{})
-
-	if c.verbose {
-		fmt.Printf("[SPEAK] AV Login complete, ready for audio\n")
-	}
-
-	return nil
 }
 
 func (c *DTLSConn) msgDisco(stage byte) []byte {
