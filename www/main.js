@@ -1,135 +1,95 @@
-document.head.innerHTML += `
-<style>
-    body {
-        background-color: white;  /* fix Hass black theme */
-        display: flex;
-        flex-direction: column;
-        font-family: Arial, sans-serif;
-        margin: 0;
-    }
+(() => {
+    const THEME_KEY = 'go2rtc_theme';
+    const root = document.documentElement;
 
-    /* navigation block */
-    nav {
-        background-color: #333;
-        overflow: hidden;
-    }
-
-    nav a {
-        float: left;
-        display: block;
-        color: #f2f2f2;
-        text-align: center;
-        padding: 14px 16px;
-        text-decoration: none;
-        font-size: 17px;
-    }
-
-    nav a:hover {
-        background-color: #ddd;
-        color: black;
-    }
-
-    /* main block */
-    main {
-        padding: 10px;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-    }
-
-    /* checkbox */
-    label {
-        display: flex;
-        gap: 5px;
-        align-items: center;
-        cursor: pointer;
-    }
-
-    input[type="checkbox"] {
-        width: 18px;
-        height: 18px;
-        cursor: pointer;
-    }
-
-    /* form */
-    form {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-    }
-
-    input[type="text"], input[type="email"], input[type="password"], select {
-        padding: 10px;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        font-size: 16px;
-    }
-
-    button {
-        padding: 10px 20px;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 16px;
-    }
-
-    /* table */
-    table {
-        width: 100%;
-        background-color: white;
-        border-collapse: collapse;
-        margin: 0 auto;
-        overflow: hidden;
-    }
-
-    th, td {
-        padding: 12px 15px;
-        text-align: left;
-        border-bottom: 1px solid #e0e0e0;
-    }
-
-    th {
-        background-color: #444;
-        color: white;
-    }
-
-    tr:nth-child(even) {
-        background-color: #fafafa;
-    }
-
-    tr:hover {
-        background-color: #edf7ff;
-        transition: background-color 0.3s ease;
-    }
-
-    /* table on mobile */
-    @media (max-width: 480px) {
-        table, thead, tbody, th, td, tr {
-            display: block;
-        }
-
-        th, td {
-            box-sizing: border-box;
-            width: 100% !important;
-            border: none;
-        }
-
-        tr {
-            margin-bottom: 10px;
-            border-radius: 4px;
+    function setTheme(theme) {
+        if (theme === 'light' || theme === 'dark') {
+            root.dataset.theme = theme;
+        } else {
+            delete root.dataset.theme;
         }
     }
-</style>
+
+    function getEffectiveTheme() {
+        if (root.dataset.theme === 'light' || root.dataset.theme === 'dark') return root.dataset.theme;
+        return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+
+    function themeIcon(theme) {
+        if (theme === 'dark') {
+            // moon
+            return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+  <path d="M21 14.8A8.5 8.5 0 0 1 9.2 3a7 7 0 1 0 11.8 11.8Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
+        }
+        // sun
+        return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+  <path d="M12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12Z" stroke="currentColor" stroke-width="2"/>
+  <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+</svg>`;
+    }
+
+    function renderThemeToggle(btn) {
+        const theme = getEffectiveTheme();
+        const label = theme === 'dark' ? 'Dark theme' : 'Light theme';
+        btn.setAttribute('aria-label', `Toggle theme (currently: ${label})`);
+        btn.innerHTML = themeIcon(theme) + '<span class="hint">Theme</span>';
+    }
+
+    try {
+        const saved = localStorage.getItem(THEME_KEY);
+        if (saved === 'light' || saved === 'dark') setTheme(saved);
+    } catch (e) {
+    }
+
+    const header = document.createElement('header');
+    header.className = 'app-header';
+    header.innerHTML = `
+  <div class="app-header__inner">
+    <a class="app-brand" href="index.html" aria-label="go2rtc home">
+      <span class="app-dot" aria-hidden="true"></span>
+      <span>go2rtc</span>
+    </a>
+    <nav class="app-nav" aria-label="Primary">
+      <a href="index.html">streams</a>
+      <a href="add.html">add</a>
+      <a href="config.html">config</a>
+      <a href="log.html">log</a>
+      <a href="net.html">net</a>
+    </nav>
+    <div class="app-actions">
+      <button class="btn btn-sm btn-ghost" type="button" data-theme-toggle></button>
+    </div>
+  </div>
 `;
 
-document.body.innerHTML = `
-<header>
-    <nav>
-        <a href="index.html"><b>go2rtc</b></a>
-        <a href="add.html">add</a>
-        <a href="config.html">config</a>
-        <a href="log.html">log</a>
-        <a href="net.html">net</a>
-    </nav>
-</header>
-` + document.body.innerHTML;
+    if (!document.querySelector('header.app-header')) {
+        document.body.prepend(header);
+    }
+
+    // Active nav item.
+    try {
+        const current = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
+        document.querySelectorAll('nav.app-nav a').forEach(a => {
+            const href = (a.getAttribute('href') || '').toLowerCase();
+            if (href === current) a.setAttribute('aria-current', 'page');
+        });
+    } catch (e) {
+    }
+
+    // Theme toggle.
+    const toggle = document.querySelector('[data-theme-toggle]');
+    if (toggle) {
+        renderThemeToggle(toggle);
+        toggle.addEventListener('click', () => {
+            const current = getEffectiveTheme();
+            const next = current === 'dark' ? 'light' : 'dark';
+            setTheme(next);
+            try {
+                localStorage.setItem(THEME_KEY, next);
+            } catch (e) {
+            }
+            renderThemeToggle(toggle);
+        });
+    }
+})();

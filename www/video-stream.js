@@ -28,22 +28,48 @@ class VideoStream extends VideoRTC {
         <style>
         video-stream {
             position: relative;
+            display: block;
         }
         .info {
             position: absolute;
             top: 0;
             left: 0;
             right: 0;
-            padding: 12px;
-            color: white;
+            padding: 10px;
+            color: rgba(255, 255, 255, 0.95);
             display: flex;
             justify-content: space-between;
+            align-items: flex-start;
+            gap: 10px;
             pointer-events: none;
+        }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font: 12px/1.2 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+            background: rgba(0, 0, 0, 0.45);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
+        .status {
+            max-width: 75%;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+        .mode {
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            font-weight: 700;
         }
         </style>
         <div class="info">
-            <div class="status"></div>
-            <div class="mode"></div>
+            <div class="badge status"></div>
+            <div class="badge mode"></div>
         </div>
         `;
 
