@@ -179,24 +179,24 @@ func (c *Client) SetResolution(quality byte) error {
 	// Use K10052 (doorbell format) for certain models
 	if c.useDoorbellResolution() {
 		k10052 := c.buildK10052(frameSize, bitrate)
-		_, err := c.conn.WriteAndWaitIOCtrl(KCmdSetResolutionDB, k10052, KCmdSetResolutionDBRes, 5*time.Second)
+		_, err := c.conn.WriteAndWaitIOCtrl(k10052, c.matchHL(KCmdSetResolutionDBRes), 5*time.Second)
 		return err
 	}
 
 	k10056 := c.buildK10056(frameSize, bitrate)
-	_, err := c.conn.WriteAndWaitIOCtrl(KCmdSetResolution, k10056, KCmdSetResolutionResp, 5*time.Second)
+	_, err := c.conn.WriteAndWaitIOCtrl(k10056, c.matchHL(KCmdSetResolutionResp), 5*time.Second)
 	return err
 }
 
 func (c *Client) StartVideo() error {
 	k10010 := c.buildK10010(MediaTypeVideo, true)
-	_, err := c.conn.WriteAndWaitIOCtrl(KCmdControlChannel, k10010, KCmdControlChannelResp, 5*time.Second)
+	_, err := c.conn.WriteAndWaitIOCtrl(k10010, c.matchHL(KCmdControlChannelResp), 5*time.Second)
 	return err
 }
 
 func (c *Client) StartAudio() error {
 	k10010 := c.buildK10010(MediaTypeAudio, true)
-	_, err := c.conn.WriteAndWaitIOCtrl(KCmdControlChannel, k10010, KCmdControlChannelResp, 5*time.Second)
+	_, err := c.conn.WriteAndWaitIOCtrl(k10010, c.matchHL(KCmdControlChannelResp), 5*time.Second)
 	return err
 }
 
@@ -210,8 +210,12 @@ func (c *Client) StartIntercom() error {
 	}
 
 	k10010 := c.buildK10010(MediaTypeReturnAudio, true)
-	if _, err := c.conn.WriteAndWaitIOCtrl(KCmdControlChannel, k10010, KCmdControlChannelResp, 5*time.Second); err != nil {
+	if _, err := c.conn.WriteAndWaitIOCtrl(k10010, c.matchHL(KCmdControlChannelResp), 5*time.Second); err != nil {
 		return fmt.Errorf("enable return audio: %w", err)
+	}
+
+	if c.verbose {
+		fmt.Printf("[Wyze] Speaker channel enabled, waiting for readiness...\n")
 	}
 
 	return c.conn.AVServStart()
@@ -329,12 +333,13 @@ func (c *Client) doAVLogin() error {
 
 func (c *Client) doKAuth() error {
 	// Step 1: K10000 -> K10001 (Challenge)
-	data, err := c.conn.WriteAndWaitIOCtrl(KCmdAuth, c.buildK10000(), KCmdChallenge, 10*time.Second)
+	data, err := c.conn.WriteAndWaitIOCtrl(c.buildK10000(), c.matchHL(KCmdChallenge), 5*time.Second)
 	if err != nil {
 		return fmt.Errorf("wyze: K10001 failed: %w", err)
 	}
 
-	challenge, status, err := c.parseK10001(data)
+	hlData := c.extractHL(data)
+	challenge, status, err := c.parseK10001(hlData)
 	if err != nil {
 		return fmt.Errorf("wyze: K10001 parse failed: %w", err)
 	}
@@ -344,13 +349,14 @@ func (c *Client) doKAuth() error {
 	}
 
 	// Step 2: K10002 -> K10003 (Auth)
-	data, err = c.conn.WriteAndWaitIOCtrl(KCmdChallengeResp, c.buildK10002(challenge, status), KCmdAuthResult, 10*time.Second)
+	data, err = c.conn.WriteAndWaitIOCtrl(c.buildK10002(challenge, status), c.matchHL(KCmdAuthResult), 5*time.Second)
 	if err != nil {
 		return fmt.Errorf("wyze: K10002 failed: %w", err)
 	}
+	hlData = c.extractHL(data)
 
 	// Parse K10003 response
-	authResp, err := c.parseK10003(data)
+	authResp, err := c.parseK10003(hlData)
 	if err != nil {
 		return fmt.Errorf("wyze: K10003 parse failed: %w", err)
 	}
@@ -546,6 +552,29 @@ func (c *Client) is2K() bool {
 
 func (c *Client) isFloodlight() bool {
 	return c.model == "HL_CFL2"
+}
+
+func (c *Client) matchHL(expectCmd uint16) func([]byte) bool {
+	return func(data []byte) bool {
+		hlData := c.extractHL(data)
+		if hlData == nil {
+			return false
+		}
+		cmd, _, ok := tutk.ParseHL(hlData)
+		return ok && cmd == expectCmd
+	}
+}
+
+func (c *Client) extractHL(data []byte) []byte {
+	// Try offset 32 (magicIOCtrl, protoVersion)
+	if hlData := tutk.FindHL(data, 32); hlData != nil {
+		return hlData
+	}
+	// Try offset 36 (magicChannelMsg)
+	if len(data) >= 36 && data[16] == 0x00 {
+		return tutk.FindHL(data, 36)
+	}
+	return nil
 }
 
 const (

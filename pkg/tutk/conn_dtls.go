@@ -176,7 +176,7 @@ func (c *DTLSConn) AVClientStart(timeout time.Duration) error {
 		return fmt.Errorf("av login 1 failed: %w", err)
 	}
 
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	if _, err := c.clientConn.Write(pkt2); err != nil {
 		return fmt.Errorf("av login 2 failed: %w", err)
@@ -239,7 +239,7 @@ func (c *DTLSConn) AVServStart() error {
 
 	// Wait for AV Login request from camera
 	buf := make([]byte, 1024)
-	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	n, err := conn.Read(buf)
 	if err != nil {
 		go conn.Close()
@@ -265,6 +265,10 @@ func (c *DTLSConn) AVServStart() error {
 	if _, err = conn.Write(resp); err != nil {
 		go conn.Close()
 		return fmt.Errorf("write av login response: %w", err)
+	}
+
+	if c.verbose {
+		fmt.Printf("[SERVER] AV Login response sent, waiting for possible resend...\n")
 	}
 
 	// Camera may resend, respond again
@@ -377,7 +381,7 @@ func (c *DTLSConn) WriteAndWait(req []byte, ok func(res []byte) bool) ([]byte, e
 	})
 	defer t.Stop()
 
-	_ = c.conn.SetDeadline(time.Now().Add(5000 * time.Millisecond))
+	_ = c.conn.SetDeadline(time.Now().Add(5 * time.Second))
 	defer c.conn.SetDeadline(time.Time{})
 
 	buf := make([]byte, 2048)
@@ -404,7 +408,7 @@ func (c *DTLSConn) WriteAndWait(req []byte, ok func(res []byte) bool) ([]byte, e
 	}
 }
 
-func (c *DTLSConn) WriteAndWaitIOCtrl(cmd uint16, payload []byte, expectCmd uint16, timeout time.Duration) ([]byte, error) {
+func (c *DTLSConn) WriteAndWaitIOCtrl(payload []byte, match func([]byte) bool, timeout time.Duration) ([]byte, error) {
 	frame := c.msgIOCtrl(payload)
 	var t *time.Timer
 	t = time.AfterFunc(1, func() {
@@ -432,19 +436,11 @@ func (c *DTLSConn) WriteAndWaitIOCtrl(cmd uint16, payload []byte, expectCmd uint
 			ack := c.msgACK()
 			c.clientConn.Write(ack)
 
-			if gotCmd, payload, ok := ParseHL(data); ok {
-				if c.verbose {
-					fmt.Printf("[DTLS RX] Got rawCmd K%d, expecting K%d, payload=%d bytes\n", gotCmd, expectCmd, len(payload))
-					if gotCmd != expectCmd && len(payload) > 0 {
-						fmt.Printf("[DTLS RX] K%d payload:\n%s", gotCmd, hexDump(payload))
-					}
-				}
-				if gotCmd == expectCmd {
-					return data, nil
-				}
+			if match(data) {
+				return data, nil
 			}
 		case <-timer.C:
-			return nil, fmt.Errorf("timeout waiting for K%d", expectCmd)
+			return nil, fmt.Errorf("timeout waiting for response")
 		}
 	}
 }
@@ -507,7 +503,7 @@ func (c *DTLSConn) discovery() error {
 	pktCC51 := c.msgDiscoCC51(0, 0, false)
 
 	buf := make([]byte, 2048)
-	deadline := time.Now().Add(5000 * time.Millisecond)
+	deadline := time.Now().Add(5 * time.Second)
 
 	for time.Now().Before(deadline) {
 		c.conn.WriteToUDP(pktIOTC, c.addr)
@@ -618,50 +614,21 @@ func (c *DTLSConn) worker() {
 		case magicAVLoginResp:
 			c.queue(c.rawCmd, data)
 
-		case magicIOCtrl:
-			if hlData := FindHL(data, 32); hlData != nil {
-				if c.verbose {
-					if cmd, _, ok := ParseHL(hlData); ok {
-						fmt.Printf("[DTLS RX] IOCtrl HL command K%d\n", cmd)
-					}
-				}
-				c.queue(c.rawCmd, hlData)
-			}
-
-		case magicChannelMsg:
-			if len(data) >= 36 && data[16] == 0x00 {
-				if hlData := FindHL(data, 36); hlData != nil {
-					if c.verbose {
-						if cmd, _, ok := ParseHL(hlData); ok {
-							fmt.Printf("[DTLS RX] ChannelMsg HL command K%d\n", cmd)
-						}
-					}
-					c.queue(c.rawCmd, hlData)
-				}
-			}
+		case magicIOCtrl, magicChannelMsg:
+			c.queue(c.rawCmd, data)
 
 		case protoVersion:
+			// Seq-Tracking
 			if len(data) >= 8 {
-				// Extract seq number at byte 4-5 (uint16 of uint32 AVSeq)
 				seq := binary.LittleEndian.Uint16(data[4:])
 				if !c.rxSeqInit {
 					c.rxSeqInit = true
 				}
-				// Track highest received sequence
 				if seq > c.rxSeqEnd || c.rxSeqEnd == 0xffff {
 					c.rxSeqEnd = seq
 				}
-
-				// Check for HL command response
-				if hlData := FindHL(data, 32); hlData != nil {
-					if c.verbose {
-						if cmd, _, ok := ParseHL(hlData); ok {
-							fmt.Printf("[DTLS RX] ProtoVersion HL command K%d\n", cmd)
-						}
-					}
-					c.queue(c.rawCmd, hlData)
-				}
 			}
+			c.queue(c.rawCmd, data)
 
 		case magicACK:
 			c.mu.RLock()
