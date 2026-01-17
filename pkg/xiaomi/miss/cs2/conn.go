@@ -21,7 +21,7 @@ func Dial(host, transport string) (*Conn, error) {
 	_, isTCP := conn.(*tcpConn)
 
 	c := &Conn{
-		conn:  conn,
+		Conn:  conn,
 		isTCP: isTCP,
 		channels: [4]*dataChannel{
 			newDataChannel(0, 10), nil, newDataChannel(250, 100), nil,
@@ -32,7 +32,7 @@ func Dial(host, transport string) (*Conn, error) {
 }
 
 type Conn struct {
-	conn  net.Conn
+	net.Conn
 	isTCP bool
 
 	err    error
@@ -116,7 +116,7 @@ func (c *Conn) worker() {
 	buf := make([]byte, 1200)
 
 	for {
-		n, err := c.conn.Read(buf)
+		n, err := c.Conn.Read(buf)
 		if err != nil {
 			c.err = fmt.Errorf("%s: %w", "cs2", err)
 			return
@@ -136,7 +136,7 @@ func (c *Conn) worker() {
 				// For TCP we should send ping every second to keep connection alive.
 				// Based on PCAP analysis: official Mi Home app sends PING every ~1s.
 				if now := time.Now(); now.After(keepaliveTS) {
-					_, _ = c.conn.Write([]byte{magic, msgPing, 0, 0})
+					_, _ = c.Conn.Write([]byte{magic, msgPing, 0, 0})
 					keepaliveTS = now.Add(time.Second)
 				}
 
@@ -151,7 +151,7 @@ func (c *Conn) worker() {
 				if pushed >= 0 {
 					// For UDP we should send ACK.
 					ack := []byte{magic, msgDrwAck, 0, 6, magicDrw, ch, 0, 1, seqHI, seqLO}
-					_, _ = c.conn.Write(ack)
+					_, _ = c.Conn.Write(ack)
 				}
 			}
 
@@ -161,7 +161,7 @@ func (c *Conn) worker() {
 			}
 
 		case msgPing:
-			_, _ = c.conn.Write([]byte{magic, msgPong, 0, 0})
+			_, _ = c.Conn.Write([]byte{magic, msgPong, 0, 0})
 		case msgPong, msgP2PRdyUDP, msgP2PRdyTCP, msgClose: // skip it
 		case msgDrwAck: // only for UDP
 			if c.cmdAck != nil {
@@ -180,16 +180,8 @@ func (c *Conn) Protocol() string {
 	return "cs2+udp"
 }
 
-func (c *Conn) RemoteAddr() net.Addr {
-	return c.conn.RemoteAddr()
-}
-
-func (c *Conn) SetDeadline(t time.Time) error {
-	return c.conn.SetDeadline(t)
-}
-
-func (c *Conn) Close() error {
-	return c.conn.Close()
+func (c *Conn) Version() string {
+	return "CS2"
 }
 
 func (c *Conn) Error() error {
@@ -199,25 +191,25 @@ func (c *Conn) Error() error {
 	return io.EOF
 }
 
-func (c *Conn) ReadCommand() (cmd uint16, data []byte, err error) {
+func (c *Conn) ReadCommand() (cmd uint32, data []byte, err error) {
 	buf, ok := c.channels[0].Pop()
 	if !ok {
 		return 0, nil, c.Error()
 	}
-	cmd = binary.LittleEndian.Uint16(buf[:2])
+	cmd = binary.LittleEndian.Uint32(buf)
 	data = buf[4:]
 	return
 }
 
-func (c *Conn) WriteCommand(cmd uint16, data []byte) error {
+func (c *Conn) WriteCommand(cmd uint32, data []byte) error {
 	c.cmdMu.Lock()
 	defer c.cmdMu.Unlock()
 
-	req := marshalCmd(0, c.seqCh0, uint32(cmd), data)
+	req := marshalCmd(0, c.seqCh0, cmd, data)
 	c.seqCh0++
 
 	if c.isTCP {
-		_, err := c.conn.Write(req)
+		_, err := c.Conn.Write(req)
 		return err
 	}
 
@@ -233,7 +225,7 @@ func (c *Conn) WriteCommand(cmd uint16, data []byte) error {
 	}
 
 	for {
-		if _, err := c.conn.Write(req); err != nil {
+		if _, err := c.Conn.Write(req); err != nil {
 			return err
 		}
 		<-timeout.C
@@ -247,18 +239,20 @@ func (c *Conn) WriteCommand(cmd uint16, data []byte) error {
 	}
 }
 
-func (c *Conn) ReadPacket() ([]byte, error) {
+const hdrSize = 32
+
+func (c *Conn) ReadPacket() (hdr, payload []byte, err error) {
 	data, ok := c.channels[2].Pop()
 	if !ok {
-		return nil, c.Error()
+		return nil, nil, c.Error()
 	}
-	return data, nil
+	return data[:hdrSize], data[hdrSize:], nil
 }
 
-func (c *Conn) WritePacket(data []byte) error {
+func (c *Conn) WritePacket(hdr, payload []byte) error {
 	const offset = 12
 
-	n := uint32(len(data))
+	n := hdrSize + uint32(len(payload))
 	req := make([]byte, n+offset)
 	req[0] = magic
 	req[1] = msgDrw
@@ -269,9 +263,10 @@ func (c *Conn) WritePacket(data []byte) error {
 	binary.BigEndian.PutUint16(req[6:], c.seqCh3)
 	c.seqCh3++
 	binary.BigEndian.PutUint32(req[8:], n)
-	copy(req[offset:], data)
+	copy(req[offset:], hdr)
+	copy(req[offset+hdrSize:], hdr)
 
-	_, err := c.conn.Write(req)
+	_, err := c.Conn.Write(req)
 	return err
 }
 
