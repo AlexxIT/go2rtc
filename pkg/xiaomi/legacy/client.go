@@ -85,10 +85,7 @@ func xiaofangLogin(conn *tutk.Conn, password string) error {
 	}
 
 	_, data, err = conn.ReadCommand()
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 type Client struct {
@@ -110,14 +107,8 @@ func (c *Client) ReadPacket() (hdr, payload []byte, err error) {
 		switch hdr[0] {
 		case tutk.CodecH264, tutk.CodecH265:
 			payload, err = DecodeVideo(payload, c.key)
-			if err != nil {
-				return
-			}
 		case tutk.CodecAAC:
 			payload, err = crypto.Decode(payload, c.key)
-			if err != nil {
-				return
-			}
 		}
 	}
 	return

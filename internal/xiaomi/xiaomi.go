@@ -99,12 +99,12 @@ func getCameraURL(url *url.URL) (string, error) {
 	// The getMissURL request has a fallback to getP2PURL.
 	// But for known models we can save one request to the cloud.
 	if xiaomi.IsLegacy(model) {
-		return getP2PURL(url)
+		return getLegacyURL(url)
 	}
 	return getMissURL(url)
 }
 
-func getP2PURL(url *url.URL) (string, error) {
+func getLegacyURL(url *url.URL) (string, error) {
 	query := url.Query()
 
 	clientPublic, clientPrivate, err := crypto.GenerateKey()
@@ -161,7 +161,7 @@ func getMissURL(url *url.URL) (string, error) {
 	res, err := cloudUserRequest(url.User, "/v2/device/miss_get_vendor", params)
 	if err != nil {
 		if strings.Contains(err.Error(), "no available vendor support") {
-			return getP2PURL(url)
+			return getLegacyURL(url)
 		}
 		return "", err
 	}

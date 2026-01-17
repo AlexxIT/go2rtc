@@ -231,10 +231,6 @@ func (s *Session25) msgAckCounters() []byte {
 }
 
 func (s *Session25) handleCh1(cmd []byte) int {
-	// Channel 1 used for two-way audio. It's important:
-	// - answer on 0000 command with exact config response (can't set simple proto)
-	// - send 0012 command at start
-	// - respond on every 0008 command for smooth playback
 	switch cid := string(cmd[:2]); cid {
 	case "\x00\x00": // client start
 		return msgClientStart

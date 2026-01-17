@@ -62,7 +62,7 @@ func probe(client *Client) ([]*core.Media, error) {
 	var vcodec, acodec *core.Codec
 
 	for {
-		// 0   5000
+		// 0   5000      codec
 		// 2   0000      codec params
 		// 4   01        active clients
 		// 5   34        unknown const
@@ -83,7 +83,6 @@ func probe(client *Client) ([]*core.Media, error) {
 				if codec == tutk.CodecH264 {
 					if h264.NALUType(avcc) == h264.NALUTypeSPS {
 						vcodec = h264.AVCCToCodec(avcc)
-						vcodec.FmtpLine = ""
 					}
 				} else {
 					if h265.NALUType(avcc) == h265.NALUTypeVPS {
