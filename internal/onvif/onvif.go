@@ -166,21 +166,21 @@ func apiOnvif(w http.ResponseWriter, r *http.Request) {
 	var items []*api.Source
 
 	if src == "" {
-		urls, err := onvif.DiscoveryStreamingURLs()
+		devices, err := onvif.DiscoveryStreamingDevices()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		for _, rawURL := range urls {
-			u, err := url.Parse(rawURL)
+		for _, device := range devices {
+			u, err := url.Parse(device.URL)
 			if err != nil {
-				log.Warn().Str("url", rawURL).Msg("[onvif] broken")
+				log.Warn().Str("url", device.URL).Msg("[onvif] broken")
 				continue
 			}
 
 			if u.Scheme != "http" {
-				log.Warn().Str("url", rawURL).Msg("[onvif] unsupported")
+				log.Warn().Str("url", device.URL).Msg("[onvif] unsupported")
 				continue
 			}
 
@@ -191,7 +191,11 @@ func apiOnvif(w http.ResponseWriter, r *http.Request) {
 				u.Path = ""
 			}
 
-			items = append(items, &api.Source{Name: u.Host, URL: u.String()})
+			items = append(items, &api.Source{
+				Name: u.Host,
+				URL:  u.String(),
+				Info: device.Name + " " + device.Hardware,
+			})
 		}
 	} else {
 		client, err := onvif.NewClient(src)
