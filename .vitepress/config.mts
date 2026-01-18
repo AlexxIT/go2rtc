@@ -24,8 +24,25 @@ function walkForReadmes(dir: string, results: string[]) {
 
 function extractTitle(filePath: string) {
   const content = fs.readFileSync(filePath, 'utf8');
-  const match = content.match(/^#\s+(.+)$/m);
-  return match ? match[1].trim() : '';
+  let inFence = false;
+
+  for (const line of content.split(/\r?\n/)) {
+    if (/^(```|~~~)/.test(line)) {
+      inFence = !inFence;
+      continue;
+    }
+
+    if (inFence) {
+      continue;
+    }
+
+    const match = line.match(/^#\s+(.+)$/);
+    if (match) {
+      return match[1].trim();
+    }
+  }
+
+  return '';
 }
 
 function toTitleCase(value: string) {
