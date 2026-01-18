@@ -50,6 +50,34 @@ func ReverseTransCodePartial(dst, src []byte) []byte {
 	return dst
 }
 
+func ReverseTransCodeBlob(src []byte) []byte {
+	if len(src) < 16 {
+		return ReverseTransCodePartial(nil, src)
+	}
+
+	dst := make([]byte, len(src))
+	header := ReverseTransCodePartial(nil, src[:16])
+	copy(dst, header)
+
+	if len(src) > 16 {
+		if dst[3]&1 != 0 { // Partial encryption (check decrypted header)
+			remaining := len(src) - 16
+			decryptLen := min(remaining, 48)
+			if decryptLen > 0 {
+				decrypted := ReverseTransCodePartial(nil, src[16:16+decryptLen])
+				copy(dst[16:], decrypted)
+			}
+			if remaining > 48 {
+				copy(dst[64:], src[64:])
+			}
+		} else { // Full decryption
+			decrypted := ReverseTransCodePartial(nil, src[16:])
+			copy(dst[16:], decrypted)
+		}
+	}
+	return dst
+}
+
 func TransCodePartial(dst, src []byte) []byte {
 	n := len(src)
 	tmp := make([]byte, n)
@@ -89,6 +117,34 @@ func TransCodePartial(dst, src []byte) []byte {
 
 	swap(dst16, tmp16, n)
 
+	return dst
+}
+
+func TransCodeBlob(src []byte) []byte {
+	if len(src) < 16 {
+		return TransCodePartial(nil, src)
+	}
+
+	dst := make([]byte, len(src))
+	header := TransCodePartial(nil, src[:16])
+	copy(dst, header)
+
+	if len(src) > 16 {
+		if src[3]&1 != 0 { // Partial encryption
+			remaining := len(src) - 16
+			encryptLen := min(remaining, 48)
+			if encryptLen > 0 {
+				encrypted := TransCodePartial(nil, src[16:16+encryptLen])
+				copy(dst[16:], encrypted)
+			}
+			if remaining > 48 {
+				copy(dst[64:], src[64:])
+			}
+		} else { // Full encryption
+			encrypted := TransCodePartial(nil, src[16:])
+			copy(dst[16:], encrypted)
+		}
+	}
 	return dst
 }
 
@@ -174,4 +230,50 @@ func XXTEADecrypt(dst, src, key []byte) {
 		binary.LittleEndian.PutUint32(dst, i)
 		dst = dst[4:]
 	}
+}
+
+func XXTEADecryptVar(data, key []byte) []byte {
+	if len(data) < 8 || len(key) < 16 {
+		return nil
+	}
+
+	k := make([]uint32, 4)
+	for i := range 4 {
+		k[i] = binary.LittleEndian.Uint32(key[i*4:])
+	}
+
+	n := max(len(data)/4, 2)
+	v := make([]uint32, n)
+	for i := 0; i < len(data)/4; i++ {
+		v[i] = binary.LittleEndian.Uint32(data[i*4:])
+	}
+
+	rounds := 6 + 52/n
+	sum := uint32(rounds) * delta
+	y := v[0]
+
+	for rounds > 0 {
+		e := (sum >> 2) & 3
+		for p := n - 1; p > 0; p-- {
+			z := v[p-1]
+			v[p] -= xxteaMX(sum, y, z, p, e, k)
+			y = v[p]
+		}
+		z := v[n-1]
+		v[0] -= xxteaMX(sum, y, z, 0, e, k)
+		y = v[0]
+		sum -= delta
+		rounds--
+	}
+
+	result := make([]byte, n*4)
+	for i := range n {
+		binary.LittleEndian.PutUint32(result[i*4:], v[i])
+	}
+
+	return result[:len(data)]
+}
+
+func xxteaMX(sum, y, z uint32, p int, e uint32, k []uint32) uint32 {
+	return ((z>>5 ^ y<<2) + (y>>3 ^ z<<4)) ^ ((sum ^ y) + (k[(p&3)^int(e)] ^ z))
 }
