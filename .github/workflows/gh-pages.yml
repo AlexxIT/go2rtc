@@ -35,12 +35,14 @@ jobs:
         run: npm install --no-package-lock
       - name: Build docs
         run: npm run docs:build
+      - name: Copy docs into website
+        run: rsync -a --exclude 'api/' .vitepress/dist/ website/
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './.vitepress/dist'
+          path: './website'
   # Single deploy job since we're just deploying
   deploy:
     needs: build
