@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/tutk"
+	"github.com/AlexxIT/go2rtc/pkg/tutk/dtls"
 )
 
 const (
@@ -49,7 +50,7 @@ const (
 )
 
 type Client struct {
-	conn *tutk.DTLSConn
+	conn *dtls.DTLSConn
 
 	host  string
 	uid   string
@@ -97,7 +98,7 @@ func Dial(rawURL string) (*Client, error) {
 		verbose: query.Get("verbose") == "true",
 	}
 
-	c.authKey = string(tutk.CalculateAuthKey(c.enr, c.mac))
+	c.authKey = string(dtls.CalculateAuthKey(c.enr, c.mac))
 
 	if c.verbose {
 		fmt.Printf("[Wyze] Connecting to %s (UID: %s)\n", c.host, c.uid)
@@ -303,7 +304,7 @@ func (c *Client) connect() error {
 		host = host[:idx]
 	}
 
-	conn, err := tutk.DialDTLS(host, port, c.uid, c.authKey, c.enr, c.verbose)
+	conn, err := dtls.DialDTLS(host, port, c.uid, c.authKey, c.enr, c.verbose)
 	if err != nil {
 		return fmt.Errorf("wyze: connect failed: %w", err)
 	}

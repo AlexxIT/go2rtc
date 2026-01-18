@@ -26,6 +26,15 @@ const (
 
 var sampleRates = [9]uint32{8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000}
 
+func GetSampleRateIndex(sampleRate uint32) uint8 {
+	for i, rate := range sampleRates {
+		if rate == sampleRate {
+			return uint8(i)
+		}
+	}
+	return 3 // default 16kHz
+}
+
 func GetSamplesPerFrame(codecID byte) uint32 {
 	switch codecID {
 	case CodecAACRaw, CodecAACADTS, CodecAACLATM, CodecAACAlt:

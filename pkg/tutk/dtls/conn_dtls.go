@@ -1,4 +1,4 @@
-package tutk
+package dtls
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/AlexxIT/go2rtc/pkg/tutk"
 	"github.com/pion/dtls/v3"
 )
 
@@ -70,7 +71,7 @@ const (
 type DTLSConn struct {
 	conn    *net.UDPConn
 	addr    *net.UDPAddr
-	frames  *FrameHandler
+	frames  *tutk.FrameHandler
 	err     error
 	verbose bool
 	ctx     context.Context
@@ -150,7 +151,7 @@ func DialDTLS(host string, port int, uid, authKey, enr string, verbose bool) (*D
 	c.clientBuf = make(chan []byte, 64)
 	c.serverBuf = make(chan []byte, 64)
 	c.rawCmd = make(chan []byte, 16)
-	c.frames = NewFrameHandler(c.verbose)
+	c.frames = tutk.NewFrameHandler(c.verbose)
 
 	c.wg.Add(1)
 	go c.reader()
@@ -167,7 +168,7 @@ func DialDTLS(host string, port int, uid, authKey, enr string, verbose bool) (*D
 }
 
 func (c *DTLSConn) AVClientStart(timeout time.Duration) error {
-	randomID := GenSessionID()
+	randomID := tutk.GenSessionID()
 	pkt1 := c.msgAVLogin(magicAVLogin1, 570, 0x0001, randomID)
 	pkt2 := c.msgAVLogin(magicAVLogin2, 572, 0x0000, randomID)
 	pkt2[20]++ // pkt2 has randomID incremented by 1
@@ -311,7 +312,7 @@ func (c *DTLSConn) AVServStop() error {
 	return nil
 }
 
-func (c *DTLSConn) AVRecvFrameData() (*Packet, error) {
+func (c *DTLSConn) AVRecvFrameData() (*tutk.Packet, error) {
 	select {
 	case pkt, ok := <-c.frames.Recv():
 		if !ok {
@@ -351,7 +352,7 @@ func (c *DTLSConn) Write(data []byte) error {
 		_, err := c.conn.WriteToUDP(data, c.addr)
 		return err
 	}
-	_, err := c.conn.WriteToUDP(TransCodeBlob(data), c.addr)
+	_, err := c.conn.WriteToUDP(tutk.TransCodeBlob(data), c.addr)
 	return err
 }
 
@@ -397,7 +398,7 @@ func (c *DTLSConn) WriteAndWait(req []byte, ok func(res []byte) bool) ([]byte, e
 		if c.isCC51 {
 			res = buf[:n]
 		} else {
-			res = ReverseTransCodeBlob(buf[:n])
+			res = tutk.ReverseTransCodeBlob(buf[:n])
 		}
 
 		if ok(res) {
@@ -496,9 +497,9 @@ func (c *DTLSConn) Error() error {
 }
 
 func (c *DTLSConn) discovery() error {
-	c.sid = GenSessionID()
+	c.sid = tutk.GenSessionID()
 
-	pktIOTC := TransCodeBlob(c.msgDisco(1))
+	pktIOTC := tutk.TransCodeBlob(c.msgDisco(1))
 	pktCC51 := c.msgDiscoCC51(0, 0, false)
 
 	buf := make([]byte, 2048)
@@ -530,7 +531,7 @@ func (c *DTLSConn) discovery() error {
 		}
 
 		// IOTC Protocol (Basis)
-		data := ReverseTransCodeBlob(buf[:n])
+		data := tutk.ReverseTransCodeBlob(buf[:n])
 		if len(data) >= 16 && binary.LittleEndian.Uint16(data[8:]) == cmdDiscoRes {
 			c.addr, c.isCC51 = addr, false
 			return c.discoDone()
@@ -638,7 +639,7 @@ func (c *DTLSConn) worker() {
 
 		default:
 			channel := data[0]
-			if channel == ChannelAudio || channel == ChannelIVideo || channel == ChannelPVideo {
+			if channel == tutk.ChannelAudio || channel == tutk.ChannelIVideo || channel == tutk.ChannelPVideo {
 				c.frames.Handle(data)
 			}
 		}
@@ -700,7 +701,7 @@ func (c *DTLSConn) reader() {
 		}
 
 		// IOTC Protocol (Basis)
-		data := ReverseTransCodeBlob(buf[:n])
+		data := tutk.ReverseTransCodeBlob(buf[:n])
 		if len(data) < 16 {
 			continue
 		}
@@ -843,8 +844,8 @@ func (c *DTLSConn) msgAudioFrame(payload []byte, timestampUS uint32, codec byte,
 	b := make([]byte, 36+totalPayload)
 
 	// Outer header (36 bytes)
-	b[0] = ChannelAudio      // 0x03
-	b[1] = FrameTypeStartAlt // 0x09
+	b[0] = tutk.ChannelAudio      // 0x03
+	b[1] = tutk.FrameTypeStartAlt // 0x09
 	binary.LittleEndian.PutUint16(b[2:], protoVersion)
 	binary.LittleEndian.PutUint32(b[4:], c.audioSeq)
 	binary.LittleEndian.PutUint32(b[8:], timestampUS)
@@ -855,8 +856,8 @@ func (c *DTLSConn) msgAudioFrame(payload []byte, timestampUS uint32, codec byte,
 	}
 
 	// Inner header
-	b[16] = ChannelAudio
-	b[17] = FrameTypeEndSingle
+	b[16] = tutk.ChannelAudio
+	b[17] = tutk.FrameTypeEndSingle
 	binary.LittleEndian.PutUint16(b[18:], uint16(prevFrame))
 	binary.LittleEndian.PutUint16(b[20:], 0x0001) // pkt_total
 	binary.LittleEndian.PutUint16(b[22:], 0x0010) // flags
@@ -868,19 +869,13 @@ func (c *DTLSConn) msgAudioFrame(payload []byte, timestampUS uint32, codec byte,
 	fi[0] = codec // Codec ID (low byte)
 	fi[1] = 0     // Codec ID (high byte, unused)
 	// Audio flags: [3:2]=sampleRateIdx [1]=16bit [0]=stereo
-	var srIdx uint8 = 3 // default 16kHz
-	for i, rate := range sampleRates {
-		if rate == sampleRate {
-			srIdx = uint8(i)
-			break
-		}
-	}
+	srIdx := tutk.GetSampleRateIndex(sampleRate)
 	fi[2] = (srIdx << 2) | 0x02 // 16-bit always set
 	if channels == 2 {
 		fi[2] |= 0x01
 	}
 	fi[4] = 1 // online
-	binary.LittleEndian.PutUint32(fi[12:], (c.audioFrameNo-1)*GetSamplesPerFrame(codec)*1000/sampleRate)
+	binary.LittleEndian.PutUint32(fi[12:], (c.audioFrameNo-1)*tutk.GetSamplesPerFrame(codec)*1000/sampleRate)
 	return b
 }
 
