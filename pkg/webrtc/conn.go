@@ -1,37 +1,38 @@
 package webrtc
 
 import (
+	"encoding/json"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
-	"github.com/pion/webrtc/v3"
+	"github.com/pion/webrtc/v4"
 )
 
 type Conn struct {
+	core.Connection
 	core.Listener
 
-	UserAgent string
-	Desc      string
-	Mode      core.Mode
+	Mode core.Mode `json:"mode"`
 
 	pc *webrtc.PeerConnection
 
-	medias    []*core.Media
-	receivers []*core.Receiver
-	senders   []*core.Sender
-
-	recv int
-	send int
-
 	offer  string
-	remote string
 	closed core.Waiter
 }
 
 func NewConn(pc *webrtc.PeerConnection) *Conn {
-	c := &Conn{pc: pc}
+	c := &Conn{
+		Connection: core.Connection{
+			ID:         core.NewID(),
+			FormatName: "webrtc",
+			Transport:  pc,
+		},
+		pc: pc,
+	}
 
 	pc.OnICECandidate(func(candidate *webrtc.ICECandidate) {
 		// last candidate will be empty
@@ -50,7 +51,19 @@ func NewConn(pc *webrtc.PeerConnection) *Conn {
 		}
 		pc.SCTP().Transport().ICETransport().OnSelectedCandidatePairChange(
 			func(pair *webrtc.ICECandidatePair) {
-				c.remote = pair.Remote.String()
+				// fix situation when candidate pair changes multiple times
+				if i := strings.IndexByte(c.Protocol, '+'); i > 0 {
+					c.Protocol = c.Protocol[:i]
+				}
+				c.Protocol += "+" + pair.Remote.Protocol.String()
+				c.RemoteAddr = fmt.Sprintf(
+					"%s:%d %s", sanitizeIP6(pair.Remote.Address), pair.Remote.Port, pair.Remote.Typ,
+				)
+				if pair.Remote.RelatedAddress != "" {
+					c.RemoteAddr += fmt.Sprintf(
+						" %s:%d", sanitizeIP6(pair.Remote.RelatedAddress), pair.Remote.RelatedPort,
+					)
+				}
 			},
 		)
 	})
@@ -92,7 +105,7 @@ func NewConn(pc *webrtc.PeerConnection) *Conn {
 				return
 			}
 
-			c.recv += n
+			c.Recv += n
 
 			packet := &rtp.Packet{}
 			if err := packet.Unmarshal(b[:n]); err != nil {
@@ -121,7 +134,7 @@ func NewConn(pc *webrtc.PeerConnection) *Conn {
 
 		switch state {
 		case webrtc.PeerConnectionStateConnected:
-			for _, sender := range c.senders {
+			for _, sender := range c.Senders {
 				sender.Start()
 			}
 		case webrtc.PeerConnectionStateDisconnected, webrtc.PeerConnectionStateFailed, webrtc.PeerConnectionStateClosed:
@@ -134,6 +147,10 @@ func NewConn(pc *webrtc.PeerConnection) *Conn {
 	return c
 }
 
+func (c *Conn) MarshalJSON() ([]byte, error) {
+	return json.Marshal(c.Connection)
+}
+
 func (c *Conn) Close() error {
 	c.closed.Done(nil)
 	return c.pc.Close()
@@ -144,21 +161,21 @@ func (c *Conn) AddCandidate(candidate string) error {
 	return c.pc.AddICECandidate(webrtc.ICECandidateInit{Candidate: candidate})
 }
 
-func (c *Conn) getTranseiver(mid string) *webrtc.RTPTransceiver {
-	for _, tr := range c.pc.GetTransceivers() {
-		if tr.Mid() == mid {
-			return tr
-		}
-	}
-	return nil
-}
-
-func (c *Conn) getSenderTrack(mid string) *Track {
+func (c *Conn) GetSenderTrack(mid string) *Track {
 	if tr := c.getTranseiver(mid); tr != nil {
 		if s := tr.Sender(); s != nil {
 			if t := s.Track().(*Track); t != nil {
 				return t
 			}
+		}
+	}
+	return nil
+}
+
+func (c *Conn) getTranseiver(mid string) *webrtc.RTPTransceiver {
+	for _, tr := range c.pc.GetTransceivers() {
+		if tr.Mid() == mid {
+			return tr
 		}
 	}
 	return nil
@@ -172,7 +189,7 @@ func (c *Conn) getMediaCodec(remote *webrtc.TrackRemote) (*core.Media, *core.Cod
 		}
 
 		// search Media for this MID
-		for _, media := range c.medias {
+		for _, media := range c.Medias {
 			if media.ID != tr.Mid() || media.Direction != core.DirectionRecvonly {
 				continue
 			}
@@ -193,4 +210,11 @@ func (c *Conn) getMediaCodec(remote *webrtc.TrackRemote) (*core.Media, *core.Cod
 	panic(core.Caller())
 
 	return nil, nil
+}
+
+func sanitizeIP6(host string) string {
+	if strings.IndexByte(host, ':') > 0 {
+		return "[" + host + "]"
+	}
+	return host
 }

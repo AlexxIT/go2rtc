@@ -7,16 +7,7 @@ import (
 )
 
 func Init() {
-	streams.HandleFunc("isapi", handle)
-}
-
-func handle(url string) (core.Producer, error) {
-	conn, err := isapi.NewClient(url)
-	if err != nil {
-		return nil, err
-	}
-	if err = conn.Dial(); err != nil {
-		return nil, err
-	}
-	return conn, nil
+	streams.HandleFunc("isapi", func(source string) (core.Producer, error) {
+		return isapi.Dial(source)
+	})
 }

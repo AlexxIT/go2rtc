@@ -11,6 +11,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 )
 
+// Deprecated: should be rewritten to core.Connection
 type Client struct {
 	core.Listener
 
@@ -23,7 +24,7 @@ type Client struct {
 	send   int
 }
 
-func NewClient(rawURL string) (*Client, error) {
+func Dial(rawURL string) (*Client, error) {
 	// check if url is valid url
 	u, err := url.Parse(rawURL)
 	if err != nil {
@@ -33,7 +34,11 @@ func NewClient(rawURL string) (*Client, error) {
 	u.Scheme = "http"
 	u.Path = ""
 
-	return &Client{url: u.String()}, nil
+	client := &Client{url: u.String()}
+	if err = client.Dial(); err != nil {
+		return nil, err
+	}
+	return client, err
 }
 
 func (c *Client) Dial() (err error) {

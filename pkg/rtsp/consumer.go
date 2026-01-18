@@ -18,15 +18,6 @@ func (c *Conn) GetMedias() []*core.Media {
 }
 
 func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) (err error) {
-	core.Assert(media.Direction == core.DirectionSendonly)
-
-	for _, sender := range c.senders {
-		if sender.Codec == codec {
-			sender.HandleRTP(track)
-			return
-		}
-	}
-
 	var channel byte
 
 	switch c.mode {
@@ -47,12 +38,12 @@ func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiv
 		c.state = StateSetup
 
 	case core.ModePassiveConsumer:
-		channel = byte(len(c.senders)) * 2
+		channel = byte(len(c.Senders)) * 2
 
 		// for consumer is better to use original track codec
 		codec = track.Codec.Clone()
 		// generate new payload type, starting from 96
-		codec.PayloadType = byte(96 + len(c.senders))
+		codec.PayloadType = byte(96 + len(c.Senders))
 
 	default:
 		panic(core.Caller())
@@ -70,7 +61,7 @@ func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiv
 
 	sender.HandleRTP(track)
 
-	c.senders = append(c.senders, sender)
+	c.Senders = append(c.Senders, sender)
 	return nil
 }
 
@@ -94,12 +85,9 @@ func (c *Conn) packetWriter(codec *core.Codec, channel, payloadType uint8) core.
 	}
 
 	flushBuf := func() {
-		if err := c.conn.SetWriteDeadline(time.Now().Add(Timeout)); err != nil {
-			return
-		}
 		//log.Printf("[rtsp] channel:%2d write_size:%6d buffer_size:%6d", channel, n, len(buf))
-		if _, err := c.conn.Write(buf[:n]); err == nil {
-			c.send += n
+		if err := c.writeInterleavedData(buf[:n]); err != nil {
+			c.Send += n
 		}
 		n = 0
 	}
@@ -171,6 +159,8 @@ func (c *Conn) packetWriter(codec *core.Codec, channel, payloadType uint8) core.
 		case core.CodecJPEG:
 			handlerFunc = mjpeg.RTPPay(handlerFunc)
 		}
+	} else if codec.Name == core.CodecPCML {
+		handlerFunc = pcm.LittleToBig(handlerFunc)
 	} else if c.PacketSize != 0 {
 		switch codec.Name {
 		case core.CodecH264:
@@ -183,4 +173,26 @@ func (c *Conn) packetWriter(codec *core.Codec, channel, payloadType uint8) core.
 	}
 
 	return handlerFunc
+}
+
+func (c *Conn) writeInterleavedData(data []byte) error {
+	if c.Transport != "udp" {
+		_ = c.conn.SetWriteDeadline(time.Now().Add(Timeout))
+		_, err := c.conn.Write(data)
+		return err
+	}
+
+	for len(data) >= 4 && data[0] == '$' {
+		channel := data[1]
+		size := uint16(data[2])<<8 | uint16(data[3])
+		rtpData := data[4 : 4+size]
+
+		if _, err := c.WriteToUDP(rtpData, channel); err != nil {
+			return err
+		}
+
+		data = data[4+size:]
+	}
+
+	return nil
 }

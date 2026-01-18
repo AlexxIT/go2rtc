@@ -12,32 +12,92 @@
   - `fetch` - JS-like HTTP requests
   - `match` - JS-like RegExp queries
 
-## Examples
+## Fetch examples
+
+Multiple fetch requests are executed within a single session. They share the same cookie.
+
+**HTTP GET**
+
+```js
+var r = fetch('https://example.org/products.json');
+```
+
+**HTTP POST JSON**
+
+```js
+var r = fetch('https://example.org/post', {
+    method: 'POST',
+    // Content-Type: application/json will be set automatically
+    json: {username: 'example'}
+});
+```
+
+**HTTP POST Form**
+
+```js
+var r = fetch('https://example.org/post', {
+    method: 'POST',
+    // Content-Type: application/x-www-form-urlencoded will be set automatically
+    data: {username: 'example', password: 'password'}
+});
+```
+
+## Script examples
 
 **Two way audio for Dahua VTO**
 
 ```yaml
 streams:
   dahua_vto: |
-    expr: let host = "admin:password@192.168.1.123";
-    fetch("http://"+host+"/cgi-bin/configManager.cgi?action=setConfig&Encode[0].MainFormat[0].Audio.Compression=G.711A&Encode[0].MainFormat[0].Audio.Frequency=8000").ok
-        ? "rtsp://"+host+"/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif" : ""
+    expr:
+    let host = 'admin:password@192.168.1.123';
+
+    var r = fetch('http://' + host + '/cgi-bin/configManager.cgi?action=setConfig&Encode[0].MainFormat[0].Audio.Compression=G.711A&Encode[0].MainFormat[0].Audio.Frequency=8000');
+
+    'rtsp://' + host + '/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif'
 ```
 
 **dom.ru**
 
-You can get credentials via:
-
-- https://github.com/alexmorbo/domru (file `/share/domru/accounts`)
-- https://github.com/ad/domru
+You can get credentials from https://github.com/ad/domru
 
 ```yaml
 streams:
   dom_ru: |
-    expr: let camera = "99999999"; let token = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"; let operator = 99;
-    fetch("https://myhome.novotelecom.ru/rest/v1/forpost/cameras/"+camera+"/video", {
-      headers: {Authorization: "Bearer "+token, Operator: operator}
+    expr:
+    let camera   = '***';
+    let token    = '***';
+    let operator = '***';
+
+    fetch('https://myhome.proptech.ru/rest/v1/forpost/cameras/' + camera + '/video', {
+      headers: {
+        'Authorization': 'Bearer ' + token,
+        'User-Agent': 'Google sdkgphone64x8664 | Android 14 | erth | 8.26.0 (82600010) | 0 | 0 | 0',
+        'Operator': operator
+      }
     }).json().data.URL
+```
+
+**dom.ufanet.ru**
+
+```yaml
+streams:
+  ufanet_ru: |
+    expr:
+    let username = '***';
+    let password = '***';
+    let cameraid = '***';
+
+    let r1 = fetch('https://ucams.ufanet.ru/api/internal/login/', {
+      method: 'POST',
+      data: {username: username, password: password}
+    });
+    let r2 = fetch('https://ucams.ufanet.ru/api/v0/cameras/this/?lang=ru', {
+      method: 'POST',
+      json: {'fields': ['token_l', 'server'], 'token_l_ttl': 3600, 'numbers': [cameraid]},
+    }).json().results[0];
+
+    'rtsp://' + r2.server.domain + '/' + r2.number + '?token=' + r2.token_l
 ```
 
 **Parse HLS files from Apple**

@@ -22,6 +22,7 @@ import (
 	"github.com/pion/rtp"
 )
 
+// Deprecated: should be rewritten to core.Connection
 type Client struct {
 	core.Listener
 
@@ -43,8 +44,12 @@ type Client struct {
 	recv int
 }
 
-func NewClient(url string) *Client {
-	return &Client{url: url}
+func Dial(rawURL string) (*Client, error) {
+	client := &Client{url: rawURL}
+	if err := client.Dial(); err != nil {
+		return nil, err
+	}
+	return client, nil
 }
 
 const (
@@ -226,7 +231,7 @@ func (c *Client) Handle() error {
 				Header: rtp.Header{
 					Timestamp: core.Now90000(),
 				},
-				Payload: annexb.EncodeToAVCC(b[6:], false),
+				Payload: annexb.EncodeToAVCC(b[6:]),
 			}
 			c.videoTrack.WriteRTP(pkt)
 		} else {

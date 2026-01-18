@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"strings"
 	"sync"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
@@ -37,22 +38,22 @@ func Init() {
 	api.HandleFunc("/streams", apiOK)
 	api.HandleFunc("/stream/", apiStream)
 
-	streams.RedirectFunc("hass", func(url string) (string, error) {
-		if location := entities[url[5:]]; location != "" {
+	streams.RedirectFunc("hass", func(rawURL string) (string, error) {
+		rawURL, rawQuery, _ := strings.Cut(rawURL, "#")
+
+		if location := entities[rawURL[5:]]; location != "" {
+			if rawQuery != "" {
+				return location + "#" + rawQuery, nil
+			}
 			return location, nil
 		}
 
 		return "", nil
 	})
 
-	streams.HandleFunc("hass", func(url string) (core.Producer, error) {
+	streams.HandleFunc("hass", func(source string) (core.Producer, error) {
 		// support hass://supervisor?entity_id=camera.driveway_doorbell
-		client, err := hass.NewClient(url)
-		if err != nil {
-			return nil, err
-		}
-
-		return client, nil
+		return hass.NewClient(source)
 	})
 
 	// load static entries from Hass config

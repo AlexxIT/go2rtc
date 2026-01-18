@@ -8,7 +8,7 @@
   [![goreport](https://goreportcard.com/badge/github.com/AlexxIT/go2rtc)](https://goreportcard.com/report/github.com/AlexxIT/go2rtc)
 </h1>
 
-Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg, RTMP, etc.
+Ultimate camera streaming application with support for RTSP, WebRTC, HomeKit, FFmpeg, RTMP, etc.
 
 ![](assets/go2rtc.png)
 
@@ -19,15 +19,27 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
 - streaming to [RTSP](#module-rtsp), [WebRTC](#module-webrtc), [MSE/MP4](#module-mp4), [HomeKit](#module-homekit) [HLS](#module-hls) or [MJPEG](#module-mjpeg)
 - [publish](#publish-stream) any source to popular streaming services (YouTube, Telegram, etc.)
 - first project in the World with support streaming from [HomeKit Cameras](#source-homekit)
-- support H265 for WebRTC in browser (Safari only, [read more](https://github.com/AlexxIT/Blog/issues/5))
-- on the fly transcoding for unsupported codecs via [FFmpeg](#source-ffmpeg)
+- on-the-fly transcoding for unsupported codecs via [FFmpeg](#source-ffmpeg)
 - play audio files and live streams on some cameras with [speaker](#stream-to-camera)
-- multi-source 2-way [codecs negotiation](#codecs-negotiation)
+- multi-source two-way [codecs negotiation](#codecs-negotiation)
    - mixing tracks from different sources to single stream
-   - auto match client supported codecs
-   - [2-way audio](#two-way-audio) for some cameras
-- streaming from private networks via [ngrok](#module-ngrok)
+   - auto-match client-supported codecs
+   - [two-way audio](#two-way-audio) for some cameras
 - can be [integrated to](#module-api) any smart home platform or be used as [standalone app](#go2rtc-binary)
+
+**Supported Formats** - describes the communication API: authorization, encryption, command set, structure of media packets
+
+- devices: `alsa` (Linux audio), `v4l2` (Linux video)
+- files: `adts`, `flv`, `h264`, `hevc`, `hls`, `mjpeg`, `mpegts`, `mp4`, `wav`
+- network (public and well known): `mpjpeg`, `onvif`, `rtmp`, `rtp`, `rtsp`, `webrtc`, `yuv4mpegpipe`
+- network (private and exclusive): `bubble`, `doorbird`, `dvrip`, `eseecloud`, `gopro`, `hass` (Home Assistant), `homekit` (Apple), `isapi` (Hikvision), `kasa` (TP-Link), `multitrans` (TP-Link), `nest` (Google), `ring`, `roborock`, `tapo` and `vigi` (TP-Link), `tuya`, `webtorrent`, `wyze`, `xiaomi` (Mi Home)
+- webrtc related: `creality`, `kinesis` (Amazon), `openipc`, `switchbot`, `whep`, `whip`, `wyze`
+- other: `ascii`, `echo`, `exec`, `expr`, `ffmpeg`
+
+**Supported Protocols** - describes the transport for data transmission
+
+- public: `http`, `pipe`, `rtmp`, `rtsp`, `tcp`, `udp`, `webrtc`, `ws` (WebSocket)
+- private: `cs2` (PPPP), `hap` and `hds` (HomeKit), `tutk` (P2P)
 
 **Inspired by:**
 
@@ -39,6 +51,9 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
 - HomeKit Accessory Protocol from [@brutella](https://github.com/brutella/hap)
 - creator of the project's logo [@v_novoseltsev](https://www.instagram.com/v_novoseltsev) 
 
+> [!CAUTION]
+> The official website of the project is this GitHub repository and go2rtc.org (hosted on GitHub Pages). The website go2rtc[.]com is in no way associated with the authors of this project.
+
 ---
 
 * [Fast start](#fast-start)
@@ -49,32 +64,39 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
   * [go2rtc: Dev version](#go2rtc-dev-version)
 * [Configuration](#configuration)
   * [Module: Streams](#module-streams)
-    * [Two way audio](#two-way-audio)
-    * [Source: RTSP](#source-rtsp)
-    * [Source: RTMP](#source-rtmp)
-    * [Source: HTTP](#source-http)
-    * [Source: ONVIF](#source-onvif)
-    * [Source: FFmpeg](#source-ffmpeg)
-    * [Source: FFmpeg Device](#source-ffmpeg-device)
-    * [Source: Exec](#source-exec)
-    * [Source: Echo](#source-echo)
-    * [Source: Expr](#source-expr)
-    * [Source: HomeKit](#source-homekit)
-    * [Source: Bubble](#source-bubble)
-    * [Source: DVRIP](#source-dvrip)
-    * [Source: Tapo](#source-tapo)
-    * [Source: Kasa](#source-kasa)
-    * [Source: GoPro](#source-gopro)
-    * [Source: Ivideon](#source-ivideon)
-    * [Source: Hass](#source-hass)
-    * [Source: ISAPI](#source-isapi)
-    * [Source: Nest](#source-nest)
-    * [Source: Roborock](#source-roborock)
-    * [Source: WebRTC](#source-webrtc)
-    * [Source: WebTorrent](#source-webtorrent)
-    * [Incoming sources](#incoming-sources)
-    * [Stream to camera](#stream-to-camera)
-    * [Publish stream](#publish-stream)
+  * [Two way audio](#two-way-audio)
+  * [Source: RTSP](#source-rtsp)
+  * [Source: RTMP](#source-rtmp)
+  * [Source: HTTP](#source-http)
+  * [Source: ONVIF](#source-onvif)
+  * [Source: FFmpeg](#source-ffmpeg)
+  * [Source: FFmpeg Device](#source-ffmpeg-device)
+  * [Source: Exec](#source-exec)
+  * [Source: Echo](#source-echo)
+  * [Source: Expr](#source-expr)
+  * [Source: HomeKit](#source-homekit)
+  * [Source: Bubble](#source-bubble)
+  * [Source: DVRIP](#source-dvrip)
+  * [Source: Tapo](#source-tapo)
+  * [Source: Kasa](#source-kasa)
+  * [Source: Multitrans](#source-multitrans)
+  * [Source: Tuya](#source-tuya)
+  * [Source: Xiaomi](#source-xiaomi)
+  * [Source: Wyze](#source-wyze)
+  * [Source: GoPro](#source-gopro)
+  * [Source: Ivideon](#source-ivideon)
+  * [Source: Hass](#source-hass)
+  * [Source: ISAPI](#source-isapi)
+  * [Source: Nest](#source-nest)
+  * [Source: Ring](#source-ring)
+  * [Source: Roborock](#source-roborock)
+  * [Source: Doorbird](#source-doorbird)
+  * [Source: WebRTC](#source-webrtc)
+  * [Source: WebTorrent](#source-webtorrent)
+  * [Incoming sources](#incoming-sources)
+  * [Stream to camera](#stream-to-camera)
+  * [Publish stream](#publish-stream)
+  * [Preload stream](#preload-stream)
   * [Module: API](#module-api)
   * [Module: RTSP](#module-rtsp)
   * [Module: RTMP](#module-rtmp)
@@ -94,9 +116,8 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
 * [Projects using go2rtc](#projects-using-go2rtc)
 * [Camera experience](#cameras-experience)
 * [TIPS](#tips)
-* [FAQ](#faq)
 
-## Fast start
+# Fast start
 
 1. Download [binary](#go2rtc-binary) or use [Docker](#go2rtc-docker) or Home Assistant [Add-on](#go2rtc-home-assistant-add-on) or [Integration](#go2rtc-home-assistant-integration)
 2. Open web interface: `http://localhost:1984/`
@@ -111,12 +132,12 @@ Ultimate camera streaming application with support RTSP, WebRTC, HomeKit, FFmpeg
 - write your own [web interface](#module-api)
 - integrate [web api](#module-api) into your smart home platform
 
-### go2rtc: Binary
+## go2rtc: Binary
 
 Download binary for your OS from [latest release](https://github.com/AlexxIT/go2rtc/releases/):
 
-- `go2rtc_win64.zip` - Windows 64-bit
-- `go2rtc_win32.zip` - Windows 32-bit
+- `go2rtc_win64.zip` - Windows 10+ 64-bit
+- `go2rtc_win32.zip` - Windows 10+ 32-bit
 - `go2rtc_win_arm64.zip` - Windows ARM 64-bit
 - `go2rtc_linux_amd64` - Linux 64-bit
 - `go2rtc_linux_i386` - Linux 32-bit
@@ -124,16 +145,20 @@ Download binary for your OS from [latest release](https://github.com/AlexxIT/go2
 - `go2rtc_linux_arm` - Linux ARM 32-bit (ex. Raspberry 32-bit OS)
 - `go2rtc_linux_armv6` - Linux ARMv6 (for old Raspberry 1 and Zero)
 - `go2rtc_linux_mipsel` - Linux MIPS (ex. [Xiaomi Gateway 3](https://github.com/AlexxIT/XiaomiGateway3), [Wyze cameras](https://github.com/gtxaspec/wz_mini_hacks))
-- `go2rtc_mac_amd64.zip` - Mac Intel 64-bit
-- `go2rtc_mac_arm64.zip` - Mac ARM 64-bit
+- `go2rtc_mac_amd64.zip` - macOS 11+ Intel 64-bit
+- `go2rtc_mac_arm64.zip` - macOS ARM 64-bit
+- `go2rtc_freebsd_amd64.zip` - FreeBSD 64-bit
+- `go2rtc_freebsd_arm64.zip` - FreeBSD ARM 64-bit
 
 Don't forget to fix the rights `chmod +x go2rtc_xxx_xxx` on Linux and Mac.
 
-### go2rtc: Docker
+PS. The application is compiled with the latest versions of the Go language for maximum speed and security. Therefore, the [minimum OS versions](https://go.dev/wiki/MinimumRequirements) depend on the Go language.
 
-The Docker container [`alexxit/go2rtc`](https://hub.docker.com/r/alexxit/go2rtc) supports multiple architectures including `amd64`, `386`, `arm64`, and `arm`. This container offers the same functionality as the [Home Assistant Add-on](#go2rtc-home-assistant-add-on) but is designed to operate independently of Home Assistant. It comes preinstalled with [FFmpeg](#source-ffmpeg), [ngrok](#module-ngrok), and [Python](#source-echo).
+## go2rtc: Docker
 
-### go2rtc: Home Assistant Add-on
+The Docker container [`alexxit/go2rtc`](https://hub.docker.com/r/alexxit/go2rtc) supports multiple architectures including `amd64`, `386`, `arm64`, and `arm`. This container offers the same functionality as the [Home Assistant Add-on](#go2rtc-home-assistant-add-on) but is designed to operate independently of Home Assistant. It comes preinstalled with [FFmpeg](#source-ffmpeg) and [Python](#source-echo).
+
+## go2rtc: Home Assistant Add-on
 
 [![](https://my.home-assistant.io/badges/supervisor_addon.svg)](https://my.home-assistant.io/redirect/supervisor_addon/?addon=a889bffc_go2rtc&repository_url=https%3A%2F%2Fgithub.com%2FAlexxIT%2Fhassio-addons)
 
@@ -142,11 +167,11 @@ The Docker container [`alexxit/go2rtc`](https://hub.docker.com/r/alexxit/go2rtc)
     - go2rtc > Install > Start
 2. Setup [Integration](#module-hass)
 
-### go2rtc: Home Assistant Integration
+## go2rtc: Home Assistant Integration
 
 [WebRTC Camera](https://github.com/AlexxIT/WebRTC) custom component can be used on any [Home Assistant installation](https://www.home-assistant.io/installation/), including [HassWP](https://github.com/AlexxIT/HassWP) on Windows. It can automatically download and use the latest version of go2rtc. Or it can connect to an existing version of go2rtc. Addon installation in this case is optional.
 
-### go2rtc: Dev version
+## go2rtc: Dev version
 
 Latest, but maybe unstable version:
 
@@ -154,7 +179,7 @@ Latest, but maybe unstable version:
 - Docker: `alexxit/go2rtc:master` or `alexxit/go2rtc:master-hardware` versions
 - Hass Add-on: `go2rtc master` or `go2rtc master hardware` versions
 
-## Configuration
+# Configuration
 
 - by default go2rtc will search `go2rtc.yaml` in the current work directory
 - `api` server will start on default **1984 port** (TCP)
@@ -170,7 +195,7 @@ Available modules:
 - [api](#module-api) - HTTP API (important for WebRTC support)
 - [rtsp](#module-rtsp) - RTSP Server (important for FFmpeg support)
 - [webrtc](#module-webrtc) - WebRTC Server
-- [mp4](#module-mp4) - MSE, MP4 stream and MP4 shapshot Server
+- [mp4](#module-mp4) - MSE, MP4 stream and MP4 snapshot Server
 - [hls](#module-hls) - HLS TS or fMP4 stream Server
 - [mjpeg](#module-mjpeg) - MJPEG Server
 - [ffmpeg](#source-ffmpeg) - FFmpeg integration
@@ -178,13 +203,13 @@ Available modules:
 - [hass](#module-hass) - Home Assistant integration
 - [log](#module-log) - logs config
 
-### Module: Streams
+## Module: Streams
 
-**go2rtc** support different stream source types. You can config one or multiple links of any type as stream source.
+**go2rtc** supports different stream source types. You can config one or multiple links of any type as a stream source.
 
 Available source types:
 
-- [rtsp](#source-rtsp) - `RTSP` and `RTSPS` cameras with [two way audio](#two-way-audio) support
+- [rtsp](#source-rtsp) - `RTSP` and `RTSPS` cameras with [two-way audio](#two-way-audio) support
 - [rtmp](#source-rtmp) - `RTMP` streams
 - [http](#source-http) - `HTTP-FLV`, `MPEG-TS`, `JPEG` (snapshots), `MJPEG` streams
 - [onvif](#source-onvif) - get camera `RTSP` link and snapshot link using `ONVIF` protocol
@@ -196,42 +221,53 @@ Available source types:
 - [homekit](#source-homekit) - streaming from HomeKit Camera
 - [bubble](#source-bubble) - streaming from ESeeCloud/dvr163 NVR
 - [dvrip](#source-dvrip) - streaming from DVR-IP NVR
+- [eseecloud](#source-eseecloud) - streaming from ESeeCloud/dvr163 NVR
 - [tapo](#source-tapo) - TP-Link Tapo cameras with [two way audio](#two-way-audio) support
+- [ring](#source-ring) - Ring cameras with [two way audio](#two-way-audio) support
+- [tuya](#source-tuya) - Tuya cameras with [two way audio](#two-way-audio) support
+- [xiaomi](#source-xiaomi) - Xiaomi cameras with [two way audio](#two-way-audio) support
 - [kasa](#source-tapo) - TP-Link Kasa cameras
 - [gopro](#source-gopro) - GoPro cameras
 - [ivideon](#source-ivideon) - public cameras from [Ivideon](https://tv.ivideon.com/) service
 - [hass](#source-hass) - Home Assistant integration
-- [isapi](#source-isapi) - two way audio for Hikvision (ISAPI) cameras
+- [isapi](#source-isapi) - two-way audio for Hikvision (ISAPI) cameras
 - [roborock](#source-roborock) - Roborock vacuums with cameras
+- [doorbird](#source-doorbird) - Doorbird cameras with [two way audio](#two-way-audio) support
 - [webrtc](#source-webrtc) - WebRTC/WHEP sources
 - [webtorrent](#source-webtorrent) - WebTorrent source from another go2rtc
+- [wyze](#source-wyze) - Wyze cameras with [two way audio](#two-way-audio) support
 
 Read more about [incoming sources](#incoming-sources)
 
-#### Two way audio
+## Two-way audio
 
-Supported for sources:
+Supported sources:
 
 - [RTSP cameras](#source-rtsp) with [ONVIF Profile T](https://www.onvif.org/specs/stream/ONVIF-Streaming-Spec.pdf) (back channel connection)
 - [DVRIP](#source-dvrip) cameras
 - [TP-Link Tapo](#source-tapo) cameras
 - [Hikvision ISAPI](#source-isapi) cameras
 - [Roborock vacuums](#source-roborock) models with cameras
+- [Doorbird](#source-doorbird) cameras
 - [Exec](#source-exec) audio on server
+- [Ring](#source-ring) cameras
+- [Tuya](#source-tuya) cameras
+- [Wyze](#source-wyze) cameras
+- [Xiaomi](#source-xiaomi) cameras
 - [Any Browser](#incoming-browser) as IP-camera
 
-Two way audio can be used in browser with [WebRTC](#module-webrtc) technology. The browser will give access to the microphone only for HTTPS sites ([read more](https://stackoverflow.com/questions/52759992/how-to-access-camera-and-microphone-in-chrome-without-https)).
+Two-way audio can be used in browser with [WebRTC](#module-webrtc) technology. The browser will give access to the microphone only for HTTPS sites ([read more](https://stackoverflow.com/questions/52759992/how-to-access-camera-and-microphone-in-chrome-without-https)).
 
-go2rtc also support [play audio](#stream-to-camera) files and live streams on this cameras.
+go2rtc also supports [play audio](#stream-to-camera) files and live streams on this cameras.
 
-#### Source: RTSP
+## Source: RTSP
 
 ```yaml
 streams:
   sonoff_camera: rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0
   dahua_camera:
     - rtsp://admin:password@192.168.1.123/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif
-    - rtsp://admin:password@192.168.1.123/cam/realmonitor?channel=1&subtype=1
+    - rtsp://admin:password@192.168.1.123/cam/realmonitor?channel=1&subtype=1#backchannel=0
   amcrest_doorbell:
     - rtsp://username:password@192.168.1.123:554/cam/realmonitor?channel=1&subtype=0#backchannel=0
   unifi_camera: rtspx://192.168.1.123:7441/fD6ouM72bWoFijxK
@@ -240,13 +276,13 @@ streams:
 
 **Recommendations**
 
-- **Amcrest Doorbell** users may want to disable two way audio, because with an active stream you won't have a call button working. You need to add `#backchannel=0` to the end of your RTSP link in YAML config file
-- **Dahua Doorbell** users may want to change backchannel [audio codec](https://github.com/AlexxIT/go2rtc/issues/52)
-- **Reolink** users may want NOT to use RTSP protocol at all, some camera models have a very awful unusable stream implementation
+- **Amcrest Doorbell** users may want to disable two-way audio, because with an active stream, you won't have a working call button. You need to add `#backchannel=0` to the end of your RTSP link in YAML config file
+- **Dahua Doorbell** users may want to change [audio codec](https://github.com/AlexxIT/go2rtc/issues/49#issuecomment-2127107379) for proper 2-way audio. Make sure not to request backchannel multiple times by adding `#backchannel=0` to other stream sources of the same doorbell. The `unicast=true&proto=Onvif` is preferred for 2-way audio as this makes the doorbell accept multiple codecs for the incoming audio
+- **Reolink** users may want NOT to use RTSP protocol at all, some camera models have a very awful, unusable stream implementation
 - **Ubiquiti UniFi** users may want to disable HTTPS verification. Use `rtspx://` prefix instead of `rtsps://`. And don't use `?enableSrtp` [suffix](https://github.com/AlexxIT/go2rtc/issues/81)
 - **TP-Link Tapo** users may skip login and password, because go2rtc support login [without them](https://drmnsamoliu.github.io/video.html)
-- If your camera has two RTSP links - you can add both of them as sources. This is useful when streams has different codecs, as example AAC audio with main stream and PCMU/PCMA audio with second stream
-- If the stream from your camera is glitchy, try using [ffmpeg source](#source-ffmpeg). It will not add CPU load if you won't use transcoding
+- If your camera has two RTSP links, you can add both as sources. This is useful when streams have different codecs, for example AAC audio with main stream and PCMU/PCMA audio with second stream
+- If the stream from your camera is glitchy, try using [ffmpeg source](#source-ffmpeg). It will not add CPU load if you don't use transcoding
 - If the stream from your camera is very glitchy, try to use transcoding with [ffmpeg source](#source-ffmpeg)
 
 **Other options**
@@ -255,7 +291,7 @@ Format: `rtsp...#{param1}#{param2}#{param3}`
 
 - Add custom timeout `#timeout=30` (in seconds)
 - Ignore audio - `#media=video` or ignore video - `#media=audio` 
-- Ignore two way audio API `#backchannel=0` - important for some glitchy cameras
+- Ignore two-way audio API `#backchannel=0` - important for some glitchy cameras
 - Use WebSocket transport `#transport=ws...`
 
 **RTSP over WebSocket**
@@ -268,16 +304,16 @@ streams:
   dahua-rtsp-ws: rtsp://user:pass@192.168.1.123/cam/realmonitor?channel=1&subtype=1&proto=Private3#transport=ws://192.168.1.123/rtspoverwebsocket
 ```
 
-#### Source: RTMP
+## Source: RTMP
 
-You can get stream from RTMP server, for example [Nginx with nginx-rtmp-module](https://github.com/arut/nginx-rtmp-module).
+You can get a stream from an RTMP server, for example [Nginx with nginx-rtmp-module](https://github.com/arut/nginx-rtmp-module).
 
 ```yaml
 streams:
   rtmp_stream: rtmp://192.168.1.123/live/camera1
 ```
 
-#### Source: HTTP
+## Source: HTTP
 
 Support Content-Type:
 
@@ -286,7 +322,7 @@ Support Content-Type:
 - **HTTP-MJPEG** (`multipart/x`) - simple MJPEG stream over HTTP
 - **MPEG-TS** (`video/mpeg`) - legacy [streaming format](https://en.wikipedia.org/wiki/MPEG_transport_stream)
 
-Source also support HTTP and TCP streams with autodetection for different formats: **MJPEG**, **H.264/H.265 bitstream**, **MPEG-TS**.
+Source also supports HTTP and TCP streams with autodetection for different formats: **MJPEG**, **H.264/H.265 bitstream**, **MPEG-TS**.
 
 ```yaml
 streams:
@@ -306,15 +342,15 @@ streams:
   custom_header: "https://mjpeg.sanford.io/count.mjpeg#header=Authorization: Bearer XXX"
 ```
 
-**PS.** Dahua camera has bug: if you select MJPEG codec for RTSP second stream - snapshot won't work.
+**PS.** Dahua camera has a bug: if you select MJPEG codec for RTSP second stream, snapshot won't work.
 
-#### Source: ONVIF
+## Source: ONVIF
 
 *[New in v1.5.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.5.0)*
 
 The source is not very useful if you already know RTSP and snapshot links for your camera. But it can be useful if you don't.
 
-**WebUI > Add** webpage support ONVIF autodiscovery. Your server must be on the same subnet as the camera. If you use docker, you must use "network host".
+**WebUI > Add** webpage support ONVIF autodiscovery. Your server must be on the same subnet as the camera. If you use Docker, you must use "network host".
 
 ```yaml
 streams:
@@ -323,9 +359,9 @@ streams:
   tapo1: onvif://admin:password@192.168.1.123:2020
 ```
 
-#### Source: FFmpeg
+## Source: FFmpeg
 
-You can get any stream or file or device via FFmpeg and push it to go2rtc. The app will automatically start FFmpeg with the proper arguments when someone starts watching the stream.
+You can get any stream, file or device via FFmpeg and push it to go2rtc. The app will automatically start FFmpeg with the proper arguments when someone starts watching the stream.
 
 - FFmpeg preistalled for **Docker** and **Hass Add-on** users
 - **Hass Add-on** users can target files from [/media](https://www.home-assistant.io/more-info/local-media/setup-media/) folder
@@ -340,7 +376,7 @@ streams:
   # [FILE] video will be transcoded to H264, audio will be skipped
   file2: ffmpeg:/media/BigBuckBunny.mp4#video=h264
 
-  # [FILE] video will be copied, audio will be transcoded to pcmu
+  # [FILE] video will be copied, audio will be transcoded to PCMU
   file3: ffmpeg:/media/BigBuckBunny.mp4#video=copy#audio=pcmu
 
   # [HLS] video will be copied, audio will be skipped
@@ -350,19 +386,21 @@ streams:
   mjpeg: ffmpeg:http://185.97.122.128/cgi-bin/faststream.jpg#video=h264
 
   # [RTSP] video with rotation, should be transcoded, so select H264
-  rotate: ffmpeg:rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0#video=h264#rotate=90
+  rotate: ffmpeg:rtsp://12345678@192.168.1.123/av_stream/ch0#video=h264#rotate=90
 ```
 
-All trascoding formats has [built-in templates](https://github.com/AlexxIT/go2rtc/blob/master/internal/ffmpeg/ffmpeg.go): `h264`, `h265`, `opus`, `pcmu`, `pcmu/16000`, `pcmu/48000`, `pcma`, `pcma/16000`, `pcma/48000`, `aac`, `aac/16000`.
+All transcoding formats have [built-in templates](internal/ffmpeg/ffmpeg.go): `h264`, `h265`, `opus`, `pcmu`, `pcmu/16000`, `pcmu/48000`, `pcma`, `pcma/16000`, `pcma/48000`, `aac`, `aac/16000`.
 
-But you can override them via YAML config. You can also add your own formats to config and use them with source params.
+But you can override them via YAML config. You can also add your own formats to the config and use them with source params.
 
 ```yaml
 ffmpeg:
   bin: ffmpeg  # path to ffmpeg binary
+  global: "-hide_banner"
+  timeout: 5  # default timeout in seconds for rtsp inputs
   h264: "-codec:v libx264 -g:v 30 -preset:v superfast -tune:v zerolatency -profile:v main -level:v 4.1"
   mycodec: "-any args that supported by ffmpeg..."
-  myinput: "-fflags nobuffer -flags low_delay -timeout 5000000 -i {input}"
+  myinput: "-fflags nobuffer -flags low_delay -timeout {timeout} -i {input}"
   myraw: "-ss 00:00:20"
 ```
 
@@ -372,23 +410,24 @@ ffmpeg:
 - You can use `width` and/or `height` params, important with transcoding (ex. `#video=h264#width=1280`)
 - You can use `drawtext` to add a timestamp (ex. `drawtext=x=2:y=2:fontsize=12:fontcolor=white:box=1:boxcolor=black`)
   - This will greatly increase the CPU of the server, even with hardware acceleration
+- You can use `timeout` param to set RTSP input timeout in seconds (ex. `#timeout=10`)
 - You can use `raw` param for any additional FFmpeg arguments (ex. `#raw=-vf transpose=1`)
 - You can use `input` param to override default input template (ex. `#input=rtsp/udp` will change RTSP transport from TCP to UDP+TCP)
-  - You can use raw input value (ex. `#input=-timeout 5000000 -i {input}`)
+  - You can use raw input value (ex. `#input=-timeout {timeout} -i {input}`)
   - You can add your own input templates
 
 Read more about [hardware acceleration](https://github.com/AlexxIT/go2rtc/wiki/Hardware-acceleration).
 
 **PS.** It is recommended to check the available hardware in the WebUI add page.
 
-#### Source: FFmpeg Device
+## Source: FFmpeg Device
 
-You can get video from any USB-camera or Webcam as RTSP or WebRTC stream. This is part of FFmpeg integration.
+You can get video from any USB camera or Webcam as RTSP or WebRTC stream. This is part of FFmpeg integration.
 
-- check available devices in Web interface
+- check available devices in web interface
 - `video_size` and `framerate` must be supported by your camera!
 - for Linux supported only video for now
-- for macOS you can stream Facetime camera or whole Desktop!
+- for macOS you can stream FaceTime camera or whole desktop!
 - for macOS important to set right framerate
 
 Format: `ffmpeg:device?{input-params}#{param1}#{param2}#{param3}`
@@ -402,11 +441,11 @@ streams:
 
 **PS.** It is recommended to check the available devices in the WebUI add page.
 
-#### Source: Exec
+## Source: Exec
 
 Exec source can run any external application and expect data from it. Two transports are supported - **pipe** (*from [v1.5.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.5.0)*) and **RTSP**.
 
-If you want to use **RTSP** transport - the command must contain the `{output}` argument in any place. On launch, it will be replaced by the local address of the RTSP server.
+If you want to use **RTSP** transport, the command must contain the `{output}` argument in any place. On launch, it will be replaced by the local address of the RTSP server.
 
 **pipe** reads data from app stdout in different formats: **MJPEG**, **H.264/H.265 bitstream**, **MPEG-TS**. Also pipe can write data to app stdin in two formats: **PCMA** and **PCM/48000**.
 
@@ -416,11 +455,11 @@ The source can be used with:
 - [FFplay](https://ffmpeg.org/ffplay.html) - play audio on your server
 - [GStreamer](https://gstreamer.freedesktop.org/)
 - [Raspberry Pi Cameras](https://www.raspberrypi.com/documentation/computers/camera_software.html)
-- any your own software
+- any of your own software
 
 Pipe commands support parameters (format: `exec:{command}#{param1}#{param2}`):
 
-- `killsignal` - signal which will be send to stop the process (numeric form)
+- `killsignal` - signal which will be sent to stop the process (numeric form)
 - `killtimeout` - time in seconds for forced termination with sigkill
 - `backchannel` - enable backchannel for two-way audio
 
@@ -435,9 +474,9 @@ streams:
   play_pcm48k: exec:ffplay -fflags nobuffer -f s16be -ar 48000 -i -#backchannel=1
 ```
 
-#### Source: Echo
+## Source: Echo
 
-Some sources may have a dynamic link. And you will need to get it using a bash or python script. Your script should echo a link to the source. RTSP, FFmpeg or any of the [supported sources](#module-streams).
+Some sources may have a dynamic link. And you will need to get it using a Bash or Python script. Your script should echo a link to the source. RTSP, FFmpeg or any of the [supported sources](#module-streams).
 
 **Docker** and **Hass Add-on** users has preinstalled `python3`, `curl`, `jq`.
 
@@ -448,31 +487,33 @@ streams:
   apple_hls: echo:python3 hls.py https://developer.apple.com/streaming/examples/basic-stream-osx-ios5.html
 ```
 
-#### Source: Expr
+## Source: Expr
 
 *[New in v1.8.2](https://github.com/AlexxIT/go2rtc/releases/tag/v1.8.2)*
 
-Like `echo` source, but uses the built-in [expr](https://github.com/antonmedv/expr) expression language ([read more](https://github.com/AlexxIT/go2rtc/blob/master/internal/expr/README.md)).
+Like `echo` source, but uses the built-in [expr](https://github.com/antonmedv/expr) expression language.
 
-#### Source: HomeKit
+*[read more](internal/expr/README.md)*
+
+## Source: HomeKit
 
 **Important:**
 
 - You can use HomeKit Cameras **without Apple devices** (iPhone, iPad, etc.), it's just a yet another protocol
-- HomeKit device can be paired with only one ecosystem. So, if you have paired it to an iPhone (Apple Home) - you can't pair it with Home Assistant or go2rtc. Or if you have paired it to go2rtc - you can't pair it with iPhone
-- HomeKit device should be in same network with working [mDNS](https://en.wikipedia.org/wiki/Multicast_DNS) between device and go2rtc
+- HomeKit device can be paired with only one ecosystem. So, if you have paired it to an iPhone (Apple Home), you can't pair it with Home Assistant or go2rtc. Or if you have paired it to go2rtc, you can't pair it with an iPhone
+- HomeKit device should be on the same network with working [mDNS](https://en.wikipedia.org/wiki/Multicast_DNS) between the device and go2rtc
 
-go2rtc support import paired HomeKit devices from [Home Assistant](#source-hass). So you can use HomeKit camera with Hass and go2rtc simultaneously. If you using Hass, I recommend pairing devices with it, it will give you more options.
+go2rtc supports importing paired HomeKit devices from [Home Assistant](#source-hass). So you can use HomeKit camera with Hass and go2rtc simultaneously. If you are using Hass, I recommend pairing devices with it; it will give you more options.
 
-You can pair device with go2rtc on the HomeKit page. If you can't see your devices - reload the page. Also try reboot your HomeKit device (power off). If you still can't see it - you have a problems with mDNS.
+You can pair device with go2rtc on the HomeKit page. If you can't see your devices, reload the page. Also, try rebooting your HomeKit device (power off). If you still can't see it, you have a problem with mDNS.
 
-If you see a device but it does not have a pair button - it is paired to some ecosystem (Apple Home, Home Assistant, HomeBridge etc). You need to delete device from that ecosystem, and it will be available for pairing. If you cannot unpair device, you will have to reset it.
+If you see a device but it does not have a pairing button, it is paired to some ecosystem (Apple Home, Home Assistant, HomeBridge etc). You need to delete the device from that ecosystem, and it will be available for pairing. If you cannot unpair the device, you will have to reset it.
 
 **Important:**
 
-- HomeKit audio uses very non-standard **AAC-ELD** codec with very non-standard params and specification violation
+- HomeKit audio uses very non-standard **AAC-ELD** codec with very non-standard params and specification violations
 - Audio can't be played in `VLC` and probably any other player
-- Audio should be transcoded for using with MSE, WebRTC, etc.
+- Audio should be transcoded for use with MSE, WebRTC, etc.
 
 Recommended settings for using HomeKit Camera with WebRTC, MSE, MP4, RTSP:
 
@@ -487,28 +528,28 @@ RTSP link with "normal" audio for any player: `rtsp://192.168.1.123:8554/aqara_g
 
 **This source is in active development!** Tested only with [Aqara Camera Hub G3](https://www.aqara.com/eu/product/camera-hub-g3) (both EU and CN versions).
 
-#### Source: Bubble
+## Source: Bubble
 
 *[New in v1.6.1](https://github.com/AlexxIT/go2rtc/releases/tag/v1.6.1)*
 
 Other names: [ESeeCloud](http://www.eseecloud.com/), [dvr163](http://help.dvr163.com/).
 
 - you can skip `username`, `password`, `port`, `ch` and `stream` if they are default
-- setup separate streams for different channels and streams
+- set up separate streams for different channels and streams
 
 ```yaml
 streams:
   camera1: bubble://username:password@192.168.1.123:34567/bubble/live?ch=0&stream=0
 ```
 
-#### Source: DVRIP
+## Source: DVRIP
 
 *[New in v1.2.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.2.0)*
 
 Other names: DVR-IP, NetSurveillance, Sofia protocol (NETsurveillance ActiveX plugin XMeye SDK).
 
 - you can skip `username`, `password`, `port`, `channel` and `subtype` if they are default
-- setup separate streams for different channels
+- set up separate streams for different channels
 - use `subtype=0` for Main stream, and `subtype=1` for Extra1 stream
 - only the TCP protocol is supported
 
@@ -521,7 +562,16 @@ streams:
     - dvrip://username:password@192.168.1.123:34567?backchannel=1
 ```
 
-#### Source: Tapo
+## Source: EseeCloud
+
+*[New in v1.9.10](https://github.com/AlexxIT/go2rtc/releases/tag/v1.9.10)*
+
+```yaml
+streams:
+  camera1: eseecloud://user:pass@192.168.1.123:80/livestream/12
+```
+
+## Source: Tapo
 
 *[New in v1.2.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.2.0)*
 
@@ -529,8 +579,8 @@ streams:
 
 - stream quality is the same as [RTSP protocol](https://www.tapo.com/en/faq/34/)
 - use the **cloud password**, this is not the RTSP password! you do not need to add a login!
-- you can also use UPPERCASE MD5 hash from your cloud password with `admin` username
-- some new camera firmwares requires SHA256 instead of MD5
+- you can also use **UPPERCASE** MD5 hash from your cloud password with `admin` username
+- some new camera firmwares require SHA256 instead of MD5
 
 ```yaml
 streams:
@@ -540,6 +590,10 @@ streams:
   camera2: tapo://admin:UPPERCASE-MD5@192.168.1.123
   # admin username and UPPERCASE SHA256 cloud-password hash
   camera3: tapo://admin:UPPERCASE-SHA256@192.168.1.123
+  # VGA stream (the so called substream, the lower resolution one)
+  camera4: tapo://cloud-password@192.168.1.123?subtype=1 
+  # HD stream (default)
+  camera5: tapo://cloud-password@192.168.1.123?subtype=0 
 ```
 
 ```bash
@@ -547,7 +601,7 @@ echo -n "cloud password" | md5 | awk '{print toupper($0)}'
 echo -n "cloud password" | shasum -a 256 | awk '{print toupper($0)}'
 ```
 
-#### Source: Kasa
+## Source: Kasa
 
 *[New in v1.7.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.7.0)*
 
@@ -563,22 +617,52 @@ streams:
 
 Tested: KD110, KC200, KC401, KC420WS, EC71.
 
-#### Source: GoPro
+## Source: Multitrans
+
+Two-way audio support for Chinese version of [TP-Link cameras](https://www.tp-link.com.cn/list_2549.html).
+
+*[read more](internal/multitrans/README.md)*
+
+## Source: Tuya
+
+*[New in v1.9.13](https://github.com/AlexxIT/go2rtc/releases/tag/v1.9.13)*
+
+[Tuya](https://www.tuya.com/) proprietary camera protocol with **two way audio** support. Go2rtc supports `Tuya Smart API` and `Tuya Cloud API`.
+
+*[read more](internal/tuya/README.md)*
+
+## Source: Xiaomi
+
+*[New in v1.9.13](https://github.com/AlexxIT/go2rtc/releases/tag/v1.9.13)*
+
+This source allows you to view cameras from the [Xiaomi Mi Home](https://home.mi.com/) ecosystem.
+
+*[read more](internal/xiaomi/README.md)*
+
+## Source: Wyze
+
+This source allows you to stream from [Wyze](https://wyze.com/) cameras using native P2P protocol - no `docker-wyze-bridge` required. Supports H.264/H.265 video, AAC/G.711 audio, and two-way audio.
+
+*[read more](internal/wyze/README.md)*
+
+## Source: GoPro
 
 *[New in v1.8.3](https://github.com/AlexxIT/go2rtc/releases/tag/v1.8.3)*
 
-Support streaming from [GoPro](https://gopro.com/) cameras, connected via USB or Wi-Fi to Linux, Mac, Windows. [Read more](https://github.com/AlexxIT/go2rtc/tree/master/internal/gopro).
+Support streaming from [GoPro](https://gopro.com/) cameras, connected via USB or Wi-Fi to Linux, Mac, Windows.
 
-#### Source: Ivideon
+*[read more](internal/gopro/README.md)*
 
-Support public cameras from service [Ivideon](https://tv.ivideon.com/).
+## Source: Ivideon
+
+Support public cameras from the service [Ivideon](https://tv.ivideon.com/).
 
 ```yaml
 streams:
   quailcam: ivideon:100-tu5dkUPct39cTp9oNEN2B6/0
 ```
 
-#### Source: Hass
+## Source: Hass
 
 Support import camera links from [Home Assistant](https://www.home-assistant.io/) config files:
 
@@ -589,7 +673,7 @@ Support import camera links from [Home Assistant](https://www.home-assistant.io/
 
 ```yaml
 hass:
-  config: "/config"  # skip this setting if you Hass Add-on user
+  config: "/config"  # skip this setting if you Hass add-on user
 
 streams:
   generic_camera: hass:Camera1  # Settings > Integrations > Integration Name
@@ -598,9 +682,9 @@ streams:
 
 **WebRTC Cameras** (*from [v1.6.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.6.0)*)
 
-Any cameras in WebRTC format are supported. But at the moment Home Assistant only supports some [Nest](https://www.home-assistant.io/integrations/nest/) cameras in this fomat.
+Any cameras in WebRTC format are supported. But at the moment Home Assistant only supports some [Nest](https://www.home-assistant.io/integrations/nest/) cameras in this format.
 
-**Important.** The Nest API only allows you to get a link to a stream for 5 minutes. Do not use this with Frigate! If the stream expires, Frigate will consume all available ram on your machine within seconds. It's recommended to use [Nest source](#source-nest) - it supports extending the stream.
+**Important.** The Nest API only allows you to get a link to a stream for 5 minutes. Do not use this with Frigate! If the stream expires, Frigate will consume all available RAM on your machine within seconds. It's recommended to use [Nest source](#source-nest) - it supports extending the stream.
 
 ```yaml
 streams:
@@ -612,13 +696,13 @@ streams:
 
 **RTSP Cameras**
 
-By default, the Home Assistant API does not allow you to get dynamic RTSP link to a camera stream. So more cameras, like [Tuya](https://www.home-assistant.io/integrations/tuya/), and possibly others can also be imported by using [this method](https://github.com/felipecrs/hass-expose-camera-stream-source#importing-home-assistant-cameras-to-go2rtc-andor-frigate).
+By default, the Home Assistant API does not allow you to get a dynamic RTSP link to a camera stream. So more cameras, like [Tuya](https://www.home-assistant.io/integrations/tuya/), and possibly others, can also be imported using [this method](https://github.com/felipecrs/hass-expose-camera-stream-source#importing-home-assistant-cameras-to-go2rtc-andor-frigate).
 
-#### Source: ISAPI
+## Source: ISAPI
 
 *[New in v1.3.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.3.0)*
 
-This source type support only backchannel audio for Hikvision ISAPI protocol. So it should be used as second source in addition to the RTSP protocol.
+This source type supports only backchannel audio for the Hikvision ISAPI protocol. So it should be used as a second source in addition to the RTSP protocol.
 
 ```yaml
 streams:
@@ -627,70 +711,92 @@ streams:
     - isapi://admin:password@192.168.1.123:80/
 ```
 
-#### Source: Nest
+## Source: Nest
 
 *[New in v1.6.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.6.0)*
 
-Currently only WebRTC cameras are supported.
+Currently, only WebRTC cameras are supported.
 
-For simplicity, it is recommended to connect the Nest/WebRTC camera to the [Home Assistant](#source-hass). But if you can somehow get the below parameters - Nest/WebRTC source will work without Hass.
+For simplicity, it is recommended to connect the Nest/WebRTC camera to the [Home Assistant](#source-hass). But if you can somehow get the below parameters, Nest/WebRTC source will work without Hass.
 
 ```yaml
 streams:
   nest-doorbell: nest:?client_id=***&client_secret=***&refresh_token=***&project_id=***&device_id=***
 ```
 
-#### Source: Roborock
+## Source: Ring
+
+This source type support Ring cameras with [two way audio](#two-way-audio) support. If you have a `refresh_token` and `device_id` - you can use it in `go2rtc.yaml` config file. Otherwise, you can use the go2rtc interface and add your ring account (WebUI > Add > Ring). Once added, it will list all your Ring cameras.
+
+```yaml
+streams:
+  ring: ring:?device_id=XXX&refresh_token=XXX
+  ring_snapshot: ring:?device_id=XXX&refresh_token=XXX&snapshot
+```
+
+## Source: Roborock
 
 *[New in v1.3.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.3.0)*
 
-This source type support Roborock vacuums with cameras. Known working models:
+This source type supports Roborock vacuums with cameras. Known working models:
 
 - Roborock S6 MaxV - only video (the vacuum has no microphone)
-- Roborock S7 MaxV - video and two way audio
+- Roborock S7 MaxV - video and two-way audio
+- Roborock Qrevo MaxV - video and two-way audio
 
-Source support load Roborock credentials from Home Assistant [custom integration](https://github.com/humbertogontijo/homeassistant-roborock). Otherwise, you need to log in to your Roborock account (MiHome account is not supported). Go to: go2rtc WebUI > Add webpage. Copy `roborock://...` source for your vacuum and paste it to `go2rtc.yaml` config.
+Source supports loading Roborock credentials from Home Assistant [custom integration](https://github.com/humbertogontijo/homeassistant-roborock) or the [core integration](https://www.home-assistant.io/integrations/roborock). Otherwise, you need to log in to your Roborock account (MiHome account is not supported). Go to: go2rtc WebUI > Add webpage. Copy `roborock://...` source for your vacuum and paste it to `go2rtc.yaml` config.
 
-If you have graphic pin for your vacuum - add it as numeric pin (lines: 123, 456, 678) to the end of the roborock-link.
+If you have a graphic PIN for your vacuum, add it as a numeric PIN (lines: 123, 456, 789) to the end of the `roborock` link.
 
-#### Source: WebRTC
+## Source: Doorbird
+
+This source type supports [Doorbird](https://www.doorbird.com/) devices including MJPEG stream, audio stream as well as two-way audio.
+
+*[read more](internal/doorbird/README.md)*
+
+## Source: WebRTC
 
 *[New in v1.3.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.3.0)*
 
-This source type support four connection formats.
+This source type supports four connection formats.
 
 **whep**
 
-[WebRTC/WHEP](https://datatracker.ietf.org/doc/draft-murillo-whep/) - is replaced by [WebRTC/WISH](https://datatracker.ietf.org/doc/charter-ietf-wish/02/) standard for WebRTC video/audio viewers. But it may already be supported in some third-party software. It is supported in go2rtc.
+[WebRTC/WHEP](https://datatracker.ietf.org/doc/draft-murillo-whep/) is replaced by [WebRTC/WISH](https://datatracker.ietf.org/doc/charter-ietf-wish/02/) standard for WebRTC video/audio viewers. But it may already be supported in some third-party software. It is supported in go2rtc.
 
 **go2rtc**
 
-This format is only supported in go2rtc. Unlike WHEP it supports asynchronous WebRTC connection and two way audio.
+This format is only supported in go2rtc. Unlike WHEP, it supports asynchronous WebRTC connections and two-way audio.
 
 **openipc** (*from [v1.7.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.7.0)*)
 
 Support connection to [OpenIPC](https://openipc.org/) cameras.
 
-**wyze** (*from [v1.6.1](https://github.com/AlexxIT/go2rtc/releases/tag/v1.6.1)*)
+**wyze (via docker-wyze-bridge)** (*from [v1.6.1](https://github.com/AlexxIT/go2rtc/releases/tag/v1.6.1)*)
 
-Supports connection to [Wyze](https://www.wyze.com/) cameras, using WebRTC protocol. You can use [docker-wyze-bridge](https://github.com/mrlt8/docker-wyze-bridge) project to get connection credentials.
+Legacy method to connect to [Wyze](https://www.wyze.com/) cameras using WebRTC protocol via [docker-wyze-bridge](https://github.com/mrlt8/docker-wyze-bridge). For native P2P support without docker-wyze-bridge, see [Source: Wyze](#source-wyze).
 
 **kinesis** (*from [v1.6.1](https://github.com/AlexxIT/go2rtc/releases/tag/v1.6.1)*)
 
-Supports [Amazon Kinesis Video Streams](https://aws.amazon.com/kinesis/video-streams/), using WebRTC protocol. You need to specify signalling WebSocket URL with all credentials in query params, `client_id` and `ice_servers` list in [JSON format](https://developer.mozilla.org/en-US/docs/Web/API/RTCIceServer).
+Supports [Amazon Kinesis Video Streams](https://aws.amazon.com/kinesis/video-streams/), using WebRTC protocol. You need to specify the signalling WebSocket URL with all credentials in query params, `client_id` and `ice_servers` list in [JSON format](https://developer.mozilla.org/en-US/docs/Web/API/RTCIceServer).
+
+**switchbot**
+
+Support connection to [SwitchBot](https://us.switch-bot.com/) cameras that are based on Kinesis Video Streams. Specifically, this includes [Pan/Tilt Cam Plus 2K](https://us.switch-bot.com/pages/switchbot-pan-tilt-cam-plus-2k) and [Pan/Tilt Cam Plus 3K](https://us.switch-bot.com/pages/switchbot-pan-tilt-cam-plus-3k) and [Smart Video Doorbell](https://www.switchbot.jp/products/switchbot-smart-video-doorbell). `Outdoor Spotlight Cam 1080P`, `Outdoor Spotlight Cam 2K`, `Pan/Tilt Cam`, `Pan/Tilt Cam 2K`, `Indoor Cam` are based on Tuya, so this feature is not available.
 
 ```yaml
 streams:
-  webrtc-whep:    webrtc:http://192.168.1.123:1984/api/webrtc?src=camera1
-  webrtc-go2rtc:  webrtc:ws://192.168.1.123:1984/api/ws?src=camera1
-  webrtc-openipc: webrtc:ws://192.168.1.123/webrtc_ws#format=openipc#ice_servers=[{"urls":"stun:stun.kinesisvideo.eu-north-1.amazonaws.com:443"}]
-  webrtc-wyze:    webrtc:http://192.168.1.123:5000/signaling/camera1?kvs#format=wyze
-  webrtc-kinesis: webrtc:wss://...amazonaws.com/?...#format=kinesis#client_id=...#ice_servers=[{...},{...}]
+  webrtc-whep:      webrtc:http://192.168.1.123:1984/api/webrtc?src=camera1
+  webrtc-go2rtc:    webrtc:ws://192.168.1.123:1984/api/ws?src=camera1
+  webrtc-openipc:   webrtc:ws://192.168.1.123/webrtc_ws#format=openipc#ice_servers=[{"urls":"stun:stun.kinesisvideo.eu-north-1.amazonaws.com:443"}]
+  webrtc-wyze:      webrtc:http://192.168.1.123:5000/signaling/camera1?kvs#format=wyze
+  webrtc-kinesis:   webrtc:wss://...amazonaws.com/?...#format=kinesis#client_id=...#ice_servers=[{...},{...}]
+  webrtc-switchbot: webrtc:wss://...amazonaws.com/?...#format=switchbot#resolution=hd#play_type=0#client_id=...#ice_servers=[{...},{...}]
 ```
 
-**PS.** For `kinesis` sources you can use [echo](#source-echo) to get connection params using `bash`/`python` or any other script language.
+**PS.** For `kinesis` sources, you can use [echo](#source-echo) to get connection params using `bash`, `python` or any other script language.
 
-#### Source: WebTorrent
+## Source: WebTorrent
 
 *[New in v1.3.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.3.0)*
 
@@ -701,15 +807,15 @@ streams:
   webtorrent1: webtorrent:?share=huofssuxaty00izc&pwd=k3l2j9djeg8v8r7e
 ```
 
-#### Incoming sources
+## Incoming sources
 
 By default, go2rtc establishes a connection to the source when any client requests it. Go2rtc drops the connection to the source when it has no clients left.
 
 - Go2rtc also can accepts incoming sources in [RTSP](#module-rtsp), [RTMP](#module-rtmp), [HTTP](#source-http) and **WebRTC/WHIP** formats
 - Go2rtc won't stop such a source if it has no clients
-- You can push data only to existing stream (create stream with empty source in config)
-- You can push multiple incoming sources to same stream
-- You can push data to non empty stream, so it will have additional codecs inside
+- You can push data only to an existing stream (create a stream with empty source in config)
+- You can push multiple incoming sources to the same stream
+- You can push data to a non-empty stream, so it will have additional codecs inside
 
 **Examples**
 
@@ -730,19 +836,19 @@ By default, go2rtc establishes a connection to the source when any client reques
   ffmpeg -re -i BigBuckBunny.mp4 -c copy -f mpegts http://localhost:1984/api/stream.ts?dst=camera1
   ```
 
-#### Incoming: Browser
+### Incoming: Browser
 
 *[New in v1.3.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.3.0)*
 
-You can turn the browser of any PC or mobile into an IP-camera with support video and two way audio. Or even broadcast your PC screen:
+You can turn the browser of any PC or mobile into an IP camera with support for video and two-way audio. Or even broadcast your PC screen:
 
 1. Create empty stream in the `go2rtc.yaml`
 2. Go to go2rtc WebUI
-3. Open `links` page for you stream
+3. Open `links` page for your stream
 4. Select `camera+microphone` or `display+speaker` option
 5. Open `webrtc` local page (your go2rtc **should work over HTTPS!**) or `share link` via [WebTorrent](#module-webtorrent) technology (work over HTTPS by default)
 
-#### Incoming: WebRTC/WHIP
+### Incoming: WebRTC/WHIP
 
 *[New in v1.3.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.3.0)*
 
@@ -750,11 +856,11 @@ You can use **OBS Studio** or any other broadcast software with [WHIP](https://w
 
 - Settings > Stream > Service: WHIP > http://192.168.1.123:1984/api/webrtc?dst=camera1
 
-#### Stream to camera
+## Stream to camera
 
 *[New in v1.3.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.3.0)*
 
-go2rtc support play audio files (ex. music or [TTS](https://www.home-assistant.io/integrations/#text-to-speech)) and live streams (ex. radio) on cameras with [two way audio](#two-way-audio) support (RTSP/ONVIF cameras, TP-Link Tapo, Hikvision ISAPI, Roborock vacuums, any Browser).
+go2rtc supports playing audio files (ex. music or [TTS](https://www.home-assistant.io/integrations/#text-to-speech)) and live streams (ex. radio) on cameras with [two-way audio](#two-way-audio) support (RTSP/ONVIF cameras, TP-Link Tapo, Hikvision ISAPI, Roborock vacuums, any Browser).
 
 API example:
 
@@ -767,22 +873,22 @@ POST http://localhost:1984/api/streams?dst=camera1&src=ffmpeg:http://example.com
 - you can check camera codecs on the go2rtc WebUI info page when the stream is active
 - some cameras support only low quality `PCMA/8000` codec (ex. [Tapo](#source-tapo))
 - it is recommended to choose higher quality formats if your camera supports them (ex. `PCMA/48000` for some Dahua cameras)
-- if you play files over http-link, you need to add `#input=file` params for transcoding, so file will be transcoded and played in real time
+- if you play files over `http` link, you need to add `#input=file` params for transcoding, so the file will be transcoded and played in real time
 - if you play live streams, you should skip `#input` param, because it is already in real time
 - you can stop active playback by calling the API with the empty `src` parameter
 - you will see one active producer and one active consumer in go2rtc WebUI info page during streaming
 
-### Publish stream
+## Publish stream
 
 *[New in v1.8.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.8.0)*
 
 You can publish any stream to streaming services (YouTube, Telegram, etc.) via RTMP/RTMPS. Important:
 
 - Supported codecs: H264 for video and AAC for audio
-- AAC audio is required for YouTube, videos without audio will not work
+- AAC audio is required for YouTube; videos without audio will not work
 - You don't need to enable [RTMP module](#module-rtmp) listening for this task
 
-You can use API:
+You can use the API:
 
 ```
 POST http://localhost:1984/api/streams?src=camera1&dst=rtmps://...
@@ -810,19 +916,39 @@ streams:
 - **Telegram Desktop App** > Any public or private channel or group (where you admin) > Live stream > Start with... > Start streaming.
 - **YouTube** > Create > Go live > Stream latency: Ultra low-latency > Copy: Stream URL + Stream key.
 
-### Module: API
+## Preload stream
+
+You can preload any stream on go2rtc start. This is useful for cameras that take a long time to start up.
+
+```yaml
+preload:
+  camera1:                                     # default: video&audio = ANY
+  camera2: "video"                             # preload only video track
+  camera3: "video=h264&audio=opus"             # preload H264 video and OPUS audio
+
+streams:
+  camera1: 
+    - rtsp://192.168.1.100/stream
+  camera2: 
+    - rtsp://192.168.1.101/stream  
+  camera3: 
+    - rtsp://192.168.1.102/h265stream
+    - ffmpeg:camera3#video=h264#audio=opus#hardware
+```
+
+## Module: API
 
 The HTTP API is the main part for interacting with the application. Default address: `http://localhost:1984/`.
 
-**Important!** go2rtc passes requests from localhost and from unix socket without HTTP authorisation, even if you have it configured! It is your responsibility to set up secure external access to API. If not properly configured, an attacker can gain access to your cameras and even your server.
+**Important!** go2rtc passes requests from localhost and from Unix sockets without HTTP authorisation, even if you have it configured! It is your responsibility to set up secure external access to the API. If not properly configured, an attacker can gain access to your cameras and even your server.
 
-[API description](https://github.com/AlexxIT/go2rtc/tree/master/api).
+[API description](api/README.md).
 
 **Module config**
 
 - you can disable HTTP API with `listen: ""` and use, for example, only RTSP client/server protocol
 - you can enable HTTP API only on localhost with `listen: "127.0.0.1:1984"` setting
-- you can change API `base_path` and host go2rtc on your main app webserver suburl
+- you can change the API `base_path` and host go2rtc on your main app webserver suburl
 - all files from `static_dir` hosted on root path: `/`
 - you can use raw TLS cert/key content or path to files
 
@@ -831,7 +957,8 @@ api:
   listen: ":1984"    # default ":1984", HTTP API port ("" - disabled)
   username: "admin"  # default "", Basic auth for WebUI
   password: "pass"   # default "", Basic auth for WebUI
-  base_path: "/rtc"  # default "", API prefix for serve on suburl (/api => /rtc/api)
+  local_auth: true   # default false, Enable auth check for localhost requests
+  base_path: "/rtc"  # default "", API prefix for serving on suburl (/api => /rtc/api)
   static_dir: "www"  # default "", folder for static files (custom web interface)
   origin: "*"        # default "", allow CORS requests (only * supported)
   tls_listen: ":443" # default "", enable HTTPS server
@@ -851,11 +978,11 @@ api:
 - MJPEG over WebSocket plays better than native MJPEG because Chrome [bug](https://bugs.chromium.org/p/chromium/issues/detail?id=527446)
 - MP4 over WebSocket was created only for Apple iOS because it doesn't support MSE and native MP4
 
-### Module: RTSP
+## Module: RTSP
 
 You can get any stream as RTSP-stream: `rtsp://192.168.1.123:8554/{stream_name}`
 
-You can enable external password protection for your RTSP streams. Password protection always disabled for localhost calls (ex. FFmpeg or Hass on same server).
+You can enable external password protection for your RTSP streams. Password protection is always disabled for localhost calls (ex. FFmpeg or Hass on the same server).
 
 ```yaml
 rtsp:
@@ -874,27 +1001,27 @@ By default go2rtc provide RTSP-stream with only one first video and only one fir
 
 Read more about [codecs filters](#codecs-filters).
 
-### Module: RTMP
+## Module: RTMP
 
 *[New in v1.8.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.8.0)*
 
 You can get any stream as RTMP-stream: `rtmp://192.168.1.123/{stream_name}`. Only H264/AAC codecs supported right now.
 
-[Incoming stream](#incoming-sources) in RTMP-format tested only with [OBS Studio](https://obsproject.com/) and Dahua camera. Different FFmpeg versions has differnt problems with this format. 
+[Incoming stream](#incoming-sources) in RTMP format tested only with [OBS Studio](https://obsproject.com/) and a Dahua camera. Different FFmpeg versions have different problems with this format. 
 
 ```yaml
 rtmp:
   listen: ":1935"  # by default - disabled!
 ```
 
-### Module: WebRTC
+## Module: WebRTC
 
-In most cases [WebRTC](https://en.wikipedia.org/wiki/WebRTC) uses direct peer-to-peer connection from your browser to go2rtc and sends media data via UDP.
+In most cases, [WebRTC](https://en.wikipedia.org/wiki/WebRTC) uses a direct peer-to-peer connection from your browser to go2rtc and sends media data via UDP.
 It **can't pass** media data through your Nginx or Cloudflare or [Nabu Casa](https://www.nabucasa.com/) HTTP TCP connection!
-It can automatically detects your external IP via public [STUN](https://en.wikipedia.org/wiki/STUN) server.
-It can establish a external direct connection via [UDP hole punching](https://en.wikipedia.org/wiki/UDP_hole_punching) technology even if you not open your server to the World.
+It can automatically detect your external IP via a public [STUN](https://en.wikipedia.org/wiki/STUN) server.
+It can establish an external direct connection via [UDP hole punching](https://en.wikipedia.org/wiki/UDP_hole_punching) technology even if you do not open your server to the World.
 
-But about 10-20% of users may need to configure additional settings for external access if **mobile phone** or **go2rtc server** behing [Symmetric NAT](https://tomchen.github.io/symmetric-nat-test/).
+But about 10-20% of users may need to configure additional settings for external access if **mobile phone** or **go2rtc server** is behind [Symmetric NAT](https://tomchen.github.io/symmetric-nat-test/).
 
 - by default, WebRTC uses both TCP and UDP on port 8555 for connections
 - you can use this port for external access
@@ -907,39 +1034,30 @@ webrtc:
 
 **Static public IP**
 
-- forward the port 8555 on your router (you can use same 8555 port or any other as external port)
-- add your external IP-address and external port to YAML config
+- forward the port 8555 on your router (you can use the same 8555 port or any other as external port)
+- add your external IP address and external port to the YAML config
 
 ```yaml
 webrtc:
   candidates:
-    - 216.58.210.174:8555  # if you have static public IP-address
+    - 216.58.210.174:8555  # if you have a static public IP address
 ```
 
 **Dynamic public IP**
 
-- forward the port 8555 on your router (you can use same 8555 port or any other as the external port)
+- forward the port 8555 on your router (you can use the same 8555 port or any other as the external port)
 - add `stun` word and external port to YAML config
-  - go2rtc automatically detects your external address with STUN-server
+  - go2rtc automatically detects your external address with STUN server
 
 ```yaml
 webrtc:
   candidates:
-    - stun:8555  # if you have dynamic public IP-address
-```
-
-**Private IP**
-
-- setup integration with [ngrok service](#module-ngrok)
-
-```yaml
-ngrok:
-  command: ...
+    - stun:8555  # if you have a dynamic public IP address
 ```
 
 **Hard tech way 1. Own TCP-tunnel**
 
-If you have personal [VPS](https://en.wikipedia.org/wiki/Virtual_private_server), you can create TCP-tunnel and setup in the same way as "Static public IP". But use your VPS IP-address in YAML config.
+If you have a personal [VPS](https://en.wikipedia.org/wiki/Virtual_private_server), you can create a TCP tunnel and setup in the same way as "Static public IP". But use your VPS IP address in the YAML config.
 
 **Hard tech way 2. Using TURN-server**
 
@@ -954,7 +1072,7 @@ webrtc:
       credential: your_pass
 ```
 
-### Module: HomeKit
+## Module: HomeKit
 
 *[New in v1.7.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.7.0)*
 
@@ -965,7 +1083,7 @@ HomeKit module can work in two modes:
 
 **Important**
 
-- HomeKit cameras supports only H264 video and OPUS audio
+- HomeKit cameras support only H264 video and OPUS audio
 
 **Minimal config**
 
@@ -1008,21 +1126,21 @@ homekit:
   aqara1:  # same stream ID from streams list
 ```
 
-### Module: WebTorrent
+## Module: WebTorrent
 
 *[New in v1.3.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.3.0)*
 
-This module support:
+This module supports:
 
 - Share any local stream via [WebTorrent](https://webtorrent.io/) technology
 - Get any [incoming stream](#incoming-browser) from PC or mobile via [WebTorrent](https://webtorrent.io/) technology
 - Get any remote [go2rtc source](#source-webtorrent) via [WebTorrent](https://webtorrent.io/) technology
 
-Securely and free. You do not need to open a public access to the go2rtc server. But in some cases (Symmetric NAT) you may need to set up external access to [WebRTC module](#module-webrtc).
+Securely and freely. You do not need to open a public access to the go2rtc server. But in some cases (Symmetric NAT), you may need to set up external access to [WebRTC module](#module-webrtc).
 
-To generate sharing link or incoming link - goto go2rtc WebUI (stream links page). This link is **temporary** and will stop working after go2rtc is restarted!
+To generate a sharing link or incoming link, go to the go2rtc WebUI (stream links page). This link is **temporary** and will stop working after go2rtc is restarted!
 
-You can create permanent external links in go2rtc config:
+You can create permanent external links in the go2rtc config:
 
 ```yaml
 webtorrent:
@@ -1032,71 +1150,19 @@ webtorrent:
       src: rtsp-dahua1   # stream name from streams section
 ```
 
-Link example: https://alexxit.github.io/go2rtc/#share=02SNtgjKXY&pwd=wznEQqznxW&media=video+audio
+Link example: https://go2rtc.org/webtorrent/#share=02SNtgjKXY&pwd=wznEQqznxW&media=video+audio
 
-TODO: article how it works...
+## Module: ngrok
 
-### Module: ngrok
+With [ngrok](https://ngrok.com/) integration, you can get external access to your streams in situations when you have Internet with a private IP address.
 
-With ngrok integration you can get external access to your streams in situations when you have Internet with private IP-address.
+*[read more](internal/ngrok/README.md)*
 
-- ngrok is pre-installed for **Docker** and **Hass Add-on** users
-- you may need external access for two different things:
-  - WebRTC stream, so you need tunnel WebRTC TCP port (ex. 8555)
-  - go2rtc web interface, so you need tunnel API HTTP port (ex. 1984)
-- ngrok support authorization for your web interface
-- ngrok automatically adds HTTPS to your web interface
+## Module: Hass
 
-The ngrok free subscription has the following limitations:
+The best and easiest way to use go2rtc inside Home Assistant is to install the custom integration [WebRTC Camera](#go2rtc-home-assistant-integration) and custom Lovelace card.
 
-- You can reserve a free domain for serving the web interface, but the TCP address you get will always be random and change with each restart of the ngrok agent (not a problem for webrtc stream)
-- You can forward multiple ports from a single agent, but you can only run one ngrok agent on the free plan
-
-go2rtc will automatically get your external TCP address (if you enable it in ngrok config) and use it with WebRTC connection (if you enable it in webrtc config).
-
-You need to manually download the [ngrok agent app](https://ngrok.com/download) for your OS and register with the [ngrok service](https://ngrok.com/signup).
-
-**Tunnel for only WebRTC Stream**
-
-You need to add your [ngrok authtoken](https://dashboard.ngrok.com/get-started/your-authtoken) and WebRTC TCP port to YAML:
-
-```yaml
-ngrok:
-  command: ngrok tcp 8555 --authtoken eW91IHNoYWxsIG5vdCBwYXNzCnlvdSBzaGFsbCBub3QgcGFzcw
-```
-
-**Tunnel for WebRTC and Web interface**
-
-You need to create `ngrok.yaml` config file and add it to go2rtc config:
-
-```yaml
-ngrok:
-  command: ngrok start --all --config ngrok.yaml
-```
-
-ngrok config example:
-
-```yaml
-version: "2"
-authtoken: eW91IHNoYWxsIG5vdCBwYXNzCnlvdSBzaGFsbCBub3QgcGFzcw
-tunnels:
-  api:
-    addr: 1984  # use the same port as in go2rtc config
-    proto: http
-    basic_auth:
-      - admin:password  # you can set login/pass for your web interface
-  webrtc:
-    addr: 8555  # use the same port as in go2rtc config
-    proto: tcp
-```
-
-See the [ngrok agent documentation](https://ngrok.com/docs/agent/config/) for more details on the ngrok configuration file.
-
-### Module: Hass
-
-The best and easiest way to use go2rtc inside the Home Assistant is to install the custom integration [WebRTC Camera](#go2rtc-home-assistant-integration) and custom lovelace card.
-
-But go2rtc is also compatible and can be used with [RTSPtoWebRTC](https://www.home-assistant.io/integrations/rtsp_to_webrtc/) built-in integration.
+But go2rtc is also compatible and can be used with the [RTSPtoWebRTC](https://www.home-assistant.io/integrations/rtsp_to_webrtc/) built-in integration.
 
 You have several options on how to add a camera to Home Assistant:
 
@@ -1114,10 +1180,10 @@ You have several options on how to watch the stream from the cameras in Home Ass
    - Install any [go2rtc](#fast-start)
    - Hass > Settings > Integrations > Add Integration > [RTSPtoWebRTC](https://my.home-assistant.io/redirect/config_flow_start/?domain=rtsp_to_webrtc) > `http://127.0.0.1:1984/`
    - RTSPtoWebRTC > Configure > STUN server: `stun.l.google.com:19302`
-   - Use Picture Entity or Picture Glance lovelace card
+   - Use Picture Entity or Picture Glance Lovelace card
 3. `Camera Entity` or `Camera URL` => [WebRTC Camera](https://github.com/AlexxIT/WebRTC) => Technology: `WebRTC/MSE/MP4/MJPEG`, codecs: `H264/H265/AAC/PCMU/PCMA/OPUS`, best latency, best compatibility.
    - Install and add [WebRTC Camera](https://github.com/AlexxIT/WebRTC) custom integration
-   - Use WebRTC Camera custom lovelace card
+   - Use WebRTC Camera custom Lovelace card
 
 You can add camera `entity_id` to [go2rtc config](#configuration) if you need transcoding:
 
@@ -1126,17 +1192,17 @@ streams:
   "camera.hall": ffmpeg:{input}#video=copy#audio=opus
 ```
 
-**PS.** Default Home Assistant lovelace cards don't support 2-way audio. You can use 2-way audio from [Add-on Web UI](https://my.home-assistant.io/redirect/supervisor_addon/?addon=a889bffc_go2rtc&repository_url=https%3A%2F%2Fgithub.com%2FAlexxIT%2Fhassio-addons). But you need use HTTPS to access the microphone. This is a browser restriction and cannot be avoided.
+**PS.** Default Home Assistant lovelace cards don't support two-way audio. You can use 2-way audio from [Add-on Web UI](https://my.home-assistant.io/redirect/supervisor_addon/?addon=a889bffc_go2rtc&repository_url=https%3A%2F%2Fgithub.com%2FAlexxIT%2Fhassio-addons), but you need to use HTTPS to access the microphone. This is a browser restriction and cannot be avoided.
 
 **PS.** There is also another nice card with go2rtc support - [Frigate Lovelace Card](https://github.com/dermotduffy/frigate-hass-card).
 
-### Module: MP4
+## Module: MP4
 
 Provides several features:
 
 1. MSE stream (fMP4 over WebSocket)
 2. Camera snapshots in MP4 format (single frame), can be sent to [Telegram](https://github.com/AlexxIT/go2rtc/wiki/Snapshot-to-Telegram)
-3. HTTP progressive streaming (MP4 file stream) - bad format for streaming because of high start delay. This format doesn't work in all Safari browsers, but go2rtc will automatically redirect it to HLS/fMP4 it this case.
+3. HTTP progressive streaming (MP4 file stream) - bad format for streaming because of high start delay. This format doesn't work in all Safari browsers, but go2rtc will automatically redirect it to HLS/fMP4 in this case.
 
 API examples:
 
@@ -1153,7 +1219,7 @@ Read more about [codecs filters](#codecs-filters).
 
 **PS.** Rotate and scale params don't use transcoding and change video using metadata. 
 
-### Module: HLS
+## Module: HLS
 
 *[New in v1.1.0](https://github.com/AlexxIT/go2rtc/releases/tag/v1.1.0)*
 
@@ -1168,15 +1234,15 @@ API examples:
 
 Read more about [codecs filters](#codecs-filters).
 
-### Module: MJPEG
+## Module: MJPEG
 
-**Important.** For stream as MJPEG format, your source MUST contain the MJPEG codec. If your stream has a MJPEG codec - you can receive **MJPEG stream** or **JPEG snapshots** via API.
+**Important.** For stream in MJPEG format, your source MUST contain the MJPEG codec. If your stream has an MJPEG codec, you can receive **MJPEG stream** or **JPEG snapshots** via API.
 
 You can receive an MJPEG stream in several ways:
 
 - some cameras support MJPEG codec inside [RTSP stream](#source-rtsp) (ex. second stream for Dahua cameras)
-- some cameras has HTTP link with [MJPEG stream](#source-http)
-- some cameras has HTTP link with snapshots - go2rtc can convert them to [MJPEG stream](#source-http)
+- some cameras have an HTTP link with [MJPEG stream](#source-http)
+- some cameras have an HTTP link with snapshots - go2rtc can convert them to [MJPEG stream](#source-http)
 - you can convert H264/H265 stream from your camera via [FFmpeg integraion](#source-ffmpeg)
 
 With this example, your stream will have both H264 and MJPEG codecs:
@@ -1196,11 +1262,11 @@ API examples:
   - You can use `rotate` param with `90`, `180`, `270` or `-90` values
   - You can use `hardware`/`hw` param [read more](https://github.com/AlexxIT/go2rtc/wiki/Hardware-acceleration)
 
-**PS.** This module also supports streaming to the server console (terminal) in the **animated ASCII art** format ([read more](https://github.com/AlexxIT/go2rtc/blob/master/internal/mjpeg/README.md)):
+**PS.** This module also supports streaming to the server console (terminal) in the **animated ASCII art** format ([read more](internal/mjpeg/README.md)).
 
 [![](https://img.youtube.com/vi/sHj_3h_sX7M/mqdefault.jpg)](https://www.youtube.com/watch?v=sHj_3h_sX7M)
 
-### Module: Log
+## Module: Log
 
 You can set different log levels for different modules.
 
@@ -1209,15 +1275,35 @@ log:
   level: info  # default level
   api: trace
   exec: debug
-  ngrok: info
   rtsp: warn
   streams: error
   webrtc: fatal
 ```
 
-## Security
+# Security
 
-By default `go2rtc` starts the Web interface on port `1984` and RTSP on port `8554`, as well as use port `8555` for WebRTC connections. The three ports are accessible from your local network. So anyone on your local network can watch video from your cameras without authorization. The same rule applies to the Home Assistant Add-on.
+> [!IMPORTANT]
+> If an attacker gains access to the API, you are in danger. Through the API, an attacker can use insecure sources such as echo and exec. And get full access to your server.
+
+For maximum (paranoid) security, go2rtc has special settings:
+
+```yaml
+app:
+  # use only allowed modules
+  modules: [api, rtsp, webrtc, exec, ffmpeg, mjpeg]
+
+api:
+  # use only allowed API paths
+  allow_paths: [/api, /api/streams, /api/webrtc, /api/frame.jpeg]
+  # enable auth for localhost (used together with username and password)
+  local_auth: true
+
+exec:
+  # use only allowed exec paths
+  allow_paths: [ffmpeg]
+```
+
+By default, `go2rtc` starts the Web interface on port `1984` and RTSP on port `8554`, as well as uses port `8555` for WebRTC connections. The three ports are accessible from your local network. So anyone on your local network can watch video from your cameras without authorization. The same rule applies to the Home Assistant Add-on.
 
 This is not a problem if you trust your local network as much as I do. But you can change this behaviour with a `go2rtc.yaml` config:
 
@@ -1233,15 +1319,15 @@ webrtc:
 ```
 
 - local access to RTSP is not a problem for [FFmpeg](#source-ffmpeg) integration, because it runs locally on your server
-- local access to API is not a problem for [Home Assistant Add-on](#go2rtc-home-assistant-add-on), because Hass runs locally on same server and Add-on Web UI protected with Hass authorization ([Ingress feature](https://www.home-assistant.io/blog/2019/04/15/hassio-ingress/))
-- external access to WebRTC TCP port is not a problem, because it used only for transmit encrypted media data
-  - anyway you need to open this port to your local network and to the Internet in order for WebRTC to work
+- local access to API is not a problem for the [Home Assistant add-on](#go2rtc-home-assistant-add-on), because Hass runs locally on the same server, and the add-on web UI is protected with Hass authorization ([Ingress feature](https://www.home-assistant.io/blog/2019/04/15/hassio-ingress/))
+- external access to WebRTC TCP port is not a problem, because it is used only for transmitting encrypted media data
+  - anyway you need to open this port to your local network and to the Internet for WebRTC to work
 
-If you need Web interface protection without Home Assistant Add-on - you need to use reverse proxy, like [Nginx](https://nginx.org/), [Caddy](https://caddyserver.com/), [ngrok](https://ngrok.com/), etc.
+If you need web interface protection without the Home Assistant add-on, you need to use a reverse proxy, like [Nginx](https://nginx.org/), [Caddy](https://caddyserver.com/), etc.
 
-PS. Additionally WebRTC will try to use the 8555 UDP port for transmit encrypted media. It works without problems on the local network. And sometimes also works for external access, even if you haven't opened this port on your router ([read more](https://en.wikipedia.org/wiki/UDP_hole_punching)). But for stable external WebRTC access, you need to open the 8555 port on your router for both TCP and UDP.
+PS. Additionally, WebRTC will try to use the 8555 UDP port to transmit encrypted media. It works without problems on the local network, and sometimes also works for external access, even if you haven't opened this port on your router ([read more](https://en.wikipedia.org/wiki/UDP_hole_punching)). But for stable external WebRTC access, you need to open the 8555 port on your router for both TCP and UDP.
 
-## Codecs filters
+# Codecs filters
 
 go2rtc can automatically detect which codecs your device supports for [WebRTC](#module-webrtc) and [MSE](#module-mp4) technologies.
 
@@ -1262,40 +1348,37 @@ Some examples:
 - `http://192.168.1.123:1984/api/stream.m3u8?src=camera1&mp4` - HLS stream with MP4 compatible codecs (HLS/fMP4)
 - `http://192.168.1.123:1984/api/stream.m3u8?src=camera1&mp4=flac` - HLS stream with PCMA/PCMU/PCM audio support (HLS/fMP4), won't work on old devices
 - `http://192.168.1.123:1984/api/stream.mp4?src=camera1&mp4=flac` - MP4 file with PCMA/PCMU/PCM audio support, won't work on old devices (ex. iOS 12)
-- `http://192.168.1.123:1984/api/stream.mp4?src=camera1&mp4=all` - MP4 file with non standard audio codecs, won't work on some players
+- `http://192.168.1.123:1984/api/stream.mp4?src=camera1&mp4=all` - MP4 file with non-standard audio codecs, won't work on some players
 
-## Codecs madness
+# Codecs madness
 
-`AVC/H.264` video can be played almost anywhere. But `HEVC/H.265` has a lot of limitations in supporting with different devices and browsers. It's all about patents and money, you can't do anything about it.
+`AVC/H.264` video can be played almost anywhere. But `HEVC/H.265` has many limitations in supporting different devices and browsers.
 
-| Device                                                                   | WebRTC                                  | MSE                                     | HTTP*                                        | HLS                         |
-|--------------------------------------------------------------------------|-----------------------------------------|-----------------------------------------|----------------------------------------------|-----------------------------|
-| *latency*                                                                | best                                    | medium                                  | bad                                          | bad                         |
-| - Desktop Chrome 107+ <br/> - Desktop Edge <br/> - Android Chrome 107+   | H264 <br/> PCMU, PCMA <br/> OPUS        | H264, H265* <br/> AAC, FLAC* <br/> OPUS | H264, H265* <br/> AAC, FLAC* <br/> OPUS, MP3 | no                          |
-| Desktop Firefox                                                          | H264 <br/> PCMU, PCMA <br/> OPUS        | H264 <br/> AAC, FLAC* <br/> OPUS        | H264 <br/> AAC, FLAC* <br/> OPUS             | no                          |
-| - Desktop Safari 14+ <br/> - iPad Safari 14+ <br/> - iPhone Safari 17.1+ | H264, H265* <br/> PCMU, PCMA <br/> OPUS | H264, H265 <br/> AAC, FLAC*             | **no!**                                      | H264, H265 <br/> AAC, FLAC* |
-| iPhone Safari 14+                                                        | H264, H265* <br/> PCMU, PCMA <br/> OPUS | **no!**                                 | **no!**                                      | H264, H265 <br/> AAC, FLAC* |
-| macOS [Hass App][1]                                                      | no                                      | no                                      | no                                           | H264, H265 <br/> AAC, FLAC* |
+| Device                                                             | WebRTC                                  | MSE                                     | HTTP*                                        | HLS                         |
+|--------------------------------------------------------------------|-----------------------------------------|-----------------------------------------|----------------------------------------------|-----------------------------|
+| *latency*                                                          | best                                    | medium                                  | bad                                          | bad                         |
+| Desktop Chrome 136+ <br/> Desktop Edge <br/> Android Chrome 136+   | H264, H265* <br/> PCMU, PCMA <br/> OPUS | H264, H265* <br/> AAC, FLAC* <br/> OPUS | H264, H265* <br/> AAC, FLAC* <br/> OPUS, MP3 | no                          |
+| Desktop Firefox                                                    | H264 <br/> PCMU, PCMA <br/> OPUS        | H264 <br/> AAC, FLAC* <br/> OPUS        | H264 <br/> AAC, FLAC* <br/> OPUS             | no                          |
+| Desktop Safari 14+ <br/> iPad Safari 14+ <br/> iPhone Safari 17.1+ | H264, H265* <br/> PCMU, PCMA <br/> OPUS | H264, H265 <br/> AAC, FLAC*             | **no!**                                      | H264, H265 <br/> AAC, FLAC* |
+| iPhone Safari 14+                                                  | H264, H265* <br/> PCMU, PCMA <br/> OPUS | **no!**                                 | **no!**                                      | H264, H265 <br/> AAC, FLAC* |
+| macOS [Hass App][1]                                                | no                                      | no                                      | no                                           | H264, H265 <br/> AAC, FLAC* |
 
 [1]: https://apps.apple.com/app/home-assistant/id1099568401
 
-`HTTP*` - HTTP Progressive Streaming, not related with [Progressive download](https://en.wikipedia.org/wiki/Progressive_download), because the file has no size and no end 
-
-- Chrome H265: [read this](https://chromestatus.com/feature/5186511939567616) and [read this](https://github.com/StaZhu/enable-chromium-hevc-hardware-decoding)
-- Edge H265: [read this](https://www.reddit.com/r/MicrosoftEdge/comments/v9iw8k/enable_hevc_support_in_edge/)
-- Desktop Safari H265: Menu > Develop > Experimental > WebRTC H265
-- iOS Safari H265: Settings > Safari > Advanced > Experimental > WebRTC H265
+- `HTTP*` - HTTP Progressive Streaming, not related to [progressive download](https://en.wikipedia.org/wiki/Progressive_download), because the file has no size and no end 
+- `WebRTC H265` - supported in [Chrome 136+](https://developer.chrome.com/release-notes/136), supported in [Safari 18+](https://developer.apple.com/documentation/safari-release-notes/safari-18-release-notes)
+- `MSE iPhone` - supported in [iOS 17.1+](https://webkit.org/blog/14735/webkit-features-in-safari-17-1/)
 
 **Audio**
 
 - Go2rtc support [automatic repack](#built-in-transcoding) `PCMA/PCMU/PCM` codecs to `FLAC` for MSE/MP4/HLS so they will work almost anywhere
 - **WebRTC** audio codecs: `PCMU/8000`, `PCMA/8000`, `OPUS/48000/2`
-- `OPUS` and `MP3` inside **MP4** is part of the standard, but some players do not support them anyway (especially Apple)
+- `OPUS` and `MP3` inside **MP4** are part of the standard, but some players do not support them anyway (especially Apple)
 
 **Apple devices**
 
 - all Apple devices don't support HTTP progressive streaming
-- iPhones don't support MSE technology because it competes with the HTTP Live Streaming (HLS) technology, invented by Apple
+- old iPhone firmwares don't support MSE technology because it competes with the HTTP Live Streaming (HLS) technology, invented by Apple
 - HLS is the worst technology for **live** streaming, it still exists only because of iPhones
 
 **Codec names**
@@ -1308,11 +1391,11 @@ Some examples:
 - AAC = MPEG4-GENERIC
 - MP3 = MPEG-1 Audio Layer III or MPEG-2 Audio Layer III
 
-## Built-in transcoding
+# Built-in transcoding
 
 There are no plans to embed complex transcoding algorithms inside go2rtc. [FFmpeg source](#source-ffmpeg) does a great job with this. Including [hardware acceleration](https://github.com/AlexxIT/go2rtc/wiki/Hardware-acceleration) support.
 
-But go2rtc has some simple algorithms. They are turned on automatically, you do not need to set them up additionally.
+But go2rtc has some simple algorithms. They are turned on automatically; you do not need to set them up additionally.
 
 **PCM for MSE/MP4/HLS**
 
@@ -1324,7 +1407,7 @@ PCMA/PCMU => PCM => FLAC => MSE/MP4/HLS
 
 **Resample PCMA/PCMU for WebRTC**
 
-By default WebRTC support only `PCMA/8000` and `PCMU/8000`. But go2rtc can automatically resample PCMA and PCMU codec with with a different sample rate. Also go2rtc can transcode `PCM` codec to `PCMA/8000`, so WebRTC can play it:
+By default WebRTC supports only `PCMA/8000` and `PCMU/8000`. But go2rtc can automatically resample PCMA and PCMU codecs with a different sample rate. Also, go2rtc can transcode `PCM` codec to `PCMA/8000`, so WebRTC can play it:
 
 ```
 PCM/xxx => PCMA/8000 => WebRTC
@@ -1334,24 +1417,24 @@ PCMU/xxx => PCMU/8000 => WebRTC
 
 **Important**
 
-- FLAC codec not supported in a RTSP stream. If you using Frigate or Hass for recording MP4 files with PCMA/PCMU/PCM audio - you should setup transcoding to AAC codec.
-- PCMA and PCMU are VERY low quality codecs. Them support only 256! different sounds. Use them only when you have no other options.
+- FLAC codec not supported in an RTSP stream. If you are using Frigate or Hass for recording MP4 files with PCMA/PCMU/PCM audio, you should set up transcoding to the AAC codec.
+- PCMA and PCMU are VERY low-quality codecs. They support only 256! different sounds. Use them only when you have no other options.
 
-## Codecs negotiation
+# Codecs negotiation
 
 For example, you want to watch RTSP-stream from [Dahua IPC-K42](https://www.dahuasecurity.com/fr/products/All-Products/Network-Cameras/Wireless-Series/Wi-Fi-Series/4MP/IPC-K42) camera in your Chrome browser.
 
-- this camera support 2-way audio standard **ONVIF Profile T**
-- this camera support codecs **H264, H265** for send video, and you select `H264` in camera settings
-- this camera support codecs **AAC, PCMU, PCMA** for send audio (from mic), and you select `AAC/16000` in camera settings
-- this camera support codecs **AAC, PCMU, PCMA** for receive audio (to speaker), you don't need to select them
-- your browser support codecs **H264, VP8, VP9, AV1** for receive video, you don't need to select them
-- your browser support codecs **OPUS, PCMU, PCMA** for send and receive audio, you don't need to select them
-- you can't get camera audio directly, because its audio codecs doesn't match with your browser codecs
-  - so you decide to use transcoding via FFmpeg and add this setting to config YAML file
+- this camera supports two-way audio standard **ONVIF Profile T**
+- this camera supports codecs **H264, H265** for send video, and you select `H264` in camera settings
+- this camera supports codecs **AAC, PCMU, PCMA** for sending audio (from mic), and you select `AAC/16000` in camera settings
+- this camera supports codecs **AAC, PCMU, PCMA** for receiving audio (to speaker), you don't need to select them
+- your browser supports codecs **H264, VP8, VP9, AV1** for receiving video, you don't need to select them
+- your browser supports codecs **OPUS, PCMU, PCMA** for sending and receiving audio, you don't need to select them
+- you can't get camera audio directly, because its audio codecs don't match with your browser codecs
+  - so you decide to use transcoding via FFmpeg and add this setting to the config YAML file
   - you have chosen `OPUS/48000/2` codec, because it is higher quality than the `PCMU/8000` or `PCMA/8000`
 
-Now you have stream with two sources - **RTSP and FFmpeg**:
+Now you have a stream with two sources - **RTSP and FFmpeg**:
 
 ```yaml
 streams:
@@ -1360,22 +1443,24 @@ streams:
     - ffmpeg:rtsp://admin:password@192.168.1.123/cam/realmonitor?channel=1&subtype=0#audio=opus
 ```
 
-**go2rtc** automatically match codecs for you browser and all your stream sources. This called **multi-source 2-way codecs negotiation**. And this is one of the main features of this app.
+**go2rtc** automatically matches codecs for your browser and all your stream sources. This is called **multi-source two-way codec negotiation**. And this is one of the main features of this app.
 
 ![](assets/codecs.svg)
 
-**PS.** You can select `PCMU` or `PCMA` codec in camera setting and don't use transcoding at all. Or you can select `AAC` codec for main stream and `PCMU` codec for second stream and add both RTSP to YAML config, this also will work fine.
+**PS.** You can select `PCMU` or `PCMA` codec in camera settings and not use transcoding at all. Or you can select `AAC` codec for main stream and `PCMU` codec for second stream and add both RTSP to YAML config, this also will work fine.
 
-## Projects using go2rtc
+# Projects using go2rtc
 
-- [Frigate 12+](https://frigate.video/) - open source NVR built around real-time AI object detection
+- [Home Assistant](https://www.home-assistant.io/) [2024.11+](https://www.home-assistant.io/integrations/go2rtc/) - top open-source smart home project
+- [Frigate](https://frigate.video/) [0.12+](https://docs.frigate.video/guides/configuring_go2rtc/) - open-source NVR built around real-time AI object detection
 - [Frigate Lovelace Card](https://github.com/dermotduffy/frigate-hass-card) - custom card for Home Assistant
-- [OpenIPC](https://github.com/OpenIPC/firmware/tree/master/general/package/go2rtc) - Alternative IP Camera firmware from an open community
-- [wz_mini_hacks](https://github.com/gtxaspec/wz_mini_hacks) - Custom firmware for Wyze cameras
-- [EufyP2PStream](https://github.com/oischinger/eufyp2pstream) - A small project that provides a Video/Audio Stream from Eufy cameras that don't directly support RTSP
-- [ioBroker.euSec](https://github.com/bropat/ioBroker.eusec) - [ioBroker](https://www.iobroker.net/) adapter for control Eufy security devices
-- [MMM-go2rtc](https://github.com/Anonym-tsk/MMM-go2rtc) - MagicMirror² Module
-- [ring-mqtt](https://github.com/tsightler/ring-mqtt) - Ring devices to MQTT Bridge
+- [OpenIPC](https://github.com/OpenIPC/firmware/tree/master/general/package/go2rtc) - alternative IP camera firmware from an open community
+- [wz_mini_hacks](https://github.com/gtxaspec/wz_mini_hacks) - custom firmware for Wyze cameras
+- [EufyP2PStream](https://github.com/oischinger/eufyp2pstream) - a small project that provides a video/audio stream from Eufy cameras that don't directly support RTSP
+- [ioBroker.euSec](https://github.com/bropat/ioBroker.eusec) - [ioBroker](https://www.iobroker.net/) adapter for controlling Eufy security devices
+- [MMM-go2rtc](https://github.com/Anonym-tsk/MMM-go2rtc) - MagicMirror² module
+- [ring-mqtt](https://github.com/tsightler/ring-mqtt) - Ring-to-MQTT bridge
+- [lightNVR](https://github.com/opensensor/lightNVR)
 
 **Distributions**
 
@@ -1383,22 +1468,22 @@ streams:
 - [Arch User Repository](https://linux-packages.com/aur/package/go2rtc)
 - [Gentoo](https://github.com/inode64/inode64-overlay/tree/main/media-video/go2rtc)
 - [NixOS](https://search.nixos.org/packages?query=go2rtc)
-- [Proxmox Helper Scripts](https://tteck.github.io/Proxmox/)
+- [Proxmox Helper Scripts](https://github.com/community-scripts/ProxmoxVE/)
 - [QNAP](https://www.myqnap.org/product/go2rtc/)
 - [Synology NAS](https://synocommunity.com/package/go2rtc)
 - [Unraid](https://unraid.net/community/apps?q=go2rtc)
 
-## Cameras experience
+# Camera experience
 
 - [Dahua](https://www.dahuasecurity.com/) - reference implementation streaming protocols, a lot of settings, high stream quality, multiple streaming clients
-- [EZVIZ](https://www.ezviz.com/) - awful RTSP protocol realisation, many bugs in SDP
+- [EZVIZ](https://www.ezviz.com/) - awful RTSP protocol implementation, many bugs in SDP
 - [Hikvision](https://www.hikvision.com/) - a lot of proprietary streaming technologies
-- [Reolink](https://reolink.com/) - some models has awful unusable RTSP realisation and not best RTMP alternative (I recommend that you contact Reolink support for new firmware), few settings
-- [Sonoff](https://sonoff.tech/) - very low stream quality, no settings, not best protocol implementation
+- [Reolink](https://reolink.com/) - some models have an awful, unusable RTSP implementation and not the best RTMP alternative (I recommend that you contact Reolink support for new firmware), few settings
+- [Sonoff](https://sonoff.tech/) - very low stream quality, no settings, not the best protocol implementation
 - [TP-Link](https://www.tp-link.com/) - few streaming clients, packet loss?
-- Chinese cheap noname cameras, Wyze Cams, Xiaomi cameras with hacks (usual has `/live/ch00_1` in RTSP URL) - awful but usable RTSP protocol realisation, low stream quality, few settings, packet loss?
+- Chinese cheap noname cameras, Wyze Cams, Xiaomi cameras with hacks (usually have `/live/ch00_1` in RTSP URL) - awful but usable RTSP protocol implementation, low stream quality, few settings, packet loss?
 
-## TIPS
+# TIPS
 
 **Using apps for low RTSP delay**
 
@@ -1408,27 +1493,3 @@ streams:
 **Snapshots to Telegram**
 
 [read more](https://github.com/AlexxIT/go2rtc/wiki/Snapshot-to-Telegram)
-
-## FAQ
-
-**Q. What's the difference between go2rtc, WebRTC Camera and RTSPtoWebRTC?**
-
-**go2rtc** is a new version of the server-side [WebRTC Camera](https://github.com/AlexxIT/WebRTC) integration, completely rewritten from scratch, with a number of fixes and a huge number of new features. It is compatible with native Home Assistant [RTSPtoWebRTC](https://www.home-assistant.io/integrations/rtsp_to_webrtc/) integration. So you [can use](#module-hass) default lovelace Picture Entity or Picture Glance.
-
-**Q. Should I use go2rtc addon or WebRTC Camera integration?**
-
-**go2rtc** is more than just viewing your stream online with WebRTC/MSE/HLS/etc. You can use it all the time for your various tasks. But every time the Hass is rebooted - all integrations are also rebooted. So your streams may be interrupted if you use them in additional tasks.
-
-Basic users can use **WebRTC Camera** integration. Advanced users can use go2rtc addon or Frigate 12+ addon.
-
-**Q. Which RTSP link should I use inside Hass?**
-
-You can use direct link to your cameras there (as you always do). **go2rtc** support zero-config feature. You may leave `streams` config section empty. And your streams will be created on the fly on first start from Hass. And your cameras will have multiple connections. Some from Hass directly and one from **go2rtc**.
-
-Also you can specify your streams in **go2rtc** [config file](#configuration) and use RTSP links to this addon. With additional features: multi-source [codecs negotiation](#codecs-negotiation) or FFmpeg [transcoding](#source-ffmpeg) for unsupported codecs. Or use them as source for Frigate. And your cameras will have one connection from **go2rtc**. And **go2rtc** will have multiple connection - some from Hass via RTSP protocol, some from your browser via WebRTC/MSE/HLS protocols.
-
-Use any config what you like.
-
-**Q. What about lovelace card with support 2-way audio?**
-
-At this moment I am focused on improving stability and adding new features to **go2rtc**. Maybe someone could write such a card themselves. It's not difficult, I have [some sketches](https://github.com/AlexxIT/go2rtc/blob/master/www/webrtc.html).

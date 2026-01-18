@@ -10,17 +10,13 @@ import (
 )
 
 type Consumer struct {
-	core.SuperConsumer
+	core.Connection
 	wr    *core.WriteBuffer
 	muxer *Muxer
 }
 
 func NewConsumer() *Consumer {
-	c := &Consumer{
-		wr:    core.NewWriteBuffer(nil),
-		muxer: &Muxer{},
-	}
-	c.Medias = []*core.Media{
+	medias := []*core.Media{
 		{
 			Kind:      core.KindVideo,
 			Direction: core.DirectionSendonly,
@@ -36,7 +32,17 @@ func NewConsumer() *Consumer {
 			},
 		},
 	}
-	return c
+	wr := core.NewWriteBuffer(nil)
+	return &Consumer{
+		Connection: core.Connection{
+			ID:         core.NewID(),
+			FormatName: "flv",
+			Medias:     medias,
+			Transport:  wr,
+		},
+		wr:    wr,
+		muxer: &Muxer{},
+	}
 }
 
 func (c *Consumer) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
@@ -85,9 +91,4 @@ func (c *Consumer) WriteTo(wr io.Writer) (int64, error) {
 		return 0, err
 	}
 	return c.wr.WriteTo(wr)
-}
-
-func (c *Consumer) Stop() error {
-	_ = c.SuperConsumer.Close()
-	return c.wr.Close()
 }

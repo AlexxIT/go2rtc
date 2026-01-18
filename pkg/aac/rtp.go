@@ -8,7 +8,6 @@ import (
 )
 
 const RTPPacketVersionAAC = 0
-const ADTSHeaderSize = 7
 
 func RTPDepay(handler core.HandlerFunc) core.HandlerFunc {
 	var timestamp uint32
@@ -22,6 +21,15 @@ func RTPDepay(handler core.HandlerFunc) core.HandlerFunc {
 		//log.Printf("[RTP/AAC] units: %d, size: %4d, ts: %10d, %t", headersSize/2, len(packet.Payload), packet.Timestamp, packet.Marker)
 
 		if len(packet.Payload) < int(2+headersSize) {
+			// In very rare cases noname cameras may send data not according to the standard
+			// https://github.com/AlexxIT/go2rtc/issues/1328
+			if IsADTS(packet.Payload) {
+				clone := *packet
+				clone.Version = RTPPacketVersionAAC
+				clone.Timestamp = timestamp
+				clone.Payload = clone.Payload[ADTSHeaderSize:]
+				handler(&clone)
+			}
 			return
 		}
 
@@ -56,7 +64,8 @@ func RTPDepay(handler core.HandlerFunc) core.HandlerFunc {
 }
 
 func RTPPay(handler core.HandlerFunc) core.HandlerFunc {
-	sequencer := rtp.NewRandomSequencer()
+	var seq uint16
+	var ts uint32
 
 	return func(packet *rtp.Packet) {
 		if packet.Version != RTPPacketVersionAAC {
@@ -76,12 +85,15 @@ func RTPPay(handler core.HandlerFunc) core.HandlerFunc {
 			Header: rtp.Header{
 				Version:        2,
 				Marker:         true,
-				SequenceNumber: sequencer.NextSequenceNumber(),
-				Timestamp:      packet.Timestamp,
+				SequenceNumber: seq,
+				Timestamp:      ts,
 			},
 			Payload: payload,
 		}
 		handler(&clone)
+
+		seq++
+		ts += AUTime
 	}
 }
 

@@ -20,7 +20,11 @@ func Serve(service string, entries []*ServiceEntry) error {
 }
 
 func (b *Browser) Serve(entries []*ServiceEntry) error {
-	var msg dns.Msg
+	names := make(map[string]*ServiceEntry, len(entries))
+	for _, entry := range entries {
+		name := entry.name() + "." + b.Service
+		names[name] = entry
+	}
 
 	buf := make([]byte, 1500)
 	for {
@@ -29,129 +33,130 @@ func (b *Browser) Serve(entries []*ServiceEntry) error {
 			break
 		}
 
-		if err = msg.Unpack(buf[:n]); err != nil {
+		var req dns.Msg // request
+		if err = req.Unpack(buf[:n]); err != nil {
 			continue
 		}
 
-		if !HasQuestionPTP(&msg, b.Service) {
+		// skip messages without Questions
+		if req.Question == nil {
 			continue
 		}
 
 		remoteIP := addr.(*net.UDPAddr).IP
-		localIP := MatchLocalIP(remoteIP)
+		localIP := b.MatchLocalIP(remoteIP)
+
+		// skip messages from unknown networks (can be docker network)
 		if localIP == nil {
 			continue
 		}
 
-		answer, err := NewDNSAnswer(entries, b.Service, localIP).Pack()
+		var res dns.Msg // response
+		for _, q := range req.Question {
+			if q.Qtype != dns.TypePTR || q.Qclass != dns.ClassINET {
+				continue
+			}
+
+			if q.Name == ServiceDNSSD {
+				AppendDNSSD(&res, b.Service)
+			} else if q.Name == b.Service {
+				for _, entry := range entries {
+					AppendEntry(&res, entry, b.Service, localIP)
+				}
+			} else if entry, ok := names[q.Name]; ok {
+				AppendEntry(&res, entry, b.Service, localIP)
+			}
+		}
+
+		if res.Answer == nil {
+			continue
+		}
+
+		res.MsgHdr.Response = true
+		res.MsgHdr.Authoritative = true
+
+		data, err := res.Pack()
 		if err != nil {
 			continue
 		}
 
 		for _, send := range b.Sends {
-			_, _ = send.WriteTo(answer, MulticastAddr)
+			_, _ = send.WriteTo(data, MulticastAddr)
 		}
 	}
 
 	return nil
 }
 
-func HasQuestionPTP(msg *dns.Msg, name string) bool {
-	for _, q := range msg.Question {
-		if q.Qtype == dns.TypePTR && q.Name == name {
-			return true
+func (b *Browser) MatchLocalIP(remote net.IP) net.IP {
+	for _, ipn := range b.Nets {
+		if ipn.Contains(remote) {
+			return ipn.IP
 		}
 	}
-	return false
+	return nil
 }
 
-func NewDNSAnswer(entries []*ServiceEntry, service string, ip net.IP) *dns.Msg {
-	msg := dns.Msg{
-		MsgHdr: dns.MsgHdr{
-			Response:      true,
-			Authoritative: true,
+func AppendDNSSD(msg *dns.Msg, service string) {
+	msg.Answer = append(
+		msg.Answer,
+		&dns.PTR{
+			Hdr: dns.RR_Header{
+				Name:   ServiceDNSSD,  // _services._dns-sd._udp.local.
+				Rrtype: dns.TypePTR,   // 12
+				Class:  dns.ClassINET, // 1
+				Ttl:    4500,
+			},
+			Ptr: service, // _home-assistant._tcp.local.
 		},
-	}
-
-	for _, entry := range entries {
-		ptrName := entry.name() + "." + service
-		srvName := entry.name() + ".local."
-
-		msg.Answer = append(
-			msg.Answer,
-			&dns.PTR{
-				Hdr: dns.RR_Header{
-					Name:   service,
-					Rrtype: dns.TypePTR,
-					Class:  dns.ClassINET,
-					Ttl:    4500,
-				},
-				Ptr: ptrName,
-			},
-		)
-		msg.Extra = append(
-			msg.Extra,
-			&dns.TXT{
-				Hdr: dns.RR_Header{
-					Name:   ptrName,
-					Rrtype: dns.TypeTXT,
-					Class:  ClassCacheFlush,
-					Ttl:    4500,
-				},
-				Txt: entry.TXT(),
-			},
-			&dns.SRV{
-				Hdr: dns.RR_Header{
-					Name:     ptrName,
-					Rrtype:   dns.TypeSRV,
-					Class:    ClassCacheFlush,
-					Ttl:      120,
-					Rdlength: 0,
-				},
-				Port:   entry.Port,
-				Target: srvName,
-			},
-			&dns.A{
-				Hdr: dns.RR_Header{
-					Name:     srvName,
-					Rrtype:   dns.TypeA,
-					Class:    ClassCacheFlush,
-					Ttl:      120,
-					Rdlength: 0,
-				},
-				A: ip,
-			},
-		)
-	}
-
-	return &msg
+	)
 }
 
-func MatchLocalIP(remote net.IP) net.IP {
-	intfs, err := net.Interfaces()
-	if err != nil {
-		return nil
-	}
+func AppendEntry(msg *dns.Msg, entry *ServiceEntry, service string, ip net.IP) {
+	ptrName := entry.name() + "." + service
+	srvName := entry.name() + ".local."
 
-	for _, intf := range intfs {
-		if intf.Flags&net.FlagUp == 0 || intf.Flags&net.FlagLoopback != 0 {
-			continue
-		}
-
-		addrs, err := intf.Addrs()
-		if err != nil {
-			continue
-		}
-
-		for _, addr := range addrs {
-			switch v := addr.(type) {
-			case *net.IPNet:
-				if local := v.IP.To4(); local != nil && v.Contains(remote) {
-					return local
-				}
-			}
-		}
-	}
-
-	return nil
+	msg.Answer = append(
+		msg.Answer,
+		&dns.PTR{
+			Hdr: dns.RR_Header{
+				Name:   service,       // _home-assistant._tcp.local.
+				Rrtype: dns.TypePTR,   // 12
+				Class:  dns.ClassINET, // 1
+				Ttl:    4500,
+			},
+			Ptr: ptrName, // Home\ Assistant._home-assistant._tcp.local.
+		},
+	)
+	msg.Extra = append(
+		msg.Extra,
+		&dns.TXT{
+			Hdr: dns.RR_Header{
+				Name:   ptrName,         // Home\ Assistant._home-assistant._tcp.local.
+				Rrtype: dns.TypeTXT,     // 16
+				Class:  ClassCacheFlush, // 32769
+				Ttl:    4500,
+			},
+			Txt: entry.TXT(),
+		},
+		&dns.SRV{
+			Hdr: dns.RR_Header{
+				Name:   ptrName,         // Home\ Assistant._home-assistant._tcp.local.
+				Rrtype: dns.TypeSRV,     // 33
+				Class:  ClassCacheFlush, // 32769
+				Ttl:    120,
+			},
+			Port:   entry.Port, // 8123
+			Target: srvName,    // 963f1fa82b7142809711cebe7c826322.local.
+		},
+		&dns.A{
+			Hdr: dns.RR_Header{
+				Name:   srvName,         // 963f1fa82b7142809711cebe7c826322.local.
+				Rrtype: dns.TypeA,       // 1
+				Class:  ClassCacheFlush, // 32769
+				Ttl:    120,
+			},
+			A: ip,
+		},
+	)
 }

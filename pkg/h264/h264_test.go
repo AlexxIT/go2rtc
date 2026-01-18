@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -91,5 +90,21 @@ func TestDecodeSPS2(t *testing.T) {
 	require.Nil(t, err)
 
 	sps := DecodeSPS(b)
-	assert.Nil(t, sps) // broken SPS?
+	require.Equal(t, uint16(928), sps.Width())
+	require.Equal(t, uint16(576), sps.Height())
+
+	s = "Z2QAHq2EAQwgCGEAQwgCGEAQwgCEO1BQF/yzcBAQFAAAD6AAAXcCEA==" // unknown
+	b, err = base64.StdEncoding.DecodeString(s)
+	require.Nil(t, err)
+
+	sps = DecodeSPS(b)
+	require.Equal(t, uint16(640), sps.Width())
+	require.Equal(t, uint16(360), sps.Height())
+}
+
+func TestAVCCToCodec(t *testing.T) {
+	s := "000000196764001fac2484014016ec0440000003004000000c23c60c920000000568ee32c8b0000000d365"
+	b, _ := hex.DecodeString(s)
+	codec := AVCCToCodec(b)
+	require.Equal(t, "packetization-mode=1;profile-level-id=64001f;sprop-parameter-sets=Z2QAH6wkhAFAFuwEQAAAAwBAAAAMI8YMkg==,aO4yyLA=", codec.FmtpLine)
 }

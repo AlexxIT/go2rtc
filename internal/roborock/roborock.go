@@ -11,20 +11,11 @@ import (
 )
 
 func Init() {
-	streams.HandleFunc("roborock", handle)
+	streams.HandleFunc("roborock", func(source string) (core.Producer, error) {
+		return roborock.Dial(source)
+	})
 
 	api.HandleFunc("api/roborock", apiHandle)
-}
-
-func handle(url string) (core.Producer, error) {
-	conn := roborock.NewClient(url)
-	if err := conn.Dial(); err != nil {
-		return nil, err
-	}
-	if err := conn.Connect(); err != nil {
-		return nil, err
-	}
-	return conn, nil
 }
 
 var Auth struct {

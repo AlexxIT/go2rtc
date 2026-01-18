@@ -7,11 +7,12 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/AlexxIT/go2rtc/pkg/core"
 	"net/http"
 	"net/url"
 	"strconv"
 	"time"
+
+	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
 type UserInfo struct {

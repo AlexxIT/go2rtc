@@ -1,7 +1,9 @@
 package onvif
 
 import (
+	"fmt"
 	"net"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -10,8 +12,14 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
+type DiscoveryDevice struct {
+	URL      string
+	Name     string
+	Hardware string
+}
+
 func FindTagValue(b []byte, tag string) string {
-	re := regexp.MustCompile(`(?s)[:<]` + tag + `>([^<]+)`)
+	re := regexp.MustCompile(`(?s)<(?:\w+:)?` + tag + `\b[^>]*>([^<]+)`)
 	m := re.FindSubmatch(b)
 	if len(m) != 2 {
 		return ""
@@ -25,7 +33,8 @@ func UUID() string {
 	return s[:8] + "-" + s[8:12] + "-" + s[12:16] + "-" + s[16:20] + "-" + s[20:]
 }
 
-func DiscoveryStreamingURLs() ([]string, error) {
+// DiscoveryStreamingDevices return list of tuple (onvif_url, name, hardware)
+func DiscoveryStreamingDevices() ([]DiscoveryDevice, error) {
 	conn, err := net.ListenUDP("udp4", nil)
 	if err != nil {
 		return nil, err
@@ -59,11 +68,9 @@ func DiscoveryStreamingURLs() ([]string, error) {
 		return nil, err
 	}
 
-	if err = conn.SetReadDeadline(time.Now().Add(time.Second * 3)); err != nil {
-		return nil, err
-	}
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 
-	var urls []string
+	var devices []DiscoveryDevice
 
 	b := make([]byte, 8192)
 	for {
@@ -79,21 +86,35 @@ func DiscoveryStreamingURLs() ([]string, error) {
 			continue
 		}
 
-		url := FindTagValue(b[:n], "XAddrs")
-		if url == "" {
+		device := DiscoveryDevice{
+			URL: FindTagValue(b[:n], "XAddrs"),
+		}
+
+		if device.URL == "" {
 			continue
 		}
 
 		// fix some buggy cameras
 		// <wsdd:XAddrs>http://0.0.0.0:8080/onvif/device_service</wsdd:XAddrs>
-		if strings.HasPrefix(url, "http://0.0.0.0") {
-			url = "http://" + addr.IP.String() + url[14:]
+		if s, ok := strings.CutPrefix(device.URL, "http://0.0.0.0"); ok {
+			device.URL = "http://" + addr.IP.String() + s
 		}
 
-		urls = append(urls, url)
+		// try to find the camera name and model (hardware)
+		scopes := FindTagValue(b[:n], "Scopes")
+		device.Name = findScope(scopes, "onvif://www.onvif.org/name/")
+		device.Hardware = findScope(scopes, "onvif://www.onvif.org/hardware/")
+
+		devices = append(devices, device)
 	}
 
-	return urls, nil
+	return devices, nil
+}
+
+func findScope(s, prefix string) string {
+	s = core.Between(s, prefix, " ")
+	s, _ = url.QueryUnescape(s)
+	return s
 }
 
 func atoi(s string) int {
@@ -105,4 +126,37 @@ func atoi(s string) int {
 		return -1
 	}
 	return i
+}
+
+func GetPosixTZ(current time.Time) string {
+	// Thanks to https://github.com/Path-Variable/go-posix-time
+	_, offset := current.Zone()
+
+	if current.IsDST() {
+		_, end := current.ZoneBounds()
+		endPlus1 := end.Add(time.Hour * 25)
+		_, offset = endPlus1.Zone()
+	}
+
+	var prefix string
+	if offset < 0 {
+		prefix = "GMT+"
+		offset = -offset / 60
+	} else {
+		prefix = "GMT-"
+		offset = offset / 60
+	}
+
+	return prefix + fmt.Sprintf("%02d:%02d", offset/60, offset%60)
+}
+
+func GetPath(urlOrPath, defPath string) string {
+	if urlOrPath == "" || urlOrPath[0] == '/' {
+		return defPath
+	}
+	u, err := url.Parse(urlOrPath)
+	if err != nil {
+		return defPath
+	}
+	return GetPath(u.Path, defPath)
 }

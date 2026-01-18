@@ -15,9 +15,10 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/roborock/iot"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
-	pion "github.com/pion/webrtc/v3"
+	pion "github.com/pion/webrtc/v4"
 )
 
+// Deprecated: should be rewritten to core.Connection
 type Client struct {
 	core.Listener
 
@@ -34,8 +35,15 @@ type Client struct {
 	backchannel bool
 }
 
-func NewClient(url string) *Client {
-	return &Client{url: url}
+func Dial(rawURL string) (*Client, error) {
+	client := &Client{url: rawURL}
+	if err := client.Dial(); err != nil {
+		return nil, err
+	}
+	if err := client.Connect(); err != nil {
+		return nil, err
+	}
+	return client, nil
 }
 
 func (c *Client) Dial() error {
@@ -103,8 +111,10 @@ func (c *Client) Connect() error {
 	var sendOffer sync.WaitGroup
 
 	c.conn = webrtc.NewConn(pc)
-	c.conn.Desc = "Roborock"
+	c.conn.FormatName = "roborock"
 	c.conn.Mode = core.ModeActiveProducer
+	c.conn.Protocol = "mqtt"
+	c.conn.URL = c.url
 	c.conn.Listen(func(msg any) {
 		switch msg := msg.(type) {
 		case *pion.ICECandidate:

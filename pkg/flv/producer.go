@@ -15,18 +15,24 @@ import (
 )
 
 type Producer struct {
-	core.SuperProducer
+	core.Connection
 	rd *core.ReadBuffer
 
 	video, audio *core.Receiver
 }
 
 func Open(rd io.Reader) (*Producer, error) {
-	prod := &Producer{rd: core.NewReadBuffer(rd)}
+	prod := &Producer{
+		Connection: core.Connection{
+			ID:         core.NewID(),
+			FormatName: "flv",
+			Transport:  rd,
+		},
+		rd: core.NewReadBuffer(rd),
+	}
 	if err := prod.probe(); err != nil {
 		return nil, err
 	}
-	prod.Type = "FLV producer"
 	return prod, nil
 }
 
@@ -38,7 +44,9 @@ const (
 	TagData  = 18
 
 	CodecAAC = 10
-	CodecAVC = 7
+
+	CodecH264 = 7
+	CodecHEVC = 12
 )
 
 const (
@@ -57,7 +65,7 @@ const (
 )
 
 func (c *Producer) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
-	receiver, _ := c.SuperProducer.GetTrack(media, codec)
+	receiver, _ := c.Connection.GetTrack(media, codec)
 	if media.Kind == core.KindVideo {
 		c.video = receiver
 	} else {
@@ -117,11 +125,6 @@ func (c *Producer) Start() error {
 	}
 }
 
-func (c *Producer) Stop() error {
-	_ = c.SuperProducer.Close()
-	return c.rd.Close()
-}
-
 func (c *Producer) probe() error {
 	if err := c.readHeader(); err != nil {
 		return err
@@ -139,23 +142,29 @@ func (c *Producer) probe() error {
 	// 1. Empty video/audio flag
 	// 2. MedaData without stereo key for AAC
 	// 3. Audio header after Video keyframe tag
-	waitType := []byte{TagData}
-	timeout := time.Now().Add(core.ProbeTimeout)
 
-	for len(waitType) != 0 && time.Now().Before(timeout) {
+	// OpenIPC camera (on old firmwares) sends:
+	// 1. Empty video/audio flag
+	// 2. No MetaData packet
+	// 3. Sends a video packet in more than 3 seconds
+	waitVideo := true
+	waitAudio := true
+	timeout := time.Now().Add(time.Second * 5)
+
+	for (waitVideo || waitAudio) && time.Now().Before(timeout) {
 		pkt, err := c.readPacket()
 		if err != nil {
 			return err
 		}
 
-		if i := bytes.IndexByte(waitType, pkt.PayloadType); i < 0 {
-			continue
-		} else {
-			waitType = append(waitType[:i], waitType[i+1:]...)
-		}
+		//log.Printf("%d %0.20s", pkt.PayloadType, pkt.Payload)
 
 		switch pkt.PayloadType {
 		case TagAudio:
+			if !waitAudio {
+				continue
+			}
+
 			_ = pkt.Payload[1] // bounds
 
 			codecID := pkt.Payload[0] >> 4 // SoundFormat
@@ -178,8 +187,13 @@ func (c *Producer) probe() error {
 				Codecs:    []*core.Codec{codec},
 			}
 			c.Medias = append(c.Medias, media)
+			waitAudio = false
 
 		case TagVideo:
+			if !waitVideo {
+				continue
+			}
+
 			var codec *core.Codec
 
 			if isExHeader(pkt.Payload) {
@@ -195,15 +209,18 @@ func (c *Producer) probe() error {
 			} else {
 				_ = pkt.Payload[0] >> 4 // FrameType
 
-				if codecID := pkt.Payload[0] & 0b1111; codecID != CodecAVC {
-					continue
-				}
-
 				if packetType := pkt.Payload[1]; packetType != PacketTypeAVCHeader { // check if header
 					continue
 				}
 
-				codec = h264.ConfigToCodec(pkt.Payload[5:])
+				switch codecID := pkt.Payload[0] & 0b1111; codecID {
+				case CodecH264:
+					codec = h264.ConfigToCodec(pkt.Payload[5:])
+				case CodecHEVC:
+					codec = h265.ConfigToCodec(pkt.Payload[5:])
+				default:
+					continue
+				}
 			}
 
 			media := &core.Media{
@@ -212,19 +229,20 @@ func (c *Producer) probe() error {
 				Codecs:    []*core.Codec{codec},
 			}
 			c.Medias = append(c.Medias, media)
+			waitVideo = false
 
 		case TagData:
 			if !bytes.Contains(pkt.Payload, []byte("onMetaData")) {
-				waitType = append(waitType, TagData)
+				continue
 			}
 			// Dahua cameras doesn't send videocodecid
-			if bytes.Contains(pkt.Payload, []byte("videocodecid")) ||
-				bytes.Contains(pkt.Payload, []byte("width")) ||
-				bytes.Contains(pkt.Payload, []byte("framerate")) {
-				waitType = append(waitType, TagVideo)
+			if !bytes.Contains(pkt.Payload, []byte("videocodecid")) &&
+				!bytes.Contains(pkt.Payload, []byte("width")) &&
+				!bytes.Contains(pkt.Payload, []byte("framerate")) {
+				waitVideo = false
 			}
-			if bytes.Contains(pkt.Payload, []byte("audiocodecid")) {
-				waitType = append(waitType, TagAudio)
+			if !bytes.Contains(pkt.Payload, []byte("audiocodecid")) {
+				waitAudio = false
 			}
 		}
 	}
@@ -281,8 +299,12 @@ func (c *Producer) readPacket() (*rtp.Packet, error) {
 	return pkt, nil
 }
 
-func TimeToRTP(timeMS uint32, clockRate uint32) uint32 {
-	return timeMS * clockRate / 1000
+// TimeToRTP convert time in milliseconds to RTP time
+func TimeToRTP(timeMS, clockRate uint32) uint32 {
+	// for clockRates 90000, 16000, 8000, etc. - we can use:
+	//     return timeMS * (clockRate / 1000)
+	// but for clockRates 44100, 22050, 11025 - we should use:
+	return uint32(uint64(timeMS) * uint64(clockRate) / 1000)
 }
 
 func isExHeader(data []byte) bool {

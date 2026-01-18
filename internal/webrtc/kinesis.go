@@ -12,7 +12,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	"github.com/gorilla/websocket"
-	pion "github.com/pion/webrtc/v3"
+	pion "github.com/pion/webrtc/v4"
 )
 
 type kinesisRequest struct {
@@ -34,7 +34,10 @@ func (k kinesisResponse) String() string {
 	return fmt.Sprintf("type=%s, payload=%s", k.Type, k.Payload)
 }
 
-func kinesisClient(rawURL string, query url.Values, desc string) (core.Producer, error) {
+func kinesisClient(
+	rawURL string, query url.Values, format string,
+	sdpOffer func(prod *webrtc.Conn, query url.Values) (any, error),
+) (core.Producer, error) {
 	// 1. Connect to signalign server
 	conn, _, err := websocket.DefaultDialer.Dial(rawURL, nil)
 	if err != nil {
@@ -79,8 +82,10 @@ func kinesisClient(rawURL string, query url.Values, desc string) (core.Producer,
 	}
 
 	prod := webrtc.NewConn(pc)
-	prod.Desc = desc
+	prod.FormatName = format
 	prod.Mode = core.ModeActiveProducer
+	prod.Protocol = "ws"
+	prod.URL = rawURL
 	prod.Listen(func(msg any) {
 		switch msg := msg.(type) {
 		case *pion.ICECandidate:
@@ -106,23 +111,33 @@ func kinesisClient(rawURL string, query url.Values, desc string) (core.Producer,
 		}
 	})
 
-	medias := []*core.Media{
-		{Kind: core.KindVideo, Direction: core.DirectionRecvonly},
-		{Kind: core.KindAudio, Direction: core.DirectionRecvonly},
+	var payload any
+
+	if sdpOffer == nil {
+		medias := []*core.Media{
+			{Kind: core.KindVideo, Direction: core.DirectionRecvonly},
+			{Kind: core.KindAudio, Direction: core.DirectionRecvonly},
+		}
+
+		// 4. Create offer
+		var offer string
+		if offer, err = prod.CreateOffer(medias); err != nil {
+			return nil, err
+		}
+
+		// 5. Send offer
+		payload = pion.SessionDescription{
+			Type: pion.SDPTypeOffer,
+			SDP:  offer,
+		}
+	} else {
+		if payload, err = sdpOffer(prod, query); err != nil {
+			return nil, err
+		}
 	}
 
-	// 4. Create offer
-	offer, err := prod.CreateOffer(medias)
-	if err != nil {
-		return nil, err
-	}
-
-	// 5. Send offer
 	req.Action = "SDP_OFFER"
-	req.Payload, _ = json.Marshal(pion.SessionDescription{
-		Type: pion.SDPTypeOffer,
-		SDP:  offer,
-	})
+	req.Payload, _ = json.Marshal(payload)
 	if err = conn.WriteJSON(req); err != nil {
 		return nil, err
 	}
@@ -216,5 +231,5 @@ func wyzeClient(rawURL string) (core.Producer, error) {
 		"ice_servers": []string{string(kvs.Servers)},
 	}
 
-	return kinesisClient(kvs.URL, query, "WebRTC/Wyze")
+	return kinesisClient(kvs.URL, query, "webrtc/wyze", nil)
 }

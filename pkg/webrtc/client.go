@@ -3,7 +3,7 @@ package webrtc
 import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/pion/sdp/v3"
-	"github.com/pion/webrtc/v3"
+	"github.com/pion/webrtc/v4"
 )
 
 func (c *Conn) CreateOffer(medias []*core.Media) (string, error) {
@@ -63,15 +63,15 @@ func (c *Conn) SetAnswer(answer string) (err error) {
 		SDP:  fakeFormatsInAnswer(c.pc.LocalDescription().SDP, answer),
 	}
 	if err = c.pc.SetRemoteDescription(desc); err != nil {
-		return
+		return err
 	}
 
 	sd := &sdp.SessionDescription{}
 	if err = sd.Unmarshal([]byte(answer)); err != nil {
-		return
+		return err
 	}
 
-	c.medias = UnmarshalMedias(sd.MediaDescriptions)
+	c.Medias = UnmarshalMedias(sd.MediaDescriptions)
 
 	return nil
 }

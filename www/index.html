@@ -1,61 +1,49 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, user-scalable=yes, initial-scale=1, maximum-scale=1">
-    <meta http-equiv="X-UA-Compatible" content="ie=edge">
-    <link rel="apple-touch-icon" href="https://alexxit.github.io/go2rtc/icons/apple-touch-icon-180x180.png" sizes="180x180">
-    <link rel="icon" href="https://alexxit.github.io/go2rtc/icons/favicon.ico">
-    <link rel="manifest" href="https://alexxit.github.io/go2rtc/manifest.json">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>go2rtc</title>
     <style>
-        body {
-            margin: 0;
-            padding: 0;
+        .controls {
             display: flex;
-            flex-direction: column;
-        }
-
-        table tbody td {
-            font-size: 13px;
-        }
-
-        label {
-            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
             align-items: center;
         }
 
-        .controls {
-            display: flex;
-            padding: 5px;
-        }
-
-        .controls > label {
-            margin-left: 10px;
+        .info {
+            color: #888;
         }
     </style>
 </head>
 <body>
+
 <script src="main.js"></script>
-<div class="info"></div>
-<div class="controls">
-    <button>stream</button>
-    <label><input type="checkbox" name="webrtc" checked>webrtc</label>
-    <label><input type="checkbox" name="mse" checked>mse</label>
-    <label><input type="checkbox" name="hls" checked>hls</label>
-    <label><input type="checkbox" name="mjpeg" checked>mjpeg</label>
-</div>
-<table>
-    <thead>
-    <tr>
-        <th><label><input id="selectall" type="checkbox">Name</label></th>
-        <th>Online</th>
-        <th>Commands</th>
-    </tr>
-    </thead>
-    <tbody id="streams">
-    </tbody>
-</table>
+
+<main>
+    <div class="controls">
+        <button>stream</button>
+        modes
+        <label><input type="checkbox" name="webrtc" checked>webrtc</label>
+        <label><input type="checkbox" name="mse" checked>mse</label>
+        <label><input type="checkbox" name="hls" checked>hls</label>
+        <label><input type="checkbox" name="mjpeg" checked>mjpeg</label>
+    </div>
+    <table>
+        <thead>
+        <tr>
+            <th><label><input id="selectall" type="checkbox">name</label></th>
+            <th>online</th>
+            <th>commands</th>
+        </tr>
+        </thead>
+        <tbody id="streams">
+        </tbody>
+    </table>
+    <div class="info"></div>
+</main>
+
 <script>
     const templates = [
         '<a href="stream.html?src={name}">stream</a>',
@@ -139,7 +127,7 @@
                 const isChecked = checkboxStates[name] ? 'checked' : '';
                 tr.innerHTML =
                     `<td><label><input type="checkbox" name="${name}" ${isChecked}>${name}</label></td>` +
-                    `<td><a href="api/streams?src=${src}">${online} / info</a> / <a href="api/streams?src=${src}&video=all&audio=all&microphone">probe</a></td>` +
+                    `<td><a href="api/streams?src=${src}">${online} / info</a> / <a href="api/streams?src=${src}&video=all&audio=all&microphone">probe</a> / <a href="net.html?src=${src}">net</a></td>` +
                     `<td>${links}</td>`;
             }
 
@@ -159,10 +147,11 @@
     const url = new URL('api', location.href);
     fetch(url, {cache: 'no-cache'}).then(r => r.json()).then(data => {
         const info = document.querySelector('.info');
-        info.innerText = `Version: ${data.version}, Config: ${data.config_path}`;
+        info.innerText = `version: ${data.version} / config: ${data.config_path}`;
     });
 
     reload();
 </script>
+
 </body>
 </html>

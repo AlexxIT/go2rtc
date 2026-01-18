@@ -13,7 +13,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/magic/bitstream"
 	"github.com/AlexxIT/go2rtc/pkg/magic/mjpeg"
 	"github.com/AlexxIT/go2rtc/pkg/mpegts"
-	"github.com/AlexxIT/go2rtc/pkg/multipart"
+	"github.com/AlexxIT/go2rtc/pkg/mpjpeg"
 	"github.com/AlexxIT/go2rtc/pkg/wav"
 	"github.com/AlexxIT/go2rtc/pkg/y4m"
 )
@@ -26,29 +26,31 @@ func Open(r io.Reader) (core.Producer, error) {
 		return nil, err
 	}
 
-	switch {
-	case string(b) == annexb.StartCode:
+	switch string(b) {
+	case annexb.StartCode:
 		return bitstream.Open(rd)
-
-	case string(b) == wav.FourCC:
+	case wav.FourCC:
 		return wav.Open(rd)
-
-	case string(b) == y4m.FourCC:
+	case y4m.FourCC:
 		return y4m.Open(rd)
+	}
 
-	case bytes.HasPrefix(b, []byte{0xFF, 0xD8}):
-		return mjpeg.Open(rd)
-
-	case bytes.HasPrefix(b, []byte(flv.Signature)):
+	switch string(b[:3]) {
+	case flv.Signature:
 		return flv.Open(rd)
+	}
 
-	case bytes.HasPrefix(b, []byte("--")):
-		return multipart.Open(rd)
-
-	case b[0] == 0xFF && (b[1] == 0xF1 || b[1] == 0xF9):
+	switch string(b[:2]) {
+	case "\xFF\xD8":
+		return mjpeg.Open(rd)
+	case "\xFF\xF1", "\xFF\xF9":
 		return aac.Open(rd)
+	case "--":
+		return mpjpeg.Open(rd)
+	}
 
-	case b[0] == mpegts.SyncByte:
+	switch b[0] {
+	case mpegts.SyncByte:
 		return mpegts.Open(rd)
 	}
 

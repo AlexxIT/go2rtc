@@ -2,17 +2,33 @@ package streams
 
 import (
 	"errors"
+	"regexp"
 	"strings"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
-type Handler func(url string) (core.Producer, error)
+type Handler func(source string) (core.Producer, error)
 
 var handlers = map[string]Handler{}
 
 func HandleFunc(scheme string, handler Handler) {
 	handlers[scheme] = handler
+}
+
+func SupportedSchemes() []string {
+	uniqueKeys := make(map[string]struct{}, len(handlers)+len(redirects))
+	for scheme := range handlers {
+		uniqueKeys[scheme] = struct{}{}
+	}
+	for scheme := range redirects {
+		uniqueKeys[scheme] = struct{}{}
+	}
+	resultKeys := make([]string, 0, len(uniqueKeys))
+	for key := range uniqueKeys {
+		resultKeys = append(resultKeys, key)
+	}
+	return resultKeys
 }
 
 func HasProducer(url string) bool {
@@ -94,4 +110,25 @@ func GetConsumer(url string) (core.Consumer, func(), error) {
 	}
 
 	return nil, nil, errors.New("streams: unsupported scheme: " + url)
+}
+
+var insecure = map[string]bool{}
+
+func MarkInsecure(scheme string) {
+	insecure[scheme] = true
+}
+
+var sanitize = regexp.MustCompile(`\s`)
+
+func Validate(source string) error {
+	// TODO: Review the entire logic of insecure sources
+	if i := strings.IndexByte(source, ':'); i > 0 {
+		if insecure[source[:i]] {
+			return errors.New("streams: source from insecure producer")
+		}
+	}
+	if sanitize.MatchString(source) {
+		return errors.New("streams: source with spaces may be insecure")
+	}
+	return nil
 }

@@ -2,12 +2,13 @@ package webrtc
 
 import (
 	"net"
-	"slices"
 	"strings"
 
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
-	pion "github.com/pion/webrtc/v3"
+	"github.com/AlexxIT/go2rtc/pkg/xnet"
+	pion "github.com/pion/webrtc/v4"
 )
 
 type Address struct {
@@ -17,9 +18,11 @@ type Address struct {
 	Priority uint32
 }
 
+var stuns []string
+
 func (a *Address) Host() string {
 	if a.host == "stun" {
-		ip, err := webrtc.GetCachedPublicIP()
+		ip, err := webrtc.GetCachedPublicIP(stuns...)
 		if err != nil {
 			return ""
 		}
@@ -73,16 +76,21 @@ func FilterCandidate(candidate *pion.ICECandidate) bool {
 		return false
 	}
 
+	// remove any Docker-like IP from candidates
+	if ip := net.ParseIP(candidate.Address); ip != nil && xnet.Docker.Contains(ip) {
+		return false
+	}
+
 	// host candidate should be in the hosts list
 	if candidate.Typ == pion.ICECandidateTypeHost && filters.Candidates != nil {
-		if !slices.Contains(filters.Candidates, candidate.Address) {
+		if !core.Contains(filters.Candidates, candidate.Address) {
 			return false
 		}
 	}
 
 	if filters.Networks != nil {
 		networkType := NetworkType(candidate.Protocol.String(), candidate.Address)
-		if !slices.Contains(filters.Networks, networkType) {
+		if !core.Contains(filters.Networks, networkType) {
 			return false
 		}
 	}

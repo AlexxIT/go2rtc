@@ -2,7 +2,6 @@ package ffmpeg
 
 import (
 	"net/url"
-	"slices"
 	"strings"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
@@ -44,7 +43,7 @@ func Init() {
 			return "", err
 		}
 		args := parseArgs(url[7:])
-		if slices.Contains(args.Codecs, "auto") {
+		if core.Contains(args.Codecs, "auto") {
 			return "", nil // force call streams.HandleFunc("ffmpeg")
 		}
 		return "exec:" + args.String(), nil
@@ -59,15 +58,15 @@ func Init() {
 }
 
 var defaults = map[string]string{
-	"bin":    "ffmpeg",
-	"global": "-hide_banner",
+	"bin":     "ffmpeg",
+	"global":  "-hide_banner",
+	"timeout": "5",
 
 	// inputs
-	"file": "-re -i {input}",
-	"http": "-fflags nobuffer -flags low_delay -i {input}",
-	"rtsp": "-fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i {input}",
-
-	"rtsp/udp": "-fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -i {input}",
+	"file":     "-re -i {input}",
+	"http":     "-fflags nobuffer -flags low_delay -i {input}",
+	"rtsp":     "-fflags nobuffer -flags low_delay -timeout {timeout} -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i {input}",
+	"rtsp/udp": "-fflags nobuffer -flags low_delay -timeout {timeout} -user_agent go2rtc/ffmpeg -i {input}",
 
 	// output
 	"output":       "-user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}",
@@ -81,7 +80,7 @@ var defaults = map[string]string{
 	// `-profile high -level 4.1` - most used streaming profile
 	// `-pix_fmt:v yuv420p` - important for Telegram
 	"h264":  "-c:v libx264 -g 50 -profile:v high -level:v 4.1 -preset:v superfast -tune:v zerolatency -pix_fmt:v yuv420p",
-	"h265":  "-c:v libx265 -g 50 -profile:v main -level:v 5.1 -preset:v superfast -tune:v zerolatency -pix_fmt:v yuv420p",
+	"h265":  "-c:v libx265 -g 50 -profile:v main -x265-params level=5.1:high-tier=0 -preset:v superfast -tune:v zerolatency -pix_fmt:v yuv420p",
 	"mjpeg": "-c:v mjpeg",
 	//"mjpeg": "-c:v mjpeg -force_duplicated_matrix:v 1 -huffman:v 0 -pix_fmt:v yuvj420p",
 
@@ -114,6 +113,7 @@ var defaults = map[string]string{
 	"pcm/48000":  "-c:a pcm_s16be -ar:a 48000 -ac:a 1",
 	"pcml":       "-c:a pcm_s16le -ar:a 8000 -ac:a 1",
 	"pcml/8000":  "-c:a pcm_s16le -ar:a 8000 -ac:a 1",
+	"pcml/16000": "-c:a pcm_s16le -ar:a 16000 -ac:a 1",
 	"pcml/44100": "-c:a pcm_s16le -ar:a 44100 -ac:a 1",
 
 	// hardware Intel and AMD on Linux
@@ -130,8 +130,9 @@ var defaults = map[string]string{
 	// hardware Rockchip
 	// important to use custom ffmpeg https://github.com/AlexxIT/go2rtc/issues/768
 	// hevc - doesn't have a profile setting
-	"h264/rkmpp": "-c:v h264_rkmpp_encoder -g 50 -bf 0 -profile:v high -level:v 4.1",
-	"h265/rkmpp": "-c:v hevc_rkmpp_encoder -g 50 -bf 0 -level:v 5.1",
+	"h264/rkmpp":  "-c:v h264_rkmpp -g 50 -bf 0 -profile:v high -level:v 4.1",
+	"h265/rkmpp":  "-c:v hevc_rkmpp -g 50 -bf 0 -profile:v main -level:v 5.1",
+	"mjpeg/rkmpp": "-c:v mjpeg_rkmpp",
 
 	// hardware NVidia on Linux and Windows
 	// preset=p2 - faster, tune=ll - low latency
@@ -168,6 +169,13 @@ func inputTemplate(name, s string, query url.Values) string {
 	} else {
 		template = defaults[name]
 	}
+	if strings.Contains(template, "{timeout}") {
+		timeout := query.Get("timeout")
+		if timeout == "" {
+			timeout = defaults["timeout"]
+		}
+		template = strings.Replace(template, "{timeout}", timeout+"000000", 1)
+	}
 	return strings.Replace(template, "{input}", s, 1)
 }
 
@@ -180,6 +188,7 @@ func parseArgs(s string) *ffmpeg.Args {
 		Version: verAV,
 	}
 
+	var source = s
 	var query url.Values
 	if i := strings.IndexByte(s, '#'); i >= 0 {
 		query = streams.ParseQuery(s[i+1:])
@@ -221,6 +230,10 @@ func parseArgs(s string) *ffmpeg.Args {
 			s += "?audio"
 		default:
 			s += "?video&audio"
+		}
+		s += "&source=ffmpeg:" + url.QueryEscape(source)
+		for _, v := range query["query"] {
+			s += "&" + v
 		}
 		args.Input = inputTemplate("rtsp", s, query)
 	} else if i = strings.Index(s, "?"); i > 0 {

@@ -13,12 +13,19 @@ import (
 )
 
 type Producer struct {
-	core.SuperProducer
+	core.Connection
 	rd *core.ReadBuffer
 }
 
 func Open(rd io.Reader) (*Producer, error) {
-	prod := &Producer{rd: core.NewReadBuffer(rd)}
+	prod := &Producer{
+		Connection: core.Connection{
+			ID:         core.NewID(),
+			FormatName: "mpegts",
+			Transport:  rd,
+		},
+		rd: core.NewReadBuffer(rd),
+	}
 	if err := prod.probe(); err != nil {
 		return nil, err
 	}
@@ -26,7 +33,7 @@ func Open(rd io.Reader) (*Producer, error) {
 }
 
 func (c *Producer) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
-	receiver, _ := c.SuperProducer.GetTrack(media, codec)
+	receiver, _ := c.Connection.GetTrack(media, codec)
 	receiver.ID = StreamType(codec)
 	return receiver, nil
 }
@@ -40,6 +47,8 @@ func (c *Producer) Start() error {
 			return err
 		}
 
+		c.Recv += len(pkt.Payload)
+
 		//log.Printf("[mpegts] size: %6d, muxer: %10d, pt: %2d", len(pkt.Payload), pkt.Timestamp, pkt.PayloadType)
 
 		for _, receiver := range c.Receivers {
@@ -50,11 +59,6 @@ func (c *Producer) Start() error {
 			}
 		}
 	}
-}
-
-func (c *Producer) Stop() error {
-	_ = c.SuperProducer.Close()
-	return c.rd.Close()
 }
 
 func (c *Producer) probe() error {

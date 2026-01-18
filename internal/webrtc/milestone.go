@@ -12,7 +12,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
-	pion "github.com/pion/webrtc/v3"
+	pion "github.com/pion/webrtc/v4"
 )
 
 // This package handles the Milestone WebRTC session lifecycle, including authentication,
@@ -193,8 +193,10 @@ func milestoneClient(rawURL string, query url.Values) (core.Producer, error) {
 	}
 
 	prod := webrtc.NewConn(pc)
-	prod.Desc = "WebRTC/Milestone"
+	prod.FormatName = "webrtc/milestone"
 	prod.Mode = core.ModeActiveProducer
+	prod.Protocol = "http"
+	prod.URL = rawURL
 
 	offer, err := mc.GetOffer()
 	if err != nil {

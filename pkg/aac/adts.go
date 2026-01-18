@@ -8,9 +8,26 @@ import (
 	"github.com/pion/rtp"
 )
 
+const ADTSHeaderSize = 7
+
+func ADTSHeaderLen(b []byte) int {
+	if HasCRC(b) {
+		return 9 // 7 bytes header + 2 bytes CRC
+	}
+	return ADTSHeaderSize
+}
+
 func IsADTS(b []byte) bool {
-	_ = b[1]
-	return len(b) > 7 && b[0] == 0xFF && b[1]&0xF6 == 0xF0
+	// AAAAAAAA AAAABCCD EEFFFFGH HHIJKLMM MMMMMMMM MMMOOOOO OOOOOOPP (QQQQQQQQ QQQQQQQQ)
+	// A	12	Syncword, all bits must be set to 1.
+	// C	2	Layer, always set to 0.
+	return len(b) >= ADTSHeaderSize && b[0] == 0xFF && b[1]&0b1111_0110 == 0xF0
+}
+
+func HasCRC(b []byte) bool {
+	// AAAAAAAA AAAABCCD EEFFFFGH HHIJKLMM MMMMMMMM MMMOOOOO OOOOOOPP (QQQQQQQQ QQQQQQQQ)
+	// D	1	Protection absence, set to 1 if there is no CRC and 0 if there is CRC.
+	return b[1]&0b1 == 0
 }
 
 func ADTSToCodec(b []byte) *core.Codec {
@@ -29,7 +46,7 @@ func ADTSToCodec(b []byte) *core.Codec {
 	objType := rd.ReadBits8(2) + 1   // Profile, the MPEG-4 Audio Object Type minus 1
 	sampleRateIdx := rd.ReadBits8(4) // MPEG-4 Sampling Frequency Index
 	_ = rd.ReadBit()                 // Private bit, guaranteed never to be used by MPEG, set to 0 when encoding, ignore when decoding
-	channels := rd.ReadBits16(3)     // MPEG-4 Channel Configuration
+	channels := rd.ReadBits8(3)      // MPEG-4 Channel Configuration
 
 	//_ = rd.ReadBit()    // Originality, set to 1 to signal originality of the audio and 0 otherwise
 	//_ = rd.ReadBit()    // Home, set to 1 to signal home usage of the audio and 0 otherwise
@@ -44,7 +61,7 @@ func ADTSToCodec(b []byte) *core.Codec {
 	wr := bits.NewWriter(nil)
 	wr.WriteBits8(objType, 5)
 	wr.WriteBits8(sampleRateIdx, 4)
-	wr.WriteBits16(channels, 4)
+	wr.WriteBits8(channels, 4)
 	conf := wr.Bytes()
 
 	codec := &core.Codec{
@@ -59,7 +76,7 @@ func ADTSToCodec(b []byte) *core.Codec {
 func ReadADTSSize(b []byte) uint16 {
 	// AAAAAAAA AAAABCCD EEFFFFGH HHIJKLMM MMMMMMMM MMMOOOOO OOOOOOPP (QQQQQQQQ QQQQQQQQ)
 	_ = b[5] // bounds
-	return uint16(b[3]&0x03)<<(8+3) | uint16(b[4])<<3 | uint16(b[5]>>5)
+	return uint16(b[3]&0b11)<<11 | uint16(b[4])<<3 | uint16(b[5]>>5)
 }
 
 func WriteADTSSize(b []byte, size uint16) {

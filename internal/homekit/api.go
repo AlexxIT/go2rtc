@@ -3,6 +3,7 @@ package homekit
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -14,54 +15,95 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/mdns"
 )
 
-func apiHandler(w http.ResponseWriter, r *http.Request) {
+func apiDiscovery(w http.ResponseWriter, r *http.Request) {
+	sources, err := discovery()
+	if err != nil {
+		api.Error(w, err)
+		return
+	}
+
+	urls := findHomeKitURLs()
+	for id, u := range urls {
+		deviceID := u.Query().Get("device_id")
+		for _, source := range sources {
+			if strings.Contains(source.URL, deviceID) {
+				source.Location = id
+				break
+			}
+		}
+	}
+
+	for _, source := range sources {
+		if source.Location == "" {
+			source.Location = " "
+		}
+	}
+
+	api.ResponseSources(w, sources)
+}
+
+func apiHomekit(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	switch r.Method {
 	case "GET":
-		sources, err := discovery()
-		if err != nil {
-			api.Error(w, err)
-			return
-		}
-
-		urls := findHomeKitURLs()
-		for id, u := range urls {
-			deviceID := u.Query().Get("device_id")
-			for _, source := range sources {
-				if strings.Contains(source.URL, deviceID) {
-					source.Location = id
-					break
-				}
+		if id := r.Form.Get("id"); id != "" {
+			if srv := servers[id]; srv != nil {
+				api.ResponsePrettyJSON(w, srv)
+			} else {
+				http.Error(w, "server not found", http.StatusNotFound)
 			}
+		} else {
+			api.ResponsePrettyJSON(w, servers)
 		}
-
-		for _, source := range sources {
-			if source.Location == "" {
-				source.Location = " "
-			}
-		}
-
-		api.ResponseSources(w, sources)
 
 	case "POST":
-		if err := r.ParseMultipartForm(1024); err != nil {
-			api.Error(w, err)
-			return
-		}
-
-		if err := apiPair(r.Form.Get("id"), r.Form.Get("url")); err != nil {
-			api.Error(w, err)
+		id := r.Form.Get("id")
+		rawURL := r.Form.Get("src") + "&pin=" + r.Form.Get("pin")
+		if err := apiPair(id, rawURL); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 
 	case "DELETE":
-		if err := r.ParseMultipartForm(1024); err != nil {
-			api.Error(w, err)
-			return
-		}
-
-		if err := apiUnpair(r.Form.Get("id")); err != nil {
-			api.Error(w, err)
+		id := r.Form.Get("id")
+		if err := apiUnpair(id); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	}
+}
+
+func apiHomekitAccessories(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	stream := streams.Get(id)
+	if stream == nil {
+		http.Error(w, "", http.StatusNotFound)
+		return
+	}
+
+	rawURL := findHomeKitURL(stream.Sources())
+	if rawURL == "" {
+		http.Error(w, "", http.StatusBadRequest)
+		return
+	}
+
+	client, err := hap.Dial(rawURL)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer client.Close()
+
+	res, err := client.Get(hap.PathAccessories)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", api.MimeJSON)
+	_, _ = io.Copy(w, res.Body)
 }
 
 func discovery() ([]*api.Source, error) {
@@ -103,7 +145,7 @@ func apiPair(id, url string) error {
 
 	streams.New(id, conn.URL())
 
-	return app.PatchConfig(id, conn.URL(), "streams")
+	return app.PatchConfig([]string{"streams", id}, conn.URL())
 }
 
 func apiUnpair(id string) error {
@@ -112,7 +154,7 @@ func apiUnpair(id string) error {
 		return errors.New(api.StreamNotFound)
 	}
 
-	rawURL := findHomeKitURL(stream)
+	rawURL := findHomeKitURL(stream.Sources())
 	if rawURL == "" {
 		return errors.New("not homekit source")
 	}
@@ -123,15 +165,15 @@ func apiUnpair(id string) error {
 
 	streams.Delete(id)
 
-	return app.PatchConfig(id, nil, "streams")
+	return app.PatchConfig([]string{"streams", id}, nil)
 }
 
 func findHomeKitURLs() map[string]*url.URL {
 	urls := map[string]*url.URL{}
-	for id, stream := range streams.Streams() {
-		if rawURL := findHomeKitURL(stream); rawURL != "" {
+	for name, sources := range streams.GetAllSources() {
+		if rawURL := findHomeKitURL(sources); rawURL != "" {
 			if u, err := url.Parse(rawURL); err == nil {
-				urls[id] = u
+				urls[name] = u
 			}
 		}
 	}

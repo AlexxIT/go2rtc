@@ -3,6 +3,8 @@ package hap
 import (
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/sha512"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -64,16 +66,23 @@ type JSONCharacters struct {
 }
 
 type JSONCharacter struct {
-	AID   uint8  `json:"aid"`
-	IID   uint64 `json:"iid"`
-	Value any    `json:"value,omitempty"`
-	Event any    `json:"ev,omitempty"`
+	AID    uint8  `json:"aid"`
+	IID    uint64 `json:"iid"`
+	Status any    `json:"status,omitempty"`
+	Value  any    `json:"value,omitempty"`
+	Event  any    `json:"ev,omitempty"`
 }
+
+// 4.2.1.2 Invalid Setup Codes
+const insecurePINs = "00000000 11111111 22222222 33333333 44444444 55555555 66666666 77777777 88888888 99999999 12345678 87654321"
 
 func SanitizePin(pin string) (string, error) {
 	s := strings.ReplaceAll(pin, "-", "")
 	if len(s) != 8 {
 		return "", errors.New("hap: wrong PIN format: " + pin)
+	}
+	if strings.Contains(insecurePINs, s) {
+		return "", errors.New("hap: insecure PIN: " + pin)
 	}
 	// 123-45-678
 	return s[:3] + "-" + s[3:5] + "-" + s[5:], nil
@@ -90,6 +99,12 @@ func GenerateUUID() string {
 	_, _ = rand.Read(data)
 	s := hex.EncodeToString(data)
 	return s[:8] + "-" + s[8:12] + "-" + s[12:16] + "-" + s[16:20] + "-" + s[20:]
+}
+
+func SetupHash(setupID, deviceID string) string {
+	// should be setup_id (random 4 alphanum) + device_id (mac address)
+	b := sha512.Sum512([]byte(setupID + deviceID))
+	return base64.StdEncoding.EncodeToString(b[:4])
 }
 
 func Append(items ...any) (b []byte) {

@@ -47,7 +47,7 @@ func Init() {
 			if stream == nil {
 				return "", errors.New(api.StreamNotFound)
 			}
-			return webrtc.ExchangeSDP(stream, offer, "WebRTC/WebTorrent sync", "")
+			return webrtc.ExchangeSDP(stream, offer, "webtorrent", "")
 		},
 	}
 

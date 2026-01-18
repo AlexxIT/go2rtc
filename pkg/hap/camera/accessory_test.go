@@ -2,11 +2,20 @@ package camera
 
 import (
 	"encoding/base64"
+	"strings"
 	"testing"
 
 	"github.com/AlexxIT/go2rtc/pkg/hap"
 	"github.com/stretchr/testify/require"
 )
+
+func TestNilCharacter(t *testing.T) {
+	var res SetupEndpoints
+	char := &hap.Character{}
+	err := char.ReadTLV8(&res)
+	require.NotNil(t, err)
+	require.NotNil(t, strings.Contains(err.Error(), "can't read value"))
+}
 
 type testTLV8 struct {
 	name    string
@@ -54,19 +63,19 @@ func TestAqaraG3(t *testing.T) {
 		{
 			name:   "114",
 			value:  "AaoBAQACEQEBAQIBAAAAAgECAwEABAEAAwsBAoAHAgI4BAMBHgAAAwsBAgAFAgLQAgMBHgAAAwsBAoACAgJoAQMBHgAAAwsBAuABAgIOAQMBHgAAAwsBAkABAgK0AAMBHgAAAwsBAgAFAgLAAwMBHgAAAwsBAgAEAgIAAwMBHgAAAwsBAoACAgLgAQMBHgAAAwsBAuABAgJoAQMBHgAAAwsBAkABAgLwAAMBHg==",
-			actual: &SupportedVideoStreamConfig{},
-			expect: &SupportedVideoStreamConfig{
-				Codecs: []VideoCodec{
+			actual: &SupportedVideoStreamConfiguration{},
+			expect: &SupportedVideoStreamConfiguration{
+				Codecs: []VideoCodecConfiguration{
 					{
 						CodecType: VideoCodecTypeH264,
-						CodecParams: []VideoParams{
+						CodecParams: []VideoCodecParameters{
 							{
 								ProfileID:  []byte{VideoCodecProfileMain},
 								Level:      []byte{VideoCodecLevel31, VideoCodecLevel40},
 								CVOEnabled: []byte{0},
 							},
 						},
-						VideoAttrs: []VideoAttrs{
+						VideoAttrs: []VideoCodecAttributes{
 							{Width: 1920, Height: 1080, Framerate: 30},
 							{Width: 1280, Height: 720, Framerate: 30},
 							{Width: 640, Height: 360, Framerate: 30},
@@ -85,29 +94,29 @@ func TestAqaraG3(t *testing.T) {
 		{
 			name:   "115",
 			value:  "AQ4BAQICCQEBAQIBAAMBAQIBAA==",
-			actual: &SupportedAudioStreamConfig{},
-			expect: &SupportedAudioStreamConfig{
-				Codecs: []AudioCodec{
+			actual: &SupportedAudioStreamConfiguration{},
+			expect: &SupportedAudioStreamConfiguration{
+				Codecs: []AudioCodecConfiguration{
 					{
 						CodecType: AudioCodecTypeAACELD,
-						CodecParams: []AudioParams{
+						CodecParams: []AudioCodecParameters{
 							{
-								Channels:   1,
-								Bitrate:    AudioCodecBitrateVariable,
-								SampleRate: []byte{AudioCodecSampleRate16Khz},
+								Channels:    1,
+								BitrateMode: AudioCodecBitrateVariable,
+								SampleRate:  []byte{AudioCodecSampleRate16Khz},
 							},
 						},
 					},
 				},
-				ComfortNoise: 0,
+				ComfortNoiseSupport: 0,
 			},
 		},
 		{
 			name:   "116",
 			value:  "AgEAAAACAQEAAAIBAg==",
-			actual: &SupportedRTPConfig{},
-			expect: &SupportedRTPConfig{
-				CryptoType: []byte{CryptoAES_CM_128_HMAC_SHA1_80, CryptoAES_CM_256_HMAC_SHA1_80, CryptoNone},
+			actual: &SupportedRTPConfiguration{},
+			expect: &SupportedRTPConfiguration{
+				SRTPCryptoType: []byte{CryptoAES_CM_128_HMAC_SHA1_80, CryptoAES_CM_256_HMAC_SHA1_80, CryptoDisabled},
 			},
 		},
 	}
@@ -121,18 +130,18 @@ func TestHomebridge(t *testing.T) {
 		{
 			name:   "114",
 			value:  "AcUBAQACHQEBAAAAAQEBAAABAQICAQAAAAIBAQAAAgECAwEAAwsBAkABAgK0AAMBHgAAAwsBAkABAgLwAAMBDwAAAwsBAkABAgLwAAMBHgAAAwsBAuABAgIOAQMBHgAAAwsBAuABAgJoAQMBHgAAAwsBAoACAgJoAQMBHgAAAwsBAoACAgLgAQMBHgAAAwsBAgAFAgLQAgMBHgAAAwsBAgAFAgLAAwMBHgAAAwsBAoAHAgI4BAMBHgAAAwsBAkAGAgKwBAMBHg==",
-			actual: &SupportedVideoStreamConfig{},
-			expect: &SupportedVideoStreamConfig{
-				Codecs: []VideoCodec{
+			actual: &SupportedVideoStreamConfiguration{},
+			expect: &SupportedVideoStreamConfiguration{
+				Codecs: []VideoCodecConfiguration{
 					{
 						CodecType: VideoCodecTypeH264,
-						CodecParams: []VideoParams{
+						CodecParams: []VideoCodecParameters{
 							{
 								ProfileID: []byte{VideoCodecProfileConstrainedBaseline, VideoCodecProfileMain, VideoCodecProfileHigh},
 								Level:     []byte{VideoCodecLevel31, VideoCodecLevel32, VideoCodecLevel40},
 							},
 						},
-						VideoAttrs: []VideoAttrs{
+						VideoAttrs: []VideoCodecAttributes{
 
 							{Width: 320, Height: 180, Framerate: 30},
 							{Width: 320, Height: 240, Framerate: 15},
@@ -153,9 +162,9 @@ func TestHomebridge(t *testing.T) {
 		{
 			name:   "116",
 			value:  "AgEA",
-			actual: &SupportedRTPConfig{},
-			expect: &SupportedRTPConfig{
-				CryptoType: []byte{CryptoAES_CM_128_HMAC_SHA1_80},
+			actual: &SupportedRTPConfiguration{},
+			expect: &SupportedRTPConfiguration{
+				SRTPCryptoType: []byte{CryptoAES_CM_128_HMAC_SHA1_80},
 			},
 		},
 	}
@@ -169,18 +178,18 @@ func TestScrypted(t *testing.T) {
 		{
 			name:   "114",
 			value:  "AVIBAQACEwEBAQIBAAAAAgEBAAACAQIDAQADCwECAA8CAnAIAwEeAAADCwECgAcCAjgEAwEeAAADCwECAAUCAtACAwEeAAADCwECQAECAvAAAwEP",
-			actual: &SupportedVideoStreamConfig{},
-			expect: &SupportedVideoStreamConfig{
-				Codecs: []VideoCodec{
+			actual: &SupportedVideoStreamConfiguration{},
+			expect: &SupportedVideoStreamConfiguration{
+				Codecs: []VideoCodecConfiguration{
 					{
 						CodecType: VideoCodecTypeH264,
-						CodecParams: []VideoParams{
+						CodecParams: []VideoCodecParameters{
 							{
 								ProfileID: []byte{VideoCodecProfileMain},
 								Level:     []byte{VideoCodecLevel31, VideoCodecLevel32, VideoCodecLevel40},
 							},
 						},
-						VideoAttrs: []VideoAttrs{
+						VideoAttrs: []VideoCodecAttributes{
 							{Width: 3840, Height: 2160, Framerate: 30},
 							{Width: 1920, Height: 1080, Framerate: 30},
 							{Width: 1280, Height: 720, Framerate: 30},
@@ -193,15 +202,15 @@ func TestScrypted(t *testing.T) {
 		{
 			name:   "115",
 			value:  "AScBAQMCIgEBAQIBAAMBAAAAAwEAAAADAQEAAAMBAQAAAwECAAADAQICAQA=",
-			actual: &SupportedAudioStreamConfig{},
-			expect: &SupportedAudioStreamConfig{
-				Codecs: []AudioCodec{
+			actual: &SupportedAudioStreamConfiguration{},
+			expect: &SupportedAudioStreamConfiguration{
+				Codecs: []AudioCodecConfiguration{
 					{
 						CodecType: AudioCodecTypeOpus,
-						CodecParams: []AudioParams{
+						CodecParams: []AudioCodecParameters{
 							{
-								Channels: 1,
-								Bitrate:  AudioCodecBitrateVariable,
+								Channels:    1,
+								BitrateMode: AudioCodecBitrateVariable,
 								SampleRate: []byte{
 									AudioCodecSampleRate8Khz, AudioCodecSampleRate8Khz,
 									AudioCodecSampleRate16Khz, AudioCodecSampleRate16Khz,
@@ -211,15 +220,15 @@ func TestScrypted(t *testing.T) {
 						},
 					},
 				},
-				ComfortNoise: 0,
+				ComfortNoiseSupport: 0,
 			},
 		},
 		{
 			name:   "116",
 			value:  "AgEAAAACAQI=",
-			actual: &SupportedRTPConfig{},
-			expect: &SupportedRTPConfig{
-				CryptoType: []byte{CryptoAES_CM_128_HMAC_SHA1_80, CryptoNone},
+			actual: &SupportedRTPConfiguration{},
+			expect: &SupportedRTPConfiguration{
+				SRTPCryptoType: []byte{CryptoAES_CM_128_HMAC_SHA1_80, CryptoDisabled},
 			},
 		},
 	}

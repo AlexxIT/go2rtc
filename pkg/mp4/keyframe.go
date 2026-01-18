@@ -10,11 +10,12 @@ import (
 )
 
 type Keyframe struct {
-	core.SuperConsumer
+	core.Connection
 	wr    *core.WriteBuffer
 	muxer *Muxer
 }
 
+// Deprecated: should be rewritten
 func NewKeyframe(medias []*core.Media) *Keyframe {
 	if medias == nil {
 		medias = []*core.Media{
@@ -29,9 +30,15 @@ func NewKeyframe(medias []*core.Media) *Keyframe {
 		}
 	}
 
+	wr := core.NewWriteBuffer(nil)
 	cons := &Keyframe{
+		Connection: core.Connection{
+			ID:         core.NewID(),
+			FormatName: "mp4",
+			Transport:  wr,
+		},
 		muxer: &Muxer{},
-		wr:    core.NewWriteBuffer(nil),
+		wr:    wr,
 	}
 	cons.Medias = medias
 	return cons
@@ -94,9 +101,4 @@ func (c *Keyframe) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 
 func (c *Keyframe) WriteTo(wr io.Writer) (int64, error) {
 	return c.wr.WriteTo(wr)
-}
-
-func (c *Keyframe) Stop() error {
-	_ = c.SuperConsumer.Close()
-	return c.wr.Close()
 }

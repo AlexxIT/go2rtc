@@ -1,31 +1,76 @@
 package expr
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
+	"net/url"
 	"regexp"
+	"strings"
+	"time"
 
-	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/expr-lang/expr"
+	"github.com/expr-lang/expr/vm"
 )
 
-func newRequest(method, url string, headers map[string]any) (*http.Request, error) {
-	if method == "" {
+func newRequest(rawURL string, options map[string]any) (*http.Request, error) {
+	var method, contentType string
+	var rd io.Reader
+
+	// method from js fetch
+	if s, ok := options["method"].(string); ok {
+		method = s
+	} else {
 		method = "GET"
 	}
 
-	req, err := http.NewRequest(method, url, nil)
+	// params key from python requests
+	if kv, ok := options["params"].(map[string]any); ok {
+		rawURL += "?" + url.Values(kvToString(kv)).Encode()
+	}
+
+	// json key from python requests
+	// data key from python requests
+	// body key from js fetch
+	if v, ok := options["json"]; ok {
+		b, err := json.Marshal(v)
+		if err != nil {
+			return nil, err
+		}
+		contentType = "application/json"
+		rd = bytes.NewReader(b)
+	} else if kv, ok := options["data"].(map[string]any); ok {
+		contentType = "application/x-www-form-urlencoded"
+		rd = strings.NewReader(url.Values(kvToString(kv)).Encode())
+	} else if s, ok := options["body"].(string); ok {
+		rd = strings.NewReader(s)
+	}
+
+	req, err := http.NewRequest(method, rawURL, rd)
 	if err != nil {
 		return nil, err
 	}
 
-	for k, v := range headers {
-		req.Header.Set(k, fmt.Sprintf("%v", v))
+	if kv, ok := options["headers"].(map[string]any); ok {
+		req.Header = kvToString(kv)
+	}
+
+	if contentType != "" && req.Header.Get("Content-Type") == "" {
+		req.Header.Set("Content-Type", contentType)
 	}
 
 	return req, nil
+}
+
+func kvToString(kv map[string]any) map[string][]string {
+	dst := make(map[string][]string, len(kv))
+	for k, v := range kv {
+		dst[k] = []string{fmt.Sprintf("%v", v)}
+	}
+	return dst
 }
 
 func regExp(params ...any) (*regexp.Regexp, error) {
@@ -42,74 +87,80 @@ func regExp(params ...any) (*regexp.Regexp, error) {
 	return regexp.Compile(exp)
 }
 
-var Options = []expr.Option{
-	expr.Function(
-		"fetch",
-		func(params ...any) (any, error) {
-			var req *http.Request
-			var err error
+func Compile(input string) (*vm.Program, error) {
+	// support http sessions
+	jar, _ := cookiejar.New(nil)
+	client := http.Client{
+		Jar:     jar,
+		Timeout: 5 * time.Second,
+	}
 
-			url := params[0].(string)
+	return expr.Compile(
+		input,
+		expr.Function(
+			"fetch",
+			func(params ...any) (any, error) {
+				var req *http.Request
+				var err error
 
-			if len(params) == 2 {
-				options := params[1].(map[string]any)
-				method, _ := options["method"].(string)
-				headers, _ := options["headers"].(map[string]any)
-				req, err = newRequest(method, url, headers)
-			} else {
-				req, err = http.NewRequest("GET", url, nil)
-			}
+				rawURL := params[0].(string)
 
-			if err != nil {
-				return nil, err
-			}
+				if len(params) == 2 {
+					options := params[1].(map[string]any)
+					req, err = newRequest(rawURL, options)
+				} else {
+					req, err = http.NewRequest("GET", rawURL, nil)
+				}
 
-			res, err := tcp.Do(req)
-			if err != nil {
-				return nil, err
-			}
+				if err != nil {
+					return nil, err
+				}
 
-			b, _ := io.ReadAll(res.Body)
+				res, err := client.Do(req)
+				if err != nil {
+					return nil, err
+				}
 
-			return map[string]any{
-				"ok":     res.StatusCode < 400,
-				"status": res.Status,
-				"text":   string(b),
-				"json": func() (v any) {
-					_ = json.Unmarshal(b, &v)
-					return
-				},
-			}, nil
-		},
-		//new(func(url string) map[string]any),
-		//new(func(url string, options map[string]any) map[string]any),
-	),
-	expr.Function(
-		"match",
-		func(params ...any) (any, error) {
-			re, err := regExp(params[1:]...)
-			if err != nil {
-				return nil, err
-			}
-			str := params[0].(string)
-			return re.FindStringSubmatch(str), nil
-		},
-		//new(func(str, expr string) []string),
-		//new(func(str, expr, flags string) []string),
-	),
-	expr.Function(
-		"RegExp",
-		func(params ...any) (any, error) {
-			return regExp(params)
-		},
-	),
+				b, _ := io.ReadAll(res.Body)
+
+				return map[string]any{
+					"ok":     res.StatusCode < 400,
+					"status": res.Status,
+					"text":   string(b),
+					"json": func() (v any) {
+						_ = json.Unmarshal(b, &v)
+						return
+					},
+				}, nil
+			},
+			//new(func(url string) map[string]any),
+			//new(func(url string, options map[string]any) map[string]any),
+		),
+		expr.Function(
+			"match",
+			func(params ...any) (any, error) {
+				re, err := regExp(params[1:]...)
+				if err != nil {
+					return nil, err
+				}
+				str := params[0].(string)
+				return re.FindStringSubmatch(str), nil
+			},
+			//new(func(str, expr string) []string),
+			//new(func(str, expr, flags string) []string),
+		),
+	)
 }
 
-func Run(input string) (any, error) {
-	program, err := expr.Compile(input, Options...)
+func Eval(input string, env any) (any, error) {
+	program, err := Compile(input)
 	if err != nil {
 		return nil, err
 	}
 
-	return expr.Run(program, nil)
+	return expr.Run(program, env)
+}
+
+func Run(program *vm.Program, env any) (any, error) {
+	return vm.Run(program, env)
 }

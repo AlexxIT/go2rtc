@@ -23,10 +23,11 @@ type Filter func(handler HandlerFunc) HandlerFunc
 
 // Node - Receiver or Sender or Filter (transform)
 type Node struct {
-	Codec  *Codec      `json:"codec"`
-	Input  HandlerFunc `json:"-"`
-	Output HandlerFunc `json:"-"`
+	Codec  *Codec
+	Input  HandlerFunc
+	Output HandlerFunc
 
+	id     uint32
 	childs []*Node
 	parent *Node
 

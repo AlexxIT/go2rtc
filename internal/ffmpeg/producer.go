@@ -13,7 +13,7 @@ import (
 )
 
 type Producer struct {
-	core.SuperProducer
+	core.Connection
 	url    string
 	query  url.Values
 	ffmpeg core.Producer
@@ -31,7 +31,8 @@ func NewProducer(url string) (core.Producer, error) {
 		return nil, errors.New("ffmpeg: unsupported params: " + url[i:])
 	}
 
-	p.Type = "FFmpeg producer"
+	p.ID = core.NewID()
+	p.FormatName = "ffmpeg"
 	p.Medias = []*core.Media{
 		{
 			// we can support only audio, because don't know FmtpLine for H264 and PayloadType for MJPEG
@@ -41,9 +42,11 @@ func NewProducer(url string) (core.Producer, error) {
 			Codecs: []*core.Codec{
 				// OPUS will always marked as OPUS/48000/2
 				{Name: core.CodecOpus, ClockRate: 48000, Channels: 2},
+				{Name: core.CodecPCML, ClockRate: 16000},
 				{Name: core.CodecPCM, ClockRate: 16000},
 				{Name: core.CodecPCMA, ClockRate: 16000},
 				{Name: core.CodecPCMU, ClockRate: 16000},
+				{Name: core.CodecPCML, ClockRate: 8000},
 				{Name: core.CodecPCM, ClockRate: 8000},
 				{Name: core.CodecPCMA, ClockRate: 8000},
 				{Name: core.CodecPCMU, ClockRate: 8000},
@@ -81,7 +84,7 @@ func (p *Producer) Stop() error {
 
 func (p *Producer) MarshalJSON() ([]byte, error) {
 	if p.ffmpeg == nil {
-		return json.Marshal(p.SuperProducer)
+		return json.Marshal(p.Connection)
 	}
 	return json.Marshal(p.ffmpeg)
 }
@@ -93,9 +96,11 @@ func (p *Producer) newURL() string {
 		codec := receiver.Codec
 		switch codec.Name {
 		case core.CodecOpus:
-			s += "#audio=opus"
+			s += "#audio=opus/16000"
 		case core.CodecAAC:
 			s += "#audio=aac/16000"
+		case core.CodecPCML:
+			s += "#audio=pcml/" + strconv.Itoa(int(codec.ClockRate))
 		case core.CodecPCM:
 			s += "#audio=pcm/" + strconv.Itoa(int(codec.ClockRate))
 		case core.CodecPCMA:

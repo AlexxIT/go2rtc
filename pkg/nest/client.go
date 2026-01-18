@@ -3,18 +3,26 @@ package nest
 import (
 	"errors"
 	"net/url"
+	"strings"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/rtsp"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
-	pion "github.com/pion/webrtc/v3"
+	pion "github.com/pion/webrtc/v4"
 )
 
-type Client struct {
+type WebRTCClient struct {
 	conn *webrtc.Conn
 	api  *API
 }
 
-func NewClient(rawURL string) (*Client, error) {
+type RTSPClient struct {
+	conn *rtsp.Conn
+	api  *API
+}
+
+func Dial(rawURL string) (core.Producer, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, err
@@ -31,75 +39,159 @@ func NewClient(rawURL string) (*Client, error) {
 		return nil, errors.New("nest: wrong query")
 	}
 
-	nestAPI, err := NewAPI(cliendID, cliendSecret, refreshToken)
-	if err != nil {
-		return nil, err
+	maxRetries := 3
+	retryDelay := time.Second * 30
+
+	var nestAPI *API
+	var lastErr error
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		nestAPI, err = NewAPI(cliendID, cliendSecret, refreshToken)
+		if err == nil {
+			break
+		}
+		lastErr = err
+		if attempt < maxRetries-1 {
+			time.Sleep(retryDelay)
+			retryDelay *= 2 // exponential backoff
+		}
 	}
 
-	rtcAPI, err := webrtc.NewAPI()
-	if err != nil {
-		return nil, err
+	if nestAPI == nil {
+		return nil, lastErr
 	}
 
-	conf := pion.Configuration{}
-	pc, err := rtcAPI.NewPeerConnection(conf)
-	if err != nil {
-		return nil, err
+	protocols := strings.Split(query.Get("protocols"), ",")
+	if len(protocols) > 0 && protocols[0] == "RTSP" {
+		return rtspConn(nestAPI, rawURL, projectID, deviceID)
 	}
 
-	conn := webrtc.NewConn(pc)
-	conn.Desc = "Nest"
-	conn.Mode = core.ModeActiveProducer
-
-	// https://developers.google.com/nest/device-access/traits/device/camera-live-stream#generatewebrtcstream-request-fields
-	medias := []*core.Media{
-		{Kind: core.KindAudio, Direction: core.DirectionRecvonly},
-		{Kind: core.KindVideo, Direction: core.DirectionRecvonly},
-		{Kind: "app"}, // important for Nest
-	}
-
-	// 3. Create offer with candidates
-	offer, err := conn.CreateCompleteOffer(medias)
-	if err != nil {
-		return nil, err
-	}
-
-	// 4. Exchange SDP via Hass
-	answer, err := nestAPI.ExchangeSDP(projectID, deviceID, offer)
-	if err != nil {
-		return nil, err
-	}
-
-	// 5. Set answer with remote medias
-	if err = conn.SetAnswer(answer); err != nil {
-		return nil, err
-	}
-
-	return &Client{conn: conn, api: nestAPI}, nil
+	// Default to WEB_RTC for backwards compataiility
+	return rtcConn(nestAPI, rawURL, projectID, deviceID)
 }
 
-func (c *Client) GetMedias() []*core.Media {
+func (c *WebRTCClient) GetMedias() []*core.Media {
 	return c.conn.GetMedias()
 }
 
-func (c *Client) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
+func (c *WebRTCClient) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
 	return c.conn.GetTrack(media, codec)
 }
 
-func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
+func (c *WebRTCClient) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
 	return c.conn.AddTrack(media, codec, track)
 }
 
-func (c *Client) Start() error {
+func (c *WebRTCClient) Start() error {
 	c.api.StartExtendStreamTimer()
 	return c.conn.Start()
 }
 
-func (c *Client) Stop() error {
+func (c *WebRTCClient) Stop() error {
 	c.api.StopExtendStreamTimer()
 	return c.conn.Stop()
 }
 
-func (c *Client) MarshalJSON() ([]byte, error) {
+func (c *WebRTCClient) MarshalJSON() ([]byte, error) {
+	return c.conn.MarshalJSON()
+}
+
+func rtcConn(nestAPI *API, rawURL, projectID, deviceID string) (*WebRTCClient, error) {
+	maxRetries := 3
+	retryDelay := time.Second * 30
+	var lastErr error
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		rtcAPI, err := webrtc.NewAPI()
+		if err != nil {
+			return nil, err
+		}
+
+		conf := pion.Configuration{}
+		pc, err := rtcAPI.NewPeerConnection(conf)
+		if err != nil {
+			return nil, err
+		}
+
+		conn := webrtc.NewConn(pc)
+		conn.FormatName = "nest/webrtc"
+		conn.Mode = core.ModeActiveProducer
+		conn.Protocol = "http"
+		conn.URL = rawURL
+
+		// https://developers.google.com/nest/device-access/traits/device/camera-live-stream#generatewebrtcstream-request-fields
+		medias := []*core.Media{
+			{Kind: core.KindAudio, Direction: core.DirectionRecvonly},
+			{Kind: core.KindVideo, Direction: core.DirectionRecvonly},
+			{Kind: "app"}, // important for Nest
+		}
+
+		// 3. Create offer with candidates
+		offer, err := conn.CreateCompleteOffer(medias)
+		if err != nil {
+			return nil, err
+		}
+
+		// 4. Exchange SDP via Hass
+		answer, err := nestAPI.ExchangeSDP(projectID, deviceID, offer)
+		if err != nil {
+			lastErr = err
+			if attempt < maxRetries-1 {
+				time.Sleep(retryDelay)
+				retryDelay *= 2
+				continue
+			}
+			return nil, err
+		}
+
+		// 5. Set answer with remote medias
+		if err = conn.SetAnswer(answer); err != nil {
+			return nil, err
+		}
+
+		return &WebRTCClient{conn: conn, api: nestAPI}, nil
+	}
+
+	return nil, lastErr
+}
+
+func rtspConn(nestAPI *API, rawURL, projectID, deviceID string) (*RTSPClient, error) {
+	rtspURL, err := nestAPI.GenerateRtspStream(projectID, deviceID)
+	if err != nil {
+		return nil, err
+	}
+
+	rtspClient := rtsp.NewClient(rtspURL)
+	if err := rtspClient.Dial(); err != nil {
+		return nil, err
+	}
+	if err := rtspClient.Describe(); err != nil {
+		return nil, err
+	}
+
+	return &RTSPClient{conn: rtspClient, api: nestAPI}, nil
+}
+
+func (c *RTSPClient) GetMedias() []*core.Media {
+	result := c.conn.GetMedias()
+	return result
+}
+
+func (c *RTSPClient) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
+	return c.conn.GetTrack(media, codec)
+}
+
+func (c *RTSPClient) Start() error {
+	c.api.StartExtendStreamTimer()
+	return c.conn.Start()
+}
+
+func (c *RTSPClient) Stop() error {
+	c.api.StopRTSPStream()
+	c.api.StopExtendStreamTimer()
+	return c.conn.Stop()
+}
+
+func (c *RTSPClient) MarshalJSON() ([]byte, error) {
 	return c.conn.MarshalJSON()
 }

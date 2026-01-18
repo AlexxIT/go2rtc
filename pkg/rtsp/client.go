@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/tcp/websocket"
@@ -20,7 +21,13 @@ import (
 var Timeout = time.Second * 5
 
 func NewClient(uri string) *Conn {
-	return &Conn{uri: uri}
+	return &Conn{
+		Connection: core.Connection{
+			ID:         core.NewID(),
+			FormatName: "rtsp",
+		},
+		uri: uri,
+	}
 }
 
 func (c *Conn) Dial() (err error) {
@@ -30,14 +37,24 @@ func (c *Conn) Dial() (err error) {
 
 	var conn net.Conn
 
-	if c.Transport == "" {
-		timeout := core.ConnDialTimeout
+	switch c.Transport {
+	case "", "tcp", "udp":
+		var timeout time.Duration
 		if c.Timeout != 0 {
 			timeout = time.Second * time.Duration(c.Timeout)
+		} else {
+			timeout = core.ConnDialTimeout
 		}
 		conn, err = tcp.Dial(c.URL, timeout)
-	} else {
+
+		if c.Transport != "udp" {
+			c.Protocol = "rtsp+tcp"
+		} else {
+			c.Protocol = "rtsp+udp"
+		}
+	default:
 		conn, err = websocket.Dial(c.Transport)
+		c.Protocol = "ws"
 	}
 	if err != nil {
 		return
@@ -52,6 +69,13 @@ func (c *Conn) Dial() (err error) {
 	c.session = ""
 	c.sequence = 0
 	c.state = StateConn
+
+	c.udpConn = nil
+	c.udpAddr = nil
+
+	c.Connection.RemoteAddr = conn.RemoteAddr().String()
+	c.Connection.Transport = conn
+	c.Connection.URL = c.uri
 
 	return nil
 }
@@ -69,7 +93,35 @@ func (c *Conn) Do(req *tcp.Request) (*tcp.Response, error) {
 
 	c.Fire(res)
 
-	if res.StatusCode == http.StatusUnauthorized {
+	switch res.StatusCode {
+	case http.StatusOK:
+		return res, nil
+
+	case http.StatusMovedPermanently, http.StatusFound:
+		rawURL := res.Header.Get("Location")
+
+		var u *url.URL
+		if u, err = url.Parse(rawURL); err != nil {
+			return nil, err
+		}
+
+		if u.User == nil {
+			u.User = c.auth.UserInfo() // restore auth if we don't have it in the new URL
+		}
+
+		c.uri = u.String() // so auth will be saved on reconnect
+
+		_ = c.conn.Close()
+
+		if err = c.Dial(); err != nil {
+			return nil, err
+		}
+
+		req.URL = c.URL // because path was changed
+
+		return c.Do(req)
+
+	case http.StatusUnauthorized:
 		switch c.auth.Method {
 		case tcp.AuthNone:
 			if c.auth.ReadNone(res) {
@@ -85,11 +137,7 @@ func (c *Conn) Do(req *tcp.Request) (*tcp.Response, error) {
 		}
 	}
 
-	if res.StatusCode != http.StatusOK {
-		return res, fmt.Errorf("wrong response on %s", req.Method)
-	}
-
-	return res, nil
+	return res, fmt.Errorf("wrong response on %s", req.Method)
 }
 
 func (c *Conn) Options() error {
@@ -143,7 +191,7 @@ func (c *Conn) Describe() error {
 		}
 	}
 
-	c.sdp = string(res.Body) // for info
+	c.SDP = string(res.Body) // for info
 
 	medias, err := UnmarshalSDP(res.Body)
 	if err != nil {
@@ -206,15 +254,27 @@ func (c *Conn) Record() (err error) {
 func (c *Conn) SetupMedia(media *core.Media) (byte, error) {
 	var transport string
 
-	// try to use media position as channel number
-	for i, m := range c.Medias {
-		if m.Equal(media) {
-			transport = fmt.Sprintf(
-				// i   - RTP (data channel)
-				// i+1 - RTCP (control channel)
-				"RTP/AVP/TCP;unicast;interleaved=%d-%d", i*2, i*2+1,
-			)
-			break
+	if c.Transport == "udp" {
+		conn1, conn2, err := ListenUDPPair()
+		if err != nil {
+			return 0, err
+		}
+
+		c.udpConn = append(c.udpConn, conn1, conn2)
+
+		port := conn1.LocalAddr().(*net.UDPAddr).Port
+		transport = fmt.Sprintf("RTP/AVP;unicast;client_port=%d-%d", port, port+1)
+	} else {
+		// try to use media position as channel number
+		for i, m := range c.Medias {
+			if m.Equal(media) {
+				transport = fmt.Sprintf(
+					// i   - RTP (data channel)
+					// i+1 - RTCP (control channel)
+					"RTP/AVP/TCP;unicast;interleaved=%d-%d", i*2, i*2+1,
+				)
+				break
+			}
 		}
 	}
 
@@ -225,13 +285,11 @@ func (c *Conn) SetupMedia(media *core.Media) (byte, error) {
 	rawURL := media.ID // control
 	if !strings.Contains(rawURL, "://") {
 		rawURL = c.URL.String()
-		if !strings.HasSuffix(rawURL, "/") {
+		// prefix check for https://github.com/AlexxIT/go2rtc/issues/1236
+		if !strings.HasSuffix(rawURL, "/") && !strings.HasPrefix(media.ID, "/") {
 			rawURL += "/"
 		}
 		rawURL += media.ID
-	} else if strings.HasPrefix(rawURL, "rtsp://rtsp://") {
-		// fix https://github.com/AlexxIT/go2rtc/issues/830
-		rawURL = rawURL[7:]
 	}
 	trackURL, err := urlParse(rawURL)
 	if err != nil {
@@ -276,27 +334,53 @@ func (c *Conn) SetupMedia(media *core.Media) (byte, error) {
 		}
 	}
 
-	// we send our `interleaved`, but camera can answer with another
-
-	// Transport: RTP/AVP/TCP;unicast;interleaved=10-11;ssrc=10117CB7
-	// Transport: RTP/AVP/TCP;unicast;destination=192.168.1.111;source=192.168.1.222;interleaved=0
-	// Transport: RTP/AVP/TCP;ssrc=22345682;interleaved=0-1
+	// Parse server response
 	transport = res.Header.Get("Transport")
-	if !strings.HasPrefix(transport, "RTP/AVP/TCP;") {
+
+	if c.Transport == "udp" {
+		channel := byte(len(c.udpConn) - 2)
+
+		// Dahua:   RTP/AVP/UDP;unicast;client_port=49292-49293;server_port=43670-43671;ssrc=7CB694B4
+		// OpenIPC: RTP/AVP/UDP;unicast;client_port=59612-59613
+		if s := core.Between(transport, "server_port=", ";"); s != "" {
+			s1, s2, _ := strings.Cut(s, "-")
+			port1 := core.Atoi(s1)
+			port2 := core.Atoi(s2)
+			// TODO: more smart handling empty server ports
+			if port1 > 0 && port2 > 0 {
+				remoteIP := c.conn.RemoteAddr().(*net.TCPAddr).IP
+				c.udpAddr = append(c.udpAddr,
+					&net.UDPAddr{IP: remoteIP, Port: port1},
+					&net.UDPAddr{IP: remoteIP, Port: port2},
+				)
+
+				go func() {
+					// Try to open a hole in the NAT router (to allow incoming UDP packets)
+					// by send a UDP packet for RTP and RTCP to the remote RTSP server.
+					// https://github.com/FFmpeg/FFmpeg/blob/aa91ae25b88e195e6af4248e0ab30605735ca1cd/libavformat/rtpdec.c#L416-L438
+					_, _ = c.WriteToUDP([]byte{0x80, 0x00, 0x00, 0x00}, channel)
+					_, _ = c.WriteToUDP([]byte{0x80, 0xC8, 0x00, 0x01}, channel+1)
+				}()
+			}
+		}
+
+		return channel, nil
+	} else {
+		// we send our `interleaved`, but camera can answer with another
+
+		// Transport: RTP/AVP/TCP;unicast;interleaved=10-11;ssrc=10117CB7
+		// Transport: RTP/AVP/TCP;unicast;destination=192.168.1.111;source=192.168.1.222;interleaved=0
+		// Transport: RTP/AVP/TCP;ssrc=22345682;interleaved=0-1
 		// Escam Q6 has a bug:
 		// Transport: RTP/AVP;unicast;destination=192.168.1.111;source=192.168.1.222;interleaved=0-1
-		if !strings.Contains(transport, ";interleaved=") {
+		s := core.Between(transport, "interleaved=", "-")
+		i, err := strconv.Atoi(s)
+		if err != nil {
 			return 0, fmt.Errorf("wrong transport: %s", transport)
 		}
-	}
 
-	channel := core.Between(transport, "interleaved=", "-")
-	i, err := strconv.Atoi(channel)
-	if err != nil {
-		return 0, err
+		return byte(i), nil
 	}
-
-	return byte(i), nil
 }
 
 func (c *Conn) Play() (err error) {
@@ -317,5 +401,56 @@ func (c *Conn) Close() error {
 	if c.OnClose != nil {
 		_ = c.OnClose()
 	}
+	for _, conn := range c.udpConn {
+		_ = conn.Close()
+	}
 	return c.conn.Close()
+}
+
+func (c *Conn) WriteToUDP(b []byte, channel byte) (int, error) {
+	return c.udpConn[channel].WriteToUDP(b, c.udpAddr[channel])
+}
+
+const listenUDPAttemps = 10
+
+var listenUDPMu sync.Mutex
+
+func ListenUDPPair() (*net.UDPConn, *net.UDPConn, error) {
+	listenUDPMu.Lock()
+	defer listenUDPMu.Unlock()
+
+	for i := 0; i < listenUDPAttemps; i++ {
+		// Get a random even port from the OS
+		ln1, err := net.ListenUDP("udp", &net.UDPAddr{IP: nil, Port: 0})
+		if err != nil {
+			continue
+		}
+
+		var port1 = ln1.LocalAddr().(*net.UDPAddr).Port
+		var port2 int
+
+		// 11. RTP over Network and Transport Protocols (https://www.ietf.org/rfc/rfc3550.txt)
+		// For UDP and similar protocols,
+		// RTP SHOULD use an even destination port number and the corresponding
+		// RTCP stream SHOULD use the next higher (odd) destination port number
+		if port1&1 > 0 {
+			port2 = port1 - 1
+		} else {
+			port2 = port1 + 1
+		}
+
+		ln2, err := net.ListenUDP("udp", &net.UDPAddr{IP: nil, Port: port2})
+		if err != nil {
+			_ = ln1.Close()
+			continue
+		}
+
+		if port1 < port2 {
+			return ln1, ln2, nil
+		} else {
+			return ln2, ln1, nil
+		}
+	}
+
+	return nil, nil, fmt.Errorf("can't open two UDP ports")
 }
