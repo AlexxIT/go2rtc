@@ -1261,6 +1261,15 @@ API examples:
   - You can use `width`/`w` and/or `height`/`h` params 
   - You can use `rotate` param with `90`, `180`, `270` or `-90` values
   - You can use `hardware`/`hw` param [read more](https://github.com/AlexxIT/go2rtc/wiki/Hardware-acceleration)
+  - You can use `cached` param (`true`/`false`) to control cached snapshots per request
+
+MJPEG config options:
+
+```yaml
+mjpeg:
+  cache_duration: 1m
+  cache_default: true
+```
 
 **PS.** This module also supports streaming to the server console (terminal) in the **animated ASCII art** format ([read more](internal/mjpeg/README.md)).
 

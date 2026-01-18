@@ -455,6 +455,25 @@
         }
       }
     },
+    "mjpeg": {
+      "type": "object",
+      "properties": {
+        "cache_duration": {
+          "description": "Keyframe cache lifetime for snapshots",
+          "type": "string",
+          "default": "1m",
+          "examples": [
+            "30s",
+            "1m"
+          ]
+        },
+        "cache_default": {
+          "description": "Default behavior for cached snapshots",
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
     "ngrok": {
       "type": "object",
       "properties": {
