@@ -60,6 +60,9 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 			}
 
 			defer func() {
+				if b == nil {
+					return
+				}
 				entry = cacheEntry{payload: b, timestamp: time.Now()}
 				cacheMu.Lock()
 				if cache == nil {
