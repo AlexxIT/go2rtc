@@ -33,7 +33,7 @@ func UUID() string {
 	return s[:8] + "-" + s[8:12] + "-" + s[12:16] + "-" + s[16:20] + "-" + s[20:]
 }
 
-// return list of tuple (onvif_url, name, hardware)
+// DiscoveryStreamingDevices return list of tuple (onvif_url, name, hardware)
 func DiscoveryStreamingDevices() ([]DiscoveryDevice, error) {
 	conn, err := net.ListenUDP("udp4", nil)
 	if err != nil {
@@ -68,9 +68,7 @@ func DiscoveryStreamingDevices() ([]DiscoveryDevice, error) {
 		return nil, err
 	}
 
-	if err = conn.SetReadDeadline(time.Now().Add(time.Second * 3)); err != nil {
-		return nil, err
-	}
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 
 	var devices []DiscoveryDevice
 
@@ -88,40 +86,35 @@ func DiscoveryStreamingDevices() ([]DiscoveryDevice, error) {
 			continue
 		}
 
-		url := FindTagValue(b[:n], "XAddrs")
-		if url == "" {
+		device := DiscoveryDevice{
+			URL: FindTagValue(b[:n], "XAddrs"),
+		}
+
+		if device.URL == "" {
 			continue
 		}
 
 		// fix some buggy cameras
 		// <wsdd:XAddrs>http://0.0.0.0:8080/onvif/device_service</wsdd:XAddrs>
-		if strings.HasPrefix(url, "http://0.0.0.0") {
-			url = "http://" + addr.IP.String() + url[14:]
+		if s, ok := strings.CutPrefix(device.URL, "http://0.0.0.0"); ok {
+			device.URL = "http://" + addr.IP.String() + s
 		}
 
 		// try to find the camera name and model (hardware)
 		scopes := FindTagValue(b[:n], "Scopes")
-		var name, hardware string
-		for _, scope := range strings.Split(scopes, " ") {
-			if strings.HasPrefix(scope, "onvif://www.onvif.org/name/") {
-				name = strings.TrimPrefix(scope, "onvif://www.onvif.org/name/")
-			} else if strings.HasPrefix(scope, "onvif://www.onvif.org/hardware/") {
-				hardware = strings.TrimPrefix(scope, "onvif://www.onvif.org/hardware/")
-			}
-		}
-		// Some cameras has the hardware copied into the name field or vice versa
-		// this is to avoid duplication
-		if name != "" && hardware != "" {
-			if strings.Contains(hardware, name) {
-				name = ""
-			} else if strings.Contains(name, hardware) {
-				hardware = ""
-			}
-		}
-		devices = append(devices, DiscoveryDevice{URL: url, Name: name, Hardware: hardware})
+		device.Name = findScope(scopes, "onvif://www.onvif.org/name/")
+		device.Hardware = findScope(scopes, "onvif://www.onvif.org/hardware/")
+
+		devices = append(devices, device)
 	}
 
 	return devices, nil
+}
+
+func findScope(s, prefix string) string {
+	s = core.Between(s, prefix, " ")
+	s, _ = url.QueryUnescape(s)
+	return s
 }
 
 func atoi(s string) int {

@@ -7,7 +7,6 @@ import (
 	"net/url"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
@@ -186,12 +185,11 @@ func apiOnvif(w http.ResponseWriter, r *http.Request) {
 				u.Path = ""
 			}
 
-			var info string
-			info = strings.TrimSpace(device.Name + " " + device.Hardware)
-			if info == "" {
-				info = "ONVIF Device"
-			}
-			items = append(items, &api.Source{Name: u.Host, URL: u.String(), Info: info})
+			items = append(items, &api.Source{
+				Name: u.Host,
+				URL:  u.String(),
+				Info: device.Name + " " + device.Hardware,
+			})
 		}
 	} else {
 		client, err := onvif.NewClient(src)
