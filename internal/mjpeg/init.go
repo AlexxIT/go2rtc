@@ -117,7 +117,10 @@ func outputMjpeg(w http.ResponseWriter, r *http.Request) {
 		cons.FormatName = "ascii"
 
 		query := r.URL.Query()
-		wr := ascii.NewWriter(w, query.Get("color"), query.Get("back"), query.Get("text"))
+		wr := ascii.NewWriter(w,
+			query.Get("color"), query.Get("back"), query.Get("text"),
+			core.Atoi(query.Get("width")), core.Atoi(query.Get("height")),
+		)
 		_, _ = cons.WriteTo(wr)
 	}
 

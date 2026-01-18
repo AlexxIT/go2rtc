@@ -567,91 +567,72 @@ paths:
           description: ""
           content: { multipart/x-mixed-replace: { example: "" } }
 
-  /api/stream.ascii?src={src}:
+  /api/stream.ascii:
     get:
-      summary: Get stream in ASCII-art format (ANSI escape codes)
-      description: "[Module: MJPEG](https://github.com/AlexxIT/go2rtc#module-mjpeg)"
-      tags: [ Consume stream ]
+      summary: Stream video as ASCII art
+      description: Streams a video source as ASCII art with various configurable parameters.
       parameters:
-        - $ref: "#/components/parameters/stream_src_path"
+        - name: src
+          in: query
+          required: true
+          description: Video source identifier
+          schema:
+            type: string
+          example: gamazda
         - name: color
           in: query
-          description: Foreground mode (`8`, `256`, `rgb` or ANSI SGR code)
           required: false
-          schema: { type: string }
+          description: Foreground color in xterm-256 color codes
+          schema:
+            type: string
+            enum: [ 256, 8 ]
+          example: "256"
         - name: back
           in: query
-          description: Background mode (`8`, `256`, `rgb` or ANSI SGR code)
           required: false
-          schema: { type: string }
+          description: Background color in xterm-256 color codes
+          schema:
+            type: string
+          example: "40" # black                                           
         - name: text
           in: query
-          description: Charset preset (empty/default, `block`) or custom characters
           required: false
-          schema: { type: string }
+          description: Character set to use for ASCII art
+          schema:
+            type: string
+        - name: width
+          in: query
+          required: false
+          description: Width of the output in characters
+          schema:
+            type: integer
+            minimum: 1
+          example: 100
+        - name: height
+          in: query
+          required: false
+          description: Height of the output in characters
+          schema:
+            type: integer
+            minimum: 1
+          example: 40
       responses:
-        "200":
-          description: OK
+        '200':
+          description: Successfully streaming video as ASCII art
           content:
-            text/plain: { example: "" }
-        "404":
-          description: Stream not found
-
-  /api/stream.y4m?src={src}:
-    get:
-      summary: Get stream in YUV4MPEG2 format (y4m)
-      tags: [ Consume stream ]
-      parameters:
-        - $ref: "#/components/parameters/stream_src_path"
-      responses:
-        "200":
-          description: OK
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Bad request, possible incorrect parameters
           content:
-            application/octet-stream: { example: "" }
-        "404":
-          description: Stream not found
-
-  /api/stream.ts?src={src}:
-    get:
-      summary: Get stream in MPEG-TS format
-      tags: [ Consume stream ]
-      parameters:
-        - $ref: "#/components/parameters/stream_src_path"
-      responses:
-        "200":
-          description: OK
-          content:
-            video/mp2t: { example: "" }
-        "404":
-          description: Stream not found
-
-  /api/stream.aac?src={src}:
-    get:
-      summary: Get stream audio in AAC (ADTS) format
-      tags: [ Consume stream ]
-      parameters:
-        - $ref: "#/components/parameters/stream_src_path"
-      responses:
-        "200":
-          description: OK
-          content:
-            audio/aac: { example: "" }
-        "404":
-          description: Stream not found
-
-  /api/stream.flv?src={src}:
-    get:
-      summary: Get stream in FLV format
-      tags: [ Consume stream ]
-      parameters:
-        - $ref: "#/components/parameters/stream_src_path"
-      responses:
-        "200":
-          description: OK
-          content:
-            video/x-flv: { example: "" }
-        "404":
-          description: Stream not found
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
 
   /api/frame.jpeg?src={src}:
     get:
