@@ -38,10 +38,26 @@ var keyframeCache = struct {
 }
 
 // Cache duration
-// TODO: Make it configurable
 var cacheDuration = 1 * time.Minute
+var cacheDefault = false
 
 func Init() {
+	var cfg struct {
+		Mod struct {
+			CacheDuration time.Duration `yaml:"cache_duration" json:"cache_duration"`
+			CacheDefault  *bool         `yaml:"cache_default" json:"cache_default"`
+		} `yaml:"mjpeg"`
+	}
+
+	cfg.Mod.CacheDuration = cacheDuration
+	app.LoadConfig(&cfg)
+	if cfg.Mod.CacheDuration > 0 {
+		cacheDuration = cfg.Mod.CacheDuration
+	}
+	if cfg.Mod.CacheDefault != nil {
+		cacheDefault = *cfg.Mod.CacheDefault
+	}
+
 	api.HandleFunc("api/frame.jpeg", handlerKeyframe)
 	api.HandleFunc("api/stream.mjpeg", handlerStream)
 	api.HandleFunc("api/stream.ascii", handlerStream)
@@ -62,13 +78,20 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	keyframeCache.RLock()
-	cachedEntry, found := keyframeCache.cache[src]
-	keyframeCache.RUnlock()
+	useCache := cacheDefault
+	if cachedRaw := r.URL.Query().Get("cached"); cachedRaw != "" {
+		useCache = cachedRaw != "0" && cachedRaw != "false"
+	}
 
-	if found && time.Since(cachedEntry.timestamp) < cacheDuration {
-		writeJPEGResponse(w, cachedEntry.frame)
-		return
+	if useCache {
+		keyframeCache.RLock()
+		cachedEntry, found := keyframeCache.cache[src]
+		keyframeCache.RUnlock()
+
+		if found && time.Since(cachedEntry.timestamp) < cacheDuration {
+			writeJPEGResponse(w, cachedEntry.frame)
+			return
+		}
 	}
 
 	cons := magic.NewKeyframe()
