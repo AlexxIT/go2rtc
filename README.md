@@ -1252,6 +1252,7 @@ API examples:
   - You can use `width`/`w` and/or `height`/`h` params 
   - You can use `rotate` param with `90`, `180`, `270` or `-90` values
   - You can use `hardware`/`hw` param [read more](https://github.com/AlexxIT/go2rtc/wiki/Hardware-acceleration)
+  - You can use `quality` param to change jpeg quality (for example `1`)
 
 **PS.** This module also supports streaming to the server console (terminal) in the **animated ASCII art** format ([read more](internal/mjpeg/README.md)).
 
