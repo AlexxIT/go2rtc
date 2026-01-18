@@ -1236,35 +1236,11 @@ Read more about [codecs filters](#codecs-filters).
 
 ## Module: MJPEG
 
-**Important.** For stream in MJPEG format, your source MUST contain the MJPEG codec. If your stream has an MJPEG codec, you can receive **MJPEG stream** or **JPEG snapshots** via API.
+- This module can provide and receive streams in MJPEG format.
+- This module is also responsible for receiving snapshots in JPEG format.
+- This module also supports streaming to the server console (terminal) in the **animated ASCII art** format.
 
-You can receive an MJPEG stream in several ways:
-
-- some cameras support MJPEG codec inside [RTSP stream](#source-rtsp) (ex. second stream for Dahua cameras)
-- some cameras have an HTTP link with [MJPEG stream](#source-http)
-- some cameras have an HTTP link with snapshots - go2rtc can convert them to [MJPEG stream](#source-http)
-- you can convert H264/H265 stream from your camera via [FFmpeg integraion](#source-ffmpeg)
-
-With this example, your stream will have both H264 and MJPEG codecs:
-
-```yaml
-streams:
-  camera1:
-    - rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0
-    - ffmpeg:camera1#video=mjpeg
-```
-
-API examples:
-
-- MJPEG stream: `http://192.168.1.123:1984/api/stream.mjpeg?src=camera1`
-- JPEG snapshots: `http://192.168.1.123:1984/api/frame.jpeg?src=camera1`
-  - You can use `width`/`w` and/or `height`/`h` params 
-  - You can use `rotate` param with `90`, `180`, `270` or `-90` values
-  - You can use `hardware`/`hw` param [read more](https://github.com/AlexxIT/go2rtc/wiki/Hardware-acceleration)
-
-**PS.** This module also supports streaming to the server console (terminal) in the **animated ASCII art** format ([read more](internal/mjpeg/README.md)).
-
-[![](https://img.youtube.com/vi/sHj_3h_sX7M/mqdefault.jpg)](https://www.youtube.com/watch?v=sHj_3h_sX7M)
+*[read more](internal/mjpeg/README.md)*
 
 ## Module: Log
 
