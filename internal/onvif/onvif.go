@@ -74,8 +74,10 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 	log.Trace().Msgf("[onvif] server request %s %s:\n%s", r.Method, r.RequestURI, b)
 
 	switch operation {
-	case onvif.DeviceGetNetworkInterfaces, // important for Hass
+	case onvif.ServiceGetServiceCapabilities, // important for Hass
+		onvif.DeviceGetNetworkInterfaces, // important for Hass
 		onvif.DeviceGetSystemDateAndTime, // important for Hass
+		onvif.DeviceSetSystemDateAndTime, // return just OK
 		onvif.DeviceGetDiscoveryMode,
 		onvif.DeviceGetDNS,
 		onvif.DeviceGetHostname,
@@ -83,8 +85,10 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 		onvif.DeviceGetNetworkProtocols,
 		onvif.DeviceGetNTP,
 		onvif.DeviceGetScopes,
+		onvif.MediaGetVideoEncoderConfiguration,
 		onvif.MediaGetVideoEncoderConfigurations,
 		onvif.MediaGetAudioEncoderConfigurations,
+		onvif.MediaGetVideoEncoderConfigurationOptions,
 		onvif.MediaGetAudioSources,
 		onvif.MediaGetAudioSourceConfigurations:
 		b = onvif.StaticResponse(operation)
@@ -99,11 +103,6 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 	case onvif.DeviceGetDeviceInformation:
 		// important for Hass: SerialNumber (unique server ID)
 		b = onvif.GetDeviceInformationResponse("", "go2rtc", app.Version, r.Host)
-
-	case onvif.ServiceGetServiceCapabilities:
-		// important for Hass
-		// TODO: check path links to media
-		b = onvif.GetMediaServiceCapabilitiesResponse()
 
 	case onvif.DeviceSystemReboot:
 		b = onvif.StaticResponse(operation)
@@ -134,8 +133,7 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 	case onvif.MediaGetStreamUri:
 		host, _, err := net.SplitHostPort(r.Host)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			host = r.Host // in case of Host without port
 		}
 
 		uri := "rtsp://" + host + ":" + rtsp.Port + "/" + onvif.FindTagValue(b, "ProfileToken")
