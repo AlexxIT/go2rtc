@@ -221,9 +221,13 @@ func appendVideoEncoderConfiguration(e *Envelope, tag string) {
 	// empty `RateControl` important for UniFi Protect
 	e.Appendf(`<tt:%s token="vec">
 		<tt:Name>VEC</tt:Name>
+        <tt:UseCount>1</tt:UseCount>
 		<tt:Encoding>H264</tt:Encoding>
 		<tt:Resolution><tt:Width>1920</tt:Width><tt:Height>1080</tt:Height></tt:Resolution>
-		<tt:RateControl />
+        <tt:Quality>0</tt:Quality>
+		<tt:RateControl><tt:FrameRateLimit>30</tt:FrameRateLimit><tt:EncodingInterval>1</tt:EncodingInterval><tt:BitrateLimit>8192</tt:BitrateLimit></tt:RateControl>
+        <tt:H264><tt:GovLength>10</tt:GovLength><tt:H264Profile>Main</tt:H264Profile></tt:H264>
+        <tt:SessionTimeout>PT10S</tt:SessionTimeout>
 	</tt:%s>`, tag, tag)
 }
 
