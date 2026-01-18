@@ -73,6 +73,7 @@ var log zerolog.Logger
 
 func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 	stream, _ := streams.GetOrPatch(r.URL.Query())
+	src := r.URL.Query().Get("src")
 	if stream == nil {
 		http.Error(w, api.StreamNotFound, http.StatusNotFound)
 		return
