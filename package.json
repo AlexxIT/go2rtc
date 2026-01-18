@@ -1,7 +1,13 @@
 {
   "devDependencies": {
     "eslint": "^8.44.0",
-    "eslint-plugin-html": "^7.1.0"
+    "eslint-plugin-html": "^7.1.0",
+    "vitepress": "^2.0.0-alpha.15"
+  },
+  "scripts": {
+    "docs:dev": "vitepress dev .",
+    "docs:build": "vitepress build .",
+    "docs:preview": "vitepress preview ."
   },
   "eslintConfig": {
     "env": {
@@ -36,5 +42,8 @@
         }
       }
     ]
+  },
+  "dependencies": {
+    "@catppuccin/vitepress": "^0.1.2"
   }
 }
