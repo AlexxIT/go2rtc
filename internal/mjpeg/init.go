@@ -23,41 +23,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// CacheEntry represents a cached keyframe with its timestamp
-type CacheEntry struct {
-	frame     []byte
-	timestamp time.Time
-}
-
-// Global cache for keyframes with expiration
-var keyframeCache = struct {
-	sync.RWMutex
-	cache map[string]CacheEntry
-}{
-	cache: make(map[string]CacheEntry),
-}
-
-// Cache duration
-var cacheDuration = 1 * time.Minute
-var cacheDefault = false
-
 func Init() {
-	var cfg struct {
-		Mod struct {
-			CacheDuration time.Duration `yaml:"cache_duration" json:"cache_duration"`
-			CacheDefault  *bool         `yaml:"cache_default" json:"cache_default"`
-		} `yaml:"mjpeg"`
-	}
-
-	cfg.Mod.CacheDuration = cacheDuration
-	app.LoadConfig(&cfg)
-	if cfg.Mod.CacheDuration > 0 {
-		cacheDuration = cfg.Mod.CacheDuration
-	}
-	if cfg.Mod.CacheDefault != nil {
-		cacheDefault = *cfg.Mod.CacheDefault
-	}
-
 	api.HandleFunc("api/frame.jpeg", handlerKeyframe)
 	api.HandleFunc("api/stream.mjpeg", handlerStream)
 	api.HandleFunc("api/stream.ascii", handlerStream)
@@ -65,33 +31,44 @@ func Init() {
 
 	ws.HandleFunc("mjpeg", handlerWS)
 
-	go cleanupCache()
 	log = app.GetLogger("mjpeg")
 }
 
 var log zerolog.Logger
 
 func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
-	stream, _ := streams.GetOrPatch(r.URL.Query())
-	src := r.URL.Query().Get("src")
+	query := r.URL.Query()
+	stream, _ := streams.GetOrPatch(query)
 	if stream == nil {
 		http.Error(w, api.StreamNotFound, http.StatusNotFound)
 		return
 	}
 
-	useCache := cacheDefault
-	if cachedRaw := r.URL.Query().Get("cached"); cachedRaw != "" {
-		useCache = cachedRaw != "0" && cachedRaw != "false"
-	}
+	var b []byte
 
-	if useCache {
-		keyframeCache.RLock()
-		cachedEntry, found := keyframeCache.cache[src]
-		keyframeCache.RUnlock()
+	if s := query.Get("cache"); s != "" {
+		if timeout, err := time.ParseDuration(s); err == nil {
+			src := query.Get("src")
 
-		if found && time.Since(cachedEntry.timestamp) < cacheDuration {
-			writeJPEGResponse(w, cachedEntry.frame)
-			return
+			cacheMu.Lock()
+			entry, found := cache[src]
+			cacheMu.Unlock()
+
+			if found && time.Since(entry.timestamp) < timeout {
+				writeJPEGResponse(w, entry.payload)
+				return
+			}
+
+			defer func() {
+				entry = cacheEntry{payload: b, timestamp: time.Now()}
+				cacheMu.Lock()
+				if cache == nil {
+					cache = map[string]cacheEntry{src: entry}
+				} else {
+					cache[src] = entry
+				}
+				cacheMu.Unlock()
+			}()
 		}
 	}
 
@@ -105,7 +82,7 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 
 	once := &core.OnceBuffer{} // init and first frame
 	_, _ = cons.WriteTo(once)
-	b := once.Buffer()
+	b = once.Buffer()
 
 	stream.RemoveConsumer(cons)
 
@@ -113,7 +90,7 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 	case core.CodecH264, core.CodecH265:
 		ts := time.Now()
 		var err error
-		if b, err = ffmpeg.JPEGWithQuery(b, r.URL.Query()); err != nil {
+		if b, err = ffmpeg.JPEGWithQuery(b, query); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -122,12 +99,16 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 		b = mjpeg.FixJPEG(b)
 	}
 
-	// Cache the keyframe with timestamp
-	keyframeCache.Lock()
-	keyframeCache.cache[src] = CacheEntry{frame: b, timestamp: time.Now()}
-	keyframeCache.Unlock()
-
 	writeJPEGResponse(w, b)
+}
+
+var cache map[string]cacheEntry
+var cacheMu sync.Mutex
+
+// cacheEntry represents a cached keyframe with its timestamp
+type cacheEntry struct {
+	payload   []byte
+	timestamp time.Time
 }
 
 func writeJPEGResponse(w http.ResponseWriter, b []byte) {
@@ -140,19 +121,6 @@ func writeJPEGResponse(w http.ResponseWriter, b []byte) {
 
 	if _, err := w.Write(b); err != nil {
 		log.Error().Err(err).Caller().Send()
-	}
-}
-
-func cleanupCache() {
-	for {
-		time.Sleep(cacheDuration)
-		keyframeCache.Lock()
-		for src, entry := range keyframeCache.cache {
-			if time.Since(entry.timestamp) >= cacheDuration {
-				delete(keyframeCache.cache, src)
-			}
-		}
-		keyframeCache.Unlock()
 	}
 }
 
