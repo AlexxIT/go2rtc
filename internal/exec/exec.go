@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -26,6 +27,16 @@ import (
 )
 
 func Init() {
+	var cfg struct {
+		Mod struct {
+			AllowPaths []string `yaml:"allow_paths"`
+		} `yaml:"exec"`
+	}
+
+	app.LoadConfig(&cfg)
+
+	allowPaths = cfg.Mod.AllowPaths
+
 	rtsp.HandleFunc(func(conn *pkg.Conn) bool {
 		waitersMu.Lock()
 		waiter := waiters[conn.URL.Path]
@@ -45,9 +56,12 @@ func Init() {
 	})
 
 	streams.HandleFunc("exec", execHandle)
+	streams.MarkInsecure("exec")
 
 	log = app.GetLogger("exec")
 }
+
+var allowPaths []string
 
 func execHandle(rawURL string) (prod core.Producer, err error) {
 	rawURL, rawQuery, _ := strings.Cut(rawURL, "#")
@@ -73,6 +87,11 @@ func execHandle(rawURL string) (prod core.Producer, err error) {
 		debug: log.Debug().Enabled(),
 	}
 
+	if allowPaths != nil && !slices.Contains(allowPaths, cmd.Args[0]) {
+		_ = cmd.Close()
+		return nil, errors.New("exec: bin not in allow_paths: " + cmd.Args[0])
+	}
+
 	if s := query.Get("killsignal"); s != "" {
 		sig := syscall.Signal(core.Atoi(s))
 		cmd.Cancel = func() error {
@@ -89,10 +108,17 @@ func execHandle(rawURL string) (prod core.Producer, err error) {
 		return pcm.NewBackchannel(cmd, query.Get("audio"))
 	}
 
+	var timeout time.Duration
+	if s := query.Get("starttimeout"); s != "" {
+		timeout = time.Duration(core.Atoi(s)) * time.Second
+	} else {
+		timeout = 30 * time.Second
+	}
+
 	if path == "" {
 		prod, err = handlePipe(rawURL, cmd)
 	} else {
-		prod, err = handleRTSP(rawURL, cmd, path)
+		prod, err = handleRTSP(rawURL, cmd, path, timeout)
 	}
 
 	if err != nil {
@@ -141,7 +167,7 @@ func handlePipe(source string, cmd *shell.Command) (core.Producer, error) {
 	return prod, nil
 }
 
-func handleRTSP(source string, cmd *shell.Command, path string) (core.Producer, error) {
+func handleRTSP(source string, cmd *shell.Command, path string, timeout time.Duration) (core.Producer, error) {
 	if log.Trace().Enabled() {
 		cmd.Stdout = os.Stdout
 	}
@@ -167,11 +193,11 @@ func handleRTSP(source string, cmd *shell.Command, path string) (core.Producer, 
 		return nil, err
 	}
 
-	timeout := time.NewTimer(30 * time.Second)
-	defer timeout.Stop()
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
 
 	select {
-	case <-timeout.C:
+	case <-timer.C:
 		// haven't received data from app in timeout
 		log.Error().Str("source", source).Msg("[exec] timeout")
 		return nil, errors.New("exec: timeout")

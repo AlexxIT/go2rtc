@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
@@ -43,7 +44,16 @@ func streamOnvif(rawURL string) (core.Producer, error) {
 		return nil, err
 	}
 
+	// Append hash-based arguments to the retrieved URI
+	if i := strings.IndexByte(rawURL, '#'); i > 0 {
+		uri += rawURL[i:]
+	}
+
 	log.Debug().Msgf("[onvif] new uri=%s", uri)
+
+	if err = streams.Validate(uri); err != nil {
+		return nil, err
+	}
 
 	return streams.GetProducer(uri)
 }
@@ -64,8 +74,10 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 	log.Trace().Msgf("[onvif] server request %s %s:\n%s", r.Method, r.RequestURI, b)
 
 	switch operation {
-	case onvif.DeviceGetNetworkInterfaces, // important for Hass
+	case onvif.ServiceGetServiceCapabilities, // important for Hass
+		onvif.DeviceGetNetworkInterfaces, // important for Hass
 		onvif.DeviceGetSystemDateAndTime, // important for Hass
+		onvif.DeviceSetSystemDateAndTime, // return just OK
 		onvif.DeviceGetDiscoveryMode,
 		onvif.DeviceGetDNS,
 		onvif.DeviceGetHostname,
@@ -73,8 +85,10 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 		onvif.DeviceGetNetworkProtocols,
 		onvif.DeviceGetNTP,
 		onvif.DeviceGetScopes,
+		onvif.MediaGetVideoEncoderConfiguration,
 		onvif.MediaGetVideoEncoderConfigurations,
 		onvif.MediaGetAudioEncoderConfigurations,
+		onvif.MediaGetVideoEncoderConfigurationOptions,
 		onvif.MediaGetAudioSources,
 		onvif.MediaGetAudioSourceConfigurations:
 		b = onvif.StaticResponse(operation)
@@ -89,11 +103,6 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 	case onvif.DeviceGetDeviceInformation:
 		// important for Hass: SerialNumber (unique server ID)
 		b = onvif.GetDeviceInformationResponse("", "go2rtc", app.Version, r.Host)
-
-	case onvif.ServiceGetServiceCapabilities:
-		// important for Hass
-		// TODO: check path links to media
-		b = onvif.GetMediaServiceCapabilitiesResponse()
 
 	case onvif.DeviceSystemReboot:
 		b = onvif.StaticResponse(operation)
@@ -124,8 +133,7 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 	case onvif.MediaGetStreamUri:
 		host, _, err := net.SplitHostPort(r.Host)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			host = r.Host // in case of Host without port
 		}
 
 		uri := "rtsp://" + host + ":" + rtsp.Port + "/" + onvif.FindTagValue(b, "ProfileToken")
@@ -156,21 +164,21 @@ func apiOnvif(w http.ResponseWriter, r *http.Request) {
 	var items []*api.Source
 
 	if src == "" {
-		urls, err := onvif.DiscoveryStreamingURLs()
+		devices, err := onvif.DiscoveryStreamingDevices()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		for _, rawURL := range urls {
-			u, err := url.Parse(rawURL)
+		for _, device := range devices {
+			u, err := url.Parse(device.URL)
 			if err != nil {
-				log.Warn().Str("url", rawURL).Msg("[onvif] broken")
+				log.Warn().Str("url", device.URL).Msg("[onvif] broken")
 				continue
 			}
 
 			if u.Scheme != "http" {
-				log.Warn().Str("url", rawURL).Msg("[onvif] unsupported")
+				log.Warn().Str("url", device.URL).Msg("[onvif] unsupported")
 				continue
 			}
 
@@ -181,7 +189,11 @@ func apiOnvif(w http.ResponseWriter, r *http.Request) {
 				u.Path = ""
 			}
 
-			items = append(items, &api.Source{Name: u.Host, URL: u.String()})
+			items = append(items, &api.Source{
+				Name: u.Host,
+				URL:  u.String(),
+				Info: device.Name + " " + device.Hardware,
+			})
 		}
 	} else {
 		client, err := onvif.NewClient(src)

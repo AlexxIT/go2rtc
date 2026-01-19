@@ -32,7 +32,7 @@ func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiv
 		panic(core.Caller())
 	}
 
-	localTrack := c.getSenderTrack(media.ID)
+	localTrack := c.GetSenderTrack(media.ID)
 	if localTrack == nil {
 		return errors.New("webrtc: can't get track")
 	}

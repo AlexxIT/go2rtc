@@ -3,6 +3,7 @@ package onvif
 import (
 	"fmt"
 	"net"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -10,6 +11,12 @@ import (
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 )
+
+type DiscoveryDevice struct {
+	URL      string
+	Name     string
+	Hardware string
+}
 
 func FindTagValue(b []byte, tag string) string {
 	re := regexp.MustCompile(`(?s)<(?:\w+:)?` + tag + `\b[^>]*>([^<]+)`)
@@ -26,7 +33,8 @@ func UUID() string {
 	return s[:8] + "-" + s[8:12] + "-" + s[12:16] + "-" + s[16:20] + "-" + s[20:]
 }
 
-func DiscoveryStreamingURLs() ([]string, error) {
+// DiscoveryStreamingDevices return list of tuple (onvif_url, name, hardware)
+func DiscoveryStreamingDevices() ([]DiscoveryDevice, error) {
 	conn, err := net.ListenUDP("udp4", nil)
 	if err != nil {
 		return nil, err
@@ -60,11 +68,9 @@ func DiscoveryStreamingURLs() ([]string, error) {
 		return nil, err
 	}
 
-	if err = conn.SetReadDeadline(time.Now().Add(time.Second * 3)); err != nil {
-		return nil, err
-	}
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 
-	var urls []string
+	var devices []DiscoveryDevice
 
 	b := make([]byte, 8192)
 	for {
@@ -80,21 +86,35 @@ func DiscoveryStreamingURLs() ([]string, error) {
 			continue
 		}
 
-		url := FindTagValue(b[:n], "XAddrs")
-		if url == "" {
+		device := DiscoveryDevice{
+			URL: FindTagValue(b[:n], "XAddrs"),
+		}
+
+		if device.URL == "" {
 			continue
 		}
 
 		// fix some buggy cameras
 		// <wsdd:XAddrs>http://0.0.0.0:8080/onvif/device_service</wsdd:XAddrs>
-		if strings.HasPrefix(url, "http://0.0.0.0") {
-			url = "http://" + addr.IP.String() + url[14:]
+		if s, ok := strings.CutPrefix(device.URL, "http://0.0.0.0"); ok {
+			device.URL = "http://" + addr.IP.String() + s
 		}
 
-		urls = append(urls, url)
+		// try to find the camera name and model (hardware)
+		scopes := FindTagValue(b[:n], "Scopes")
+		device.Name = findScope(scopes, "onvif://www.onvif.org/name/")
+		device.Hardware = findScope(scopes, "onvif://www.onvif.org/hardware/")
+
+		devices = append(devices, device)
 	}
 
-	return urls, nil
+	return devices, nil
+}
+
+func findScope(s, prefix string) string {
+	s = core.Between(s, prefix, " ")
+	s, _ = url.QueryUnescape(s)
+	return s
 }
 
 func atoi(s string) int {
@@ -128,4 +148,15 @@ func GetPosixTZ(current time.Time) string {
 	}
 
 	return prefix + fmt.Sprintf("%02d:%02d", offset/60, offset%60)
+}
+
+func GetPath(urlOrPath, defPath string) string {
+	if urlOrPath == "" || urlOrPath[0] == '/' {
+		return defPath
+	}
+	u, err := url.Parse(urlOrPath)
+	if err != nil {
+		return defPath
+	}
+	return GetPath(u.Path, defPath)
 }

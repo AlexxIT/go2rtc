@@ -2,6 +2,7 @@ package webrtc
 
 import (
 	"errors"
+	"net"
 	"strings"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
@@ -26,24 +27,49 @@ func Init() {
 
 	cfg.Mod.Listen = ":8555"
 	cfg.Mod.IceServers = []pion.ICEServer{
-		{URLs: []string{"stun:stun.l.google.com:19302"}},
+		{URLs: []string{"stun:stun.cloudflare.com:3478", "stun:stun.l.google.com:19302"}},
 	}
 
 	app.LoadConfig(&cfg)
 
 	log = app.GetLogger("webrtc")
 
-	filters = cfg.Mod.Filters
+	if log.Debug().Enabled() {
+		itfs, _ := net.Interfaces()
+		for _, itf := range itfs {
+			addrs, _ := itf.Addrs()
+			log.Debug().Msgf("[webrtc] interface %+v addrs %v", itf, addrs)
+		}
+	}
 
 	address, network, _ := strings.Cut(cfg.Mod.Listen, "/")
 	for _, candidate := range cfg.Mod.Candidates {
 		AddCandidate(network, candidate)
+
+		if strings.HasPrefix(candidate, "stun:") && stuns == nil {
+			for _, ice := range cfg.Mod.IceServers {
+				for _, url := range ice.URLs {
+					if strings.HasPrefix(url, "stun:") {
+						stuns = append(stuns, url[5:])
+					}
+				}
+			}
+		}
+	}
+
+	webrtc.OnNewListener = func(ln any) {
+		switch ln := ln.(type) {
+		case *net.TCPListener:
+			log.Info().Stringer("addr", ln.Addr()).Msg("[webrtc] listen tcp")
+		case *net.UDPConn:
+			log.Info().Stringer("addr", ln.LocalAddr()).Msg("[webrtc] listen udp")
+		}
 	}
 
 	var err error
 
 	// create pionAPI with custom codecs list and custom network settings
-	serverAPI, err = webrtc.NewServerAPI(network, address, &filters)
+	serverAPI, err = webrtc.NewServerAPI(network, address, &cfg.Mod.Filters)
 	if err != nil {
 		log.Error().Err(err).Caller().Send()
 		return
@@ -53,7 +79,6 @@ func Init() {
 	clientAPI = serverAPI
 
 	if address != "" {
-		log.Info().Str("addr", cfg.Mod.Listen).Msg("[webrtc] listen")
 		clientAPI, _ = webrtc.NewAPI()
 	}
 
@@ -95,7 +120,7 @@ func asyncHandler(tr *ws.Transport, msg *ws.Message) (err error) {
 
 	query := tr.Request.URL.Query()
 	if name := query.Get("src"); name != "" {
-		stream = streams.GetOrPatch(query)
+		stream, _ = streams.GetOrPatch(query)
 		mode = core.ModePassiveConsumer
 		log.Debug().Str("src", name).Msg("[webrtc] new consumer")
 	} else if name = query.Get("dst"); name != "" {

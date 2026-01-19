@@ -44,7 +44,9 @@ const (
 	TagData  = 18
 
 	CodecAAC = 10
-	CodecAVC = 7
+
+	CodecH264 = 7
+	CodecHEVC = 12
 )
 
 const (
@@ -207,15 +209,18 @@ func (c *Producer) probe() error {
 			} else {
 				_ = pkt.Payload[0] >> 4 // FrameType
 
-				if codecID := pkt.Payload[0] & 0b1111; codecID != CodecAVC {
-					continue
-				}
-
 				if packetType := pkt.Payload[1]; packetType != PacketTypeAVCHeader { // check if header
 					continue
 				}
 
-				codec = h264.ConfigToCodec(pkt.Payload[5:])
+				switch codecID := pkt.Payload[0] & 0b1111; codecID {
+				case CodecH264:
+					codec = h264.ConfigToCodec(pkt.Payload[5:])
+				case CodecHEVC:
+					codec = h265.ConfigToCodec(pkt.Payload[5:])
+				default:
+					continue
+				}
 			}
 
 			media := &core.Media{
@@ -294,8 +299,12 @@ func (c *Producer) readPacket() (*rtp.Packet, error) {
 	return pkt, nil
 }
 
-func TimeToRTP(timeMS uint32, clockRate uint32) uint32 {
-	return timeMS * clockRate / 1000
+// TimeToRTP convert time in milliseconds to RTP time
+func TimeToRTP(timeMS, clockRate uint32) uint32 {
+	// for clockRates 90000, 16000, 8000, etc. - we can use:
+	//     return timeMS * (clockRate / 1000)
+	// but for clockRates 44100, 22050, 11025 - we should use:
+	return uint32(uint64(timeMS) * uint64(clockRate) / 1000)
 }
 
 func isExHeader(data []byte) bool {

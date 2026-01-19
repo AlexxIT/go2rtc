@@ -8,8 +8,26 @@ import (
 	"github.com/pion/rtp"
 )
 
+const ADTSHeaderSize = 7
+
+func ADTSHeaderLen(b []byte) int {
+	if HasCRC(b) {
+		return 9 // 7 bytes header + 2 bytes CRC
+	}
+	return ADTSHeaderSize
+}
+
 func IsADTS(b []byte) bool {
-	return len(b) > 7 && b[0] == 0xFF && b[1]&0xF6 == 0xF0
+	// AAAAAAAA AAAABCCD EEFFFFGH HHIJKLMM MMMMMMMM MMMOOOOO OOOOOOPP (QQQQQQQQ QQQQQQQQ)
+	// A	12	Syncword, all bits must be set to 1.
+	// C	2	Layer, always set to 0.
+	return len(b) >= ADTSHeaderSize && b[0] == 0xFF && b[1]&0b1111_0110 == 0xF0
+}
+
+func HasCRC(b []byte) bool {
+	// AAAAAAAA AAAABCCD EEFFFFGH HHIJKLMM MMMMMMMM MMMOOOOO OOOOOOPP (QQQQQQQQ QQQQQQQQ)
+	// D	1	Protection absence, set to 1 if there is no CRC and 0 if there is CRC.
+	return b[1]&0b1 == 0
 }
 
 func ADTSToCodec(b []byte) *core.Codec {
@@ -58,7 +76,7 @@ func ADTSToCodec(b []byte) *core.Codec {
 func ReadADTSSize(b []byte) uint16 {
 	// AAAAAAAA AAAABCCD EEFFFFGH HHIJKLMM MMMMMMMM MMMOOOOO OOOOOOPP (QQQQQQQQ QQQQQQQQ)
 	_ = b[5] // bounds
-	return uint16(b[3]&0x03)<<(8+3) | uint16(b[4])<<3 | uint16(b[5]>>5)
+	return uint16(b[3]&0b11)<<11 | uint16(b[4])<<3 | uint16(b[5]>>5)
 }
 
 func WriteADTSSize(b []byte, size uint16) {
