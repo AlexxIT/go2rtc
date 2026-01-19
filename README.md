@@ -10,7 +10,7 @@
 
 Ultimate camera streaming application with support for RTSP, WebRTC, HomeKit, FFmpeg, RTMP, etc.
 
-![](assets/go2rtc.png)
+![go2rtc overview](assets/go2rtc.png)
 
 - zero-dependency and zero-config [small app](#go2rtc-binary) for all OS (Windows, macOS, Linux, ARM)
 - zero-delay for many supported protocols (lowest possible streaming latency)
@@ -114,8 +114,8 @@ Ultimate camera streaming application with support for RTSP, WebRTC, HomeKit, FF
 - [Codecs madness](#codecs-madness)
 - [Codecs negotiation](#codecs-negotiation)
 - [Projects using go2rtc](#projects-using-go2rtc)
-- [Camera experience](#cameras-experience)
-- [TIPS](#tips)
+- [Camera experience](#camera-experience)
+- [Tips](#tips)
 
 # Fast start
 
@@ -160,7 +160,7 @@ The Docker container [`alexxit/go2rtc`](https://hub.docker.com/r/alexxit/go2rtc)
 
 ## go2rtc: Home Assistant add-on
 
-[![](https://my.home-assistant.io/badges/supervisor_addon.svg)](https://my.home-assistant.io/redirect/supervisor_addon/?addon=a889bffc_go2rtc&repository_url=https%3A%2F%2Fgithub.com%2FAlexxIT%2Fhassio-addons)
+[![Open your Home Assistant instance and show the add add-on repository dialog with a specific repository URL pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FAlexxIT%2Fhassio-addons)
 
 1. Install Add-On:
     - Settings > Add-ons > Plus > Repositories > Add `https://github.com/AlexxIT/hassio-addons`
@@ -1342,7 +1342,7 @@ Some examples:
 
 [1]: https://apps.apple.com/app/home-assistant/id1099568401
 
-- `HTTP*` - HTTP Progressive Streaming, not related to [progressive download](https://en.wikipedia.org/wiki/Progressive_download), because the file has no size and no end 
+- `HTTP*` - HTTP Progressive Streaming, not related to [progressive download](https://en.wikipedia.org/wiki/Progressive_download), because the file has no size and no end
 - `WebRTC H265` - supported in [Chrome 136+](https://developer.chrome.com/release-notes/136), supported in [Safari 18+](https://developer.apple.com/documentation/safari-release-notes/safari-18-release-notes)
 - `MSE iPhone` - supported in [iOS 17.1+](https://webkit.org/blog/14735/webkit-features-in-safari-17-1/)
 
@@ -1422,7 +1422,7 @@ streams:
 
 **go2rtc** automatically matches codecs for your browser and all your stream sources. This is called **multi-source two-way codec negotiation**. And this is one of the main features of this app.
 
-![](assets/codecs.svg)
+![Codec negotiation](assets/codecs.svg)
 
 **PS.** You can select `PCMU` or `PCMA` codec in camera settings and not use transcoding at all. Or you can select `AAC` codec for main stream and `PCMU` codec for second stream and add both RTSP to YAML config, this also will work fine.
 
