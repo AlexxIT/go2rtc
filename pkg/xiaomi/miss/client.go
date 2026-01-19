@@ -139,11 +139,14 @@ const (
 	ModelLoockV2 = "loock.cateye.v02"
 	ModelC200    = "chuangmi.camera.046c04"
 	ModelC300    = "chuangmi.camera.72ac1"
+	// ModelXiaofang looks like it has the same firmware as the ModelDafang.
+	// There is also an older model "isa.camera.isc5" that only works with the legacy protocol.
+	ModelXiaofang = "isa.camera.isc5c1"
 )
 
 func (c *Client) StartMedia(channel, quality, audio string) error {
 	switch c.model {
-	case ModelDafang:
+	case ModelDafang, ModelXiaofang:
 		var q, a byte
 		if quality == "sd" {
 			q = 1 // 0 - hd, 1 - sd, default - hd
@@ -207,7 +210,7 @@ func (c *Client) StartSpeaker() error {
 // SpeakerCodec if the camera model has a non-standard two-way codec.
 func (c *Client) SpeakerCodec() uint32 {
 	switch c.model {
-	case ModelDafang, "isa.camera.hlc6":
+	case ModelDafang, ModelXiaofang, "isa.camera.hlc6":
 		return codecPCM
 	case "chuangmi.camera.72ac1":
 		return codecOPUS
@@ -240,7 +243,7 @@ func (c *Client) ReadPacket() (*Packet, error) {
 	}
 
 	switch c.model {
-	case ModelDafang, ModelLoockV2:
+	case ModelDafang, ModelXiaofang, ModelLoockV2:
 		// Dafang has ts in sec
 		// LoockV2 has ts in msec for video, but zero ts for audio
 		pkt.Timestamp = uint64(time.Now().UnixMilli())
