@@ -33,7 +33,7 @@ func NewClient(rawURL string) (*Client, error) {
 			`{"public_key":"%s","sign":"%s","account":"admin"}`,
 			query.Get("client_public"), query.Get("sign"),
 		)
-	} else if model == ModelXiaobai {
+	} else if model == ModelMijia || model == ModelXiaobai {
 		username = "admin"
 		password = query.Get("password")
 	} else if model == ModelXiaofang {
@@ -114,17 +114,49 @@ func (c *Client) ReadPacket() (hdr, payload []byte, err error) {
 	return
 }
 
+const (
+	cmdVideoStart    = 0x01ff
+	cmdVideoStop     = 0x02ff
+	cmdAudioStart    = 0x0300
+	cmdAudioStop     = 0x0301
+	cmdStreamCtrlReq = 0x0320
+)
+
+var empty = []byte(`{}`)
+
 func (c *Client) StartMedia(video, audio string) error {
 	switch c.model {
 	case ModelAqaraG2:
-		return c.WriteCommand(0x01ff, []byte(`{}`))
+		return c.WriteCommand(cmdVideoStart, empty)
+
+	case ModelMijia:
+		// 0 - auto, 1 - low, 3 - hd
+		switch video {
+		case "", "hd":
+			video = "3"
+		case "sd":
+			video = "1" // 2 is also low quality
+		case "auto":
+			video = "0"
+		}
+		s := fmt.Sprintf(`{"videoquality":%s}`, video)
+
+		// quality after start
+		return errors.Join(
+			c.WriteCommand(cmdAudioStart, empty),
+			c.WriteCommand(cmdVideoStart, empty),
+			c.WriteCommand(cmdStreamCtrlReq, []byte(s)),
+		)
 
 	case ModelXiaobai:
 		// 00030000 7b7d  audio on
 		// 01030000 7b7d  audio off
-		if err := c.WriteCommand(0x0300, []byte(`{}`)); err != nil {
-			return err
-		}
+		// 20030000 0000000001000000  fhd (1920x1080)
+		// 20030000 0000000002000000  hd (1280x720)
+		// 20030000 0000000004000000  low (640x360)
+		// 20030000 00000000ff000000  auto (1920x1080)
+		// ff010000 7b7d  video tart
+		// ff020000 7b7d  video stop
 
 		var b byte
 		switch video {
@@ -137,17 +169,13 @@ func (c *Client) StartMedia(video, audio string) error {
 		case "auto":
 			b = 0xff
 		}
-		// 20030000 0000000001000000  fhd (1920x1080)
-		// 20030000 0000000002000000  hd (1280x720)
-		// 20030000 0000000004000000  low (640x360)
-		// 20030000 00000000ff000000  auto (1920x1080)
-		if err := c.WriteCommand(0x0320, []byte{0, 0, 0, 0, b, 0, 0, 0}); err != nil {
-			return err
-		}
 
-		// ff010000 7b7d  video tart
-		// ff020000 7b7d  video stop
-		return c.WriteCommand(0x01ff, []byte(`{}`))
+		// quality before start
+		return errors.Join(
+			c.WriteCommand(cmdAudioStart, empty),
+			c.WriteCommand(cmdStreamCtrlReq, []byte{0, 0, 0, 0, b, 0, 0, 0}),
+			c.WriteCommand(cmdVideoStart, empty),
+		)
 
 	case ModelXiaofang:
 		// 00010000 4943414d 95010400000000000000000600000000000000d20400005a07 - 90k bitrate
@@ -170,8 +198,8 @@ func (c *Client) StartMedia(video, audio string) error {
 
 func (c *Client) StopMedia() error {
 	return errors.Join(
-		c.WriteCommand(0x02ff, []byte(`{}`)),
-		c.WriteCommand(0x02ff, make([]byte, 8)),
+		c.WriteCommand(cmdVideoStop, empty),
+		c.WriteCommand(cmdVideoStop, make([]byte, 8)),
 	)
 }
 
@@ -205,6 +233,7 @@ func DecodeVideo(data, key []byte) ([]byte, error) {
 const (
 	ModelAqaraG2  = "lumi.camera.gwagl01"
 	ModelLoockV1  = "loock.cateye.v01"
+	ModelMijia    = "chuangmi.camera.v2" // support miss format for new fw and legacy format for old fw
 	ModelXiaobai  = "chuangmi.camera.xiaobai"
 	ModelXiaofang = "isa.camera.isc5"
 )
