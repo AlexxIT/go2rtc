@@ -20,6 +20,7 @@ import (
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/mpegts"
+	"github.com/AlexxIT/go2rtc/pkg/pcm"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 )
 
@@ -140,6 +141,12 @@ func (c *Client) newDectypter(res *http.Response, brand, username, password stri
 		username = "admin"
 	}
 
+	if strings.Contains(exchange, `username="none"`) {
+		// https://nvd.nist.gov/vuln/detail/CVE-2022-37255
+		username = "none"
+		password = "TPL075526460603"
+	}
+
 	key := md5.Sum([]byte(nonce + ":" + password))
 	iv := md5.Sum([]byte(username + ":" + nonce))
 
@@ -158,8 +165,9 @@ func (c *Client) newDectypter(res *http.Response, brand, username, password stri
 		cbc.CryptBlocks(b, b)
 
 		// unpad
-		padSize := int(b[len(b)-1])
-		return b[:len(b)-padSize]
+		n := len(b)
+		padSize := int(b[n-1])
+		return b[:n-padSize]
 	}
 }
 
@@ -177,6 +185,8 @@ func (c *Client) SetupStream() (err error) {
 func (c *Client) Handle() error {
 	rd := multipart.NewReader(c.conn1, "--device-stream-boundary--")
 	demux := mpegts.NewDemuxer()
+
+	var transcode func([]byte) []byte
 
 	for {
 		p, err := rd.NextRawPart()
@@ -217,6 +227,23 @@ func (c *Client) Handle() error {
 			}
 			if err2 != nil {
 				return err2
+			}
+
+			if pkt.PayloadType == mpegts.StreamTypePCMUTapo {
+				// TODO: rewrite this part in the future
+				// Some cameras in the new firmware began to use PCMU/16000.
+				// https://github.com/AlexxIT/go2rtc/issues/1954
+				// I don't know why Tapo considers this an improvement. The codec is no better than the previous one.
+				// Unfortunately, we don't know in advance what codec the camera will use.
+				// Therefore, it's easier to transcode to a standard codec that all Tapo cameras have.
+				if transcode == nil {
+					transcode = pcm.Transcode(
+						&core.Codec{Name: core.CodecPCMA, ClockRate: 8000},
+						&core.Codec{Name: core.CodecPCMU, ClockRate: 16000},
+					)
+				}
+				pkt.PayloadType = mpegts.StreamTypePCMATapo
+				pkt.Payload = transcode(pkt.Payload)
 			}
 
 			for _, receiver := range c.receivers {
@@ -292,12 +319,12 @@ func dial(req *http.Request, brand, username, password string) (net.Conn, *http.
 		return nil, nil, err
 	}
 	_, _ = io.Copy(io.Discard, res.Body) // discard leftovers
-	_ = res.Body.Close() // ignore response body
+	_ = res.Body.Close()                 // ignore response body
 
 	auth := res.Header.Get("WWW-Authenticate")
 
 	if res.StatusCode != http.StatusUnauthorized || !strings.HasPrefix(auth, "Digest") {
-		return nil, nil, fmt.Errorf("Expected StatusCode to be %d, received %d", http.StatusUnauthorized, res.StatusCode)
+		return nil, nil, errors.New("tapo: wrond status: " + res.Status)
 	}
 
 	if brand == "tapo" && password == "" {

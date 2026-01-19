@@ -91,7 +91,7 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stream := streams.GetOrPatch(query)
+	stream, _ := streams.GetOrPatch(query)
 	if stream == nil {
 		http.Error(w, api.StreamNotFound, http.StatusNotFound)
 		return

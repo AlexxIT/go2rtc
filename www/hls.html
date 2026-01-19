@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>go2rtc - HLS</title>
+    <title>hls - go2rtc</title>
     <style>
         body {
             background-color: black;
@@ -24,6 +24,7 @@
     const url = new URL('api/stream.m3u8' + location.search, location.href);
 
     const video = document.getElementById('video');
+    /* global Hls */
     if (Hls.isSupported()) {
         const hls = new Hls();
         hls.loadSource(url.toString());

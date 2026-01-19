@@ -161,21 +161,21 @@ func (c *Conn) AddCandidate(candidate string) error {
 	return c.pc.AddICECandidate(webrtc.ICECandidateInit{Candidate: candidate})
 }
 
-func (c *Conn) getTranseiver(mid string) *webrtc.RTPTransceiver {
-	for _, tr := range c.pc.GetTransceivers() {
-		if tr.Mid() == mid {
-			return tr
-		}
-	}
-	return nil
-}
-
-func (c *Conn) getSenderTrack(mid string) *Track {
+func (c *Conn) GetSenderTrack(mid string) *Track {
 	if tr := c.getTranseiver(mid); tr != nil {
 		if s := tr.Sender(); s != nil {
 			if t := s.Track().(*Track); t != nil {
 				return t
 			}
+		}
+	}
+	return nil
+}
+
+func (c *Conn) getTranseiver(mid string) *webrtc.RTPTransceiver {
+	for _, tr := range c.pc.GetTransceivers() {
+		if tr.Mid() == mid {
+			return tr
 		}
 	}
 	return nil

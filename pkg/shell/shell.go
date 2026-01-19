@@ -3,8 +3,6 @@ package shell
 import (
 	"os"
 	"os/signal"
-	"path/filepath"
-	"regexp"
 	"strings"
 	"syscall"
 )
@@ -36,39 +34,6 @@ func QuoteSplit(s string) []string {
 	}
 
 	return a
-}
-
-// ReplaceEnvVars - support format ${CAMERA_PASSWORD} and ${RTSP_USER:admin}
-func ReplaceEnvVars(text string) string {
-	re := regexp.MustCompile(`\${([^}{]+)}`)
-	return re.ReplaceAllStringFunc(text, func(match string) string {
-		key := match[2 : len(match)-1]
-
-		var def string
-		var dok bool
-
-		if i := strings.IndexByte(key, ':'); i > 0 {
-			key, def = key[:i], key[i+1:]
-			dok = true
-		}
-
-		if dir, vok := os.LookupEnv("CREDENTIALS_DIRECTORY"); vok {
-			value, err := os.ReadFile(filepath.Join(dir, key))
-			if err == nil {
-				return strings.TrimSpace(string(value))
-			}
-		}
-
-		if value, vok := os.LookupEnv(key); vok {
-			return value
-		}
-
-		if dok {
-			return def
-		}
-
-		return match
-	})
 }
 
 func RunUntilSignal() {

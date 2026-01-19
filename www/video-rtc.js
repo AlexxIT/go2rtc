@@ -71,7 +71,7 @@ export class VideoRTC extends HTMLElement {
          */
         this.pcConfig = {
             bundlePolicy: 'max-bundle',
-            iceServers: [{urls: 'stun:stun.l.google.com:19302'}],
+            iceServers: [{urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.l.google.com:19302']}],
             sdpSemantics: 'unified-plan',  // important for Chromecast 1
         };
 
@@ -185,7 +185,7 @@ export class VideoRTC extends HTMLElement {
     /** @param {Function} isSupported */
     codecs(isSupported) {
         return this.CODECS
-            .filter(codec => this.media.indexOf(codec.indexOf('vc1') > 0 ? 'video' : 'audio') >= 0)
+            .filter(codec => this.media.includes(codec.includes('vc1') ? 'video' : 'audio'))
             .filter(codec => isSupported(`video/mp4; codecs="${codec}"`)).join();
     }
 
@@ -249,7 +249,22 @@ export class VideoRTC extends HTMLElement {
         this.appendChild(this.video);
 
         this.video.addEventListener('error', ev => {
-            console.warn(ev);
+            const err = this.video.error;
+            // https://developer.mozilla.org/en-US/docs/Web/API/MediaError/code
+            const MEDIA_ERRORS = {
+                1: 'MEDIA_ERR_ABORTED',
+                2: 'MEDIA_ERR_NETWORK',
+                3: 'MEDIA_ERR_DECODE',
+                4: 'MEDIA_ERR_SRC_NOT_SUPPORTED'
+            };
+            console.error('[VideoRTC] Video error:', {
+                error: err ? MEDIA_ERRORS[err.code] : 'unknown',
+                message: err ? err.message : 'unknown',
+                codecs: this.mseCodecs || 'not set',
+                readyState: this.video.readyState,
+                networkState: this.video.networkState,
+                currentTime: this.video.currentTime
+            });
             if (this.ws) this.ws.close(); // run reconnect for broken MSE stream
         });
 
@@ -350,23 +365,23 @@ export class VideoRTC extends HTMLElement {
 
         const modes = [];
 
-        if (this.mode.indexOf('mse') >= 0 && ('MediaSource' in window || 'ManagedMediaSource' in window)) {
+        if (this.mode.includes('mse') && ('MediaSource' in window || 'ManagedMediaSource' in window)) {
             modes.push('mse');
             this.onmse();
-        } else if (this.mode.indexOf('hls') >= 0 && this.video.canPlayType('application/vnd.apple.mpegurl')) {
+        } else if (this.mode.includes('hls') && this.video.canPlayType('application/vnd.apple.mpegurl')) {
             modes.push('hls');
             this.onhls();
-        } else if (this.mode.indexOf('mp4') >= 0) {
+        } else if (this.mode.includes('mp4')) {
             modes.push('mp4');
             this.onmp4();
         }
 
-        if (this.mode.indexOf('webrtc') >= 0 && 'RTCPeerConnection' in window) {
+        if (this.mode.includes('webrtc') && 'RTCPeerConnection' in window) {
             modes.push('webrtc');
             this.onwebrtc();
         }
 
-        if (this.mode.indexOf('mjpeg') >= 0) {
+        if (this.mode.includes('mjpeg')) {
             if (modes.length) {
                 this.onmessage['mjpeg'] = msg => {
                     if (msg.type !== 'error' || msg.value.indexOf(modes[0]) !== 0) return;
@@ -490,7 +505,7 @@ export class VideoRTC extends HTMLElement {
         const pc = new RTCPeerConnection(this.pcConfig);
 
         pc.addEventListener('icecandidate', ev => {
-            if (ev.candidate && this.mode.indexOf('webrtc/tcp') >= 0 && ev.candidate.protocol === 'udp') return;
+            if (ev.candidate && this.mode.includes('webrtc/tcp') && ev.candidate.protocol === 'udp') return;
 
             const candidate = ev.candidate ? ev.candidate.toJSON().candidate : '';
             this.send({type: 'webrtc/candidate', value: candidate});
@@ -518,7 +533,7 @@ export class VideoRTC extends HTMLElement {
         this.onmessage['webrtc'] = msg => {
             switch (msg.type) {
                 case 'webrtc/candidate':
-                    if (this.mode.indexOf('webrtc/tcp') >= 0 && msg.value.indexOf(' udp ') > 0) return;
+                    if (this.mode.includes('webrtc/tcp') && msg.value.includes(' udp ')) return;
 
                     pc.addIceCandidate({candidate: msg.value, sdpMid: '0'}).catch(er => {
                         console.warn(er);
@@ -530,7 +545,7 @@ export class VideoRTC extends HTMLElement {
                     });
                     break;
                 case 'error':
-                    if (msg.value.indexOf('webrtc/offer') < 0) return;
+                    if (!msg.value.includes('webrtc/offer')) return;
                     pc.close();
             }
         };
@@ -549,7 +564,7 @@ export class VideoRTC extends HTMLElement {
      */
     async createOffer(pc) {
         try {
-            if (this.media.indexOf('microphone') >= 0) {
+            if (this.media.includes('microphone')) {
                 const media = await navigator.mediaDevices.getUserMedia({audio: true});
                 media.getTracks().forEach(track => {
                     pc.addTransceiver(track, {direction: 'sendonly'});
@@ -560,7 +575,7 @@ export class VideoRTC extends HTMLElement {
         }
 
         for (const kind of ['video', 'audio']) {
-            if (this.media.indexOf(kind) >= 0) {
+            if (this.media.includes(kind)) {
                 pc.addTransceiver(kind, {direction: 'recvonly'});
             }
         }
@@ -580,12 +595,16 @@ export class VideoRTC extends HTMLElement {
 
             /** @type {MediaStream} */
             const stream = video2.srcObject;
-            if (stream.getVideoTracks().length > 0) rtcPriority += 0x220;
+            if (stream.getVideoTracks().length > 0) {
+                // not the best, but a pretty simple way to check a codec
+                const isH265Supported =  this.pc.remoteDescription.sdp.includes('H265/90000');
+                rtcPriority += isH265Supported ? 0x240 : 0x220;
+            }
             if (stream.getAudioTracks().length > 0) rtcPriority += 0x102;
 
-            if (this.mseCodecs.indexOf('hvc1.') >= 0) msePriority += 0x230;
-            if (this.mseCodecs.indexOf('avc1.') >= 0) msePriority += 0x210;
-            if (this.mseCodecs.indexOf('mp4a.') >= 0) msePriority += 0x101;
+            if (this.mseCodecs.includes('hvc1.')) msePriority += 0x230;
+            if (this.mseCodecs.includes('avc1.')) msePriority += 0x210;
+            if (this.mseCodecs.includes('mp4a.')) msePriority += 0x101;
 
             if (rtcPriority >= msePriority) {
                 this.video.srcObject = stream;

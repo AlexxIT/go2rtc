@@ -25,4 +25,5 @@ func Init() {
 
 		return url, nil
 	})
+	streams.MarkInsecure("expr")
 }
