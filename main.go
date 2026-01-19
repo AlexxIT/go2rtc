@@ -27,6 +27,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/mjpeg"
 	"github.com/AlexxIT/go2rtc/internal/mp4"
 	"github.com/AlexxIT/go2rtc/internal/mpegts"
+	"github.com/AlexxIT/go2rtc/internal/multitrans"
 	"github.com/AlexxIT/go2rtc/internal/nest"
 	"github.com/AlexxIT/go2rtc/internal/ngrok"
 	"github.com/AlexxIT/go2rtc/internal/onvif"
@@ -43,12 +44,15 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/webrtc"
 	"github.com/AlexxIT/go2rtc/internal/webtorrent"
 	"github.com/AlexxIT/go2rtc/internal/wyoming"
+	"github.com/AlexxIT/go2rtc/internal/wyze"
+	"github.com/AlexxIT/go2rtc/internal/xiaomi"
 	"github.com/AlexxIT/go2rtc/internal/yandex"
 	"github.com/AlexxIT/go2rtc/pkg/shell"
 )
 
 func main() {
-	app.Version = "1.9.12"
+	// version will be set later from -buildvcs info, this used only as fallback
+	app.Version = "1.9.14"
 
 	type module struct {
 		name string
@@ -93,11 +97,14 @@ func main() {
 		{"isapi", isapi.Init},
 		{"ivideon", ivideon.Init},
 		{"mpegts", mpegts.Init},
+		{"multitrans", multitrans.Init},
 		{"nest", nest.Init},
 		{"ring", ring.Init},
 		{"roborock", roborock.Init},
 		{"tapo", tapo.Init},
 		{"tuya", tuya.Init},
+		{"wyze", wyze.Init},
+		{"xiaomi", xiaomi.Init},
 		{"yandex", yandex.Init},
 		// Helper modules
 		{"debug", debug.Init},

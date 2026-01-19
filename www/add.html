@@ -413,6 +413,146 @@
     </script>
 
 
+    <button id="wyze">Wyze</button>
+    <div>
+        <p style="margin: 5px 0; font-size: 12px; color: #888;">
+            API Key required: <a href="https://support.wyze.com/hc/en-us/articles/16129834216731" target="_blank">Get your API Key</a>
+        </p>
+        <form id="wyze-login-form">
+            <input type="text" name="api_id" placeholder="API ID" required size="20">
+            <input type="text" name="api_key" placeholder="API Key" required size="36">
+            <input type="email" name="email" placeholder="email" required>
+            <input type="password" name="password" placeholder="password" required>
+            <button type="submit">login</button>
+        </form>
+        <form id="wyze-devices-form">
+            <select id="wyze-id" name="id" required></select>
+            <button type="submit">load devices</button>
+        </form>
+        <table id="wyze-table"></table>
+    </div>
+    <script>
+        async function wyzeReload(ev) {
+            if (ev) ev.target.nextElementSibling.style.display = 'grid';
+
+            const r = await fetch('api/wyze', {'cache': 'no-cache'});
+            const data = await r.json();
+            const users = document.getElementById('wyze-id');
+            users.innerHTML = data.map(item => `<option value="${item}">${item}</option>`).join('');
+        }
+
+        document.getElementById('wyze').addEventListener('click', wyzeReload);
+
+        document.getElementById('wyze-login-form').addEventListener('submit', async ev => {
+            ev.preventDefault();
+
+            const table = document.getElementById('wyze-table');
+            table.innerText = 'loading...';
+
+            const params = new URLSearchParams(new FormData(ev.target));
+            const r = await fetch('api/wyze', {method: 'POST', body: params});
+
+            if (!r.ok) {
+                table.innerText = (await r.text()) || 'Unknown error';
+                return;
+            }
+
+            const data = await r.json();
+            table.innerText = '';
+            drawTable(table, data);
+            wyzeReload();
+        });
+
+        document.getElementById('wyze-devices-form').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const params = new URLSearchParams(new FormData(ev.target));
+            await getSources('wyze-table', 'api/wyze?' + params.toString());
+        });
+    </script>
+
+
+    <button id="xiaomi">Xiaomi</button>
+    <div>
+        <form id="xiaomi-login-form">
+            <input type="text" name="username" placeholder="username" required>
+            <input type="password" name="password" placeholder="password" required>
+            <button type="submit">login</button>
+        </form>
+        <form id="xiaomi-captcha-form">
+            <img id="xiaomi-captcha">
+            <input type="text" name="captcha" placeholder="captcha" required size="10">
+            <button type="submit">send</button>
+        </form>
+        <form id="xiaomi-verify-form">
+            <label id="xiaomi-verify"></label>
+            <input type="text" name="verify" placeholder="verify" required size="10">
+            <button type="submit">send</button>
+        </form>
+        <form id="xiaomi-devices-form">
+            <select id="xiaomi-id" name="id" required></select>
+            <select name="region" required>
+                <option value="cn">China</option>
+                <option value="de">Europe</option>
+                <option value="i2">India</option>
+                <option value="ru">Russia</option>
+                <option value="sg">Singapore</option>
+                <option value="us">United States</option>
+            </select>
+            <button type="submit">load devices</button>
+        </form>
+        <table id="xiaomi-table"></table>
+    </div>
+    <script>
+        async function xiaomiReload(ev) {
+            if (ev) ev.target.nextElementSibling.style.display = 'grid';
+
+            document.getElementById('xiaomi-login-form').style.display = 'flex';
+            document.getElementById('xiaomi-captcha-form').style.display = 'none';
+            document.getElementById('xiaomi-verify-form').style.display = 'none';
+
+            const r = await fetch('api/xiaomi', {'cache': 'no-cache'});
+            const data = await r.json();
+            const users = document.getElementById('xiaomi-id');
+            users.innerHTML = data.map(item => `<option value="${item}">${item}</option>`).join('');
+        }
+
+        document.getElementById('xiaomi').addEventListener('click', xiaomiReload);
+
+        async function xiaomiLogin(ev) {
+            ev.preventDefault();
+            const params = new URLSearchParams(new FormData(ev.target));
+            const r = await fetch('api/xiaomi', {method: 'POST', body: params});
+            if (r.status === 401) {
+                /** @type {{captcha: string, verify_email: string, verify_phone: string}} */
+                const data = await r.json();
+                document.getElementById('xiaomi-login-form').style.display = 'none';
+                if (data.captcha) {
+                    document.getElementById('xiaomi-captcha-form').style.display = 'flex';
+                    document.getElementById('xiaomi-captcha').src = 'data:image/jpeg;base64,' + data.captcha;
+                } else {
+                    document.getElementById('xiaomi-verify-form').style.display = 'flex';
+                    document.getElementById('xiaomi-verify').innerText = data.verify_email || data.verify_phone;
+                }
+            } else if (r.ok) {
+                alert('OK');
+                xiaomiReload();
+            } else {
+                alert('ERROR: ' + await r.text());
+            }
+        }
+
+        document.getElementById('xiaomi-login-form').addEventListener('submit', xiaomiLogin);
+        document.getElementById('xiaomi-captcha-form').addEventListener('submit', xiaomiLogin);
+        document.getElementById('xiaomi-verify-form').addEventListener('submit', xiaomiLogin);
+
+        document.getElementById('xiaomi-devices-form').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const params = new URLSearchParams(new FormData(ev.target));
+            await getSources('xiaomi-table', 'api/xiaomi?' + params.toString());
+        });
+    </script>
+
+
     <button id="webtorrent">WebTorrent Shares</button>
     <div>
         <table id="webtorrent-table"></table>

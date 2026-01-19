@@ -46,6 +46,7 @@ func NewProducer(url string) (core.Producer, error) {
 				{Name: core.CodecPCM, ClockRate: 16000},
 				{Name: core.CodecPCMA, ClockRate: 16000},
 				{Name: core.CodecPCMU, ClockRate: 16000},
+				{Name: core.CodecPCML, ClockRate: 8000},
 				{Name: core.CodecPCM, ClockRate: 8000},
 				{Name: core.CodecPCMA, ClockRate: 8000},
 				{Name: core.CodecPCMU, ClockRate: 8000},
@@ -95,11 +96,11 @@ func (p *Producer) newURL() string {
 		codec := receiver.Codec
 		switch codec.Name {
 		case core.CodecOpus:
-			s += "#audio=opus"
+			s += "#audio=opus/16000"
 		case core.CodecAAC:
 			s += "#audio=aac/16000"
 		case core.CodecPCML:
-			s += "#audio=pcml/16000"
+			s += "#audio=pcml/" + strconv.Itoa(int(codec.ClockRate))
 		case core.CodecPCM:
 			s += "#audio=pcm/" + strconv.Itoa(int(codec.ClockRate))
 		case core.CodecPCMA:

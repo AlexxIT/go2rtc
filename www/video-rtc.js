@@ -71,7 +71,7 @@ export class VideoRTC extends HTMLElement {
          */
         this.pcConfig = {
             bundlePolicy: 'max-bundle',
-            iceServers: [{urls: 'stun:stun.l.google.com:19302'}],
+            iceServers: [{urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.l.google.com:19302']}],
             sdpSemantics: 'unified-plan',  // important for Chromecast 1
         };
 
@@ -249,7 +249,22 @@ export class VideoRTC extends HTMLElement {
         this.appendChild(this.video);
 
         this.video.addEventListener('error', ev => {
-            console.warn(ev);
+            const err = this.video.error;
+            // https://developer.mozilla.org/en-US/docs/Web/API/MediaError/code
+            const MEDIA_ERRORS = {
+                1: 'MEDIA_ERR_ABORTED',
+                2: 'MEDIA_ERR_NETWORK',
+                3: 'MEDIA_ERR_DECODE',
+                4: 'MEDIA_ERR_SRC_NOT_SUPPORTED'
+            };
+            console.error('[VideoRTC] Video error:', {
+                error: err ? MEDIA_ERRORS[err.code] : 'unknown',
+                message: err ? err.message : 'unknown',
+                codecs: this.mseCodecs || 'not set',
+                readyState: this.video.readyState,
+                networkState: this.video.networkState,
+                currentTime: this.video.currentTime
+            });
             if (this.ws) this.ws.close(); // run reconnect for broken MSE stream
         });
 

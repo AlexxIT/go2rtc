@@ -43,8 +43,8 @@ func Init() {
 			}
 		}
 		for name, rawQuery := range cfg.Preload {
-			if stream := Get(name); stream != nil {
-				Preload(stream, rawQuery)
+			if err := AddPreload(name, rawQuery); err != nil {
+				log.Error().Err(err).Caller().Send()
 			}
 		}
 	})

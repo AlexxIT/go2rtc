@@ -14,6 +14,8 @@ import (
 var MemoryLog = newBuffer()
 
 func GetLogger(module string) zerolog.Logger {
+	Logger.Trace().Str("module", module).Msgf("[log] init")
+
 	if s, ok := modules[module]; ok {
 		lvl, err := zerolog.ParseLevel(s)
 		if err == nil {
