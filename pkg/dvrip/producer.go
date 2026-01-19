@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -20,6 +21,8 @@ type Producer struct {
 	client *Client
 
 	video, audio *core.Receiver
+
+	Media string
 
 	videoTS  uint32
 	videoDT  uint32
@@ -112,9 +115,12 @@ func (c *Producer) probe() error {
 	timeoutBoth := time.Now().Add(core.ProbeTimeout)
 	timeoutAny := time.Now().Add(time.Second * 15)
 
+	waitVideo := c.Media == "" || strings.Contains(c.Media, "video")
+	waitAudio := c.Media == "" || strings.Contains(c.Media, "audio")
+
 	for {
 		if now := time.Now(); now.Before(timeoutBoth) {
-			if c.video != nil && c.audio != nil {
+			if (!waitVideo || c.video != nil) && (!waitAudio || c.audio != nil) {
 				return nil
 			}
 		} else if now.Before(timeoutAny) {
@@ -132,7 +138,7 @@ func (c *Producer) probe() error {
 
 		switch tag {
 		case 0xFC, 0xFE: // video
-			if c.video != nil {
+			if !waitVideo || c.video != nil {
 				continue
 			}
 
@@ -150,7 +156,7 @@ func (c *Producer) probe() error {
 			c.addVideoTrack(b[4], payload)
 
 		case 0xFA: // audio
-			if c.audio != nil {
+			if !waitAudio || c.audio != nil {
 				continue
 			}
 
