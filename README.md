@@ -697,7 +697,7 @@ streams:
 
 **RTSP Cameras**
 
-By default, the Home Assistant API does not allow you to get a dynamic RTSP link to a camera stream. So more cameras, like [Tuya](https://www.home-assistant.io/integrations/tuya/), and possibly others, can also be imported using [this method](https://github.com/felipecrs/hass-expose-camera-stream-source#importing-cameras-from-home-assistant-to-go2rtc-or-frigate).
+By default, the Home Assistant API does not allow you to get a dynamic RTSP link to a camera stream. [This method](https://github.com/felipecrs/hass-expose-camera-stream-source#importing-cameras-from-home-assistant-to-go2rtc-or-frigate) can work around it.
 
 ## Source: ISAPI
 
