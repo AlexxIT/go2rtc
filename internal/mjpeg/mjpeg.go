@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
@@ -36,10 +37,42 @@ func Init() {
 var log zerolog.Logger
 
 func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
-	stream, _ := streams.GetOrPatch(r.URL.Query())
+	query := r.URL.Query()
+	stream, _ := streams.GetOrPatch(query)
 	if stream == nil {
 		http.Error(w, api.StreamNotFound, http.StatusNotFound)
 		return
+	}
+
+	var b []byte
+
+	if s := query.Get("cache"); s != "" {
+		if timeout, err := time.ParseDuration(s); err == nil {
+			src := query.Get("src")
+
+			cacheMu.Lock()
+			entry, found := cache[src]
+			cacheMu.Unlock()
+
+			if found && time.Since(entry.timestamp) < timeout {
+				writeJPEGResponse(w, entry.payload)
+				return
+			}
+
+			defer func() {
+				if b == nil {
+					return
+				}
+				entry = cacheEntry{payload: b, timestamp: time.Now()}
+				cacheMu.Lock()
+				if cache == nil {
+					cache = map[string]cacheEntry{src: entry}
+				} else {
+					cache[src] = entry
+				}
+				cacheMu.Unlock()
+			}()
+		}
 	}
 
 	cons := magic.NewKeyframe()
@@ -52,7 +85,7 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 
 	once := &core.OnceBuffer{} // init and first frame
 	_, _ = cons.WriteTo(once)
-	b := once.Buffer()
+	b = once.Buffer()
 
 	stream.RemoveConsumer(cons)
 
@@ -60,7 +93,7 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 	case core.CodecH264, core.CodecH265:
 		ts := time.Now()
 		var err error
-		if b, err = ffmpeg.JPEGWithQuery(b, r.URL.Query()); err != nil {
+		if b, err = ffmpeg.JPEGWithQuery(b, query); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -69,6 +102,19 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 		b = mjpeg.FixJPEG(b)
 	}
 
+	writeJPEGResponse(w, b)
+}
+
+var cache map[string]cacheEntry
+var cacheMu sync.Mutex
+
+// cacheEntry represents a cached keyframe with its timestamp
+type cacheEntry struct {
+	payload   []byte
+	timestamp time.Time
+}
+
+func writeJPEGResponse(w http.ResponseWriter, b []byte) {
 	h := w.Header()
 	h.Set("Content-Type", "image/jpeg")
 	h.Set("Content-Length", strconv.Itoa(len(b)))

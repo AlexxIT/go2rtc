@@ -1209,7 +1209,7 @@
 
         (async () => {
             try {
-                const r = await fetch('https://go2rtc.org/schema.json', {cache: 'no-cache'});
+                const r = await fetch('schema.json', {cache: 'no-cache'});
                 if (r.ok) setupYamlHints(await r.json());
             } catch (e) {
                 // ignore schema load errors

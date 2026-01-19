@@ -1,4 +1,4 @@
-package xiaomi
+package miss
 
 import (
 	"time"
@@ -6,12 +6,11 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/opus"
 	"github.com/AlexxIT/go2rtc/pkg/pcm"
-	"github.com/AlexxIT/go2rtc/pkg/xiaomi/miss"
 	"github.com/pion/rtp"
 )
 
 func (p *Producer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver) error {
-	if err := p.client.SpeakerStart(); err != nil {
+	if err := p.client.StartSpeaker(); err != nil {
 		return err
 	}
 	// TODO: check this!!!
@@ -23,7 +22,7 @@ func (p *Producer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 	case core.CodecPCMA:
 		var buf []byte
 
-		if p.model == "isa.camera.hlc6" {
+		if p.client.SpeakerCodec() == codecPCM {
 			dst := &core.Codec{Name: core.CodecPCML, ClockRate: 8000}
 			transcode := pcm.Transcode(dst, track.Codec)
 
@@ -31,7 +30,8 @@ func (p *Producer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 				buf = append(buf, transcode(pkt.Payload)...)
 				const size = 2 * 8000 * 0.040 // 16bit 40ms
 				for len(buf) >= size {
-					_ = p.client.WriteAudio(miss.CodecPCM, buf[:size])
+					p.Send += size
+					_ = p.client.WriteAudio(codecPCM, buf[:size])
 					buf = buf[size:]
 				}
 			}
@@ -40,13 +40,14 @@ func (p *Producer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 				buf = append(buf, pkt.Payload...)
 				const size = 8000 * 0.040 // 8bit 40 ms
 				for len(buf) >= size {
-					_ = p.client.WriteAudio(miss.CodecPCMA, buf[:size])
+					p.Send += size
+					_ = p.client.WriteAudio(codecPCMA, buf[:size])
 					buf = buf[size:]
 				}
 			}
 		}
 	case core.CodecOpus:
-		if p.model == "chuangmi.camera.72ac1" {
+		if p.client.SpeakerCodec() == codecOPUS {
 			var buf []byte
 			sender.Handler = func(pkt *rtp.Packet) {
 				if buf == nil {
@@ -54,13 +55,15 @@ func (p *Producer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 				} else {
 					// convert two 20ms to one 40ms
 					buf = opus.JoinFrames(buf, pkt.Payload)
-					_ = p.client.WriteAudio(miss.CodecOPUS, buf)
+					p.Send += len(buf)
+					_ = p.client.WriteAudio(codecOPUS, buf)
 					buf = nil
 				}
 			}
 		} else {
 			sender.Handler = func(pkt *rtp.Packet) {
-				_ = p.client.WriteAudio(miss.CodecOPUS, pkt.Payload)
+				p.Send += len(pkt.Payload)
+				_ = p.client.WriteAudio(codecOPUS, pkt.Payload)
 			}
 		}
 	}

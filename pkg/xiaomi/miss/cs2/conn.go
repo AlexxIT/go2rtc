@@ -2,6 +2,7 @@ package cs2
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -20,24 +21,25 @@ func Dial(host, transport string) (*Conn, error) {
 	_, isTCP := conn.(*tcpConn)
 
 	c := &Conn{
-		conn:   conn,
-		isTCP:  isTCP,
-		rawCh0: make(chan []byte, 10),
-		rawCh2: make(chan []byte, 100),
+		Conn:  conn,
+		isTCP: isTCP,
+		channels: [4]*dataChannel{
+			newDataChannel(0, 10), nil, newDataChannel(250, 100), nil,
+		},
 	}
 	go c.worker()
 	return c, nil
 }
 
 type Conn struct {
-	conn  net.Conn
+	net.Conn
 	isTCP bool
 
 	err    error
 	seqCh0 uint16
 	seqCh3 uint16
-	rawCh0 chan []byte
-	rawCh2 chan []byte
+
+	channels [4]*dataChannel
 
 	cmdMu  sync.Mutex
 	cmdAck func()
@@ -46,6 +48,7 @@ type Conn struct {
 const (
 	magic        = 0xF1
 	magicDrw     = 0xD1
+	magicTCP     = 0x68
 	msgLanSearch = 0x30
 	msgPunchPkt  = 0x41
 	msgP2PRdyUDP = 0x42
@@ -104,93 +107,69 @@ func handshake(host, transport string) (net.Conn, error) {
 
 func (c *Conn) worker() {
 	defer func() {
-		close(c.rawCh0)
-		close(c.rawCh2)
+		c.channels[0].Close()
+		c.channels[2].Close()
 	}()
 
-	chAck := make([]uint16, 4) // only for UDP
+	var keepaliveTS time.Time // only for TCP
+
 	buf := make([]byte, 1200)
-	var ch2WaitSize int
-	var ch2WaitData []byte
-	var keepaliveTS time.Time
 
 	for {
-		n, err := c.conn.Read(buf)
+		n, err := c.Conn.Read(buf)
 		if err != nil {
 			c.err = fmt.Errorf("%s: %w", "cs2", err)
 			return
 		}
 
+		// 0  f1d0  magic
+		// 2  005d  size = total size + 4
+		// 4  d1    magic
+		// 5  00    channel
+		// 6  0000  seq
 		switch buf[1] {
 		case msgDrw:
 			ch := buf[5]
+			channel := c.channels[ch]
 
 			if c.isTCP {
-				// For TCP we should using ping/pong.
+				// For TCP we should send ping every second to keep connection alive.
+				// Based on PCAP analysis: official Mi Home app sends PING every ~1s.
 				if now := time.Now(); now.After(keepaliveTS) {
-					_, _ = c.conn.Write([]byte{magic, msgPing, 0, 0})
-					keepaliveTS = now.Add(5 * time.Second)
+					_, _ = c.Conn.Write([]byte{magic, msgPing, 0, 0})
+					keepaliveTS = now.Add(time.Second)
 				}
+
+				err = channel.Push(buf[8:n])
 			} else {
-				// For UDP we should using ack.
-				seqHI := buf[6]
-				seqLO := buf[7]
+				var pushed int
 
-				if chAck[ch] != uint16(seqHI)<<8|uint16(seqLO) {
-					continue
+				seqHI, seqLO := buf[6], buf[7]
+				seq := uint16(seqHI)<<8 | uint16(seqLO)
+				pushed, err = channel.PushSeq(seq, buf[8:n])
+
+				if pushed >= 0 {
+					// For UDP we should send ACK.
+					ack := []byte{magic, msgDrwAck, 0, 6, magicDrw, ch, 0, 1, seqHI, seqLO}
+					_, _ = c.Conn.Write(ack)
 				}
-				chAck[ch]++
-
-				ack := []byte{magic, msgDrwAck, 0, 6, magicDrw, ch, 0, 1, seqHI, seqLO}
-				_, _ = c.conn.Write(ack)
 			}
 
-			switch ch {
-			case 0:
-				select {
-				case c.rawCh0 <- buf[12:]:
-				default:
-				}
-				continue
-
-			case 2:
-				ch2WaitData = append(ch2WaitData, buf[8:n]...)
-
-				for len(ch2WaitData) > 4 {
-					if ch2WaitSize == 0 {
-						ch2WaitSize = int(binary.BigEndian.Uint32(ch2WaitData))
-						ch2WaitData = ch2WaitData[4:]
-					}
-					if ch2WaitSize <= len(ch2WaitData) {
-						select {
-						case c.rawCh2 <- ch2WaitData[:ch2WaitSize]:
-						default:
-							c.err = fmt.Errorf("%s: media queue is full", "cs2")
-							return
-						}
-
-						ch2WaitData = ch2WaitData[ch2WaitSize:]
-						ch2WaitSize = 0
-					} else {
-						break
-					}
-				}
-				continue
+			if err != nil {
+				c.err = fmt.Errorf("%s: %w", "cs2", err)
+				return
 			}
 
 		case msgPing:
-			_, _ = c.conn.Write([]byte{magic, msgPong, 0, 0})
-			continue
-		case msgPong, msgP2PRdyUDP, msgP2PRdyTCP, msgClose:
-			continue // skip it
+			_, _ = c.Conn.Write([]byte{magic, msgPong, 0, 0})
+		case msgPong, msgP2PRdyUDP, msgP2PRdyTCP, msgClose: // skip it
 		case msgDrwAck: // only for UDP
 			if c.cmdAck != nil {
 				c.cmdAck()
 			}
-			continue
+		default:
+			fmt.Printf("%s: unknown msg: %x\n", "cs2", buf[:n])
 		}
-
-		fmt.Printf("%s: unknown msg: %x\n", "cs2", buf[:n])
 	}
 }
 
@@ -201,16 +180,8 @@ func (c *Conn) Protocol() string {
 	return "cs2+udp"
 }
 
-func (c *Conn) RemoteAddr() net.Addr {
-	return c.conn.RemoteAddr()
-}
-
-func (c *Conn) SetDeadline(t time.Time) error {
-	return c.conn.SetDeadline(t)
-}
-
-func (c *Conn) Close() error {
-	return c.conn.Close()
+func (c *Conn) Version() string {
+	return "CS2"
 }
 
 func (c *Conn) Error() error {
@@ -220,25 +191,25 @@ func (c *Conn) Error() error {
 	return io.EOF
 }
 
-func (c *Conn) ReadCommand() (cmd uint16, data []byte, err error) {
-	buf, ok := <-c.rawCh0
+func (c *Conn) ReadCommand() (cmd uint32, data []byte, err error) {
+	buf, ok := c.channels[0].Pop()
 	if !ok {
 		return 0, nil, c.Error()
 	}
-	cmd = binary.LittleEndian.Uint16(buf[:2])
+	cmd = binary.LittleEndian.Uint32(buf)
 	data = buf[4:]
 	return
 }
 
-func (c *Conn) WriteCommand(cmd uint16, data []byte) error {
+func (c *Conn) WriteCommand(cmd uint32, data []byte) error {
 	c.cmdMu.Lock()
 	defer c.cmdMu.Unlock()
 
-	req := marshalCmd(0, c.seqCh0, uint32(cmd), data)
+	req := marshalCmd(0, c.seqCh0, cmd, data)
 	c.seqCh0++
 
 	if c.isTCP {
-		_, err := c.conn.Write(req)
+		_, err := c.Conn.Write(req)
 		return err
 	}
 
@@ -254,7 +225,7 @@ func (c *Conn) WriteCommand(cmd uint16, data []byte) error {
 	}
 
 	for {
-		if _, err := c.conn.Write(req); err != nil {
+		if _, err := c.Conn.Write(req); err != nil {
 			return err
 		}
 		<-timeout.C
@@ -268,18 +239,20 @@ func (c *Conn) WriteCommand(cmd uint16, data []byte) error {
 	}
 }
 
-func (c *Conn) ReadPacket() ([]byte, error) {
-	data, ok := <-c.rawCh2
+const hdrSize = 32
+
+func (c *Conn) ReadPacket() (hdr, payload []byte, err error) {
+	data, ok := c.channels[2].Pop()
 	if !ok {
-		return nil, c.Error()
+		return nil, nil, c.Error()
 	}
-	return data, nil
+	return data[:hdrSize], data[hdrSize:], nil
 }
 
-func (c *Conn) WritePacket(data []byte) error {
+func (c *Conn) WritePacket(hdr, payload []byte) error {
 	const offset = 12
 
-	n := uint32(len(data))
+	n := hdrSize + uint32(len(payload))
 	req := make([]byte, n+offset)
 	req[0] = magic
 	req[1] = msgDrw
@@ -290,9 +263,10 @@ func (c *Conn) WritePacket(data []byte) error {
 	binary.BigEndian.PutUint16(req[6:], c.seqCh3)
 	c.seqCh3++
 	binary.BigEndian.PutUint32(req[8:], n)
-	copy(req[offset:], data)
+	copy(req[offset:], hdr)
+	copy(req[offset+hdrSize:], hdr)
 
-	_, err := c.conn.Write(req)
+	_, err := c.Conn.Write(req)
 	return err
 }
 
@@ -342,23 +316,24 @@ type udpConn struct {
 	addr *net.UDPAddr
 }
 
-func (c *udpConn) Read(p []byte) (n int, err error) {
+func (c *udpConn) Read(b []byte) (n int, err error) {
 	var addr *net.UDPAddr
 	for {
-		n, addr, err = c.UDPConn.ReadFromUDP(p)
+		n, addr, err = c.UDPConn.ReadFromUDP(b)
 		if err != nil {
 			return 0, err
 		}
 
 		if string(addr.IP) == string(c.addr.IP) || n >= 8 {
+			//log.Printf("<- %x", b[:n])
 			return
 		}
 	}
 }
 
-func (c *udpConn) Write(req []byte) (n int, err error) {
-	//log.Printf("-> %x", req)
-	return c.UDPConn.WriteToUDP(req, c.addr)
+func (c *udpConn) Write(b []byte) (n int, err error) {
+	//log.Printf("-> %x", b)
+	return c.UDPConn.WriteToUDP(b, c.addr)
 }
 
 func (c *udpConn) RemoteAddr() net.Addr {
@@ -424,9 +399,107 @@ func (c *tcpConn) Write(req []byte) (n int, err error) {
 	n = len(req)
 	buf := make([]byte, 8+n)
 	binary.BigEndian.PutUint16(buf, uint16(n))
-	buf[2] = 0x68
+	buf[2] = magicTCP
 	copy(buf[8:], req)
 	//log.Printf("-> %x", buf)
 	_, err = c.TCPConn.Write(buf)
 	return
+}
+
+func newDataChannel(pushSize, popSize int) *dataChannel {
+	c := &dataChannel{}
+	if pushSize > 0 {
+		c.pushBuf = make(map[uint16][]byte, pushSize)
+		c.pushSize = pushSize
+	}
+	if popSize >= 0 {
+		c.popBuf = make(chan []byte, popSize)
+	}
+	return c
+}
+
+type dataChannel struct {
+	waitSeq  uint16
+	pushBuf  map[uint16][]byte
+	pushSize int
+
+	waitData []byte
+	waitSize int
+	popBuf   chan []byte
+}
+
+func (c *dataChannel) Push(b []byte) error {
+	c.waitData = append(c.waitData, b...)
+
+	for len(c.waitData) > 4 {
+		// Every new data starts with size. There can be several data inside one packet.
+		if c.waitSize == 0 {
+			c.waitSize = int(binary.BigEndian.Uint32(c.waitData))
+			c.waitData = c.waitData[4:]
+		}
+		if c.waitSize > len(c.waitData) {
+			break
+		}
+
+		select {
+		case c.popBuf <- c.waitData[:c.waitSize]:
+		default:
+			return fmt.Errorf("pop buffer is full")
+		}
+
+		c.waitData = c.waitData[c.waitSize:]
+		c.waitSize = 0
+	}
+	return nil
+}
+
+func (c *dataChannel) Pop() ([]byte, bool) {
+	data, ok := <-c.popBuf
+	return data, ok
+}
+
+func (c *dataChannel) Close() {
+	close(c.popBuf)
+}
+
+// PushSeq returns how many seq were processed.
+// Returns 0 if seq was saved or processed earlier.
+// Returns -1 if seq could not be saved (buffer full or disabled).
+func (c *dataChannel) PushSeq(seq uint16, data []byte) (int, error) {
+	diff := int16(seq - c.waitSeq)
+	// Check if this is seq from the future.
+	if diff > 0 {
+		// Support disabled buffer.
+		if c.pushSize == 0 {
+			return -1, nil // couldn't save seq
+		}
+		// Check if we don't have this seq in the buffer.
+		if c.pushBuf[seq] == nil {
+			// Check if there is enough space in the buffer.
+			if len(c.pushBuf) == c.pushSize {
+				return -1, nil // couldn't save seq
+			}
+			c.pushBuf[seq] = bytes.Clone(data)
+			//log.Printf("push buf wait=%d seq=%d len=%d", c.waitSeq, seq, len(c.pushBuf))
+		}
+		return 0, nil
+	}
+
+	// Check if this is seq from the past.
+	if diff < 0 {
+		return 0, nil
+	}
+
+	for i := 1; ; i++ {
+		if err := c.Push(data); err != nil {
+			return i, err
+		}
+		c.waitSeq++
+		// Check if we have next seq in the buffer.
+		if data = c.pushBuf[c.waitSeq]; data != nil {
+			delete(c.pushBuf, c.waitSeq)
+		} else {
+			return i, nil
+		}
+	}
 }
