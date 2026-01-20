@@ -104,10 +104,11 @@ func (c *Client) ReadPacket() (hdr, payload []byte, err error) {
 		return
 	}
 	if c.key != nil {
-		switch hdr[0] {
-		case tutk.CodecH264, tutk.CodecH265:
+		if c.model == ModelAqaraG2 && hdr[0] == tutk.CodecH265 {
 			payload, err = DecodeVideo(payload, c.key)
-		case tutk.CodecAACLATM:
+		} else {
+			// ModelAqaraG2: audio AAC
+			// ModelIMILABA1: video HEVC, audio PCMA
 			payload, err = crypto.Decode(payload, c.key)
 		}
 	}
@@ -148,7 +149,7 @@ func (c *Client) StartMedia(video, audio string) error {
 			c.WriteCommandJSON(0x0704, `{}`), // don't know why
 		)
 
-	case ModelMijia:
+	case ModelIMILABA1, ModelMijia:
 		// 0 - auto, 1 - low, 3 - hd
 		switch video {
 		case "", "hd":
@@ -209,9 +210,10 @@ func (c *Client) StartMedia(video, audio string) error {
 		//if err := c.WriteCommand(0x100, data); err != nil {
 		//	return err
 		//}
+		return nil
 	}
 
-	return nil
+	return fmt.Errorf("xiaomi: unsupported model: %s", c.model)
 }
 
 func (c *Client) StopMedia() error {
@@ -250,15 +252,17 @@ func DecodeVideo(data, key []byte) ([]byte, error) {
 
 const (
 	ModelAqaraG2  = "lumi.camera.gwagl01"
+	ModelIMILABA1 = "chuangmi.camera.ipc019e"
 	ModelLoockV1  = "loock.cateye.v01"
-	ModelMijia    = "chuangmi.camera.v2" // support miss format for new fw and legacy format for old fw
 	ModelXiaobai  = "chuangmi.camera.xiaobai"
 	ModelXiaofang = "isa.camera.isc5"
+	// ModelMijia support miss format for new fw and legacy format for old fw
+	ModelMijia = "chuangmi.camera.v2"
 )
 
 func Supported(model string) bool {
 	switch model {
-	case ModelAqaraG2, ModelLoockV1, ModelXiaobai, ModelXiaofang:
+	case ModelAqaraG2, ModelIMILABA1, ModelLoockV1, ModelXiaobai, ModelXiaofang:
 		return true
 	}
 	return false
