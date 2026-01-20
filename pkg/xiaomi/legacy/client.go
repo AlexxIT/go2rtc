@@ -122,12 +122,31 @@ const (
 	cmdStreamCtrlReq = 0x0320
 )
 
-var empty = []byte(`{}`)
+func (c *Client) WriteCommandJSON(ctrlType uint32, format string, a ...any) error {
+	if len(a) > 0 {
+		format = fmt.Sprintf(format, a...)
+	}
+	return c.WriteCommand(ctrlType, []byte(format))
+}
 
 func (c *Client) StartMedia(video, audio string) error {
 	switch c.model {
 	case ModelAqaraG2:
-		return c.WriteCommand(cmdVideoStart, empty)
+		// 0 - 1920x1080, 1 - 1280x720, 2 - ?
+		switch video {
+		case "", "fhd":
+			video = "0"
+		case "hd":
+			video = "1"
+		case "sd":
+			video = "2"
+		}
+
+		return errors.Join(
+			c.WriteCommandJSON(cmdVideoStart, `{}`),
+			c.WriteCommandJSON(0x0605, `{"channel":%s}`, video),
+			c.WriteCommandJSON(0x0704, `{}`), // don't know why
+		)
 
 	case ModelMijia:
 		// 0 - auto, 1 - low, 3 - hd
@@ -139,13 +158,12 @@ func (c *Client) StartMedia(video, audio string) error {
 		case "auto":
 			video = "0"
 		}
-		s := fmt.Sprintf(`{"videoquality":%s}`, video)
 
 		// quality after start
 		return errors.Join(
-			c.WriteCommand(cmdAudioStart, empty),
-			c.WriteCommand(cmdVideoStart, empty),
-			c.WriteCommand(cmdStreamCtrlReq, []byte(s)),
+			c.WriteCommandJSON(cmdAudioStart, `{}`),
+			c.WriteCommandJSON(cmdVideoStart, `{}`),
+			c.WriteCommandJSON(cmdStreamCtrlReq, `{"videoquality":%s}`, video),
 		)
 
 	case ModelXiaobai:
@@ -172,9 +190,9 @@ func (c *Client) StartMedia(video, audio string) error {
 
 		// quality before start
 		return errors.Join(
-			c.WriteCommand(cmdAudioStart, empty),
+			c.WriteCommandJSON(cmdAudioStart, `{}`),
 			c.WriteCommand(cmdStreamCtrlReq, []byte{0, 0, 0, 0, b, 0, 0, 0}),
-			c.WriteCommand(cmdVideoStart, empty),
+			c.WriteCommandJSON(cmdVideoStart, `{}`),
 		)
 
 	case ModelXiaofang:
@@ -198,7 +216,7 @@ func (c *Client) StartMedia(video, audio string) error {
 
 func (c *Client) StopMedia() error {
 	return errors.Join(
-		c.WriteCommand(cmdVideoStop, empty),
+		c.WriteCommandJSON(cmdVideoStop, `{}`),
 		c.WriteCommand(cmdVideoStop, make([]byte, 8)),
 	)
 }
@@ -214,8 +232,8 @@ func DecodeVideo(data, key []byte) ([]byte, error) {
 	}
 
 	nonce8 := data[:8]
-	i1 := binary.LittleEndian.Uint16(data[9:])
-	i2 := binary.LittleEndian.Uint16(data[13:])
+	i1 := binary.LittleEndian.Uint32(data[9:])
+	i2 := binary.LittleEndian.Uint32(data[13:])
 	data = data[17:]
 	src := data[i1 : i1+i2]
 
