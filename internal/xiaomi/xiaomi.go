@@ -16,6 +16,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/xiaomi"
 	"github.com/AlexxIT/go2rtc/pkg/xiaomi/crypto"
+	"github.com/rs/zerolog"
 )
 
 func Init() {
@@ -26,7 +27,7 @@ func Init() {
 
 	tokens = v.Cfg
 
-	log := app.GetLogger("xiaomi")
+	log = app.GetLogger("xiaomi")
 
 	streams.HandleFunc("xiaomi", func(rawURL string) (core.Producer, error) {
 		u, err := url.Parse(rawURL)
@@ -48,6 +49,8 @@ func Init() {
 
 	api.HandleFunc("api/xiaomi", apiXiaomi)
 }
+
+var log zerolog.Logger
 
 var tokens map[string]string
 var clouds map[string]*xiaomi.Cloud
@@ -249,6 +252,8 @@ func apiDeviceList(w http.ResponseWriter, r *http.Request) {
 		var v struct {
 			List []*Device `json:"list"`
 		}
+
+		log.Trace().Str("user", user).Msgf("[xiaomi] devices list: %s", res)
 
 		if err = json.Unmarshal(res, &v); err != nil {
 			return err
