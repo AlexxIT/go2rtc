@@ -184,9 +184,10 @@ func (c *Client) StartMedia(channel, quality, audio string) error {
 	}
 
 	data := binary.BigEndian.AppendUint32(nil, cmdVideoStart)
-	if channel == "" {
+	switch channel {
+	case "", "0":
 		data = fmt.Appendf(data, `{"videoquality":%s,"enableaudio":%s}`, quality, audio)
-	} else {
+	default:
 		data = fmt.Appendf(data, `{"videoquality":-1,"videoquality2":%s,"enableaudio":%s}`, quality, audio)
 	}
 	return c.WriteCommand(data)
