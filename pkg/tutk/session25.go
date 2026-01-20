@@ -171,15 +171,15 @@ func (s *Session25) handleChunk(cmd []byte, checkSeq bool) int {
 	// "0x20 chunk seq for first chunk if only one chunk".
 	if binary.LittleEndian.Uint16(cmd2[6:]) == 0 || binary.LittleEndian.Uint16(cmd2[4:]) == 1 {
 		s.waitData = s.waitData[:0]
-		s.waitSeq = seq
-	} else if seq != s.waitSeq {
+		s.waitCSeq = seq
+	} else if seq != s.waitCSeq {
 		return msgMediaLost
 	}
 
 	s.waitData = append(s.waitData, cmd2[20:]...)
 
 	if flags&0b0001 == 0 {
-		s.waitSeq++
+		s.waitCSeq++
 		return msgMediaChunk
 	}
 
