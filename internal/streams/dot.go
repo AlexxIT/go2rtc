@@ -11,7 +11,7 @@ func AppendDOT(dot []byte, stream *Stream) []byte {
 		if prod.conn == nil {
 			continue
 		}
-		c, err := marshalConn(prod.conn)
+		c, err := marshalConn(prod)
 		if err != nil {
 			continue
 		}
@@ -56,11 +56,12 @@ func humanBytes(i int) string {
 }
 
 type node struct {
-	ID     uint32         `json:"id"`
-	Codec  map[string]any `json:"codec"`
-	Parent uint32         `json:"parent"`
-	Childs []uint32       `json:"childs"`
-	Bytes  int            `json:"bytes"`
+	ID      uint32         `json:"id"`
+	Codec   map[string]any `json:"codec"`
+	Parent  uint32         `json:"parent"`
+	Parents []uint32       `json:"parents"`
+	Childs  []uint32       `json:"childs"`
+	Bytes   int            `json:"bytes"`
 	//Packets uint32         `json:"packets"`
 	//Drops   uint32         `json:"drops"`
 }
@@ -105,6 +106,7 @@ type conn struct {
 	UserAgent  string `json:"user_agent"`
 	Receivers  []node `json:"receivers"`
 	Senders    []node `json:"senders"`
+	Mixers     []node `json:"mixers"`
 	BytesRecv  int    `json:"bytes_recv"`
 	BytesSend  int    `json:"bytes_send"`
 }
@@ -127,6 +129,12 @@ func (c *conn) appendDOT(dot []byte, group string) []byte {
 		dot = fmt.Appendf(dot, "%d -> %d [label=%q];\n", send.Parent, c.ID, humanBytes(send.Bytes))
 		//dot = fmt.Appendf(dot, "%d -> %d [label=%q];\n", send.ID, c.ID, humanBytes(send.Bytes))
 		//dot = send.appendDOT(dot, "node")
+	}
+	for _, mixer := range c.Mixers {
+		dot = mixer.appendDOT(dot, "mixer")
+		for _, parentID := range mixer.Parents {
+			dot = fmt.Appendf(dot, "%d -> %d;\n", parentID, mixer.ID)
+		}
 	}
 	return dot
 }
