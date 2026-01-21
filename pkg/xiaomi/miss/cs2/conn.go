@@ -57,7 +57,8 @@ const (
 	msgDrwAck    = 0xD1
 	msgPing      = 0xE0
 	msgPong      = 0xE1
-	msgClose     = 0xF1
+	msgClose     = 0xF0
+	msgCloseAck  = 0xF1
 )
 
 func handshake(host, transport string) (net.Conn, error) {
@@ -162,7 +163,7 @@ func (c *Conn) worker() {
 
 		case msgPing:
 			_, _ = c.Conn.Write([]byte{magic, msgPong, 0, 0})
-		case msgPong, msgP2PRdyUDP, msgP2PRdyTCP, msgClose: // skip it
+		case msgPong, msgP2PRdyUDP, msgP2PRdyTCP, msgClose, msgCloseAck: // skip it
 		case msgDrwAck: // only for UDP
 			if c.cmdAck != nil {
 				c.cmdAck()
