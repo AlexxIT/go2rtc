@@ -63,7 +63,7 @@ func streamsHandler(rawURL string) (core.Producer, error) {
 			}
 		}
 	}
-	return nil, errors.New("unsupported url: " + rawURL)
+	return nil, errors.New("unsupported url: " + core.StripUserinfo(rawURL))
 }
 
 // go2rtcClient can connect only to go2rtc server

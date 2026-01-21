@@ -8,6 +8,7 @@ import (
 
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/streams"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/shell"
 )
 
@@ -38,7 +39,7 @@ func Init() {
 
 		b = bytes.TrimSpace(b)
 
-		log.Debug().Str("url", url).Msgf("[echo] %s", b)
+		log.Debug().Str("url", core.StripUserinfo(url)).Msgf("[echo] %s", b)
 
 		return string(b), nil
 	})

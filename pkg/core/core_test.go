@@ -132,3 +132,65 @@ func TestStripUserinfo(t *testing.T) {
     - ffmpeg:rtsp://10.1.2.3:554/stream1@#video=copy
 `, s)
 }
+
+func TestConnectionMarshalJSON(t *testing.T) {
+	tests := []struct {
+		name     string
+		conn     *Connection
+		expected string
+	}{
+		{
+			name: "URL with credentials",
+			conn: &Connection{
+				ID:         12345,
+				FormatName: "rtsp",
+				Protocol:   "tcp",
+				URL:        "rtsp://username:password@192.168.1.204:554/live",
+				RemoteAddr: "192.168.1.204:554",
+			},
+			expected: `{"id":12345,"format_name":"rtsp","protocol":"tcp","remote_addr":"192.168.1.204:554","url":"rtsp://***@192.168.1.204:554/live"}`,
+		},
+		{
+			name: "URL without credentials",
+			conn: &Connection{
+				ID:         67890,
+				FormatName: "webrtc",
+				Protocol:   "udp",
+				URL:        "rtsp://192.168.1.100:554/stream",
+			},
+			expected: `{"id":67890,"format_name":"webrtc","protocol":"udp","url":"rtsp://192.168.1.100:554/stream"}`,
+		},
+		{
+			name: "URL with complex credentials (encoded)",
+			conn: &Connection{
+				ID:  11111,
+				URL: "rtsp://user%40domain:p%40ssw0rd!@camera.local:8554/path?query=1",
+			},
+			expected: `{"id":11111,"url":"rtsp://***@camera.local:8554/path?query=1"}`,
+		},
+		{
+			name: "Empty URL",
+			conn: &Connection{
+				ID:         22222,
+				FormatName: "mjpeg",
+			},
+			expected: `{"id":22222,"format_name":"mjpeg"}`,
+		},
+		{
+			name: "HTTP URL with credentials",
+			conn: &Connection{
+				ID:  33333,
+				URL: "http://admin:secret@192.168.1.1:8080/stream",
+			},
+			expected: `{"id":33333,"url":"http://***@192.168.1.1:8080/stream"}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data, err := tt.conn.MarshalJSON()
+			require.NoError(t, err)
+			require.JSONEq(t, tt.expected, string(data))
+		})
+	}
+}

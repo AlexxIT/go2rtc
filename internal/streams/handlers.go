@@ -66,7 +66,7 @@ func GetProducer(url string) (core.Producer, error) {
 		}
 	}
 
-	return nil, errors.New("streams: unsupported scheme: " + url)
+	return nil, errors.New("streams: unsupported scheme: " + core.StripUserinfo(url))
 }
 
 // Redirect can return: location URL or error or empty URL and error
@@ -109,7 +109,7 @@ func GetConsumer(url string) (core.Consumer, func(), error) {
 		}
 	}
 
-	return nil, nil, errors.New("streams: unsupported scheme: " + url)
+	return nil, nil, errors.New("streams: unsupported scheme: " + core.StripUserinfo(url))
 }
 
 var insecure = map[string]bool{}

@@ -28,7 +28,7 @@ func NewProducer(url string) (core.Producer, error) {
 
 	// ffmpeg.NewProducer support only one audio
 	if len(p.query["video"]) != 0 || len(p.query["audio"]) != 1 {
-		return nil, errors.New("ffmpeg: unsupported params: " + url[i:])
+		return nil, errors.New("ffmpeg: unsupported params: " + core.StripUserinfo(url[i:]))
 	}
 
 	p.ID = core.NewID()

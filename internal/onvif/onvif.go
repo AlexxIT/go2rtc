@@ -49,7 +49,7 @@ func streamOnvif(rawURL string) (core.Producer, error) {
 		uri += rawURL[i:]
 	}
 
-	log.Debug().Msgf("[onvif] new uri=%s", uri)
+	log.Debug().Msgf("[onvif] new uri=%s", core.StripUserinfo(uri))
 
 	if err = streams.Validate(uri); err != nil {
 		return nil, err

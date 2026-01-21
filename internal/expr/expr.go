@@ -5,6 +5,7 @@ import (
 
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/streams"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/expr"
 )
 
@@ -17,7 +18,7 @@ func Init() {
 			return "", err
 		}
 
-		log.Debug().Msgf("[expr] url=%s", url)
+		log.Debug().Msgf("[expr] url=%s", core.StripUserinfo(url))
 
 		if url = v.(string); url == "" {
 			return "", errors.New("expr: result is empty")

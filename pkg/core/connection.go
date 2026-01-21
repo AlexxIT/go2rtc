@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"reflect"
@@ -126,6 +127,17 @@ func (c *Connection) WithRequest(r *http.Request) {
 
 func (c *Connection) GetSource() string {
 	return c.Source
+}
+
+func (c *Connection) MarshalJSON() ([]byte, error) {
+	type Alias Connection
+	return json.Marshal(&struct {
+		URL string `json:"url,omitempty"`
+		*Alias
+	}{
+		URL:   StripUserinfo(c.URL),
+		Alias: (*Alias)(c),
+	})
 }
 
 // Create like os.Create, init Consumer with existing Transport

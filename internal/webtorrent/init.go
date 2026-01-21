@@ -164,7 +164,7 @@ func streamHandle(rawURL string) (core.Producer, error) {
 	share := query.Get("share")
 	pwd := query.Get("pwd")
 	if len(share) < 8 || len(pwd) < 4 {
-		return nil, errors.New("wrong URL: " + rawURL)
+		return nil, errors.New("wrong URL: " + core.StripUserinfo(rawURL))
 	}
 
 	pc, err := webrtc.PeerConnection(true)
