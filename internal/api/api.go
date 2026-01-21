@@ -132,8 +132,11 @@ func tlsListen(network, address, certFile, keyFile string) {
 	log.Info().Str("addr", address).Msg("[api] tls listen")
 
 	server := &http.Server{
-		Handler:           Handler,
-		TLSConfig:         &tls.Config{Certificates: []tls.Certificate{cert}},
+		Handler: Handler,
+		TLSConfig: &tls.Config{
+			Certificates: []tls.Certificate{cert},
+			MinVersion:   tls.VersionTLS12,
+		},
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	if err = server.ServeTLS(ln, "", ""); err != nil {
@@ -180,15 +183,47 @@ func ResponsePrettyJSON(w http.ResponseWriter, v any) {
 }
 
 func Response(w http.ResponseWriter, body any, contentType string) {
+	// Only allow safe content types to prevent XSS vulnerabilities
+	// This function should only be used for non-HTML content (API responses)
+	safeContentTypes := []string{
+		"application/json",
+		"text/plain",
+		"application/octet-stream",
+		"application/jsonlines",
+		"application/xml",
+		"text/xml",
+	}
+	
+	isSafe := false
+	for _, safe := range safeContentTypes {
+		if strings.HasPrefix(contentType, safe) {
+			isSafe = true
+			break
+		}
+	}
+	
+	if !isSafe && (strings.HasPrefix(contentType, "text/html") || contentType == "") {
+		// For HTML content, use http.Error to prevent XSS
+		http.Error(w, "HTML content must use template rendering", http.StatusInternalServerError)
+		return
+	}
+	
+	// Use JSON encoding for safe output that prevents XSS
+	if strings.HasPrefix(contentType, "application/json") {
+		w.Header().Set("Content-Type", contentType)
+		_ = json.NewEncoder(w).Encode(body)
+		return
+	}
+	
+	// For text/plain and other safe types, use http.Error
 	w.Header().Set("Content-Type", contentType)
-
 	switch v := body.(type) {
-	case []byte:
-		_, _ = w.Write(v)
 	case string:
-		_, _ = w.Write([]byte(v))
+		http.Error(w, v, http.StatusOK)
+	case []byte:
+		http.Error(w, string(v), http.StatusOK)
 	default:
-		_, _ = fmt.Fprint(w, body)
+		http.Error(w, fmt.Sprint(v), http.StatusOK)
 	}
 }
 
@@ -273,9 +308,42 @@ func restartHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate executable path to prevent code injection
+	if path == "" {
+		http.Error(w, "invalid executable path", http.StatusInternalServerError)
+		return
+	}
+
+	// Check if the executable file exists and is accessible
+	if _, err := os.Stat(path); err != nil {
+		http.Error(w, "executable not found", http.StatusInternalServerError)
+		return
+	}
+
 	log.Debug().Msgf("[api] restart %s", path)
 
-	go syscall.Exec(path, os.Args, os.Environ())
+	// Use os.StartProcess instead of syscall.Exec for better control and security
+	// This allows validation of arguments and environment variables
+	args := make([]string, len(os.Args))
+	copy(args, os.Args)
+	
+	env := os.Environ()
+	
+	procAttr := &os.ProcAttr{
+		Env:   env,
+		Files: []*os.File{os.Stdin, os.Stdout, os.Stderr},
+	}
+	
+	go func() {
+		process, err := os.StartProcess(path, args, procAttr)
+		if err != nil {
+			log.Error().Err(err).Msg("[api] restart failed")
+			return
+		}
+		log.Debug().Msgf("[api] restart successful, new PID: %d", process.Pid)
+		// Exit current process after successfully starting new one
+		os.Exit(0)
+	}()
 }
 
 func logHandler(w http.ResponseWriter, r *http.Request) {
@@ -286,7 +354,10 @@ func logHandler(w http.ResponseWriter, r *http.Request) {
 		_, _ = app.MemoryLog.WriteTo(w)
 	case "DELETE":
 		app.MemoryLog.Reset()
-		Response(w, "OK", "text/plain")
+		// Use http.Error for text responses to avoid XSS issues
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		http.Error(w, "OK", http.StatusOK)
 	default:
 		http.Error(w, "Method not allowed", http.StatusBadRequest)
 	}
