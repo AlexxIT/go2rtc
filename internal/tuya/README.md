@@ -2,7 +2,7 @@
 
 *[New in v1.9.13](https://github.com/AlexxIT/go2rtc/releases/tag/v1.9.13)*
 
-[Tuya](https://www.tuya.com/) proprietary camera protocol with **two way audio** support. Go2rtc supports `Tuya Smart API` and `Tuya Cloud API`.
+[Tuya](https://www.tuya.com/) is a proprietary camera protocol with **two-way audio** support. go2rtc supports `Tuya Smart API` and `Tuya Cloud API`.
 
 **Tuya Smart API (recommended)**:
 - Cameras can be discovered through the go2rtc web interface via Tuya Smart account (Add > Tuya > Select region and fill in email and password > Login).
@@ -15,7 +15,7 @@
 
 ## Configuration
 
-Use `resolution` parameter to select the stream (not all cameras support `hd` stream through WebRTC even if the camera has it):
+Use the `resolution` parameter to select the stream (not all cameras support an `hd` stream through WebRTC even if the camera supports it):
 - `hd` - HD stream (default)
 - `sd` - SD stream
 

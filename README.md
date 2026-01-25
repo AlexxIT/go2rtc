@@ -280,7 +280,7 @@ streams:
 - **Dahua Doorbell** users may want to change [audio codec](https://github.com/AlexxIT/go2rtc/issues/49#issuecomment-2127107379) for proper two-way audio. Make sure not to request backchannel multiple times by adding `#backchannel=0` to other stream sources of the same doorbell. The `unicast=true&proto=Onvif` is preferred for two-way audio as this makes the doorbell accept multiple codecs for the incoming audio
 - **Reolink** users may want NOT to use RTSP protocol at all, some camera models have a very awful, unusable stream implementation
 - **Ubiquiti UniFi** users may want to disable HTTPS verification. Use `rtspx://` prefix instead of `rtsps://`. And don't use `?enableSrtp` [suffix](https://github.com/AlexxIT/go2rtc/issues/81)
-- **TP-Link Tapo** users may skip login and password, because go2rtc support login [without them](https://drmnsamoliu.github.io/video.html)
+- **TP-Link Tapo** users may skip login and password, because go2rtc supports login [without them](https://drmnsamoliu.github.io/video.html)
 - If your camera has two RTSP links, you can add both as sources. This is useful when streams have different codecs, for example AAC audio with main stream and PCMU/PCMA audio with second stream
 - If the stream from your camera is glitchy, try using [ffmpeg source](#source-ffmpeg). It will not add CPU load if you don't use transcoding
 - If the stream from your camera is very glitchy, try to use transcoding with [ffmpeg source](#source-ffmpeg)
@@ -727,7 +727,7 @@ streams:
 
 ## Source: Ring
 
-This source type support Ring cameras with [two-way audio](#two-way-audio) support. If you have a `refresh_token` and `device_id` - you can use it in `go2rtc.yaml` config file. Otherwise, you can use the go2rtc interface and add your ring account (WebUI > Add > Ring). Once added, it will list all your Ring cameras.
+This source type supports Ring cameras with [two-way audio](#two-way-audio) support. If you have a `refresh_token` and `device_id`, you can use them in the `go2rtc.yaml` config file. Otherwise, you can use the go2rtc web interface and add your Ring account (WebUI > Add > Ring). Once added, it will list all your Ring cameras.
 
 ```yaml
 streams:
@@ -745,9 +745,9 @@ This source type supports Roborock vacuums with cameras. Known working models:
 - Roborock S7 MaxV - video and two-way audio
 - Roborock Qrevo MaxV - video and two-way audio
 
-Source supports loading Roborock credentials from Home Assistant [custom integration](https://github.com/humbertogontijo/homeassistant-roborock) or the [core integration](https://www.home-assistant.io/integrations/roborock). Otherwise, you need to log in to your Roborock account (MiHome account is not supported). Go to: go2rtc WebUI > Add webpage. Copy `roborock://...` source for your vacuum and paste it to `go2rtc.yaml` config.
+This source supports loading Roborock credentials from the Home Assistant [custom integration](https://github.com/humbertogontijo/homeassistant-roborock) or the [core integration](https://www.home-assistant.io/integrations/roborock). Otherwise, you need to log in to your Roborock account (MiHome account is not supported). Go to go2rtc WebUI > Add webpage. Copy the `roborock://...` source for your vacuum and paste it into your `go2rtc.yaml` config.
 
-If you have a graphic PIN for your vacuum, add it as a numeric PIN (lines: 123, 456, 789) to the end of the `roborock` link.
+If you have a pattern PIN for your vacuum, add it as a numeric PIN (lines: 123, 456, 789) to the end of the `roborock` link.
 
 ## Source: Doorbird
 
@@ -948,7 +948,7 @@ streams:
 
 The HTTP API is the main part for interacting with the application. Default address: `http://localhost:1984/`.
 
-**Important!** go2rtc passes requests from localhost and from Unix sockets without HTTP authorisation, even if you have it configured! It is your responsibility to set up secure external access to the API. If not properly configured, an attacker can gain access to your cameras and even your server.
+**Important!** go2rtc passes requests from localhost and Unix sockets without HTTP authorization, even if you have it configured. It is your responsibility to set up secure external access to the API. If not properly configured, an attacker can gain access to your cameras and even your server.
 
 [API description](api/README.md).
 
@@ -1348,7 +1348,7 @@ Some examples:
 
 **Audio**
 
-- Go2rtc support [automatic repack](#built-in-transcoding) `PCMA/PCMU/PCM` codecs to `FLAC` for MSE/MP4/HLS so they will work almost anywhere
+- go2rtc supports [automatic repackaging](#built-in-transcoding) of `PCMA/PCMU/PCM` codecs into `FLAC` for MSE/MP4/HLS so they'll work almost anywhere
 - **WebRTC** audio codecs: `PCMU/8000`, `PCMA/8000`, `OPUS/48000/2`
 - `OPUS` and `MP3` inside **MP4** are part of the standard, but some players do not support them anyway (especially Apple)
 
@@ -1399,15 +1399,15 @@ PCMU/xxx => PCMU/8000 => WebRTC
 
 # Codecs negotiation
 
-For example, you want to watch RTSP-stream from [Dahua IPC-K42](https://www.dahuasecurity.com/fr/products/All-Products/Network-Cameras/Wireless-Series/Wi-Fi-Series/4MP/IPC-K42) camera in your Chrome browser.
+For example, you want to watch an RTSP stream from a [Dahua IPC-K42](https://www.dahuasecurity.com/fr/products/All-Products/Network-Cameras/Wireless-Series/Wi-Fi-Series/4MP/IPC-K42) camera in your Chrome browser.
 
 - this camera supports two-way audio standard **ONVIF Profile T**
-- this camera supports codecs **H264, H265** for send video, and you select `H264` in camera settings
+- this camera supports codecs **H264, H265** for sending video, and you select `H264` in camera settings
 - this camera supports codecs **AAC, PCMU, PCMA** for sending audio (from mic), and you select `AAC/16000` in camera settings
 - this camera supports codecs **AAC, PCMU, PCMA** for receiving audio (to speaker), you don't need to select them
 - your browser supports codecs **H264, VP8, VP9, AV1** for receiving video, you don't need to select them
 - your browser supports codecs **OPUS, PCMU, PCMA** for sending and receiving audio, you don't need to select them
-- you can't get camera audio directly, because its audio codecs don't match with your browser codecs
+- you can't get the camera audio directly because its audio codecs don't match your browser's codecs
   - so you decide to use transcoding via FFmpeg and add this setting to the config YAML file
   - you have chosen `OPUS/48000/2` codec, because it is higher quality than the `PCMU/8000` or `PCMA/8000`
 
@@ -1420,7 +1420,7 @@ streams:
     - ffmpeg:rtsp://admin:password@192.168.1.123/cam/realmonitor?channel=1&subtype=0#audio=opus
 ```
 
-**go2rtc** automatically matches codecs for your browser and all your stream sources. This is called **multi-source two-way codec negotiation**. And this is one of the main features of this app.
+**go2rtc** automatically matches codecs for your browser across all of your stream sources. This is called **multi-source two-way codec negotiation**, and it's one of the main features of this app.
 
 ![Codec negotiation](assets/codecs.svg)
 
