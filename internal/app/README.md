@@ -35,7 +35,7 @@ rtsp:
 Editors like [GoLand](https://www.jetbrains.com/go/) and [VS Code](https://code.visualstudio.com/) supports autocomplete and syntax validation.
 
 ```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/AlexxIT/go2rtc/master/website/schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/AlexxIT/go2rtc/master/www/schema.json
 ```
 
 ## Defaults
