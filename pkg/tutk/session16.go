@@ -50,7 +50,8 @@ type Session16 struct {
 	seqSendCmd1 uint16
 	seqSendAud  uint16
 
-	waitSeq  uint16
+	waitFSeq uint16
+	waitCSeq uint16
 	waitSize int
 	waitData []byte
 }
@@ -183,7 +184,7 @@ func (s *Session16) SessionRead(chID byte, cmd []byte) int {
 	}
 
 	// 0  01030800  command + version
-	// 4  00000000  frame num
+	// 4  00000000  frame seq
 	// 8  ac880100  total size
 	// 12 6200      chunk seq
 	// 14 2000      tail (pkt header) size
@@ -197,25 +198,27 @@ func (s *Session16) SessionRead(chID byte, cmd []byte) int {
 
 		switch cmd[1] {
 		case 0x03:
-			seq := binary.LittleEndian.Uint16(cmd[12:])
-			if seq != s.waitSeq {
-				s.waitSeq = 0
-				return msgMediaLost
-			}
-			if seq == 0 {
+			frameSeq := binary.LittleEndian.Uint16(cmd[4:])
+			chunkSeq := binary.LittleEndian.Uint16(cmd[12:])
+			if chunkSeq == 0 {
+				s.waitFSeq = frameSeq
+				s.waitCSeq = 0
 				s.waitData = s.waitData[:0]
 				payloadSize := binary.LittleEndian.Uint32(cmd[8:])
 				hdrSize := binary.LittleEndian.Uint16(cmd[14:])
 				s.waitSize = int(hdrSize) + int(payloadSize)
+			} else if frameSeq != s.waitFSeq || chunkSeq != s.waitCSeq {
+				s.waitCSeq = 0
+				return msgMediaLost
 			}
 
 			s.waitData = append(s.waitData, cmd[24:]...)
 			if n := len(s.waitData); n < s.waitSize {
-				s.waitSeq++
+				s.waitCSeq++
 				return msgMediaChunk
 			}
 
-			s.waitSeq = 0
+			s.waitCSeq = 0
 
 			payloadSize := binary.LittleEndian.Uint32(cmd[8:])
 			packetData[0] = bytes.Clone(s.waitData[payloadSize:])

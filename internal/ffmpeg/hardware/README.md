@@ -22,7 +22,7 @@ You **NEED** hardware acceleration if you using `#video=h264`, `#video=h265`, `#
 streams:
   # auto select hardware encoder
   camera1_hw: ffmpeg:rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0#video=h264#hardware
-  
+
   # manual select hardware encoder (vaapi, cuda, v4l2m2m, dxva2, videotoolbox)
   camera1_vaapi: ffmpeg:rtsp://rtsp:12345678@192.168.1.123/av_stream/ch0#video=h264#hardware=vaapi
 ```
@@ -47,7 +47,7 @@ Read more [here](https://en.wikipedia.org/wiki/Intel_Quick_Sync_Video#Hardware_d
 Linux and Docker:
 
 - It may be important to have the latest version of the OS with the latest version of the Linux kernel. For example, on my **Debian 10 (kernel 4.19)** it did not work, but after update to **Debian 11 (kernel 5.10)** all was fine.
-- In case of troube check you have `/dev/dri/` folder on your host.
+- In case of trouble check you have `/dev/dri/` folder on your host.
 
 Docker users should add `--privileged` option to container for access to Hardware.
 
@@ -79,7 +79,7 @@ Read more [here](https://docs.frigate.video/configuration/hardware_acceleration)
 
 **Supported on:** Linux binary, Docker, Hass Addon.
 
-I don't recommend using transcoding on the Raspberry Pi 3. It's extreamly slow, even with hardware acceleration. Also it may fail when transcoding 2K+ stream.
+I don't recommend using transcoding on the Raspberry Pi 3. It's extremely slow, even with hardware acceleration. Also it may fail when transcoding 2K+ stream.
 
 ## Raspberry Pi 4
 

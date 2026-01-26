@@ -15,14 +15,9 @@ type Envelope struct {
 }
 
 const (
-	prefix1 = `<?xml version="1.0" encoding="utf-8"?>
-<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope" xmlns:tt="http://www.onvif.org/ver10/schema" xmlns:tds="http://www.onvif.org/ver10/device/wsdl" xmlns:trt="http://www.onvif.org/ver10/media/wsdl">
-`
-	prefix2 = `<s:Body>
-`
-	suffix = `
-</s:Body>
-</s:Envelope>`
+	prefix1 = `<?xml version="1.0" encoding="utf-8"?><s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope" xmlns:tt="http://www.onvif.org/ver10/schema" xmlns:tds="http://www.onvif.org/ver10/device/wsdl" xmlns:trt="http://www.onvif.org/ver10/media/wsdl">`
+	prefix2 = `<s:Body>`
+	suffix  = `</s:Body></s:Envelope>`
 )
 
 func NewEnvelope() *Envelope {
@@ -54,8 +49,7 @@ func NewEnvelopeWithUser(user *url.Userinfo) *Envelope {
 			<wsu:Created xmlns:wsu="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd">%s</wsu:Created>
 		</wsse:UsernameToken>
 	</wsse:Security>
-</s:Header>
-`,
+</s:Header>`,
 		user.Username(),
 		base64.StdEncoding.EncodeToString(h.Sum(nil)),
 		base64.StdEncoding.EncodeToString([]byte(nonce)),
