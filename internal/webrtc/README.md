@@ -10,8 +10,8 @@ What you should to know about WebRTC:
 If an external connection via STUN is used:
 
 - Uses [UDP hole punching](https://en.wikipedia.org/wiki/UDP_hole_punching) technology to bypass NAT even if you not open your server to the World
-- For about 20% of users, the techology will not work because of the [Symmetric NAT](https://tomchen.github.io/symmetric-nat-test/)
-- UDP is not suitable for transmitting 2K and 4K high bitrate video over open networks because of the high loss rate:
+- For about 20% of users, the technology will not work because of the [Symmetric NAT](https://tomchen.github.io/symmetric-nat-test/)
+- UDP is not suitable for transmitting 2K and 4K high bit rate video over open networks because of the high loss rate:
   - https://habr.com/ru/companies/flashphoner/articles/480006/
   - https://www.youtube.com/watch?v=FXVg2ckuKfs
 
@@ -26,7 +26,7 @@ webrtc:
 
 ## Config
 
-**Important!** This example is not for copypasting!
+**Important!** This example is not for copy pasting!
 
 ```yaml
 webrtc:
@@ -49,13 +49,13 @@ webrtc:
       credential: your_pass
 
   # optional filter list for auto discovery logic
-  # some settings only make sense if you don't specify a fixed UDP port  
+  # some settings only make sense if you don't specify a fixed UDP port
   filters:
     # list of host candidates from auto discovery to be sent
     # including candidates from the `listen` option
     # use `candidates: []` to remove all auto discovery candidates
     candidates: [ 192.168.1.123 ]
-    
+
     # enable localhost candidates
     loopback: true
 
@@ -84,7 +84,7 @@ Don't know why, but you can disable TCP port and leave only random UDP ports - `
 
 ## Config filters
 
-**Importan!** By default go2rtc exclude all Docker-like candidates (`172.16.0.0/12`). This can not be disabled.
+**Important!** By default go2rtc exclude all Docker-like candidates (`172.16.0.0/12`). This can not be disabled.
 
 Filters allow you to exclude unnecessary candidates. Extra candidates don't make your connection worse or better. But the wrong filter settings can break everything. Skip this setting if you don't understand it.
 
@@ -106,7 +106,7 @@ webrtc:
   candidates: [ 192.168.1.2:8555 ]  # add manual host candidate (use docker port forwarding)
 ```
 
-## Userful links
+## Useful links
 
 - https://www.ietf.org/archive/id/draft-ietf-wish-whip-01.html
 - https://www.ietf.org/id/draft-murillo-whep-01.html
