@@ -582,6 +582,8 @@ streams:
 - use the **cloud password**, this is not the RTSP password! you do not need to add a login!
 - you can also use **UPPERCASE** MD5 hash from your cloud password with `admin` username
 - some new camera firmwares require SHA256 instead of MD5
+- Note: in some cases you might have to disable 2FA on your account.
+- Note: with the proprietary `tapo://` protocol there is no way to access the smaller `/stream2`.
 
 ```yaml
 streams:
