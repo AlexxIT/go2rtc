@@ -37,8 +37,8 @@ Settings > Stream:
 
 - Service: Custom
 - Server: rtmp://192.168.10.101/tmp
-- Stream Key: <empty>
-- Use auth: <disabled>
+- Stream Key: `<empty>`
+- Use auth: `<disabled>`
 
 **OpenIPC**
 
