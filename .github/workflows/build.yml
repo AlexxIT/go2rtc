@@ -116,6 +116,7 @@ jobs:
   docker-master:
     name: Build docker master
     runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -173,6 +174,7 @@ jobs:
   docker-hardware:
     name: Build docker hardware
     runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -228,6 +230,7 @@ jobs:
   docker-rockchip:
     name: Build docker rockchip
     runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
