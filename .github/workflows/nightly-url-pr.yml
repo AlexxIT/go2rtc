@@ -51,8 +51,46 @@ jobs:
               return core.error(`No artifacts found`);
             }
             let body = `Download the artifacts for this pull request:\n`;
+            const osLabels = {
+              win: "Windows",
+              linux: "Linux",
+              mac: "macOS",
+              freebsd: "FreeBSD",
+            };
+            const groups = new Map();
             for (const art of artifacts) {
-              body += `\n* [${art.name}.zip](https://nightly.link/${owner}/${repo}/actions/artifacts/${art.id}.zip)`;
+              const name = art.name;
+              const parts = name.split("_");
+              // Extract OS prefix from parts[1] by removing trailing digits
+              const osKey = parts.length >= 2 ? parts[1].replace(/\d+$/, "") : "other";
+              const osLabel = osLabels[osKey] || "Other";
+              // Extract architecture: for 3+ parts use parts[2:], for 2 parts extract digits from parts[1]
+              let arch;
+              if (parts.length >= 3) {
+                arch = parts.slice(2).join("_");
+              } else if (parts.length === 2) {
+                // Extract digits/suffix from parts[1] (e.g., "win64" -> "64", "win32" -> "32")
+                const match = parts[1].match(/\d+$/);
+                arch = match ? match[0] : parts[1];
+              } else {
+                arch = name.replace(/^go2rtc_/, "");
+              }
+              if (!groups.has(osLabel)) groups.set(osLabel, []);
+              groups.get(osLabel).push({
+                label: arch,
+                url: `https://nightly.link/${owner}/${repo}/actions/artifacts/${art.id}.zip`,
+              });
+            }
+
+            const order = ["Windows", "Linux", "macOS", "FreeBSD", "Other"];
+            for (const osLabel of order) {
+              const items = groups.get(osLabel);
+              if (!items || !items.length) continue;
+              items.sort((a, b) => a.label.localeCompare(b.label));
+              body += `\n\n**${osLabel}**`;
+              for (const item of items) {
+                body += `\n- [${item.label}.zip](${item.url})`;
+              }
             }
 
             core.info("Review thread message body:", body);
