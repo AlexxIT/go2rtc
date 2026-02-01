@@ -136,8 +136,8 @@ Ultimate camera streaming application with support for RTSP, WebRTC, HomeKit, FF
 
 Download binary for your OS from [latest release](https://github.com/AlexxIT/go2rtc/releases/):
 
-- `go2rtc_win64.zip` - Windows 10+ 64-bit
-- `go2rtc_win32.zip` - Windows 10+ 32-bit
+- `go2rtc_win_x64.zip` - Windows 10+ 64-bit
+- `go2rtc_win_x32.zip` - Windows 10+ 32-bit
 - `go2rtc_win_arm64.zip` - Windows ARM 64-bit
 - `go2rtc_linux_amd64` - Linux 64-bit
 - `go2rtc_linux_i386` - Linux 32-bit

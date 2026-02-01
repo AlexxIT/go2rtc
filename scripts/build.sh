@@ -29,8 +29,8 @@ export CGO_ENABLED=0
 
 set -x  # Print commands and their arguments as they are executed.
 
-GOOS=windows  GOARCH=amd64        build_zip go2rtc_win64.zip     go2rtc.exe
-GOOS=windows  GOARCH=386          build_zip go2rtc_win32.zip     go2rtc.exe
+GOOS=windows  GOARCH=amd64        build_zip go2rtc_win_x64.zip     go2rtc.exe
+GOOS=windows  GOARCH=386          build_zip go2rtc_win_x32.zip     go2rtc.exe
 GOOS=windows  GOARCH=arm64        build_zip go2rtc_win_arm64.zip go2rtc.exe
 
 GOOS=linux    GOARCH=amd64        build_upx go2rtc_linux_amd64
