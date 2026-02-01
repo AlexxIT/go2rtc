@@ -111,6 +111,14 @@ func handleTCP(rawURL string) (core.Producer, error) {
 }
 
 func apiStream(w http.ResponseWriter, r *http.Request) {
+	if api.IsReadOnly() {
+		switch r.Method {
+		case "PUT", "PATCH", "POST", "DELETE":
+			api.ReadOnlyError(w)
+			return
+		}
+	}
+
 	dst := r.URL.Query().Get("dst")
 	stream := streams.Get(dst)
 	if stream == nil {
