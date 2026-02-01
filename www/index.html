@@ -45,11 +45,18 @@
 </main>
 
 <script>
-    const templates = [
+    let templates = [
         '<a href="stream.html?src={name}">stream</a>',
         '<a href="links.html?src={name}">links</a>',
         '<a href="#" data-name="{name}">delete</a>',
     ];
+    let readOnly = false;
+
+    const applyReadOnly = (flag) => {
+        if (!flag || readOnly) return;
+        readOnly = true;
+        templates = templates.filter(link => link.indexOf('delete') < 0);
+    };
 
     document.querySelector('.controls > button')
         .addEventListener('click', () => {
@@ -144,13 +151,21 @@
     // Auto-reload
     setInterval(reload, 1000);
 
-    const url = new URL('api', location.href);
-    fetch(url, {cache: 'no-cache'}).then(r => r.json()).then(data => {
-        const info = document.querySelector('.info');
+    const info = document.querySelector('.info');
+    const applyInfo = (data) => {
         info.innerText = `version: ${data.version} / config: ${data.config_path}`;
-    });
+        applyReadOnly(Boolean(data.read_only));
+        reload();
+    };
 
-    reload();
+    if (window.go2rtcReady) {
+        window.go2rtcReady.then(data => {
+            if (data) applyInfo(data);
+        });
+    } else {
+        const url = new URL('api', location.href);
+        fetch(url, {cache: 'no-cache'}).then(r => r.json()).then(data => applyInfo(data));
+    }
 </script>
 
 </body>

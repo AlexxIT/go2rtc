@@ -24,6 +24,10 @@ var Auth struct {
 }
 
 func apiHandle(w http.ResponseWriter, r *http.Request) {
+	if api.IsReadOnly() && r.Method != "GET" {
+		api.ReadOnlyError(w)
+		return
+	}
 	switch r.Method {
 	case "GET":
 		if Auth.UserData == nil {

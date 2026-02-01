@@ -52,8 +52,24 @@
         drawTable(table, await r.json());
     }
 </script>
+<script>
+    window.addEventListener('DOMContentLoaded', () => {
+        if (!window.go2rtcReady) return;
+        window.go2rtcReady.then(data => {
+            if (!data || !data.read_only) return;
+            const banner = document.getElementById('readonly-banner');
+            if (banner) banner.style.display = 'block';
+            document.querySelectorAll('main input, main select, main button, main textarea').forEach(el => {
+                el.disabled = true;
+            });
+        });
+    });
+</script>
 
 <main>
+    <div id="readonly-banner" style="display: none; padding: 10px; background: #ffe9e9; border: 1px solid #f0b4b4;">
+        Read-only mode: add actions are disabled.
+    </div>
     <button id="stream">Temporary stream</button>
     <div>
         <form id="stream-form">

@@ -21,6 +21,14 @@ const MimeSDP = "application/sdp"
 var sessions = map[string]*webrtc.Conn{}
 
 func syncHandler(w http.ResponseWriter, r *http.Request) {
+	if api.IsReadOnly() {
+		switch r.Method {
+		case "POST", "PATCH", "DELETE":
+			api.ReadOnlyError(w)
+			return
+		}
+	}
+
 	switch r.Method {
 	case "POST":
 		query := r.URL.Query()

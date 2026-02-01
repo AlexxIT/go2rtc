@@ -152,6 +152,21 @@ Telegram: rtmps://xxx-x.rtmp.t.me/s/xxxxxxxxxx:xxxxxxxxxxxxxxxxxxxxxx</pre>
             fetch(url, {method: 'POST'});
         });
     </script>
+    <script>
+        const applyReadOnly = () => {
+            const ids = ['play-send', 'play-url', 'pub-send', 'pub-url'];
+            ids.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.disabled = true;
+            });
+        };
+
+        if (window.go2rtcReady) {
+            window.go2rtcReady.then(data => {
+                if (data && data.read_only) applyReadOnly();
+            });
+        }
+    </script>
 
     <div id="webrtc">
         <h2>WebRTC Magic</h2>
