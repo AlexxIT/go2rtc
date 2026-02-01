@@ -1183,6 +1183,11 @@
         let dump;
 
         const saveButton = document.getElementById('save');
+        const readOnlyWarning = 'Enabling read_only: true cannot be reverted remotely. To disable it you must edit the config file on the server manually. Continue?';
+        const hasReadOnlyTrue = (text) => {
+            if (!text) return false;
+            return /(^|\n)\s*read_only\s*:\s*true\s*(#.*)?$/m.test(text);
+        };
         const applyReadOnly = () => {
             saveButton.disabled = true;
             saveButton.title = 'Read-only mode';
@@ -1202,11 +1207,36 @@
                 return;
             }
 
-            r = await fetch('api/config', {method: 'POST', body: editor.getValue()});
+            const nextValue = editor.getValue();
+            if (hasReadOnlyTrue(nextValue) && !hasReadOnlyTrue(dump)) {
+                if (!confirm(readOnlyWarning)) return;
+            }
+
+            r = await fetch('api/config', {method: 'POST', body: nextValue});
             if (r.ok) {
                 alert('OK');
-                dump = editor.getValue();
+                dump = nextValue;
                 await fetch('api/restart', {method: 'POST'});
+                
+                // Poll server until it's back online before reloading
+                const waitForServer = async () => {
+                    for (let i = 0; i < 20; i++) {
+                        await new Promise(r => setTimeout(r, 500));
+                        try {
+                            const response = await fetch('api/config', {cache: 'no-cache'});
+                            if (response.ok || response.status === 410) {
+                                location.reload();
+                                return;
+                            }
+                        } catch (e) {
+                            // Server still down, continue polling
+                        }
+                    }
+                    // Fallback: reload after 10 seconds even if server check fails
+                    location.reload();
+                };
+                waitForServer();
+
             } else {
                 alert(await r.text());
             }
