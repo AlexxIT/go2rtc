@@ -32,6 +32,7 @@ func Init() {
 			TLSCert    string `yaml:"tls_cert"`
 			TLSKey     string `yaml:"tls_key"`
 			UnixListen string `yaml:"unix_listen"`
+			ReadOnly   bool   `yaml:"read_only"`
 
 			AllowPaths []string `yaml:"allow_paths"`
 		} `yaml:"api"`
@@ -50,6 +51,9 @@ func Init() {
 	allowPaths = cfg.Mod.AllowPaths
 	basePath = cfg.Mod.BasePath
 	log = app.GetLogger("api")
+	ReadOnly = cfg.Mod.ReadOnly
+	app.ConfigReadOnly = ReadOnly
+	app.Info["read_only"] = ReadOnly
 
 	initStatic(cfg.Mod.StaticDir)
 
@@ -149,6 +153,15 @@ const (
 )
 
 var Handler http.Handler
+var ReadOnly bool
+
+func IsReadOnly() bool {
+	return ReadOnly
+}
+
+func ReadOnlyError(w http.ResponseWriter) {
+	http.Error(w, "read-only", http.StatusForbidden)
+}
 
 // HandleFunc handle pattern with relative path:
 // - "api/streams" => "{basepath}/api/streams"
@@ -249,6 +262,11 @@ func exitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if IsReadOnly() {
+		ReadOnlyError(w)
+		return
+	}
+
 	s := r.URL.Query().Get("code")
 	code, err := strconv.Atoi(s)
 
@@ -264,6 +282,11 @@ func exitHandler(w http.ResponseWriter, r *http.Request) {
 func restartHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		http.Error(w, "", http.StatusBadRequest)
+		return
+	}
+
+	if IsReadOnly() {
+		ReadOnlyError(w)
 		return
 	}
 
@@ -285,6 +308,10 @@ func logHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/jsonlines")
 		_, _ = app.MemoryLog.WriteTo(w)
 	case "DELETE":
+		if IsReadOnly() {
+			ReadOnlyError(w)
+			return
+		}
 		app.MemoryLog.Reset()
 		Response(w, "OK", "text/plain")
 	default:

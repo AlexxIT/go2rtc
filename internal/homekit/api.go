@@ -43,6 +43,10 @@ func apiDiscovery(w http.ResponseWriter, r *http.Request) {
 }
 
 func apiHomekit(w http.ResponseWriter, r *http.Request) {
+	if api.IsReadOnly() && r.Method != "GET" {
+		api.ReadOnlyError(w)
+		return
+	}
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

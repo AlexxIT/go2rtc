@@ -4,12 +4,17 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 )
 
 func apiFFmpeg(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		http.Error(w, "", http.StatusMethodNotAllowed)
+		return
+	}
+	if api.IsReadOnly() {
+		api.ReadOnlyError(w)
 		return
 	}
 

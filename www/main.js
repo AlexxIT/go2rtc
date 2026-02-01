@@ -133,3 +133,24 @@ document.body.innerHTML = `
     </nav>
 </header>
 ` + document.body.innerHTML;
+
+window.go2rtcReady = (async () => {
+    try {
+        const url = new URL('api', location.href);
+        const r = await fetch(url, {cache: 'no-cache'});
+        if (!r.ok) return null;
+        const data = await r.json();
+        window.go2rtcInfo = data;
+        return data;
+    } catch (e) {
+        return null;
+    }
+})();
+
+window.go2rtcReady.then(data => {
+    if (!data || !data.read_only) return;
+    const links = document.querySelectorAll('nav a[href="add.html"], nav a[href="config.html"]');
+    links.forEach(link => {
+        link.style.display = 'none';
+    });
+});

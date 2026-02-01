@@ -1182,7 +1182,20 @@
 
         let dump;
 
-        document.getElementById('save').addEventListener('click', async () => {
+        const saveButton = document.getElementById('save');
+        const applyReadOnly = () => {
+            saveButton.disabled = true;
+            saveButton.title = 'Read-only mode';
+            editor.updateOptions({readOnly: true});
+        };
+
+        if (window.go2rtcReady) {
+            window.go2rtcReady.then(data => {
+                if (data && data.read_only) applyReadOnly();
+            });
+        }
+
+        saveButton.addEventListener('click', async () => {
             let r = await fetch('api/config', {cache: 'no-cache'});
             if (r.ok && dump !== await r.text()) {
                 alert('Config was changed from another place. Refresh the page and make changes again');
