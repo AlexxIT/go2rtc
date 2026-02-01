@@ -1,3 +1,4 @@
+//go:build ignore
 #include <stdio.h>
 #include <stddef.h>
 #include <sys/ioctl.h>
