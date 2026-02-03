@@ -9,10 +9,16 @@
             height: 100%;
         }
 
+        main {
+            flex: 0 0 auto;
+            padding: 10px 0;
+        }
+
         #config {
             flex: 1 1 auto;
-            border-top: 1px solid #ccc;
+            border-top: 1px solid var(--border-color);
             min-height: 300px;
+            overflow: hidden;
         }
     </style>
 </head>
@@ -1177,8 +1183,6 @@
         };
 
         const layout = () => {
-            const top = container.getBoundingClientRect().top;
-            container.style.height = `${Math.max(200, window.innerHeight - top)}px`;
             editor.layout();
         };
         window.addEventListener('resize', layout);
