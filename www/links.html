@@ -82,6 +82,8 @@
             color: var(--text-secondary);
             font-size: 14px;
             font-family: monospace;
+            word-break: break-all;
+            overflow-wrap: break-word;
         }
 
         .section {
@@ -120,6 +122,9 @@
             border-radius: 6px;
             border: 1px solid var(--border-color);
             transition: all 0.3s;
+            flex-wrap: wrap;
+            word-break: break-word;
+            overflow-wrap: break-word;
         }
 
         .link-item:hover {
@@ -139,6 +144,9 @@
             text-decoration: none;
             font-weight: 500;
             margin-right: 8px;
+            word-break: break-all;
+            overflow-wrap: break-word;
+            max-width: 100%;
         }
 
         .link-item a:hover {
@@ -161,6 +169,8 @@
             color: var(--accent-green);
             overflow-x: auto;
             margin-top: 12px;
+            word-break: break-all;
+            white-space: pre-wrap;
         }
 
         .form-group {
