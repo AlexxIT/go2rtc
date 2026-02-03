@@ -164,7 +164,6 @@ if (!document.querySelector('.logo')) {
         padding: 8px 16px;
         border: 1px solid transparent;
         border-radius: 4px;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         position: relative;
         overflow: hidden;
     }
@@ -177,7 +176,6 @@ if (!document.querySelector('.logo')) {
         width: 100%;
         height: 100%;
         background: linear-gradient(90deg, transparent, var(--accent-cyan), transparent);
-        transition: left 0.5s;
     }
 
     .nav-link:hover::before {
