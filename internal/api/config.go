@@ -26,6 +26,10 @@ func configHandler(w http.ResponseWriter, r *http.Request) {
 		Response(w, data, "application/yaml")
 
 	case "POST", "PATCH":
+		if IsReadOnly() {
+			ReadOnlyError(w)
+			return
+		}
 		data, err := io.ReadAll(r.Body)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)

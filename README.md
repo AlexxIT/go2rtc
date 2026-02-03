@@ -965,6 +965,7 @@ api:
   listen: ":1984"    # default ":1984", HTTP API port ("" - disabled)
   username: "admin"  # default "", Basic auth for WebUI
   password: "pass"   # default "", Basic auth for WebUI
+  read_only: true    # default false, Disable write actions in WebUI/API
   local_auth: true   # default false, Enable auth check for localhost requests
   base_path: "/rtc"  # default "", API prefix for serving on suburl (/api => /rtc/api)
   static_dir: "www"  # default "", folder for static files (custom web interface)
