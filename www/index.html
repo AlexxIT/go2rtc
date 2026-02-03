@@ -189,6 +189,17 @@
             box-shadow: var(--glow-cyan);
         }
 
+        .docs-link {
+            font-size: 11px;
+            padding: 4px 10px;
+            opacity: 0.6;
+            margin-left: auto;
+        }
+
+        .docs-link:hover {
+            opacity: 1;
+        }
+
         /* Main content */
         main {
             padding: 40px 0;
@@ -600,13 +611,15 @@
 <header>
     <div class="container">
         <nav>
-            <a href="index.html" class="logo">GO2RTC</a>
+            <span class="logo">GO2RTC</span>
             <div class="nav-links">
+                <a href="index.html" class="nav-link">Streams</a>
                 <a href="add.html" class="nav-link">Add Stream</a>
                 <a href="config.html" class="nav-link">Config</a>
                 <a href="log.html" class="nav-link">Logs</a>
                 <a href="net.html" class="nav-link">Network</a>
             </div>
+            <a href="https://github.com/AlexxIT/go2rtc" target="_blank" class="nav-link docs-link">docs</a>
             <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
                 <span class="theme-icon">🌙</span>
             </button>
