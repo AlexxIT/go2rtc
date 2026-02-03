@@ -116,8 +116,12 @@
 
         ensureYamlLanguage();
 
-        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-        monaco.editor.setTheme(prefersDark ? 'vs-dark' : 'vs');
+        const getTheme = () => document.documentElement.getAttribute('data-theme') === 'light' ? 'vs' : 'vs-dark';
+        monaco.editor.setTheme(getTheme());
+
+        window.addEventListener('themeChanged', () => {
+            monaco.editor.setTheme(getTheme());
+        });
 
         const editor = monaco.editor.create(container, {
             language: 'yaml',

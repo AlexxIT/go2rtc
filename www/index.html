@@ -4,65 +4,729 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>go2rtc</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
     <style>
-        .controls {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            align-items: center;
+        :root {
+            --bg-primary: #0a0e14;
+            --bg-secondary: #151b24;
+            --bg-card: #1a2332;
+            --border-color: #2a3544;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --text-muted: #6e7681;
+            --accent-cyan: #00d9ff;
+            --accent-electric: #00ffff;
+            --accent-red: #ff4757;
+            --accent-green: #2ecc71;
+            --accent-yellow: #ffd93d;
+            --glow-cyan: 0 0 20px rgba(0, 217, 255, 0.3);
+            --glow-red: 0 0 20px rgba(255, 71, 87, 0.3);
+            --glow-green: 0 0 20px rgba(46, 204, 113, 0.3);
         }
 
+        [data-theme="light"] {
+            --bg-primary: #f5f7fa;
+            --bg-secondary: #ffffff;
+            --bg-card: #ffffff;
+            --border-color: #e1e4e8;
+            --text-primary: #24292e;
+            --text-secondary: #586069;
+            --text-muted: #6a737d;
+            --accent-cyan: #0366d6;
+            --accent-electric: #005cc5;
+            --accent-red: #d73a49;
+            --accent-green: #28a745;
+            --accent-yellow: #ffd33d;
+            --glow-cyan: 0 0 10px rgba(3, 102, 214, 0.2);
+            --glow-red: 0 0 10px rgba(215, 58, 73, 0.2);
+            --glow-green: 0 0 10px rgba(40, 167, 69, 0.2);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Scan line effect */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                0deg,
+                rgba(0, 0, 0, 0.05) 0px,
+                rgba(0, 0, 0, 0.05) 1px,
+                transparent 1px,
+                transparent 2px
+            );
+            pointer-events: none;
+            z-index: 9999;
+            opacity: 0.3;
+        }
+
+        /* Animated gradient background */
+        body::after {
+            content: '';
+            position: fixed;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(
+                circle at 50% 50%,
+                rgba(0, 217, 255, 0.03) 0%,
+                transparent 50%
+            );
+            animation: rotateGradient 20s linear infinite;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        @keyframes rotateGradient {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 24px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Header */
+        header {
+            background: var(--bg-secondary);
+            border-bottom: 2px solid var(--accent-cyan);
+            box-shadow: var(--glow-cyan);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+        }
+
+        nav {
+            display: flex;
+            align-items: center;
+            gap: 32px;
+            padding: 20px 0;
+        }
+
+        .logo {
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 900;
+            font-size: 28px;
+            color: var(--accent-cyan);
+            text-shadow: var(--glow-cyan);
+            letter-spacing: 2px;
+            text-decoration: none;
+            position: relative;
+            animation: glitch 3s infinite;
+        }
+
+        @keyframes glitch {
+            0%, 90%, 100% { transform: translate(0); }
+            91% { transform: translate(-2px, 1px); }
+            92% { transform: translate(2px, -1px); }
+            93% { transform: translate(-1px, 2px); }
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 24px;
+            align-items: center;
+            flex: 1;
+        }
+
+        .nav-link {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-weight: 500;
+            text-transform: uppercase;
+            font-size: 12px;
+            letter-spacing: 1px;
+            padding: 8px 16px;
+            border: 1px solid transparent;
+            border-radius: 4px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .nav-link::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, var(--accent-cyan), transparent);
+            transition: left 0.5s;
+        }
+
+        .nav-link:hover::before {
+            left: 100%;
+        }
+
+        .nav-link:hover {
+            color: var(--accent-cyan);
+            border-color: var(--accent-cyan);
+            box-shadow: var(--glow-cyan);
+        }
+
+        /* Main content */
+        main {
+            padding: 40px 0;
+        }
+
+        .controls {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 32px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            align-items: center;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-electric));
+            color: var(--bg-primary);
+            border: none;
+            padding: 12px 28px;
+            border-radius: 6px;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            box-shadow: var(--glow-cyan);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .btn-primary::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .btn-primary:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 0 30px rgba(0, 217, 255, 0.5);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .mode-selector {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            padding: 12px 20px;
+            background: var(--bg-secondary);
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+        }
+
+        .mode-label {
+            color: var(--text-muted);
+            text-transform: uppercase;
+            font-size: 11px;
+            letter-spacing: 1px;
+            font-weight: 700;
+        }
+
+        .checkbox-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .checkbox-wrapper input[type="checkbox"] {
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border: 2px solid var(--border-color);
+            border-radius: 3px;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .checkbox-wrapper input[type="checkbox"]:checked {
+            background: var(--accent-cyan);
+            border-color: var(--accent-cyan);
+            box-shadow: var(--glow-cyan);
+        }
+
+        .checkbox-wrapper input[type="checkbox"]:checked::after {
+            content: '✓';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: var(--bg-primary);
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .checkbox-wrapper label {
+            color: var(--text-secondary);
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+        }
+
+        /* Table */
+        .streams-table {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead {
+            background: var(--bg-secondary);
+            border-bottom: 2px solid var(--accent-cyan);
+        }
+
+        th {
+            text-align: left;
+            padding: 16px 20px;
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 11px;
+            letter-spacing: 1px;
+            color: var(--accent-cyan);
+        }
+
+        th label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+        }
+
+        td {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        tbody tr {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+
+        tbody tr::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 3px;
+            height: 100%;
+            background: var(--accent-cyan);
+            transform: scaleY(0);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        tbody tr:hover {
+            background: rgba(0, 217, 255, 0.05);
+        }
+
+        tbody tr:hover::before {
+            transform: scaleY(1);
+        }
+
+        tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* Stream name with checkbox */
+        .stream-name {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .stream-name label {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        /* Live indicator */
+        .online-count {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 700;
+        }
+
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-green);
+            box-shadow: var(--glow-green);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.2); }
+        }
+
+        .offline-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text-muted);
+        }
+
+        /* Links */
+        a {
+            color: var(--accent-cyan);
+            text-decoration: none;
+            position: relative;
+            transition: color 0.3s;
+        }
+
+        a::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            width: 0;
+            height: 1px;
+            background: var(--accent-cyan);
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        a:hover {
+            color: var(--accent-electric);
+        }
+
+        a:hover::after {
+            width: 100%;
+        }
+
+        .link-separator {
+            color: var(--text-muted);
+            margin: 0 8px;
+        }
+
+        .delete-link {
+            color: var(--accent-red);
+        }
+
+        .delete-link:hover {
+            color: #ff6b81;
+        }
+
+        /* Info footer */
         .info {
-            color: #888;
+            margin-top: 32px;
+            padding: 20px 24px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-muted);
+            font-size: 12px;
+            display: flex;
+            gap: 24px;
+            flex-wrap: wrap;
+        }
+
+        .info-item {
+            display: flex;
+            gap: 8px;
+        }
+
+        .info-label {
+            color: var(--accent-cyan);
+            text-transform: uppercase;
+            font-weight: 700;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            nav {
+                flex-direction: column;
+                gap: 16px;
+            }
+
+            .nav-links {
+                flex-direction: column;
+                width: 100%;
+            }
+
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .mode-selector {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            table, thead, tbody, th, td, tr {
+                display: block;
+            }
+
+            thead {
+                display: none;
+            }
+
+            tr {
+                margin-bottom: 16px;
+                border: 1px solid var(--border-color);
+                border-radius: 8px;
+                overflow: hidden;
+            }
+
+            td {
+                position: relative;
+                padding-left: 50%;
+                border: none;
+                border-bottom: 1px solid var(--border-color);
+            }
+
+            td:last-child {
+                border-bottom: none;
+            }
+
+            td::before {
+                content: attr(data-label);
+                position: absolute;
+                left: 16px;
+                top: 16px;
+                color: var(--accent-cyan);
+                font-weight: 700;
+                text-transform: uppercase;
+                font-size: 11px;
+            }
+        }
+
+        /* Loading animation */
+        @keyframes shimmer {
+            0% { background-position: -1000px 0; }
+            100% { background-position: 1000px 0; }
+        }
+
+        .loading {
+            background: linear-gradient(
+                90deg,
+                var(--bg-card) 25%,
+                var(--bg-secondary) 50%,
+                var(--bg-card) 75%
+            );
+            background-size: 1000px 100%;
+            animation: shimmer 2s infinite;
+        }
+
+        /* Theme toggle */
+        .theme-toggle {
+            width: 48px;
+            height: 48px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: var(--bg-card);
+            color: var(--accent-cyan);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            margin-left: auto;
+        }
+
+        .theme-toggle:hover {
+            background: var(--accent-cyan);
+            color: var(--bg-primary);
+            box-shadow: var(--glow-cyan);
+            transform: rotate(180deg);
         }
     </style>
 </head>
 <body>
 
-<script src="main.js"></script>
+<header>
+    <div class="container">
+        <nav>
+            <a href="index.html" class="logo">GO2RTC</a>
+            <div class="nav-links">
+                <a href="add.html" class="nav-link">Add Stream</a>
+                <a href="config.html" class="nav-link">Config</a>
+                <a href="log.html" class="nav-link">Logs</a>
+                <a href="net.html" class="nav-link">Network</a>
+            </div>
+            <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
+                <span class="theme-icon">🌙</span>
+            </button>
+        </nav>
+    </div>
+</header>
 
 <main>
-    <div class="controls">
-        <button>stream</button>
-        modes
-        <label><input type="checkbox" name="webrtc" checked>webrtc</label>
-        <label><input type="checkbox" name="mse" checked>mse</label>
-        <label><input type="checkbox" name="hls" checked>hls</label>
-        <label><input type="checkbox" name="mjpeg" checked>mjpeg</label>
+    <div class="container">
+        <div class="controls">
+            <button class="btn-primary">View Streams</button>
+            <div class="mode-selector">
+                <span class="mode-label">Modes:</span>
+                <label class="checkbox-wrapper">
+                    <input type="checkbox" name="webrtc" checked>
+                    <span>WebRTC</span>
+                </label>
+                <label class="checkbox-wrapper">
+                    <input type="checkbox" name="mse" checked>
+                    <span>MSE</span>
+                </label>
+                <label class="checkbox-wrapper">
+                    <input type="checkbox" name="hls" checked>
+                    <span>HLS</span>
+                </label>
+                <label class="checkbox-wrapper">
+                    <input type="checkbox" name="mjpeg" checked>
+                    <span>MJPEG</span>
+                </label>
+            </div>
+        </div>
+
+        <div class="streams-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>
+                            <label>
+                                <input id="selectall" type="checkbox">
+                                Stream Name
+                            </label>
+                        </th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="streams">
+                </tbody>
+            </table>
+        </div>
+
+        <div class="info"></div>
     </div>
-    <table>
-        <thead>
-        <tr>
-            <th><label><input id="selectall" type="checkbox">name</label></th>
-            <th>online</th>
-            <th>commands</th>
-        </tr>
-        </thead>
-        <tbody id="streams">
-        </tbody>
-    </table>
-    <div class="info"></div>
 </main>
 
 <script>
+    // Theme management
+    function initTheme() {
+        const savedTheme = localStorage.getItem('theme');
+        const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const theme = savedTheme || (systemPrefersDark ? 'dark' : 'light');
+
+        setTheme(theme);
+
+        // Listen for system theme changes
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+            if (!localStorage.getItem('theme')) {
+                setTheme(e.matches ? 'dark' : 'light');
+            }
+        });
+    }
+
+    function setTheme(theme) {
+        const html = document.documentElement;
+        const themeIcon = document.querySelector('.theme-icon');
+
+        if (theme === 'light') {
+            html.setAttribute('data-theme', 'light');
+            if (themeIcon) themeIcon.textContent = '☀️';
+        } else {
+            html.removeAttribute('data-theme');
+            if (themeIcon) themeIcon.textContent = '🌙';
+        }
+    }
+
+    function toggleTheme() {
+        const html = document.documentElement;
+        const currentTheme = html.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+        const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+
+        setTheme(newTheme);
+        localStorage.setItem('theme', newTheme);
+    }
+
+    // Initialize theme before page loads
+    initTheme();
+
+    // Theme toggle button handler
+    document.getElementById('theme-toggle')?.addEventListener('click', toggleTheme);
+
     const templates = [
         '<a href="stream.html?src={name}">stream</a>',
         '<a href="links.html?src={name}">links</a>',
-        '<a href="#" data-name="{name}">delete</a>',
+        '<a href="#" class="delete-link" data-name="{name}">delete</a>',
     ];
 
-    document.querySelector('.controls > button')
+    document.querySelector('.btn-primary')
         .addEventListener('click', () => {
             const url = new URL('stream.html', location.href);
 
-            const streams = document.querySelectorAll('#streams input');
+            const streams = document.querySelectorAll('#streams input[type="checkbox"]');
             streams.forEach(i => {
-                if (i.checked) url.searchParams.append('src', i.name);
+                if (i.checked && i.name) url.searchParams.append('src', i.name);
             });
 
             if (!url.searchParams.has('src')) return;
 
-            let mode = document.querySelectorAll('.controls input');
+            let mode = document.querySelectorAll('.mode-selector input[type="checkbox"]');
             mode = Array.from(mode).filter(i => i.checked).map(i => i.name).join(',');
 
             window.location.href = `${url}&mode=${mode}`;
@@ -70,7 +734,7 @@
 
     const tbody = document.getElementById('streams');
     tbody.addEventListener('click', async ev => {
-        if (ev.target.innerText !== 'delete') return;
+        if (!ev.target.classList.contains('delete-link')) return;
 
         ev.preventDefault();
 
@@ -94,7 +758,7 @@
     });
 
     document.getElementById('selectall').addEventListener('change', ev => {
-        document.querySelectorAll('#streams input').forEach(el => {
+        document.querySelectorAll('#streams input[type="checkbox"]').forEach(el => {
             el.checked = ev.target.checked;
         });
     });
@@ -116,7 +780,7 @@
                 let tr = tbody.querySelector(`tr[data-id="${name}"]`);
                 const online = value && value.consumers ? value.consumers.length : 0;
                 const src = encodeURIComponent(name);
-                const links = templates.map(link => link.replace('{name}', src)).join(' ');
+                const links = templates.map(link => link.replace('{name}', src)).join('<span class="link-separator">/</span>');
 
                 if (!tr) {
                     tr = document.createElement('tr');
@@ -125,10 +789,30 @@
                 }
 
                 const isChecked = checkboxStates[name] ? 'checked' : '';
+                const dotClass = online > 0 ? 'live-dot' : 'offline-dot';
+
                 tr.innerHTML =
-                    `<td><label><input type="checkbox" name="${name}" ${isChecked}>${name}</label></td>` +
-                    `<td><a href="api/streams?src=${src}">${online} / info</a> / <a href="api/streams?src=${src}&video=all&audio=all&microphone">probe</a> / <a href="net.html?src=${src}">net</a></td>` +
-                    `<td>${links}</td>`;
+                    `<td data-label="Name">
+                        <div class="stream-name">
+                            <label>
+                                <input type="checkbox" name="${name}" ${isChecked}>
+                                <span>${name}</span>
+                            </label>
+                        </div>
+                    </td>` +
+                    `<td data-label="Status">
+                        <div class="online-count">
+                            <span class="${dotClass}"></span>
+                            ${online > 0 ? `<span>${online} viewer${online !== 1 ? 's' : ''}</span>` : '<span>offline</span>'}
+                        </div>
+                        <span class="link-separator">/</span>
+                        <a href="api/streams?src=${src}">info</a>
+                        <span class="link-separator">/</span>
+                        <a href="api/streams?src=${src}&video=all&audio=all&microphone">probe</a>
+                        <span class="link-separator">/</span>
+                        <a href="net.html?src=${src}">network</a>
+                    </td>` +
+                    `<td data-label="Actions">${links}</td>`;
             }
 
             // Remove old rows
@@ -147,7 +831,16 @@
     const url = new URL('api', location.href);
     fetch(url, {cache: 'no-cache'}).then(r => r.json()).then(data => {
         const info = document.querySelector('.info');
-        info.innerText = `version: ${data.version} / config: ${data.config_path}`;
+        info.innerHTML = `
+            <div class="info-item">
+                <span class="info-label">Version:</span>
+                <span>${data.version}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Config:</span>
+                <span>${data.config_path}</span>
+            </div>
+        `;
     });
 
     reload();
