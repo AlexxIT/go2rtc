@@ -182,7 +182,8 @@ if (!document.querySelector('.logo')) {
         left: 100%;
     }
 
-    .nav-link:hover {
+    .nav-link:hover,
+    .nav-link.active {
         color: var(--accent-cyan);
         border-color: var(--accent-cyan);
         box-shadow: var(--glow-cyan);
@@ -426,6 +427,14 @@ if (!document.querySelector('.logo')) {
     </div>
 </header>
 ` + document.body.innerHTML;
+
+    // Mark active nav link
+    const currentPage = location.pathname.split('/').pop() || 'index.html';
+    document.querySelectorAll('.nav-links .nav-link').forEach(link => {
+        if (link.getAttribute('href') === currentPage) {
+            link.classList.add('active');
+        }
+    });
 
     // Theme management functions
     function initTheme() {

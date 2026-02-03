@@ -183,7 +183,8 @@
             left: 100%;
         }
 
-        .nav-link:hover {
+        .nav-link:hover,
+        .nav-link.active {
             color: var(--accent-cyan);
             border-color: var(--accent-cyan);
             box-shadow: var(--glow-cyan);
@@ -613,7 +614,7 @@
         <nav>
             <span class="logo">GO2RTC</span>
             <div class="nav-links">
-                <a href="index.html" class="nav-link">Streams</a>
+                <a href="index.html" class="nav-link active">Streams</a>
                 <a href="add.html" class="nav-link">Add Stream</a>
                 <a href="config.html" class="nav-link">Config</a>
                 <a href="log.html" class="nav-link">Logs</a>
