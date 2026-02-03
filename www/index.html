@@ -369,10 +369,13 @@
 
         tbody tr {
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        tbody td:first-child {
             position: relative;
         }
 
-        tbody tr::before {
+        tbody td:first-child::before {
             content: '';
             position: absolute;
             left: 0;
@@ -388,7 +391,7 @@
             background: rgba(0, 217, 255, 0.05);
         }
 
-        tbody tr:hover::before {
+        tbody tr:hover td:first-child::before {
             transform: scaleY(1);
         }
 
