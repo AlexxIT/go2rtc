@@ -176,6 +176,7 @@ The Docker container [`alexxit/go2rtc`](https://hub.docker.com/r/alexxit/go2rtc)
 Latest, but maybe unstable version:
 
 - Binary: [latest nightly release](https://nightly.link/AlexxIT/go2rtc/workflows/build/master)
+- Pull Requests: each PR build publishes artifacts, and a bot comment in the PR includes binary download links via nightly.link
 - Docker: `alexxit/go2rtc:master` or `alexxit/go2rtc:master-hardware` versions
 - Home Assistant add-on: `go2rtc master` or `go2rtc master hardware` versions
 
