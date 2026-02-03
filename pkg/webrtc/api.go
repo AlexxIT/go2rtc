@@ -292,7 +292,7 @@ func RegisterDefaultCodecs(m *webrtc.MediaEngine) error {
 			RTPCodecCapability: webrtc.RTPCodecCapability{
 				MimeType:     webrtc.MimeTypeH264,
 				ClockRate:    90000,
-				SDPFmtpLine:  "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640032",
+				SDPFmtpLine:  "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640029",
 				RTCPFeedback: videoRTCPFeedback,
 			},
 			PayloadType: 98, // Chrome v110 - PayloadType: 112
