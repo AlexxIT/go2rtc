@@ -418,7 +418,7 @@ if (!document.querySelector('.logo')) {
     .theme-toggle {
         width: 48px;
         height: 48px;
-        border: 1px solid var(--border-color);
+        border: none;
         border-radius: 6px;
         background: var(--bg-card);
         color: var(--accent-cyan);
@@ -427,15 +427,12 @@ if (!document.querySelector('.logo')) {
         align-items: center;
         justify-content: center;
         font-size: 20px;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         margin-left: auto;
     }
 
     .theme-toggle:hover {
         background: var(--accent-cyan);
         color: var(--bg-primary);
-        box-shadow: var(--glow-cyan);
-        transform: rotate(180deg);
     }
 </style>
 `;
