@@ -4,66 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Links - go2rtc</title>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@900&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
     <style>
-        :root {
-            --bg-primary: #0a0e1a;
-            --bg-secondary: #121829;
-            --bg-card: #1a1f35;
-            --text-primary: #ffffff;
-            --text-secondary: #b8c4db;
-            --text-muted: #6b7a99;
-            --border-color: #2a3550;
-            --accent-cyan: #00d9ff;
-            --accent-electric: #0ff;
-            --accent-green: #00ff88;
-            --accent-red: #ff4757;
-            --glow-cyan: 0 0 20px rgba(0, 217, 255, 0.5);
-            --glow-green: 0 0 20px rgba(0, 255, 136, 0.5);
-        }
-
-        [data-theme="light"] {
-            --bg-primary: #f5f7fa;
-            --bg-secondary: #ffffff;
-            --bg-card: #ffffff;
-            --text-primary: #1a1f35;
-            --text-secondary: #4a5568;
-            --text-muted: #718096;
-            --border-color: #e2e8f0;
-            --accent-cyan: #0088cc;
-            --accent-electric: #0099dd;
-            --accent-green: #00aa66;
-            --accent-red: #dd3344;
-            --glow-cyan: 0 0 10px rgba(0, 136, 204, 0.3);
-            --glow-green: 0 0 10px rgba(0, 170, 102, 0.3);
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Inter', sans-serif;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            line-height: 1.6;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-
+        /* Page-specific styles for links.html */
         .container {
             max-width: 1200px;
-            margin: 0 auto;
-            padding: 0 24px;
-            width: 100%;
-        }
-
-        main {
-            padding: 40px 0;
-            flex: 1;
         }
 
         .page-header {
@@ -152,6 +100,11 @@
         .link-item a:hover {
             color: var(--accent-electric);
             text-decoration: underline;
+        }
+
+        .link-item a::after,
+        .action-link::after {
+            content: none;
         }
 
         .link-description {
