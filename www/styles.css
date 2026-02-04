@@ -445,3 +445,23 @@ a:hover::after {
         border-radius: 4px;
     }
 }
+
+.back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--accent-cyan);
+    text-decoration: none;
+    font-weight: 500;
+    padding: 8px 16px;
+    border: 1px solid var(--accent-cyan);
+    border-radius: 6px;
+    transition: all 0.3s;
+    margin-bottom: 24px;
+}
+
+.back-link:hover {
+    background: var(--accent-cyan);
+    color: var(--bg-primary);
+    box-shadow: var(--glow-cyan);
+}
