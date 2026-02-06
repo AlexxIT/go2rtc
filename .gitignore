@@ -15,3 +15,9 @@ go2rtc_win*
 0_test.go
 
 .DS_Store
+
+website/.vitepress/cache
+website/.vitepress/dist
+
+node_modules
+package-lock.json

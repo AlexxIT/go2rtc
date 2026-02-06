@@ -1,6 +1,6 @@
 # Doorbird
 
-*[added in v1.9.8](https://github.com/AlexxIT/go2rtc/releases/tag/v1.9.11)*
+[`new in v1.9.8`](https://github.com/AlexxIT/go2rtc/releases/tag/v1.9.8)
 
 This source type supports [Doorbird](https://www.doorbird.com/) devices including MJPEG stream, audio stream as well as two-way audio.
 
