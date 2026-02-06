@@ -1,6 +1,6 @@
-# Xiaomi
+# Xiaomi Mi Home
 
-**Added in v1.9.13. Improved in v1.9.14.**
+[`new in v1.9.13`](https://github.com/AlexxIT/go2rtc/releases/tag/v1.9.13)
 
 This source allows you to view cameras from the [Xiaomi Mi Home](https://home.mi.com/) ecosystem.
 

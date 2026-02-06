@@ -1,13 +1,14 @@
 {
   "devDependencies": {
-    "eslint": "^8.44.0",
-    "eslint-plugin-html": "^7.1.0",
-    "vitepress": "^2.0.0-alpha.15"
+    "@types/node": "^25.2.0",
+    "eslint": "^9.39.2",
+    "eslint-plugin-html": "^8.1.4",
+    "vitepress": "^2.0.0-alpha.16"
   },
   "scripts": {
-    "docs:dev": "vitepress dev .",
-    "docs:build": "vitepress build .",
-    "docs:preview": "vitepress preview ."
+    "docs:dev": "vitepress dev website --host",
+    "docs:build": "vitepress build website",
+    "docs:preview": "vitepress preview website"
   },
   "eslintConfig": {
     "env": {
@@ -42,8 +43,5 @@
         }
       }
     ]
-  },
-  "dependencies": {
-    "@catppuccin/vitepress": "^0.1.2"
   }
 }

@@ -1,70 +1,62 @@
-# ffmpeg
+# FFmpeg
 
-## FFplay output
+You can get any stream, file or device via FFmpeg and push it to go2rtc. The app will automatically start FFmpeg with the proper arguments when someone starts watching the stream.
 
-[FFplay](https://stackoverflow.com/questions/27778678/what-are-mv-fd-aq-vq-sq-and-f-in-a-video-stream) `7.11 A-V:  0.003 fd=   1 aq=   21KB vq=  321KB sq=    0B f=0/0`:
+- FFmpeg preinstalled for **Docker** and **Home Assistant add-on** users
+- **Home Assistant add-on** users can target files from [/media](https://www.home-assistant.io/more-info/local-media/setup-media/) folder
 
-- `7.11` - master clock, is the time from start of the stream/video
-- `A-V` - av_diff, difference between audio and video timestamps
-- `fd` - frames dropped
-- `aq` - audio queue (0 - no delay)
-- `vq` - video queue (0 - no delay)
-- `sq` - subtitle queue
-- `f` - timestamp error correction rate (Not 100% sure)
+## Configuration
 
-`M-V`, `M-A` means video stream only, audio stream only respectively.
-
-## Devices Windows
-
-```
->ffmpeg -hide_banner -f dshow -list_options true -i video="VMware Virtual USB Video Device"
-[dshow @ 0000025695e52900] DirectShow video device options (from video devices)
-[dshow @ 0000025695e52900]  Pin "Record" (alternative pin name "0")
-[dshow @ 0000025695e52900]   pixel_format=yuyv422  min s=1280x720 fps=1 max s=1280x720 fps=10
-[dshow @ 0000025695e52900]   pixel_format=yuyv422  min s=1280x720 fps=1 max s=1280x720 fps=10 (tv, bt470bg/bt709/unknown, topleft)
-[dshow @ 0000025695e52900]   pixel_format=nv12  min s=1280x720 fps=1 max s=1280x720 fps=23
-[dshow @ 0000025695e52900]   pixel_format=nv12  min s=1280x720 fps=1 max s=1280x720 fps=23 (tv, bt470bg/bt709/unknown, topleft)
-```
-
-## Devices Mac
-
-```
-% ./ffmpeg -hide_banner -f avfoundation -list_devices true -i ""
-[AVFoundation indev @ 0x7f8b1f504d80] AVFoundation video devices:
-[AVFoundation indev @ 0x7f8b1f504d80] [0] FaceTime HD Camera
-[AVFoundation indev @ 0x7f8b1f504d80] [1] Capture screen 0
-[AVFoundation indev @ 0x7f8b1f504d80] AVFoundation audio devices:
-[AVFoundation indev @ 0x7f8b1f504d80] [0] Soundflower (2ch)
-[AVFoundation indev @ 0x7f8b1f504d80] [1] Built-in Microphone
-[AVFoundation indev @ 0x7f8b1f504d80] [2] Soundflower (64ch)
-```
-
-## Devices Linux 
-
-```
-# ffmpeg -hide_banner -f v4l2 -list_formats all -i /dev/video0
-[video4linux2,v4l2 @ 0x7f7de7c58bc0] Raw       :     yuyv422 :           YUYV 4:2:2 : 640x480 160x120 176x144 320x176 320x240 352x288 432x240 544x288 640x360 752x416 800x448 800x600 864x480 960x544 960x720 1024x576 1184x656 1280x720 1280x960
-[video4linux2,v4l2 @ 0x7f7de7c58bc0] Compressed:       mjpeg :          Motion-JPEG : 640x480 160x120 176x144 320x176 320x240 352x288 432x240 544x288 640x360 752x416 800x448 800x600 864x480 960x544 960x720 1024x576 1184x656 1280x720 1280x960
-```
-
-## TTS
+Format: `ffmpeg:{input}#{param1}#{param2}#{param3}`. Examples:
 
 ```yaml
 streams:
-  tts: ffmpeg:#input=-readrate 1 -readrate_initial_burst 0.001 -f lavfi -i "flite=text='1 2 3 4 5 6 7 8 9 0'"#audio=pcma
+  # [FILE] all tracks will be copied without transcoding codecs
+  file1: ffmpeg:/media/BigBuckBunny.mp4
+
+  # [FILE] video will be transcoded to H264, audio will be skipped
+  file2: ffmpeg:/media/BigBuckBunny.mp4#video=h264
+
+  # [FILE] video will be copied, audio will be transcoded to PCMU
+  file3: ffmpeg:/media/BigBuckBunny.mp4#video=copy#audio=pcmu
+
+  # [HLS] video will be copied, audio will be skipped
+  hls: ffmpeg:https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/gear5/prog_index.m3u8#video=copy
+
+  # [MJPEG] video will be transcoded to H264
+  mjpeg: ffmpeg:http://185.97.122.128/cgi-bin/faststream.jpg#video=h264
+
+  # [RTSP] video with rotation, should be transcoded, so select H264
+  rotate: ffmpeg:rtsp://12345678@192.168.1.123/av_stream/ch0#video=h264#rotate=90
 ```
 
-## Useful links
+All transcoding formats have [built-in templates](ffmpeg.go): `h264`, `h265`, `opus`, `pcmu`, `pcmu/16000`, `pcmu/48000`, `pcma`, `pcma/16000`, `pcma/48000`, `aac`, `aac/16000`.
 
-- https://superuser.com/questions/564402/explanation-of-x264-tune
-- https://stackoverflow.com/questions/33624016/why-sliced-thread-affect-so-much-on-realtime-encoding-using-ffmpeg-x264
-- https://codec.fandom.com/ru/wiki/X264_-_описание_ключей_кодирования
-- https://html5test.com/
-- https://trac.ffmpeg.org/wiki/Capture/Webcam
-- https://trac.ffmpeg.org/wiki/DirectShow
-- https://stackoverflow.com/questions/53207692/libav-mjpeg-encoding-and-huffman-table
-- https://github.com/tuupola/esp_video/blob/master/README.md
-- https://github.com/leandromoreira/ffmpeg-libav-tutorial
-- https://www.reddit.com/user/VeritablePornocopium/comments/okw130/ffmpeg_with_libfdk_aac_for_windows_x64/
-- https://slhck.info/video/2017/02/24/vbr-settings.html
-- [HomeKit audio samples problem](https://superuser.com/questions/1290996/non-monotonous-dts-with-igndts-flag)
+But you can override them via YAML config. You can also add your own formats to the config and use them with source params.
+
+```yaml
+ffmpeg:
+  bin: ffmpeg  # path to ffmpeg binary
+  global: "-hide_banner"
+  timeout: 5  # default timeout in seconds for rtsp inputs
+  h264: "-codec:v libx264 -g:v 30 -preset:v superfast -tune:v zerolatency -profile:v main -level:v 4.1"
+  mycodec: "-any args that supported by ffmpeg..."
+  myinput: "-fflags nobuffer -flags low_delay -timeout {timeout} -i {input}"
+  myraw: "-ss 00:00:20"
+```
+
+- You can use go2rtc stream name as ffmpeg input (ex. `ffmpeg:camera1#video=h264`)
+- You can use `video` and `audio` params multiple times (ex. `#video=copy#audio=copy#audio=pcmu`)
+- You can use `rotate` param with `90`, `180`, `270` or `-90` values, important with transcoding (ex. `#video=h264#rotate=90`)
+- You can use `width` and/or `height` params, important with transcoding (ex. `#video=h264#width=1280`)
+- You can use `drawtext` to add a timestamp (ex. `drawtext=x=2:y=2:fontsize=12:fontcolor=white:box=1:boxcolor=black`)
+    - This will greatly increase the CPU of the server, even with hardware acceleration
+- You can use `timeout` param to set RTSP input timeout in seconds (ex. `#timeout=10`)
+- You can use `raw` param for any additional FFmpeg arguments (ex. `#raw=-vf transpose=1`)
+- You can use `input` param to override default input template (ex. `#input=rtsp/udp` will change RTSP transport from TCP to UDP+TCP)
+    - You can use raw input value (ex. `#input=-timeout {timeout} -i {input}`)
+    - You can add your own input templates
+
+Read more about [hardware acceleration](hardware/README.md).
+
+**PS.** It is recommended to check the available hardware in the WebUI add page.

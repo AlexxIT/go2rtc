@@ -1,3 +1,7 @@
+# Docker
+
+Images are built automatically via [GitHub actions](https://github.com/AlexxIT/go2rtc/actions) and published on [Docker Hub](https://hub.docker.com/r/alexxit/go2rtc) and [GitHub](https://github.com/AlexxIT/go2rtc/pkgs/container/go2rtc).
+
 ## Versions
 
 - `alexxit/go2rtc:latest` - latest release based on `alpine` (`amd64`, `386`, `arm/v6`, `arm/v7`, `arm64`) with support hardware transcoding for Intel iGPU and Raspberry

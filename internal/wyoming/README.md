@@ -1,5 +1,8 @@
 # Wyoming
 
+> [!NOTE]
+> The format is under development and does not yet work stably.
+
 This module provide [Wyoming Protocol](https://www.home-assistant.io/integrations/wyoming/) support to create local voice assistants using [Home Assistant](https://www.home-assistant.io/).
 
 - go2rtc can act as [Wyoming Satellite](https://github.com/rhasspy/wyoming-satellite)

@@ -1,3 +1,61 @@
+# Real-Time Messaging Protocol
+
+This module provides the following features for the RTMP protocol:
+
+- Streaming input - [RTMP client](#rtmp-client)
+- Streaming output and ingest in `rtmp` format - [RTMP server](#rtmp-server)
+- Streaming output and ingest in `flv` format - [FLV server](#flv-server)
+
+## RTMP Client
+
+You can get a stream from an RTMP server, for example [Nginx with nginx-rtmp-module](https://github.com/arut/nginx-rtmp-module).
+
+### Client Configuration
+
+```yaml
+streams:
+  rtmp_stream: rtmp://192.168.1.123/live/camera1
+```
+
+## RTMP Server
+
+[`new in v1.8.0`](https://github.com/AlexxIT/go2rtc/releases/tag/v1.8.0)
+
+Streaming output stream in `rtmp` format:
+
+```shell
+ffplay rtmp://localhost:1935/camera1
+```
+
+Streaming ingest stream in `rtmp` format:
+
+```shell
+ffmpeg -re -i BigBuckBunny.mp4 -c copy -f flv rtmp://localhost:1935/camera1
+```
+
+### Server Configuration
+
+By default, the RTMP server is disabled.
+
+```yaml
+rtmp:
+  listen: ":1935"  # by default - disabled!
+```
+
+## FLV Server
+
+Streaming output in `flv` format.
+
+```shell
+ffplay http://localhost:1984/stream.flv?src=camera1
+```
+
+Streaming ingest in `flv` format.
+
+```shell
+ffmpeg -re -i BigBuckBunny.mp4 -c copy -f flv http://localhost:1984/api/stream.flv?dst=camera1
+```
+
 ## Tested client
 
 | From   | To                              | Comment |
