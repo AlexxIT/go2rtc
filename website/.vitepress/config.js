@@ -1,5 +1,22 @@
 import {defineConfig} from 'vitepress';
 
+function replace_link(md) {
+    md.core.ruler.after('inline', 'replace-link', function (state) {
+        for (const block of state.tokens) {
+            if (block.type === 'inline' && block.children) {
+                for (const token of block.children) {
+                    const href = token.attrGet('href');
+                    if (href && href.indexOf('README.md') >= 0) {
+                        // token.attrJoin('style', 'color:red;');
+                        token.attrSet('href', href.replace('README.md', 'index.md'));
+                    }
+                }
+            }
+        }
+        return true;
+    });
+}
+
 export default defineConfig({
     title: 'go2rtc',
     themeConfig: {
@@ -128,15 +145,22 @@ export default defineConfig({
 
         ],
         socialLinks: [
-            {icon: "github", link: "https://github.com/AlexxIT/go2rtc"}
+            {icon: 'github', link: 'https://github.com/AlexxIT/go2rtc'}
         ],
         outline: [2, 3],
         search: {provider: 'local'},
     },
 
-    rewrites: {
-        'README.md': 'index.md',
-        '(.*)/README.md': '(.*)/index.md',
+    rewrites(id) {
+        // change file names
+        return id.replace('README.md', 'index.md');
+    },
+
+    markdown: {
+        config: (md) => {
+            // change markdown links
+            md.use(replace_link);
+        }
     },
 
     srcDir: '..',

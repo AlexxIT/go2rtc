@@ -23,13 +23,13 @@ This module provide [Wyoming Protocol](https://www.home-assistant.io/integration
 3. Wake Word (WAKE)
    - [OpenWakeWord](https://www.home-assistant.io/voice_control/create_wake_word/)
 4. Speech-to-Text (STT)
-   - [Whisper](https://github.com/home-assistant/addons/blob/master/whisper/README.md) 
-   - [Vosk](https://github.com/rhasspy/hassio-addons/blob/master/vosk/README.md)
+   - [Whisper](https://github.com/home-assistant/addons/blob/master/whisper/) 
+   - [Vosk](https://github.com/rhasspy/hassio-addons/blob/master/vosk/)
 5. Conversation agent (INTENT)
    - [Home Assistant](https://www.home-assistant.io/integrations/conversation/)
 6. Text-to-speech (TTS)
    - [Google Translate](https://www.home-assistant.io/integrations/google_translate/)
-   - [Piper](https://github.com/home-assistant/addons/blob/master/piper/README.md)
+   - [Piper](https://github.com/home-assistant/addons/blob/master/piper/)
 7. Audio stream (SND)
    - any source with two-way audio (backchannel) and PCM codec support (include PCMA/PCMU)
 
@@ -63,7 +63,7 @@ wake_uri: tcp://192.168.1.23:10400?name=alexa_v0.1&name=hey_jarvis_v0.1&name=hey
 
 ## Events
 
-You can add wyoming event handling using the [expr](https://github.com/AlexxIT/go2rtc/blob/master/internal/expr/README.md) language. For example, to pronounce TTS on some media player from HA.
+You can add wyoming event handling using the [expr](../expr/README.md) language. For example, to pronounce TTS on some media player from HA.
 
 Turn on the logs to see what kind of events happens.
 
@@ -94,7 +94,7 @@ Supported functions and variables:
 - `PlayFile(path)` - play audio from `wav` file
 - `Type` - type (name) of event
 - `Data` - event data in JSON format (ex. `{"text":"how are you"}`)
-- also available other functions from [expr](https://github.com/AlexxIT/go2rtc/blob/master/internal/expr/README.md) module (ex. `fetch`)
+- also available other functions from [expr](../expr/README.md) module (ex. `fetch`)
 
 If you write a script for an event - the default action is no longer executed. You need to repeat the necessary steps yourself.
 

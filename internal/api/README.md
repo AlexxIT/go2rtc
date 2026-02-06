@@ -4,7 +4,7 @@ The HTTP API is the main part for interacting with the application. Default addr
 
 The HTTP API is described in [OpenAPI](../../website/api/openapi.yaml) format. It can be explored in [interactive viewer](https://go2rtc.org/api/). WebSocket API described [here](ws/README.md).
 
-The project's static HTML and JS files are located in the [www](../../www) folder. An external developer can use them as a basis for integrating go2rtc into their project or for developing a custom web interface for go2rtc.
+The project's static HTML and JS files are located in the [www](../../www/README.md) folder. An external developer can use them as a basis for integrating go2rtc into their project or for developing a custom web interface for go2rtc.
 
 The contents of `www` folder are built into go2rtc when building, but you can use configuration to specify an external folder as the source of static files.
 
