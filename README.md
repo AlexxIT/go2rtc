@@ -33,6 +33,7 @@ Ultimate camera streaming application with support for dozens formats and protoc
 - [streaming audio](#stream-to-camera) to all cameras with [two-way audio](#two-way-audio) support
 - mixing tracks from different sources to single stream
 - [auto-match](www/README.md#javascript-api) client-supported streaming formats and codecs
+- [streaming stats](#streaming-stats) for all active connections
 - can be [integrated to any project](#projects-using-go2rtc) or be used as [standalone app](#go2rtc-binary)
 
 #### Inspired by
@@ -64,6 +65,7 @@ Ultimate camera streaming application with support for dozens formats and protoc
   - [Stream to camera](#stream-to-camera)
   - [Publish stream](#publish-stream)
   - [Preload stream](#preload-stream)
+  - [Streaming stats](#streaming-stats)
 - [Codecs](#codecs)
   - [Codecs filters](#codecs-filters)
   - [Codecs madness](#codecs-madness)
@@ -82,9 +84,7 @@ Ultimate camera streaming application with support for dozens formats and protoc
 2. Open web interface: `http://localhost:1984/`
 3. Add [streams](#streaming-input) to [config](#configuration)
 
-**Developers:**
-
-- integrate [HTTP API](internal/api/README.md) into your smart home platform
+**Developers:** integrate [HTTP API](internal/api/README.md) into your smart home platform.
 
 ### go2rtc: Binary
 
@@ -141,14 +141,16 @@ Latest, but maybe unstable version:
 ## Configuration
 
 This is the `go2rtc.yaml` file in [YAML-format](https://en.wikipedia.org/wiki/YAML).
-The configuration can be changed in the [web interface](www/README.md) at `http://localhost:1984`.
+The configuration can be changed in the [WebUI](www/README.md) at `http://localhost:1984`.
 The editor provides syntax highlighting and checking.
+
+![go2rtc webui config](website/images/webui-config.png)
 
 The simplest config looks like this:
 
 ```yaml
 streams:
-  hall_camera: rtsp://admin:password@192.168.1.123/cam/realmonitor?channel=1&subtype=0
+  hall-camera: rtsp://admin:password@192.168.1.123/cam/realmonitor?channel=1&subtype=0
 ```
 
 - by default go2rtc will search `go2rtc.yaml` in the current work directory
@@ -161,6 +163,12 @@ More information can be [found here](internal/app/README.md).
 ## Features
 
 A summary table of all modules and features can be found [here](internal/README.md).
+
+**Core modules**
+
+- [`app`](internal/app/README.md) - Reading [configs](internal/app/README.md) and setting up [logs](internal/app/README.md#log).
+- [`api`](internal/api/README.md) - Handle [HTTP](internal/api/README.md) and [WebSocket](internal/api/ws/README.md) API.
+- [`streams`](internal/streams/README.md) - Handle a list of streams.
 
 ### Streaming input
 
@@ -297,6 +305,13 @@ You can publish any stream to streaming services (YouTube, Telegram, etc.) via R
 You can preload any stream on go2rtc start. This is useful for cameras that take a long time to start up.
 
 [read more](internal/streams/README.md#preload-stream)
+
+### Streaming stats
+
+[WebUI](www/README.md) provides detailed information about all active connections, including IP-addresses, formats, protocols, number of packets and bytes transferred. 
+Via the [HTTP API](internal/api/README.md) in [`json`](https://en.wikipedia.org/wiki/JSON) or [`dot`](https://en.wikipedia.org/wiki/DOT_(graph_description_language)) format on an interactive connection map.
+
+![go2rtc webui net](website/images/webui-net.png)
 
 ## Codecs
 

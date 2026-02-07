@@ -1,6 +1,6 @@
 # App
 
-The application module is responsible for reading configuration files and running other modules.
+The application module is responsible for reading configuration files, running other modules and setting up [logs](#log).
 
 The configuration can be edited through the application's WebUI with code highlighting, syntax and specification checking.
 
@@ -60,10 +60,10 @@ api:
   listen: ":1984"  # default public port for WebUI and HTTP API
 
 ffmpeg:
-  bin: "ffmpeg"  # default binary path for FFmpeg
+  bin: "ffmpeg"    # default binary path for FFmpeg
 
 log:
-  level: "info"  # default log level
+  level: "info"    # default log level
   output: "stdout"
   time: "UNIXMS"
 

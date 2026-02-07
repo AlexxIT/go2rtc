@@ -41,6 +41,7 @@ export default defineConfig({
                     {text: 'Stream to camera', link: '/#stream-to-camera'},
                     {text: 'Publish stream', link: '/#publish-stream'},
                     {text: 'Preload stream', link: '/#preload-stream'},
+                    {text: 'Streaming stats', link: '/#streaming-stats'},
                 ],
                 collapsed: false,
             },
