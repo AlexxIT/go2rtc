@@ -1,135 +1,92 @@
-document.head.innerHTML += `
-<style>
-    body {
-        background-color: white;  /* fix Hass black theme */
-        display: flex;
-        flex-direction: column;
-        font-family: Arial, sans-serif;
-        margin: 0;
+// Shared navigation component - loaded automatically by other pages
+if (!document.querySelector('.logo')) {
+    const head = document.head;
+    if (!head.querySelector('link[href*="fonts.googleapis.com"]')) {
+        head.insertAdjacentHTML(
+            'beforeend',
+            `
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+`.trim(),
+        );
     }
 
-    /* navigation block */
-    nav {
-        background-color: #333;
-        overflow: hidden;
+    if (!head.querySelector('link[href="styles.css"]')) {
+        head.insertAdjacentHTML('beforeend', '<link rel="stylesheet" href="styles.css">');
     }
 
-    nav a {
-        float: left;
-        display: block;
-        color: #f2f2f2;
-        text-align: center;
-        padding: 14px 16px;
-        text-decoration: none;
-        font-size: 17px;
-    }
-
-    nav a:hover {
-        background-color: #ddd;
-        color: black;
-    }
-
-    /* main block */
-    main {
-        padding: 10px;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-    }
-
-    /* checkbox */
-    label {
-        display: flex;
-        gap: 5px;
-        align-items: center;
-        cursor: pointer;
-    }
-
-    input[type="checkbox"] {
-        width: 18px;
-        height: 18px;
-        cursor: pointer;
-    }
-
-    /* form */
-    form {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-    }
-
-    input[type="text"], input[type="email"], input[type="password"], select {
-        padding: 10px;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        font-size: 16px;
-    }
-
-    button {
-        padding: 10px 20px;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 16px;
-    }
-
-    /* table */
-    table {
-        width: 100%;
-        background-color: white;
-        border-collapse: collapse;
-        margin: 0 auto;
-        overflow: hidden;
-    }
-
-    th, td {
-        padding: 12px 15px;
-        text-align: left;
-        border-bottom: 1px solid #e0e0e0;
-    }
-
-    th {
-        background-color: #444;
-        color: white;
-    }
-
-    tr:nth-child(even) {
-        background-color: #fafafa;
-    }
-
-    tr:hover {
-        background-color: #edf7ff;
-        transition: background-color 0.3s ease;
-    }
-
-    /* table on mobile */
-    @media (max-width: 480px) {
-        table, thead, tbody, th, td, tr {
-            display: block;
-        }
-
-        th, td {
-            box-sizing: border-box;
-            width: 100% !important;
-            border: none;
-        }
-
-        tr {
-            margin-bottom: 10px;
-            border-radius: 4px;
-        }
-    }
-</style>
-`;
-
-document.body.innerHTML = `
+    document.body.innerHTML = `
 <header>
-    <nav>
-        <a href="index.html"><b>go2rtc</b></a>
-        <a href="add.html">add</a>
-        <a href="config.html">config</a>
-        <a href="log.html">log</a>
-        <a href="net.html">net</a>
-    </nav>
+    <div class="container">
+        <nav>
+            <span class="logo">GO2RTC</span>
+            <div class="nav-links">
+                <a href="index.html" class="nav-link">Streams</a>
+                <a href="add.html" class="nav-link">Add Stream</a>
+                <a href="config.html" class="nav-link">Config</a>
+                <a href="log.html" class="nav-link">Logs</a>
+                <a href="net.html" class="nav-link">Network</a>
+            </div>
+            <a href="https://github.com/AlexxIT/go2rtc" target="_blank" class="nav-link docs-link">docs</a>
+            <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
+                <span class="theme-icon">🌙</span>
+            </button>
+        </nav>
+    </div>
 </header>
 ` + document.body.innerHTML;
+
+    // Mark active nav link
+    const currentPage = location.pathname.split('/').pop() || 'index.html';
+    document.querySelectorAll('.nav-links .nav-link').forEach(link => {
+        if (link.getAttribute('href') === currentPage) {
+            link.classList.add('active');
+        }
+    });
+
+    // Theme management functions
+    function initTheme() {
+        const savedTheme = localStorage.getItem('theme');
+        const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const theme = savedTheme || (systemPrefersDark ? 'dark' : 'light');
+
+        setTheme(theme);
+
+        // Listen for system theme changes
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+            if (!localStorage.getItem('theme')) {
+                setTheme(e.matches ? 'dark' : 'light');
+            }
+        });
+    }
+
+    function setTheme(theme) {
+        const html = document.documentElement;
+        const themeIcon = document.querySelector('.theme-icon');
+
+        if (theme === 'light') {
+            html.setAttribute('data-theme', 'light');
+            if (themeIcon) themeIcon.textContent = '☀️';
+        } else {
+            html.removeAttribute('data-theme');
+            if (themeIcon) themeIcon.textContent = '🌙';
+        }
+    }
+
+    function toggleTheme() {
+        const html = document.documentElement;
+        const currentTheme = html.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+        const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+
+        setTheme(newTheme);
+        localStorage.setItem('theme', newTheme);
+        window.dispatchEvent(new Event('themeChanged'));
+    }
+
+    // Initialize theme
+    initTheme();
+
+    // Theme toggle button handler
+    document.getElementById('theme-toggle')?.addEventListener('click', toggleTheme);
+}
