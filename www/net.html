@@ -23,16 +23,30 @@
         const url = new URL('api/streams.dot' + location.search, location.href);
 
         const container = document.getElementById('network');
-        const options = {
-            edges: {
-                font: {align: 'middle'},
-                smooth: false,
-            },
-            nodes: {shape: 'box'},
-            physics: false,
-        };
+
+        function getOptions() {
+            const style = getComputedStyle(document.documentElement);
+            const textColor = style.getPropertyValue('--text-color').trim();
+            const bgColor = style.getPropertyValue('--bg-color').trim();
+            return {
+                edges: {
+                    font: {
+                        align: 'middle',
+                        color: textColor || undefined,
+                        strokeColor: bgColor || undefined,
+                    },
+                    smooth: false,
+                },
+                nodes: {shape: 'box'},
+                physics: false,
+            };
+        }
 
         let network;
+
+        window.addEventListener('themeChanged', () => {
+            if (network) network.setOptions(getOptions());
+        });
 
         async function update() {
             try {
@@ -41,7 +55,7 @@
                 const data = vis.parseDOTNetwork(dotData);
 
                 if (!network) {
-                    network = new vis.Network(container, data, options);
+                    network = new vis.Network(container, data, getOptions());
                     network.storePositions();
                 } else {
                     const positions = network.getPositions();
