@@ -1,10 +1,14 @@
 package dvrip
 
-import "github.com/AlexxIT/go2rtc/pkg/core"
+import (
+	"net/url"
 
-func Dial(url string) (core.Producer, error) {
+	"github.com/AlexxIT/go2rtc/pkg/core"
+)
+
+func Dial(rawURL string) (core.Producer, error) {
 	client := &Client{}
-	if err := client.Dial(url); err != nil {
+	if err := client.Dial(rawURL); err != nil {
 		return nil, err
 	}
 
@@ -18,6 +22,11 @@ func Dial(url string) (core.Producer, error) {
 
 	if client.stream != "" {
 		prod := &Producer{Connection: conn, client: client}
+
+		if u, err := url.Parse(rawURL); err == nil {
+			prod.Media = u.Query().Get("media")
+		}
+
 		if err := prod.probe(); err != nil {
 			return nil, err
 		}
