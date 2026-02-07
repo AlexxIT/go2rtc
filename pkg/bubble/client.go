@@ -264,3 +264,7 @@ func (c *Client) Handle() error {
 func (c *Client) Close() error {
 	return c.conn.Close()
 }
+
+func (c *Client) IsClosed() bool {
+	return c.conn == nil
+}
