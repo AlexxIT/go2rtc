@@ -19,6 +19,20 @@ function replace_link(md) {
 
 export default defineConfig({
     title: 'go2rtc',
+    description: 'Ultimate camera streaming application',
+    head: [
+        // first line (green bold) of Telegram card, autodetect from hostname
+        ['meta', { property: 'og:site_name', content: 'go2rtc.org' }],
+        // second line of Telegram card (black bold), autodetect from site description
+        ['meta', { property: 'og:title', content: 'go2rtc - Ultimate camera streaming application' }],
+        // third line of Telegram card, autodetect from site description
+        ['meta', { property: 'og:description', content: 'Support alsa, doorbird, dvrip, eseecloud, ffmpeg, gopro, hass, hls, homekit, mjpeg, mp4, mpegts, nest, onvif, ring, roborock, rtmp, rtsp, tapo, vigi, tuya, v4l2, webrtc, wyze, xiaomi.' }],
+        ['meta', { property: 'og:url', content: 'https://go2rtc.org/' }],
+        ['meta', { property: 'og:image', content: 'https://go2rtc.org/images/logo.png' }],
+        // important for Telegram - the image will be at the bottom and large
+        ['meta', { property: 'twitter:card', content: 'summary_large_image' }],
+    ],
+
     themeConfig: {
         nav: [
             {text: 'Home', link: '/'},
