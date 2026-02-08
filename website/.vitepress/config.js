@@ -26,7 +26,7 @@ export default defineConfig({
         // second line of Telegram card (black bold), autodetect from site description
         ['meta', { property: 'og:title', content: 'go2rtc - Ultimate camera streaming application' }],
         // third line of Telegram card, autodetect from site description
-        ['meta', { property: 'og:description', content: 'Support alsa, doorbird, dvrip, eseecloud, ffmpeg, gopro, hass, hls, homekit, mjpeg, mp4, mpegts, nest, onvif, ring, roborock, rtmp, rtsp, tapo, vigi, tuya, v4l2, webrtc, wyze, xiaomi.' }],
+        ['meta', { property: 'og:description', content: 'Support alsa, doorbird, dvrip, eseecloud, ffmpeg, gopro, hass, hls, homekit, mcp, mjpeg, mp4, mpegts, nest, onvif, ring, roborock, rtmp, rtsp, tapo, vigi, tuya, v4l2, webrtc, wyze, xiaomi.' }],
         ['meta', { property: 'og:url', content: 'https://go2rtc.org/' }],
         ['meta', { property: 'og:image', content: 'https://go2rtc.org/images/logo.png' }],
         // important for Telegram - the image will be at the bottom and large
@@ -152,6 +152,7 @@ export default defineConfig({
                 text: 'Helper modules',
                 items: [
                     {text: 'debug', link: '/internal/debug/'},
+                    {text: 'mcp', link: '/internal/mcp/'},
                     {text: 'ngrok', link: '/internal/ngrok/'},
                     {text: 'pinggy', link: '/internal/pinggy/'},
                     {text: 'srtp', link: '/internal/srtp/'},
