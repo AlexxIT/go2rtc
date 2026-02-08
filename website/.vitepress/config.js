@@ -134,7 +134,7 @@ export default defineConfig({
                     {text: 'isapi', link: '/internal/isapi/'},
                     {text: 'ivideon', link: '/internal/ivideon/'},
                     {text: 'kasa', link: '/internal/kasa/'},
-                    {text: 'mpegts', link: '/internal/mpegts/'},
+                    {text: 'mpeg', link: '/internal/mpeg/'},
                     {text: 'multitrans', link: '/internal/multitrans/'},
                     {text: 'nest', link: '/internal/nest/'},
                     {text: 'ring', link: '/internal/ring/'},

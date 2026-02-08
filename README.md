@@ -237,7 +237,7 @@ A summary table of all modules and features can be found [here](internal/README.
 
 ### Streaming output
 
-- [`adts`](internal/mpegts/README.md) - Output stream in ADTS format with [AAC](https://en.wikipedia.org/wiki/Advanced_Audio_Coding) audio.
+- [`adts`](internal/mpeg/README.md) - Output stream in ADTS format with [AAC](https://en.wikipedia.org/wiki/Advanced_Audio_Coding) audio.
 - [`ascii`](internal/mjpeg/README.md#ascii) - Just for fun stream as [ASCII to Terminal](https://www.youtube.com/watch?v=sHj_3h_sX7M).
 - [`flv`](internal/rtmp/README.md) - Output stream in [Flash Video](https://en.wikipedia.org/wiki/Flash_Video) format.
 - [`hls`](internal/hls/README.md) - Output stream in [HTTP Live Streaming](https://en.wikipedia.org/wiki/HTTP_Live_Streaming) format.
@@ -245,7 +245,7 @@ A summary table of all modules and features can be found [here](internal/README.
 - [`jpeg`](internal/mjpeg/README.md#jpeg) - Output snapshots in [JPEG](https://en.wikipedia.org/wiki/JPEG) format.
 - [`mpjpeg`](internal/mjpeg/README.md#mpjpeg) - Output a stream in [MJPEG](https://en.wikipedia.org/wiki/Motion_JPEG) format.
 - [`mp4`](internal/mp4/README.md) - Output as [MP4 stream](https://en.wikipedia.org/wiki/Progressive_download) or [Media Source Extensions](https://developer.mozilla.org/en-US/docs/Web/API/Media_Source_Extensions_API) (MSE) compatible format.
-- [`mpegts`](internal/homekit/README.md) - Output stream in [MPEG transport stream](https://en.wikipedia.org/wiki/MPEG_transport_stream) format.
+- [`mpegts`](internal/mpeg/README.md) - Output stream in [MPEG transport stream](https://en.wikipedia.org/wiki/MPEG_transport_stream) format.
 - [`onvif`](internal/onvif/README.md#onvif-server) - Output stream using [ONVIF](https://en.wikipedia.org/wiki/ONVIF) protocol.
 - [`rtmp`](internal/rtmp/README.md#rtmp-server) - Output stream using [Real-Time Messaging](https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol) protocol.
 - [`rtsp`](internal/rtsp/README.md#rtsp-server) - Output stream using [Real-Time Streaming](https://en.wikipedia.org/wiki/Real-Time_Streaming_Protocol) protocol.
@@ -258,7 +258,7 @@ A summary table of all modules and features can be found [here](internal/README.
 Supported for: 
 [`flv`](internal/rtmp/README.md#flv-server), 
 [`mjpeg`](internal/mjpeg/README.md#streaming-ingest), 
-[`mpegts`](internal/mpegts/README.md#streaming-ingest), 
+[`mpegts`](internal/mpeg/README.md#streaming-ingest), 
 [`rtmp`](internal/rtmp/README.md#rtmp-server), 
 [`rtsp`](internal/rtsp/README.md#streaming-ingest), 
 [`webrtc`](internal/webrtc/README.md#streaming-ingest).

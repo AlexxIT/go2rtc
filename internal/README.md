@@ -47,8 +47,8 @@ Some formats and protocols go2rtc supports exclusively. They have no equivalent 
 | [`mjpeg`]      | `mpjpeg`        | `http`           |       | yes    | yes    |         |
 | [`mjpeg`]      | `yuv4mpegpipe`  | `http`           |       | yes    |        |         |
 | [`mp4`]        | `mp4`           | `http`, `ws`     |       | yes    |        |         |
-| [`mpegts`]     | `adts`          | `http`           |       | yes    |        |         |
-| [`mpegts`]     | `mpegts`        | `http`           |       | yes    | yes    |         |
+| [`mpeg`]       | `adts`          | `http`           |       | yes    |        |         |
+| [`mpeg`]       | `mpegts`        | `http`           |       | yes    | yes    |         |
 | [`multitrans`] | `rtp`           | `tcp`            |       |        |        | yes     |
 | [`nest`]       | `srtp`          | `rtsp`, `webrtc` | yes   |        |        | no      |
 | [`onvif`]      | `rtp`           | *                | yes   | yes    |        |         |
@@ -90,7 +90,7 @@ Some formats and protocols go2rtc supports exclusively. They have no equivalent 
 [`kasa`]: kasa/README.md
 [`mjpeg`]: mjpeg/README.md
 [`mp4`]: mp4/README.md
-[`mpegts`]: mpegts/README.md
+[`mpeg`]: mpeg/README.md
 [`multitrans`]: multitrans/README.md
 [`nest`]: nest/README.md
 [`ngrok`]: ngrok/README.md

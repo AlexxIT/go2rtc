@@ -1,13 +1,10 @@
-# MPEG-TS
+# MPEG
 
 This module provides an [HTTP API](../api/README.md) for:
  
 - Streaming output in `mpegts` format.
 - Streaming output in `adts` format.
 - Streaming ingest in `mpegts` format.
-
-> [!NOTE]
-> This module is probably better called mpeg. Because AAC is part of MPEG-2 and MPEG-4 and MPEG-TS is part of MPEG-2.
 
 ## MPEG-TS Server
 
