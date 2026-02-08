@@ -6,8 +6,8 @@
     <title>add - go2rtc</title>
     <style>
         main > button {
-            background-color: #444;
-            color: white;
+            background-color: var(--bg-secondary);
+            color: var(--text-secondary);
             cursor: pointer;
             padding: 14px;
             width: 100%;
@@ -64,7 +64,8 @@
     </div>
     <script>
         document.getElementById('stream').addEventListener('click', async ev => {
-            ev.target.nextElementSibling.style.display = 'grid';
+            const div = ev.target.nextElementSibling;
+            div.style.display = div.style.display === 'grid' ? 'none' : 'grid';
         });
 
         document.getElementById('stream-form').addEventListener('submit', async ev => {
@@ -86,7 +87,9 @@
     </div>
     <script>
         document.getElementById('alsa').addEventListener('click', async ev => {
-            ev.target.nextElementSibling.style.display = 'grid';
+            const div = ev.target.nextElementSibling;
+            if (div.style.display === 'grid') { div.style.display = 'none'; return; }
+            div.style.display = 'grid';
             await getSources('alsa-table', 'api/alsa');
         });
     </script>
@@ -123,7 +126,9 @@
         }
 
         document.getElementById('homekit').addEventListener('click', async ev => {
-            ev.target.nextElementSibling.style.display = 'grid';
+            const div = ev.target.nextElementSibling;
+            if (div.style.display === 'grid') { div.style.display = 'none'; return; }
+            div.style.display = 'grid';
             await reloadHomeKit();
         });
 
@@ -168,7 +173,9 @@
     </div>
     <script>
         document.getElementById('dvrip').addEventListener('click', async ev => {
-            ev.target.nextElementSibling.style.display = 'grid';
+            const div = ev.target.nextElementSibling;
+            if (div.style.display === 'grid') { div.style.display = 'none'; return; }
+            div.style.display = 'grid';
             await getSources('dvrip-table', 'api/dvrip');
         });
     </script>
@@ -180,7 +187,9 @@
     </div>
     <script>
         document.getElementById('devices').addEventListener('click', async ev => {
-            ev.target.nextElementSibling.style.display = 'grid';
+            const div = ev.target.nextElementSibling;
+            if (div.style.display === 'grid') { div.style.display = 'none'; return; }
+            div.style.display = 'grid';
             await getSources('devices-table', 'api/ffmpeg/devices');
         });
     </script>
@@ -192,7 +201,9 @@
     </div>
     <script>
         document.getElementById('hardware').addEventListener('click', async ev => {
-            ev.target.nextElementSibling.style.display = 'grid';
+            const div = ev.target.nextElementSibling;
+            if (div.style.display === 'grid') { div.style.display = 'none'; return; }
+            div.style.display = 'grid';
             await getSources('hardware-table', 'api/ffmpeg/hardware');
         });
     </script>
@@ -211,7 +222,8 @@
     </div>
     <script>
         document.getElementById('nest').addEventListener('click', async ev => {
-            ev.target.nextElementSibling.style.display = 'grid';
+            const div = ev.target.nextElementSibling;
+            div.style.display = div.style.display === 'grid' ? 'none' : 'grid';
         });
 
         document.getElementById('nest-form').addEventListener('submit', async ev => {
@@ -231,7 +243,9 @@
     </div>
     <script>
         document.getElementById('gopro').addEventListener('click', async ev => {
-            ev.target.nextElementSibling.style.display = 'grid';
+            const div = ev.target.nextElementSibling;
+            if (div.style.display === 'grid') { div.style.display = 'none'; return; }
+            div.style.display = 'grid';
             await getSources('gopro-table', 'api/gopro');
         });
     </script>
@@ -243,7 +257,9 @@
     </div>
     <script>
         document.getElementById('hass').addEventListener('click', async ev => {
-            ev.target.nextElementSibling.style.display = 'grid';
+            const div = ev.target.nextElementSibling;
+            if (div.style.display === 'grid') { div.style.display = 'none'; return; }
+            div.style.display = 'grid';
             await getSources('hass-table', 'api/hass');
         });
     </script>
@@ -259,7 +275,9 @@
     </div>
     <script>
         document.getElementById('onvif').addEventListener('click', async ev => {
-            ev.target.nextElementSibling.style.display = 'grid';
+            const div = ev.target.nextElementSibling;
+            if (div.style.display === 'grid') { div.style.display = 'none'; return; }
+            div.style.display = 'grid';
             await getSources('onvif-table', 'api/onvif');
         });
 
@@ -293,7 +311,8 @@
     </div>
     <script>
         document.getElementById('ring').addEventListener('click', async ev => {
-            ev.target.nextElementSibling.style.display = 'grid';
+            const div = ev.target.nextElementSibling;
+            div.style.display = div.style.display === 'grid' ? 'none' : 'grid';
         });
 
         async function handleRingAuth(ev) {
@@ -349,7 +368,8 @@
     </div>
     <script>
         document.getElementById('tuya').addEventListener('click', async ev => {
-            ev.target.nextElementSibling.style.display = 'grid';
+            const div = ev.target.nextElementSibling;
+            div.style.display = div.style.display === 'grid' ? 'none' : 'grid';
         });
 
         document.getElementById('tuya-credentials-form').addEventListener('submit', async ev => {
@@ -389,7 +409,9 @@
     </div>
     <script>
         document.getElementById('roborock').addEventListener('click', async ev => {
-            ev.target.nextElementSibling.style.display = 'grid';
+            const div = ev.target.nextElementSibling;
+            if (div.style.display === 'grid') { div.style.display = 'none'; return; }
+            div.style.display = 'grid';
             await getSources('roborock-table', 'api/roborock');
         });
 
@@ -407,7 +429,9 @@
     </div>
     <script>
         document.getElementById('v4l2').addEventListener('click', async ev => {
-            ev.target.nextElementSibling.style.display = 'grid';
+            const div = ev.target.nextElementSibling;
+            if (div.style.display === 'grid') { div.style.display = 'none'; return; }
+            div.style.display = 'grid';
             await getSources('v4l2-table', 'api/v4l2');
         });
     </script>
@@ -433,7 +457,11 @@
     </div>
     <script>
         async function wyzeReload(ev) {
-            if (ev) ev.target.nextElementSibling.style.display = 'grid';
+            if (ev) {
+                const div = ev.target.nextElementSibling;
+                if (div.style.display === 'grid') { div.style.display = 'none'; return; }
+                div.style.display = 'grid';
+            }
 
             const r = await fetch('api/wyze', {'cache': 'no-cache'});
             const data = await r.json();
@@ -504,7 +532,11 @@
     </div>
     <script>
         async function xiaomiReload(ev) {
-            if (ev) ev.target.nextElementSibling.style.display = 'grid';
+            if (ev) {
+                const div = ev.target.nextElementSibling;
+                if (div.style.display === 'grid') { div.style.display = 'none'; return; }
+                div.style.display = 'grid';
+            }
 
             document.getElementById('xiaomi-login-form').style.display = 'flex';
             document.getElementById('xiaomi-captcha-form').style.display = 'none';
@@ -559,7 +591,9 @@
     </div>
     <script>
         document.getElementById('webtorrent').addEventListener('click', async ev => {
-            ev.target.nextElementSibling.style.display = 'grid';
+            const div = ev.target.nextElementSibling;
+            if (div.style.display === 'grid') { div.style.display = 'none'; return; }
+            div.style.display = 'grid';
             await getSources('webtorrent-table', 'api/webtorrent');
         });
     </script>

@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stream Info - go2rtc</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        /* Page-specific styles for info.html */
+
+        .page-header {
+            margin-bottom: 32px;
+        }
+
+        .page-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 32px;
+            color: var(--accent-cyan);
+            text-shadow: var(--glow-cyan);
+            margin-bottom: 8px;
+        }
+
+        .page-subtitle {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .stream-name-display {
+            color: var(--accent-electric);
+            font-weight: 700;
+        }
+
+        .info-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--accent-cyan);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .json-viewer {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 20px;
+            overflow-x: auto;
+            font-size: 13px;
+        }
+
+        .json-key {
+            color: var(--accent-cyan);
+            font-weight: 700;
+        }
+
+        .json-string {
+            color: var(--accent-green);
+        }
+
+        .json-number {
+            color: var(--accent-yellow);
+        }
+
+        .json-boolean {
+            color: var(--accent-electric);
+            font-weight: 700;
+        }
+
+        .json-null {
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        .json-bracket {
+            color: var(--text-secondary);
+        }
+
+        .json-line {
+            margin: 4px 0;
+        }
+
+        .json-indent {
+            display: inline-block;
+            width: 20px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-secondary);
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border-color);
+            border-top-color: var(--accent-cyan);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 16px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .error {
+            background: rgba(255, 71, 87, 0.1);
+            border: 1px solid var(--accent-red);
+            border-radius: 8px;
+            padding: 24px;
+            color: var(--accent-red);
+            text-align: center;
+        }
+
+        .error-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        @media (max-width: 768px) {
+            .page-title {
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="container">
+        <nav>
+            <a href="index.html" class="logo">GO2RTC</a>
+            <div class="nav-links">
+                <a href="index.html" class="nav-link">Streams</a>
+                <a href="add.html" class="nav-link">Add Stream</a>
+                <a href="config.html" class="nav-link">Config</a>
+                <a href="log.html" class="nav-link">Logs</a>
+                <a href="net.html" class="nav-link">Network</a>
+            </div>
+            <a href="https://github.com/AlexxIT/go2rtc" target="_blank" class="nav-link docs-link">docs</a>
+            <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
+                <span class="theme-icon">🌙</span>
+            </button>
+        </nav>
+    </div>
+</header>
+
+<main>
+    <div class="container">
+        <a href="index.html" class="back-link">← Back to Streams</a>
+
+        <div class="page-header">
+            <h1 class="page-title">Stream Information</h1>
+            <p class="page-subtitle">Detailed information for stream: <span class="stream-name-display" id="stream-name"></span></p>
+        </div>
+
+        <div id="content">
+            <div class="loading">
+                <div class="loading-spinner"></div>
+                <div>Loading stream information...</div>
+            </div>
+        </div>
+    </div>
+</main>
+
+<script>
+    // Theme management
+    function initTheme() {
+        const savedTheme = localStorage.getItem('theme');
+        const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const theme = savedTheme || (systemPrefersDark ? 'dark' : 'light');
+
+        setTheme(theme);
+
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+            if (!localStorage.getItem('theme')) {
+                setTheme(e.matches ? 'dark' : 'light');
+            }
+        });
+    }
+
+    function setTheme(theme) {
+        const html = document.documentElement;
+        const themeIcon = document.querySelector('.theme-icon');
+
+        if (theme === 'light') {
+            html.setAttribute('data-theme', 'light');
+            if (themeIcon) themeIcon.textContent = '☀️';
+        } else {
+            html.removeAttribute('data-theme');
+            if (themeIcon) themeIcon.textContent = '🌙';
+        }
+    }
+
+    function toggleTheme() {
+        const html = document.documentElement;
+        const currentTheme = html.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+        const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+
+        setTheme(newTheme);
+        localStorage.setItem('theme', newTheme);
+    }
+
+    initTheme();
+    document.getElementById('theme-toggle')?.addEventListener('click', toggleTheme);
+
+    // Get stream name from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const streamName = urlParams.get('src');
+
+    if (!streamName) {
+        document.getElementById('content').innerHTML = `
+            <div class="error">
+                <div class="error-title">Error</div>
+                <div>No stream name provided</div>
+            </div>
+        `;
+    } else {
+        document.getElementById('stream-name').textContent = decodeURIComponent(streamName);
+
+        // Fetch stream info
+        const url = new URL('api/streams', location.href);
+        url.searchParams.set('src', streamName);
+
+        fetch(url, {cache: 'no-cache'})
+            .then(r => {
+                if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+                return r.json();
+            })
+            .then(data => {
+                displayInfo(data);
+            })
+            .catch(error => {
+                document.getElementById('content').innerHTML = `
+                    <div class="error">
+                        <div class="error-title">Failed to load stream information</div>
+                        <div>${error.message}</div>
+                    </div>
+                `;
+            });
+    }
+
+    function displayInfo(data) {
+        const content = document.getElementById('content');
+
+        let html = '<div class="info-card">';
+        html += '<div class="card-title">Stream Data</div>';
+        html += '<div class="json-viewer">';
+        html += formatJSON(data, 0);
+        html += '</div>';
+        html += '</div>';
+
+        content.innerHTML = html;
+    }
+
+    function formatJSON(obj, indent = 0) {
+        const indentStr = '<span class="json-indent"></span>'.repeat(indent);
+        let html = '';
+
+        if (obj === null) {
+            return `<span class="json-null">null</span>`;
+        }
+
+        if (typeof obj === 'string') {
+            return `<span class="json-string">"${escapeHtml(obj)}"</span>`;
+        }
+
+        if (typeof obj === 'number') {
+            return `<span class="json-number">${obj}</span>`;
+        }
+
+        if (typeof obj === 'boolean') {
+            return `<span class="json-boolean">${obj}</span>`;
+        }
+
+        if (Array.isArray(obj)) {
+            if (obj.length === 0) {
+                return '<span class="json-bracket">[]</span>';
+            }
+
+            html += '<span class="json-bracket">[</span>\n';
+            obj.forEach((item, i) => {
+                html += '<div class="json-line">' + indentStr + '<span class="json-indent"></span>';
+                html += formatJSON(item, indent + 1);
+                if (i < obj.length - 1) html += '<span class="json-bracket">,</span>';
+                html += '</div>';
+            });
+            html += '<div class="json-line">' + indentStr + '<span class="json-bracket">]</span></div>';
+            return html;
+        }
+
+        if (typeof obj === 'object') {
+            const keys = Object.keys(obj);
+            if (keys.length === 0) {
+                return '<span class="json-bracket">{}</span>';
+            }
+
+            html += '<span class="json-bracket">{</span>\n';
+            keys.forEach((key, i) => {
+                html += '<div class="json-line">' + indentStr + '<span class="json-indent"></span>';
+                html += `<span class="json-key">"${escapeHtml(key)}"</span>: `;
+                html += formatJSON(obj[key], indent + 1);
+                if (i < keys.length - 1) html += '<span class="json-bracket">,</span>';
+                html += '</div>';
+            });
+            html += '<div class="json-line">' + indentStr + '<span class="json-bracket">}</span></div>';
+            return html;
+        }
+
+        return String(obj);
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+</script>
+
+</body>
+</html>

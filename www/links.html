@@ -3,18 +3,262 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>links - go2rtc</title>
+    <title>Links - go2rtc</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
     <style>
-        div > li {
-            list-style-type: none;
-            padding-left: 10px;
-            position: relative;
+        /* Page-specific styles for links.html */
+        .container {
+            max-width: 1200px;
         }
 
-        div > li:before {
-            content: "-";
-            position: absolute;
-            left: 0;
+        .page-header {
+            margin-bottom: 32px;
+        }
+
+        .page-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 32px;
+            color: var(--accent-cyan);
+            text-shadow: var(--glow-cyan);
+            margin-bottom: 8px;
+        }
+
+        .stream-name {
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-family: monospace;
+            word-break: break-all;
+            overflow-wrap: break-word;
+        }
+
+        .section {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--accent-cyan);
+            margin-bottom: 16px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .link-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .link-item {
+            display: flex;
+            align-items: flex-start;
+            padding: 12px;
+            background: var(--bg-secondary);
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            transition: all 0.3s;
+            flex-wrap: wrap;
+            word-break: break-word;
+            overflow-wrap: break-word;
+        }
+
+        .link-item:hover {
+            border-color: var(--accent-cyan);
+            box-shadow: var(--glow-cyan);
+        }
+
+        .link-item::before {
+            content: '▸';
+            color: var(--accent-cyan);
+            margin-right: 12px;
+            font-size: 14px;
+        }
+
+        .link-item a {
+            color: var(--accent-cyan);
+            text-decoration: none;
+            font-weight: 500;
+            margin-right: 8px;
+            word-break: break-all;
+            overflow-wrap: break-word;
+            max-width: 100%;
+        }
+
+        .link-item a:hover {
+            color: var(--accent-electric);
+            text-decoration: underline;
+        }
+
+        .link-item a::after,
+        .action-link::after {
+            content: none;
+        }
+
+        .link-description {
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+
+        .code-block {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 16px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            color: var(--accent-green);
+            overflow-x: auto;
+            margin-top: 12px;
+            word-break: break-all;
+            white-space: pre-wrap;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .radio-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .radio-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .radio-label:hover {
+            border-color: var(--accent-cyan);
+        }
+
+        .radio-label input[type="radio"] {
+            accent-color: var(--accent-cyan);
+        }
+
+        .input-group {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 12px 16px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: var(--accent-cyan);
+            box-shadow: var(--glow-cyan);
+        }
+
+        button {
+            padding: 12px 24px;
+            background: var(--accent-cyan);
+            color: #0a0e1a;
+            border: none;
+            border-radius: 6px;
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 12px;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        button:hover {
+            background: var(--accent-electric);
+            box-shadow: var(--glow-cyan);
+            transform: translateY(-2px);
+        }
+
+        .action-links {
+            display: flex;
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .action-link {
+            padding: 8px 16px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--accent-cyan);
+            text-decoration: none;
+            font-size: 13px;
+            transition: all 0.3s;
+        }
+
+        .action-link:hover {
+            border-color: var(--accent-cyan);
+            box-shadow: var(--glow-cyan);
+        }
+
+        .action-link.delete {
+            color: var(--accent-red);
+        }
+
+        .action-link.delete:hover {
+            border-color: var(--accent-red);
+        }
+
+        #homekit-qrcode {
+            margin-top: 16px;
+            padding: 16px;
+            background: white;
+            display: inline-block;
+            border-radius: 8px;
+        }
+
+        .note {
+            color: var(--text-muted);
+            font-size: 13px;
+            font-style: italic;
+            margin-top: 8px;
+        }
+
+        @media (max-width: 768px) {
+            .input-group {
+                flex-direction: column;
+            }
+
+            button {
+                width: 100%;
+            }
+
+            .action-links {
+                flex-direction: column;
+            }
         }
     </style>
 </head>
@@ -23,246 +267,337 @@
 <script src="main.js"></script>
 
 <main>
-    <div id="links"></div>
-    <script>
-        const src = new URLSearchParams(location.search).get('src').replace(/[<">]/g, ''); // sanitize
+    <div class="container">
+        <a href="index.html" class="back-link">← Back to Streams</a>
+        
+        <div class="page-header">
+            <h1 class="page-title">Stream Links</h1>
+            <div class="stream-name">Stream: <span id="stream-name"></span></div>
+        </div>
 
-        const links = document.getElementById('links');
+        <div id="links"></div>
 
-        links.innerHTML = `
-        <h2>Any codec in source</h2>
-        <li><a href="stream.html?src=${src}">stream.html</a> with auto-select mode / browsers: all / codecs: H264, H265*, MJPEG, JPEG, AAC, PCMU, PCMA, OPUS</li>
-        <li><a href="api/streams?src=${src}">info.json</a> page with active connections</li>
+        <div id="homekit" class="section" style="display: none">
+            <h2 class="section-title">🏠 HomeKit Server</h2>
+        </div>
+
+        <div class="section">
+            <h2 class="section-title">🎵 Play Audio</h2>
+            <div class="form-group">
+                <div class="radio-group">
+                    <label class="radio-label">
+                        <input type="radio" name="play" value="file" checked>
+                        <span><strong>File</strong> - Play remote (https://example.com/song.mp3) or local (/media/song.mp3) file</span>
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="play" value="live">
+                        <span><strong>Live</strong> - Play remote live stream (radio, etc.)</span>
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="play" value="text">
+                        <span><strong>Text</strong> - Play Text To Speech (if your FFmpeg supports this)</span>
+                    </label>
+                </div>
+                <div class="input-group">
+                    <input id="play-url" type="text" placeholder="Enter path / url / text">
+                    <button id="play-send">Send</button>
+                </div>
+                <div class="note">For cameras with two-way audio support</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2 class="section-title">📡 Publish Stream</h2>
+            <div class="code-block">YouTube:  rtmps://xxx.rtmp.youtube.com/live2/xxxx-xxxx-xxxx-xxxx-xxxx
+Telegram: rtmps://xxx-x.rtmp.t.me/s/xxxxxxxxxx:xxxxxxxxxxxxxxxxxxxxxx</div>
+            <div class="form-group">
+                <div class="input-group">
+                    <input id="pub-url" type="text" placeholder="Enter RTMPS URL">
+                    <button id="pub-send">Send</button>
+                </div>
+                <div class="note">Publish to YouTube, Telegram RTMPS server, etc.</div>
+            </div>
+        </div>
+
+        <div id="webrtc" class="section">
+            <h2 class="section-title">🎥 WebRTC Magic</h2>
+            <div class="form-group">
+                <div class="radio-group">
+                    <label class="radio-label">
+                        <input type="radio" name="webrtc" value="video+audio" checked>
+                        <span><strong>Video + Audio</strong> - Simple viewer</span>
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="webrtc" value="video+audio+microphone">
+                        <span><strong>Video + Audio + Microphone</strong> - Two-way audio from camera</span>
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="webrtc" value="camera+microphone">
+                        <span><strong>Camera + Microphone</strong> - Stream from browser</span>
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="webrtc" value="display+speaker">
+                        <span><strong>Display + Speaker</strong> - Broadcast software</span>
+                    </label>
+                </div>
+
+                <ul class="link-list">
+                    <li class="link-item">
+                        <a id="local" href="webrtc.html?src=">Local WebRTC viewer</a>
+                    </li>
+                    <li class="link-item">
+                        <span class="link-description">External WebRTC viewer:</span>
+                        <div class="action-links">
+                            <a id="shareadd" href="#" class="action-link">Share Link</a>
+                            <a id="shareget" href="#" class="action-link" style="display:none">Copy Link</a>
+                            <a id="sharedel" href="#" class="action-link delete" style="display:none">Delete</a>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</main>
+
+<script>
+    const src = new URLSearchParams(location.search).get('src').replace(/[<">]/g, ''); // sanitize
+    document.getElementById('stream-name').textContent = src;
+
+    const links = document.getElementById('links');
+
+    links.innerHTML = `
+    <div class="section">
+        <h2 class="section-title">🌐 Any Codec in Source</h2>
+        <ul class="link-list">
+            <li class="link-item">
+                <a href="stream.html?src=${src}">stream.html</a>
+                <span class="link-description">Auto-select mode / Browsers: All / Codecs: H264, H265*, MJPEG, JPEG, AAC, PCMU, PCMA, OPUS</span>
+            </li>
+            <li class="link-item">
+                <a href="api/streams?src=${src}">info.json</a>
+                <span class="link-description">Active connections info</span>
+            </li>
+        </ul>
+    </div>
     `;
 
-        const url = new URL('api', location.href);
-        fetch(url, {cache: 'no-cache'}).then(r => r.json()).then(data => {
-            let rtsp = location.host + ':8554';
-            try {
-                const host = data.host.match(/^[^:]+/)[0];
-                const port = data.rtsp.listen.match(/[0-9]+$/)[0];
-                rtsp = `${host}:${port}`;
-            } catch (e) {
-            }
+    const url = new URL('api', location.href);
+    fetch(url, {cache: 'no-cache'}).then(r => r.json()).then(data => {
+        let rtsp = location.host + ':8554';
+        try {
+            const host = data.host.match(/^[^:]+/)[0];
+            const port = data.rtsp.listen.match(/[0-9]+$/)[0];
+            rtsp = `${host}:${port}`;
+        } catch (e) {
+        }
 
-            links.innerHTML += `
-            <li><a href="rtsp://${rtsp}/${src}">rtsp</a> with only one video and one audio / codecs: any</li>
-            <li><a href="rtsp://${rtsp}/${src}?mp4">rtsp</a> for MP4 recording (Hass or Frigate) / codecs: H264, H265, AAC</li>
-            <li><a href="rtsp://${rtsp}/${src}?video=all&audio=all">rtsp</a> with all tracks / codecs: any</li>
+        links.innerHTML += `
+        <div class="section">
+            <h2 class="section-title">📹 RTSP Streaming</h2>
+            <ul class="link-list">
+                <li class="link-item">
+                    <a href="rtsp://${rtsp}/${src}">rtsp://${rtsp}/${src}</a>
+                    <span class="link-description">One video + one audio / Codecs: Any</span>
+                </li>
+                <li class="link-item">
+                    <a href="rtsp://${rtsp}/${src}?mp4">rtsp://${rtsp}/${src}?mp4</a>
+                    <span class="link-description">For MP4 recording (Hass, Frigate) / Codecs: H264, H265, AAC</span>
+                </li>
+                <li class="link-item">
+                    <a href="rtsp://${rtsp}/${src}?video=all&audio=all">rtsp://${rtsp}/${src}?video=all&audio=all</a>
+                    <span class="link-description">All tracks / Codecs: Any</span>
+                </li>
+            </ul>
+            <div class="code-block">ffplay -fflags nobuffer -flags low_delay -rtsp_transport tcp "rtsp://${rtsp}/${src}"</div>
+        </div>
 
-            <pre>ffplay -fflags nobuffer -flags low_delay -rtsp_transport tcp "rtsp://${rtsp}/${src}"</pre>
+        <div class="section">
+            <h2 class="section-title">🎬 H264/H265 Source</h2>
+            <ul class="link-list">
+                <li class="link-item">
+                    <a href="stream.html?src=${src}&mode=webrtc">WebRTC stream</a>
+                    <span class="link-description">Browsers: All / Codecs: H264, PCMU, PCMA, OPUS / +H265 in Safari</span>
+                </li>
+                <li class="link-item">
+                    <a href="stream.html?src=${src}&mode=mse">MSE stream</a>
+                    <span class="link-description">Browsers: Chrome, Firefox, Safari Mac/iPad / Codecs: H264, H265*, AAC, PCMA*, PCMU*, PCM* / +OPUS in Chrome/Firefox</span>
+                </li>
+                <li class="link-item">
+                    <a href="api/stream.mp4?src=${src}">stream.mp4 (legacy AAC)</a>
+                    <span class="link-description">Browsers: Chrome, Firefox / Codecs: H264, H265*, AAC</span>
+                </li>
+                <li class="link-item">
+                    <a href="api/stream.mp4?src=${src}&mp4=flac">stream.mp4 (modern FLAC)</a>
+                    <span class="link-description">Browsers: Chrome, Firefox / Codecs: H264, H265*, AAC, FLAC (PCMA, PCMU, PCM)</span>
+                </li>
+                <li class="link-item">
+                    <a href="api/stream.mp4?src=${src}&mp4=all">stream.mp4 (all audio)</a>
+                    <span class="link-description">Browsers: Chrome / Codecs: H264, H265*, AAC, OPUS, MP3, FLAC (PCMA, PCMU, PCM)</span>
+                </li>
+                <li class="link-item">
+                    <a href="api/frame.mp4?src=${src}">frame.mp4</a>
+                    <span class="link-description">Snapshot in MP4 format / Browsers: All / Codecs: H264, H265*</span>
+                </li>
+                <li class="link-item">
+                    <a href="api/stream.m3u8?src=${src}">stream.m3u8 (legacy HLS/TS)</a>
+                    <span class="link-description">Browsers: Safari all, Chrome Android / Codecs: H264</span>
+                </li>
+                <li class="link-item">
+                    <a href="api/stream.m3u8?src=${src}&mp4">stream.m3u8 (legacy HLS/fMP4)</a>
+                    <span class="link-description">Browsers: Safari all, Chrome Android / Codecs: H264, H265*, AAC</span>
+                </li>
+                <li class="link-item">
+                    <a href="api/stream.m3u8?src=${src}&mp4=flac">stream.m3u8 (modern HLS/fMP4)</a>
+                    <span class="link-description">Browsers: Safari all, Chrome Android / Codecs: H264, H265*, AAC, FLAC (PCMA, PCMU, PCM)</span>
+                </li>
+            </ul>
+        </div>
 
-            <h2>H264/H265 source</h2>
-            <li><a href="stream.html?src=${src}&mode=webrtc">stream.html</a> WebRTC stream / browsers: all / codecs: H264, PCMU, PCMA, OPUS / +H265 in Safari</li>
-            <li><a href="stream.html?src=${src}&mode=mse">stream.html</a> MSE stream / browsers: Chrome, Firefox, Safari Mac/iPad / codecs: H264, H265*, AAC, PCMA*, PCMU*, PCM* / +OPUS in Chrome and Firefox</li>
-            <li><a href="api/stream.mp4?src=${src}">stream.mp4</a> legacy MP4 stream with AAC audio / browsers: Chrome, Firefox / codecs: H264, H265*, AAC</li>
-            <li><a href="api/stream.mp4?src=${src}&mp4=flac">stream.mp4</a> modern MP4 stream with common audio / browsers: Chrome, Firefox / codecs: H264, H265*, AAC, FLAC (PCMA, PCMU, PCM)</li>
-            <li><a href="api/stream.mp4?src=${src}&mp4=all">stream.mp4</a> MP4 stream with any audio / browsers: Chrome / codecs: H264, H265*, AAC, OPUS, MP3, FLAC (PCMA, PCMU, PCM)</li>
-            <li><a href="api/frame.mp4?src=${src}">frame.mp4</a> snapshot in MP4-format / browsers: all / codecs: H264, H265*</li>
-            <li><a href="api/stream.m3u8?src=${src}">stream.m3u8</a> legacy HLS/TS / browsers: Safari all, Chrome Android / codecs: H264</li>
-            <li><a href="api/stream.m3u8?src=${src}&mp4">stream.m3u8</a> legacy HLS/fMP4 / browsers: Safari all, Chrome Android / codecs: H264, H265*, AAC</li>
-            <li><a href="api/stream.m3u8?src=${src}&mp4=flac">stream.m3u8</a> modern HLS/fMP4 / browsers: Safari all, Chrome Android / codecs: H264, H265*, AAC, FLAC (PCMA, PCMU, PCM)</li>
-
-            <h2>MJPEG source</h2>
-            <li><a href="stream.html?src=${src}&mode=mjpeg">stream.html</a> with MJPEG mode / browsers: all / codecs: MJPEG, JPEG</li>
-            <li><a href="api/stream.mjpeg?src=${src}">stream.mjpeg</a> MJPEG stream / browsers: all / codecs: MJPEG, JPEG</li>
-            <li><a href="api/frame.jpeg?src=${src}">frame.jpeg</a> snapshot in JPEG-format / browsers: all / codecs: MJPEG, JPEG</li>
+        <div class="section">
+            <h2 class="section-title">📸 MJPEG Source</h2>
+            <ul class="link-list">
+                <li class="link-item">
+                    <a href="stream.html?src=${src}&mode=mjpeg">stream.html (MJPEG)</a>
+                    <span class="link-description">Browsers: All / Codecs: MJPEG, JPEG</span>
+                </li>
+                <li class="link-item">
+                    <a href="api/stream.mjpeg?src=${src}">stream.mjpeg</a>
+                    <span class="link-description">MJPEG stream / Browsers: All / Codecs: MJPEG, JPEG</span>
+                </li>
+                <li class="link-item">
+                    <a href="api/frame.jpeg?src=${src}">frame.jpeg</a>
+                    <span class="link-description">Snapshot in JPEG format / Browsers: All / Codecs: MJPEG, JPEG</span>
+                </li>
+            </ul>
+        </div>
         `;
-        });
-    </script>
+    });
 
-    <div id="homekit" style="display: none">
-        <h2>HomeKit server</h2>
-    </div>
-    <script>
-        fetch(`api/homekit?id=${src}`, {cache: 'no-cache'}).then(async (r) => {
-            if (!r.ok) return;
+    // HomeKit section
+    fetch(`api/homekit?id=${src}`, {cache: 'no-cache'}).then(async (r) => {
+        if (!r.ok) return;
 
-            const div = document.querySelector('#homekit');
-            div.innerHTML += `<div><a href="${r.url}">info.json</a> page with active connections</div>`;
-            div.style = '';
+        const div = document.querySelector('#homekit');
+        div.innerHTML += `<ul class="link-list"><li class="link-item"><a href="${r.url}">info.json</a><span class="link-description">Active connections</span></li></ul>`;
+        div.style.display = 'block';
 
-            /** @type {{name: string, category_id: string, setup_code: string, setup_id: string, setup_uri: string}} */
-            const data = await r.json();
-            if (data.setup_code === undefined) return;
+        const data = await r.json();
+        if (data.setup_code === undefined) return;
 
-            const script = document.createElement('script');
-            script.src = 'https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js';
-            script.async = true;
-            script.onload = () => {
-                /* global BigInt */
-                const categoryID = BigInt(data.category_id);
-                const pin = BigInt(data.setup_code.replaceAll('-', ''));
-                const payload = categoryID << BigInt(31) | BigInt(2 << 27) | pin;
-                const setupURI = `X-HM://${payload.toString(36).toUpperCase().padStart(9, '0')}${data.setup_id}`;
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js';
+        script.async = true;
+        script.onload = () => {
+            const categoryID = BigInt(data.category_id);
+            const pin = BigInt(data.setup_code.replaceAll('-', ''));
+            const payload = categoryID << BigInt(31) | BigInt(2 << 27) | pin;
+            const setupURI = `X-HM://${payload.toString(36).toUpperCase().padStart(9, '0')}${data.setup_id}`;
 
-                div.innerHTML += `<pre>Setup Name: ${data.name}
-Setup Code: ${data.setup_code}</pre>
+            div.innerHTML += `<div class="code-block">Setup Name: ${data.name}
+Setup Code: ${data.setup_code}</div>
 <div id="homekit-qrcode"></div>`;
 
-                /* global QRCode */
-                new QRCode('homekit-qrcode', {text: setupURI, width: 128, height: 128});
-            };
-            document.head.appendChild(script);
-        });
-    </script>
+            new QRCode('homekit-qrcode', {text: setupURI, width: 128, height: 128});
+        };
+        document.head.appendChild(script);
+    });
 
-    <div>
-        <h2>Play audio</h2>
-        <label><input type="radio" name="play" value="file" checked>
-            file - play remote (https://example.com/song.mp3) or local (/media/song.mp3) file
-        </label>
-        <label><input type="radio" name="play" value="live">
-            live - play remote live stream (radio, etc.)
-        </label>
-        <label><input type="radio" name="play" value="text">
-            text - play Text To Speech (if your FFmpeg support this)
-        </label>
-        <br>
-        <input id="play-url" type="text" placeholder="path / url / text">
-        <button id="play-send">send</button>
-        / cameras with two way audio support
-    </div>
-    <script>
-        document.getElementById('play-send').addEventListener('click', ev => {
-            ev.preventDefault();
-            // action - file / live / text
-            const action = document.querySelector('input[name="play"]:checked').value;
-            const url = new URL('api/ffmpeg', location.href);
-            url.searchParams.set('dst', src);
-            url.searchParams.set(action, document.getElementById('play-url').value);
-            fetch(url, {method: 'POST'});
-        });
-    </script>
+    // Play audio
+    document.getElementById('play-send').addEventListener('click', ev => {
+        ev.preventDefault();
+        const action = document.querySelector('input[name="play"]:checked').value;
+        const url = new URL('api/ffmpeg', location.href);
+        url.searchParams.set('dst', src);
+        url.searchParams.set(action, document.getElementById('play-url').value);
+        fetch(url, {method: 'POST'});
+    });
 
-    <div>
-        <h2>Publish stream</h2>
-        <pre>YouTube:  rtmps://xxx.rtmp.youtube.com/live2/xxxx-xxxx-xxxx-xxxx-xxxx
-Telegram: rtmps://xxx-x.rtmp.t.me/s/xxxxxxxxxx:xxxxxxxxxxxxxxxxxxxxxx</pre>
-        <input id="pub-url" type="text" placeholder="url">
-        <button id="pub-send">send</button>
-        / Telegram RTMPS server
-    </div>
-    <script>
-        document.getElementById('pub-send').addEventListener('click', ev => {
-            ev.preventDefault();
-            const url = new URL('api/streams', location.href);
-            url.searchParams.set('src', src);
-            url.searchParams.set('dst', document.getElementById('pub-url').value);
-            fetch(url, {method: 'POST'});
-        });
-    </script>
+    // Publish stream
+    document.getElementById('pub-send').addEventListener('click', ev => {
+        ev.preventDefault();
+        const url = new URL('api/streams', location.href);
+        url.searchParams.set('src', src);
+        url.searchParams.set('dst', document.getElementById('pub-url').value);
+        fetch(url, {method: 'POST'});
+    });
 
-    <div id="webrtc">
-        <h2>WebRTC Magic</h2>
-        <label><input type="radio" name="webrtc" value="video+audio" checked>
-            video+audio = simple viewer
-        </label>
-        <label><input type="radio" name="webrtc" value="video+audio+microphone">
-            video+audio+microphone = two way audio from camera
-        </label>
-        <label><input type="radio" name="webrtc" value="camera+microphone">
-            camera+microphone = stream from browser
-        </label>
-        <label><input type="radio" name="webrtc" value="display+speaker">
-            display+speaker = broadcast software
-        </label>
+    // WebRTC functions
+    function webrtcLinksUpdate() {
+        const media = document.querySelector('input[name="webrtc"]:checked').value;
+        const direction = media.indexOf('video') >= 0 || media === 'audio' ? 'src' : 'dst';
+        document.getElementById('local').href = `webrtc.html?${direction}=${src}&media=${media}`;
 
-        <br>
-        <li><a id="local" href="webrtc.html?src=">webrtc.html</a> local WebRTC viewer</li>
+        const share = document.getElementById('shareget');
+        share.href = `https://go2rtc.org/webtorrent/#${share.dataset.auth}&media=${media}`;
+    }
 
-        <li>
-            <a id="shareadd" href="#">share link</a>
-            <a id="shareget" href="#">copy link</a>
-            <a id="sharedel" href="#">delete</a>
-            external WebRTC viewer
-        </li>
-    </div>
-    <script>
-        function webrtcLinksUpdate() {
-            const media = document.querySelector('input[name="webrtc"]:checked').value;
+    function share(method) {
+        const url = new URL('api/webtorrent', location.href);
+        url.searchParams.set('src', src);
+        return fetch(url, {method: method, cache: 'no-cache'});
+    }
 
-            const direction = media.indexOf('video') >= 0 || media === 'audio' ? 'src' : 'dst';
-            document.getElementById('local').href = `webrtc.html?${direction}=${src}&media=${media}`;
-
-            const share = document.getElementById('shareget');
-            share.href = `https://go2rtc.org/webtorrent/#${share.dataset.auth}&media=${media}`;
-        }
-
-        function share(method) {
-            const url = new URL('api/webtorrent', location.href);
-            url.searchParams.set('src', src);
-            return fetch(url, {method: method, cache: 'no-cache'});
-        }
-
-        function onshareadd(r) {
-            document.getElementById('shareget').dataset['auth'] = `share=${r.share}&pwd=${r.pwd}`;
-
-            document.getElementById('shareadd').style.display = 'none';
-            document.getElementById('shareget').style.display = '';
-            document.getElementById('sharedel').style.display = '';
-
-            webrtcLinksUpdate();
-        }
-
-        function onsharedel() {
-            document.getElementById('shareadd').style.display = '';
-            document.getElementById('shareget').style.display = 'none';
-            document.getElementById('sharedel').style.display = 'none';
-        }
-
-        function copyTextToClipboard(text) {
-            // https://web.dev/patterns/clipboard/copy-text
-            if (navigator.clipboard && window.isSecureContext) {
-                navigator.clipboard.writeText(text).catch(err => {
-                    console.error(err.name, err.message);
-                });
-            } else {
-                const textarea = document.createElement('textarea');
-                textarea.value = text;
-                textarea.style.opacity = '0';
-                document.body.appendChild(textarea);
-
-                textarea.focus();
-                textarea.select();
-
-                try {
-                    document.execCommand('copy');
-                } catch (err) {
-                    console.error(err.name, err.message);
-                }
-
-                document.body.removeChild(textarea);
-            }
-        }
-
-        document.getElementById('shareadd').addEventListener('click', ev => {
-            ev.preventDefault();
-            share('POST').then(r => r.json()).then(r => onshareadd(r));
-        });
-
-        document.getElementById('shareget').addEventListener('click', ev => {
-            ev.preventDefault();
-            copyTextToClipboard(ev.target.href);
-        });
-
-        document.getElementById('sharedel').addEventListener('click', ev => {
-            ev.preventDefault();
-            share('DELETE').then(() => onsharedel());
-        });
-
-        document.getElementById('webrtc').addEventListener('click', ev => {
-            if (ev.target.tagName === 'INPUT') webrtcLinksUpdate();
-        });
-
-        share('GET').then(r => {
-            if (r.ok) r.json().then(r => onshareadd(r));
-            else onsharedel();
-        });
-
+    function onshareadd(r) {
+        document.getElementById('shareget').dataset['auth'] = `share=${r.share}&pwd=${r.pwd}`;
+        document.getElementById('shareadd').style.display = 'none';
+        document.getElementById('shareget').style.display = '';
+        document.getElementById('sharedel').style.display = '';
         webrtcLinksUpdate();
-    </script>
-</main>
+    }
+
+    function onsharedel() {
+        document.getElementById('shareadd').style.display = '';
+        document.getElementById('shareget').style.display = 'none';
+        document.getElementById('sharedel').style.display = 'none';
+    }
+
+    function copyTextToClipboard(text) {
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text).catch(err => {
+                console.error(err.name, err.message);
+            });
+        } else {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+            try {
+                document.execCommand('copy');
+            } catch (err) {
+                console.error(err.name, err.message);
+            }
+            document.body.removeChild(textarea);
+        }
+    }
+
+    document.getElementById('shareadd').addEventListener('click', ev => {
+        ev.preventDefault();
+        share('POST').then(r => r.json()).then(r => onshareadd(r));
+    });
+
+    document.getElementById('shareget').addEventListener('click', ev => {
+        ev.preventDefault();
+        copyTextToClipboard(ev.target.href);
+    });
+
+    document.getElementById('sharedel').addEventListener('click', ev => {
+        ev.preventDefault();
+        share('DELETE').then(() => onsharedel());
+    });
+
+    document.getElementById('webrtc').addEventListener('click', ev => {
+        if (ev.target.tagName === 'INPUT') webrtcLinksUpdate();
+    });
+
+    share('GET').then(r => {
+        if (r.ok) r.json().then(r => onshareadd(r));
+        else onsharedel();
+    });
+
+    webrtcLinksUpdate();
+</script>
 
 </body>
 </html>
