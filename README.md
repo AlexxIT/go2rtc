@@ -112,8 +112,8 @@ PS. The application is compiled with the latest versions of the Go language for 
 
 ### go2rtc: Docker
 
-The Docker containers [`alexxit/go2rtc`](https://hub.docker.com/r/alexxit/go2rtc) and [`ghcr.io/alexxit/go2rtc`](https://github.com/AlexxIT/go2rtc/pkgs/container/go2rtc) supports multiple architectures including `386`, `amd64`, `arm/v6`, `arm/v7` and `arm64`.
-This containers offers the same functionality as the Home Assistant [add-on](#go2rtc-home-assistant-add-on) but is designed to operate independently of Home Assistant.
+The Docker containers [`alexxit/go2rtc`](https://hub.docker.com/r/alexxit/go2rtc) and [`ghcr.io/alexxit/go2rtc`](https://github.com/AlexxIT/go2rtc/pkgs/container/go2rtc) support multiple architectures including `386`, `amd64`, `arm/v6`, `arm/v7` and `arm64`.
+These containers offer the same functionality as the Home Assistant [add-on](#go2rtc-home-assistant-add-on) but are designed to operate independently of Home Assistant.
 It comes preinstalled with [FFmpeg](internal/ffmpeg/README.md) and [Python](internal/echo/README.md).
 
 ### go2rtc: Home Assistant add-on
