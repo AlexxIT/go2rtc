@@ -47,7 +47,7 @@ In go2rtc logs you will get similar output:
 16:17:43.167 INF [pinggy] proxy url=tcp://abcde-123-123-123-123.a.free.pinggy.link:12345
 ```
 
-Now you have working stream:
+Now you have a working stream:
 
 ```
 rtsp://admin:password@abcde-123-123-123-123.a.free.pinggy.link:12345/cam/realmonitor?channel=1&subtype=0

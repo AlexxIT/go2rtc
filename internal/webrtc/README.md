@@ -98,7 +98,7 @@ If an external connection via STUN is used:
   - https://habr.com/ru/companies/flashphoner/articles/480006/
   - https://www.youtube.com/watch?v=FXVg2ckuKfs
 
-### Confiration suggestions
+### Configuration suggestions
 
 - by default, WebRTC uses both TCP and UDP on port 8555 for connections
 - you can use this port for external access

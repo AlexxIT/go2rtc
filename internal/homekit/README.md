@@ -83,7 +83,7 @@ homekit:
 
 **Proxy HomeKit camera**
 
-- Video stream from HomeKit camera to Apple device (iPhone, AppleTV) will be transmitted directly
+- Video stream from HomeKit camera to Apple device (iPhone, Apple TV) will be transmitted directly
 - Video stream from HomeKit camera to RTSP/WebRTC/MP4/etc. will be transmitted via go2rtc
 
 ```yaml

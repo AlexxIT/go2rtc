@@ -7,10 +7,10 @@ Some formats and protocols go2rtc supports exclusively. They have no equivalent 
 
 - The initiator of the connection can be go2rtc - **Source protocols**
 - The initiator of the connection can be an external program - **Ingress protocols**
-- Codecs can be incoming - **Recevers codecs**
-- Codecs can be outgoing (two way audio) - **Senders codecs**
+- Codecs can be incoming - **Receiver codecs**
+- Codecs can be outgoing (two way audio) - **Sender codecs**
 
-| Group      | Format       | Protocols       | Ingress | Recevers codecs                 | Senders codecs      | Example       |
+| Group      | Format       | Protocols       | Ingress | Receiver codecs                 | Sender codecs      | Example       |
 |------------|--------------|-----------------|---------|---------------------------------|---------------------|---------------|
 | Devices    | alsa         | pipe            |         |                                 | pcm                 | `alsa:`       |
 | Devices    | v4l2         | pipe            |         |                                 |                     | `v4l2:`       |
@@ -93,7 +93,7 @@ Some formats and protocols go2rtc supports exclusively. They have no equivalent 
 
 - `pkg/{format}/producer.go` - producer for this format (also if support backchannel)
 - `pkg/{format}/consumer.go` - consumer for this format
-- `pkg/{format}/backchanel.go` - producer with only backchannel func
+- `pkg/{format}/backchannel.go` - producer with only backchannel func
 
 **Mentioning modules:**
 

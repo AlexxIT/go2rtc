@@ -24,8 +24,8 @@ streams:
 
 Any cameras in WebRTC format are supported. But at the moment Home Assistant only supports some [Nest](https://www.home-assistant.io/integrations/nest/) cameras in this format.
 
-**Important.** The Nest API only allows you to get a link to a stream for 5 minutes. 
-Do not use this with Frigate! If the stream expires, Frigate will consume all available RAM on your machine within seconds. 
+**Important.** The Nest API only allows you to get a link to a stream for 5 minutes.
+Do not use this with Frigate! If the stream expires, Frigate will consume all available RAM on your machine within seconds.
 It's recommended to use [Nest source](../nest/README.md) - it supports extending the stream.
 
 ```yaml
