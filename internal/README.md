@@ -41,6 +41,7 @@ Some formats and protocols go2rtc supports exclusively. They have no equivalent 
 | [`http`]       | `yuv4mpegpipe`  | `http`, `tcp`    | yes   |        |        |         |
 | [`isapi`]      | `alaw`, `mulaw` | `http`           |       |        |        | yes     |
 | [`ivideon`]    | `mp4`           | `ws`             | yes   |        |        |         |
+| [`kasa`]       | `h264`, `mulaw` | `http`           | yes   |        |        |         |
 | [`mjpeg`]      | `ascii`         | `http`           |       | yes    |        |         |
 | [`mjpeg`]      | `jpeg`          | `http`           |       | yes    |        |         |
 | [`mjpeg`]      | `mpjpeg`        | `http`           |       | yes    | yes    |         |
@@ -86,6 +87,7 @@ Some formats and protocols go2rtc supports exclusively. They have no equivalent 
 [`http`]: http/README.md
 [`isapi`]: isapi/README.md
 [`ivideon`]: ivideon/README.md
+[`kasa`]: kasa/README.md
 [`mjpeg`]: mjpeg/README.md
 [`mp4`]: mp4/README.md
 [`mpegts`]: mpegts/README.md

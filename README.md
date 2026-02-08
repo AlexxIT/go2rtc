@@ -191,7 +191,7 @@ A summary table of all modules and features can be found [here](internal/README.
 - [`hass`](internal/hass/README.md) - Import cameras from [Home Assistant](https://www.home-assistant.io/) config files.
 - [`homekit`](internal/homekit/README.md) - Cameras with [Apple HomeKit](https://www.apple.com/home-app/accessories/) protocol.
 - [`isapi`](internal/isapi/README.md) - Two-way audio for [Hikvision ISAPI](https://tpp.hikvision.com/download/ISAPI_OTAP) protocol.
-- [`kasa`](internal/tapo/README.md#tp-link-kasa) - [TP-Link Kasa](https://www.kasasmart.com/) cameras.
+- [`kasa`](internal/kasa/README.md) - [TP-Link Kasa](https://www.kasasmart.com/) cameras.
 - [`multitrans`](internal/multitrans/README.md) - Two-way audio for Chinese version of [TP-Link](https://www.tp-link.com.cn/) cameras.
 - [`nest`](internal/nest/README.md) - [Google Nest](https://developers.google.com/nest/device-access/supported-devices) cameras through user-unfriendly and paid APIs.
 - [`ring`](internal/ring/README.md) - Ring cameras with two-way audio support.
