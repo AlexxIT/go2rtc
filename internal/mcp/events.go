@@ -98,16 +98,33 @@ func checkStreamChanges(knownStreams map[string][]string) {
 					"sources": currentSources,
 				},
 			})
-		} else if !sourcesEqual(previousSources, currentSources) {
-			// Updated stream
-			eventBus.Publish(Event{
-				Type:      "stream_updated",
-				Timestamp: time.Now(),
-				Data: map[string]any{
-					"name":    name,
-					"sources": currentSources,
-				},
-			})
+		} else {
+			// Check if sources changed
+			equal := len(previousSources) == len(currentSources)
+			if equal {
+				aMap := make(map[string]struct{}, len(previousSources))
+				for _, s := range previousSources {
+					aMap[s] = struct{}{}
+				}
+				for _, s := range currentSources {
+					if _, exists := aMap[s]; !exists {
+						equal = false
+						break
+					}
+				}
+			}
+
+			if !equal {
+				// Updated stream
+				eventBus.Publish(Event{
+					Type:      "stream_updated",
+					Timestamp: time.Now(),
+					Data: map[string]any{
+						"name":    name,
+						"sources": currentSources,
+					},
+				})
+			}
 		}
 
 		knownStreams[name] = currentSources
@@ -134,47 +151,6 @@ func checkStreamChanges(knownStreams map[string][]string) {
 			delete(knownStreams, name)
 		}
 	}
-}
-
-func sourcesEqual(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-
-	aMap := make(map[string]struct{})
-	for _, s := range a {
-		aMap[s] = struct{}{}
-	}
-
-	for _, s := range b {
-		if _, exists := aMap[s]; !exists {
-			return false
-		}
-	}
-
-	return true
-}
-
-// GetRecentEvents returns a list of recent events for MCP tools
-func GetRecentEvents(count int) []Event {
-	// This is a simplified version - in production, you'd want to store
-	// events in a circular buffer or similar structure
-	ch := eventBus.Subscribe()
-	defer eventBus.Unsubscribe(ch)
-
-	events := make([]Event, 0, count)
-	deadline := time.After(time.Second)
-
-	for i := 0; i < count; i++ {
-		select {
-		case event := <-ch:
-			events = append(events, event)
-		case <-deadline:
-			break
-		}
-	}
-
-	return events
 }
 
 // Event logging for resources

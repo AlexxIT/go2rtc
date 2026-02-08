@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -639,6 +640,41 @@ func TestStreamHandlers(t *testing.T) {
 
 		if config["info"] == nil {
 			t.Error("expected info in config result")
+		}
+	})
+}
+
+func TestSourceValidationHint(t *testing.T) {
+	t.Run("insecure producer", func(t *testing.T) {
+		err := errors.New("streams: source from insecure producer")
+		hint := sourceValidationHint("exec:ffmpeg -hide_banner -f lavfi -i testsrc -f h264 -", err)
+
+		if hint == "" {
+			t.Fatal("expected hint for insecure producer")
+		}
+		if !strings.Contains(hint, "exec:") {
+			t.Fatalf("expected hint to include blocked scheme, got: %s", hint)
+		}
+	})
+
+	t.Run("spaces in source", func(t *testing.T) {
+		err := errors.New("streams: source with spaces may be insecure")
+		hint := sourceValidationHint("ffmpeg -i rtsp://example", err)
+
+		if hint == "" {
+			t.Fatal("expected hint for source with spaces")
+		}
+		if !strings.Contains(hint, "spaces") {
+			t.Fatalf("expected hint to mention spaces, got: %s", hint)
+		}
+	})
+
+	t.Run("other errors", func(t *testing.T) {
+		err := errors.New("streams: source not supported")
+		hint := sourceValidationHint("rtsp://example", err)
+
+		if hint != "" {
+			t.Fatalf("expected empty hint for unrelated errors, got: %s", hint)
 		}
 	})
 }

@@ -184,10 +184,26 @@ func handleSSEPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Compatibility fallback: if session is not used, behave like plain HTTP MCP.
-	responses, err := handleMCPBody(body)
-	if err != nil {
-		sendHTTPError(w, nil, ParseError, err.Error())
-		return
+	var messages []Message
+	if len(body) > 0 && body[0] == '[' {
+		if err := json.Unmarshal(body, &messages); err != nil {
+			sendHTTPError(w, nil, ParseError, err.Error())
+			return
+		}
+	} else {
+		var msg Message
+		if err := json.Unmarshal(body, &msg); err != nil {
+			sendHTTPError(w, nil, ParseError, err.Error())
+			return
+		}
+		messages = []Message{msg}
+	}
+
+	responses := make([]*Message, 0, len(messages))
+	for _, msg := range messages {
+		if response := server.HandleMessage(&msg); response != nil {
+			responses = append(responses, response)
+		}
 	}
 
 	if len(responses) == 0 {
@@ -216,13 +232,24 @@ func handleSSEPostWithSession(w http.ResponseWriter, body []byte, sessionID stri
 		return
 	}
 
-	responses, err := handleMCPBody(body)
-	if err != nil {
-		sendHTTPError(w, nil, ParseError, err.Error())
-		return
+	// Handle both single request and batch requests.
+	var messages []Message
+	if len(body) > 0 && body[0] == '[' {
+		if err := json.Unmarshal(body, &messages); err != nil {
+			sendHTTPError(w, nil, ParseError, err.Error())
+			return
+		}
+	} else {
+		var msg Message
+		if err := json.Unmarshal(body, &msg); err != nil {
+			sendHTTPError(w, nil, ParseError, err.Error())
+			return
+		}
+		messages = []Message{msg}
 	}
 
-	for _, response := range responses {
+	for _, msg := range messages {
+		response := server.HandleMessage(&msg)
 		if response == nil {
 			continue
 		}
@@ -235,31 +262,6 @@ func handleSSEPostWithSession(w http.ResponseWriter, body []byte, sessionID stri
 	}
 
 	w.WriteHeader(http.StatusAccepted)
-}
-
-func handleMCPBody(body []byte) ([]*Message, error) {
-	// Handle both single request and batch requests.
-	var messages []Message
-	if len(body) > 0 && body[0] == '[' {
-		if err := json.Unmarshal(body, &messages); err != nil {
-			return nil, err
-		}
-	} else {
-		var msg Message
-		if err := json.Unmarshal(body, &msg); err != nil {
-			return nil, err
-		}
-		messages = []Message{msg}
-	}
-
-	responses := make([]*Message, 0, len(messages))
-	for _, msg := range messages {
-		if response := server.HandleMessage(&msg); response != nil {
-			responses = append(responses, response)
-		}
-	}
-
-	return responses, nil
 }
 
 func registerSSESession(session *sseSession) {

@@ -83,7 +83,7 @@ func Init() {
 				},
 				"url": map[string]any{
 					"type":        "string",
-					"description": "Stream source URL (e.g., rtsp://..., http://...)",
+					"description": "Stream source URL (e.g., rtsp://..., http://...). Insecure runtime sources like exec:/expr:/echo: are blocked.",
 				},
 			},
 			"required": []string{"name", "url"},

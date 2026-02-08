@@ -11,6 +11,45 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/streams"
 )
 
+func sourceScheme(source string) string {
+	if i := strings.IndexByte(source, ':'); i > 0 {
+		return source[:i]
+	}
+	return ""
+}
+
+func sourceValidationHint(source string, err error) string {
+	if err == nil {
+		return ""
+	}
+
+	switch {
+	case strings.Contains(err.Error(), "streams: source from insecure producer"):
+		scheme := sourceScheme(source)
+		if scheme == "" {
+			return "Runtime MCP tools block insecure producer schemes; configure this source in go2rtc.yaml under streams."
+		}
+		return fmt.Sprintf(
+			"Runtime MCP tools block insecure producer scheme %q; configure this source in go2rtc.yaml under streams.",
+			scheme+":",
+		)
+	case strings.Contains(err.Error(), "streams: source with spaces may be insecure"):
+		return "Runtime MCP tools block sources with spaces; use URL-style sources without raw shell command arguments (for example ffmpeg:virtual?...)."
+	default:
+		return ""
+	}
+}
+
+func validationErrorWithHint(source string, err error) error {
+	if err == nil {
+		return nil
+	}
+	if hint := sourceValidationHint(source, err); hint != "" {
+		return fmt.Errorf("%w (%s)", err, hint)
+	}
+	return err
+}
+
 // Tool Handlers
 
 func handleListStreams(ctx context.Context, args map[string]any) (any, error) {
@@ -95,7 +134,7 @@ func handleAddStream(ctx context.Context, args map[string]any) (any, error) {
 
 	stream, err := streams.Patch(name, url)
 	if err != nil {
-		return nil, fmt.Errorf("failed to add stream: %w", err)
+		return nil, fmt.Errorf("failed to add stream: %w", validationErrorWithHint(url, err))
 	}
 
 	return map[string]any{
@@ -182,6 +221,9 @@ func handleValidateSource(ctx context.Context, args map[string]any) (any, error)
 	}
 	if validationErr != nil {
 		result["error"] = validationErr.Error()
+		if hint := sourceValidationHint(source, validationErr); hint != "" {
+			result["hint"] = hint
+		}
 	}
 
 	return result, nil
@@ -203,7 +245,7 @@ func handlePlayStream(ctx context.Context, args map[string]any) (any, error) {
 	}
 
 	if err = streams.Validate(source); err != nil {
-		return nil, err
+		return nil, validationErrorWithHint(source, err)
 	}
 
 	if err = stream.Play(source); err != nil {
@@ -233,7 +275,7 @@ func handlePublishStream(ctx context.Context, args map[string]any) (any, error) 
 	}
 
 	if err = streams.Validate(destination); err != nil {
-		return nil, err
+		return nil, validationErrorWithHint(destination, err)
 	}
 
 	if err = stream.Publish(destination); err != nil {
@@ -1054,24 +1096,24 @@ func handleGetStreamURLs(ctx context.Context, args map[string]any) (any, error) 
 	host := fmt.Sprintf("%v", app.Info["host"])
 
 	urls := map[string]string{
-		"mp4":        fmt.Sprintf("%s/mp4/%s.mp4", host, name),
-		"mp4_live":   fmt.Sprintf("%s/mp4/%s.live.mp4", host, name),
-		"hls":        fmt.Sprintf("%s/hls/%s.m3u8", host, name),
-		"webrtc":     fmt.Sprintf("%s/api/stream?src=%s", host, name),
-		"mse":        fmt.Sprintf("%s/mse/%s", host, name),
-		"rtsp":       fmt.Sprintf("rtsp://localhost:8554/%s", name),
-		"rtmp":       fmt.Sprintf("rtmp://localhost:1935/%s", name),
-		"flv":        fmt.Sprintf("%s/flv/%s.flv", host, name),
-		"mjpeg":      fmt.Sprintf("%s/mjpeg/%s", host, name),
-		"websocket":  fmt.Sprintf("%s/api/ws?src=%s", host, name),
+		"mp4":       fmt.Sprintf("%s/mp4/%s.mp4", host, name),
+		"mp4_live":  fmt.Sprintf("%s/mp4/%s.live.mp4", host, name),
+		"hls":       fmt.Sprintf("%s/hls/%s.m3u8", host, name),
+		"webrtc":    fmt.Sprintf("%s/api/stream?src=%s", host, name),
+		"mse":       fmt.Sprintf("%s/mse/%s", host, name),
+		"rtsp":      fmt.Sprintf("rtsp://localhost:8554/%s", name),
+		"rtmp":      fmt.Sprintf("rtmp://localhost:1935/%s", name),
+		"flv":       fmt.Sprintf("%s/flv/%s.flv", host, name),
+		"mjpeg":     fmt.Sprintf("%s/mjpeg/%s", host, name),
+		"websocket": fmt.Sprintf("%s/api/ws?src=%s", host, name),
 	}
 
 	if scheme != "" {
 		if url, ok := urls[scheme]; ok {
 			return map[string]any{
-				"name": name,
+				"name":   name,
 				"scheme": scheme,
-				"url": url,
+				"url":    url,
 			}, nil
 		}
 		return nil, fmt.Errorf("unsupported scheme: %s", scheme)
@@ -1228,8 +1270,8 @@ func handleGetStreamStats(ctx context.Context, args map[string]any) (any, error)
 	}
 
 	stats := map[string]any{
-		"name":     name,
-		"sources":  stream.Sources(),
+		"name":    name,
+		"sources": stream.Sources(),
 	}
 
 	// Get detailed stream info including stats
@@ -1278,8 +1320,8 @@ func handleStreamSnapshot(ctx context.Context, args map[string]any) (any, error)
 
 	// Return complete snapshot of stream state
 	snapshot := map[string]any{
-		"name":     name,
-		"sources":  stream.Sources(),
+		"name":      name,
+		"sources":   stream.Sources(),
 		"timestamp": app.Info["time"],
 	}
 

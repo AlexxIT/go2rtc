@@ -156,6 +156,9 @@ Add or update a stream in go2rtc.
 }
 ```
 
+Note: runtime MCP tools block insecure producer schemes such as `exec:`, `expr:`, and `echo:`.  
+Configure those trusted local sources in `go2rtc.yaml` under `streams`.
+
 **Returns:**
 ```json
 {
