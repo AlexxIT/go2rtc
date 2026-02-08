@@ -130,6 +130,65 @@ document.body.innerHTML = `
         <a href="config.html">config</a>
         <a href="log.html">log</a>
         <a href="net.html">net</a>
+        <button id="theme-toggle" style="float:right;margin:8px 16px 8px 0;">🌙</button>
     </nav>
 </header>
 ` + document.body.innerHTML;
+
+// Theme toggle logic
+const themeButton = document.getElementById('theme-toggle');
+const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+let darkMode = localStorage.getItem('theme') === 'dark' || (localStorage.getItem('theme') === null && prefersDark);
+
+function setTheme(dark) {
+    darkMode = dark;
+    if (dark) {
+        document.body.classList.add('dark-mode');
+        themeButton.textContent = '☀️';
+        localStorage.setItem('theme', 'dark');
+    } else {
+        document.body.classList.remove('dark-mode');
+        themeButton.textContent = '🌙';
+        localStorage.setItem('theme', 'light');
+    }
+}
+
+themeButton.onclick = () => setTheme(!darkMode);
+setTheme(darkMode);
+
+// Add dark mode styles
+document.head.innerHTML += `
+<style>
+body.dark-mode {
+    background-color: #181a1b;
+    color: #e0e0e0;
+}
+body.dark-mode nav {
+    background-color: #222;
+}
+body.dark-mode nav a {
+    color: #e0e0e0;
+}
+body.dark-mode nav a:hover {
+    background-color: #444;
+    color: #fff;
+}
+body.dark-mode main {
+    background-color: #23272a;
+}
+body.dark-mode table {
+    background-color: #23272a;
+    color: #e0e0e0;
+}
+body.dark-mode th {
+    background-color: #333;
+    color: #fff;
+}
+body.dark-mode tr:nth-child(even) {
+    background-color: #222;
+}
+body.dark-mode tr:hover {
+    background-color: #333;
+}
+</style>
+`;
