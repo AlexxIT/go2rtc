@@ -33,8 +33,20 @@ func Init() {
 
 var log zerolog.Logger
 
+// extractFragment separates the URL and fragment parts to avoid encoding issues.
+// Returns the URL without fragment and the fragment (including # if present).
+func extractFragment(rawURL string) (url, fragment string) {
+	if idx := strings.IndexByte(rawURL, '#'); idx >= 0 {
+		return rawURL[:idx], rawURL[idx:]
+	}
+	return rawURL, ""
+}
+
 func streamOnvif(rawURL string) (core.Producer, error) {
-	client, err := onvif.NewClient(rawURL)
+	// Extract fragment part manually to avoid encoding issues
+	url, fragment := extractFragment(rawURL)
+
+	client, err := onvif.NewClient(url)
 	if err != nil {
 		return nil, err
 	}
@@ -44,9 +56,9 @@ func streamOnvif(rawURL string) (core.Producer, error) {
 		return nil, err
 	}
 
-	// Append hash-based arguments to the retrieved URI
-	if i := strings.IndexByte(rawURL, '#'); i > 0 {
-		uri += rawURL[i:]
+	// If the original URL had a fragment, append it directly to avoid encoding
+	if fragment != "" {
+		uri += fragment
 	}
 
 	log.Debug().Msgf("[onvif] new uri=%s", uri)
