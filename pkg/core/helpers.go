@@ -10,9 +10,9 @@ import (
 
 const (
 	BufferSize      = 64 * 1024 // 64K
-	ConnDialTimeout = time.Second * 3
-	ConnDeadline    = time.Second * 5
-	ProbeTimeout    = time.Second * 3
+	ConnDialTimeout = 5 * time.Second
+	ConnDeadline    = 5 * time.Second
+	ProbeTimeout    = 5 * time.Second
 )
 
 // Now90000 - timestamp for Video (clock rate = 90000 samples per second)
@@ -62,6 +62,21 @@ func Between(s, sub1, sub2 string) string {
 func Atoi(s string) (i int) {
 	if s != "" {
 		i, _ = strconv.Atoi(s)
+	}
+	return
+}
+
+// ParseByte - fast parsing string to byte function
+func ParseByte(s string) (b byte) {
+	for i, ch := range []byte(s) {
+		ch -= '0'
+		if ch > 9 {
+			return 0
+		}
+		if i > 0 {
+			b *= 10
+		}
+		b += ch
 	}
 	return
 }

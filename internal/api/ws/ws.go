@@ -11,6 +11,7 @@ import (
 
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/app"
+	"github.com/AlexxIT/go2rtc/pkg/creds"
 	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog"
 )
@@ -132,7 +133,8 @@ func apiWS(w http.ResponseWriter, r *http.Request) {
 		if handler := wsHandlers[msg.Type]; handler != nil {
 			go func() {
 				if err = handler(tr, msg); err != nil {
-					tr.Write(&Message{Type: "error", Value: msg.Type + ": " + err.Error()})
+					errMsg := creds.SecretString(err.Error())
+					tr.Write(&Message{Type: "error", Value: msg.Type + ": " + errMsg})
 				}
 			}()
 		}

@@ -1,69 +1,64 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>go2rtc - Logs</title>
-    <meta name="viewport" content="width=device-width, user-scalable=yes, initial-scale=1, maximum-scale=1">
-    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>log - go2rtc</title>
     <style>
-        body {
-            font-family: Arial, Helvetica, sans-serif;
-            background-color: white;
-            margin: 0;
-            padding: 0;
+        main > div {
             display: flex;
-            flex-direction: column;
+            flex-wrap: wrap;
+            gap: 10px;
         }
 
-        html, body {
-            width: 100%;
-            height: 100%;
-        }
-
-        table tbody td {
+        table tbody {
             font-size: 13px;
-            vertical-align: top;
-        }
-
-        .info {
-            color: #0174DF;
-        }
-
-        .debug {
-            color: #808080;
-        }
-
-        .error {
-            color: #DF0101;
         }
 
         .trace {
-            color: #585858;
+            color: #585858 !important;
+        }
+
+        .debug {
+            color: #808080 !important;
+        }
+
+        .info {
+            color: #0174DF !important;
         }
 
         .warn {
-            color: #FF9966;
+            color: #FF9966 !important;
+        }
+
+        .error {
+            color: #DF0101 !important;
         }
     </style>
 </head>
 <body>
+
 <script src="main.js"></script>
-<div>
-    <button id="clean">Clean</button>
-    <button id="update">Auto Update: ON</button>
-    <button id="reverse">Reverse Log Order: OFF</button>
-</div>
-<br>
-<table>
-    <thead>
-    <tr>
-        <th style="width: 100px">Time</th>
-        <th style="width: 40px">Level</th>
-        <th>Message</th>
-    </tr>
-    </thead>
-    <tbody id="log">
-    </tbody>
-</table>
+
+<main>
+    <div>
+        <button id="clean">Clean</button>
+        <button id="update">Auto Update: ON</button>
+        <button id="reverse">Reverse Log Order: OFF</button>
+    </div>
+    <table>
+        <thead>
+        <tr>
+            <th style="width: 100px">Time</th>
+            <th style="width: 40px">Level</th>
+            <th>Message</th>
+        </tr>
+        </thead>
+        <tbody id="log">
+        </tbody>
+    </table>
+</main>
+
 <script>
     document.getElementById('clean').addEventListener('click', async () => {
         const r = await fetch('api/log', {method: 'DELETE'});
@@ -145,5 +140,6 @@
         if (autoUpdateEnabled) reload();
     }, 5000);
 </script>
+
 </body>
 </html>

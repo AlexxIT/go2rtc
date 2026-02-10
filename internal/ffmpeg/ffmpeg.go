@@ -58,15 +58,15 @@ func Init() {
 }
 
 var defaults = map[string]string{
-	"bin":    "ffmpeg",
-	"global": "-hide_banner",
+	"bin":     "ffmpeg",
+	"global":  "-hide_banner",
+	"timeout": "5",
 
 	// inputs
-	"file": "-re -i {input}",
-	"http": "-fflags nobuffer -flags low_delay -i {input}",
-	"rtsp": "-fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i {input}",
-
-	"rtsp/udp": "-fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -i {input}",
+	"file":     "-re -i {input}",
+	"http":     "-fflags nobuffer -flags low_delay -i {input}",
+	"rtsp":     "-fflags nobuffer -flags low_delay -timeout {timeout} -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i {input}",
+	"rtsp/udp": "-fflags nobuffer -flags low_delay -timeout {timeout} -user_agent go2rtc/ffmpeg -i {input}",
 
 	// output
 	"output":       "-user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}",
@@ -80,7 +80,7 @@ var defaults = map[string]string{
 	// `-profile high -level 4.1` - most used streaming profile
 	// `-pix_fmt:v yuv420p` - important for Telegram
 	"h264":  "-c:v libx264 -g 50 -profile:v high -level:v 4.1 -preset:v superfast -tune:v zerolatency -pix_fmt:v yuv420p",
-	"h265":  "-c:v libx265 -g 50 -profile:v main -level:v 5.1 -preset:v superfast -tune:v zerolatency -pix_fmt:v yuv420p",
+	"h265":  "-c:v libx265 -g 50 -profile:v main -x265-params level=5.1:high-tier=0 -preset:v superfast -tune:v zerolatency -pix_fmt:v yuv420p",
 	"mjpeg": "-c:v mjpeg",
 	//"mjpeg": "-c:v mjpeg -force_duplicated_matrix:v 1 -huffman:v 0 -pix_fmt:v yuvj420p",
 
@@ -168,6 +168,13 @@ func inputTemplate(name, s string, query url.Values) string {
 		template = configTemplate(input)
 	} else {
 		template = defaults[name]
+	}
+	if strings.Contains(template, "{timeout}") {
+		timeout := query.Get("timeout")
+		if timeout == "" {
+			timeout = defaults["timeout"]
+		}
+		template = strings.Replace(template, "{timeout}", timeout+"000000", 1)
 	}
 	return strings.Replace(template, "{input}", s, 1)
 }

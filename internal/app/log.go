@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/AlexxIT/go2rtc/pkg/creds"
 	"github.com/mattn/go-isatty"
 	"github.com/rs/zerolog"
 )
@@ -13,6 +14,8 @@ import (
 var MemoryLog = newBuffer()
 
 func GetLogger(module string) zerolog.Logger {
+	Logger.Trace().Str("module", module).Msgf("[log] init")
+
 	if s, ok := modules[module]; ok {
 		lvl, err := zerolog.ParseLevel(s)
 		if err == nil {
@@ -87,6 +90,8 @@ func initLogger() {
 	} else {
 		writer = MemoryLog
 	}
+
+	writer = creds.SecretWriter(writer)
 
 	lvl, _ := zerolog.ParseLevel(modules["level"])
 	Logger = zerolog.New(writer).Level(lvl)

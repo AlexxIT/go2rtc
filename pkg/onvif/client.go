@@ -35,20 +35,21 @@ func NewClient(rawURL string) (*Client, error) {
 	baseURL := "http://" + u.Host
 
 	client := &Client{url: u}
-	if u.Path == "" {
-		client.deviceURL = baseURL + PathDevice
-	} else {
-		client.deviceURL = baseURL + u.Path
-	}
+	client.deviceURL = baseURL + GetPath(u.Path, PathDevice)
 
 	b, err := client.DeviceRequest(DeviceGetCapabilities)
 	if err != nil {
 		return nil, err
 	}
 
-	client.mediaURL = FindTagValue(b, "Media.+?XAddr")
-	client.imaginURL = FindTagValue(b, "Imaging.+?XAddr")
-	client.ptzURL = FindTagValue(b, "PTZ.+?XAddr")
+	s := FindTagValue(b, "Media.+?XAddr")
+	client.mediaURL = baseURL + GetPath(s, "/onvif/media_service")
+
+	s = FindTagValue(b, "Imaging.+?XAddr")
+	client.imaginURL = baseURL + GetPath(s, "/onvif/imaging_service")
+
+	s = FindTagValue(b, "PTZ.+?XAddr")
+	client.ptzURL = baseURL + GetPath(s, "/onvif/ptz_service")
 
 	return client, nil
 }
@@ -198,15 +199,13 @@ func (c *Client) Request(url, body string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer res.Body.Close()
 
-	// need to close body with eny response status
-	b, err := io.ReadAll(res.Body)
-
-	if err == nil && res.StatusCode != http.StatusOK {
-		err = errors.New("onvif: " + res.Status + " for " + url)
+	if res.StatusCode != http.StatusOK {
+		return nil, errors.New("onvif: wrong response " + res.Status)
 	}
 
 	fmt.Printf("url: %s, resp: %s\n", url, b)
 
-	return b, err
+	return io.ReadAll(res.Body)
 }

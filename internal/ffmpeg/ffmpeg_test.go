@@ -123,6 +123,11 @@ func TestParseArgsIpCam(t *testing.T) {
 			source: "rtmp://example.com#input=rtsp/udp",
 			expect: `ffmpeg -hide_banner -fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -i rtmp://example.com -c copy -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`,
 		},
+		{
+			name:   "[RTSP] custom timeout",
+			source: "rtsp://example.com#timeout=10",
+			expect: `ffmpeg -hide_banner -allowed_media_types video+audio -fflags nobuffer -flags low_delay -timeout 10000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i rtsp://example.com -c copy -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}`,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

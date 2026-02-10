@@ -185,8 +185,8 @@ func LookupIP(address string) (string, error) {
 }
 
 // GetPublicIP example from https://github.com/pion/stun
-func GetPublicIP() (net.IP, error) {
-	conn, err := net.Dial("udp", "stun.l.google.com:19302")
+func GetPublicIP(address string) (net.IP, error) {
+	conn, err := net.Dial("udp", address)
 	if err != nil {
 		return nil, err
 	}
@@ -225,18 +225,19 @@ func GetPublicIP() (net.IP, error) {
 var cachedIP net.IP
 var cachedTS time.Time
 
-func GetCachedPublicIP() (net.IP, error) {
-	now := time.Now()
-	if now.After(cachedTS) {
-		newIP, err := GetPublicIP()
-		if err == nil {
-			cachedIP = newIP
-			cachedTS = now.Add(time.Minute * 5)
-		} else if cachedIP == nil {
-			return nil, err
+func GetCachedPublicIP(stuns ...string) (net.IP, error) {
+	if now := time.Now(); now.After(cachedTS) {
+		for _, addr := range stuns {
+			if ip, _ := GetPublicIP(addr); ip != nil {
+				cachedIP = ip
+				cachedTS = now.Add(time.Minute * 5)
+				return ip, nil
+			}
 		}
 	}
-
+	if cachedIP == nil {
+		return nil, errors.New("webrtc: can't get public IP")
+	}
 	return cachedIP, nil
 }
 
@@ -330,8 +331,12 @@ func UnmarshalICEServers(b []byte) ([]webrtc.ICEServer, error) {
 		}
 
 		switch v := src[i].URLs.(type) {
-		case []string:
-			srv.URLs = v
+		case []any:
+			for _, u := range v {
+				if s, ok := u.(string); ok {
+					srv.URLs = append(srv.URLs, s)
+				}
+			}
 		case string:
 			srv.URLs = []string{v}
 		}

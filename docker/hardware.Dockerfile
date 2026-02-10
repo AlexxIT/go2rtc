@@ -4,7 +4,7 @@
 # only debian 13 (trixie) has latest ffmpeg
 # https://packages.debian.org/trixie/ffmpeg
 ARG DEBIAN_VERSION="trixie-slim"
-ARG GO_VERSION="1.24-bookworm"
+ARG GO_VERSION="1.25-bookworm"
 
 
 # 1. Build go2rtc binary
@@ -49,6 +49,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked --mount=type=cache,t
 
 COPY --from=build /build/go2rtc /usr/local/bin/
 
+EXPOSE 1984 8554 8555 8555/udp
 ENTRYPOINT ["/usr/bin/tini", "--"]
 VOLUME /config
 WORKDIR /config

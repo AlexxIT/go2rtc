@@ -82,3 +82,20 @@ func ReadResponse(r *bufio.Reader, req *http.Request) (*http.Response, error) {
 
 	return res, nil
 }
+
+func WriteEvent(w io.Writer, res *http.Response) error {
+	return res.Write(&eventWriter{w: w})
+}
+
+type eventWriter struct {
+	w    io.Writer
+	done bool
+}
+
+func (e *eventWriter) Write(p []byte) (n int, err error) {
+	if !e.done {
+		p = append([]byte("EVENT/1.0"), p[8:]...)
+		e.done = true
+	}
+	return e.w.Write(p)
+}

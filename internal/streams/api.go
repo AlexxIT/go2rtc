@@ -5,10 +5,14 @@ import (
 
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/app"
+	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/creds"
 	"github.com/AlexxIT/go2rtc/pkg/probe"
 )
 
 func apiStreams(w http.ResponseWriter, r *http.Request) {
+	w = creds.SecretResponse(w)
+
 	query := r.URL.Query()
 	src := query.Get("src")
 
@@ -27,7 +31,7 @@ func apiStreams(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		cons := probe.NewProbe(query)
+		cons := probe.Create("probe", query)
 		if len(cons.Medias) != 0 {
 			cons.WithRequest(r)
 			if err := stream.AddConsumer(cons); err != nil {
@@ -48,8 +52,8 @@ func apiStreams(w http.ResponseWriter, r *http.Request) {
 			name = src
 		}
 
-		if New(name, query["src"]...) == nil {
-			http.Error(w, "", http.StatusBadRequest)
+		if _, err := New(name, query["src"]...); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
@@ -65,8 +69,8 @@ func apiStreams(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// support {input} templates: https://github.com/AlexxIT/go2rtc#module-hass
-		if Patch(name, src) == nil {
-			http.Error(w, "", http.StatusBadRequest)
+		if _, err := Patch(name, src); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
 		}
 
 	case "POST":
@@ -120,5 +124,58 @@ func apiStreamsDOT(w http.ResponseWriter, r *http.Request) {
 	}
 	dot = append(dot, '}')
 
+	dot = []byte(creds.SecretString(string(dot)))
+
 	api.Response(w, dot, "text/vnd.graphviz")
+}
+
+func apiPreload(w http.ResponseWriter, r *http.Request) {
+	// GET - return all preloads
+	if r.Method == "GET" {
+		api.ResponseJSON(w, GetPreloads())
+		return
+	}
+
+	query := r.URL.Query()
+	src := query.Get("src")
+
+	switch r.Method {
+	case "PUT":
+		// it's safe to delete from map while iterating
+		for k := range query {
+			switch k {
+			case core.KindVideo, core.KindAudio, "microphone":
+			default:
+				delete(query, k)
+			}
+		}
+
+		rawQuery := query.Encode()
+
+		if err := AddPreload(src, rawQuery); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		if err := app.PatchConfig([]string{"preload", src}, rawQuery); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+
+	case "DELETE":
+		if err := DelPreload(src); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		if err := app.PatchConfig([]string{"preload", src}, nil); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+
+	default:
+		http.Error(w, "", http.StatusMethodNotAllowed)
+	}
+}
+
+func apiSchemes(w http.ResponseWriter, r *http.Request) {
+	api.ResponseJSON(w, SupportedSchemes())
 }

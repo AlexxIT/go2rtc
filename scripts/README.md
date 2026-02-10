@@ -1,33 +1,14 @@
-## Versions
+# Scripts
 
-[Go 1.20](https://go.dev/doc/go1.20) is last version with support Windows 7 and macOS 10.13.
-Go 1.21 support only Windows 10 and macOS 10.15.
+This folder contains a script for building binaries for all platforms.
 
-So we will set `go 1.20` (minimum version) inside `go.mod` file. And will use env `GOTOOLCHAIN=go1.20.14` for building
-`win32` and `mac_amd64` binaries. All other binaries will use latest go version.
+The project has no `CGO` dependencies, so building is as simple as possible using the `go build` command.
 
-```
-github.com/miekg/dns v1.1.63
-golang.org/x/crypto v0.33.0
-golang.org/x/mod v0.20.0 // indirect
-golang.org/x/net v0.35.0 // indirect
-golang.org/x/sync v0.11.0 // indirect
-golang.org/x/sys v0.30.0 // indirect
-golang.org/x/tools v0.24.0 // indirect
-```
+The project has to use the latest versions of go due to dependencies on third-party go libraries. Such as `pion/webrtc` or `golang.org/x`. Unfortunately, this breaks compatibility with older versions of operating systems.
 
-**PS.** Unfortunately, due to the dependency on `pion/webrtc/v4 v4.1.3`, had to upgrade go to `1.23`.
+The project uses [UPX](https://github.com/upx/upx) to compress binaries for Linux. The project does not use compression for Windows due to false antivirus alarms. The project does not use compression for macOS due to broken result.
 
-## Build
-
-- UPX-3.96 pack broken bin for `linux_mipsel`
-- UPX-3.95 pack broken bin for `mac_amd64`
-- UPX pack broken bin for `mac_arm64`
-- UPX windows pack is recognised by anti-viruses as malicious
-- `aarch64` = `arm64`
-- `armv7` = `arm`
-
-## Go
+## Useful commands
 
 ```
 go get -u
@@ -69,18 +50,20 @@ go list -deps .\cmd\go2rtc_rtsp\
 ## Licenses
 
 - github.com/asticode/go-astits - MIT
+- github.com/eclipse/paho.mqtt.golang - EPL-2.0
 - github.com/expr-lang/expr - MIT
 - github.com/gorilla/websocket - BSD-2
 - github.com/mattn/go-isatty - MIT
 - github.com/miekg/dns - BSD-3
-- github.com/pion/ice/v2 - MIT
+- github.com/pion/dtls - MIT
+- github.com/pion/ice - MIT
 - github.com/pion/interceptor - MIT
 - github.com/pion/rtcp - MIT
 - github.com/pion/rtp - MIT
-- github.com/pion/sdp/v3 - MIT
-- github.com/pion/srtp/v2 - MIT
+- github.com/pion/sdp - MIT
+- github.com/pion/srtp - MIT
 - github.com/pion/stun - MIT
-- github.com/pion/webrtc/v3 - MIT
+- github.com/pion/webrtc - MIT
 - github.com/rs/zerolog - MIT
 - github.com/sigurn/crc16 - MIT
 - github.com/sigurn/crc8 - MIT
@@ -93,6 +76,11 @@ go list -deps .\cmd\go2rtc_rtsp\
 - github.com/google/uuid - BSD-3
 - github.com/kr/pretty - MIT
 - github.com/mattn/go-colorable - MIT
+- github.com/pion/datachannel - MIT
+- github.com/pion/logging - MIT
+- github.com/pion/mdns - MIT
+- github.com/pion/randutil - MIT
+- github.com/pion/sctp - MIT
 - github.com/pmezard/go-difflib - ???
 - github.com/wlynxg/anet - BSD-3
 - golang.org/x/mod - BSD-3

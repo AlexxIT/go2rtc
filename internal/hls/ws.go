@@ -11,7 +11,7 @@ import (
 )
 
 func handlerWSHLS(tr *ws.Transport, msg *ws.Message) error {
-	stream := streams.GetOrPatch(tr.Request.URL.Query())
+	stream, _ := streams.GetOrPatch(tr.Request.URL.Query())
 	if stream == nil {
 		return errors.New(api.StreamNotFound)
 	}

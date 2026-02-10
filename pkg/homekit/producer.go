@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
-	"net/url"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -22,33 +21,22 @@ type Client struct {
 	hap  *hap.Client
 	srtp *srtp.Server
 
-	videoConfig camera.SupportedVideoStreamConfig
-	audioConfig camera.SupportedAudioStreamConfig
+	videoConfig camera.SupportedVideoStreamConfiguration
+	audioConfig camera.SupportedAudioStreamConfiguration
 
 	videoSession *srtp.Session
 	audioSession *srtp.Session
 
 	stream *camera.Stream
 
-	Bitrate int // in bits/s
+	MaxWidth  int `json:"-"`
+	MaxHeight int `json:"-"`
+	Bitrate   int `json:"-"` // in bits/s
 }
 
 func Dial(rawURL string, server *srtp.Server) (*Client, error) {
-	u, err := url.Parse(rawURL)
+	conn, err := hap.Dial(rawURL)
 	if err != nil {
-		return nil, err
-	}
-
-	query := u.Query()
-	conn := &hap.Client{
-		DeviceAddress: u.Host,
-		DeviceID:      query.Get("device_id"),
-		DevicePublic:  hap.DecodeKey(query.Get("device_public")),
-		ClientID:      query.Get("client_id"),
-		ClientPrivate: hap.DecodeKey(query.Get("client_private")),
-	}
-
-	if err = conn.Dial(); err != nil {
 		return nil, err
 	}
 
@@ -129,7 +117,7 @@ func (c *Client) Start() error {
 	}
 
 	videoTrack := c.trackByKind(core.KindVideo)
-	videoCodec := trackToVideo(videoTrack, &c.videoConfig.Codecs[0])
+	videoCodec := trackToVideo(videoTrack, &c.videoConfig.Codecs[0], c.MaxWidth, c.MaxHeight)
 
 	audioTrack := c.trackByKind(core.KindAudio)
 	audioCodec := trackToAudio(audioTrack, &c.audioConfig.Codecs[0])
