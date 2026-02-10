@@ -98,6 +98,20 @@ func TestPatch(t *testing.T) {
 			value:  []string{"val1"},
 			expect: "streams:\n  camera1: url1\nhomekit:\n  camera1:\n    name: dummy\n    pairings:\n      - val1\n",
 		},
+		{
+			name:   "top-level replace",
+			src:    "api:\n  listen: :1984\nlog:\n  level: trace\n",
+			path:   []string{"log"},
+			value:  map[string]any{"level": "debug"},
+			expect: "api:\n  listen: :1984\nlog:\n  level: debug\n",
+		},
+		{
+			name:   "top-level add",
+			src:    "api:\n  listen: :1984\n",
+			path:   []string{"ffmpeg"},
+			value:  map[string]any{"bin": "/usr/bin/ffmpeg"},
+			expect: "api:\n  listen: :1984\nffmpeg:\n  bin: /usr/bin/ffmpeg\n",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
