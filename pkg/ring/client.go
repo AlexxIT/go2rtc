@@ -350,6 +350,10 @@ func (c *Client) Stop() error {
 	return nil
 }
 
+func (c *Client) IsClosed() bool {
+	return c.closed
+}
+
 func (c *Client) MarshalJSON() ([]byte, error) {
 	return json.Marshal(c.prod)
 }

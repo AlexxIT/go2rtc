@@ -379,3 +379,10 @@ func (c *Client) Request(method string, args any) (err error) {
 
 	return
 }
+
+func (c *Client) IsClosed() bool {
+	if c.conn == nil {
+		return true
+	}
+	return c.conn.IsClosed()
+}
