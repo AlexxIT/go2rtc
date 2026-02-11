@@ -103,13 +103,14 @@ func (s *Stream) stopProducers() {
 	s.mu.Lock()
 producers:
 	for _, producer := range s.producers {
+		// Use thread-safe HasSenders() method instead of deprecated Senders()
 		for _, track := range producer.receivers {
-			if len(track.Senders()) > 0 {
+			if track.HasSenders() {
 				continue producers
 			}
 		}
 		for _, track := range producer.senders {
-			if len(track.Senders()) > 0 {
+			if track.HasSenders() {
 				continue producers
 			}
 		}
