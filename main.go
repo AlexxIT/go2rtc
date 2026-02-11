@@ -121,5 +121,8 @@ func main() {
 		}
 	}
 
+	// Signal that all modules have finished initializing and all schemes are registered.
+	api.SetReady()
+
 	shell.RunUntilSignal()
 }

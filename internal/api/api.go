@@ -11,12 +11,30 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/rs/zerolog"
 )
+
+// ready is set to true after all modules have finished initializing.
+var ready atomic.Bool
+
+// SetReady marks the server as fully initialized. Call this once all modules
+// have registered their handlers and schemes.
+func SetReady() {
+	ready.Store(true)
+}
+
+func readyHandler(w http.ResponseWriter, r *http.Request) {
+	if ready.Load() {
+		w.WriteHeader(http.StatusOK)
+	} else {
+		http.Error(w, "starting", http.StatusServiceUnavailable)
+	}
+}
 
 func Init() {
 	var cfg struct {
@@ -58,6 +76,7 @@ func Init() {
 	HandleFunc("api/exit", exitHandler)
 	HandleFunc("api/restart", restartHandler)
 	HandleFunc("api/log", logHandler)
+	HandleFunc("api/ready", readyHandler)
 
 	Handler = http.DefaultServeMux // 4th
 
