@@ -153,6 +153,7 @@
     const graphWidth = 36;
     const graphHeight = 8;
     const infoUpdateInterval = window.SYSTEM_INFO_UPDATE_INTERVAL_MS ?? 2000;
+    let infoUpdateTimer = null;
 
     function toNumber(value) {
         const number = Number(value);
@@ -201,19 +202,23 @@
         return text + ' '.repeat(Math.max(0, width - text.length));
     }
 
-    function renderInfo(data, cpuUsage, memUsage, memUsed, memTotal) {
-        const cpuLines = renderAsciiGraphLines(cpuHistory);
-        const memLines = renderAsciiGraphLines(memHistory);
-        const graphLines = [];
-        const graphBlockWidth = graphWidth + 2; // borders
-        const cpuTitle = `CPU ${cpuUsage.toFixed(1)}%`;
-        const memTitle = `MEM ${memUsage.toFixed(1)}% (${formatBytes(memUsed)} / ${formatBytes(memTotal)})`;
+    function renderInfo(data, cpuUsage, memUsage, memUsed, memTotal, isUsageUnsupported) {
+        const detailsLines = [];
+        if (isUsageUnsupported) {
+            detailsLines.push('System metrics are not supported on this platform (CPU and MEM usage are 0).');
+        } else {
+            const cpuLines = renderAsciiGraphLines(cpuHistory);
+            const memLines = renderAsciiGraphLines(memHistory);
+            const graphBlockWidth = graphWidth + 2; // borders
+            const cpuTitle = `CPU ${cpuUsage.toFixed(1)}%`;
+            const memTitle = `MEM ${memUsage.toFixed(1)}% (${formatBytes(memUsed)} / ${formatBytes(memTotal)})`;
 
-        graphLines.push(
-            `${padRight(cpuTitle, graphBlockWidth)}   ${padRight(memTitle, graphBlockWidth)}`
-        );
-        for (let i = 0; i < cpuLines.length; i++) {
-            graphLines.push(`${cpuLines[i]}   ${memLines[i]}`);
+            detailsLines.push(
+                `${padRight(cpuTitle, graphBlockWidth)}   ${padRight(memTitle, graphBlockWidth)}`
+            );
+            for (let i = 0; i < cpuLines.length; i++) {
+                detailsLines.push(`${cpuLines[i]}   ${memLines[i]}`);
+            }
         }
 
         const lines = [
@@ -221,30 +226,49 @@
             `pid: ${data.pid ?? '-'}`,
             `config: ${data.config_path ?? '-'}`,
             '',
-            ...graphLines,
+            ...detailsLines,
         ];
         info.textContent = lines.join('\n');
     }
 
+    function startInfoUpdates() {
+        if (infoUpdateTimer !== null) return;
+        infoUpdateTimer = setInterval(updateInfo, infoUpdateInterval);
+    }
+
+    function stopInfoUpdates() {
+        if (infoUpdateTimer === null) return;
+        clearInterval(infoUpdateTimer);
+        infoUpdateTimer = null;
+    }
+
     function updateInfo() {
-        fetch(infoURL, {cache: 'no-cache'}).then(r => r.json()).then(data => {
+        return fetch(infoURL, {cache: 'no-cache'}).then(r => r.json()).then(data => {
             const cpuUsage = clampPercent(data.system?.cpu_usage);
             const memUsed = toNumber(data.system?.mem_used);
             const memTotal = toNumber(data.system?.mem_total);
             const memUsage = memTotal > 0 ? clampPercent((memUsed * 100) / memTotal) : 0;
+            const isUsageUnsupported = cpuUsage === 0 && memUsage === 0;
 
-            pushHistory(cpuHistory, cpuUsage);
-            pushHistory(memHistory, memUsage);
-            renderInfo(data, cpuUsage, memUsage, memUsed, memTotal);
+            if (!isUsageUnsupported) {
+                pushHistory(cpuHistory, cpuUsage);
+                pushHistory(memHistory, memUsage);
+            } else {
+                stopInfoUpdates();
+            }
+            renderInfo(data, cpuUsage, memUsage, memUsed, memTotal, isUsageUnsupported);
+            return !isUsageUnsupported;
         }).catch(error => {
             if (!info.textContent) {
                 info.textContent = `Can't load system info: ${error.message}`;
             }
+            return true;
         });
     }
 
-    updateInfo();
-    setInterval(updateInfo, infoUpdateInterval);
+    updateInfo().then(isSupported => {
+        if (isSupported) startInfoUpdates();
+    });
 
     reload();
 </script>
