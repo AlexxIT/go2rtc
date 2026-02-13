@@ -62,6 +62,24 @@ streams:
 - **Telegram Desktop App** > Any public or private channel or group (where you admin) > Live stream > Start with... > Start streaming.
 - **YouTube** > Create > Go live > Stream latency: Ultra low-latency > Copy: Stream URL + Stream key.
 
+### Publish via SOCKS5 proxy
+
+If the streaming service is blocked in your country (e.g. Telegram), you can route the RTMP connection through a SOCKS5 proxy by appending the `socks5` query parameter to the destination URL:
+
+```yaml
+publish:
+  # publish to Telegram via SOCKS5 proxy (no auth)
+  my_stream: rtmps://dc4-1.rtmp.t.me/s/YOUR_KEY#proxy=socks5://proxy.example.com:1080
+
+  # publish to Telegram via SOCKS5 proxy with authentication
+  my_stream2: rtmps://dc4-1.rtmp.t.me/s/YOUR_KEY#proxy=socks5://user:pass@proxy.example.com:1080
+
+  # combine with RTMP query parameters
+  my_stream3: rtmp://xxx.rtmp.youtube.com/live2/KEY?token=abc#proxy=socks5://proxy.example.com:1080
+```
+
+The `socks5` parameter is stripped before the URL is sent to the RTMP server, so it will not affect authentication or stream keys.
+
 ## Preload stream
 
 [`new in v1.9.11`](https://github.com/AlexxIT/go2rtc/releases/tag/v1.9.11)
