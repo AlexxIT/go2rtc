@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/app"
@@ -130,14 +131,39 @@ func streamsHandle(url string) (core.Producer, error) {
 	return rtmp.DialPlay(url)
 }
 
-func streamsConsumerHandle(url string) (core.Consumer, func(), error) {
+func streamsConsumerHandle(rawURL string) (core.Consumer, func(), error) {
 	cons := flv.NewConsumer()
+
+	u, _ := url.Parse(rawURL)
+	proxyAddr := streams.ParseQuery(u.Fragment).Get("proxy")
+
+	var proxyHost, proxyRedacted string
+	if proxyAddr != "" {
+		if pu, err := url.Parse(proxyAddr); err == nil {
+			proxyHost = pu.Host
+			proxyRedacted = pu.Redacted()
+		}
+	}
+
 	run := func() {
-		wr, err := rtmp.DialPublish(url, cons)
+		if proxyHost != "" {
+			log.Debug().Str("proxy", proxyHost).Str("target", u.Host).Msg("[rtmp] publish via socks5")
+			log.Trace().Str("proxy", proxyRedacted).Msg("[rtmp] socks5 proxy url")
+		}
+
+		wr, err := rtmp.DialPublish(rawURL, cons)
 		if err != nil {
+			if proxyHost != "" {
+				log.Debug().Err(err).Str("proxy", proxyHost).Msg("[rtmp] socks5 dial failed")
+			}
 			return
 		}
-		_, err = cons.WriteTo(wr)
+
+		if proxyHost != "" {
+			log.Trace().Str("proxy", proxyHost).Str("target", u.Host).Msg("[rtmp] socks5 connected")
+		}
+
+		_, _ = cons.WriteTo(wr)
 	}
 
 	return cons, run, nil

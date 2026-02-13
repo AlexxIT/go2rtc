@@ -500,7 +500,9 @@
             "type": "string",
             "examples": [
               "rtmp://xxx.rtmp.youtube.com/live2/xxxx-xxxx-xxxx-xxxx-xxxx",
-              "rtmps://xxx-x.rtmp.t.me/s/xxxxxxxxxx:xxxxxxxxxxxxxxxxxxxxxx"
+              "rtmps://xxx-x.rtmp.t.me/s/xxxxxxxxxx:xxxxxxxxxxxxxxxxxxxxxx",
+              "rtmps://dc4-1.rtmp.t.me/s/xxxxxxxxxx:xxxxxxxxxxxxxxxxxxxxxx#proxy=socks5://proxy.example.com:1080",
+              "rtmps://dc4-1.rtmp.t.me/s/xxxxxxxxxx:xxxxxxxxxxxxxxxxxxxxxx#proxy=socks5://user:pass@proxy.example.com:1080"
             ]
           },
           {
