@@ -150,6 +150,7 @@
     const infoURL = new URL('api', location.href);
     const cpuHistory = [];
     const memHistory = [];
+    const timeHistory = [];
     const graphWidth = 36;
     const graphHeight = 8;
     const infoUpdateInterval = window.SYSTEM_INFO_UPDATE_INTERVAL_MS ?? 2000;
@@ -178,6 +179,20 @@
             index++;
         }
         return `${value.toFixed(value >= 100 || index === 0 ? 0 : 1)} ${units[index]}`;
+    }
+
+    function formatClock(timeMs) {
+        return new Date(timeMs).toTimeString().slice(0, 8);
+    }
+
+    function renderXAxisLabels(width) {
+        if (!timeHistory.length) return ' '.repeat(width);
+
+        const start = formatClock(timeHistory[0]);
+        const end = formatClock(timeHistory[timeHistory.length - 1]);
+        if (start.length + end.length >= width) return `${start} ${end}`;
+
+        return `${start}${' '.repeat(width - start.length - end.length)}${end}`;
     }
 
     function renderAsciiGraphLines(history) {
@@ -219,6 +234,8 @@
             for (let i = 0; i < cpuLines.length; i++) {
                 detailsLines.push(`${cpuLines[i]}   ${memLines[i]}`);
             }
+            const timeLabels = renderXAxisLabels(graphBlockWidth);
+            detailsLines.push(`${timeLabels}   ${timeLabels}`);
         }
 
         const lines = [
@@ -251,8 +268,10 @@
             const isUsageUnsupported = cpuUsage === 0 && memUsage === 0;
 
             if (!isUsageUnsupported) {
+                const now = Date.now();
                 pushHistory(cpuHistory, cpuUsage);
                 pushHistory(memHistory, memUsage);
+                pushHistory(timeHistory, now);
             } else {
                 stopInfoUpdates();
             }
