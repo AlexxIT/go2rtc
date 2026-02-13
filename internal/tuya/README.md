@@ -1,12 +1,12 @@
 # Tuya
 
-*[New in v1.9.13](https://github.com/AlexxIT/go2rtc/releases/tag/v1.9.13)*
+[`new in v1.9.13`](https://github.com/AlexxIT/go2rtc/releases/tag/v1.9.13) by [@seydx](https://github.com/seydx)
 
 [Tuya](https://www.tuya.com/) is a proprietary camera protocol with **two-way audio** support. go2rtc supports `Tuya Smart API` and `Tuya Cloud API`.
 
 **Tuya Smart API (recommended)**:
+- **Smart Life accounts are NOT supported**, you need to create a Tuya Smart account. If the cameras are already added to the Smart Life app, you need to remove them and add them again to the [Tuya Smart](https://play.google.com/store/apps/details?id=com.tuya.smart) app.
 - Cameras can be discovered through the go2rtc web interface via Tuya Smart account (Add > Tuya > Select region and fill in email and password > Login).
-- **Smart Life accounts are not supported**, you need to create a Tuya Smart account. If the cameras are already added to the Smart Life app, you need to remove them and add them again to the Tuya Smart app.
 
 **Tuya Cloud API**:
 - Requires setting up a cloud project in the Tuya Developer Platform.

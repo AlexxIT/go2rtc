@@ -7,10 +7,10 @@ Some formats and protocols go2rtc supports exclusively. They have no equivalent 
 
 - The initiator of the connection can be go2rtc - **Source protocols**
 - The initiator of the connection can be an external program - **Ingress protocols**
-- Codecs can be incoming - **Recevers codecs**
-- Codecs can be outgoing (two way audio) - **Senders codecs**
+- Codecs can be incoming - **Receiver codecs**
+- Codecs can be outgoing (two way audio) - **Sender codecs**
 
-| Group      | Format       | Protocols       | Ingress | Recevers codecs                 | Senders codecs      | Example       |
+| Group      | Format       | Protocols       | Ingress | Receiver codecs                 | Sender codecs      | Example       |
 |------------|--------------|-----------------|---------|---------------------------------|---------------------|---------------|
 | Devices    | alsa         | pipe            |         |                                 | pcm                 | `alsa:`       |
 | Devices    | v4l2         | pipe            |         |                                 |                     | `v4l2:`       |
@@ -89,11 +89,20 @@ Some formats and protocols go2rtc supports exclusively. They have no equivalent 
 
 ## Developers
 
-File naming:
+**File naming:**
 
 - `pkg/{format}/producer.go` - producer for this format (also if support backchannel)
 - `pkg/{format}/consumer.go` - consumer for this format
-- `pkg/{format}/backchanel.go` - producer with only backchannel func
+- `pkg/{format}/backchannel.go` - producer with only backchannel func
+
+**Mentioning modules:**
+
+- [`main.go`](../main.go)
+- [`README.md`](../README.md)
+- [`internal/README.md`](../internal/README.md)
+- [`website/.vitepress/config.js`](../website/.vitepress/config.js)
+- [`website/api/openapi.yaml`](../website/api/openapi.yaml)
+- [`www/schema.json`](../www/schema.json)
 
 ## Useful links
 

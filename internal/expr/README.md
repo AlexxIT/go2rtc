@@ -1,5 +1,7 @@
 # Expr
 
+[`new in v1.8.2`](https://github.com/AlexxIT/go2rtc/releases/tag/v1.8.2)
+
 [Expr](https://github.com/antonmedv/expr) - expression language and expression evaluation for Go.
 
 - [language definition](https://expr.medv.io/docs/Language-Definition) - takes best from JS, Python, Jinja2 syntax

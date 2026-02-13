@@ -1,3 +1,5 @@
+# ngrok
+
 With the ngrok integration, you can get external access to your streams when your Internet connection is behind a private IP address.
 
 - you may need external access for two different things:

@@ -2,7 +2,7 @@
 
 You **DON'T** need hardware acceleration if:
 
-- you're not using the [FFmpeg source](https://github.com/AlexxIT/go2rtc#source-ffmpeg)
+- you're not using the [FFmpeg source](../README.md)
 - you're using only `#video=copy` for the FFmpeg source
 - you're using only `#audio=...` (any audio) transcoding for the FFmpeg source
 

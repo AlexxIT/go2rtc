@@ -24,9 +24,10 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/http"
 	"github.com/AlexxIT/go2rtc/internal/isapi"
 	"github.com/AlexxIT/go2rtc/internal/ivideon"
+	"github.com/AlexxIT/go2rtc/internal/kasa"
 	"github.com/AlexxIT/go2rtc/internal/mjpeg"
 	"github.com/AlexxIT/go2rtc/internal/mp4"
-	"github.com/AlexxIT/go2rtc/internal/mpegts"
+	"github.com/AlexxIT/go2rtc/internal/mpeg"
 	"github.com/AlexxIT/go2rtc/internal/multitrans"
 	"github.com/AlexxIT/go2rtc/internal/nest"
 	"github.com/AlexxIT/go2rtc/internal/ngrok"
@@ -96,7 +97,8 @@ func main() {
 		{"gopro", gopro.Init},
 		{"isapi", isapi.Init},
 		{"ivideon", ivideon.Init},
-		{"mpegts", mpegts.Init},
+		{"kasa", kasa.Init},
+		{"mpegts", mpeg.Init},
 		{"multitrans", multitrans.Init},
 		{"nest", nest.Init},
 		{"ring", ring.Init},
