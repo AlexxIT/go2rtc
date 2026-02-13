@@ -129,6 +129,12 @@ paths:
                     properties:
                       listen: { type: string, example: ":8554" }
                       default_query: { type: string, example: "video&audio" }
+                  system:
+                    type: object
+                    properties:
+                      cpu_usage: { type: number, format: float, example: 23.5, description: "CPU usage percent (0-100)" }
+                      mem_total: { type: integer, format: int64, example: 17179869184, description: "Total physical memory in bytes" }
+                      mem_used: { type: integer, format: int64, example: 8589934592, description: "Used memory in bytes" }
                   version: { type: string, example: "1.9.12" }
 
   /api/exit:
