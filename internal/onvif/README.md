@@ -6,7 +6,7 @@
 
 The source is not very useful if you already know RTSP and snapshot links for your camera. But it can be useful if you don't.
 
-**WebUI > Add** webpage support ONVIF autodiscovery. Your server must be on the same subnet as the camera. If you use Docker, you must use "network host".
+**WebUI > Add** webpage supports ONVIF autodiscovery. Your server must be on the same subnet as the camera. If you use Docker, you must use "network host".
 
 ```yaml
 streams:
@@ -30,7 +30,7 @@ Go2rtc works as ONVIF server:
 - Onvier (android)
 - ONVIF Device Manager (windows)
 
-PS. Support only TCP transport for RTSP protocol. UDP and HTTP transports - unsupported yet.
+PS. Supports only TCP transport for RTSP protocol. UDP and HTTP transports - unsupported yet.
 
 ## Tested cameras
 

@@ -8,7 +8,7 @@ If you want to use **RTSP** transport, the command must contain the `{output}` a
 
 The source can be used with:
 
-- [FFmpeg](https://ffmpeg.org/) - go2rtc ffmpeg source just a shortcut to exec source
+- [FFmpeg](https://ffmpeg.org/) - go2rtc ffmpeg source is just a shortcut to exec source
 - [FFplay](https://ffmpeg.org/ffplay.html) - play audio on your server
 - [GStreamer](https://gstreamer.freedesktop.org/)
 - [Raspberry Pi Cameras](https://www.raspberrypi.com/documentation/computers/camera_software.html)

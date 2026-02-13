@@ -4,7 +4,7 @@
 
 This source type supports [Doorbird](https://www.doorbird.com/) devices including MJPEG stream, audio stream as well as two-way audio.
 
-It is recommended to create a sepearate user within your doorbird setup for go2rtc. Minimum permissions for the user are:
+It is recommended to create a separate user within your doorbird setup for go2rtc. Minimum permissions for the user are:
 
 - Watch always
 - API operator
