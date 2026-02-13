@@ -25,7 +25,7 @@ go2rtc -c log.format=text -c /config/go2rtc.yaml -c rtsp.listen='' -c /usr/local
 
 ## Environment variables
 
-There is support for loading external variables into the config. First, they will be attempted to be loaded from [credential files](https://systemd.io/CREDENTIALS). If `CREDENTIALS_DIRECTORY` is not set, then the key will be loaded from an environment variable. If no environment variable is set, then the string will be left as-is.
+There is support for loading external variables into the config. First, they will be loaded from [credential files](https://systemd.io/CREDENTIALS). If `CREDENTIALS_DIRECTORY` is not set, then the key will be loaded from an environment variable. If no environment variable is set, then the string will be left as-is.
 
 ```yaml
 streams:

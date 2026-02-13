@@ -2,7 +2,7 @@
 
 Some sources may have a dynamic link. And you will need to get it using a Bash or Python script. Your script should echo a link to the source. RTSP, FFmpeg or any of the supported sources.
 
-**Docker** and **Home Assistant add-on** users has preinstalled `python3`, `curl`, `jq`.
+**Docker** and **Home Assistant add-on** users have preinstalled `python3`, `curl`, `jq`.
 
 ## Configuration
 
@@ -13,7 +13,7 @@ streams:
 
 ## Install python libraries
 
-**Docker** and **Hass Add-on** users has preinstalled `python3` without any additional libraries, like [requests](https://requests.readthedocs.io/) or others. If you need some additional libraries - you need to install them to folder with your script:
+**Docker** and **Hass Add-on** users have preinstalled `python3` without any additional libraries, like [requests](https://requests.readthedocs.io/) or others. If you need some additional libraries - you need to install them to folder with your script:
 
 1. Install [SSH & Web Terminal](https://github.com/hassio-addons/addon-ssh)
 2. Goto Add-on Web UI

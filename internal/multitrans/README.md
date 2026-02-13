@@ -9,9 +9,9 @@ Two-way audio support for Chinese version of [TP-Link](https://www.tp-link.com.c
 ```yaml
 streams:
   tplink_cam:
-    # video use standard RTSP
+    # video uses standard RTSP
     - rtsp://admin:admin@192.168.1.202:554/stream1
-    # two-way audio use MULTITRANS schema
+    # two-way audio uses MULTITRANS schema
     - multitrans://admin:admin@192.168.1.202:554
 ```
 

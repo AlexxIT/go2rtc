@@ -56,7 +56,7 @@ Streaming ingest in `flv` format.
 ffmpeg -re -i BigBuckBunny.mp4 -c copy -f flv http://localhost:1984/api/stream.flv?dst=camera1
 ```
 
-## Tested client
+## Tested clients
 
 | From   | To                              | Comment |
 |--------|---------------------------------|---------|

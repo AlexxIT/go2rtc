@@ -32,6 +32,7 @@ export default defineConfig({
         // important for Telegram - the image will be at the bottom and large
         ['meta', { property: 'twitter:card', content: 'summary_large_image' }],
     ],
+    sitemap: {hostname: 'https://go2rtc.org'},
 
     themeConfig: {
         nav: [
