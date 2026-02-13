@@ -123,6 +123,7 @@ paths:
                 properties:
                   config_path: { type: string, example: "/config/go2rtc.yaml" }
                   host: { type: string, example: "192.168.1.123:1984" }
+                  pid: { type: integer, example: 12345 }
                   rtsp:
                     type: object
                     properties:

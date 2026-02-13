@@ -147,7 +147,12 @@
     const url = new URL('api', location.href);
     fetch(url, {cache: 'no-cache'}).then(r => r.json()).then(data => {
         const info = document.querySelector('.info');
-        info.innerText = `version: ${data.version} / config: ${data.config_path}`;
+        const parts = [
+            `version: ${data.version}`,
+            `pid: ${data.pid}`,
+            `config: ${data.config_path}`,
+        ];
+        info.innerText = parts.join(' / ');
     });
 
     reload();
