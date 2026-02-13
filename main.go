@@ -121,7 +121,9 @@ func main() {
 		}
 	}
 
-	// Signal that all modules have finished initializing and all schemes are registered.
+	// Unblock any API requests that were waiting for full initialization
+	// (e.g. /api/schemes, /api). Callers that arrived early will now get
+	// the complete response rather than partial or stale data.
 	api.SetReady()
 
 	shell.RunUntilSignal()

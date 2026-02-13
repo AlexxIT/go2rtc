@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -11,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -19,20 +19,22 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// ready is set to true after all modules have finished initializing.
-var ready atomic.Bool
+// readyCh is closed once all modules have finished initializing.
+var readyCh = make(chan struct{})
 
 // SetReady marks the server as fully initialized. Call this once all modules
 // have registered their handlers and schemes.
 func SetReady() {
-	ready.Store(true)
+	close(readyCh)
 }
 
-func readyHandler(w http.ResponseWriter, r *http.Request) {
-	if ready.Load() {
-		w.WriteHeader(http.StatusOK)
-	} else {
-		http.Error(w, "starting", http.StatusServiceUnavailable)
+// WaitReady blocks until SetReady has been called or the context is cancelled.
+func WaitReady(ctx context.Context) error {
+	select {
+	case <-readyCh:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 
@@ -76,7 +78,6 @@ func Init() {
 	HandleFunc("api/exit", exitHandler)
 	HandleFunc("api/restart", restartHandler)
 	HandleFunc("api/log", logHandler)
-	HandleFunc("api/ready", readyHandler)
 
 	Handler = http.DefaultServeMux // 4th
 
@@ -255,6 +256,11 @@ func middlewareCORS(next http.Handler) http.Handler {
 var mu sync.Mutex
 
 func apiHandler(w http.ResponseWriter, r *http.Request) {
+	if err := WaitReady(r.Context()); err != nil {
+		http.Error(w, "starting", http.StatusServiceUnavailable)
+		return
+	}
+
 	mu.Lock()
 	app.Info["host"] = r.Host
 	mu.Unlock()
