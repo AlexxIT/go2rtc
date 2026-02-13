@@ -14,6 +14,8 @@
 
         .info {
             color: #888;
+            white-space: pre;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
         }
     </style>
 </head>
@@ -144,16 +146,105 @@
     // Auto-reload
     setInterval(reload, 1000);
 
-    const url = new URL('api', location.href);
-    fetch(url, {cache: 'no-cache'}).then(r => r.json()).then(data => {
-        const info = document.querySelector('.info');
-        const parts = [
-            `version: ${data.version}`,
-            `pid: ${data.pid}`,
-            `config: ${data.config_path}`,
+    const info = document.querySelector('.info');
+    const infoURL = new URL('api', location.href);
+    const cpuHistory = [];
+    const memHistory = [];
+    const graphWidth = 36;
+    const graphHeight = 8;
+    const infoUpdateInterval = window.SYSTEM_INFO_UPDATE_INTERVAL_MS ?? 2000;
+
+    function toNumber(value) {
+        const number = Number(value);
+        return Number.isFinite(number) ? number : 0;
+    }
+
+    function clampPercent(value) {
+        return Math.max(0, Math.min(100, toNumber(value)));
+    }
+
+    function pushHistory(history, value) {
+        history.push(value);
+        while (history.length > graphWidth) history.shift();
+    }
+
+    function formatBytes(bytes) {
+        const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        let value = Math.max(0, toNumber(bytes));
+        let index = 0;
+        while (value >= 1024 && index < units.length - 1) {
+            value /= 1024;
+            index++;
+        }
+        return `${value.toFixed(value >= 100 || index === 0 ? 0 : 1)} ${units[index]}`;
+    }
+
+    function renderAsciiGraphLines(history) {
+        const bars = Array.from({length: graphWidth}, (_, index) => {
+            const value = history[index] ?? 0;
+            return Math.round((value / 100) * graphHeight);
+        });
+        const lines = [];
+        for (let row = graphHeight; row >= 1; row--) {
+            let line = '|';
+            for (const bar of bars) {
+                line += bar >= row ? '#' : ' ';
+            }
+            line += '|';
+            lines.push(line);
+        }
+        lines.push('+' + '-'.repeat(graphWidth) + '+');
+        return lines;
+    }
+
+    function padRight(text, width) {
+        return text + ' '.repeat(Math.max(0, width - text.length));
+    }
+
+    function renderInfo(data, cpuUsage, memUsage, memUsed, memTotal) {
+        const cpuLines = renderAsciiGraphLines(cpuHistory);
+        const memLines = renderAsciiGraphLines(memHistory);
+        const graphLines = [];
+        const graphBlockWidth = graphWidth + 2; // borders
+        const cpuTitle = `CPU ${cpuUsage.toFixed(1)}%`;
+        const memTitle = `MEM ${memUsage.toFixed(1)}% (${formatBytes(memUsed)} / ${formatBytes(memTotal)})`;
+
+        graphLines.push(
+            `${padRight(cpuTitle, graphBlockWidth)}   ${padRight(memTitle, graphBlockWidth)}`
+        );
+        for (let i = 0; i < cpuLines.length; i++) {
+            graphLines.push(`${cpuLines[i]}   ${memLines[i]}`);
+        }
+
+        const lines = [
+            `version: ${data.version ?? '-'}`,
+            `pid: ${data.pid ?? '-'}`,
+            `config: ${data.config_path ?? '-'}`,
+            '',
+            ...graphLines,
         ];
-        info.innerText = parts.join(' / ');
-    });
+        info.textContent = lines.join('\n');
+    }
+
+    function updateInfo() {
+        fetch(infoURL, {cache: 'no-cache'}).then(r => r.json()).then(data => {
+            const cpuUsage = clampPercent(data.system?.cpu_usage);
+            const memUsed = toNumber(data.system?.mem_used);
+            const memTotal = toNumber(data.system?.mem_total);
+            const memUsage = memTotal > 0 ? clampPercent((memUsed * 100) / memTotal) : 0;
+
+            pushHistory(cpuHistory, cpuUsage);
+            pushHistory(memHistory, memUsage);
+            renderInfo(data, cpuUsage, memUsage, memUsed, memTotal);
+        }).catch(error => {
+            if (!info.textContent) {
+                info.textContent = `Can't load system info: ${error.message}`;
+            }
+        });
+    }
+
+    updateInfo();
+    setInterval(updateInfo, infoUpdateInterval);
 
     reload();
 </script>
