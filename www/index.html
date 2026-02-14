@@ -182,7 +182,9 @@
     }
 
     function formatClock(timeMs) {
-        return new Date(timeMs).toTimeString().slice(0, 8);
+        return new Date(timeMs).toLocaleTimeString(undefined, {
+            hour: '2-digit', minute: '2-digit', second: '2-digit'
+        });
     }
 
     function renderXAxisLabels(width) {
