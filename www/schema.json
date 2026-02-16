@@ -183,7 +183,8 @@
               "debug",
               "ngrok",
               "pinggy",
-              "srtp"
+              "srtp",
+              "mcp"
             ]
           }
         }
@@ -350,7 +351,7 @@
           ]
         },
         "level": {
-          "description": "Defaul log level",
+          "description": "Default log level",
           "default": "info",
           "$ref": "#/definitions/log_level"
         },
@@ -453,6 +454,48 @@
         },
         "wyoming": {
           "$ref": "#/definitions/log_level"
+        },
+        "mcp": {
+          "$ref": "#/definitions/log_level"
+        }
+      }
+    },
+    "mcp": {
+      "description": "MCP (Model Context Protocol) server for AI assistant integration",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Enable MCP server",
+          "type": "boolean",
+          "default": false
+        },
+        "stdio": {
+          "description": "Enable stdio transport (for Claude Desktop)",
+          "type": "boolean",
+          "default": true
+        },
+        "http": {
+          "description": "Enable HTTP transport",
+          "type": "boolean",
+          "default": false
+        },
+        "sse": {
+          "description": "Enable Server-Sent Events transport",
+          "type": "boolean",
+          "default": false
+        },
+        "websocket": {
+          "description": "Enable WebSocket transport",
+          "type": "boolean",
+          "default": false
+        },
+        "unix": {
+          "description": "Unix socket path",
+          "type": "string"
+        },
+        "proxy": {
+          "description": "Upstream URL for CLI proxy mode (-mcp)",
+          "type": "string"
         }
       }
     },
