@@ -25,7 +25,7 @@ Some formats and protocols go2rtc supports exclusively. They have no equivalent 
 | Net (pub)  | mpjpeg       | http, tcp, pipe | http    | mjpeg                           |                     | `http:`       |
 | Net (pub)  | onvif        | rtsp            |         |                                 |                     | `onvif:`      |
 | Net (pub)  | rtmp         | rtmp            | rtmp    | h264, aac                       |                     | `rtmp:`       |
-| Net (pub)  | rtsp         | rtsp, ws        | rtsp    | h264, hevc, aac, pcm*, opus     | pcm*, opus          | `rtsp:`       |
+| Net (pub)  | rtsp         | rtsp, ws        | rtsp    | h264, hevc, av1, aac, pcm*, opus | pcm*, opus          | `rtsp:`       |
 | Net (pub)  | webrtc*      | webrtc          | webrtc  | h264, pcm_alaw, pcm_mulaw, opus | pcm_alaw, pcm_mulaw | `webrtc:`     |
 | Net (pub)  | yuv4mpegpipe | http, tcp, pipe | http    | rawvideo                        |                     | `http:`       |
 | Net (priv) | bubble       | http            |         | h264, hevc, pcm_alaw            |                     | `bubble:`     |
@@ -70,12 +70,12 @@ Some formats and protocols go2rtc supports exclusively. They have no equivalent 
 | homekit      | hap      | h264, opus                      |                           | Apple HomeKit app                     |
 | mjpeg        | ws       | mjpeg                           |                           | `{"type":"mjpeg"}` -> `/api/ws`       |
 | mpjpeg       | http     | mjpeg                           |                           | `GET /api/stream.mjpeg`               |
-| mp4          | http     | h264, hevc, aac, pcm*, opus     |                           | `GET /api/stream.mp4`                 |
-| mse/fmp4     | ws       | h264, hevc, aac, pcm*, opus     |                           | `{"type":"mse"}` -> `/api/ws`         |
+| mp4          | http     | h264, hevc, av1, aac, pcm*, opus |                           | `GET /api/stream.mp4`                 |
+| mse/fmp4     | ws       | h264, hevc, av1, aac, pcm*, opus |                           | `{"type":"mse"}` -> `/api/ws`         |
 | mpegts       | http     | h264, hevc, aac                 |                           | `GET /api/stream.ts`                  |
 | rtmp         | rtmp     | h264, aac                       |                           | `rtmp://localhost:1935/{stream_name}` |
 | rtsp         | rtsp     | h264, hevc, aac, pcm*, opus     |                           | `rtsp://localhost:8554/{stream_name}` |
-| webrtc       | webrtc   | h264, pcm_alaw, pcm_mulaw, opus | pcm_alaw, pcm_mulaw, opus | `{"type":"webrtc"}` -> `/api/ws`      |
+| webrtc       | webrtc   | h264, av1, pcm_alaw, pcm_mulaw, opus | pcm_alaw, pcm_mulaw, opus | `{"type":"webrtc"}` -> `/api/ws`      |
 | yuv4mpegpipe | http     | rawvideo                        |                           | `GET /api/stream.y4m`                 |
 
 - **pcm** - pcm_alaw pcm_mulaw pcm_s16be pcm_s16le

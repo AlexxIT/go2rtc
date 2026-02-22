@@ -358,21 +358,23 @@ Some examples:
 
 ### Codecs madness
 
-`AVC/H.264` video can be played almost anywhere. But `HEVC/H.265` has many limitations in supporting different devices and browsers.
+`AVC/H.264` video can be played almost anywhere. But `HEVC/H.265` and `AV1` have many limitations in supporting different devices and browsers.
 
-| Device                                                             | WebRTC                                  | MSE                                     | HTTP*                                        | HLS                         |
-|--------------------------------------------------------------------|-----------------------------------------|-----------------------------------------|----------------------------------------------|-----------------------------|
-| *latency*                                                          | best                                    | medium                                  | bad                                          | bad                         |
-| Desktop Chrome 136+ <br/> Desktop Edge <br/> Android Chrome 136+   | H264, H265* <br/> PCMU, PCMA <br/> OPUS | H264, H265* <br/> AAC, FLAC* <br/> OPUS | H264, H265* <br/> AAC, FLAC* <br/> OPUS, MP3 | no                          |
-| Desktop Firefox                                                    | H264 <br/> PCMU, PCMA <br/> OPUS        | H264 <br/> AAC, FLAC* <br/> OPUS        | H264 <br/> AAC, FLAC* <br/> OPUS             | no                          |
-| Desktop Safari 14+ <br/> iPad Safari 14+ <br/> iPhone Safari 17.1+ | H264, H265* <br/> PCMU, PCMA <br/> OPUS | H264, H265 <br/> AAC, FLAC*             | **no!**                                      | H264, H265 <br/> AAC, FLAC* |
-| iPhone Safari 14+                                                  | H264, H265* <br/> PCMU, PCMA <br/> OPUS | **no!**                                 | **no!**                                      | H264, H265 <br/> AAC, FLAC* |
-| macOS [Hass App][1]                                                | no                                      | no                                      | no                                           | H264, H265 <br/> AAC, FLAC* |
+| Device                                                             | WebRTC                                  | MSE                                          | HTTP*                                             | HLS                         |
+|--------------------------------------------------------------------|----------------------------------------------|----------------------------------------------|---------------------------------------------------|-----------------------------|
+| *latency*                                                          | best                                         | medium                                       | bad                                               | bad                         |
+| Desktop Chrome 136+ <br/> Desktop Edge <br/> Android Chrome 136+   | H264, H265*, AV1* <br/> PCMU, PCMA <br/> OPUS | H264, H265*, AV1* <br/> AAC, FLAC* <br/> OPUS | H264, H265*, AV1* <br/> AAC, FLAC* <br/> OPUS, MP3 | no                          |
+| Desktop Firefox                                                    | H264 <br/> PCMU, PCMA <br/> OPUS              | H264, AV1* <br/> AAC, FLAC* <br/> OPUS        | H264, AV1* <br/> AAC, FLAC* <br/> OPUS               | no                          |
+| Desktop Safari 14+ <br/> iPad Safari 14+ <br/> iPhone Safari 17.1+ | H264, H265* <br/> PCMU, PCMA <br/> OPUS       | H264, H265 <br/> AAC, FLAC*                   | **no!**                                               | H264, H265 <br/> AAC, FLAC* |
+| iPhone Safari 14+                                                  | H264, H265* <br/> PCMU, PCMA <br/> OPUS       | **no!**                                        | **no!**                                               | H264, H265 <br/> AAC, FLAC* |
+| macOS [Hass App][1]                                                | no                                             | no                                             | no                                                    | H264, H265 <br/> AAC, FLAC* |
 
 [1]: https://apps.apple.com/app/home-assistant/id1099568401
 
 - `HTTP*` - HTTP Progressive Streaming, not related to [progressive download](https://en.wikipedia.org/wiki/Progressive_download), because the file has no size and no end
 - `WebRTC H265` - supported in [Chrome 136+](https://developer.chrome.com/release-notes/136), supported in [Safari 18+](https://developer.apple.com/documentation/safari-release-notes/safari-18-release-notes)
+- `WebRTC AV1` - supported in [Chrome 90+](https://developer.chrome.com/blog/webrtc-av1/), Firefox behind flag
+- `MSE AV1` - supported in Chrome 70+, Firefox 67+
 - `MSE iPhone` - supported in [iOS 17.1+](https://webkit.org/blog/14735/webkit-features-in-safari-17-1/)
 
 **Audio**

@@ -31,7 +31,12 @@ func handlerWSMSE(tr *ws.Transport, msg *ws.Message) error {
 		return err
 	}
 
-	tr.Write(&ws.Message{Type: "mse", Value: mp4.ContentType(cons.Codecs())})
+	// Send the MSE content-type after the first keyframe arrives,
+	// so codec params (e.g. AV1 level from sequence header) are correct.
+	cons.OnInit = func(ct string) {
+		log.Trace().Str("content_type", ct).Msgf("[mp4] MSE content type")
+		tr.Write(&ws.Message{Type: "mse", Value: ct})
+	}
 
 	go cons.WriteTo(tr.Writer())
 
