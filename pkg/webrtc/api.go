@@ -306,6 +306,15 @@ func RegisterDefaultCodecs(m *webrtc.MediaEngine) error {
 			},
 			PayloadType: 100,
 		},
+		// AV1 support (Chrome 94+, Firefox 98+, Edge 94+)
+		{
+			RTPCodecCapability: webrtc.RTPCodecCapability{
+				MimeType:     webrtc.MimeTypeAV1,
+				ClockRate:    90000,
+				RTCPFeedback: videoRTCPFeedback,
+			},
+			PayloadType: 99,
+		},
 	} {
 		if err := m.RegisterCodec(codec, webrtc.RTPCodecTypeVideo); err != nil {
 			return err

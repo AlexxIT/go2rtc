@@ -3,6 +3,7 @@ package mp4
 import (
 	"io"
 
+	"github.com/AlexxIT/go2rtc/pkg/av1"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
@@ -25,6 +26,7 @@ func NewKeyframe(medias []*core.Media) *Keyframe {
 				Codecs: []*core.Codec{
 					{Name: core.CodecH264},
 					{Name: core.CodecH265},
+					{Name: core.CodecAV1},
 				},
 			},
 		}
@@ -90,6 +92,23 @@ func (c *Keyframe) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 
 		if track.Codec.IsRTP() {
 			handler.Handler = h265.RTPDepay(track.Codec, handler.Handler)
+		}
+
+	case core.CodecAV1:
+		handler.Handler = func(packet *rtp.Packet) {
+			if !av1.IsKeyframe(packet.Payload) {
+				return
+			}
+
+			b := c.muxer.GetPayload(0, packet)
+			b = append(init, b...)
+			if n, err := c.wr.Write(b); err == nil {
+				c.Send += n
+			}
+		}
+
+		if track.Codec.IsRTP() {
+			handler.Handler = av1.RTPDepay(handler.Handler)
 		}
 	}
 

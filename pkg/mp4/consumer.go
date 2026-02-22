@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/AlexxIT/go2rtc/pkg/aac"
+	"github.com/AlexxIT/go2rtc/pkg/av1"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
@@ -19,6 +20,16 @@ type Consumer struct {
 	muxer *Muxer
 	mu    sync.Mutex
 	start bool
+
+	// startOnce + startCh: closed when the first video keyframe arrives,
+	// signaling that codec params (e.g. AV1 sequence header) are available.
+	startOnce sync.Once
+	startCh   chan struct{}
+
+	// OnInit is called from WriteTo after the init segment is generated,
+	// just before writing data. Use this to send the correct content-type
+	// to consumers (e.g. MSE) with actual codec parameters.
+	OnInit func(contentType string)
 
 	Rotate int `json:"-"`
 	ScaleX int `json:"-"`
@@ -35,6 +46,7 @@ func NewConsumer(medias []*core.Media) *Consumer {
 				Codecs: []*core.Codec{
 					{Name: core.CodecH264},
 					{Name: core.CodecH265},
+					{Name: core.CodecAV1},
 				},
 			},
 			{
@@ -55,8 +67,9 @@ func NewConsumer(medias []*core.Media) *Consumer {
 			Medias:     medias,
 			Transport:  wr,
 		},
-		muxer: &Muxer{},
-		wr:    wr,
+		muxer:   &Muxer{},
+		wr:      wr,
+		startCh: make(chan struct{}),
 	}
 }
 
@@ -74,6 +87,7 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 					return
 				}
 				c.start = true
+				c.startOnce.Do(func() { close(c.startCh) })
 			}
 
 			// important to use Mutex because right fragment order
@@ -98,6 +112,7 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 					return
 				}
 				c.start = true
+				c.startOnce.Do(func() { close(c.startCh) })
 			}
 
 			// important to use Mutex because right fragment order
@@ -113,6 +128,34 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 			handler.Handler = h265.RTPDepay(track.Codec, handler.Handler)
 		} else {
 			handler.Handler = h265.RepairAVCC(track.Codec, handler.Handler)
+		}
+
+	case core.CodecAV1:
+		handler.Handler = func(packet *rtp.Packet) {
+			if !c.start {
+				if !av1.IsKeyframe(packet.Payload) {
+					return
+				}
+				// Extract the sequence header from the first keyframe so the
+				// init segment (av1C box) gets the correct profile/level/resolution.
+				if seqHdr := av1.SequenceHeader(packet.Payload); seqHdr != nil {
+					codec.FmtpLine = string(seqHdr)
+				}
+				c.start = true
+				c.startOnce.Do(func() { close(c.startCh) })
+			}
+
+			// important to use Mutex because right fragment order
+			c.mu.Lock()
+			b := c.muxer.GetPayload(trackID, packet)
+			if n, err := c.wr.Write(b); err == nil {
+				c.Send += n
+			}
+			c.mu.Unlock()
+		}
+
+		if track.Codec.IsRTP() {
+			handler.Handler = av1.RTPDepay(handler.Handler)
 		}
 
 	default:
@@ -167,7 +210,12 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 func (c *Consumer) WriteTo(wr io.Writer) (int64, error) {
 	if len(c.Senders) == 1 && c.Senders[0].Codec.IsAudio() {
 		c.start = true
+		c.startOnce.Do(func() { close(c.startCh) })
 	}
+
+	// Wait for the first video keyframe so codec parameters (e.g. AV1
+	// sequence header) are available before generating the init segment.
+	<-c.startCh
 
 	init, err := c.muxer.GetInit()
 	if err != nil {
@@ -179,6 +227,12 @@ func (c *Consumer) WriteTo(wr io.Writer) (int64, error) {
 	}
 	if c.ScaleX != 0 && c.ScaleY != 0 {
 		PatchVideoScale(init, c.ScaleX, c.ScaleY)
+	}
+
+	// Notify the caller with the final content type (now that codec params
+	// like AV1 sequence header are available for correct MIME strings).
+	if c.OnInit != nil {
+		c.OnInit(ContentType(c.Codecs()))
 	}
 
 	if _, err = wr.Write(init); err != nil {

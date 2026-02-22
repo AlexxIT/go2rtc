@@ -3,6 +3,7 @@ package mp4
 import (
 	"encoding/hex"
 
+	"github.com/AlexxIT/go2rtc/pkg/av1"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
@@ -81,6 +82,27 @@ func (m *Muxer) GetInit() ([]byte, error) {
 				uint32(i+1), codec.Name, codec.ClockRate, width, height, h265.EncodeConfig(vps, sps, pps),
 			)
 
+		case core.CodecAV1:
+			// FmtpLine contains the raw Sequence Header OBU (set in consumer.go)
+			var seqHdr []byte
+			if codec.FmtpLine != "" {
+				seqHdr = []byte(codec.FmtpLine)
+			}
+			conf := av1.EncodeConfig(seqHdr)
+
+			var width, height uint16
+			if seqHdr != nil {
+				width, height = av1.DecodeSequenceHeader(seqHdr)
+			}
+			if width == 0 {
+				width = 1920
+				height = 1080
+			}
+
+			mv.WriteVideoTrack(
+				uint32(i+1), codec.Name, codec.ClockRate, width, height, conf,
+			)
+
 		case core.CodecAAC:
 			s := core.Between(codec.FmtpLine, "config=", ";")
 			b, err := hex.DecodeString(s)
@@ -142,6 +164,12 @@ func (m *Muxer) GetPayload(trackID byte, packet *rtp.Packet) []byte {
 		} else {
 			flags = iso.SampleVideoNonIFrame
 		}
+	case core.CodecAV1:
+		if av1.IsKeyframe(packet.Payload) {
+			flags = iso.SampleVideoIFrame
+		} else {
+			flags = iso.SampleVideoNonIFrame
+		}
 	case core.CodecAAC:
 		duration = 1024         // important for Apple Finder and QuickTime
 		flags = iso.SampleAudio // not important?
@@ -163,8 +191,6 @@ func (m *Muxer) GetPayload(trackID byte, packet *rtp.Packet) []byte {
 		m.index, uint32(trackID+1), duration, uint32(size), flags, m.dts[trackID], uint32(packet.ExtensionProfile),
 	)
 	mv.WriteData(packet.Payload)
-
-	//log.Printf("[MP4] idx:%3d trk:%d dts:%6d cts:%4d dur:%5d time:%10d len:%5d", m.index, trackID+1, m.dts[trackID], packet.SSRC, duration, packet.Timestamp, len(packet.Payload))
 
 	m.dts[trackID] += uint64(duration)
 
