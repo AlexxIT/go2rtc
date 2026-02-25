@@ -51,6 +51,9 @@ func exitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Stop all streams before exiting.
+	streams.StopAll()
+
 	os.Exit(code)
 }
 
