@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/AlexxIT/go2rtc/internal/api"
+	api "github.com/AlexxIT/go2rtc/internal/api/server"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/internal/webrtc"
 )

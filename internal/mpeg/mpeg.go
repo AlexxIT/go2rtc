@@ -3,7 +3,7 @@ package mpeg
 import (
 	"net/http"
 
-	"github.com/AlexxIT/go2rtc/internal/api"
+	api "github.com/AlexxIT/go2rtc/internal/api/server"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/aac"
 	"github.com/AlexxIT/go2rtc/pkg/mpegts"
