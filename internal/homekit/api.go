@@ -151,7 +151,7 @@ func apiPair(id, url string) error {
 func apiUnpair(id string) error {
 	stream := streams.Get(id)
 	if stream == nil {
-		return errors.New(api.StreamNotFound)
+		return errors.New(streams.StreamNotFound)
 	}
 
 	rawURL := findHomeKitURL(stream.Sources())

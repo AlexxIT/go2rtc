@@ -26,7 +26,7 @@ func outputMpegTS(w http.ResponseWriter, r *http.Request) {
 	src := r.URL.Query().Get("src")
 	stream := streams.Get(src)
 	if stream == nil {
-		http.Error(w, api.StreamNotFound, http.StatusNotFound)
+		http.Error(w, streams.StreamNotFound, http.StatusNotFound)
 		return
 	}
 
@@ -49,7 +49,7 @@ func inputMpegTS(w http.ResponseWriter, r *http.Request) {
 	dst := r.URL.Query().Get("dst")
 	stream := streams.Get(dst)
 	if stream == nil {
-		http.Error(w, api.StreamNotFound, http.StatusNotFound)
+		http.Error(w, streams.StreamNotFound, http.StatusNotFound)
 		return
 	}
 
@@ -72,7 +72,7 @@ func apiStreamAAC(w http.ResponseWriter, r *http.Request) {
 	src := r.URL.Query().Get("src")
 	stream := streams.Get(src)
 	if stream == nil {
-		http.Error(w, api.StreamNotFound, http.StatusNotFound)
+		http.Error(w, streams.StreamNotFound, http.StatusNotFound)
 		return
 	}
 

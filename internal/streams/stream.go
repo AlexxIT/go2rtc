@@ -8,6 +8,8 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
+const StreamNotFound = "stream not found"
+
 type Stream struct {
 	producers []*Producer
 	consumers []core.Consumer

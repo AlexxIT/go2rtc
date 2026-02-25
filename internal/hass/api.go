@@ -47,7 +47,7 @@ func apiStream(w http.ResponseWriter, r *http.Request) {
 		name := r.RequestURI[8 : 8+i]
 		stream := streams.Get(name)
 		if stream == nil {
-			http.Error(w, api.StreamNotFound, http.StatusNotFound)
+			http.Error(w, streams.StreamNotFound, http.StatusNotFound)
 			return
 		}
 

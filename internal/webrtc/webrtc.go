@@ -130,7 +130,7 @@ func asyncHandler(tr *ws.Transport, msg *ws.Message) (err error) {
 	}
 
 	if stream == nil {
-		return errors.New(api.StreamNotFound)
+		return errors.New(streams.StreamNotFound)
 	}
 
 	var offer struct {

@@ -45,7 +45,7 @@ func Init() {
 		Exchange: func(src, offer string) (answer string, err error) {
 			stream := streams.Get(src)
 			if stream == nil {
-				return "", errors.New(api.StreamNotFound)
+				return "", errors.New(streams.StreamNotFound)
 			}
 			return webrtc.ExchangeSDP(stream, offer, "webtorrent", "")
 		},

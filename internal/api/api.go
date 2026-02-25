@@ -192,8 +192,6 @@ func Response(w http.ResponseWriter, body any, contentType string) {
 	}
 }
 
-const StreamNotFound = "stream not found"
-
 var allowPaths []string
 var basePath string
 var log zerolog.Logger
