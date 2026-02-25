@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/AlexxIT/go2rtc/internal/api"
+	api "github.com/AlexxIT/go2rtc/internal/api/server"
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/hap"
@@ -151,7 +151,7 @@ func apiPair(id, url string) error {
 func apiUnpair(id string) error {
 	stream := streams.Get(id)
 	if stream == nil {
-		return errors.New(api.StreamNotFound)
+		return errors.New(streams.StreamNotFound)
 	}
 
 	rawURL := findHomeKitURL(stream.Sources())
