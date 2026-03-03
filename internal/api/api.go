@@ -130,6 +130,12 @@ func tlsListen(network, address, certFile, keyFile string, minVersion string) {
 	var minTLSVersion uint16
 	var cert tls.Certificate
 	var err error
+
+	minTLSVersion, err = parseTLSVersion(minVersion)
+	if err != nil {
+		log.Error().Err(err).Caller().Send()
+		return
+	}
 	if strings.IndexByte(certFile, '\n') < 0 && strings.IndexByte(keyFile, '\n') < 0 {
 		// check if file path
 		cert, err = tls.LoadX509KeyPair(certFile, keyFile)
@@ -141,13 +147,6 @@ func tlsListen(network, address, certFile, keyFile string, minVersion string) {
 		log.Error().Err(err).Caller().Send()
 		return
 	}
-
-	minTLSVersion, err = parseTLSVersion(minVersion)
-	if err != nil {
-		log.Error().Err(err).Caller().Send()
-		return
-	}
-
 	ln, err := net.Listen(network, address)
 	if err != nil {
 		log.Error().Err(err).Msg("[api] tls listen")
