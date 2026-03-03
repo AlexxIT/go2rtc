@@ -40,7 +40,7 @@ func Init() {
 
 	// default config
 	cfg.Mod.Listen = ":1984"
-	cfg.Mod.TLSMinVer = "TLS1.0"
+	cfg.Mod.TLSMinVer = "TLS1.2"
 
 	// load config from YAML
 	app.LoadConfig(&cfg)
