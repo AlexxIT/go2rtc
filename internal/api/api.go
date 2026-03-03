@@ -112,14 +112,14 @@ func listen(network, address string) {
 
 func parseTLSVersion(versionStr string) (uint16, error) {
 	v := strings.ToUpper(strings.TrimSpace(versionStr))
-	if val, ok := tlsVersionMapp[v]; ok {
+	if val, ok := tlsVersionMap[v]; ok {
 		return val, nil
 	}
 	return 0, fmt.Errorf("invalid TLS version: %s", versionStr)
 }
 
 // Map string values to the crypto/tls constants
-var tlsVersionMapp = map[string]uint16{
+var tlsVersionMap = map[string]uint16{
 	"TLS1.0": tls.VersionTLS10,
 	"TLS1.1": tls.VersionTLS11,
 	"TLS1.2": tls.VersionTLS12,
