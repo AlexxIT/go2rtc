@@ -26,8 +26,9 @@ func Init() {
 			DevicePrivate string   `yaml:"device_private"`
 			CategoryID    string   `yaml:"category_id"`
 			Pairings      []string `yaml:"pairings"`
-			HKSV          bool     `yaml:"hksv"`
-			Motion        string   `yaml:"motion"`
+			HKSV            bool     `yaml:"hksv"`
+			Motion          string   `yaml:"motion"`
+			MotionThreshold float64  `yaml:"motion_threshold"`
 		} `yaml:"homekit"`
 	}
 	app.LoadConfig(&cfg)
@@ -109,6 +110,11 @@ func Init() {
 		} else if conf.HKSV {
 			// 2. Act as HKSV camera
 			srv.motionMode = conf.Motion
+			srv.motionThreshold = conf.MotionThreshold
+			if srv.motionThreshold <= 0 {
+				srv.motionThreshold = motionThreshold
+			}
+			log.Debug().Str("stream", id).Str("motion", conf.Motion).Float64("threshold", srv.motionThreshold).Msg("[homekit] HKSV mode")
 			if conf.CategoryID == "doorbell" {
 				srv.accessory = camera.NewHKSVDoorbellAccessory("AlexxIT", "go2rtc", name, "-", app.Version)
 			} else {

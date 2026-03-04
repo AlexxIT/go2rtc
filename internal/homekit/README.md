@@ -132,7 +132,20 @@ homekit:
 **Motion modes:**
 
 - `continuous` — MotionDetected is always true; Home Hub continuously receives video and decides what to save. Simplest setup, recommended for most cameras.
+- `detect` — automatic motion detection by analyzing H264 P-frame sizes. No external dependencies or CPU-heavy decoding. Works with any H264 source and resolution. Compares each P-frame size against an adaptive baseline using EMA (exponential moving average). When a P-frame exceeds the threshold ratio, motion is triggered with a 30s hold time and 5s cooldown.
 - `api` — motion is triggered externally via HTTP API. Use this with Frigate, ONVIF events, or any other motion detection system.
+
+**Motion detect config:**
+
+```yaml
+homekit:
+  outdoor:
+    hksv: true
+    motion: detect
+    motion_threshold: 2.0  # P-frame size / baseline ratio to trigger motion (default: 2.0)
+```
+
+The `motion_threshold` controls sensitivity. Lower values = more sensitive. Typical values: 1.5 (high sensitivity) to 3.0 (low sensitivity). Default 2.0 works well for most real cameras with static scenes.
 
 **Motion API:**
 

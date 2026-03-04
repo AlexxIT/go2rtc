@@ -45,8 +45,10 @@ type server struct {
 	stream    string // stream name from YAML
 
 	// HKSV fields
-	motionMode  string // "api", "continuous"
-	hksvSession *hksvSession
+	motionMode      string  // "api", "continuous", "detect"
+	motionThreshold float64 // ratio threshold for "detect" mode (default 2.0)
+	motionDetector  *motionDetector
+	hksvSession     *hksvSession
 }
 
 func (s *server) MarshalJSON() ([]byte, error) {
@@ -110,6 +112,11 @@ func (s *server) Handle(w http.ResponseWriter, r *http.Request) {
 
 		s.AddConn(controller)
 		defer s.DelConn(controller)
+
+		// start motion detector on first Home Hub connection
+		if s.motionMode == "detect" {
+			go s.startMotionDetector()
+		}
 
 		var handler homekit.HandlerFunc
 
@@ -387,11 +394,14 @@ func (s *server) SetCharacteristic(conn net.Conn, aid uint8, iid uint64, value a
 		go s.acceptHDS(hapConn, ln, combinedSalt)
 
 	case camera.TypeSelectedCameraRecordingConfiguration:
-		log.Debug().Str("stream", s.stream).Msg("[homekit] HKSV selected recording config")
+		log.Debug().Str("stream", s.stream).Str("motion", s.motionMode).Msg("[homekit] HKSV selected recording config")
 		char.Value = value
 
-		if s.motionMode == "continuous" {
+		switch s.motionMode {
+		case "continuous":
 			go s.startContinuousMotion()
+		case "detect":
+			go s.startMotionDetector()
 		}
 
 	default:
@@ -451,6 +461,53 @@ func (s *server) TriggerDoorbell() {
 	char.Value = 0 // SINGLE_PRESS
 	_ = char.NotifyListeners(nil)
 	log.Debug().Str("stream", s.stream).Msg("[homekit] doorbell")
+}
+
+func (s *server) startMotionDetector() {
+	s.mu.Lock()
+	if s.motionDetector != nil {
+		s.mu.Unlock()
+		return
+	}
+	det := newMotionDetector(s)
+	s.motionDetector = det
+	s.mu.Unlock()
+
+	s.AddConn(det)
+
+	stream := streams.Get(s.stream)
+	if err := stream.AddConsumer(det); err != nil {
+		log.Error().Err(err).Str("stream", s.stream).Msg("[homekit] motion detector add consumer failed")
+		s.DelConn(det)
+		s.mu.Lock()
+		s.motionDetector = nil
+		s.mu.Unlock()
+		return
+	}
+
+	log.Debug().Str("stream", s.stream).Msg("[homekit] motion detector started")
+
+	_, _ = det.WriteTo(nil) // blocks until Stop()
+
+	stream.RemoveConsumer(det)
+	s.DelConn(det)
+
+	s.mu.Lock()
+	if s.motionDetector == det {
+		s.motionDetector = nil
+	}
+	s.mu.Unlock()
+
+	log.Debug().Str("stream", s.stream).Msg("[homekit] motion detector stopped")
+}
+
+func (s *server) stopMotionDetector() {
+	s.mu.Lock()
+	det := s.motionDetector
+	s.mu.Unlock()
+	if det != nil {
+		_ = det.Stop()
+	}
 }
 
 func (s *server) startContinuousMotion() {
