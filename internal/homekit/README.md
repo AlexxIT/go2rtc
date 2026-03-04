@@ -81,6 +81,72 @@ homekit:
     device_private: dahua1  # custom key, default: generated from stream ID
 ```
 
+### HKSV (HomeKit Secure Video)
+
+go2rtc can expose any camera as a HomeKit Secure Video (HKSV) camera. This allows Apple Home to record video clips to iCloud when motion is detected.
+
+**Requirements:**
+- Apple Home Hub (Apple TV, HomePod or iPad) on the same network
+- iCloud storage plan with HomeKit Secure Video support
+- Camera source with H264 video (AAC audio recommended)
+
+**Minimal HKSV config**
+
+```yaml
+streams:
+  outdoor: rtsp://admin:password@192.168.1.123/stream1
+
+homekit:
+  outdoor:
+    hksv: true           # enable HomeKit Secure Video
+    motion: continuous   # always report motion, Home Hub decides what to record
+```
+
+**Full HKSV config**
+
+```yaml
+streams:
+  outdoor:
+    - rtsp://admin:password@192.168.1.123/stream1
+    - ffmpeg:outdoor#video=h264#hardware  # transcode to H264 if needed
+    - ffmpeg:outdoor#audio=aac            # AAC-LC audio for HKSV recording
+
+homekit:
+  outdoor:
+    pin: 12345678
+    name: Outdoor Camera
+    hksv: true
+    motion: api          # motion triggered via API
+```
+
+**HKSV Doorbell config**
+
+```yaml
+homekit:
+  front_door:
+    category_id: doorbell
+    hksv: true
+    motion: api
+```
+
+**Motion modes:**
+
+- `continuous` — MotionDetected is always true; Home Hub continuously receives video and decides what to save. Simplest setup, recommended for most cameras.
+- `api` — motion is triggered externally via HTTP API. Use this with Frigate, ONVIF events, or any other motion detection system.
+
+**Motion API:**
+
+```bash
+# Trigger motion start
+curl -X POST "http://localhost:1984/api/homekit/motion?id=outdoor"
+
+# Clear motion
+curl -X DELETE "http://localhost:1984/api/homekit/motion?id=outdoor"
+
+# Trigger doorbell ring
+curl -X POST "http://localhost:1984/api/homekit/doorbell?id=front_door"
+```
+
 **Proxy HomeKit camera**
 
 - Video stream from HomeKit camera to Apple device (iPhone, Apple TV) will be transmitted directly

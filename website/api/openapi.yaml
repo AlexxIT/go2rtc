@@ -1059,6 +1059,58 @@ paths:
         "404":
           description: Stream not found
 
+  /api/homekit/motion:
+    post:
+      summary: Trigger motion detection for HKSV camera
+      description: Sets MotionDetected characteristic to true, which triggers the Home Hub to start recording.
+      tags: [ HomeKit ]
+      parameters:
+        - name: id
+          in: query
+          description: Stream name / server ID
+          required: true
+          schema: { type: string }
+          example: outdoor
+      responses:
+        "200":
+          description: Motion triggered
+        "404":
+          description: Server not found
+    delete:
+      summary: Clear motion detection for HKSV camera
+      description: Sets MotionDetected characteristic to false.
+      tags: [ HomeKit ]
+      parameters:
+        - name: id
+          in: query
+          description: Stream name / server ID
+          required: true
+          schema: { type: string }
+          example: outdoor
+      responses:
+        "200":
+          description: Motion cleared
+        "404":
+          description: Server not found
+
+  /api/homekit/doorbell:
+    post:
+      summary: Trigger doorbell ring event
+      description: Sends ProgrammableSwitchEvent to Home Hub, triggering a doorbell notification on Apple devices.
+      tags: [ HomeKit ]
+      parameters:
+        - name: id
+          in: query
+          description: Stream name / server ID (must have category_id=doorbell)
+          required: true
+          schema: { type: string }
+          example: front_door
+      responses:
+        "200":
+          description: Doorbell event sent
+        "404":
+          description: Server not found
+
   /api/homekit/accessories:
     get:
       summary: Get HomeKit accessories JSON for a stream

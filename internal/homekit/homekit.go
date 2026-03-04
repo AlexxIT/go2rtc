@@ -26,6 +26,8 @@ func Init() {
 			DevicePrivate string   `yaml:"device_private"`
 			CategoryID    string   `yaml:"category_id"`
 			Pairings      []string `yaml:"pairings"`
+			HKSV          bool     `yaml:"hksv"`
+			Motion        string   `yaml:"motion"`
 		} `yaml:"homekit"`
 	}
 	app.LoadConfig(&cfg)
@@ -36,6 +38,8 @@ func Init() {
 
 	api.HandleFunc("api/homekit", apiHomekit)
 	api.HandleFunc("api/homekit/accessories", apiHomekitAccessories)
+	api.HandleFunc("api/homekit/motion", apiMotion)
+	api.HandleFunc("api/homekit/doorbell", apiDoorbell)
 	api.HandleFunc("api/discovery/homekit", apiDiscovery)
 
 	if cfg.Mod == nil {
@@ -102,8 +106,16 @@ func Init() {
 		if url := findHomeKitURL(stream.Sources()); url != "" {
 			// 1. Act as transparent proxy for HomeKit camera
 			srv.proxyURL = url
+		} else if conf.HKSV {
+			// 2. Act as HKSV camera
+			srv.motionMode = conf.Motion
+			if conf.CategoryID == "doorbell" {
+				srv.accessory = camera.NewHKSVDoorbellAccessory("AlexxIT", "go2rtc", name, "-", app.Version)
+			} else {
+				srv.accessory = camera.NewHKSVAccessory("AlexxIT", "go2rtc", name, "-", app.Version)
+			}
 		} else {
-			// 2. Act as basic HomeKit camera
+			// 3. Act as basic HomeKit camera
 			srv.accessory = camera.NewAccessory("AlexxIT", "go2rtc", name, "-", app.Version)
 		}
 
@@ -187,6 +199,37 @@ func findHomeKitURL(sources []string) string {
 	}
 
 	return ""
+}
+
+func apiMotion(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	srv := servers[id]
+	if srv == nil {
+		http.Error(w, "server not found: "+id, http.StatusNotFound)
+		return
+	}
+	switch r.Method {
+	case "POST":
+		srv.SetMotionDetected(true)
+	case "DELETE":
+		srv.SetMotionDetected(false)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func apiDoorbell(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	id := r.URL.Query().Get("id")
+	srv := servers[id]
+	if srv == nil {
+		http.Error(w, "server not found: "+id, http.StatusNotFound)
+		return
+	}
+	srv.TriggerDoorbell()
 }
 
 func parseBitrate(s string) int {

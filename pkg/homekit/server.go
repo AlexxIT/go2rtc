@@ -68,14 +68,31 @@ func ServerHandler(server Server) HandlerFunc {
 						AID   uint8  `json:"aid"`
 						IID   uint64 `json:"iid"`
 						Value any    `json:"value"`
+						Event any    `json:"ev"`
 					} `json:"characteristics"`
 				}
 				if err := json.NewDecoder(req.Body).Decode(&v); err != nil {
 					return nil, err
 				}
 
-				for _, char := range v.Value {
-					server.SetCharacteristic(conn, char.AID, char.IID, char.Value)
+				for _, c := range v.Value {
+					if c.Value != nil {
+						server.SetCharacteristic(conn, c.AID, c.IID, c.Value)
+					}
+					if c.Event != nil {
+						// subscribe/unsubscribe to events
+						accs := server.GetAccessories(conn)
+						for _, acc := range accs {
+							if char := acc.GetCharacterByID(c.IID); char != nil {
+								if ev, ok := c.Event.(bool); ok && ev {
+									char.AddListener(conn)
+								} else {
+									char.RemoveListener(conn)
+								}
+								break
+							}
+						}
+					}
 				}
 
 				res := &http.Response{

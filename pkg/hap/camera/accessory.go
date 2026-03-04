@@ -19,6 +19,66 @@ func NewAccessory(manuf, model, name, serial, firmware string) *hap.Accessory {
 	return acc
 }
 
+func NewHKSVAccessory(manuf, model, name, serial, firmware string) *hap.Accessory {
+	rtpStream := ServiceCameraRTPStreamManagement()
+	motionSensor := ServiceMotionSensor()
+	operatingMode := ServiceCameraOperatingMode()
+	recordingMgmt := ServiceCameraEventRecordingManagement()
+	dataStreamMgmt := ServiceDataStreamManagement()
+
+	acc := &hap.Accessory{
+		AID: hap.DeviceAID,
+		Services: []*hap.Service{
+			hap.ServiceAccessoryInformation(manuf, model, name, serial, firmware),
+			rtpStream,
+			ServiceMicrophone(),
+			motionSensor,
+			operatingMode,
+			recordingMgmt,
+			dataStreamMgmt,
+		},
+	}
+	acc.InitIID()
+
+	// CameraOperatingMode links to RTPStreamManagement and RecordingManagement
+	operatingMode.Linked = []int{int(rtpStream.IID), int(recordingMgmt.IID)}
+	// CameraEventRecordingManagement links to DataStreamManagement and MotionSensor
+	recordingMgmt.Linked = []int{int(dataStreamMgmt.IID), int(motionSensor.IID)}
+
+	return acc
+}
+
+func NewHKSVDoorbellAccessory(manuf, model, name, serial, firmware string) *hap.Accessory {
+	rtpStream := ServiceCameraRTPStreamManagement()
+	motionSensor := ServiceMotionSensor()
+	operatingMode := ServiceCameraOperatingMode()
+	recordingMgmt := ServiceCameraEventRecordingManagement()
+	dataStreamMgmt := ServiceDataStreamManagement()
+	doorbell := ServiceDoorbell()
+
+	acc := &hap.Accessory{
+		AID: hap.DeviceAID,
+		Services: []*hap.Service{
+			hap.ServiceAccessoryInformation(manuf, model, name, serial, firmware),
+			rtpStream,
+			ServiceMicrophone(),
+			motionSensor,
+			operatingMode,
+			recordingMgmt,
+			dataStreamMgmt,
+			doorbell,
+		},
+	}
+	acc.InitIID()
+
+	// CameraOperatingMode links to RTPStreamManagement and RecordingManagement
+	operatingMode.Linked = []int{int(rtpStream.IID), int(recordingMgmt.IID)}
+	// CameraEventRecordingManagement links to DataStreamManagement, MotionSensor, and Doorbell
+	recordingMgmt.Linked = []int{int(dataStreamMgmt.IID), int(motionSensor.IID), int(doorbell.IID)}
+
+	return acc
+}
+
 func ServiceMicrophone() *hap.Service {
 	return &hap.Service{
 		Type: "112", // 'Microphone'

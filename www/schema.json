@@ -331,6 +331,20 @@
             "items": {
               "type": "string"
             }
+          },
+          "hksv": {
+            "description": "Enable HomeKit Secure Video recording support",
+            "type": "boolean",
+            "default": false
+          },
+          "motion": {
+            "description": "Motion detection mode for HKSV: `api` (triggered via HTTP API) or `continuous` (always report motion)",
+            "type": "string",
+            "enum": [
+              "api",
+              "continuous"
+            ],
+            "default": "api"
           }
         }
       }

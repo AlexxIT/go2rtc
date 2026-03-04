@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg"
@@ -42,6 +43,10 @@ type server struct {
 	proxyURL  string
 	setupID   string
 	stream    string // stream name from YAML
+
+	// HKSV fields
+	motionMode  string // "api", "continuous"
+	hksvSession *hksvSession
 }
 
 func (s *server) MarshalJSON() ([]byte, error) {
@@ -120,9 +125,15 @@ func (s *server) Handle(w http.ResponseWriter, r *http.Request) {
 			handler = homekit.ProxyHandler(s, client.Conn)
 		}
 
+		log.Debug().Str("stream", s.stream).Msgf("[homekit] handler started for %s", conn.RemoteAddr())
+
 		// If your iPhone goes to sleep, it will be an EOF error.
-		if err = handler(controller); err != nil && !errors.Is(err, io.EOF) {
-			log.Error().Err(err).Caller().Send()
+		if err = handler(controller); err != nil {
+			if errors.Is(err, io.EOF) {
+				log.Debug().Str("stream", s.stream).Msgf("[homekit] %s: connection closed (EOF)", conn.RemoteAddr())
+			} else {
+				log.Error().Err(err).Str("stream", s.stream).Caller().Send()
+			}
 			return
 		}
 	}
@@ -226,6 +237,12 @@ func (s *server) PatchConfig() {
 }
 
 func (s *server) GetAccessories(_ net.Conn) []*hap.Accessory {
+	log.Trace().Str("stream", s.stream).Msg("[homekit] GET /accessories")
+	if log.Trace().Enabled() {
+		if b, err := json.Marshal(s.accessory); err == nil {
+			log.Trace().Str("stream", s.stream).RawJSON("accessory", b).Msg("[homekit] accessory JSON")
+		}
+	}
 	return []*hap.Accessory{s.accessory}
 }
 
@@ -321,6 +338,65 @@ func (s *server) SetCharacteristic(conn net.Conn, aid uint8, iid uint64, value a
 				s.DelConn(consumer)
 			}()
 		}
+
+	case camera.TypeSetupDataStreamTransport:
+		var req camera.SetupDataStreamTransportRequest
+		if err := tlv8.UnmarshalBase64(value, &req); err != nil {
+			log.Error().Err(err).Str("stream", s.stream).Msg("[homekit] HKSV parse ch131 failed")
+			return
+		}
+
+		log.Debug().Str("stream", s.stream).Uint8("cmd", req.SessionCommandType).
+			Uint8("transport", req.TransportType).Msg("[homekit] HKSV DataStream setup")
+
+		if req.SessionCommandType != 0 {
+			// 0 = start, 1 = close
+			log.Debug().Str("stream", s.stream).Msg("[homekit] HKSV DataStream close request")
+			if s.hksvSession != nil {
+				s.hksvSession.Close()
+			}
+			return
+		}
+
+		accessoryKeySalt := core.RandString(32, 0)
+		combinedSalt := req.ControllerKeySalt + accessoryKeySalt
+
+		ln, err := net.ListenTCP("tcp", nil)
+		if err != nil {
+			log.Error().Err(err).Str("stream", s.stream).Msg("[homekit] HKSV listen failed")
+			return
+		}
+		port := ln.Addr().(*net.TCPAddr).Port
+
+		resp := camera.SetupDataStreamTransportResponse{
+			Status:           0,
+			AccessoryKeySalt: accessoryKeySalt,
+		}
+		resp.TransportTypeSessionParameters.TCPListeningPort = uint16(port)
+
+		v, err := tlv8.MarshalBase64(resp)
+		if err != nil {
+			ln.Close()
+			return
+		}
+		char.Value = v
+
+		log.Debug().Str("stream", s.stream).Int("port", port).Msg("[homekit] HKSV listening for HDS")
+
+		hapConn := conn.(*hap.Conn)
+		go s.acceptHDS(hapConn, ln, combinedSalt)
+
+	case camera.TypeSelectedCameraRecordingConfiguration:
+		log.Debug().Str("stream", s.stream).Msg("[homekit] HKSV selected recording config")
+		char.Value = value
+
+		if s.motionMode == "continuous" {
+			go s.startContinuousMotion()
+		}
+
+	default:
+		// Store value for all other writable characteristics
+		char.Value = value
 	}
 }
 
@@ -349,6 +425,46 @@ func (s *server) GetImage(conn net.Conn, width, height int) []byte {
 	}
 
 	return b
+}
+
+func (s *server) SetMotionDetected(detected bool) {
+	if s.accessory == nil {
+		return
+	}
+	char := s.accessory.GetCharacter("22") // MotionDetected
+	if char == nil {
+		return
+	}
+	char.Value = detected
+	_ = char.NotifyListeners(nil)
+	log.Debug().Str("stream", s.stream).Bool("motion", detected).Msg("[homekit] motion")
+}
+
+func (s *server) TriggerDoorbell() {
+	if s.accessory == nil {
+		return
+	}
+	char := s.accessory.GetCharacter("73") // ProgrammableSwitchEvent
+	if char == nil {
+		return
+	}
+	char.Value = 0 // SINGLE_PRESS
+	_ = char.NotifyListeners(nil)
+	log.Debug().Str("stream", s.stream).Msg("[homekit] doorbell")
+}
+
+func (s *server) startContinuousMotion() {
+	s.SetMotionDetected(true)
+
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		if s.accessory == nil {
+			return
+		}
+		s.SetMotionDetected(true)
+	}
 }
 
 func calcName(name, seed string) string {
