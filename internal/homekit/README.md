@@ -142,7 +142,7 @@ homekit:
   outdoor:
     hksv: true
     motion: detect
-    motion_threshold: 2.0  # P-frame size / baseline ratio to trigger motion (default: 2.0)
+    motion_threshold: 1.0  # P-frame size / baseline ratio to trigger motion (default: 2.0)
 ```
 
 The `motion_threshold` controls sensitivity. Lower values = more sensitive. Typical values: 1.5 (high sensitivity) to 3.0 (low sensitivity). Default 2.0 works well for most real cameras with static scenes.

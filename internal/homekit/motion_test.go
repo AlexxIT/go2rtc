@@ -145,7 +145,10 @@ func TestMotionDetector_Cooldown(t *testing.T) {
 	// trigger and expire motion
 	det.handlePacket(makePFrame(5000))
 	clock.advance(motionHoldTime + time.Second)
-	det.handlePacket(makePFrame(500)) // trigger hold time check
+	// feed enough small frames to hit a hold check interval
+	for i := 0; i < motionHoldCheckFrames+1; i++ {
+		det.handlePacket(makePFrame(500))
+	}
 	if len(rec.calls) != 2 || rec.calls[1] != false {
 		t.Fatalf("expected ON then OFF, got %v", rec.calls)
 	}
@@ -283,7 +286,10 @@ func TestMotionDetector_HoldTimeExtended(t *testing.T) {
 
 	// advance past hold time from last trigger
 	clock.advance(6 * time.Second)
-	det.handlePacket(makePFrame(500))
+	// feed enough frames to guarantee hitting hold check interval
+	for i := 0; i < motionHoldCheckFrames+1; i++ {
+		det.handlePacket(makePFrame(500))
+	}
 
 	last, _ := rec.lastCall()
 	if last {
@@ -394,7 +400,10 @@ func TestMotionDetector_MultipleCycles(t *testing.T) {
 	for cycle := 0; cycle < 3; cycle++ {
 		det.handlePacket(makePFrame(5000))
 		clock.advance(motionHoldTime + time.Second)
-		det.handlePacket(makePFrame(500)) // trigger OFF
+		// feed enough frames to hit hold check interval
+		for i := 0; i < motionHoldCheckFrames+1; i++ {
+			det.handlePacket(makePFrame(500))
+		}
 		clock.advance(motionCooldown + time.Second)
 	}
 

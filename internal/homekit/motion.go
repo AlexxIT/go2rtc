@@ -16,6 +16,11 @@ const (
 	motionAlphaSlow    = 0.02
 	motionHoldTime     = 30 * time.Second
 	motionCooldown     = 5 * time.Second
+
+	// check hold time expiry every N frames during active motion (~270ms at 30fps)
+	motionHoldCheckFrames = 8
+	// trace log every N frames (~5s at 30fps)
+	motionTraceFrames = 150
 )
 
 type motionDetector struct {
@@ -33,7 +38,6 @@ type motionDetector struct {
 	motionActive bool
 	lastMotion   time.Time
 	lastOff      time.Time
-	lastTrace    time.Time
 
 	// for testing: injectable time and callback
 	now      func() time.Time
@@ -124,45 +128,53 @@ func (m *motionDetector) handlePacket(packet *rtp.Packet) {
 		return
 	}
 
-	now := m.now()
+	if m.baseline <= 0 {
+		return
+	}
 
-	if m.baseline > 0 {
-		ratio := size / m.baseline
+	ratio := size / m.baseline
+	triggered := ratio > m.threshold
 
-		// periodic trace: once per 5 seconds
-		if now.Sub(m.lastTrace) >= 5*time.Second {
-			m.lastTrace = now
-			log.Trace().Str("stream", m.streamName()).
-				Float64("baseline", m.baseline).Float64("ratio", ratio).
-				Bool("active", m.motionActive).Msg("[homekit] motion: status")
+	if !m.motionActive {
+		// idle path: check for trigger first, then update baseline
+		if triggered {
+			// only call time.Now() when threshold exceeded
+			now := m.now()
+			if now.Sub(m.lastOff) >= motionCooldown {
+				m.motionActive = true
+				m.lastMotion = now
+				log.Debug().Str("stream", m.streamName()).Float64("ratio", ratio).Msg("[homekit] motion: ON")
+				m.setMotion(true)
+			} else {
+				log.Debug().Str("stream", m.streamName()).Float64("ratio", ratio).
+					Dur("cooldown_left", motionCooldown-now.Sub(m.lastOff)).Msg("[homekit] motion: blocked by cooldown")
+			}
 		}
-
-		if ratio > m.threshold {
-			m.lastMotion = now
-			if !m.motionActive {
-				// check cooldown
-				if now.Sub(m.lastOff) >= motionCooldown {
-					m.motionActive = true
-					log.Debug().Str("stream", m.streamName()).Float64("ratio", ratio).Msg("[homekit] motion: ON")
-					m.setMotion(true)
-				} else {
-					log.Debug().Str("stream", m.streamName()).Float64("ratio", ratio).Dur("cooldown_left", motionCooldown-now.Sub(m.lastOff)).Msg("[homekit] motion: blocked by cooldown")
-				}
+		// update baseline only if still idle (trigger frame doesn't pollute baseline)
+		if !m.motionActive {
+			m.baseline += motionAlphaSlow * (size - m.baseline)
+		}
+	} else {
+		// active motion path
+		if triggered {
+			m.lastMotion = m.now()
+		} else if m.frameCount%motionHoldCheckFrames == 0 {
+			// check hold time expiry periodically, not every frame
+			now := m.now()
+			if now.Sub(m.lastMotion) >= motionHoldTime {
+				m.motionActive = false
+				m.lastOff = now
+				log.Debug().Str("stream", m.streamName()).Msg("[homekit] motion: OFF (hold expired)")
+				m.setMotion(false)
 			}
 		}
 	}
 
-	// update baseline only when no active motion
-	if !m.motionActive {
-		m.baseline += motionAlphaSlow * (size - m.baseline)
-	}
-
-	// check hold time expiry
-	if m.motionActive && now.Sub(m.lastMotion) >= motionHoldTime {
-		m.motionActive = false
-		m.lastOff = now
-		log.Debug().Str("stream", m.streamName()).Msg("[homekit] motion: OFF (hold expired)")
-		m.setMotion(false)
+	// periodic trace using frame counter instead of time check
+	if m.frameCount%motionTraceFrames == 0 {
+		log.Trace().Str("stream", m.streamName()).
+			Float64("baseline", m.baseline).Float64("ratio", ratio).
+			Bool("active", m.motionActive).Msg("[homekit] motion: status")
 	}
 }
 
