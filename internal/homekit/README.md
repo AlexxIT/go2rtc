@@ -145,7 +145,26 @@ homekit:
     motion_threshold: 1.0  # P-frame size / baseline ratio to trigger motion (default: 2.0)
 ```
 
-The `motion_threshold` controls sensitivity. Lower values = more sensitive. Typical values: 1.5 (high sensitivity) to 3.0 (low sensitivity). Default 2.0 works well for most real cameras with static scenes.
+The `motion_threshold` controls sensitivity — it's the ratio of P-frame size to the adaptive baseline. When a P-frame exceeds `baseline × threshold`, motion is triggered.
+
+| Scenario | threshold | Notes |
+|---|---|---|
+| Quiet indoor scene | 1.3–1.5 | Low noise, stable baseline, even small motion is visible |
+| Standard camera (yard, hallway) | 2.0 (default) | Good balance between sensitivity and false positives |
+| Outdoor with trees/shadows/wind | 2.5–3.0 | Wind and shadows produce medium P-frames, need margin |
+| Busy street / complex scene | 3.0–5.0 | Lots of background motion, react only to large events |
+
+Values below 1.0 are meaningless (triggers on every frame). Values above 5.0 require very large motion (person filling half the frame).
+
+**How to tune:** set `log.level: trace` and watch `motion: status` lines — they show current `ratio`. Walk in front of the camera and note the ratio values:
+
+```
+motion: status baseline=5000 ratio=0.95  ← quiet
+motion: status baseline=5000 ratio=3.21  ← person walked by
+motion: status baseline=5000 ratio=1.40  ← shadow/wind
+```
+
+Set threshold between "noise" and "real motion". In this example, 2.0 is a good choice (ignores 1.4, catches 3.2).
 
 **Motion API:**
 

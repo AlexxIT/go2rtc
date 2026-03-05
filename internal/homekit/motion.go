@@ -16,10 +16,9 @@ const (
 	motionAlphaSlow    = 0.02
 	motionHoldTime     = 30 * time.Second
 	motionCooldown     = 5 * time.Second
+	motionDefaultFPS   = 30.0
 
-	// check hold time expiry every N frames during active motion (~270ms at 30fps)
-	motionHoldCheckFrames = 8
-	// trace log every N frames (~5s at 30fps)
+	// recalibrate FPS and emit trace log every N frames (~5s at 30fps)
 	motionTraceFrames = 150
 )
 
@@ -29,15 +28,24 @@ type motionDetector struct {
 	done   chan struct{}
 
 	// algorithm state (accessed only from Sender goroutine — no mutex needed)
-	threshold   float64
-	baseline    float64
-	initialized bool
-	frameCount  int
+	threshold    float64
+	triggerLevel int     // pre-computed: int(baseline * threshold)
+	baseline     float64
+	initialized  bool
+	frameCount   int
+
+	// frame-based timing (calibrated periodically, no time.Now() in per-frame hot path)
+	holdBudget        int // motionHoldTime converted to frames
+	cooldownBudget    int // motionCooldown converted to frames
+	remainingHold     int // frames left until hold expires (active motion)
+	remainingCooldown int // frames left until cooldown expires (after OFF)
 
 	// motion state
 	motionActive bool
-	lastMotion   time.Time
-	lastOff      time.Time
+
+	// periodic FPS recalibration
+	lastFPSCheck time.Time
+	lastFPSFrame int
 
 	// for testing: injectable time and callback
 	now      func() time.Time
@@ -100,6 +108,20 @@ func (m *motionDetector) streamName() string {
 	return ""
 }
 
+func (m *motionDetector) calibrate() {
+	// use default FPS — real FPS calibrated after first periodic check
+	m.holdBudget = int(motionHoldTime.Seconds() * motionDefaultFPS)
+	m.cooldownBudget = int(motionCooldown.Seconds() * motionDefaultFPS)
+	m.triggerLevel = int(m.baseline * m.threshold)
+	m.lastFPSCheck = m.now()
+	m.lastFPSFrame = m.frameCount
+
+	log.Debug().Str("stream", m.streamName()).
+		Float64("baseline", m.baseline).
+		Int("holdFrames", m.holdBudget).Int("cooldownFrames", m.cooldownBudget).
+		Msg("[homekit] motion: warmup complete")
+}
+
 func (m *motionDetector) handlePacket(packet *rtp.Packet) {
 	payload := packet.Payload
 	if len(payload) < 5 {
@@ -111,69 +133,82 @@ func (m *motionDetector) handlePacket(packet *rtp.Packet) {
 		return
 	}
 
-	size := float64(len(payload))
+	size := len(payload)
 	m.frameCount++
 
 	if m.frameCount <= motionWarmupFrames {
-		// warmup: build baseline with fast EMA
+		fsize := float64(size)
 		if !m.initialized {
-			m.baseline = size
+			m.baseline = fsize
 			m.initialized = true
 		} else {
-			m.baseline += motionAlphaFast * (size - m.baseline)
+			m.baseline += motionAlphaFast * (fsize - m.baseline)
 		}
 		if m.frameCount == motionWarmupFrames {
-			log.Debug().Str("stream", m.streamName()).Float64("baseline", m.baseline).Msg("[homekit] motion: warmup complete")
+			m.calibrate()
 		}
 		return
 	}
 
-	if m.baseline <= 0 {
+	if m.triggerLevel <= 0 {
 		return
 	}
 
-	ratio := size / m.baseline
-	triggered := ratio > m.threshold
+	// integer comparison — no float division needed
+	triggered := size > m.triggerLevel
 
 	if !m.motionActive {
-		// idle path: check for trigger first, then update baseline
-		if triggered {
-			// only call time.Now() when threshold exceeded
-			now := m.now()
-			if now.Sub(m.lastOff) >= motionCooldown {
-				m.motionActive = true
-				m.lastMotion = now
-				log.Debug().Str("stream", m.streamName()).Float64("ratio", ratio).Msg("[homekit] motion: ON")
-				m.setMotion(true)
-			} else {
-				log.Debug().Str("stream", m.streamName()).Float64("ratio", ratio).
-					Dur("cooldown_left", motionCooldown-now.Sub(m.lastOff)).Msg("[homekit] motion: blocked by cooldown")
-			}
+		// idle path: decrement cooldown, check for trigger, update baseline
+		if m.remainingCooldown > 0 {
+			m.remainingCooldown--
 		}
+
+		if triggered && m.remainingCooldown <= 0 {
+			m.motionActive = true
+			m.remainingHold = m.holdBudget
+			log.Debug().Str("stream", m.streamName()).
+				Float64("ratio", float64(size)/m.baseline).
+				Msg("[homekit] motion: ON")
+			m.setMotion(true)
+		}
+
 		// update baseline only if still idle (trigger frame doesn't pollute baseline)
 		if !m.motionActive {
-			m.baseline += motionAlphaSlow * (size - m.baseline)
+			fsize := float64(size)
+			m.baseline += motionAlphaSlow * (fsize - m.baseline)
+			m.triggerLevel = int(m.baseline * m.threshold)
 		}
 	} else {
-		// active motion path
+		// active motion path: pure integer arithmetic, zero time.Now() calls
 		if triggered {
-			m.lastMotion = m.now()
-		} else if m.frameCount%motionHoldCheckFrames == 0 {
-			// check hold time expiry periodically, not every frame
-			now := m.now()
-			if now.Sub(m.lastMotion) >= motionHoldTime {
+			m.remainingHold = m.holdBudget
+		} else {
+			m.remainingHold--
+			if m.remainingHold <= 0 {
 				m.motionActive = false
-				m.lastOff = now
+				m.remainingCooldown = m.cooldownBudget
 				log.Debug().Str("stream", m.streamName()).Msg("[homekit] motion: OFF (hold expired)")
 				m.setMotion(false)
 			}
 		}
 	}
 
-	// periodic trace using frame counter instead of time check
+	// periodic: recalibrate FPS and emit trace log
 	if m.frameCount%motionTraceFrames == 0 {
+		now := m.now()
+		frames := m.frameCount - m.lastFPSFrame
+		if frames > 0 {
+			if elapsed := now.Sub(m.lastFPSCheck); elapsed > time.Millisecond {
+				fps := float64(frames) / elapsed.Seconds()
+				m.holdBudget = int(motionHoldTime.Seconds() * fps)
+				m.cooldownBudget = int(motionCooldown.Seconds() * fps)
+			}
+		}
+		m.lastFPSCheck = now
+		m.lastFPSFrame = m.frameCount
+
 		log.Trace().Str("stream", m.streamName()).
-			Float64("baseline", m.baseline).Float64("ratio", ratio).
+			Float64("baseline", m.baseline).Float64("ratio", float64(size)/m.baseline).
 			Bool("active", m.motionActive).Msg("[homekit] motion: status")
 	}
 }

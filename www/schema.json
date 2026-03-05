@@ -338,13 +338,19 @@
             "default": false
           },
           "motion": {
-            "description": "Motion detection mode for HKSV: `api` (triggered via HTTP API) or `continuous` (always report motion)",
+            "description": "Motion detection mode for HKSV: `api` (triggered via HTTP API), `continuous` (always report motion), or `detect` (automatic detection based on P-frame size analysis)",
             "type": "string",
             "enum": [
               "api",
-              "continuous"
+              "continuous",
+              "detect"
             ],
             "default": "api"
+          },
+          "motion_threshold": {
+            "description": "Motion detection sensitivity threshold for `detect` mode. Lower values = more sensitive. Uses EMA-based P-frame size analysis.",
+            "type": "number",
+            "default": 2.0
           }
         }
       }
