@@ -69,11 +69,14 @@ func ServerHandler(server Server) HandlerFunc {
 						IID   uint64 `json:"iid"`
 						Value any    `json:"value"`
 						Event any    `json:"ev"`
+						R     *bool  `json:"r,omitempty"`
 					} `json:"characteristics"`
 				}
 				if err := json.NewDecoder(req.Body).Decode(&v); err != nil {
 					return nil, err
 				}
+
+				var writeResponses []hap.JSONCharacter
 
 				for _, c := range v.Value {
 					if c.Value != nil {
@@ -93,6 +96,25 @@ func ServerHandler(server Server) HandlerFunc {
 							}
 						}
 					}
+					if c.R != nil && *c.R {
+						// write-response: return updated value
+						accs := server.GetAccessories(conn)
+						for _, acc := range accs {
+							if char := acc.GetCharacterByID(c.IID); char != nil {
+								writeResponses = append(writeResponses, hap.JSONCharacter{
+									AID:    c.AID,
+									IID:    c.IID,
+									Status: 0,
+									Value:  char.Value,
+								})
+								break
+							}
+						}
+					}
+				}
+
+				if len(writeResponses) > 0 {
+					return makeResponse(hap.MimeJSON, hap.JSONCharacters{Value: writeResponses})
 				}
 
 				res := &http.Response{

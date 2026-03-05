@@ -163,27 +163,59 @@ func (s *Session) WriteRequest(protocol, topic string, body map[string]any) (int
 	return id, s.WriteMessage(header, body)
 }
 
+// maxChunkSize is the maximum data chunk size for HDS media transfer (256 KiB)
+const maxChunkSize = 0x40000
+
 // SendMediaInit sends the fMP4 initialization segment (ftyp+moov)
 func (s *Session) SendMediaInit(streamID int, initData []byte) error {
-	return s.WriteEvent(ProtoDataSend, TopicData, map[string]any{
-		"streamId": streamID,
-		"packets":  1,
-		"type":     "mediaInitialization",
-		"data":     initData,
-	})
+	return s.sendMediaData(streamID, "mediaInitialization", initData, 1)
 }
 
-// SendMediaFragment sends an fMP4 fragment (moof+mdat)
+// SendMediaFragment sends an fMP4 fragment (moof+mdat), splitting into chunks if needed
 func (s *Session) SendMediaFragment(streamID int, fragment []byte, sequence int) error {
-	return s.WriteEvent(ProtoDataSend, TopicData, map[string]any{
-		"streamId":               streamID,
-		"packets":                1,
-		"type":                   "mediaFragment",
-		"data":                   fragment,
-		"dataSequenceNumber":     sequence,
-		"isLastDataChunk":        true,
-		"dataChunkSequenceNumber": 0,
-	})
+	return s.sendMediaData(streamID, "mediaFragment", fragment, sequence)
+}
+
+// sendMediaData sends media data with proper HAP-NodeJS compatible packet structure.
+// Large data is split into chunks of maxChunkSize bytes.
+func (s *Session) sendMediaData(streamID int, dataType string, data []byte, sequence int) error {
+	totalSize := len(data)
+	chunkSeq := 1
+
+	for offset := 0; offset < totalSize; offset += maxChunkSize {
+		end := offset + maxChunkSize
+		if end > totalSize {
+			end = totalSize
+		}
+		chunk := data[offset:end]
+		isLast := end >= totalSize
+
+		metadata := map[string]any{
+			"dataType":                dataType,
+			"dataSequenceNumber":      sequence,
+			"dataChunkSequenceNumber": chunkSeq,
+			"isLastDataChunk":         isLast,
+		}
+		if chunkSeq == 1 {
+			metadata["dataTotalSize"] = totalSize
+		}
+
+		body := map[string]any{
+			"streamId": streamID,
+			"packets": []any{
+				map[string]any{
+					"data":     chunk,
+					"metadata": metadata,
+				},
+			},
+		}
+
+		if err := s.WriteEvent(ProtoDataSend, TopicData, body); err != nil {
+			return err
+		}
+		chunkSeq++
+	}
+	return nil
 }
 
 // Run processes incoming HDS messages in a loop

@@ -45,10 +45,12 @@ type server struct {
 	stream    string // stream name from YAML
 
 	// HKSV fields
-	motionMode      string  // "api", "continuous", "detect"
-	motionThreshold float64 // ratio threshold for "detect" mode (default 2.0)
-	motionDetector  *motionDetector
-	hksvSession     *hksvSession
+	motionMode       string  // "api", "continuous", "detect"
+	motionThreshold  float64 // ratio threshold for "detect" mode (default 2.0)
+	motionDetector   *motionDetector
+	hksvSession      *hksvSession
+	continuousMotion bool
+	preparedConsumer *hksvConsumer
 }
 
 func (s *server) MarshalJSON() ([]byte, error) {
@@ -113,9 +115,13 @@ func (s *server) Handle(w http.ResponseWriter, r *http.Request) {
 		s.AddConn(controller)
 		defer s.DelConn(controller)
 
-		// start motion detector on first Home Hub connection
-		if s.motionMode == "detect" {
+		// start motion on first Home Hub connection
+		switch s.motionMode {
+		case "detect":
 			go s.startMotionDetector()
+		case "continuous":
+			go s.prepareHKSVConsumer()
+			go s.startContinuousMotion()
 		}
 
 		var handler homekit.HandlerFunc
@@ -510,7 +516,21 @@ func (s *server) stopMotionDetector() {
 	}
 }
 
+
 func (s *server) startContinuousMotion() {
+	s.mu.Lock()
+	if s.continuousMotion {
+		s.mu.Unlock()
+		return
+	}
+	s.continuousMotion = true
+	s.mu.Unlock()
+
+	log.Debug().Str("stream", s.stream).Msg("[homekit] continuous motion started")
+
+	// delay to allow Home Hub to subscribe to events
+	time.Sleep(5 * time.Second)
+
 	s.SetMotionDetected(true)
 
 	ticker := time.NewTicker(30 * time.Second)

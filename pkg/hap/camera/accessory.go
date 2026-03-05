@@ -40,10 +40,8 @@ func NewHKSVAccessory(manuf, model, name, serial, firmware string) *hap.Accessor
 	}
 	acc.InitIID()
 
-	// CameraOperatingMode links to RTPStreamManagement and RecordingManagement
-	operatingMode.Linked = []int{int(rtpStream.IID), int(recordingMgmt.IID)}
-	// CameraEventRecordingManagement links to DataStreamManagement and MotionSensor
-	recordingMgmt.Linked = []int{int(dataStreamMgmt.IID), int(motionSensor.IID)}
+	// HAP-NodeJS: only RecordingManagement links to DataStreamManagement
+	recordingMgmt.Linked = []int{int(dataStreamMgmt.IID)}
 
 	return acc
 }
@@ -71,10 +69,8 @@ func NewHKSVDoorbellAccessory(manuf, model, name, serial, firmware string) *hap.
 	}
 	acc.InitIID()
 
-	// CameraOperatingMode links to RTPStreamManagement and RecordingManagement
-	operatingMode.Linked = []int{int(rtpStream.IID), int(recordingMgmt.IID)}
-	// CameraEventRecordingManagement links to DataStreamManagement, MotionSensor, and Doorbell
-	recordingMgmt.Linked = []int{int(dataStreamMgmt.IID), int(motionSensor.IID), int(doorbell.IID)}
+	// HAP-NodeJS: only RecordingManagement links to DataStreamManagement
+	recordingMgmt.Linked = []int{int(dataStreamMgmt.IID)}
 
 	return acc
 }

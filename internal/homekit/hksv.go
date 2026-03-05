@@ -63,22 +63,38 @@ func (hs *hksvSession) handleOpen(streamID int) error {
 		hs.stopRecording()
 	}
 
-	consumer := newHKSVConsumer(hs.session, streamID)
-	hs.consumer = consumer
+	// Try to use the pre-started consumer from pair-verify
+	consumer := hs.server.takePreparedConsumer()
+	if consumer != nil {
+		log.Debug().Str("stream", hs.server.stream).Msg("[homekit] HKSV using prepared consumer")
+		hs.consumer = consumer
+		hs.server.AddConn(consumer)
+
+		// Activate: set the HDS session and send init + start streaming
+		if err := consumer.activate(hs.session, streamID); err != nil {
+			log.Error().Err(err).Str("stream", hs.server.stream).Msg("[homekit] HKSV activate failed")
+			hs.stopRecording()
+			return nil
+		}
+		return nil
+	}
+
+	// Fallback: create new consumer (will be slow ~3s)
+	log.Debug().Str("stream", hs.server.stream).Msg("[homekit] HKSV no prepared consumer, creating new")
+	consumer = newHKSVConsumer()
 
 	stream := streams.Get(hs.server.stream)
 	if err := stream.AddConsumer(consumer); err != nil {
 		log.Error().Err(err).Str("stream", hs.server.stream).Msg("[homekit] HKSV add consumer failed")
-		hs.consumer = nil
-		return nil // don't kill the session
+		return nil
 	}
 
+	hs.consumer = consumer
 	hs.server.AddConn(consumer)
 
-	// wait for tracks to be added, then send init
 	go func() {
-		if err := consumer.waitAndSendInit(); err != nil {
-			log.Error().Err(err).Str("stream", hs.server.stream).Msg("[homekit] HKSV send init failed")
+		if err := consumer.activate(hs.session, streamID); err != nil {
+			log.Error().Err(err).Str("stream", hs.server.stream).Msg("[homekit] HKSV activate failed")
 		}
 	}()
 
@@ -107,19 +123,31 @@ func (hs *hksvSession) stopRecording() {
 	hs.server.DelConn(consumer)
 }
 
-// hksvConsumer implements core.Consumer, generates fMP4 and sends over HDS
+// hksvConsumer implements core.Consumer, generates fMP4 and sends over HDS.
+// It can be pre-started without an HDS session, buffering init data until activated.
 type hksvConsumer struct {
 	core.Connection
+	muxer *mp4.Muxer
+	mu    sync.Mutex
+	done  chan struct{}
+
+	// Set by activate() when HDS session is available
 	session  *hds.Session
-	muxer    *mp4.Muxer
 	streamID int
 	seqNum   int
-	mu       sync.Mutex
-	start    bool
-	done     chan struct{}
+	active   bool
+	start    bool // waiting for first keyframe
+
+	// GOP buffer - accumulate moof+mdat pairs, flush on next keyframe
+	fragBuf []byte
+
+	// Pre-built init segment (built when tracks connect)
+	initData []byte
+	initErr  error
+	initDone chan struct{} // closed when init is ready
 }
 
-func newHKSVConsumer(session *hds.Session, streamID int) *hksvConsumer {
+func newHKSVConsumer() *hksvConsumer {
 	medias := []*core.Media{
 		{
 			Kind:      core.KindVideo,
@@ -143,15 +171,16 @@ func newHKSVConsumer(session *hds.Session, streamID int) *hksvConsumer {
 			Protocol:   "hds",
 			Medias:     medias,
 		},
-		session:  session,
 		muxer:    &mp4.Muxer{},
-		streamID: streamID,
 		done:     make(chan struct{}),
+		initDone: make(chan struct{}),
 	}
 }
 
 func (c *hksvConsumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver) error {
 	trackID := byte(len(c.Senders))
+
+	log.Debug().Str("codec", track.Codec.Name).Uint8("trackID", trackID).Msg("[homekit] HKSV AddTrack")
 
 	codec := track.Codec.Clone()
 	handler := core.NewSender(media, codec)
@@ -159,19 +188,25 @@ func (c *hksvConsumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Re
 	switch track.Codec.Name {
 	case core.CodecH264:
 		handler.Handler = func(packet *rtp.Packet) {
+			c.mu.Lock()
+			if !c.active {
+				c.mu.Unlock()
+				return
+			}
 			if !c.start {
 				if !h264.IsKeyframe(packet.Payload) {
+					c.mu.Unlock()
 					return
 				}
 				c.start = true
+				log.Debug().Int("payloadLen", len(packet.Payload)).Msg("[homekit] HKSV first keyframe")
+			} else if h264.IsKeyframe(packet.Payload) && len(c.fragBuf) > 0 {
+				// New keyframe = flush previous GOP as one mediaFragment
+				c.flushFragment()
 			}
 
-			c.mu.Lock()
 			b := c.muxer.GetPayload(trackID, packet)
-			if err := c.session.SendMediaFragment(c.streamID, b, c.seqNum); err == nil {
-				c.Send += len(b)
-				c.seqNum++
-			}
+			c.fragBuf = append(c.fragBuf, b...)
 			c.mu.Unlock()
 		}
 
@@ -183,16 +218,14 @@ func (c *hksvConsumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Re
 
 	case core.CodecAAC:
 		handler.Handler = func(packet *rtp.Packet) {
-			if !c.start {
+			c.mu.Lock()
+			if !c.active || !c.start {
+				c.mu.Unlock()
 				return
 			}
 
-			c.mu.Lock()
 			b := c.muxer.GetPayload(trackID, packet)
-			if err := c.session.SendMediaFragment(c.streamID, b, c.seqNum); err == nil {
-				c.Send += len(b)
-				c.seqNum++
-			}
+			c.fragBuf = append(c.fragBuf, b...)
 			c.mu.Unlock()
 		}
 
@@ -208,23 +241,72 @@ func (c *hksvConsumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Re
 	handler.HandleRTP(track)
 	c.Senders = append(c.Senders, handler)
 
+	// Build init segment when all expected tracks are ready (video + audio)
+	select {
+	case <-c.initDone:
+		// already built
+	default:
+		if len(c.Senders) >= len(c.Medias) {
+			initData, err := c.muxer.GetInit()
+			c.initData = initData
+			c.initErr = err
+			close(c.initDone)
+			if err != nil {
+				log.Error().Err(err).Msg("[homekit] HKSV GetInit failed")
+			} else {
+				log.Debug().Int("initSize", len(initData)).Int("tracks", len(c.Senders)).Msg("[homekit] HKSV init segment ready")
+			}
+		}
+	}
+
 	return nil
 }
 
-func (c *hksvConsumer) waitAndSendInit() error {
-	// wait for at least one track to be added
-	for i := 0; i < 50; i++ {
-		if len(c.Senders) > 0 {
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
+// activate is called when the HDS session is ready (dataSend.open).
+// It sends the pre-built init segment and starts streaming.
+func (c *hksvConsumer) activate(session *hds.Session, streamID int) error {
+	// Wait for init to be ready (should already be done if consumer was pre-started)
+	select {
+	case <-c.initDone:
+	case <-time.After(5 * time.Second):
+		return io.ErrClosedPipe
 	}
 
-	init, err := c.muxer.GetInit()
-	if err != nil {
+	if c.initErr != nil {
+		return c.initErr
+	}
+
+	log.Debug().Int("initSize", len(c.initData)).Msg("[homekit] HKSV sending init segment")
+
+	if err := session.SendMediaInit(streamID, c.initData); err != nil {
 		return err
 	}
-	return c.session.SendMediaInit(c.streamID, init)
+
+	log.Debug().Msg("[homekit] HKSV init segment sent OK")
+
+	// Enable live streaming (seqNum=2 because init used seqNum=1)
+	c.mu.Lock()
+	c.session = session
+	c.streamID = streamID
+	c.seqNum = 2
+	c.active = true
+	c.mu.Unlock()
+
+	return nil
+}
+
+// flushFragment sends the accumulated GOP buffer as a single mediaFragment.
+// Must be called while holding c.mu.
+func (c *hksvConsumer) flushFragment() {
+	fragment := c.fragBuf
+	c.fragBuf = make([]byte, 0, len(fragment))
+
+	log.Debug().Int("fragSize", len(fragment)).Int("seq", c.seqNum).Msg("[homekit] HKSV flush fragment")
+
+	if err := c.session.SendMediaFragment(c.streamID, fragment, c.seqNum); err == nil {
+		c.Send += len(fragment)
+	}
+	c.seqNum++
 }
 
 func (c *hksvConsumer) WriteTo(io.Writer) (int64, error) {
@@ -238,6 +320,9 @@ func (c *hksvConsumer) Stop() error {
 	default:
 		close(c.done)
 	}
+	c.mu.Lock()
+	c.active = false
+	c.mu.Unlock()
 	return c.Connection.Stop()
 }
 
@@ -286,4 +371,61 @@ func (s *server) acceptHDS(hapConn *hap.Conn, ln net.Listener, salt string) {
 	if err := session.Run(); err != nil {
 		log.Debug().Err(err).Str("stream", s.stream).Msg("[homekit] HKSV session ended")
 	}
+}
+
+// prepareHKSVConsumer pre-starts a consumer and adds it to the stream.
+// When dataSend.open arrives, the consumer is ready immediately.
+func (s *server) prepareHKSVConsumer() {
+	stream := streams.Get(s.stream)
+	if stream == nil {
+		return
+	}
+
+	consumer := newHKSVConsumer()
+
+	if err := stream.AddConsumer(consumer); err != nil {
+		log.Debug().Err(err).Str("stream", s.stream).Msg("[homekit] HKSV prepare consumer failed")
+		return
+	}
+
+	log.Debug().Str("stream", s.stream).Msg("[homekit] HKSV consumer prepared")
+
+	s.mu.Lock()
+	// Clean up any previous prepared consumer
+	if s.preparedConsumer != nil {
+		old := s.preparedConsumer
+		s.preparedConsumer = nil
+		s.mu.Unlock()
+		stream.RemoveConsumer(old)
+		_ = old.Stop()
+		s.mu.Lock()
+	}
+	s.preparedConsumer = consumer
+	s.mu.Unlock()
+
+	// Keep alive until used or timeout (60 seconds)
+	select {
+	case <-consumer.done:
+		// consumer was stopped (used or server closed)
+	case <-time.After(60 * time.Second):
+		// timeout: clean up unused prepared consumer
+		s.mu.Lock()
+		if s.preparedConsumer == consumer {
+			s.preparedConsumer = nil
+			s.mu.Unlock()
+			stream.RemoveConsumer(consumer)
+			_ = consumer.Stop()
+			log.Debug().Str("stream", s.stream).Msg("[homekit] HKSV prepared consumer expired")
+		} else {
+			s.mu.Unlock()
+		}
+	}
+}
+
+func (s *server) takePreparedConsumer() *hksvConsumer {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	consumer := s.preparedConsumer
+	s.preparedConsumer = nil
+	return consumer
 }

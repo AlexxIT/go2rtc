@@ -104,6 +104,49 @@ func ServiceCameraEventRecordingManagement() *hap.Service {
 		},
 	})
 
+	// Default selected recording configuration (Home Hub expects this to persist)
+	val209, _ := tlv8.MarshalBase64(SelectedCameraRecordingConfiguration{
+		GeneralConfig: SupportedCameraRecordingConfiguration{
+			PrebufferLength:     4000,
+			EventTriggerOptions: 0x01, // motion
+			MediaContainerConfigurations: MediaContainerConfigurations{
+				MediaContainerType: 0,
+				MediaContainerParameters: MediaContainerParameters{
+					FragmentLength: 4000,
+				},
+			},
+		},
+		VideoConfig: SupportedVideoRecordingConfiguration{
+			CodecConfigs: []VideoRecordingCodecConfiguration{
+				{
+					CodecType: VideoCodecTypeH264,
+					CodecParams: VideoRecordingCodecParameters{
+						ProfileID:      VideoCodecProfileHigh,
+						Level:          VideoCodecLevel40,
+						Bitrate:        2000,
+						IFrameInterval: 4000,
+					},
+					CodecAttrs: VideoCodecAttributes{Width: 1920, Height: 1080, Framerate: 30},
+				},
+			},
+		},
+		AudioConfig: SupportedAudioRecordingConfiguration{
+			CodecConfigs: []AudioRecordingCodecConfiguration{
+				{
+					CodecType: AudioRecordingCodecTypeAACLC,
+					CodecParams: []AudioRecordingCodecParameters{
+						{
+							Channels:        1,
+							BitrateMode:     []byte{AudioCodecBitrateVariable},
+							SampleRate:      []byte{AudioRecordingSampleRate24Khz},
+							MaxAudioBitrate: []uint32{64},
+						},
+					},
+				},
+			},
+		},
+	})
+
 	return &hap.Service{
 		Type: "204",
 		Characters: []*hap.Character{
@@ -134,7 +177,7 @@ func ServiceCameraEventRecordingManagement() *hap.Service {
 			{
 				Type:   TypeSelectedCameraRecordingConfiguration,
 				Format: hap.FormatTLV8,
-				Value:  "",
+				Value:  val209,
 				Perms:  hap.EVPRPW,
 			},
 			{
