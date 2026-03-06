@@ -1,4 +1,5 @@
-package homekit
+// Author: Sergei "svk" Krashevich <svk@svk.su>
+package hksv
 
 import (
 	"encoding/binary"
@@ -7,6 +8,7 @@ import (
 
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/pion/rtp"
+	"github.com/rs/zerolog"
 )
 
 // makeAVCC creates a fake AVCC packet with the given NAL type and total size.
@@ -51,17 +53,16 @@ func (r *motionRecorder) lastCall() (bool, bool) {
 	return r.calls[len(r.calls)-1], true
 }
 
-func newTestDetector() (*motionDetector, *mockClock, *motionRecorder) {
-	det := newMotionDetector(nil)
-	clock := &mockClock{t: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+func newTestDetector() (*MotionDetector, *mockClock, *motionRecorder) {
 	rec := &motionRecorder{}
+	det := NewMotionDetector(0, rec.onMotion, zerolog.Nop())
+	clock := &mockClock{t: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
 	det.now = clock.now
-	det.onMotion = rec.onMotion
 	return det, clock, rec
 }
 
 // warmup feeds the detector with small P-frames to build baseline.
-func warmup(det *motionDetector, clock *mockClock, size int) {
+func warmup(det *MotionDetector, clock *mockClock, size int) {
 	for i := 0; i < motionWarmupFrames; i++ {
 		det.handlePacket(makePFrame(size))
 		clock.advance(33 * time.Millisecond) // ~30fps
@@ -69,7 +70,7 @@ func warmup(det *motionDetector, clock *mockClock, size int) {
 }
 
 // warmupWithBudgets performs warmup then sets test-friendly hold/cooldown budgets.
-func warmupWithBudgets(det *motionDetector, clock *mockClock, size, hold, cooldown int) {
+func warmupWithBudgets(det *MotionDetector, clock *mockClock, size, hold, cooldown int) {
 	warmup(det, clock, size)
 	det.holdBudget = hold
 	det.cooldownBudget = cooldown
@@ -343,7 +344,7 @@ func TestMotionDetector_StopWithoutMotion(t *testing.T) {
 	warmup(det, clock, 500)
 
 	rec := &motionRecorder{}
-	det.onMotion = rec.onMotion
+	det.OnMotion = rec.onMotion
 	_ = det.Stop()
 
 	if len(rec.calls) != 0 {
@@ -500,8 +501,7 @@ func BenchmarkMotionDetector_Warmup(b *testing.B) {
 	pkt := makePFrame(500)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		det := newMotionDetector(nil)
-		det.onMotion = func(bool) {}
+		det := NewMotionDetector(0, func(bool) {}, zerolog.Nop())
 		det.now = time.Now
 		for j := 0; j < motionWarmupFrames; j++ {
 			det.handlePacket(pkt)

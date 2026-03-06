@@ -1,4 +1,5 @@
-package homekit
+// Author: Sergei "svk" Krashevich <svk@svk.su>
+package hksv
 
 import (
 	"io"
@@ -7,11 +8,12 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/pion/rtp"
+	"github.com/rs/zerolog"
 )
 
 const (
 	motionWarmupFrames = 30
-	motionThreshold    = 2.0
+	defaultThreshold   = 2.0
 	motionAlphaFast    = 0.1
 	motionAlphaSlow    = 0.02
 	motionHoldTime     = 30 * time.Second
@@ -22,10 +24,13 @@ const (
 	motionTraceFrames = 150
 )
 
-type motionDetector struct {
+// MotionDetector implements core.Consumer for P-frame based motion detection.
+// It analyzes H.264 P-frame sizes using an EMA baseline and triggers a callback
+// when the frame size exceeds the baseline by the configured threshold.
+type MotionDetector struct {
 	core.Connection
-	server *server
-	done   chan struct{}
+	done chan struct{}
+	log  zerolog.Logger
 
 	// algorithm state (accessed only from Sender goroutine — no mutex needed)
 	threshold    float64
@@ -49,10 +54,16 @@ type motionDetector struct {
 
 	// for testing: injectable time and callback
 	now      func() time.Time
-	onMotion func(bool)
+	OnMotion func(bool) `json:"-"` // callback when motion state changes
 }
 
-func newMotionDetector(srv *server) *motionDetector {
+// NewMotionDetector creates a new motion detector with the given threshold and callback.
+// If threshold <= 0, the default of 2.0 is used.
+// onMotion is called when motion state changes (true=detected, false=ended).
+func NewMotionDetector(threshold float64, onMotion func(bool), log zerolog.Logger) *MotionDetector {
+	if threshold <= 0 {
+		threshold = defaultThreshold
+	}
 	medias := []*core.Media{
 		{
 			Kind:      core.KindVideo,
@@ -62,26 +73,23 @@ func newMotionDetector(srv *server) *motionDetector {
 			},
 		},
 	}
-	threshold := motionThreshold
-	if srv != nil && srv.motionThreshold > 0 {
-		threshold = srv.motionThreshold
-	}
-	return &motionDetector{
+	return &MotionDetector{
 		Connection: core.Connection{
 			ID:         core.NewID(),
 			FormatName: "motion",
 			Protocol:   "detect",
 			Medias:     medias,
 		},
-		server:    srv,
 		threshold: threshold,
 		done:      make(chan struct{}),
 		now:       time.Now,
+		OnMotion:  onMotion,
+		log:       log,
 	}
 }
 
-func (m *motionDetector) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver) error {
-	log.Debug().Str("stream", m.streamName()).Str("codec", track.Codec.Name).Msg("[homekit] motion: add track")
+func (m *MotionDetector) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver) error {
+	m.log.Debug().Str("codec", track.Codec.Name).Msg("[hksv] motion: add track")
 
 	codec := track.Codec.Clone()
 	sender := core.NewSender(media, codec)
@@ -101,28 +109,20 @@ func (m *motionDetector) AddTrack(media *core.Media, _ *core.Codec, track *core.
 	return nil
 }
 
-func (m *motionDetector) streamName() string {
-	if m.server != nil {
-		return m.server.stream
-	}
-	return ""
-}
-
-func (m *motionDetector) calibrate() {
-	// use default FPS — real FPS calibrated after first periodic check
+func (m *MotionDetector) calibrate() {
 	m.holdBudget = int(motionHoldTime.Seconds() * motionDefaultFPS)
 	m.cooldownBudget = int(motionCooldown.Seconds() * motionDefaultFPS)
 	m.triggerLevel = int(m.baseline * m.threshold)
 	m.lastFPSCheck = m.now()
 	m.lastFPSFrame = m.frameCount
 
-	log.Debug().Str("stream", m.streamName()).
+	m.log.Debug().
 		Float64("baseline", m.baseline).
 		Int("holdFrames", m.holdBudget).Int("cooldownFrames", m.cooldownBudget).
-		Msg("[homekit] motion: warmup complete")
+		Msg("[hksv] motion: warmup complete")
 }
 
-func (m *motionDetector) handlePacket(packet *rtp.Packet) {
+func (m *MotionDetector) handlePacket(packet *rtp.Packet) {
 	payload := packet.Payload
 	if len(payload) < 5 {
 		return
@@ -166,9 +166,9 @@ func (m *motionDetector) handlePacket(packet *rtp.Packet) {
 		if triggered && m.remainingCooldown <= 0 {
 			m.motionActive = true
 			m.remainingHold = m.holdBudget
-			log.Debug().Str("stream", m.streamName()).
+			m.log.Debug().
 				Float64("ratio", float64(size)/m.baseline).
-				Msg("[homekit] motion: ON")
+				Msg("[hksv] motion: ON")
 			m.setMotion(true)
 		}
 
@@ -187,7 +187,7 @@ func (m *motionDetector) handlePacket(packet *rtp.Packet) {
 			if m.remainingHold <= 0 {
 				m.motionActive = false
 				m.remainingCooldown = m.cooldownBudget
-				log.Debug().Str("stream", m.streamName()).Msg("[homekit] motion: OFF (hold expired)")
+				m.log.Debug().Msg("[hksv] motion: OFF (hold expired)")
 				m.setMotion(false)
 			}
 		}
@@ -207,34 +207,34 @@ func (m *motionDetector) handlePacket(packet *rtp.Packet) {
 		m.lastFPSCheck = now
 		m.lastFPSFrame = m.frameCount
 
-		log.Trace().Str("stream", m.streamName()).
+		m.log.Trace().
 			Float64("baseline", m.baseline).Float64("ratio", float64(size)/m.baseline).
-			Bool("active", m.motionActive).Msg("[homekit] motion: status")
+			Bool("active", m.motionActive).Msg("[hksv] motion: status")
 	}
 }
 
-func (m *motionDetector) setMotion(detected bool) {
-	if m.onMotion != nil {
-		m.onMotion(detected)
-		return
-	}
-	if m.server != nil {
-		m.server.SetMotionDetected(detected)
+func (m *MotionDetector) setMotion(detected bool) {
+	if m.OnMotion != nil {
+		m.OnMotion(detected)
 	}
 }
 
-func (m *motionDetector) WriteTo(io.Writer) (int64, error) {
+func (m *MotionDetector) String() string {
+	return "motion detector"
+}
+
+func (m *MotionDetector) WriteTo(io.Writer) (int64, error) {
 	<-m.done
 	return 0, nil
 }
 
-func (m *motionDetector) Stop() error {
+func (m *MotionDetector) Stop() error {
 	select {
 	case <-m.done:
 	default:
 		if m.motionActive {
 			m.motionActive = false
-			log.Debug().Str("stream", m.streamName()).Msg("[homekit] motion: OFF (stop)")
+			m.log.Debug().Msg("[hksv] motion: OFF (stop)")
 			m.setMotion(false)
 		}
 		close(m.done)

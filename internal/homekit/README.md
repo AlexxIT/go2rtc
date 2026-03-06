@@ -79,6 +79,7 @@ homekit:
     name: Dahua camera      # custom camera name, default: generated from stream ID
     device_id: dahua1       # custom ID, default: generated from stream ID
     device_private: dahua1  # custom key, default: generated from stream ID
+    speaker: true           # enable 2-way audio (default: false, enable only if camera has a speaker)
 ```
 
 ### HKSV (HomeKit Secure Video)

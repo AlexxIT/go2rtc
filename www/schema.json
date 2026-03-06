@@ -351,6 +351,11 @@
             "description": "Motion detection sensitivity threshold for `detect` mode. Lower values = more sensitive. Uses EMA-based P-frame size analysis.",
             "type": "number",
             "default": 2.0
+          },
+          "speaker": {
+            "description": "Include Speaker service for 2-way audio (talk through the camera). Only enable if your camera has a physical speaker.",
+            "type": "boolean",
+            "default": false
           }
         }
       }
