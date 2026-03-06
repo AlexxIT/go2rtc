@@ -13,6 +13,7 @@ func NewAccessory(manuf, model, name, serial, firmware string) *hap.Accessory {
 			ServiceCameraRTPStreamManagement(),
 			//hap.ServiceHAPProtocolInformation(),
 			ServiceMicrophone(),
+			ServiceSpeaker(),
 		},
 	}
 	acc.InitIID()
@@ -32,6 +33,7 @@ func NewHKSVAccessory(manuf, model, name, serial, firmware string) *hap.Accessor
 			hap.ServiceAccessoryInformation(manuf, model, name, serial, firmware),
 			rtpStream,
 			ServiceMicrophone(),
+			ServiceSpeaker(),
 			motionSensor,
 			operatingMode,
 			recordingMgmt,
@@ -60,6 +62,7 @@ func NewHKSVDoorbellAccessory(manuf, model, name, serial, firmware string) *hap.
 			hap.ServiceAccessoryInformation(manuf, model, name, serial, firmware),
 			rtpStream,
 			ServiceMicrophone(),
+			ServiceSpeaker(),
 			motionSensor,
 			operatingMode,
 			recordingMgmt,
@@ -73,6 +76,20 @@ func NewHKSVDoorbellAccessory(manuf, model, name, serial, firmware string) *hap.
 	recordingMgmt.Linked = []int{int(dataStreamMgmt.IID)}
 
 	return acc
+}
+
+func ServiceSpeaker() *hap.Service {
+	return &hap.Service{
+		Type: "113", // 'Speaker'
+		Characters: []*hap.Character{
+			{
+				Type:   "11A",
+				Format: hap.FormatBool,
+				Value:  0,
+				Perms:  hap.EVPRPW,
+			},
+		},
+	}
 }
 
 func ServiceMicrophone() *hap.Service {
