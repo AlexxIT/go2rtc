@@ -76,6 +76,17 @@ func (s *Stream) RemoveConsumer(cons core.Consumer) {
 	s.stopProducers()
 }
 
+func (s *Stream) HasConsumer(cons core.Consumer) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, consumer := range s.consumers {
+		if consumer == cons {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Stream) AddProducer(prod core.Producer) {
 	producer := &Producer{conn: prod, state: stateExternal, url: "external"}
 	s.mu.Lock()
