@@ -614,6 +614,59 @@ Understanding the recording flow helps with debugging:
 8. Motion timeout -> SetMotionDetected(false)
 ```
 
+## Example CLI Application
+
+The `example/` directory contains a standalone CLI app that exports any RTSP camera as an HKSV camera in HomeKit.
+
+### Build & Run
+
+```bash
+# Run directly
+go run ./pkg/hksv/example -url rtsp://camera:554/stream
+
+# Or build a binary
+go build -o hksv-camera ./pkg/hksv/example
+./hksv-camera -url rtsp://admin:pass@192.168.1.100:554/h264
+```
+
+### Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-url` | (required) | RTSP stream URL |
+| `-pin` | `27041991` | HomeKit pairing PIN |
+| `-port` | `0` (auto) | HAP HTTP port |
+| `-motion` | `detect` | Motion mode: `detect`, `continuous`, `api` |
+| `-threshold` | `2.0` | Motion sensitivity (lower = more sensitive) |
+| `-pairings` | `pairings.json` | File to persist HomeKit pairings |
+
+### How It Works
+
+1. Connects to the RTSP source, discovers available tracks (H264/AAC)
+2. Creates an HKSV server with HAP pairing and encrypted communication
+3. Advertises the camera via mDNS — it appears in the Home app
+4. On motion detection, Home Hub opens an HDS DataStream and records fMP4 fragments
+5. Pairings are saved to a JSON file so the camera survives restarts
+
+### Architecture
+
+```
+RTSP Camera ──► rtsp.Conn (Producer)
+                    │
+                    ▼
+              streamProvider ◄── hksv.Server
+              (AddConsumer)       │       │
+                    │             ▼       ▼
+                    ├── MotionDetector   HKSVConsumer
+                    │   (P-frame EMA)   (fMP4 → HDS)
+                    │         │               │
+                    │         ▼               ▼
+                    │    HAP event →     Home Hub
+                    │    motion notify   records video
+                    │
+                    └── mDNS advertisement
+```
+
 ## Testing
 
 ```bash
