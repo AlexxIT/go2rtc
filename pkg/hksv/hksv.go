@@ -107,8 +107,8 @@ type Config struct {
 
 	// Dependencies (injected by host)
 	Streams    StreamProvider
-	Store      PairingStore     // optional, nil = no persistence
-	Snapshots  SnapshotProvider // optional, nil = no snapshots
+	Store      PairingStore      // optional, nil = no persistence
+	Snapshots  SnapshotProvider  // optional, nil = no snapshots
 	LiveStream LiveStreamHandler // optional, nil = HKSV only (no live streaming)
 	Logger     zerolog.Logger
 
@@ -497,8 +497,11 @@ func (s *Server) SetCharacteristic(conn net.Conn, aid uint8, iid uint64, value a
 		resp, err := s.liveStream.SetupEndpoints(conn, &offer)
 		if err != nil {
 			s.log.Error().Err(err).Msg("[hksv] setup endpoints failed")
+			return
 		}
-		_ = resp // stored by the handler
+		// Keep the latest response in characteristic value for write-response (r=true)
+		// and subsequent GET /characteristics reads.
+		char.Value = resp
 
 	case camera.TypeSelectedStreamConfiguration:
 		if s.liveStream == nil {
@@ -606,6 +609,19 @@ func (s *Server) SetMotionDetected(detected bool) {
 	char.Value = detected
 	_ = char.NotifyListeners(nil)
 	s.log.Debug().Str("stream", s.stream).Bool("motion", detected).Msg("[hksv] motion")
+}
+
+// MotionDetected returns the current motion detected state.
+func (s *Server) MotionDetected() bool {
+	if s.accessory == nil {
+		return false
+	}
+	char := s.accessory.GetCharacter("22") // MotionDetected
+	if char == nil {
+		return false
+	}
+	v, _ := char.Value.(bool)
+	return v
 }
 
 // TriggerDoorbell triggers a doorbell press event.

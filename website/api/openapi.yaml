@@ -1060,6 +1060,33 @@ paths:
           description: Stream not found
 
   /api/homekit/motion:
+    get:
+      summary: Get motion detection status
+      description: Returns current MotionDetected state for the HKSV camera.
+      tags: [ HomeKit ]
+      parameters:
+        - name: id
+          in: query
+          description: Stream name / server ID
+          required: true
+          schema: { type: string }
+          example: outdoor
+      responses:
+        "200":
+          description: Motion status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    example: outdoor
+                  motion:
+                    type: boolean
+                    example: false
+        "404":
+          description: Server not found
     post:
       summary: Trigger motion detection for HKSV camera
       description: Sets MotionDetected characteristic to true, which triggers the Home Hub to start recording.

@@ -465,6 +465,9 @@ detector.Stop()
 ### Motion Control
 
 ```go
+// Check current motion status
+detected := srv.MotionDetected()
+
 // Trigger motion detected (for "api" mode or external sensors)
 srv.SetMotionDetected(true)
 

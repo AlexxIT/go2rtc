@@ -170,6 +170,10 @@ Set threshold between "noise" and "real motion". In this example, 2.0 is a good 
 **Motion API:**
 
 ```bash
+# Get motion status
+curl "http://localhost:1984/api/homekit/motion?id=outdoor"
+# → {"id":"outdoor","motion":false}
+
 # Trigger motion start
 curl -X POST "http://localhost:1984/api/homekit/motion?id=outdoor"
 

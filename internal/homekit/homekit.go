@@ -1,6 +1,7 @@
 package homekit
 
 import (
+	"encoding/json"
 	"errors"
 	"net"
 	"net/http"
@@ -178,17 +179,19 @@ func (s *go2rtcSnapshotProvider) GetSnapshot(streamName string, width, height in
 
 // go2rtcLiveStreamHandler implements hksv.LiveStreamHandler
 type go2rtcLiveStreamHandler struct {
-	mu       sync.Mutex
-	consumer *homekit.Consumer
+	mu            sync.Mutex
+	consumers     map[string]*homekit.Consumer
+	lastSessionID string
 }
 
 func (h *go2rtcLiveStreamHandler) SetupEndpoints(conn net.Conn, offer *camera.SetupEndpointsRequest) (any, error) {
 	consumer := homekit.NewConsumer(conn, srtp.Server)
 	consumer.SetOffer(offer)
 
-	h.mu.Lock()
-	h.consumer = consumer
-	h.mu.Unlock()
+	old := h.setConsumer(offer.SessionID, consumer)
+	if old != nil && old != consumer {
+		_ = old.Stop()
+	}
 
 	answer := consumer.GetAnswer()
 	v, err := tlv8.MarshalBase64(answer)
@@ -199,9 +202,7 @@ func (h *go2rtcLiveStreamHandler) SetupEndpoints(conn net.Conn, offer *camera.Se
 }
 
 func (h *go2rtcLiveStreamHandler) GetEndpointsResponse() any {
-	h.mu.Lock()
-	consumer := h.consumer
-	h.mu.Unlock()
+	consumer := h.latestConsumer()
 	if consumer == nil {
 		return nil
 	}
@@ -211,9 +212,8 @@ func (h *go2rtcLiveStreamHandler) GetEndpointsResponse() any {
 }
 
 func (h *go2rtcLiveStreamHandler) StartStream(streamName string, conf *camera.SelectedStreamConfiguration, connTracker hksv.ConnTracker) error {
-	h.mu.Lock()
-	consumer := h.consumer
-	h.mu.Unlock()
+	sessionID := conf.Control.SessionID
+	consumer := h.getConsumer(sessionID)
 
 	if consumer == nil {
 		return errors.New("no consumer")
@@ -226,7 +226,12 @@ func (h *go2rtcLiveStreamHandler) StartStream(streamName string, conf *camera.Se
 	connTracker.AddConn(consumer)
 
 	stream := streams.Get(streamName)
+	if stream == nil {
+		connTracker.DelConn(consumer)
+		return errors.New("stream not found: " + streamName)
+	}
 	if err := stream.AddConsumer(consumer); err != nil {
+		connTracker.DelConn(consumer)
 		return err
 	}
 
@@ -234,20 +239,62 @@ func (h *go2rtcLiveStreamHandler) StartStream(streamName string, conf *camera.Se
 		_, _ = consumer.WriteTo(nil)
 		stream.RemoveConsumer(consumer)
 		connTracker.DelConn(consumer)
+		h.removeConsumer(sessionID, consumer)
 	}()
 
 	return nil
 }
 
 func (h *go2rtcLiveStreamHandler) StopStream(sessionID string, connTracker hksv.ConnTracker) error {
-	h.mu.Lock()
-	consumer := h.consumer
-	h.mu.Unlock()
+	consumer := h.getConsumer(sessionID)
 
-	if consumer != nil && consumer.SessionID() == sessionID {
+	if consumer != nil {
 		_ = consumer.Stop()
+		h.removeConsumer(sessionID, consumer)
 	}
 	return nil
+}
+
+func (h *go2rtcLiveStreamHandler) setConsumer(sessionID string, consumer *homekit.Consumer) *homekit.Consumer {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if h.consumers == nil {
+		h.consumers = map[string]*homekit.Consumer{}
+	}
+
+	old := h.consumers[sessionID]
+	h.consumers[sessionID] = consumer
+	h.lastSessionID = sessionID
+	return old
+}
+
+func (h *go2rtcLiveStreamHandler) getConsumer(sessionID string) *homekit.Consumer {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.consumers[sessionID]
+}
+
+func (h *go2rtcLiveStreamHandler) latestConsumer() *homekit.Consumer {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.consumers[h.lastSessionID]
+}
+
+func (h *go2rtcLiveStreamHandler) removeConsumer(sessionID string, consumer *homekit.Consumer) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if h.consumers[sessionID] == consumer {
+		delete(h.consumers, sessionID)
+		if h.lastSessionID == sessionID {
+			h.lastSessionID = ""
+			for id := range h.consumers {
+				h.lastSessionID = id
+				break
+			}
+		}
+	}
 }
 
 func streamHandler(rawURL string) (core.Producer, error) {
@@ -316,6 +363,12 @@ func apiMotion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch r.Method {
+	case "GET":
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"id":     id,
+			"motion": srv.MotionDetected(),
+		})
 	case "POST":
 		srv.SetMotionDetected(true)
 	case "DELETE":

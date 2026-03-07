@@ -77,6 +77,16 @@ func ServerHandler(server Server) HandlerFunc {
 				}
 
 				var writeResponses []hap.JSONCharacter
+				findChar := func(aid uint8, iid uint64) *hap.Character {
+					accs := server.GetAccessories(conn)
+					for _, acc := range accs {
+						if acc.AID != aid {
+							continue
+						}
+						return acc.GetCharacterByID(iid)
+					}
+					return nil
+				}
 
 				for _, c := range v.Value {
 					if c.Value != nil {
@@ -84,31 +94,23 @@ func ServerHandler(server Server) HandlerFunc {
 					}
 					if c.Event != nil {
 						// subscribe/unsubscribe to events
-						accs := server.GetAccessories(conn)
-						for _, acc := range accs {
-							if char := acc.GetCharacterByID(c.IID); char != nil {
-								if ev, ok := c.Event.(bool); ok && ev {
-									char.AddListener(conn)
-								} else {
-									char.RemoveListener(conn)
-								}
-								break
+						if char := findChar(c.AID, c.IID); char != nil {
+							if ev, ok := c.Event.(bool); ok && ev {
+								char.AddListener(conn)
+							} else {
+								char.RemoveListener(conn)
 							}
 						}
 					}
 					if c.R != nil && *c.R {
 						// write-response: return updated value
-						accs := server.GetAccessories(conn)
-						for _, acc := range accs {
-							if char := acc.GetCharacterByID(c.IID); char != nil {
-								writeResponses = append(writeResponses, hap.JSONCharacter{
-									AID:    c.AID,
-									IID:    c.IID,
-									Status: 0,
-									Value:  char.Value,
-								})
-								break
-							}
+						if char := findChar(c.AID, c.IID); char != nil {
+							writeResponses = append(writeResponses, hap.JSONCharacter{
+								AID:    c.AID,
+								IID:    c.IID,
+								Status: 0,
+								Value:  char.Value,
+							})
 						}
 					}
 				}
