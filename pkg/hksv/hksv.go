@@ -600,15 +600,19 @@ func (s *Server) GetImage(conn net.Conn, width, height int) []byte {
 // SetMotionDetected triggers or clears the motion detected characteristic.
 func (s *Server) SetMotionDetected(detected bool) {
 	if s.accessory == nil {
+		s.log.Warn().Str("stream", s.stream).Msg("[hksv] SetMotionDetected: accessory is nil")
 		return
 	}
 	char := s.accessory.GetCharacter("22") // MotionDetected
 	if char == nil {
+		s.log.Warn().Str("stream", s.stream).Msg("[hksv] SetMotionDetected: char 22 (MotionDetected) not found")
 		return
 	}
 	char.Value = detected
-	_ = char.NotifyListeners(nil)
-	s.log.Debug().Str("stream", s.stream).Bool("motion", detected).Msg("[hksv] motion")
+	listeners := char.ListenerCount()
+	err := char.NotifyListeners(nil)
+	s.log.Debug().Str("stream", s.stream).Bool("motion", detected).
+		Int("listeners", listeners).Err(err).Msg("[hksv] motion")
 }
 
 // MotionDetected returns the current motion detected state.

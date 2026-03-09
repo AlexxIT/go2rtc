@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/app"
@@ -36,6 +37,8 @@ func Init() {
 			HKSV            bool     `yaml:"hksv"`
 			Motion          string   `yaml:"motion"`
 			MotionThreshold float64  `yaml:"motion_threshold"`
+			MotionHoldTime  float64  `yaml:"motion_hold_time"`
+			OnvifURL        string   `yaml:"onvif_url"`
 			Speaker         *bool    `yaml:"speaker"`
 		} `yaml:"homekit"`
 	}
@@ -71,6 +74,12 @@ func Init() {
 			proxyURL = url
 		}
 
+		// Remap "onvif" → "api" for hksv.Server; ONVIF watcher drives motion externally.
+		motionMode := conf.Motion
+		if motionMode == "onvif" {
+			motionMode = "api"
+		}
+
 		srv, err := hksv.NewServer(hksv.Config{
 			StreamName:      id,
 			Pin:             conf.Pin,
@@ -81,7 +90,7 @@ func Init() {
 			Pairings:        conf.Pairings,
 			ProxyURL:        proxyURL,
 			HKSV:            conf.HKSV,
-			MotionMode:      conf.Motion,
+			MotionMode:      motionMode,
 			MotionThreshold: conf.MotionThreshold,
 			Speaker:         conf.Speaker,
 			UserAgent:       app.UserAgent,
@@ -96,6 +105,28 @@ func Init() {
 		if err != nil {
 			log.Error().Err(err).Str("stream", id).Msg("[homekit] create server failed")
 			continue
+		}
+
+		// Start ONVIF motion watcher if configured.
+		if conf.Motion == "onvif" {
+			onvifURL := conf.OnvifURL
+			if onvifURL == "" {
+				sources := stream.Sources()
+				log.Debug().Str("stream", id).Strs("sources", sources).
+					Msg("[homekit] onvif motion: searching for ONVIF URL in stream sources")
+				onvifURL = findOnvifURL(sources)
+			}
+			if onvifURL == "" {
+				log.Warn().Str("stream", id).Msg("[homekit] onvif motion: no ONVIF URL found, set onvif_url or use onvif:// stream source")
+			} else {
+				holdTime := time.Duration(conf.MotionHoldTime) * time.Second
+				if holdTime <= 0 {
+					holdTime = 30 * time.Second
+				}
+				log.Info().Str("stream", id).Str("onvif_url", onvifURL).
+					Dur("hold_time", holdTime).Msg("[homekit] starting ONVIF motion watcher")
+				startOnvifMotionWatcher(srv, onvifURL, holdTime, log)
+			}
 		}
 
 		entry := srv.MDNSEntry()
