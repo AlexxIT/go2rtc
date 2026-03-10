@@ -120,7 +120,7 @@ func DecodeAtom(b []byte) (any, error) {
 
 	case MoofTrafTfhd:
 		rd := bits.NewReader(data)
-		_ = rd.ReadByte() // version
+		_ = rd.ReadUint8() // version
 		flags := rd.ReadUint24()
 
 		atom := &AtomTfhd{
@@ -145,7 +145,7 @@ func DecodeAtom(b []byte) (any, error) {
 
 	case MoofTrafTrun:
 		rd := bits.NewReader(data)
-		_ = rd.ReadByte() // version
+		_ = rd.ReadUint8() // version
 		flags := rd.ReadUint24()
 		samples := rd.ReadUint32()
 

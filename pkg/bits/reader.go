@@ -14,7 +14,7 @@ func NewReader(b []byte) *Reader {
 }
 
 //goland:noinspection GoStandardMethods
-func (r *Reader) ReadByte() byte {
+func (r *Reader) ReadUint8() byte {
 	if r.bits != 0 {
 		return r.ReadBits8(8)
 	}
@@ -33,26 +33,26 @@ func (r *Reader) ReadUint16() uint16 {
 	if r.bits != 0 {
 		return r.ReadBits16(16)
 	}
-	return uint16(r.ReadByte())<<8 | uint16(r.ReadByte())
+	return uint16(r.ReadUint8())<<8 | uint16(r.ReadUint8())
 }
 
 func (r *Reader) ReadUint24() uint32 {
 	if r.bits != 0 {
 		return r.ReadBits(24)
 	}
-	return uint32(r.ReadByte())<<16 | uint32(r.ReadByte())<<8 | uint32(r.ReadByte())
+	return uint32(r.ReadUint8())<<16 | uint32(r.ReadUint8())<<8 | uint32(r.ReadUint8())
 }
 
 func (r *Reader) ReadUint32() uint32 {
 	if r.bits != 0 {
 		return r.ReadBits(32)
 	}
-	return uint32(r.ReadByte())<<24 | uint32(r.ReadByte())<<16 | uint32(r.ReadByte())<<8 | uint32(r.ReadByte())
+	return uint32(r.ReadUint8())<<24 | uint32(r.ReadUint8())<<16 | uint32(r.ReadUint8())<<8 | uint32(r.ReadUint8())
 }
 
 func (r *Reader) ReadBit() byte {
 	if r.bits == 0 {
-		r.byte = r.ReadByte()
+		r.byte = r.ReadUint8()
 		r.bits = 7
 	} else {
 		r.bits--
@@ -106,8 +106,8 @@ func (r *Reader) ReadBytes(n int) (b []byte) {
 		r.pos += n
 	} else {
 		b = make([]byte, n)
-		for i := 0; i < n; i++ {
-			b[i] = r.ReadByte()
+		for i := range n {
+			b[i] = r.ReadUint8()
 		}
 	}
 

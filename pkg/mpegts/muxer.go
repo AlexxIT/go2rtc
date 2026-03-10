@@ -129,7 +129,7 @@ func (m *Muxer) writePMT(wr *bits.Writer) {
 		if !ok {
 			break
 		}
-		wr.WriteByte(pes.StreamType) // Stream type
+		wr.WriteUint8(pes.StreamType) // Stream type
 		wr.WriteBits8(0b111, 3)      // Reserved bits (all to 1)
 		wr.WriteBits16(pid, 13)      // Elementary PID
 		wr.WriteBits8(0b1111, 4)     // Reserved bits (all to 1)
@@ -148,7 +148,7 @@ func (m *Muxer) writePES(wr *bits.Writer, pid uint16, pes *PES) {
 	const flagAdaptation = 0b00100000
 	const flagPayload = 0b00010000
 
-	wr.WriteByte(SyncByte)
+	wr.WriteUint8(SyncByte)
 
 	if pes.Size != 0 {
 		pid |= flagPUSI // Payload unit start indicator (PUSI)
@@ -159,17 +159,17 @@ func (m *Muxer) writePES(wr *bits.Writer, pid uint16, pes *PES) {
 	counter := byte(pes.Sequence) & 0xF
 
 	if size := len(pes.Payload); size < PacketSize-4 {
-		wr.WriteByte(flagAdaptation | flagPayload | counter) // adaptation + payload
+		wr.WriteUint8(flagAdaptation | flagPayload | counter) // adaptation + payload
 
 		// for 183 payload will be zero
 		adSize := PacketSize - 4 - 1 - byte(size)
-		wr.WriteByte(adSize)
+		wr.WriteUint8(adSize)
 		wr.WriteBytes(make([]byte, adSize)...)
 
 		wr.WriteBytes(pes.Payload...)
 		pes.Payload = nil
 	} else {
-		wr.WriteByte(flagPayload | counter) // only payload
+		wr.WriteUint8(flagPayload | counter) // only payload
 
 		wr.WriteBytes(pes.Payload[:PacketSize-4]...)
 		pes.Payload = pes.Payload[PacketSize-4:]
@@ -177,7 +177,7 @@ func (m *Muxer) writePES(wr *bits.Writer, pid uint16, pes *PES) {
 }
 
 func (m *Muxer) writeHeader(wr *bits.Writer, pid uint16) {
-	wr.WriteByte(SyncByte)
+	wr.WriteUint8(SyncByte)
 
 	wr.WriteBit(0)          // Transport error indicator (TEI)
 	wr.WriteBit(1)          // Payload unit start indicator (PUSI)
@@ -191,9 +191,9 @@ func (m *Muxer) writeHeader(wr *bits.Writer, pid uint16) {
 }
 
 func (m *Muxer) writePSIHeader(wr *bits.Writer, tableID byte, size uint16) {
-	wr.WriteByte(0) // Pointer field
+	wr.WriteUint8(0) // Pointer field
 
-	wr.WriteByte(tableID) // Table ID
+	wr.WriteUint8(tableID) // Table ID
 
 	wr.WriteBit(1)               // Section syntax indicator
 	wr.WriteBit(0)               // Private bit
@@ -206,8 +206,8 @@ func (m *Muxer) writePSIHeader(wr *bits.Writer, tableID byte, size uint16) {
 	wr.WriteBits8(0, 5)    // Version number
 	wr.WriteBit(1)         // Current/next indicator
 
-	wr.WriteByte(0) // Section number
-	wr.WriteByte(0) // Last section number
+	wr.WriteUint8(0) // Section number
+	wr.WriteUint8(0) // Last section number
 }
 
 func (m *Muxer) WriteTail(wr *bits.Writer) {

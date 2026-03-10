@@ -41,7 +41,7 @@ func TestMarshal(t *testing.T) {
 
 func TestBytes(t *testing.T) {
 	bytes := make([]byte, 255)
-	for i := 0; i < len(bytes); i++ {
+	for i := range len(bytes) {
 		bytes[i] = byte(i)
 	}
 

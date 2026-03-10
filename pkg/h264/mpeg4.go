@@ -20,7 +20,7 @@ func DecodeConfig(conf []byte) (profile []byte, sps []byte, pps []byte) {
 
 	count := conf[5] & 0x1F
 	conf = conf[6:]
-	for i := byte(0); i < count; i++ {
+	for range count {
 		if len(conf) < 2 {
 			return
 		}
@@ -36,7 +36,7 @@ func DecodeConfig(conf []byte) (profile []byte, sps []byte, pps []byte) {
 
 	count = conf[0]
 	conf = conf[1:]
-	for i := byte(0); i < count; i++ {
+	for range count {
 		if len(conf) < 2 {
 			return
 		}

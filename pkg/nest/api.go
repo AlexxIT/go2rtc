@@ -170,7 +170,7 @@ func (a *API) ExchangeSDP(projectID, deviceID, offer string) (string, error) {
 	maxRetries := 3
 	retryDelay := time.Second * 30
 
-	for attempt := 0; attempt < maxRetries; attempt++ {
+	for attempt := range maxRetries {
 		req, err := http.NewRequest("POST", uri, bytes.NewReader(b))
 		if err != nil {
 			return "", err

@@ -30,6 +30,9 @@ func NewStream(source any) *Stream {
 	case []any:
 		s := new(Stream)
 		for _, src := range source {
+			if src == nil {
+				continue
+			}
 			str, ok := src.(string)
 			if !ok {
 				log.Error().Msgf("[stream] NewStream: Expected string, got %v", src)

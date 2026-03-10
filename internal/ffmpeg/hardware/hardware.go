@@ -175,7 +175,7 @@ func runToString(bin string, args string) string {
 }
 
 func cut(s string, sep byte, pos int) string {
-	for n := 0; n < pos; n++ {
+	for range pos {
 		if i := strings.IndexByte(s, sep); i > 0 {
 			s = s[i+1:]
 		} else {
