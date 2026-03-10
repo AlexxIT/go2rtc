@@ -20,6 +20,7 @@ type Client struct {
 	deviceURL string
 	mediaURL  string
 	imaginURL string
+	eventURL  string
 }
 
 func NewClient(rawURL string) (*Client, error) {
@@ -43,6 +44,11 @@ func NewClient(rawURL string) (*Client, error) {
 
 	s = FindTagValue(b, "Imaging.+?XAddr")
 	client.imaginURL = baseURL + GetPath(s, "/onvif/imaging_service")
+
+	s = FindTagValue(b, "Events.+?XAddr")
+	if s != "" {
+		client.eventURL = baseURL + getURLPath(s, "/onvif/event_service")
+	}
 
 	return client, nil
 }
