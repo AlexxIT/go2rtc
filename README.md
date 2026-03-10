@@ -28,13 +28,22 @@ Ultimate camera streaming application with support for dozens formats and protoc
 >
 > This is a fork of [AlexxIT/go2rtc](https://github.com/AlexxIT/go2rtc) with the following additions:
 >
+> **Features**
 > - **HomeKit Secure Video (HKSV)** — full recording support with motion detection (P-frame analysis, ONVIF events, API)
 > - **ONVIF motion detection** — automatic motion events from ONVIF cameras for HomeKit
 > - **WebP streaming** — native WebP encoding (snapshot & multipart stream) without FFmpeg
-> - **System resource monitoring** — CPU/memory usage in API (`/api/system`) and WebUI graphs
+> - **System resource monitoring** — CPU/memory usage in API (`/api/system`) and WebUI ASCII graphs
 > - **Read-only mode** — disable all write operations in API/WebUI for production security
 > - **Offline WebUI in Docker** — CDN JS dependencies bundled into Docker images
-> - **YAML config merge fix** — corrected merge behavior for YAML configuration
+>
+> **WebUI improvements**
+> - **Redesigned interface** — dark/light theme toggle, unified color scheme, improved layout
+> - **Stream Info & Probe pages** — detailed stream analysis with producers/consumers data
+> - **Stream Links page** — direct URLs for all supported formats (RTSP, WebRTC, MSE, HLS, etc.)
+> - **Mobile-responsive** — improved header, tables, and word wrapping on mobile devices
+>
+> **Bug fixes & maintenance**
+> - **YAML config merge fix** — corrected recursive merge behavior preserving comments
 > - **Streams race condition fix** — fixed race condition in stream schema handling
 > - **Go 1.26** — updated to the latest Go runtime
 >
