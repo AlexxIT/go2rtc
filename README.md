@@ -57,6 +57,42 @@ Ultimate camera streaming application with support for dozens formats and protoc
 
 ---
 
+## Screenshots
+
+| Streams Dashboard | Add Stream |
+|:-:|:-:|
+| ![Streams](website/images/screenshots/01-streams-dashboard-dark.png) | ![Add Stream](website/images/screenshots/02-add-stream-dark.png) |
+| Stream list with status, actions, and system monitoring | Quick setup for dozens of protocols and integrations |
+
+| Stream Info | Stream Links |
+|:-:|:-:|
+| ![Info](website/images/screenshots/03-stream-info-dark.png) | ![Links](website/images/screenshots/04-stream-links-dark.png) |
+| Producers and consumers details | Direct URLs for all supported formats |
+
+| Config Editor | Logs |
+|:-:|:-:|
+| ![Config](website/images/screenshots/05-config-editor-dark.png) | ![Logs](website/images/screenshots/06-logs-dark.png) |
+| YAML configuration with syntax highlighting | Real-time log viewer with auto-update |
+
+<details>
+<summary>Light theme</summary>
+
+| Streams Dashboard | Add Stream |
+|:-:|:-:|
+| ![Streams](website/images/screenshots/01-streams-dashboard-light.png) | ![Add Stream](website/images/screenshots/02-add-stream-light.png) |
+
+| Stream Info | Stream Links |
+|:-:|:-:|
+| ![Info](website/images/screenshots/03-stream-info-light.png) | ![Links](website/images/screenshots/04-stream-links-light.png) |
+
+| Config Editor | Logs |
+|:-:|:-:|
+| ![Config](website/images/screenshots/05-config-editor-light.png) | ![Logs](website/images/screenshots/06-logs-light.png) |
+
+</details>
+
+---
+
 - zero-dependency [small app](#go2rtc-binary) for all OS (Windows, macOS, Linux, FreeBSD)
 - zero-delay for many [supported protocols](#codecs-madness) (lowest possible streaming latency)
 - [streaming input](#streaming-input) from dozens formats and protocols
@@ -179,7 +215,7 @@ This is the `go2rtc.yaml` file in [YAML-format](https://en.wikipedia.org/wiki/YA
 The configuration can be changed in the [WebUI](www/README.md) at `http://localhost:1984`.
 The editor provides syntax highlighting and checking.
 
-![go2rtc webui config](website/images/webui-config.png)
+![go2rtc webui config](website/images/screenshots/05-config-editor-dark.png)
 
 The simplest config looks like this:
 
@@ -346,7 +382,7 @@ You can preload any stream on go2rtc start. This is useful for cameras that take
 [WebUI](www/README.md) provides detailed information about all active connections, including IP-addresses, formats, protocols, number of packets and bytes transferred. 
 Via the [HTTP API](internal/api/README.md) in [`json`](https://en.wikipedia.org/wiki/JSON) or [`dot`](https://en.wikipedia.org/wiki/DOT_(graph_description_language)) format on an interactive connection map.
 
-![go2rtc webui net](website/images/webui-net.png)
+![go2rtc webui net](website/images/screenshots/05-network-topology-dark.png)
 
 ## Codecs
 
