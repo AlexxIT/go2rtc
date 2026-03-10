@@ -22,6 +22,41 @@
 
 Ultimate camera streaming application with support for dozens formats and protocols.
 
+---
+
+> ### 🔀 Fork: [skrashevich/go2rtc](https://github.com/skrashevich/go2rtc)
+>
+> This is a fork of [AlexxIT/go2rtc](https://github.com/AlexxIT/go2rtc) with the following additions:
+>
+> - **HomeKit Secure Video (HKSV)** — full recording support with motion detection (P-frame analysis, ONVIF events, API)
+> - **ONVIF motion detection** — automatic motion events from ONVIF cameras for HomeKit
+> - **WebP streaming** — native WebP encoding (snapshot & multipart stream) without FFmpeg
+> - **System resource monitoring** — CPU/memory usage in API (`/api/system`) and WebUI graphs
+> - **Read-only mode** — disable all write operations in API/WebUI for production security
+> - **Offline WebUI in Docker** — CDN JS dependencies bundled into Docker images
+> - **YAML config merge fix** — corrected merge behavior for YAML configuration
+> - **Streams race condition fix** — fixed race condition in stream schema handling
+> - **Go 1.26** — updated to the latest Go runtime
+>
+> #### Download
+>
+> **Docker images** (GHCR):
+> ```bash
+> # Standard
+> docker pull ghcr.io/skrashevich/go2rtc:beta
+>
+> # With hardware acceleration (Intel/AMD)
+> docker pull ghcr.io/skrashevich/go2rtc:beta-hardware
+>
+> # Rockchip
+> docker pull ghcr.io/skrashevich/go2rtc:beta-rockchip
+> ```
+>
+> **Binaries**: download from [GitHub Actions](https://github.com/skrashevich/go2rtc/actions/workflows/build.yml) artifacts (select the latest successful run on the `beta` branch).
+> Available for: Windows (amd64, i386, arm64), Linux (amd64, i386, arm, arm64), macOS (amd64, arm64), FreeBSD (amd64, arm64).
+
+---
+
 - zero-dependency [small app](#go2rtc-binary) for all OS (Windows, macOS, Linux, FreeBSD)
 - zero-delay for many [supported protocols](#codecs-madness) (lowest possible streaming latency)
 - [streaming input](#streaming-input) from dozens formats and protocols
@@ -135,7 +170,7 @@ It comes preinstalled with [FFmpeg](internal/ffmpeg/README.md) and [Python](inte
 Latest, but maybe unstable version:
 
 - Binary: [latest master build](https://nightly.link/AlexxIT/go2rtc/workflows/build/master)
-- Docker: `alexxit/go2rtc:master` or `alexxit/go2rtc:master-hardware` versions
+- Docker: `ghcr.io/skrashevich/go2rtc:beta` or `ghcr.io/skrashevich/go2rtc:beta-hardware` versions
 - Home Assistant add-on: `go2rtc master` or `go2rtc master hardware` versions
 
 ## Configuration
