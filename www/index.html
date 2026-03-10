@@ -47,11 +47,18 @@
 </main>
 
 <script>
-    const templates = [
+    let templates = [
         '<a href="stream.html?src={name}">stream</a>',
         '<a href="links.html?src={name}">links</a>',
         '<a href="#" data-name="{name}">delete</a>',
     ];
+    let readOnly = false;
+
+    const applyReadOnly = (flag) => {
+        if (!flag || readOnly) return;
+        readOnly = true;
+        templates = templates.filter(link => link.indexOf('delete') < 0);
+    };
 
     document.querySelector('.controls > button')
         .addEventListener('click', () => {
@@ -263,6 +270,8 @@
 
     function updateInfo() {
         return fetch(infoURL, {cache: 'no-cache'}).then(r => r.json()).then(data => {
+            applyReadOnly(Boolean(data.read_only));
+
             const cpuUsage = clampPercent(data.system?.cpu_usage);
             const memUsed = toNumber(data.system?.mem_used);
             const memTotal = toNumber(data.system?.mem_total);
@@ -287,11 +296,21 @@
         });
     }
 
-    updateInfo().then(isSupported => {
-        if (isSupported) startInfoUpdates();
-    });
+    const applyInfo = (data) => {
+        applyReadOnly(Boolean(data.read_only));
+        updateInfo().then(isSupported => {
+            if (isSupported) startInfoUpdates();
+        });
+    };
 
-    reload();
+    if (window.go2rtcReady) {
+        window.go2rtcReady.then(data => {
+            if (data) applyInfo(data);
+        });
+    } else {
+        const url = new URL('api', location.href);
+        fetch(url, {cache: 'no-cache'}).then(r => r.json()).then(data => applyInfo(data));
+    }
 </script>
 
 </body>

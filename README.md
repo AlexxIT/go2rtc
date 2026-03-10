@@ -462,6 +462,8 @@ api:
   allow_paths: [/api, /api/streams, /api/webrtc, /api/frame.jpeg]
   # enable auth for localhost (used together with username and password)
   local_auth: true
+  # disable write actions in WebUI/API
+  read_only: true
 
 exec:
   # use only allowed exec paths

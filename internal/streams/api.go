@@ -12,6 +12,13 @@ import (
 
 func apiStreams(w http.ResponseWriter, r *http.Request) {
 	w = creds.SecretResponse(w)
+	if api.IsReadOnly() {
+		switch r.Method {
+		case "PUT", "PATCH", "POST", "DELETE":
+			api.ReadOnlyError(w)
+			return
+		}
+	}
 
 	query := r.URL.Query()
 	src := query.Get("src")
@@ -130,6 +137,13 @@ func apiStreamsDOT(w http.ResponseWriter, r *http.Request) {
 }
 
 func apiPreload(w http.ResponseWriter, r *http.Request) {
+	if api.IsReadOnly() {
+		switch r.Method {
+		case "PUT", "DELETE":
+			api.ReadOnlyError(w)
+			return
+		}
+	}
 	// GET - return all preloads
 	if r.Method == "GET" {
 		api.ResponseJSON(w, GetPreloads())

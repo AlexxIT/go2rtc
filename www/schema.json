@@ -68,6 +68,11 @@
         "password": {
           "type": "string"
         },
+        "read_only": {
+          "description": "Disable write actions in WebUI/API",
+          "type": "boolean",
+          "default": false
+        },
         "local_auth": {
           "description": "Enable auth check for localhost requests",
           "type": "boolean",
