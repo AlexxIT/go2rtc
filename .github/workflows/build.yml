@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - 'master'
+      - 'beta'
     tags:
       - 'v*'
 
@@ -19,7 +19,7 @@ jobs:
 
       - name: Setup Go
         uses: actions/setup-go@v5
-        with: { go-version: '1.25' }
+        with: { go-version: '1.26' }
 
       - name: Build go2rtc_win64
         env: { GOOS: windows, GOARCH: amd64 }
