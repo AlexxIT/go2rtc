@@ -4,107 +4,64 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Links - go2rtc</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css">
     <style>
-        /* Page-specific styles for links.html */
-        .container {
-            max-width: 1200px;
-        }
-
         .page-header {
-            margin-bottom: 32px;
+            margin-bottom: 20px;
         }
 
         .page-title {
-            font-family: 'Orbitron', sans-serif;
-            font-size: 32px;
-            color: var(--accent-cyan);
-            text-shadow: var(--glow-cyan);
-            margin-bottom: 8px;
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 4px;
         }
 
         .stream-name {
             color: var(--text-secondary);
-            font-size: 14px;
-            font-family: monospace;
+            font-size: 13px;
             word-break: break-all;
-            overflow-wrap: break-word;
         }
 
         .section {
             background: var(--bg-card);
             border: 1px solid var(--border-color);
             border-radius: 8px;
-            padding: 24px;
-            margin-bottom: 24px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            padding: 16px;
+            margin-bottom: 16px;
         }
 
         .section-title {
-            font-size: 18px;
-            font-weight: 700;
-            color: var(--accent-cyan);
-            margin-bottom: 16px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 12px;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
         }
 
         .link-list {
             list-style: none;
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 8px;
         }
 
         .link-item {
             display: flex;
             align-items: flex-start;
-            padding: 12px;
+            padding: 10px;
             background: var(--bg-secondary);
             border-radius: 6px;
             border: 1px solid var(--border-color);
-            transition: all 0.3s;
             flex-wrap: wrap;
             word-break: break-word;
-            overflow-wrap: break-word;
-        }
-
-        .link-item:hover {
-            border-color: var(--accent-cyan);
-            box-shadow: var(--glow-cyan);
-        }
-
-        .link-item::before {
-            content: '▸';
-            color: var(--accent-cyan);
-            margin-right: 12px;
-            font-size: 14px;
+            gap: 8px;
         }
 
         .link-item a {
-            color: var(--accent-cyan);
-            text-decoration: none;
             font-weight: 500;
-            margin-right: 8px;
             word-break: break-all;
-            overflow-wrap: break-word;
             max-width: 100%;
-        }
-
-        .link-item a:hover {
-            color: var(--accent-electric);
-            text-decoration: underline;
-        }
-
-        .link-item a::after,
-        .action-link::after {
-            content: none;
         }
 
         .link-description {
@@ -116,12 +73,12 @@
             background: var(--bg-secondary);
             border: 1px solid var(--border-color);
             border-radius: 6px;
-            padding: 16px;
-            font-family: 'Courier New', monospace;
+            padding: 12px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
             font-size: 13px;
-            color: var(--accent-green);
+            color: var(--text-primary);
             overflow-x: auto;
-            margin-top: 12px;
+            margin-top: 10px;
             word-break: break-all;
             white-space: pre-wrap;
         }
@@ -129,131 +86,92 @@
         .form-group {
             display: flex;
             flex-direction: column;
-            gap: 12px;
-            margin-top: 16px;
+            gap: 10px;
+            margin-top: 12px;
         }
 
         .radio-group {
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: 6px;
         }
 
         .radio-label {
             display: flex;
             align-items: center;
             gap: 8px;
-            padding: 10px;
+            padding: 8px 10px;
             background: var(--bg-secondary);
             border: 1px solid var(--border-color);
             border-radius: 6px;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: border-color 0.15s;
+            font-size: 13px;
         }
 
         .radio-label:hover {
-            border-color: var(--accent-cyan);
+            border-color: var(--accent);
         }
 
         .radio-label input[type="radio"] {
-            accent-color: var(--accent-cyan);
+            accent-color: var(--accent);
         }
 
         .input-group {
             display: flex;
-            gap: 12px;
+            gap: 8px;
             align-items: center;
         }
 
-        input[type="text"] {
+        .input-group input[type="text"] {
             flex: 1;
-            padding: 12px 16px;
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            color: var(--text-primary);
-            font-size: 14px;
-            transition: all 0.3s;
-        }
-
-        input[type="text"]:focus {
-            outline: none;
-            border-color: var(--accent-cyan);
-            box-shadow: var(--glow-cyan);
-        }
-
-        button {
-            padding: 12px 24px;
-            background: var(--accent-cyan);
-            color: #0a0e1a;
-            border: none;
-            border-radius: 6px;
-            font-weight: 700;
-            text-transform: uppercase;
-            font-size: 12px;
-            letter-spacing: 1px;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-
-        button:hover {
-            background: var(--accent-electric);
-            box-shadow: var(--glow-cyan);
-            transform: translateY(-2px);
         }
 
         .action-links {
             display: flex;
-            gap: 12px;
-            margin-top: 12px;
+            gap: 8px;
+            margin-top: 8px;
         }
 
         .action-link {
-            padding: 8px 16px;
+            padding: 6px 12px;
             background: var(--bg-secondary);
             border: 1px solid var(--border-color);
             border-radius: 6px;
-            color: var(--accent-cyan);
-            text-decoration: none;
             font-size: 13px;
-            transition: all 0.3s;
+            transition: border-color 0.15s;
         }
 
         .action-link:hover {
-            border-color: var(--accent-cyan);
-            box-shadow: var(--glow-cyan);
+            border-color: var(--accent);
+            text-decoration: none;
         }
 
         .action-link.delete {
-            color: var(--accent-red);
+            color: var(--red);
         }
 
         .action-link.delete:hover {
-            border-color: var(--accent-red);
+            border-color: var(--red);
         }
 
         #homekit-qrcode {
-            margin-top: 16px;
-            padding: 16px;
+            margin-top: 12px;
+            padding: 12px;
             background: white;
             display: inline-block;
-            border-radius: 8px;
+            border-radius: 6px;
         }
 
         .note {
             color: var(--text-muted);
-            font-size: 13px;
+            font-size: 12px;
             font-style: italic;
-            margin-top: 8px;
         }
 
         @media (max-width: 768px) {
             .input-group {
                 flex-direction: column;
-            }
-
-            button {
-                width: 100%;
             }
 
             .action-links {
@@ -269,7 +187,7 @@
 <main>
     <div class="container">
         <a href="index.html" class="back-link">← Back to Streams</a>
-        
+
         <div class="page-header">
             <h1 class="page-title">Stream Links</h1>
             <div class="stream-name">Stream: <span id="stream-name"></span></div>
@@ -278,11 +196,11 @@
         <div id="links"></div>
 
         <div id="homekit" class="section" style="display: none">
-            <h2 class="section-title">🏠 HomeKit Server</h2>
+            <h2 class="section-title">HomeKit Server</h2>
         </div>
 
         <div class="section">
-            <h2 class="section-title">🎵 Play Audio</h2>
+            <h2 class="section-title">Play Audio</h2>
             <div class="form-group">
                 <div class="radio-group">
                     <label class="radio-label">
@@ -307,7 +225,7 @@
         </div>
 
         <div class="section">
-            <h2 class="section-title">📡 Publish Stream</h2>
+            <h2 class="section-title">Publish Stream</h2>
             <div class="code-block">YouTube:  rtmps://xxx.rtmp.youtube.com/live2/xxxx-xxxx-xxxx-xxxx-xxxx
 Telegram: rtmps://xxx-x.rtmp.t.me/s/xxxxxxxxxx:xxxxxxxxxxxxxxxxxxxxxx</div>
             <div class="form-group">
@@ -320,7 +238,7 @@ Telegram: rtmps://xxx-x.rtmp.t.me/s/xxxxxxxxxx:xxxxxxxxxxxxxxxxxxxxxx</div>
         </div>
 
         <div id="webrtc" class="section">
-            <h2 class="section-title">🎥 WebRTC Magic</h2>
+            <h2 class="section-title">WebRTC</h2>
             <div class="form-group">
                 <div class="radio-group">
                     <label class="radio-label">
@@ -367,7 +285,7 @@ Telegram: rtmps://xxx-x.rtmp.t.me/s/xxxxxxxxxx:xxxxxxxxxxxxxxxxxxxxxx</div>
 
     links.innerHTML = `
     <div class="section">
-        <h2 class="section-title">🌐 Any Codec in Source</h2>
+        <h2 class="section-title">Any Codec in Source</h2>
         <ul class="link-list">
             <li class="link-item">
                 <a href="stream.html?src=${src}">stream.html</a>
@@ -393,7 +311,7 @@ Telegram: rtmps://xxx-x.rtmp.t.me/s/xxxxxxxxxx:xxxxxxxxxxxxxxxxxxxxxx</div>
 
         links.innerHTML += `
         <div class="section">
-            <h2 class="section-title">📹 RTSP Streaming</h2>
+            <h2 class="section-title">RTSP Streaming</h2>
             <ul class="link-list">
                 <li class="link-item">
                     <a href="rtsp://${rtsp}/${src}">rtsp://${rtsp}/${src}</a>
@@ -412,7 +330,7 @@ Telegram: rtmps://xxx-x.rtmp.t.me/s/xxxxxxxxxx:xxxxxxxxxxxxxxxxxxxxxx</div>
         </div>
 
         <div class="section">
-            <h2 class="section-title">🎬 H264/H265 Source</h2>
+            <h2 class="section-title">H264/H265 Source</h2>
             <ul class="link-list">
                 <li class="link-item">
                     <a href="stream.html?src=${src}&mode=webrtc">WebRTC stream</a>
@@ -454,7 +372,7 @@ Telegram: rtmps://xxx-x.rtmp.t.me/s/xxxxxxxxxx:xxxxxxxxxxxxxxxxxxxxxx</div>
         </div>
 
         <div class="section">
-            <h2 class="section-title">📸 MJPEG Source</h2>
+            <h2 class="section-title">MJPEG Source</h2>
             <ul class="link-list">
                 <li class="link-item">
                     <a href="stream.html?src=${src}&mode=mjpeg">stream.html (MJPEG)</a>

@@ -6,20 +6,34 @@
     <title>add - go2rtc</title>
     <style>
         main > button {
-            background-color: var(--bg-secondary);
-            color: var(--text-secondary);
+            background: var(--bg-card);
+            color: var(--text-primary);
             cursor: pointer;
-            padding: 14px;
+            padding: 12px 16px;
             width: 100%;
-            border: none;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
             text-align: left;
-            font-size: 16px;
-            font-weight: bold;
+            font-size: 14px;
+            font-weight: 500;
+            font-family: inherit;
+            margin-bottom: 4px;
+            transition: border-color 0.15s;
+        }
+
+        main > button:hover {
+            border-color: var(--accent);
+            color: var(--accent);
         }
 
         main > div {
             display: none;
-            gap: 10px;
+            gap: 8px;
+            margin-bottom: 8px;
+            padding: 12px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
         }
     </style>
 </head>
@@ -67,7 +81,7 @@
 </script>
 
 <main>
-    <div id="readonly-banner" style="display: none; padding: 10px; background: #ffe9e9; border: 1px solid #f0b4b4;">
+    <div id="readonly-banner" style="display: none; padding: 10px; background: var(--bg-card); border: 1px solid var(--red); border-radius: 6px; color: var(--red); margin-bottom: 12px;">
         Read-only mode: add actions are disabled.
     </div>
     <button id="stream">Temporary stream</button>
@@ -455,7 +469,7 @@
 
     <button id="wyze">Wyze</button>
     <div>
-        <p style="margin: 5px 0; font-size: 12px; color: #888;">
+        <p style="margin: 5px 0; font-size: 12px; color: var(--text-muted);">
             API Key required: <a href="https://support.wyze.com/hc/en-us/articles/16129834216731" target="_blank">Get your API Key</a>
         </p>
         <form id="wyze-login-form">
