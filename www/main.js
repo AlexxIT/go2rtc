@@ -1,16 +1,6 @@
 // Shared navigation component - loaded automatically by other pages
 if (!document.querySelector('.logo')) {
     const head = document.head;
-    if (!head.querySelector('link[href*="fonts.googleapis.com"]')) {
-        head.insertAdjacentHTML(
-            'beforeend',
-            `
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
-`.trim(),
-        );
-    }
 
     if (!head.querySelector('link[href="styles.css"]')) {
         head.insertAdjacentHTML('beforeend', '<link rel="stylesheet" href="styles.css">');
@@ -20,7 +10,7 @@ if (!document.querySelector('.logo')) {
 <header>
     <div class="container">
         <nav>
-            <span class="logo">GO2RTC</span>
+            <span class="logo">go2rtc</span>
             <div class="nav-links">
                 <a href="index.html" class="nav-link">Streams</a>
                 <a href="add.html" class="nav-link">Add Stream</a>
@@ -30,7 +20,7 @@ if (!document.querySelector('.logo')) {
             </div>
             <a href="https://github.com/AlexxIT/go2rtc" target="_blank" class="nav-link docs-link">docs</a>
             <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
-                <span class="theme-icon">🌙</span>
+                <span class="theme-icon">\u{1F319}</span>
             </button>
         </nav>
     </div>
@@ -67,10 +57,10 @@ if (!document.querySelector('.logo')) {
 
         if (theme === 'light') {
             html.setAttribute('data-theme', 'light');
-            if (themeIcon) themeIcon.textContent = '☀️';
+            if (themeIcon) themeIcon.textContent = '\u2600\uFE0F';
         } else {
             html.removeAttribute('data-theme');
-            if (themeIcon) themeIcon.textContent = '🌙';
+            if (themeIcon) themeIcon.textContent = '\u{1F319}';
         }
     }
 

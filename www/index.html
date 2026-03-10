@@ -4,240 +4,90 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>go2rtc</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
     <style>
-        /* Page-specific styles for index.html */
         .controls {
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 24px;
-            margin-bottom: 32px;
             display: flex;
             flex-wrap: wrap;
-            gap: 20px;
+            gap: 12px;
             align-items: center;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            margin-bottom: 16px;
         }
 
         .btn-primary {
-            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-electric));
-            color: var(--bg-primary);
+            background: var(--accent);
+            color: #fff;
             border: none;
-            padding: 12px 28px;
+            padding: 8px 20px;
             border-radius: 6px;
-            font-family: 'JetBrains Mono', monospace;
-            font-weight: 700;
+            font-weight: 600;
             font-size: 13px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
             cursor: pointer;
-            position: relative;
-            overflow: hidden;
-            box-shadow: var(--glow-cyan);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        .btn-primary::before {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 0;
-            height: 0;
-            border-radius: 50%;
-            background: rgba(255, 255, 255, 0.3);
-            transform: translate(-50%, -50%);
-            transition: width 0.6s, height 0.6s;
-        }
-
-        .btn-primary:hover::before {
-            width: 300px;
-            height: 300px;
+            transition: background 0.15s;
         }
 
         .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 0 30px rgba(0, 217, 255, 0.5);
-        }
-
-        .btn-primary:active {
-            transform: translateY(0);
+            background: var(--accent-hover);
+            color: #fff;
         }
 
         .mode-selector {
             display: flex;
-            gap: 16px;
+            gap: 12px;
             align-items: center;
-            padding: 12px 20px;
-            background: var(--bg-secondary);
-            border-radius: 6px;
-            border: 1px solid var(--border-color);
         }
 
         .mode-label {
             color: var(--text-muted);
-            text-transform: uppercase;
-            font-size: 11px;
-            letter-spacing: 1px;
-            font-weight: 700;
-        }
-
-        .checkbox-wrapper {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            cursor: pointer;
-            user-select: none;
-        }
-
-        .checkbox-wrapper input[type="checkbox"] {
-            appearance: none;
-            width: 18px;
-            height: 18px;
-            border: 2px solid var(--border-color);
-            border-radius: 3px;
-            cursor: pointer;
-            position: relative;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        .checkbox-wrapper input[type="checkbox"]:checked {
-            background: var(--accent-cyan);
-            border-color: var(--accent-cyan);
-            box-shadow: var(--glow-cyan);
-        }
-
-        .checkbox-wrapper input[type="checkbox"]:checked::after {
-            content: '✓';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            color: var(--bg-primary);
             font-size: 12px;
-            font-weight: 700;
         }
 
-        .checkbox-wrapper label {
-            color: var(--text-secondary);
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            cursor: pointer;
-        }
-
-        /* Table */
         .streams-table {
-            background: var(--bg-card);
             border: 1px solid var(--border-color);
             border-radius: 8px;
             overflow: hidden;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         }
 
         table {
-            width: 100%;
-            border-collapse: collapse;
+            border: none;
         }
 
         thead {
-            background: var(--bg-secondary);
-            border-bottom: 2px solid var(--accent-cyan);
-        }
-
-        th {
-            text-align: left;
-            padding: 16px 20px;
-            font-weight: 700;
-            text-transform: uppercase;
-            font-size: 11px;
-            letter-spacing: 1px;
-            color: var(--accent-cyan);
+            border-bottom: 1px solid var(--border-color);
         }
 
         th label {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
             cursor: pointer;
         }
 
-        td {
-            padding: 16px 20px;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        tbody tr {
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        tbody td:first-child {
-            position: relative;
-        }
-
-        tbody td:first-child::before {
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 3px;
-            height: 100%;
-            background: var(--accent-cyan);
-            transform: scaleY(0);
-            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        tbody tr:hover {
-            background: rgba(0, 217, 255, 0.05);
-        }
-
-        tbody tr:hover td:first-child::before {
-            transform: scaleY(1);
-        }
-
-        tbody tr:last-child td {
-            border-bottom: none;
-        }
-
-        /* Stream name with checkbox */
         .stream-name {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 8px;
         }
 
         .stream-name label {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 8px;
             cursor: pointer;
             font-weight: 500;
         }
 
-        /* Live indicator */
         .online-count {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            font-weight: 700;
+            gap: 6px;
         }
 
         .live-dot {
             width: 8px;
             height: 8px;
             border-radius: 50%;
-            background: var(--accent-green);
-            box-shadow: var(--glow-green);
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.6; transform: scale(1.2); }
+            background: var(--green);
         }
 
         .offline-dot {
@@ -248,39 +98,25 @@
         }
 
         .delete-link {
-            color: var(--accent-red);
+            color: var(--red);
         }
 
         .delete-link:hover {
-            color: #ff6b81;
+            color: var(--red);
         }
 
-        /* Info footer */
         .info {
-            margin-top: 32px;
-            padding: 20px 24px;
+            margin-top: 16px;
+            padding: 14px 16px;
             background: var(--bg-secondary);
             border: 1px solid var(--border-color);
             border-radius: 8px;
             color: var(--text-muted);
             font-size: 12px;
-            display: flex;
-            gap: 24px;
-            flex-wrap: wrap;
+            white-space: pre;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
         }
 
-        .info-item {
-            display: flex;
-            gap: 8px;
-        }
-
-        .info-label {
-            color: var(--accent-cyan);
-            text-transform: uppercase;
-            font-weight: 700;
-        }
-
-        /* Responsive - page specific */
         @media (max-width: 768px) {
             .controls {
                 flex-direction: column;
@@ -288,8 +124,7 @@
             }
 
             .mode-selector {
-                flex-direction: column;
-                align-items: stretch;
+                flex-wrap: wrap;
             }
 
             table, thead, tbody, th, td, tr {
@@ -301,7 +136,7 @@
             }
 
             tr {
-                margin-bottom: 16px;
+                margin-bottom: 12px;
                 border: 1px solid var(--border-color);
                 border-radius: 8px;
                 overflow: hidden;
@@ -321,15 +156,13 @@
             td::before {
                 content: attr(data-label);
                 position: absolute;
-                left: 16px;
-                top: 16px;
-                color: var(--accent-cyan);
-                font-weight: 700;
-                text-transform: uppercase;
-                font-size: 11px;
+                left: 14px;
+                top: 10px;
+                color: var(--text-secondary);
+                font-weight: 600;
+                font-size: 12px;
             }
         }
-
     </style>
 </head>
 <body>
@@ -337,7 +170,7 @@
 <header>
     <div class="container">
         <nav>
-            <span class="logo">GO2RTC</span>
+            <span class="logo">go2rtc</span>
             <div class="nav-links">
                 <a href="index.html" class="nav-link active">Streams</a>
                 <a href="add.html" class="nav-link">Add Stream</a>
@@ -359,19 +192,19 @@
             <button class="btn-primary">View Streams</button>
             <div class="mode-selector">
                 <span class="mode-label">Modes:</span>
-                <label class="checkbox-wrapper">
+                <label>
                     <input type="checkbox" name="webrtc" checked>
                     <span>WebRTC</span>
                 </label>
-                <label class="checkbox-wrapper">
+                <label>
                     <input type="checkbox" name="mse" checked>
                     <span>MSE</span>
                 </label>
-                <label class="checkbox-wrapper">
+                <label>
                     <input type="checkbox" name="hls" checked>
                     <span>HLS</span>
                 </label>
-                <label class="checkbox-wrapper">
+                <label>
                     <input type="checkbox" name="mjpeg" checked>
                     <span>MJPEG</span>
                 </label>
