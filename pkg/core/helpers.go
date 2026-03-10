@@ -32,7 +32,7 @@ func RandString(size, base byte) string {
 	if base == 0 {
 		return string(b)
 	}
-	for i := byte(0); i < size; i++ {
+	for i := range size {
 		b[i] = symbols[b[i]%base]
 	}
 	return string(b)

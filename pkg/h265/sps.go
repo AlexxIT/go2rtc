@@ -92,7 +92,7 @@ func (s *SPS) profile_tier_level(r *bits.Reader) bool {
 	s.sub_layer_profile_present_flag = make([]byte, s.sps_max_sub_layers_minus1)
 	s.sub_layer_level_present_flag = make([]byte, s.sps_max_sub_layers_minus1)
 
-	for i := byte(0); i < s.sps_max_sub_layers_minus1; i++ {
+	for i := range s.sps_max_sub_layers_minus1 {
 		s.sub_layer_profile_present_flag[i] = r.ReadBit()
 		s.sub_layer_level_present_flag[i] = r.ReadBit()
 	}
@@ -103,7 +103,7 @@ func (s *SPS) profile_tier_level(r *bits.Reader) bool {
 		}
 	}
 
-	for i := byte(0); i < s.sps_max_sub_layers_minus1; i++ {
+	for i := range s.sps_max_sub_layers_minus1 {
 		if s.sub_layer_profile_present_flag[i] != 0 {
 			_ = r.ReadBits8(2)                      // sub_layer_profile_space
 			_ = r.ReadBit()                         // sub_layer_tier_flag
