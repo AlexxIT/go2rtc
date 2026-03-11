@@ -116,7 +116,7 @@ The Docker containers [`alexxit/go2rtc`](https://hub.docker.com/r/alexxit/go2rtc
 These containers offer the same functionality as the Home Assistant [add-on](#go2rtc-home-assistant-add-on) but are designed to operate independently of Home Assistant.
 It comes preinstalled with [FFmpeg](internal/ffmpeg/README.md) and [Python](internal/echo/README.md).
 
-### go2rtc: Home Assistant add-on
+### go2rtc: Home Assistant application (ex. add-on)
 
 [![Open your Home Assistant instance and show the add add-on repository dialog with a specific repository URL pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FAlexxIT%2Fhassio-addons)
 
