@@ -114,8 +114,8 @@ func (a *writer) Write(p []byte) (n int, err error) {
 
 	w := img.Bounds().Dx()
 	h := img.Bounds().Dy()
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
+	for y := range h {
+		for x := range w {
 			r, g, b, _ := img.At(x, y).RGBA()
 			if a.color != nil {
 				a.color(uint8(r>>8), uint8(g>>8), uint8(b>>8))
@@ -155,7 +155,7 @@ const x256b = "\x00\x00\x00\x00\x80\x80\x80\xc0\x80\x00\x00\x00\xff\xff\xff\xff\
 
 func xterm256color(r, g, b uint8, n int) (index uint8) {
 	best := uint16(0xFFFF)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		diff := sqDiff(r, x256r[i]) + sqDiff(g, x256g[i]) + sqDiff(b, x256b[i])
 		if diff < best {
 			best = diff

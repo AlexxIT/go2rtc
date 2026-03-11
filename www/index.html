@@ -4,65 +4,306 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>go2rtc</title>
+    <link rel="stylesheet" href="styles.css">
     <style>
         .controls {
             display: flex;
             flex-wrap: wrap;
-            gap: 10px;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-hover);
+            color: #fff;
+        }
+
+        .mode-selector {
+            display: flex;
+            gap: 12px;
             align-items: center;
         }
 
+        .mode-label {
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+
+        .streams-table {
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        table {
+            border: none;
+        }
+
+        thead {
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+
+        .stream-name {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .stream-name label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .online-count {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--green);
+        }
+
+        .offline-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text-muted);
+        }
+
+        .delete-link {
+            color: var(--red);
+        }
+
+        .delete-link:hover {
+            color: var(--red);
+        }
+
         .info {
-            color: #888;
+            margin-top: 16px;
+            padding: 14px 16px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-muted);
+            font-size: 12px;
+            white-space: pre;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        }
+
+        @media (max-width: 768px) {
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .mode-selector {
+                flex-wrap: wrap;
+            }
+
+            table, thead, tbody, th, td, tr {
+                display: block;
+            }
+
+            thead {
+                display: none;
+            }
+
+            tr {
+                margin-bottom: 12px;
+                border: 1px solid var(--border-color);
+                border-radius: 8px;
+                overflow: hidden;
+            }
+
+            td {
+                position: relative;
+                padding-left: 50%;
+                border: none;
+                border-bottom: 1px solid var(--border-color);
+            }
+
+            td:last-child {
+                border-bottom: none;
+            }
+
+            td::before {
+                content: attr(data-label);
+                position: absolute;
+                left: 14px;
+                top: 10px;
+                color: var(--text-secondary);
+                font-weight: 600;
+                font-size: 12px;
+            }
         }
     </style>
 </head>
 <body>
 
-<script src="main.js"></script>
+<header>
+    <div class="container">
+        <nav>
+            <span class="logo">go2rtc</span>
+            <div class="nav-links">
+                <a href="index.html" class="nav-link active">Streams</a>
+                <a href="add.html" class="nav-link">Add Stream</a>
+                <a href="config.html" class="nav-link">Config</a>
+                <a href="log.html" class="nav-link">Logs</a>
+                <a href="net.html" class="nav-link">Network</a>
+            </div>
+            <a href="https://github.com/AlexxIT/go2rtc" target="_blank" class="nav-link docs-link">docs</a>
+            <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
+                <span class="theme-icon">🌙</span>
+            </button>
+        </nav>
+    </div>
+</header>
 
 <main>
-    <div class="controls">
-        <button>stream</button>
-        modes
-        <label><input type="checkbox" name="webrtc" checked>webrtc</label>
-        <label><input type="checkbox" name="mse" checked>mse</label>
-        <label><input type="checkbox" name="hls" checked>hls</label>
-        <label><input type="checkbox" name="mjpeg" checked>mjpeg</label>
+    <div class="container">
+        <div class="controls">
+            <button class="btn-primary">View Streams</button>
+            <div class="mode-selector">
+                <span class="mode-label">Modes:</span>
+                <label>
+                    <input type="checkbox" name="webrtc" checked>
+                    <span>WebRTC</span>
+                </label>
+                <label>
+                    <input type="checkbox" name="mse" checked>
+                    <span>MSE</span>
+                </label>
+                <label>
+                    <input type="checkbox" name="hls" checked>
+                    <span>HLS</span>
+                </label>
+                <label>
+                    <input type="checkbox" name="mjpeg" checked>
+                    <span>MJPEG</span>
+                </label>
+            </div>
+        </div>
+
+        <div class="streams-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>
+                            <label>
+                                <input id="selectall" type="checkbox">
+                                Stream Name
+                            </label>
+                        </th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="streams">
+                </tbody>
+            </table>
+        </div>
+
+        <div class="info"></div>
     </div>
-    <table>
-        <thead>
-        <tr>
-            <th><label><input id="selectall" type="checkbox">name</label></th>
-            <th>online</th>
-            <th>commands</th>
-        </tr>
-        </thead>
-        <tbody id="streams">
-        </tbody>
-    </table>
-    <div class="info"></div>
 </main>
 
 <script>
-    const templates = [
+    // Theme management
+    function initTheme() {
+        const savedTheme = localStorage.getItem('theme');
+        const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const theme = savedTheme || (systemPrefersDark ? 'dark' : 'light');
+
+        setTheme(theme);
+
+        // Listen for system theme changes
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+            if (!localStorage.getItem('theme')) {
+                setTheme(e.matches ? 'dark' : 'light');
+            }
+        });
+    }
+
+    function setTheme(theme) {
+        const html = document.documentElement;
+        const themeIcon = document.querySelector('.theme-icon');
+
+        if (theme === 'light') {
+            html.setAttribute('data-theme', 'light');
+            if (themeIcon) themeIcon.textContent = '☀️';
+        } else {
+            html.removeAttribute('data-theme');
+            if (themeIcon) themeIcon.textContent = '🌙';
+        }
+    }
+
+    function toggleTheme() {
+        const html = document.documentElement;
+        const currentTheme = html.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+        const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+
+        setTheme(newTheme);
+        localStorage.setItem('theme', newTheme);
+    }
+
+    // Initialize theme before page loads
+    initTheme();
+
+    // Theme toggle button handler
+    document.getElementById('theme-toggle')?.addEventListener('click', toggleTheme);
+
+    let templates = [
         '<a href="stream.html?src={name}">stream</a>',
         '<a href="links.html?src={name}">links</a>',
-        '<a href="#" data-name="{name}">delete</a>',
+        '<a href="#" class="delete-link" data-name="{name}">delete</a>',
     ];
+    let readOnly = false;
 
-    document.querySelector('.controls > button')
+    const applyReadOnly = (flag) => {
+        if (!flag || readOnly) return;
+        readOnly = true;
+        templates = templates.filter(link => link.indexOf('delete') < 0);
+    };
+
+    document.querySelector('.btn-primary')
         .addEventListener('click', () => {
             const url = new URL('stream.html', location.href);
 
-            const streams = document.querySelectorAll('#streams input');
+            const streams = document.querySelectorAll('#streams input[type="checkbox"]');
             streams.forEach(i => {
-                if (i.checked) url.searchParams.append('src', i.name);
+                if (i.checked && i.name) url.searchParams.append('src', i.name);
             });
 
             if (!url.searchParams.has('src')) return;
 
-            let mode = document.querySelectorAll('.controls input');
+            let mode = document.querySelectorAll('.mode-selector input[type="checkbox"]');
             mode = Array.from(mode).filter(i => i.checked).map(i => i.name).join(',');
 
             window.location.href = `${url}&mode=${mode}`;
@@ -70,7 +311,7 @@
 
     const tbody = document.getElementById('streams');
     tbody.addEventListener('click', async ev => {
-        if (ev.target.innerText !== 'delete') return;
+        if (!ev.target.classList.contains('delete-link')) return;
 
         ev.preventDefault();
 
@@ -94,7 +335,7 @@
     });
 
     document.getElementById('selectall').addEventListener('change', ev => {
-        document.querySelectorAll('#streams input').forEach(el => {
+        document.querySelectorAll('#streams input[type="checkbox"]').forEach(el => {
             el.checked = ev.target.checked;
         });
     });
@@ -116,7 +357,7 @@
                 let tr = tbody.querySelector(`tr[data-id="${name}"]`);
                 const online = value && value.consumers ? value.consumers.length : 0;
                 const src = encodeURIComponent(name);
-                const links = templates.map(link => link.replace('{name}', src)).join(' ');
+                const links = templates.map(link => link.replace('{name}', src)).join('<span class="link-separator">/</span>');
 
                 if (!tr) {
                     tr = document.createElement('tr');
@@ -125,10 +366,30 @@
                 }
 
                 const isChecked = checkboxStates[name] ? 'checked' : '';
+                const dotClass = online > 0 ? 'live-dot' : 'offline-dot';
+
                 tr.innerHTML =
-                    `<td><label><input type="checkbox" name="${name}" ${isChecked}>${name}</label></td>` +
-                    `<td><a href="api/streams?src=${src}">${online} / info</a> / <a href="api/streams?src=${src}&video=all&audio=all&microphone">probe</a> / <a href="net.html?src=${src}">net</a></td>` +
-                    `<td>${links}</td>`;
+                    `<td data-label="Name">
+                        <div class="stream-name">
+                            <label>
+                                <input type="checkbox" name="${name}" ${isChecked}>
+                                <span>${name}</span>
+                            </label>
+                        </div>
+                    </td>` +
+                    `<td data-label="Status">
+                        <div class="online-count">
+                            <span class="${dotClass}"></span>
+                            ${online > 0 ? `<span>${online} viewer${online !== 1 ? 's' : ''}</span>` : '<span>offline</span>'}
+                        </div>
+                        <span class="link-separator">/</span>
+                        <a href="info.html?src=${src}">info</a>
+                        <span class="link-separator">/</span>
+                        <a href="probe.html?src=${src}">probe</a>
+                        <span class="link-separator">/</span>
+                        <a href="net.html?src=${src}">network</a>
+                    </td>` +
+                    `<td data-label="Actions">${links}</td>`;
             }
 
             // Remove old rows
@@ -144,13 +405,164 @@
     // Auto-reload
     setInterval(reload, 1000);
 
-    const url = new URL('api', location.href);
-    fetch(url, {cache: 'no-cache'}).then(r => r.json()).then(data => {
-        const info = document.querySelector('.info');
-        info.innerText = `version: ${data.version} / config: ${data.config_path}`;
-    });
+    const info = document.querySelector('.info');
+    const infoURL = new URL('api', location.href);
+    const cpuHistory = [];
+    const memHistory = [];
+    const timeHistory = [];
+    const graphWidth = 36;
+    const graphHeight = 8;
+    const infoUpdateInterval = window.SYSTEM_INFO_UPDATE_INTERVAL_MS ?? 2000;
+    let infoUpdateTimer = null;
 
-    reload();
+    function toNumber(value) {
+        const number = Number(value);
+        return Number.isFinite(number) ? number : 0;
+    }
+
+    function clampPercent(value) {
+        return Math.max(0, Math.min(100, toNumber(value)));
+    }
+
+    function pushHistory(history, value) {
+        history.push(value);
+        while (history.length > graphWidth) history.shift();
+    }
+
+    function formatBytes(bytes) {
+        const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        let value = Math.max(0, toNumber(bytes));
+        let index = 0;
+        while (value >= 1024 && index < units.length - 1) {
+            value /= 1024;
+            index++;
+        }
+        return `${value.toFixed(value >= 100 || index === 0 ? 0 : 1)} ${units[index]}`;
+    }
+
+    function formatClock(timeMs) {
+        return new Date(timeMs).toLocaleTimeString(undefined, {
+            hour: '2-digit', minute: '2-digit', second: '2-digit'
+        });
+    }
+
+    function renderXAxisLabels(width) {
+        if (!timeHistory.length) return ' '.repeat(width);
+
+        const start = formatClock(timeHistory[0]);
+        const end = formatClock(timeHistory[timeHistory.length - 1]);
+        if (start.length + end.length >= width) return `${start} ${end}`;
+
+        return `${start}${' '.repeat(width - start.length - end.length)}${end}`;
+    }
+
+    function renderAsciiGraphLines(history) {
+        const bars = Array.from({length: graphWidth}, (_, index) => {
+            const value = history[index] ?? 0;
+            return Math.round((value / 100) * graphHeight);
+        });
+        const lines = [];
+        for (let row = graphHeight; row >= 1; row--) {
+            let line = '|';
+            for (const bar of bars) {
+                line += bar >= row ? '█' : ' ';
+            }
+            line += '|';
+            lines.push(line);
+        }
+        lines.push('+' + '-'.repeat(graphWidth) + '+');
+        return lines;
+    }
+
+    function padRight(text, width) {
+        return text + ' '.repeat(Math.max(0, width - text.length));
+    }
+
+    function renderInfo(data, cpuUsage, memUsage, memUsed, memTotal, isUsageUnsupported) {
+        const detailsLines = [];
+        if (isUsageUnsupported) {
+            detailsLines.push('System metrics are not supported on this platform (CPU and MEM usage are 0).');
+        } else {
+            const cpuLines = renderAsciiGraphLines(cpuHistory);
+            const memLines = renderAsciiGraphLines(memHistory);
+            const graphBlockWidth = graphWidth + 2; // borders
+            const cpuTitle = `CPU ${cpuUsage.toFixed(1)}%`;
+            const memTitle = `MEM ${memUsage.toFixed(1)}% (${formatBytes(memUsed)} / ${formatBytes(memTotal)})`;
+
+            detailsLines.push(
+                `${padRight(cpuTitle, graphBlockWidth)}   ${padRight(memTitle, graphBlockWidth)}`
+            );
+            for (let i = 0; i < cpuLines.length; i++) {
+                detailsLines.push(`${cpuLines[i]}   ${memLines[i]}`);
+            }
+            const timeLabels = renderXAxisLabels(graphBlockWidth);
+            detailsLines.push(`${timeLabels}   ${timeLabels}`);
+        }
+
+        const lines = [
+            `version: ${data.version ?? '-'}`,
+            `pid: ${data.pid ?? '-'}`,
+            `config: ${data.config_path ?? '-'}`,
+            '',
+            ...detailsLines,
+        ];
+        info.textContent = lines.join('\n');
+    }
+
+    function startInfoUpdates() {
+        if (infoUpdateTimer !== null) return;
+        infoUpdateTimer = setInterval(updateInfo, infoUpdateInterval);
+    }
+
+    function stopInfoUpdates() {
+        if (infoUpdateTimer === null) return;
+        clearInterval(infoUpdateTimer);
+        infoUpdateTimer = null;
+    }
+
+    function updateInfo() {
+        return fetch(infoURL, {cache: 'no-cache'}).then(r => r.json()).then(data => {
+            applyReadOnly(Boolean(data.read_only));
+
+            const cpuUsage = clampPercent(data.system?.cpu_usage);
+            const memUsed = toNumber(data.system?.mem_used);
+            const memTotal = toNumber(data.system?.mem_total);
+            const memUsage = memTotal > 0 ? clampPercent((memUsed * 100) / memTotal) : 0;
+            const isUsageUnsupported = cpuUsage === 0 && memUsage === 0;
+
+            if (!isUsageUnsupported) {
+                const now = Date.now();
+                pushHistory(cpuHistory, cpuUsage);
+                pushHistory(memHistory, memUsage);
+                pushHistory(timeHistory, now);
+            } else {
+                stopInfoUpdates();
+            }
+            renderInfo(data, cpuUsage, memUsage, memUsed, memTotal, isUsageUnsupported);
+            return !isUsageUnsupported;
+        }).catch(error => {
+            if (!info.textContent) {
+                info.textContent = `Can't load system info: ${error.message}`;
+            }
+            return true;
+        });
+    }
+
+    const applyInfo = (data) => {
+        applyReadOnly(Boolean(data.read_only));
+        updateInfo().then(isSupported => {
+            if (isSupported) startInfoUpdates();
+        });
+    };
+
+    if (window.go2rtcReady) {
+        window.go2rtcReady.then(data => {
+            if (data) applyInfo(data);
+        });
+    } else {
+        const url = new URL('api', location.href);
+        fetch(url, {cache: 'no-cache'}).then(r => r.json()).then(data => applyInfo(data));
+    }
 </script>
 
 </body>

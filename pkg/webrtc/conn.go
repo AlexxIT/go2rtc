@@ -208,8 +208,6 @@ func (c *Conn) getMediaCodec(remote *webrtc.TrackRemote) (*core.Media, *core.Cod
 	// sends new codec with new payload type to same media
 	// check GetTrack
 	panic(core.Caller())
-
-	return nil, nil
 }
 
 func sanitizeIP6(host string) string {

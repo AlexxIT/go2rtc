@@ -20,10 +20,14 @@ func LoadConfig(v any) {
 }
 
 var configMu sync.Mutex
+var ConfigReadOnly bool
 
 func PatchConfig(path []string, value any) error {
 	if ConfigPath == "" {
 		return errors.New("config file disabled")
+	}
+	if ConfigReadOnly {
+		return errors.New("config is read-only")
 	}
 
 	configMu.Lock()

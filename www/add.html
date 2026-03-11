@@ -6,20 +6,34 @@
     <title>add - go2rtc</title>
     <style>
         main > button {
-            background-color: #444;
-            color: white;
+            background: var(--bg-card);
+            color: var(--text-primary);
             cursor: pointer;
-            padding: 14px;
+            padding: 12px 16px;
             width: 100%;
-            border: none;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
             text-align: left;
-            font-size: 16px;
-            font-weight: bold;
+            font-size: 14px;
+            font-weight: 500;
+            font-family: inherit;
+            margin-bottom: 4px;
+            transition: border-color 0.15s;
+        }
+
+        main > button:hover {
+            border-color: var(--accent);
+            color: var(--accent);
         }
 
         main > div {
             display: none;
-            gap: 10px;
+            gap: 8px;
+            margin-bottom: 8px;
+            padding: 12px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
         }
     </style>
 </head>
@@ -52,8 +66,24 @@
         drawTable(table, await r.json());
     }
 </script>
+<script>
+    window.addEventListener('DOMContentLoaded', () => {
+        if (!window.go2rtcReady) return;
+        window.go2rtcReady.then(data => {
+            if (!data || !data.read_only) return;
+            const banner = document.getElementById('readonly-banner');
+            if (banner) banner.style.display = 'block';
+            document.querySelectorAll('main input, main select, main button, main textarea').forEach(el => {
+                el.disabled = true;
+            });
+        });
+    });
+</script>
 
 <main>
+    <div id="readonly-banner" style="display: none; padding: 10px; background: var(--bg-card); border: 1px solid var(--red); border-radius: 6px; color: var(--red); margin-bottom: 12px;">
+        Read-only mode: add actions are disabled.
+    </div>
     <button id="stream">Temporary stream</button>
     <div>
         <form id="stream-form">
@@ -64,7 +94,8 @@
     </div>
     <script>
         document.getElementById('stream').addEventListener('click', async ev => {
-            ev.target.nextElementSibling.style.display = 'grid';
+            const div = ev.target.nextElementSibling;
+            div.style.display = div.style.display === 'grid' ? 'none' : 'grid';
         });
 
         document.getElementById('stream-form').addEventListener('submit', async ev => {
@@ -86,7 +117,9 @@
     </div>
     <script>
         document.getElementById('alsa').addEventListener('click', async ev => {
-            ev.target.nextElementSibling.style.display = 'grid';
+            const div = ev.target.nextElementSibling;
+            if (div.style.display === 'grid') { div.style.display = 'none'; return; }
+            div.style.display = 'grid';
             await getSources('alsa-table', 'api/alsa');
         });
     </script>
@@ -123,7 +156,9 @@
         }
 
         document.getElementById('homekit').addEventListener('click', async ev => {
-            ev.target.nextElementSibling.style.display = 'grid';
+            const div = ev.target.nextElementSibling;
+            if (div.style.display === 'grid') { div.style.display = 'none'; return; }
+            div.style.display = 'grid';
             await reloadHomeKit();
         });
 
@@ -168,7 +203,9 @@
     </div>
     <script>
         document.getElementById('dvrip').addEventListener('click', async ev => {
-            ev.target.nextElementSibling.style.display = 'grid';
+            const div = ev.target.nextElementSibling;
+            if (div.style.display === 'grid') { div.style.display = 'none'; return; }
+            div.style.display = 'grid';
             await getSources('dvrip-table', 'api/dvrip');
         });
     </script>
@@ -180,7 +217,9 @@
     </div>
     <script>
         document.getElementById('devices').addEventListener('click', async ev => {
-            ev.target.nextElementSibling.style.display = 'grid';
+            const div = ev.target.nextElementSibling;
+            if (div.style.display === 'grid') { div.style.display = 'none'; return; }
+            div.style.display = 'grid';
             await getSources('devices-table', 'api/ffmpeg/devices');
         });
     </script>
@@ -192,7 +231,9 @@
     </div>
     <script>
         document.getElementById('hardware').addEventListener('click', async ev => {
-            ev.target.nextElementSibling.style.display = 'grid';
+            const div = ev.target.nextElementSibling;
+            if (div.style.display === 'grid') { div.style.display = 'none'; return; }
+            div.style.display = 'grid';
             await getSources('hardware-table', 'api/ffmpeg/hardware');
         });
     </script>
@@ -211,7 +252,8 @@
     </div>
     <script>
         document.getElementById('nest').addEventListener('click', async ev => {
-            ev.target.nextElementSibling.style.display = 'grid';
+            const div = ev.target.nextElementSibling;
+            div.style.display = div.style.display === 'grid' ? 'none' : 'grid';
         });
 
         document.getElementById('nest-form').addEventListener('submit', async ev => {
@@ -231,7 +273,9 @@
     </div>
     <script>
         document.getElementById('gopro').addEventListener('click', async ev => {
-            ev.target.nextElementSibling.style.display = 'grid';
+            const div = ev.target.nextElementSibling;
+            if (div.style.display === 'grid') { div.style.display = 'none'; return; }
+            div.style.display = 'grid';
             await getSources('gopro-table', 'api/gopro');
         });
     </script>
@@ -243,7 +287,9 @@
     </div>
     <script>
         document.getElementById('hass').addEventListener('click', async ev => {
-            ev.target.nextElementSibling.style.display = 'grid';
+            const div = ev.target.nextElementSibling;
+            if (div.style.display === 'grid') { div.style.display = 'none'; return; }
+            div.style.display = 'grid';
             await getSources('hass-table', 'api/hass');
         });
     </script>
@@ -259,7 +305,9 @@
     </div>
     <script>
         document.getElementById('onvif').addEventListener('click', async ev => {
-            ev.target.nextElementSibling.style.display = 'grid';
+            const div = ev.target.nextElementSibling;
+            if (div.style.display === 'grid') { div.style.display = 'none'; return; }
+            div.style.display = 'grid';
             await getSources('onvif-table', 'api/onvif');
         });
 
@@ -293,7 +341,8 @@
     </div>
     <script>
         document.getElementById('ring').addEventListener('click', async ev => {
-            ev.target.nextElementSibling.style.display = 'grid';
+            const div = ev.target.nextElementSibling;
+            div.style.display = div.style.display === 'grid' ? 'none' : 'grid';
         });
 
         async function handleRingAuth(ev) {
@@ -349,7 +398,8 @@
     </div>
     <script>
         document.getElementById('tuya').addEventListener('click', async ev => {
-            ev.target.nextElementSibling.style.display = 'grid';
+            const div = ev.target.nextElementSibling;
+            div.style.display = div.style.display === 'grid' ? 'none' : 'grid';
         });
 
         document.getElementById('tuya-credentials-form').addEventListener('submit', async ev => {
@@ -389,7 +439,9 @@
     </div>
     <script>
         document.getElementById('roborock').addEventListener('click', async ev => {
-            ev.target.nextElementSibling.style.display = 'grid';
+            const div = ev.target.nextElementSibling;
+            if (div.style.display === 'grid') { div.style.display = 'none'; return; }
+            div.style.display = 'grid';
             await getSources('roborock-table', 'api/roborock');
         });
 
@@ -407,7 +459,9 @@
     </div>
     <script>
         document.getElementById('v4l2').addEventListener('click', async ev => {
-            ev.target.nextElementSibling.style.display = 'grid';
+            const div = ev.target.nextElementSibling;
+            if (div.style.display === 'grid') { div.style.display = 'none'; return; }
+            div.style.display = 'grid';
             await getSources('v4l2-table', 'api/v4l2');
         });
     </script>
@@ -415,7 +469,7 @@
 
     <button id="wyze">Wyze</button>
     <div>
-        <p style="margin: 5px 0; font-size: 12px; color: #888;">
+        <p style="margin: 5px 0; font-size: 12px; color: var(--text-muted);">
             API Key required: <a href="https://support.wyze.com/hc/en-us/articles/16129834216731" target="_blank">Get your API Key</a>
         </p>
         <form id="wyze-login-form">
@@ -433,7 +487,11 @@
     </div>
     <script>
         async function wyzeReload(ev) {
-            if (ev) ev.target.nextElementSibling.style.display = 'grid';
+            if (ev) {
+                const div = ev.target.nextElementSibling;
+                if (div.style.display === 'grid') { div.style.display = 'none'; return; }
+                div.style.display = 'grid';
+            }
 
             const r = await fetch('api/wyze', {'cache': 'no-cache'});
             const data = await r.json();
@@ -504,7 +562,11 @@
     </div>
     <script>
         async function xiaomiReload(ev) {
-            if (ev) ev.target.nextElementSibling.style.display = 'grid';
+            if (ev) {
+                const div = ev.target.nextElementSibling;
+                if (div.style.display === 'grid') { div.style.display = 'none'; return; }
+                div.style.display = 'grid';
+            }
 
             document.getElementById('xiaomi-login-form').style.display = 'flex';
             document.getElementById('xiaomi-captcha-form').style.display = 'none';
@@ -559,7 +621,9 @@
     </div>
     <script>
         document.getElementById('webtorrent').addEventListener('click', async ev => {
-            ev.target.nextElementSibling.style.display = 'grid';
+            const div = ev.target.nextElementSibling;
+            if (div.style.display === 'grid') { div.style.display = 'none'; return; }
+            div.style.display = 'grid';
             await getSources('webtorrent-table', 'api/webtorrent');
         });
     </script>

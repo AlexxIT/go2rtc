@@ -419,7 +419,7 @@ func ListenUDPPair() (*net.UDPConn, *net.UDPConn, error) {
 	listenUDPMu.Lock()
 	defer listenUDPMu.Unlock()
 
-	for i := 0; i < listenUDPAttemps; i++ {
+	for range listenUDPAttemps {
 		// Get a random even port from the OS
 		ln1, err := net.ListenUDP("udp", &net.UDPAddr{IP: nil, Port: 0})
 		if err != nil {

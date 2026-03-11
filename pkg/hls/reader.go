@@ -88,7 +88,7 @@ func (r *reader) RoundTrip(_ *http.Request) (*http.Response, error) {
 }
 
 func (r *reader) getSegment() ([]byte, error) {
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		if r.playlist == nil {
 			if wait := time.Second - time.Since(r.lastTime); wait > 0 {
 				time.Sleep(wait)

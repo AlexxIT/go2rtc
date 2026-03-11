@@ -123,11 +123,18 @@ paths:
                 properties:
                   config_path: { type: string, example: "/config/go2rtc.yaml" }
                   host: { type: string, example: "192.168.1.123:1984" }
+                  pid: { type: integer, example: 12345 }
                   rtsp:
                     type: object
                     properties:
                       listen: { type: string, example: ":8554" }
                       default_query: { type: string, example: "video&audio" }
+                  system:
+                    type: object
+                    properties:
+                      cpu_usage: { type: number, format: float, example: 23.5, description: "CPU usage percent (0-100)" }
+                      mem_total: { type: integer, format: int64, example: 17179869184, description: "Total physical memory in bytes" }
+                      mem_used: { type: integer, format: int64, example: 8589934592, description: "Used memory in bytes" }
                   version: { type: string, example: "1.9.12" }
 
   /api/exit:
@@ -567,6 +574,18 @@ paths:
           description: ""
           content: { multipart/x-mixed-replace: { example: "" } }
 
+  /api/stream.webp?src={src}:
+    get:
+      summary: Get stream in Motion-WebP format (multipart)
+      description: "Multipart stream of WebP frames. Pure Go encoding via [go-webp](https://github.com/skrashevich/go-webp)."
+      tags: [ Consume stream ]
+      parameters:
+        - $ref: "#/components/parameters/stream_src_path"
+      responses:
+        200:
+          description: ""
+          content: { multipart/x-mixed-replace: { example: "" } }
+
   /api/stream.ascii?src={src}:
     get:
       summary: Get stream in ASCII-art format (ANSI escape codes)
@@ -690,6 +709,55 @@ paths:
           description: ""
           content:
             image/jpeg: { example: "" }
+
+  /api/frame.webp?src={src}:
+    get:
+      summary: Get snapshot in WebP format
+      description: "Pure Go WebP encoding via [go-webp](https://github.com/skrashevich/go-webp). No FFmpeg or CGO required for the WebP conversion itself."
+      tags: [ Snapshot ]
+      parameters:
+        - $ref: "#/components/parameters/stream_src_path"
+        - name: name
+          in: query
+          description: Optional stream name to create/update if `src` is a URL
+          required: false
+          schema: { type: string }
+        - name: quality
+          in: query
+          description: "WebP quality (1-100, default: 75)"
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 75 }
+        - name: width
+          in: query
+          description: "Scale output width (alias: `w`). Requires FFmpeg for H264/H265 sources."
+          required: false
+          schema: { type: integer, minimum: 1 }
+        - name: height
+          in: query
+          description: "Scale output height (alias: `h`). Requires FFmpeg for H264/H265 sources."
+          required: false
+          schema: { type: integer, minimum: 1 }
+        - name: rotate
+          in: query
+          description: "Rotate output (degrees). Requires FFmpeg for H264/H265 sources."
+          required: false
+          schema: { type: integer, enum: [ 90, 180, 270 ] }
+        - name: hardware
+          in: query
+          description: "Hardware acceleration engine for FFmpeg snapshot transcoding (alias: `hw`)"
+          required: false
+          schema: { type: string }
+        - name: cache
+          in: query
+          description: "Cache duration (e.g. `5s`, `1m`). Serves cached frame if within timeout."
+          required: false
+          schema: { type: string }
+          example: "5s"
+      responses:
+        "200":
+          description: ""
+          content:
+            image/webp: { example: "" }
 
   /api/frame.mp4?src={src}:
     get:
@@ -1058,6 +1126,85 @@ paths:
           description: OK
         "404":
           description: Stream not found
+
+  /api/homekit/motion:
+    get:
+      summary: Get motion detection status
+      description: Returns current MotionDetected state for the HKSV camera.
+      tags: [ HomeKit ]
+      parameters:
+        - name: id
+          in: query
+          description: Stream name / server ID
+          required: true
+          schema: { type: string }
+          example: outdoor
+      responses:
+        "200":
+          description: Motion status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    example: outdoor
+                  motion:
+                    type: boolean
+                    example: false
+        "404":
+          description: Server not found
+    post:
+      summary: Trigger motion detection for HKSV camera
+      description: Sets MotionDetected characteristic to true, which triggers the Home Hub to start recording.
+      tags: [ HomeKit ]
+      parameters:
+        - name: id
+          in: query
+          description: Stream name / server ID
+          required: true
+          schema: { type: string }
+          example: outdoor
+      responses:
+        "200":
+          description: Motion triggered
+        "404":
+          description: Server not found
+    delete:
+      summary: Clear motion detection for HKSV camera
+      description: Sets MotionDetected characteristic to false.
+      tags: [ HomeKit ]
+      parameters:
+        - name: id
+          in: query
+          description: Stream name / server ID
+          required: true
+          schema: { type: string }
+          example: outdoor
+      responses:
+        "200":
+          description: Motion cleared
+        "404":
+          description: Server not found
+
+  /api/homekit/doorbell:
+    post:
+      summary: Trigger doorbell ring event
+      description: Sends ProgrammableSwitchEvent to Home Hub, triggering a doorbell notification on Apple devices.
+      tags: [ HomeKit ]
+      parameters:
+        - name: id
+          in: query
+          description: Stream name / server ID (must have category_id=doorbell)
+          required: true
+          schema: { type: string }
+          example: front_door
+      responses:
+        "200":
+          description: Doorbell event sent
+        "404":
+          description: Server not found
 
   /api/homekit/accessories:
     get:

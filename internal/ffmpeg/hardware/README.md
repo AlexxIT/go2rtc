@@ -59,7 +59,7 @@ Docker users should add the `--privileged` option to the container for access to
 
 **Supported on:** Linux binary, Docker, Hass Addon.
 
-Docker users should install: `alexxit/go2rtc:master-hardware`. Docker users should add the `--privileged` option to the container for access to the hardware.
+Docker users should install: `ghcr.io/skrashevich/go2rtc:beta-hardware`. Docker users should add the `--privileged` option to the container for access to the hardware.
 
 Hass Addon users should install **go2rtc master hardware** version.
 
@@ -69,7 +69,7 @@ Hass Addon users should install **go2rtc master hardware** version.
 
 **Supported on:** Windows binary, Linux binary, Docker.
 
-Docker users should install: `alexxit/go2rtc:master-hardware`.
+Docker users should install: `ghcr.io/skrashevich/go2rtc:beta-hardware`.
 
 Read more [here](https://docs.frigate.video/configuration/hardware_acceleration) and [here](https://jellyfin.org/docs/general/administration/hardware-acceleration/#nvidia-hardware-acceleration-on-docker-linux).
 

@@ -48,6 +48,10 @@ func (c *Character) RemoveListener(w io.Writer) {
 	}
 }
 
+func (c *Character) ListenerCount() int {
+	return len(c.listeners)
+}
+
 func (c *Character) NotifyListeners(ignore io.Writer) error {
 	if c.listeners == nil {
 		return nil

@@ -47,7 +47,7 @@ func MakeTables(q byte) (lqt, cqt []byte) {
 	lqt = make([]byte, 64)
 	cqt = make([]byte, 64)
 
-	for i := 0; i < 64; i++ {
+	for i := range 64 {
 		lq := (int(jpeg_luma_quantizer[i])*factor + 50) / 100
 		cq := (int(jpeg_chroma_quantizer[i])*factor + 50) / 100
 

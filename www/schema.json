@@ -68,6 +68,11 @@
         "password": {
           "type": "string"
         },
+        "read_only": {
+          "description": "Disable write actions in WebUI/API",
+          "type": "boolean",
+          "default": false
+        },
         "local_auth": {
           "description": "Enable auth check for localhost requests",
           "type": "boolean",
@@ -151,6 +156,7 @@
               "mp4",
               "hls",
               "mjpeg",
+              "webp",
               "hass",
               "homekit",
               "onvif",
@@ -331,6 +337,41 @@
             "items": {
               "type": "string"
             }
+          },
+          "hksv": {
+            "description": "Enable HomeKit Secure Video recording support",
+            "type": "boolean",
+            "default": false
+          },
+          "motion": {
+            "description": "Motion detection mode for HKSV: `api` (triggered via HTTP API), `continuous` (always report motion), `detect` (automatic detection based on P-frame size analysis), or `onvif` (use ONVIF event subscription from the camera)",
+            "type": "string",
+            "enum": [
+              "api",
+              "continuous",
+              "detect",
+              "onvif"
+            ],
+            "default": "api"
+          },
+          "motion_threshold": {
+            "description": "Motion detection sensitivity threshold for `detect` mode. Lower values = more sensitive. Uses EMA-based P-frame size analysis.",
+            "type": "number",
+            "default": 2.0
+          },
+          "motion_hold_time": {
+            "description": "Duration in seconds to keep motion active after the last trigger. Used with `onvif` mode to ensure Home Hub has enough time to start recording.",
+            "type": "number",
+            "default": 30
+          },
+          "onvif_url": {
+            "description": "ONVIF device URL for motion detection. If not set, auto-detected from `onvif://` stream sources.",
+            "type": "string"
+          },
+          "speaker": {
+            "description": "Include Speaker service for 2-way audio (talk through the camera). Only enable if your camera has a physical speaker.",
+            "type": "boolean",
+            "default": false
           }
         }
       }
@@ -425,6 +466,9 @@
           "$ref": "#/definitions/log_level"
         },
         "mjpeg": {
+          "$ref": "#/definitions/log_level"
+        },
+        "webp": {
           "$ref": "#/definitions/log_level"
         },
         "mp4": {

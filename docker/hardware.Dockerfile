@@ -4,7 +4,7 @@
 # only debian 13 (trixie) has latest ffmpeg
 # https://packages.debian.org/trixie/ffmpeg
 ARG DEBIAN_VERSION="trixie-slim"
-ARG GO_VERSION="1.25-bookworm"
+ARG GO_VERSION="1.26-bookworm"
 
 
 # 1. Build go2rtc binary
@@ -26,7 +26,15 @@ COPY . .
 RUN --mount=type=cache,target=/root/.cache/go-build CGO_ENABLED=0 go build -ldflags "-s -w" -trimpath
 
 
-# 2. Final image
+# 2. Download CDN dependencies for offline web UI
+FROM alpine AS download-cdn
+RUN apk add --no-cache wget
+COPY www/ /web/
+COPY docker/download_cdn.sh /tmp/
+RUN sh /tmp/download_cdn.sh /web
+
+
+# 3. Final image
 FROM debian:${DEBIAN_VERSION}
 
 # Prepare apt for buildkit cache
@@ -48,13 +56,14 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked --mount=type=cache,t
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /build/go2rtc /usr/local/bin/
+COPY --from=download-cdn /web /var/www/go2rtc
+COPY --chmod=755 docker/entrypoint.sh /usr/local/bin/
 
 EXPOSE 1984 8554 8555 8555/udp
-ENTRYPOINT ["/usr/bin/tini", "--"]
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/entrypoint.sh"]
 VOLUME /config
 WORKDIR /config
 # https://github.com/NVIDIA/nvidia-docker/wiki/Installation-(Native-GPU-Support)
 ENV NVIDIA_VISIBLE_DEVICES all
 ENV NVIDIA_DRIVER_CAPABILITIES compute,video,utility
 
-CMD ["go2rtc", "-config", "/config/go2rtc.yaml"]

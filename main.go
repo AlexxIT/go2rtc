@@ -27,6 +27,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/kasa"
 	"github.com/AlexxIT/go2rtc/internal/mjpeg"
 	"github.com/AlexxIT/go2rtc/internal/mp4"
+	"github.com/AlexxIT/go2rtc/internal/webp"
 	"github.com/AlexxIT/go2rtc/internal/mpeg"
 	"github.com/AlexxIT/go2rtc/internal/multitrans"
 	"github.com/AlexxIT/go2rtc/internal/nest"
@@ -73,6 +74,7 @@ func main() {
 		{"mp4", mp4.Init},     // MP4 API
 		{"hls", hls.Init},     // HLS API
 		{"mjpeg", mjpeg.Init}, // MJPEG API
+		{"webp", webp.Init},   // WebP API
 		// Other sources and servers
 		{"hass", hass.Init},             // hass source, Hass API server
 		{"homekit", homekit.Init},       // homekit source, HomeKit server
@@ -120,6 +122,8 @@ func main() {
 			m.init()
 		}
 	}
+
+	streams.SetReady()
 
 	shell.RunUntilSignal()
 }

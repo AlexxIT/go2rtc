@@ -22,6 +22,86 @@
 
 Ultimate camera streaming application with support for dozens formats and protocols.
 
+---
+
+> ### 🔀 Fork: [skrashevich/go2rtc](https://github.com/skrashevich/go2rtc)
+>
+> This is a fork of [AlexxIT/go2rtc](https://github.com/AlexxIT/go2rtc) with the following additions:
+>
+> **Features**
+> - **HomeKit Secure Video (HKSV)** — full recording support with motion detection (P-frame analysis, ONVIF events, API)
+> - **ONVIF motion detection** — automatic motion events from ONVIF cameras for HomeKit
+> - **WebP streaming** — native WebP encoding (snapshot & multipart stream) without FFmpeg
+> - **System resource monitoring** — CPU/memory usage in API (`/api/system`) and WebUI ASCII graphs
+> - **Read-only mode** — disable all write operations in API/WebUI for production security
+> - **Offline WebUI in Docker** — CDN JS dependencies bundled into Docker images
+>
+> **WebUI improvements**
+> - **Redesigned interface** — dark/light theme toggle, unified color scheme, improved layout
+> - **Stream Info & Probe pages** — detailed stream analysis with producers/consumers data
+> - **Stream Links page** — direct URLs for all supported formats (RTSP, WebRTC, MSE, HLS, etc.)
+> - **Mobile-responsive** — improved header, tables, and word wrapping on mobile devices
+>
+> **Bug fixes & maintenance**
+> - **YAML config merge fix** — corrected recursive merge behavior preserving comments
+> - **Streams race condition fix** — fixed race condition in stream schema handling
+> - **Go 1.26** — updated to the latest Go runtime
+>
+> #### Download
+>
+> **Docker images** (GHCR):
+> ```bash
+> # Standard
+> docker pull ghcr.io/skrashevich/go2rtc:beta
+>
+> # With hardware acceleration (Intel/AMD)
+> docker pull ghcr.io/skrashevich/go2rtc:beta-hardware
+>
+> # Rockchip
+> docker pull ghcr.io/skrashevich/go2rtc:beta-rockchip
+> ```
+>
+> **Binaries**: download from [GitHub Actions](https://github.com/skrashevich/go2rtc/actions/workflows/build.yml) artifacts (select the latest successful run on the `beta` branch).
+> Available for: Windows (amd64, i386, arm64), Linux (amd64, i386, arm, arm64), macOS (amd64, arm64), FreeBSD (amd64, arm64).
+
+---
+
+## Screenshots
+
+| Streams Dashboard | Add Stream |
+|:-:|:-:|
+| ![Streams](website/images/screenshots/01-streams-dashboard-dark.png) | ![Add Stream](website/images/screenshots/02-add-stream-dark.png) |
+| Stream list with status, actions, and system monitoring | Quick setup for dozens of protocols and integrations |
+
+| Stream Info | Stream Links |
+|:-:|:-:|
+| ![Info](website/images/screenshots/03-stream-info-dark.png) | ![Links](website/images/screenshots/04-stream-links-dark.png) |
+| Producers and consumers details | Direct URLs for all supported formats |
+
+| Config Editor | Logs |
+|:-:|:-:|
+| ![Config](website/images/screenshots/05-config-editor-dark.png) | ![Logs](website/images/screenshots/06-logs-dark.png) |
+| YAML configuration with syntax highlighting | Real-time log viewer with auto-update |
+
+<details>
+<summary>Light theme</summary>
+
+| Streams Dashboard | Add Stream |
+|:-:|:-:|
+| ![Streams](website/images/screenshots/01-streams-dashboard-light.png) | ![Add Stream](website/images/screenshots/02-add-stream-light.png) |
+
+| Stream Info | Stream Links |
+|:-:|:-:|
+| ![Info](website/images/screenshots/03-stream-info-light.png) | ![Links](website/images/screenshots/04-stream-links-light.png) |
+
+| Config Editor | Logs |
+|:-:|:-:|
+| ![Config](website/images/screenshots/05-config-editor-light.png) | ![Logs](website/images/screenshots/06-logs-light.png) |
+
+</details>
+
+---
+
 - zero-dependency [small app](#go2rtc-binary) for all OS (Windows, macOS, Linux, FreeBSD)
 - zero-delay for many [supported protocols](#codecs-madness) (lowest possible streaming latency)
 - [streaming input](#streaming-input) from dozens formats and protocols
@@ -135,7 +215,7 @@ It comes preinstalled with [FFmpeg](internal/ffmpeg/README.md) and [Python](inte
 Latest, but maybe unstable version:
 
 - Binary: [latest master build](https://nightly.link/AlexxIT/go2rtc/workflows/build/master)
-- Docker: `alexxit/go2rtc:master` or `alexxit/go2rtc:master-hardware` versions
+- Docker: `ghcr.io/skrashevich/go2rtc:beta` or `ghcr.io/skrashevich/go2rtc:beta-hardware` versions
 - Home Assistant add-on: `go2rtc master` or `go2rtc master hardware` versions
 
 ## Configuration
@@ -144,7 +224,7 @@ This is the `go2rtc.yaml` file in [YAML-format](https://en.wikipedia.org/wiki/YA
 The configuration can be changed in the [WebUI](www/README.md) at `http://localhost:1984`.
 The editor provides syntax highlighting and checking.
 
-![go2rtc webui config](website/images/webui-config.png)
+![go2rtc webui config](website/images/screenshots/05-config-editor-dark.png)
 
 The simplest config looks like this:
 
@@ -311,7 +391,7 @@ You can preload any stream on go2rtc start. This is useful for cameras that take
 [WebUI](www/README.md) provides detailed information about all active connections, including IP-addresses, formats, protocols, number of packets and bytes transferred. 
 Via the [HTTP API](internal/api/README.md) in [`json`](https://en.wikipedia.org/wiki/JSON) or [`dot`](https://en.wikipedia.org/wiki/DOT_(graph_description_language)) format on an interactive connection map.
 
-![go2rtc webui net](website/images/webui-net.png)
+![go2rtc webui net](website/images/screenshots/05-network-topology-dark.png)
 
 ## Codecs
 
@@ -462,6 +542,8 @@ api:
   allow_paths: [/api, /api/streams, /api/webrtc, /api/frame.jpeg]
   # enable auth for localhost (used together with username and password)
   local_auth: true
+  # disable write actions in WebUI/API
+  read_only: true
 
 exec:
   # use only allowed exec paths

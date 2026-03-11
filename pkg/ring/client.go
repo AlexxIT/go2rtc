@@ -140,7 +140,7 @@ func Dial(rawURL string) (*Client, error) {
 				return
 			}
 
-			icePayload := map[string]interface{}{
+			icePayload := map[string]any{
 				"ice":        iceCandidate.Candidate,
 				"mlineindex": iceCandidate.SDPMLineIndex,
 			}
@@ -200,7 +200,7 @@ func Dial(rawURL string) (*Client, error) {
 	}
 
 	// Send offer
-	offerPayload := map[string]interface{}{
+	offerPayload := map[string]any{
 		"stream_options": map[string]bool{
 			"audio_enabled": true,
 			"video_enabled": true,
@@ -317,7 +317,7 @@ func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Rece
 	if webrtcProd, ok := c.prod.(*webrtc.Conn); ok {
 		if media.Kind == core.KindAudio {
 			// Enable speaker
-			speakerPayload := map[string]interface{}{
+			speakerPayload := map[string]any{
 				"stealth_mode": false,
 			}
 			_ = c.wsClient.sendSessionMessage("camera_options", speakerPayload)
