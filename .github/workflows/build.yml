@@ -2,6 +2,7 @@ name: Build and Push
 
 on:
   workflow_dispatch:
+  pull_request:
   push:
     branches:
       - 'master'
@@ -112,9 +113,68 @@ jobs:
         uses: actions/upload-artifact@v4
         with: { name: go2rtc_freebsd_arm64, path: go2rtc }
 
+      - name: Generate artifact download links
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const {owner, repo} = context.repo;
+            const run_id = context.runId;
+
+            const artifacts = await github.paginate(
+              github.rest.actions.listWorkflowRunArtifacts, {owner, repo, run_id});
+            if (!artifacts.length) {
+              return core.warning('No artifacts found');
+            }
+
+            let body = `# Download artifacts\n\n`;
+            const osLabels = {
+              win: "Windows",
+              linux: "Linux",
+              mac: "macOS",
+              freebsd: "FreeBSD",
+            };
+            const groups = new Map();
+            for (const art of artifacts) {
+              const name = art.name;
+              const parts = name.split("_");
+              const osKey = parts.length >= 2 ? parts[1].replace(/\d+$/, "") : "other";
+              const osLabel = osLabels[osKey] || "Other";
+              let arch;
+              if (parts.length >= 3) {
+                arch = parts.slice(2).join("_");
+              } else if (parts.length === 2) {
+                const match = parts[1].match(/\d+$/);
+                arch = match ? match[0] : parts[1];
+              } else {
+                arch = name.replace(/^go2rtc_/, "");
+              }
+              if (!groups.has(osLabel)) groups.set(osLabel, []);
+              groups.get(osLabel).push({
+                label: arch,
+                url: `https://nightly.link/${owner}/${repo}/actions/artifacts/${art.id}.zip`,
+              });
+            }
+
+            const order = ["Windows", "Linux", "macOS", "FreeBSD", "Other"];
+            for (const osLabel of order) {
+              const items = groups.get(osLabel);
+              if (!items || !items.length) continue;
+              items.sort((a, b) => a.label.localeCompare(b.label));
+              body += `\n## ${osLabel}\n`;
+              for (const item of items) {
+                body += `- [${item.label}.zip](${item.url})\n`;
+              }
+            }
+
+            const fs = require('fs');
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, body);
+            core.info("Artifact links added to step summary");
+
   docker-master:
     name: Build docker master
     runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -172,6 +232,7 @@ jobs:
   docker-hardware:
     name: Build docker hardware
     runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -227,6 +288,7 @@ jobs:
   docker-rockchip:
     name: Build docker rockchip
     runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
