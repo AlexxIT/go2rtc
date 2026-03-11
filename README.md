@@ -63,6 +63,17 @@ Ultimate camera streaming application with support for dozens formats and protoc
 >
 > **Binaries**: download from [GitHub Actions](https://github.com/AlexxIT/go2rtc/actions/workflows/build.yml) artifacts (select the latest successful run on the `beta` branch).
 > Available for: Windows (amd64, i386, arm64), Linux (amd64, i386, arm, arm64), macOS (amd64, arm64), FreeBSD (amd64, arm64).
+>
+> #### Merged PRs (not yet in `master`)
+>
+> - [#1993](https://github.com/AlexxIT/go2rtc/pull/1993) — WebUI redesign
+> - [#2066](https://github.com/AlexxIT/go2rtc/pull/2066) — Add read-only mode to API and UI
+> - [#2098](https://github.com/AlexxIT/go2rtc/pull/2098) — Serve webui JS offline in docker images
+> - [#2093](https://github.com/AlexxIT/go2rtc/pull/2093) — Expose process PID and system resource metrics in API and UI
+> - [#2092](https://github.com/AlexxIT/go2rtc/pull/2092) — Fix schemas race condition
+> - [#2086](https://github.com/AlexxIT/go2rtc/pull/2086) — Fix YAML merge functionality
+> - [#2143](https://github.com/AlexxIT/go2rtc/pull/2143) — WebP native (pure-go) implementation
+> - [#2130](https://github.com/AlexxIT/go2rtc/pull/2130) — HomeKit Secure Video
 
 ---
 
