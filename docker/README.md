@@ -7,9 +7,9 @@ Images are built automatically via [GitHub actions](https://github.com/AlexxIT/g
 - `alexxit/go2rtc:latest` - latest release based on `alpine` (`amd64`, `386`, `arm/v6`, `arm/v7`, `arm64`) with support for hardware transcoding for Intel iGPU and Raspberry
 - `alexxit/go2rtc:latest-hardware` - latest release based on `debian 13` (`amd64`) with support for hardware transcoding for Intel iGPU, AMD GPU and NVidia GPU
 - `alexxit/go2rtc:latest-rockchip` - latest release based on `debian 12` (`arm64`) with support for hardware transcoding for Rockchip RK35xx
-- `ghcr.io/skrashevich/go2rtc:beta` - latest unstable version based on `alpine`
-- `ghcr.io/skrashevich/go2rtc:beta-hardware` - latest unstable version based on `debian 13` (`amd64`)
-- `ghcr.io/skrashevich/go2rtc:beta-rockchip` - latest unstable version based on `debian 12` (`arm64`)
+- `ghcr.io/AlexxIT/go2rtc:dev` - latest unstable version based on `alpine`
+- `ghcr.io/AlexxIT/go2rtc:dev-hardware` - latest unstable version based on `debian 13` (`amd64`)
+- `ghcr.io/AlexxIT/go2rtc:dev-rockchip` - latest unstable version based on `debian 12` (`arm64`)
 
 ## Docker compose
 

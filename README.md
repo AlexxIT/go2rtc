@@ -24,9 +24,9 @@ Ultimate camera streaming application with support for dozens formats and protoc
 
 ---
 
-> ### 🔀 Fork: [skrashevich/go2rtc](https://github.com/skrashevich/go2rtc)
+> ### 🔀 Dev branch: [AlexxIT/go2rtc:dev](https://github.com/AlexxIT/go2rtc/tree/dev)
 >
-> This is a fork of [AlexxIT/go2rtc](https://github.com/AlexxIT/go2rtc) with the following additions:
+> This is a dev (bleeding-edge) branch with the following additions:
 >
 > **Features**
 > - **HomeKit Secure Video (HKSV)** — full recording support with motion detection (P-frame analysis, ONVIF events, API)
@@ -52,16 +52,16 @@ Ultimate camera streaming application with support for dozens formats and protoc
 > **Docker images** (GHCR):
 > ```bash
 > # Standard
-> docker pull ghcr.io/skrashevich/go2rtc:beta
+> docker pull ghcr.io/AlexxIT/go2rtc:dev
 >
 > # With hardware acceleration (Intel/AMD)
-> docker pull ghcr.io/skrashevich/go2rtc:beta-hardware
+> docker pull ghcr.io/AlexxIT/go2rtc:dev-hardware
 >
 > # Rockchip
-> docker pull ghcr.io/skrashevich/go2rtc:beta-rockchip
+> docker pull ghcr.io/AlexxIT/go2rtc:dev-rockchip
 > ```
 >
-> **Binaries**: download from [GitHub Actions](https://github.com/skrashevich/go2rtc/actions/workflows/build.yml) artifacts (select the latest successful run on the `beta` branch).
+> **Binaries**: download from [GitHub Actions](https://github.com/AlexxIT/go2rtc/actions/workflows/build.yml) artifacts (select the latest successful run on the `beta` branch).
 > Available for: Windows (amd64, i386, arm64), Linux (amd64, i386, arm, arm64), macOS (amd64, arm64), FreeBSD (amd64, arm64).
 
 ---
@@ -215,7 +215,7 @@ It comes preinstalled with [FFmpeg](internal/ffmpeg/README.md) and [Python](inte
 Latest, but maybe unstable version:
 
 - Binary: [latest master build](https://nightly.link/AlexxIT/go2rtc/workflows/build/master)
-- Docker: `ghcr.io/skrashevich/go2rtc:beta` or `ghcr.io/skrashevich/go2rtc:beta-hardware` versions
+- Docker: `ghcr.io/AlexxIT/go2rtc:dev` or `ghcr.io/AlexxIT/go2rtc:dev-hardware` versions
 - Home Assistant add-on: `go2rtc master` or `go2rtc master hardware` versions
 
 ## Configuration
