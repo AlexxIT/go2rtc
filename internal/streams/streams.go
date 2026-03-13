@@ -174,3 +174,18 @@ func GetAllSources() map[string][]string {
 	streamsMu.Unlock()
 	return sources
 }
+
+func StopAll() {
+	streamsMu.Lock()
+	unique := make(map[*Stream]struct{}, len(streams))
+	for _, stream := range streams {
+		if stream != nil {
+			unique[stream] = struct{}{}
+		}
+	}
+	streamsMu.Unlock()
+
+	for stream := range unique {
+		stream.stopAll()
+	}
+}
