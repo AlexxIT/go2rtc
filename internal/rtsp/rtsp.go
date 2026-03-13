@@ -223,10 +223,7 @@ func tcpHandler(conn *rtsp.Conn) {
 				conn.PacketSize = uint16(core.Atoi(s))
 			}
 
-			switch query.Get("repack") {
-			case "1", "true", "yes", "on":
-				conn.Repack = true
-			}
+			conn.Repack = defaultConsumerRepack(conn.Connection.RemoteAddr, query.Get("repack"))
 
 			// param name like ffmpeg style https://ffmpeg.org/ffmpeg-protocols.html
 			if s := query.Get("log_level"); s != "" {
@@ -305,6 +302,23 @@ func tcpHandler(conn *rtsp.Conn) {
 	}
 
 	_ = conn.Close()
+}
+
+func defaultConsumerRepack(remoteAddr, raw string) bool {
+	switch strings.ToLower(raw) {
+	case "":
+		return isLoopback(remoteAddr)
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return isLoopback(remoteAddr)
+	}
+}
+
+func isLoopback(remoteAddr string) bool {
+	return strings.HasPrefix(remoteAddr, "127.") || strings.HasPrefix(remoteAddr, "[::1]") || strings.HasPrefix(remoteAddr, "localhost:")
 }
 
 func ParseQuery(query map[string][]string) []*core.Media {
