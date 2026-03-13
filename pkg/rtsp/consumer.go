@@ -148,6 +148,12 @@ func (c *Conn) packetWriter(codec *core.Codec, channel, payloadType uint8) core.
 		flushBuf()
 	}
 
+	handlerFunc = c.wrapPacketHandler(codec, handlerFunc)
+
+	return handlerFunc
+}
+
+func (c *Conn) wrapPacketHandler(codec *core.Codec, handlerFunc core.HandlerFunc) core.HandlerFunc {
 	if !codec.IsRTP() {
 		switch codec.Name {
 		case core.CodecH264:
@@ -159,20 +165,65 @@ func (c *Conn) packetWriter(codec *core.Codec, channel, payloadType uint8) core.
 		case core.CodecJPEG:
 			handlerFunc = mjpeg.RTPPay(handlerFunc)
 		}
-	} else if codec.Name == core.CodecPCML {
+		return handlerFunc
+	}
+
+	if codec.Name == core.CodecPCML {
 		handlerFunc = pcm.LittleToBig(handlerFunc)
-	} else if c.PacketSize != 0 {
+		return handlerFunc
+	}
+
+	if c.Repack || c.PacketSize != 0 {
 		switch codec.Name {
 		case core.CodecH264:
 			handlerFunc = h264.RTPPay(c.PacketSize, handlerFunc)
+			if c.Repack {
+				handlerFunc = waitH264Keyframe(handlerFunc)
+			}
 			handlerFunc = h264.RTPDepay(codec, handlerFunc)
 		case core.CodecH265:
 			handlerFunc = h265.RTPPay(c.PacketSize, handlerFunc)
+			if c.Repack {
+				handlerFunc = waitH265Keyframe(handlerFunc)
+			}
 			handlerFunc = h265.RTPDepay(codec, handlerFunc)
+		case core.CodecAAC:
+			handlerFunc = aac.RTPPay(handlerFunc)
+			handlerFunc = aac.RTPDepay(handlerFunc)
 		}
 	}
 
 	return handlerFunc
+}
+
+func waitH264Keyframe(handlerFunc core.HandlerFunc) core.HandlerFunc {
+	var synced bool
+
+	return func(packet *rtp.Packet) {
+		if !synced {
+			if !h264.IsKeyframe(packet.Payload) {
+				return
+			}
+			synced = true
+		}
+
+		handlerFunc(packet)
+	}
+}
+
+func waitH265Keyframe(handlerFunc core.HandlerFunc) core.HandlerFunc {
+	var synced bool
+
+	return func(packet *rtp.Packet) {
+		if !synced {
+			if !h265.IsKeyframe(packet.Payload) {
+				return
+			}
+			synced = true
+		}
+
+		handlerFunc(packet)
+	}
 }
 
 func (c *Conn) writeInterleavedData(data []byte) error {
