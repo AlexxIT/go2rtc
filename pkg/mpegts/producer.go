@@ -175,6 +175,8 @@ func StreamType(codec *core.Codec) uint8 {
 		return StreamTypeAAC
 	case core.CodecPCMA:
 		return StreamTypePCMATapo
+	case core.CodecPCMU:
+		return StreamTypePCMUTapo
 	case core.CodecOpus:
 		return StreamTypePrivateOPUS
 	}
