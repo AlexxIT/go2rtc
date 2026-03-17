@@ -16,8 +16,7 @@ import (
 
 // Binary frame header (9 bytes):
 // Byte 0:    flags (bit7=video, bit6=keyframe, bits0-5=trackID)
-// Byte 1-4:  timestamp in microseconds (uint32 BE)
-// Byte 5-8:  payload length (uint32 BE)
+// Byte 1-8:  timestamp in microseconds (uint64 BE)
 // Byte 9+:   payload
 
 const headerSize = 9
@@ -27,6 +26,8 @@ type Consumer struct {
 	wr    *core.WriteBuffer
 	mu    sync.Mutex
 	start bool
+
+	UseGOP bool
 }
 
 type InitInfo struct {
@@ -250,18 +251,17 @@ func (c *Consumer) WriteTo(wr io.Writer) (int64, error) {
 	return c.wr.WriteTo(wr)
 }
 
-func buildFrame(flags byte, timestamp uint32, payload []byte) []byte {
+func buildFrame(flags byte, timestamp uint64, payload []byte) []byte {
 	msg := make([]byte, headerSize+len(payload))
 	msg[0] = flags
-	binary.BigEndian.PutUint32(msg[1:5], timestamp)
-	binary.BigEndian.PutUint32(msg[5:9], uint32(len(payload)))
+	binary.BigEndian.PutUint64(msg[1:9], timestamp)
 	copy(msg[headerSize:], payload)
 	return msg
 }
 
-func rtpToMicroseconds(timestamp uint32, clockRate uint32) uint32 {
+func rtpToMicroseconds(timestamp uint32, clockRate uint32) uint64 {
 	if clockRate == 0 {
-		return timestamp
+		return uint64(timestamp)
 	}
-	return uint32(uint64(timestamp) * 1_000_000 / uint64(clockRate))
+	return uint64(timestamp) * 1_000_000 / uint64(clockRate)
 }
