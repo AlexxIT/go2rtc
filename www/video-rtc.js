@@ -1,3 +1,5 @@
+import {VideoRenderer} from './video-renderer.js';
+
 /**
  * VideoRTC v1.6.0 - Video player for go2rtc streaming application.
  *
@@ -37,6 +39,13 @@ export class VideoRTC extends HTMLElement {
          * @type {string}
          */
         this.mode = 'webrtc,mse,hls,mjpeg';
+
+        /**
+         * [config] Renderer cascade for WebCodecs (webgpu, webgl, 2d).
+         * Order defines priority. Default: try all in order.
+         * @type {string}
+         */
+        this.renderer = 'webgpu,webgl,2d';
 
         /**
          * [Config] Requested medias (video, audio, microphone).
@@ -340,19 +349,25 @@ export class VideoRTC extends HTMLElement {
 
         // cleanup WebCodecs resources
         if (this._videoDecoder) {
-            try { this._videoDecoder.close(); } catch (e) {}
+            try { this._videoDecoder.close(); } catch {}
             this._videoDecoder = null;
         }
         if (this._audioDecoder) {
-            try { this._audioDecoder.close(); } catch (e) {}
+            try { this._audioDecoder.close(); } catch {}
             this._audioDecoder = null;
         }
         if (this._wcGainNode) {
             this._wcGainNode = null;
         }
         if (this._audioCtx) {
-            try { this._audioCtx.close(); } catch (e) {}
+            try { this._audioCtx.close(); } catch {}
             this._audioCtx = null;
+        }
+        this._wcAudioInfo = null;
+        this._wcAudioStarted = false;
+        if (this._renderer) {
+            this._renderer.destroy();
+            this._renderer = null;
         }
         const wcContainer = this.querySelector('canvas')?.parentElement;
         if (wcContainer && wcContainer !== this) {
@@ -579,9 +594,9 @@ export class VideoRTC extends HTMLElement {
         // Volume / Mute
         const btnMute = document.createElement('button');
         btnMute.style.cssText = btnStyle;
-        btnMute.innerHTML = svgIcon(iconVolume);
-        btnMute.title = 'Mute';
-        let muted = false;
+        btnMute.innerHTML = svgIcon(iconMuted);
+        btnMute.title = 'Unmute';
+        let muted = true;
 
         const volume = document.createElement('input');
         volume.type = 'range';
@@ -601,9 +616,11 @@ export class VideoRTC extends HTMLElement {
             paused = !paused;
             btnPlay.innerHTML = svgIcon(paused ? iconPlay : iconPause);
             btnPlay.title = paused ? 'Play' : 'Pause';
-            // Pause/resume the WebSocket data flow
             if (paused && this._audioCtx) this._audioCtx.suspend();
-            if (!paused && this._audioCtx) this._audioCtx.resume();
+            if (!paused && this._audioCtx) {
+                this._audioCtx._nextTime = 0;
+                this._audioCtx.resume();
+            }
         });
 
         btnFS.addEventListener('click', () => {
@@ -626,38 +643,96 @@ export class VideoRTC extends HTMLElement {
         this._audioDecoder = null;
         this._audioCtx = null;
         this._wcGainNode = null;
-        let ctx2d = null;
+
+        // --- Video renderer (WebGPU → WebGL2 → Canvas 2D cascade) ---
+        this._renderer = new VideoRenderer(container, {
+            cascade: this.renderer,
+            canvasStyle: canvas.style.cssText,
+        });
+        // Hide the original canvas — the renderer manages its own canvases
+        canvas.style.display = 'none';
+
+        // Lazy audio init — deferred until user gesture to satisfy autoplay policy
+        const startAudio = () => {
+            if (this._wcAudioStarted || !this._wcAudioInfo) return;
+            this._wcAudioStarted = true;
+
+            const info = this._wcAudioInfo;
+            const actx = new AudioContext({sampleRate: info.sampleRate});
+            this._audioCtx = actx;
+            this._wcGainNode = actx.createGain();
+            this._wcGainNode.connect(actx.destination);
+
+            this._audioDecoder = new AudioDecoder({
+                output: data => {
+                    if (actx.state === 'closed') { data.close(); return; }
+                    const buf = actx.createBuffer(
+                        data.numberOfChannels, data.numberOfFrames, data.sampleRate
+                    );
+                    for (let ch = 0; ch < data.numberOfChannels; ch++) {
+                        data.copyTo(buf.getChannelData(ch), {planeIndex: ch, format: 'f32-planar'});
+                    }
+                    const src = actx.createBufferSource();
+                    src.buffer = buf;
+                    src.connect(this._wcGainNode);
+                    const now = actx.currentTime;
+                    if ((actx._nextTime || 0) < now) {
+                        actx._nextTime = now;
+                    }
+                    src.start(actx._nextTime);
+                    actx._nextTime += buf.duration;
+                    data.close();
+                },
+                error: () => {
+                    this._audioDecoder = null;
+                },
+            });
+            this._audioDecoder.configure({
+                codec: info.codec,
+                sampleRate: info.sampleRate,
+                numberOfChannels: info.channels,
+            });
+
+            VideoRenderer.log('audio started:', info.codec, info.sampleRate + 'Hz', info.channels + 'ch');
+            updateVolume();
+        };
 
         // Volume / mute handlers
         const updateVolume = () => {
             if (this._wcGainNode) {
                 this._wcGainNode.gain.value = muted ? 0 : parseFloat(volume.value);
             }
+            if (this._audioCtx && this._audioCtx.state === 'suspended') {
+                this._audioCtx.resume();
+            }
             const isMuted = muted || parseFloat(volume.value) === 0;
             btnMute.innerHTML = svgIcon(isMuted ? iconMuted : iconVolume);
             btnMute.title = isMuted ? 'Unmute' : 'Mute';
         };
-        btnMute.addEventListener('click', () => { muted = !muted; updateVolume(); });
-        volume.addEventListener('input', () => { muted = false; updateVolume(); });
+        btnMute.addEventListener('click', () => {
+            muted = !muted;
+            if (!muted) startAudio();
+            updateVolume();
+        });
+        volume.addEventListener('input', () => {
+            muted = false;
+            startAudio();
+            updateVolume();
+        });
 
         this.onmessage['webcodecs'] = msg => {
             if (msg.type !== 'webcodecs') return;
             const info = msg.value;
+            VideoRenderer.log('init:', info.video ? 'video=' + info.video.codec : 'no video',
+                info.audio ? 'audio=' + info.audio.codec + ' ' + info.audio.sampleRate + 'Hz' : 'no audio');
 
             if (info.video) {
                 this._videoDecoder = new VideoDecoder({
                     output: frame => {
-                        const w = frame.displayWidth;
-                        const h = frame.displayHeight;
-                        if (canvas.width !== w) canvas.width = w;
-                        if (canvas.height !== h) canvas.height = h;
-                        if (!ctx2d) {
-                            ctx2d = canvas.getContext('2d');
-                        }
-                        ctx2d.drawImage(frame, 0, 0, w, h);
+                        this._renderer.draw(frame);
                         frame.close();
                     },
-                    error: err => console.warn('VideoDecoder error:', err),
+                    error: err => VideoRenderer.log('VideoDecoder error:', err),
                 });
                 this._videoDecoder.configure({
                     codec: info.video.codec,
@@ -666,38 +741,8 @@ export class VideoRTC extends HTMLElement {
             }
 
             if (info.audio && this.media.includes('audio')) {
-                this._audioCtx = new AudioContext({sampleRate: info.audio.sampleRate});
-                const actx = this._audioCtx;
-                // GainNode for volume control
-                this._wcGainNode = actx.createGain();
-                this._wcGainNode.connect(actx.destination);
-                updateVolume();
-
-                this._audioDecoder = new AudioDecoder({
-                    output: data => {
-                        const buf = actx.createBuffer(
-                            data.numberOfChannels, data.numberOfFrames, data.sampleRate
-                        );
-                        for (let ch = 0; ch < data.numberOfChannels; ch++) {
-                            data.copyTo(buf.getChannelData(ch), {planeIndex: ch, format: 'f32-planar'});
-                        }
-                        const src = actx.createBufferSource();
-                        src.buffer = buf;
-                        src.connect(this._wcGainNode);
-                        const startTime = Math.max(actx._nextTime || 0, actx.currentTime);
-                        src.start(startTime);
-                        actx._nextTime = startTime + buf.duration;
-                        data.close();
-                    },
-                    error: () => {
-                        this._audioDecoder = null;
-                    },
-                });
-                this._audioDecoder.configure({
-                    codec: info.audio.codec,
-                    sampleRate: info.audio.sampleRate,
-                    numberOfChannels: info.audio.channels,
-                });
+                this._wcAudioInfo = info.audio;
+                this._wcAudioStarted = false;
             }
 
             // Hide audio-only controls when no audio
