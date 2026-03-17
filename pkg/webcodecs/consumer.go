@@ -16,7 +16,7 @@ import (
 
 // Binary frame header (9 bytes):
 // Byte 0:    flags (bit7=video, bit6=keyframe, bits0-5=trackID)
-// Byte 1-4:  timestamp (uint32 BE)
+// Byte 1-4:  timestamp in microseconds (uint32 BE)
 // Byte 5-8:  payload length (uint32 BE)
 // Byte 9+:   payload
 
@@ -80,15 +80,6 @@ func NewConsumer(medias []*core.Media) *Consumer {
 	}
 }
 
-func buildFrame(flags byte, timestamp uint32, payload []byte) []byte {
-	msg := make([]byte, headerSize+len(payload))
-	msg[0] = flags
-	binary.BigEndian.PutUint32(msg[1:5], timestamp)
-	binary.BigEndian.PutUint32(msg[5:9], uint32(len(payload)))
-	copy(msg[headerSize:], payload)
-	return msg
-}
-
 func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver) error {
 	trackID := byte(len(c.Senders))
 
@@ -97,6 +88,7 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 
 	switch track.Codec.Name {
 	case core.CodecH264:
+		clockRate := codec.ClockRate
 		handler.Handler = func(packet *rtp.Packet) {
 			keyframe := h264.IsKeyframe(packet.Payload)
 			if !c.start {
@@ -113,7 +105,7 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 			}
 
 			c.mu.Lock()
-			msg := buildFrame(flags, packet.Timestamp, payload)
+			msg := buildFrame(flags, rtpToMicroseconds(packet.Timestamp, clockRate), payload)
 			if n, err := c.wr.Write(msg); err == nil {
 				c.Send += n
 			}
@@ -127,6 +119,7 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 		}
 
 	case core.CodecH265:
+		clockRate := codec.ClockRate
 		handler.Handler = func(packet *rtp.Packet) {
 			keyframe := h265.IsKeyframe(packet.Payload)
 			if !c.start {
@@ -143,7 +136,7 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 			}
 
 			c.mu.Lock()
-			msg := buildFrame(flags, packet.Timestamp, payload)
+			msg := buildFrame(flags, rtpToMicroseconds(packet.Timestamp, clockRate), payload)
 			if n, err := c.wr.Write(msg); err == nil {
 				c.Send += n
 			}
@@ -157,6 +150,7 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 		}
 
 	default:
+		clockRate := codec.ClockRate
 		handler.Handler = func(packet *rtp.Packet) {
 			if !c.start {
 				return
@@ -165,7 +159,7 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 			flags := trackID // audio flag (bit7=0)
 
 			c.mu.Lock()
-			msg := buildFrame(flags, packet.Timestamp, packet.Payload)
+			msg := buildFrame(flags, rtpToMicroseconds(packet.Timestamp, clockRate), packet.Payload)
 			if n, err := c.wr.Write(msg); err == nil {
 				c.Send += n
 			}
@@ -254,4 +248,20 @@ func (c *Consumer) WriteTo(wr io.Writer) (int64, error) {
 	}
 
 	return c.wr.WriteTo(wr)
+}
+
+func buildFrame(flags byte, timestamp uint32, payload []byte) []byte {
+	msg := make([]byte, headerSize+len(payload))
+	msg[0] = flags
+	binary.BigEndian.PutUint32(msg[1:5], timestamp)
+	binary.BigEndian.PutUint32(msg[5:9], uint32(len(payload)))
+	copy(msg[headerSize:], payload)
+	return msg
+}
+
+func rtpToMicroseconds(timestamp uint32, clockRate uint32) uint32 {
+	if clockRate == 0 {
+		return timestamp
+	}
+	return uint32(uint64(timestamp) * 1_000_000 / uint64(clockRate))
 }
