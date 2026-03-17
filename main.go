@@ -41,6 +41,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/tapo"
 	"github.com/AlexxIT/go2rtc/internal/tuya"
 	"github.com/AlexxIT/go2rtc/internal/v4l2"
+	"github.com/AlexxIT/go2rtc/internal/webcodecs"
 	"github.com/AlexxIT/go2rtc/internal/webrtc"
 	"github.com/AlexxIT/go2rtc/internal/webtorrent"
 	"github.com/AlexxIT/go2rtc/internal/wyoming"
@@ -69,9 +70,10 @@ func main() {
 		{"rtsp", rtsp.Init},     // rtsp source, RTSP server
 		{"webrtc", webrtc.Init}, // webrtc source, WebRTC server
 		// Main API
-		{"mp4", mp4.Init},     // MP4 API
-		{"hls", hls.Init},     // HLS API
-		{"mjpeg", mjpeg.Init}, // MJPEG API
+		{"mp4", mp4.Init},             // MP4 API
+		{"webcodecs", webcodecs.Init}, // WebCodecs API
+		{"hls", hls.Init},             // HLS API
+		{"mjpeg", mjpeg.Init},         // MJPEG API
 		// Other sources and servers
 		{"hass", hass.Init},             // hass source, Hass API server
 		{"homekit", homekit.Init},       // homekit source, HomeKit server

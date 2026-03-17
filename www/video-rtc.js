@@ -33,7 +33,7 @@ export class VideoRTC extends HTMLElement {
         ];
 
         /**
-         * [config] Supported modes (webrtc, webrtc/tcp, mse, hls, mp4, mjpeg).
+         * [config] Supported modes (webrtc, webrtc/tcp, mse, hls, mp4, mjpeg, webcodecs).
          * @type {string}
          */
         this.mode = 'webrtc,mse,hls,mjpeg';
@@ -338,6 +338,28 @@ export class VideoRTC extends HTMLElement {
             this.pc = null;
         }
 
+        // cleanup WebCodecs resources
+        if (this._videoDecoder) {
+            try { this._videoDecoder.close(); } catch (e) {}
+            this._videoDecoder = null;
+        }
+        if (this._audioDecoder) {
+            try { this._audioDecoder.close(); } catch (e) {}
+            this._audioDecoder = null;
+        }
+        if (this._wcGainNode) {
+            this._wcGainNode = null;
+        }
+        if (this._audioCtx) {
+            try { this._audioCtx.close(); } catch (e) {}
+            this._audioCtx = null;
+        }
+        const wcContainer = this.querySelector('canvas')?.parentElement;
+        if (wcContainer && wcContainer !== this) {
+            wcContainer.remove();
+            this.video.style.display = 'block';
+        }
+
         this.video.src = '';
         this.video.srcObject = null;
     }
@@ -365,7 +387,10 @@ export class VideoRTC extends HTMLElement {
 
         const modes = [];
 
-        if (this.mode.includes('mse') && ('MediaSource' in window || 'ManagedMediaSource' in window)) {
+        if (this.mode.includes('webcodecs') && 'VideoDecoder' in window) {
+            modes.push('webcodecs');
+            this.onwebcodecs();
+        } else if (this.mode.includes('mse') && ('MediaSource' in window || 'ManagedMediaSource' in window)) {
             modes.push('mse');
             this.onmse();
         } else if (this.mode.includes('hls') && this.video.canPlayType('application/vnd.apple.mpegurl')) {
@@ -499,6 +524,218 @@ export class VideoRTC extends HTMLElement {
                 }
             };
         };
+    }
+
+    onwebcodecs() {
+        // Container wrapping canvas + controls
+        const container = document.createElement('div');
+        container.style.cssText = 'position:relative;width:100%;height:100%;background:#000;' +
+            'display:flex;align-items:center;justify-content:center;overflow:hidden';
+
+        const canvas = document.createElement('canvas');
+        canvas.style.cssText = 'display:block;max-width:100%;max-height:100%';
+
+        // SVG icon paths (24x24 viewBox)
+        const svgIcon = (path) => `<svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:#fff"><path d="${path}"/></svg>`;
+        const iconPlay = 'M8 5v14l11-7z';
+        const iconPause = 'M6 19h4V5H6v14zm8-14v14h4V5h-4z';
+        const iconVolume = 'M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z';
+        const iconMuted = 'M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z';
+        const iconFS = 'M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z';
+        const iconFSExit = 'M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z';
+
+        // Controls bar
+        const controls = document.createElement('div');
+        controls.style.cssText = 'position:absolute;bottom:0;left:0;right:0;display:flex;' +
+            'align-items:center;gap:4px;padding:4px 8px;background:rgba(23,23,23,.85);' +
+            'opacity:0;transition:opacity .3s;user-select:none;z-index:1;height:36px;box-sizing:border-box';
+        container.addEventListener('mouseenter', () => { controls.style.opacity = '1'; });
+        container.addEventListener('mouseleave', () => { controls.style.opacity = '0'; });
+        container.addEventListener('touchstart', ev => {
+            if (ev.target === canvas || ev.target === container) {
+                controls.style.opacity = controls.style.opacity === '1' ? '0' : '1';
+            }
+        }, {passive: true});
+
+        const btnStyle = 'background:none;border:none;cursor:pointer;padding:4px;display:flex;' +
+            'align-items:center;justify-content:center;opacity:.85';
+
+        // Play / Pause
+        const btnPlay = document.createElement('button');
+        btnPlay.style.cssText = btnStyle;
+        btnPlay.innerHTML = svgIcon(iconPause);
+        btnPlay.title = 'Pause';
+        let paused = false;
+
+        // Time / Live indicator
+        const timeLabel = document.createElement('span');
+        timeLabel.style.cssText = 'color:#fff;font-size:12px;font-family:Arial,sans-serif;padding:0 4px;min-width:36px';
+        timeLabel.textContent = 'LIVE';
+
+        // Spacer
+        const spacer = document.createElement('div');
+        spacer.style.flex = '1';
+
+        // Volume / Mute
+        const btnMute = document.createElement('button');
+        btnMute.style.cssText = btnStyle;
+        btnMute.innerHTML = svgIcon(iconVolume);
+        btnMute.title = 'Mute';
+        let muted = false;
+
+        const volume = document.createElement('input');
+        volume.type = 'range';
+        volume.min = '0';
+        volume.max = '1';
+        volume.step = '0.05';
+        volume.value = '1';
+        volume.style.cssText = 'width:60px;cursor:pointer;accent-color:#fff;height:4px';
+
+        // Fullscreen
+        const btnFS = document.createElement('button');
+        btnFS.style.cssText = btnStyle;
+        btnFS.innerHTML = svgIcon(iconFS);
+        btnFS.title = 'Fullscreen';
+
+        btnPlay.addEventListener('click', () => {
+            paused = !paused;
+            btnPlay.innerHTML = svgIcon(paused ? iconPlay : iconPause);
+            btnPlay.title = paused ? 'Play' : 'Pause';
+            // Pause/resume the WebSocket data flow
+            if (paused && this._audioCtx) this._audioCtx.suspend();
+            if (!paused && this._audioCtx) this._audioCtx.resume();
+        });
+
+        btnFS.addEventListener('click', () => {
+            if (document.fullscreenElement) {
+                document.exitFullscreen();
+            } else {
+                container.requestFullscreen().catch(() => {});
+            }
+        });
+        document.addEventListener('fullscreenchange', () => {
+            const isFS = document.fullscreenElement === container;
+            btnFS.innerHTML = svgIcon(isFS ? iconFSExit : iconFS);
+            btnFS.title = isFS ? 'Exit fullscreen' : 'Fullscreen';
+        });
+
+        controls.append(btnPlay, timeLabel, spacer, btnMute, volume, btnFS);
+        container.append(canvas, controls);
+
+        this._videoDecoder = null;
+        this._audioDecoder = null;
+        this._audioCtx = null;
+        this._wcGainNode = null;
+        let ctx2d = null;
+
+        // Volume / mute handlers
+        const updateVolume = () => {
+            if (this._wcGainNode) {
+                this._wcGainNode.gain.value = muted ? 0 : parseFloat(volume.value);
+            }
+            const isMuted = muted || parseFloat(volume.value) === 0;
+            btnMute.innerHTML = svgIcon(isMuted ? iconMuted : iconVolume);
+            btnMute.title = isMuted ? 'Unmute' : 'Mute';
+        };
+        btnMute.addEventListener('click', () => { muted = !muted; updateVolume(); });
+        volume.addEventListener('input', () => { muted = false; updateVolume(); });
+
+        this.onmessage['webcodecs'] = msg => {
+            if (msg.type !== 'webcodecs') return;
+            const info = msg.value;
+
+            if (info.video) {
+                this._videoDecoder = new VideoDecoder({
+                    output: frame => {
+                        const w = frame.displayWidth;
+                        const h = frame.displayHeight;
+                        if (canvas.width !== w) canvas.width = w;
+                        if (canvas.height !== h) canvas.height = h;
+                        if (!ctx2d) {
+                            ctx2d = canvas.getContext('2d');
+                        }
+                        ctx2d.drawImage(frame, 0, 0, w, h);
+                        frame.close();
+                    },
+                    error: err => console.warn('VideoDecoder error:', err),
+                });
+                this._videoDecoder.configure({
+                    codec: info.video.codec,
+                    optimizeForLatency: true,
+                });
+            }
+
+            if (info.audio && this.media.includes('audio')) {
+                this._audioCtx = new AudioContext({sampleRate: info.audio.sampleRate});
+                const actx = this._audioCtx;
+                // GainNode for volume control
+                this._wcGainNode = actx.createGain();
+                this._wcGainNode.connect(actx.destination);
+                updateVolume();
+
+                this._audioDecoder = new AudioDecoder({
+                    output: data => {
+                        const buf = actx.createBuffer(
+                            data.numberOfChannels, data.numberOfFrames, data.sampleRate
+                        );
+                        for (let ch = 0; ch < data.numberOfChannels; ch++) {
+                            data.copyTo(buf.getChannelData(ch), {planeIndex: ch, format: 'f32-planar'});
+                        }
+                        const src = actx.createBufferSource();
+                        src.buffer = buf;
+                        src.connect(this._wcGainNode);
+                        const startTime = Math.max(actx._nextTime || 0, actx.currentTime);
+                        src.start(startTime);
+                        actx._nextTime = startTime + buf.duration;
+                        data.close();
+                    },
+                    error: () => {
+                        this._audioDecoder = null;
+                    },
+                });
+                this._audioDecoder.configure({
+                    codec: info.audio.codec,
+                    sampleRate: info.audio.sampleRate,
+                    numberOfChannels: info.audio.channels,
+                });
+            }
+
+            // Hide audio-only controls when no audio
+            if (!info.audio || !this.media.includes('audio')) {
+                btnMute.style.display = 'none';
+                volume.style.display = 'none';
+            }
+
+            this.video.style.display = 'none';
+            this.insertBefore(container, this.video);
+        };
+
+        this.ondata = data => {
+            if (paused) return;
+
+            const view = new DataView(data);
+            const flags = view.getUint8(0);
+            const isVideo = (flags & 0x80) !== 0;
+            const isKeyframe = (flags & 0x40) !== 0;
+            const timestamp = view.getUint32(1);
+            const payload = new Uint8Array(data, 9);
+
+            if (isVideo && this._videoDecoder && this._videoDecoder.state === 'configured') {
+                this._videoDecoder.decode(new EncodedVideoChunk({
+                    type: isKeyframe ? 'key' : 'delta',
+                    timestamp: timestamp,
+                    data: payload,
+                }));
+            } else if (!isVideo && this._audioDecoder && this._audioDecoder.state === 'configured') {
+                this._audioDecoder.decode(new EncodedAudioChunk({
+                    type: 'key',
+                    timestamp: timestamp,
+                    data: payload,
+                }));
+            }
+        };
+
+        this.send({type: 'webcodecs', value: ''});
     }
 
     onwebrtc() {
