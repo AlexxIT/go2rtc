@@ -150,6 +150,19 @@ func GetPosixTZ(current time.Time) string {
 	return prefix + fmt.Sprintf("%02d:%02d", offset/60, offset%60)
 }
 
+// getURLPath extracts the path from a URL string, using defPath as fallback.
+// Unlike GetPath, this correctly returns the actual path from the URL.
+func getURLPath(rawURL, defPath string) string {
+	if rawURL == "" {
+		return defPath
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Path == "" {
+		return defPath
+	}
+	return u.Path
+}
+
 func GetPath(urlOrPath, defPath string) string {
 	if urlOrPath == "" || urlOrPath[0] == '/' {
 		return defPath
