@@ -1,6 +1,6 @@
 # H264
 
-Payloader code taken from [pion](https://github.com/pion/rtp) library. And changed to AVC packets support.
+Payloader code taken from [pion](https://github.com/pion/rtp) library and changed to AVC packets support.
 
 ## Useful Links
 

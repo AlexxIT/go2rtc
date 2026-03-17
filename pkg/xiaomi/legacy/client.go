@@ -36,7 +36,7 @@ func NewClient(rawURL string) (*Client, error) {
 	} else if model == ModelMijia || model == ModelXiaobai {
 		username = "admin"
 		password = query.Get("password")
-	} else if model == ModelXiaofang {
+	} else if model == ModelDafang || model == ModelXiaofang {
 		username = "admin"
 	} else {
 		return nil, fmt.Errorf("xiaomi: unsupported model: %s", model)
@@ -47,7 +47,7 @@ func NewClient(rawURL string) (*Client, error) {
 		return nil, err
 	}
 
-	if model == ModelXiaofang {
+	if model == ModelDafang || model == ModelXiaofang {
 		err = xiaofangLogin(conn, query.Get("password"))
 		if err != nil {
 			_ = conn.Close()
@@ -196,7 +196,7 @@ func (c *Client) StartMedia(video, audio string) error {
 			c.WriteCommandJSON(cmdVideoStart, `{}`),
 		)
 
-	case ModelXiaofang:
+	case ModelDafang, ModelXiaofang:
 		// 00010000 4943414d 95010400000000000000000600000000000000d20400005a07 - 90k bitrate
 		// 00010000 4943414d 95010400000000000000000600000000000000d20400001e07 - 30k bitrate
 		//var b byte
@@ -258,6 +258,8 @@ const (
 	ModelXiaofang = "isa.camera.isc5"
 	// ModelMijia support miss format for new fw and legacy format for old fw
 	ModelMijia = "chuangmi.camera.v2"
+	// ModelDafang support miss format for new fw and legacy format for old fw
+	ModelDafang = "isa.camera.df3"
 )
 
 func Supported(model string) bool {

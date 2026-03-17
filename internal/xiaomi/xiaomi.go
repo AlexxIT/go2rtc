@@ -262,7 +262,7 @@ func apiDeviceList(w http.ResponseWriter, r *http.Request) {
 		var items []*api.Source
 
 		for _, device := range v.List {
-			if !strings.Contains(device.Model, ".camera.") && !strings.Contains(device.Model, ".cateye.") {
+			if !device.HasCamera() {
 				continue
 			}
 			items = append(items, &api.Source{
@@ -287,6 +287,12 @@ type Device struct {
 	Model string `json:"model"`
 	MAC   string `json:"mac"`
 	IP    string `json:"localip"`
+}
+
+func (d *Device) HasCamera() bool {
+	return strings.Contains(d.Model, ".camera.") ||
+		strings.Contains(d.Model, ".cateye.") ||
+		strings.Contains(d.Model, ".feeder.")
 }
 
 var auth *xiaomi.Cloud
