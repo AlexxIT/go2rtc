@@ -74,6 +74,7 @@ Ultimate camera streaming application with support for dozens formats and protoc
 > - [#2086](https://github.com/AlexxIT/go2rtc/pull/2086) — Fix YAML merge functionality
 > - [#2143](https://github.com/AlexxIT/go2rtc/pull/2143) — WebP native (pure-go) implementation
 > - [#2130](https://github.com/AlexxIT/go2rtc/pull/2130) — HomeKit Secure Video
+> - [#2159](https://github.com/AlexxIT/go2rtc/pull/2159) - PCMA and PCMU handling (@ludufre)
 
 ---
 
