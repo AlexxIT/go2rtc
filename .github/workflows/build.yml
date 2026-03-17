@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - 'beta'
+      - 'dev'
     tags:
       - 'v*'
 
