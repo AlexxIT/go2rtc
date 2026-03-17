@@ -77,8 +77,9 @@ class VideoStream extends VideoRTC {
                 case 'hls':
                 case 'mp4':
                 case 'mjpeg':
-                case 'webcodecs':
                     this.divMode = msg.type.toUpperCase();
+                    break;
+                case 'webcodecs':
                     break;
             }
         };
@@ -98,6 +99,14 @@ class VideoStream extends VideoRTC {
         if (this.pcState !== WebSocket.CLOSED) {
             this.divMode = 'RTC';
         }
+    }
+
+    onwebcodecsready() {
+        this.divMode = 'WEBCODECS';
+    }
+
+    onwebcodecserror(error) {
+        this.divError = error;
     }
 }
 
