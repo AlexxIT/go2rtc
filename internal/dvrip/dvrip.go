@@ -80,7 +80,7 @@ func sendBroadcasts(conn *net.UDPConn) {
 		IP:   net.IP{255, 255, 255, 255},
 	}
 
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		time.Sleep(100 * time.Millisecond)
 		_, _ = conn.WriteToUDP(data, addr)
 	}

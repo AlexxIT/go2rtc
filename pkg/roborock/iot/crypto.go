@@ -68,7 +68,7 @@ func encodeTimestamp(i uint32) string {
 
 func pad(plainText []byte, blockSize int) []byte {
 	b0 := byte(blockSize - len(plainText)%blockSize)
-	for i := byte(0); i < b0; i++ {
+	for range b0 {
 		plainText = append(plainText, b0)
 	}
 	return plainText

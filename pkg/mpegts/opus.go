@@ -42,7 +42,7 @@ func opus_control_header(r *bits.Reader) int {
 
 	var payload_size int
 	for {
-		i := r.ReadByte()
+		i := r.ReadUint8()
 		payload_size += int(i)
 		if i < 255 {
 			break
@@ -58,7 +58,7 @@ func opus_control_header(r *bits.Reader) int {
 		_ = r.ReadBits(13)
 	}
 	if control_extension_flag != 0 {
-		control_extension_length := r.ReadByte()
+		control_extension_length := r.ReadUint8()
 		_ = r.ReadBytes(int(control_extension_length)) // reserved
 	}
 

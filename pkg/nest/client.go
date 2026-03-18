@@ -45,7 +45,7 @@ func Dial(rawURL string) (core.Producer, error) {
 	var nestAPI *API
 	var lastErr error
 
-	for attempt := 0; attempt < maxRetries; attempt++ {
+	for attempt := range maxRetries {
 		nestAPI, err = NewAPI(cliendID, cliendSecret, refreshToken)
 		if err == nil {
 			break
@@ -101,7 +101,7 @@ func rtcConn(nestAPI *API, rawURL, projectID, deviceID string) (*WebRTCClient, e
 	retryDelay := time.Second * 30
 	var lastErr error
 
-	for attempt := 0; attempt < maxRetries; attempt++ {
+	for attempt := range maxRetries {
 		rtcAPI, err := webrtc.NewAPI()
 		if err != nil {
 			return nil, err

@@ -88,12 +88,12 @@ type MqttLowPowerMessage struct {
 	S        int    `json:"s,omitempty"`
 	Type     string `json:"type,omitempty"`
 	Data     struct {
-		DevID                string                 `json:"devId,omitempty"`
-		Online               bool                   `json:"online,omitempty"`
-		LastOnlineChangeTime int64                  `json:"lastOnlineChangeTime,omitempty"`
-		GwID                 string                 `json:"gwId,omitempty"`
-		Cmd                  string                 `json:"cmd,omitempty"`
-		Dps                  map[string]interface{} `json:"dps,omitempty"`
+		DevID                string         `json:"devId,omitempty"`
+		Online               bool           `json:"online,omitempty"`
+		LastOnlineChangeTime int64          `json:"lastOnlineChangeTime,omitempty"`
+		GwID                 string         `json:"gwId,omitempty"`
+		Cmd                  string         `json:"cmd,omitempty"`
+		Dps                  map[string]any `json:"dps,omitempty"`
 	} `json:"data"`
 }
 
@@ -395,7 +395,7 @@ func (c *TuyaMqttClient) onError(err error) {
 	}
 }
 
-func (c *TuyaMqttClient) sendMqttMessage(messageType string, protocol int, transactionID string, data interface{}) error {
+func (c *TuyaMqttClient) sendMqttMessage(messageType string, protocol int, transactionID string, data any) error {
 	if c.closed {
 		return fmt.Errorf("mqtt client is closed, send mqtt message fail")
 	}
