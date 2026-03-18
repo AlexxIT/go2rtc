@@ -121,5 +121,7 @@ func main() {
 		}
 	}
 
-	shell.RunUntilSignal()
+	sig := shell.WaitSignal()
+	println("exit with signal:", sig.String())
+	streams.StopAll()
 }
