@@ -18,6 +18,7 @@ func ParseQuery(query map[string][]string) []*core.Media {
 				Codecs: []*core.Codec{
 					{Name: core.CodecH264},
 					{Name: core.CodecH265},
+					{Name: core.CodecAV1},
 				},
 			},
 			{
@@ -60,24 +61,27 @@ func ParseCodecs(codecs string, parseAudio bool) (medias []*core.Media) {
 	var audios []*core.Codec
 
 	for _, name := range strings.Split(codecs, ",") {
-		switch name {
-		case MimeH264:
+		switch {
+		case name == MimeH264:
 			codec := &core.Codec{Name: core.CodecH264}
 			videos = append(videos, codec)
-		case MimeH265:
+		case name == MimeH265:
 			codec := &core.Codec{Name: core.CodecH265}
 			videos = append(videos, codec)
-		case MimeAAC:
+		case name == MimeAV1 || strings.HasPrefix(name, "av01."):
+			codec := &core.Codec{Name: core.CodecAV1}
+			videos = append(videos, codec)
+		case name == MimeAAC:
 			codec := &core.Codec{Name: core.CodecAAC}
 			audios = append(audios, codec)
-		case MimeFlac:
+		case name == MimeFlac:
 			audios = append(audios,
 				&core.Codec{Name: core.CodecPCMA},
 				&core.Codec{Name: core.CodecPCMU},
 				&core.Codec{Name: core.CodecPCM},
 				&core.Codec{Name: core.CodecPCML},
 			)
-		case MimeOpus:
+		case name == MimeOpus:
 			codec := &core.Codec{Name: core.CodecOpus}
 			audios = append(audios, codec)
 		}
