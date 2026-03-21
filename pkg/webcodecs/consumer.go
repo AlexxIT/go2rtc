@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"sync"
+	"sync/atomic"
 
 	"github.com/AlexxIT/go2rtc/pkg/aac"
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -25,7 +26,7 @@ type Consumer struct {
 	core.Connection
 	wr    *core.WriteBuffer
 	mu    sync.Mutex
-	start bool
+	start atomic.Bool
 
 	UseGOP bool
 }
@@ -92,11 +93,11 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 		clockRate := codec.ClockRate
 		handler.Handler = func(packet *rtp.Packet) {
 			keyframe := h264.IsKeyframe(packet.Payload)
-			if !c.start {
+			if !c.start.Load() {
 				if !keyframe {
 					return
 				}
-				c.start = true
+				c.start.Store(true)
 			}
 
 			payload := annexb.DecodeAVCC(packet.Payload, true)
@@ -123,11 +124,11 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 		clockRate := codec.ClockRate
 		handler.Handler = func(packet *rtp.Packet) {
 			keyframe := h265.IsKeyframe(packet.Payload)
-			if !c.start {
+			if !c.start.Load() {
 				if !keyframe {
 					return
 				}
-				c.start = true
+				c.start.Store(true)
 			}
 
 			payload := annexb.DecodeAVCC(packet.Payload, true)
@@ -153,7 +154,7 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 	default:
 		clockRate := codec.ClockRate
 		handler.Handler = func(packet *rtp.Packet) {
-			if !c.start {
+			if !c.start.Load() {
 				return
 			}
 
@@ -245,7 +246,7 @@ func (c *Consumer) GetInitInfo() *InitInfo {
 
 func (c *Consumer) WriteTo(wr io.Writer) (int64, error) {
 	if len(c.Senders) == 1 && c.Senders[0].Codec.IsAudio() {
-		c.start = true
+		c.start.Store(true)
 	}
 
 	return c.wr.WriteTo(wr)

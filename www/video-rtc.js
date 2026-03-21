@@ -543,7 +543,7 @@ export class VideoRTC extends HTMLElement {
         };
 
         this.ondata = data => {
-            this._wc.feed(data);
+            if (this._wc) this._wc.feed(data);
         };
 
         this.send({type: 'webcodecs', value: ''});

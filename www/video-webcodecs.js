@@ -170,6 +170,10 @@ export class WebCodecsPlayer {
             this._renderer.destroy();
             this._renderer = null;
         }
+        if (this._fsHandler) {
+            document.removeEventListener('fullscreenchange', this._fsHandler);
+            this._fsHandler = null;
+        }
         if (this._container?.parentElement) {
             this._container.remove();
         }
@@ -247,11 +251,12 @@ export class WebCodecsPlayer {
                 container.requestFullscreen().catch(() => {});
             }
         });
-        document.addEventListener('fullscreenchange', () => {
+        this._fsHandler = () => {
             const isFS = document.fullscreenElement === container;
             btnFS.innerHTML = svgIcon(isFS ? ICONS.fsExit : ICONS.fs);
             btnFS.title = isFS ? 'Exit fullscreen' : 'Fullscreen';
-        });
+        };
+        document.addEventListener('fullscreenchange', this._fsHandler);
 
         controls.append(btnPlay, timeLabel, spacer, btnMute, volume, btnFS);
         container.append(controls);
