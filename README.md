@@ -31,6 +31,7 @@ Ultimate camera streaming application with support for dozens formats and protoc
 > **Features**
 > - **HomeKit Secure Video (HKSV)** — full recording support with motion detection (P-frame analysis, ONVIF events, API)
 > - **ONVIF motion detection** — automatic motion events from ONVIF cameras for HomeKit
+> - **WebCodecs streaming** — browser-native video/audio decoding via [WebCodecs API](https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API) with H264, H265, AAC, OPUS, PCMA, PCMU support
 > - **WebP streaming** — native WebP encoding (snapshot & multipart stream) without FFmpeg
 > - **System resource monitoring** — CPU/memory usage in API (`/api/system`) and WebUI ASCII graphs
 > - **Read-only mode** — disable all write operations in API/WebUI for production security
@@ -74,6 +75,7 @@ Ultimate camera streaming application with support for dozens formats and protoc
 > - [#2086](https://github.com/AlexxIT/go2rtc/pull/2086) — Fix YAML merge functionality
 > - [#2143](https://github.com/AlexxIT/go2rtc/pull/2143) — WebP native (pure-go) implementation
 > - [#2130](https://github.com/AlexxIT/go2rtc/pull/2130) — HomeKit Secure Video
+> - [#2160](https://github.com/AlexxIT/go2rtc/pull/2160) — WebCodecs streaming support (@seydx)
 > - [#2159](https://github.com/AlexxIT/go2rtc/pull/2159) - PCMA and PCMU handling (@ludufre)
 
 ---
@@ -341,6 +343,7 @@ A summary table of all modules and features can be found [here](internal/README.
 - [`onvif`](internal/onvif/README.md#onvif-server) - Output stream using [ONVIF](https://en.wikipedia.org/wiki/ONVIF) protocol.
 - [`rtmp`](internal/rtmp/README.md#rtmp-server) - Output stream using [Real-Time Messaging](https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol) protocol.
 - [`rtsp`](internal/rtsp/README.md#rtsp-server) - Output stream using [Real-Time Streaming](https://en.wikipedia.org/wiki/Real-Time_Streaming_Protocol) protocol.
+- [`webcodecs`](internal/webcodecs/README.md) - Output stream using [WebCodecs API](https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API) for browser-native decoding.
 - [`webrtc`](internal/webrtc/README.md#webrtc-server) - Output stream using [Web Real-Time Communication](https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API) API.
 - [`webtorrent`](internal/webtorrent/README.md#webtorrent-server) - Output stream using [WebTorrent](https://en.wikipedia.org/wiki/WebTorrent) protocol.
 - [`yuv4mpegpipe`](internal/mjpeg/README.md#yuv4mpegpipe) - Output in raw [YUV](https://en.wikipedia.org/wiki/Y%E2%80%B2UV) frame stream with [YUV4MPEG](https://manned.org/yuv4mpeg) header.
@@ -452,14 +455,14 @@ Some examples:
 
 `AVC/H.264` video can be played almost anywhere. But `HEVC/H.265` has many limitations in supporting different devices and browsers.
 
-| Device                                                             | WebRTC                                  | MSE                                     | HTTP*                                        | HLS                         |
-|--------------------------------------------------------------------|-----------------------------------------|-----------------------------------------|----------------------------------------------|-----------------------------|
-| *latency*                                                          | best                                    | medium                                  | bad                                          | bad                         |
-| Desktop Chrome 136+ <br/> Desktop Edge <br/> Android Chrome 136+   | H264, H265* <br/> PCMU, PCMA <br/> OPUS | H264, H265* <br/> AAC, FLAC* <br/> OPUS | H264, H265* <br/> AAC, FLAC* <br/> OPUS, MP3 | no                          |
-| Desktop Firefox                                                    | H264 <br/> PCMU, PCMA <br/> OPUS        | H264 <br/> AAC, FLAC* <br/> OPUS        | H264 <br/> AAC, FLAC* <br/> OPUS             | no                          |
-| Desktop Safari 14+ <br/> iPad Safari 14+ <br/> iPhone Safari 17.1+ | H264, H265* <br/> PCMU, PCMA <br/> OPUS | H264, H265 <br/> AAC, FLAC*             | **no!**                                      | H264, H265 <br/> AAC, FLAC* |
-| iPhone Safari 14+                                                  | H264, H265* <br/> PCMU, PCMA <br/> OPUS | **no!**                                 | **no!**                                      | H264, H265 <br/> AAC, FLAC* |
-| macOS [Hass App][1]                                                | no                                      | no                                      | no                                           | H264, H265 <br/> AAC, FLAC* |
+| Device                                                             | WebRTC                                  | WebCodecs                                       | MSE                                     | HTTP*                                        | HLS                         |
+|--------------------------------------------------------------------|-----------------------------------------|-------------------------------------------------|-----------------------------------------|----------------------------------------------|-----------------------------|
+| *latency*                                                          | best                                    | best                                            | medium                                  | bad                                          | bad                         |
+| Desktop Chrome 136+ <br/> Desktop Edge <br/> Android Chrome 136+   | H264, H265* <br/> PCMU, PCMA <br/> OPUS | H264, H265 <br/> AAC, OPUS <br/> PCMA, PCMU     | H264, H265* <br/> AAC, FLAC* <br/> OPUS | H264, H265* <br/> AAC, FLAC* <br/> OPUS, MP3 | no                          |
+| Desktop Firefox                                                    | H264 <br/> PCMU, PCMA <br/> OPUS        | H264, H265 <br/> AAC, OPUS <br/> PCMA, PCMU     | H264 <br/> AAC, FLAC* <br/> OPUS        | H264 <br/> AAC, FLAC* <br/> OPUS             | no                          |
+| Desktop Safari 14+ <br/> iPad Safari 14+ <br/> iPhone Safari 17.1+ | H264, H265* <br/> PCMU, PCMA <br/> OPUS | H264, H265 <br/> AAC, OPUS <br/> PCMA, PCMU     | H264, H265 <br/> AAC, FLAC*             | **no!**                                      | H264, H265 <br/> AAC, FLAC* |
+| iPhone Safari 14+                                                  | H264, H265* <br/> PCMU, PCMA <br/> OPUS | H264, H265 <br/> AAC, OPUS <br/> PCMA, PCMU     | **no!**                                 | **no!**                                      | H264, H265 <br/> AAC, FLAC* |
+| macOS [Hass App][1]                                                | no                                      | no                                              | no                                      | no                                           | H264, H265 <br/> AAC, FLAC* |
 
 [1]: https://apps.apple.com/app/home-assistant/id1099568401
 
