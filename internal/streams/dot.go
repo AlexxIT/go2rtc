@@ -111,12 +111,12 @@ type conn struct {
 
 func (c *conn) appendDOT(dot []byte, group string) []byte {
 	host := c.host()
-	dot = fmt.Appendf(dot, "%s [group=host];\n", host)
+	dot = fmt.Appendf(dot, "%q [group=host];\n", host)
 	dot = fmt.Appendf(dot, "%d [group=%s, label=%q, title=%q];\n", c.ID, group, c.FormatName, c.label())
 	if group == "producer" {
-		dot = fmt.Appendf(dot, "%s -> %d [label=%q];\n", host, c.ID, humanBytes(c.BytesRecv))
+		dot = fmt.Appendf(dot, "%q -> %d [label=%q];\n", host, c.ID, humanBytes(c.BytesRecv))
 	} else {
-		dot = fmt.Appendf(dot, "%d -> %s [label=%q];\n", c.ID, host, humanBytes(c.BytesSend))
+		dot = fmt.Appendf(dot, "%d -> %q [label=%q];\n", c.ID, host, humanBytes(c.BytesSend))
 	}
 
 	for _, recv := range c.Receivers {
