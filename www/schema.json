@@ -624,6 +624,15 @@
               },
               "credential": {
                 "type": "string"
+              },
+              "shared_secret": {
+                "type": "string",
+                "description": "Shared secret for TURN REST API authentication (use-auth-secret)"
+              },
+              "credential_ttl": {
+                "type": "integer",
+                "description": "Credential lifetime in seconds (default: 86400)",
+                "default": 86400
               }
             }
           }
