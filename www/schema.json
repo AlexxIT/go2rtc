@@ -151,6 +151,7 @@
               "mp4",
               "hls",
               "mjpeg",
+              "webp",
               "hass",
               "homekit",
               "onvif",
@@ -425,6 +426,9 @@
           "$ref": "#/definitions/log_level"
         },
         "mjpeg": {
+          "$ref": "#/definitions/log_level"
+        },
+        "webp": {
           "$ref": "#/definitions/log_level"
         },
         "mp4": {
