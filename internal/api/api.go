@@ -31,6 +31,7 @@ func Init() {
 			TLSListen  string `yaml:"tls_listen"`
 			TLSCert    string `yaml:"tls_cert"`
 			TLSKey     string `yaml:"tls_key"`
+			TLSMinVer  string `yaml:"tls_min_ver"`
 			UnixListen string `yaml:"unix_listen"`
 
 			AllowPaths []string `yaml:"allow_paths"`
@@ -39,6 +40,7 @@ func Init() {
 
 	// default config
 	cfg.Mod.Listen = ":1984"
+	cfg.Mod.TLSMinVer = "TLS1.2"
 
 	// load config from YAML
 	app.LoadConfig(&cfg)
@@ -86,7 +88,7 @@ func Init() {
 
 	// Initialize the HTTPS server
 	if cfg.Mod.TLSListen != "" && cfg.Mod.TLSCert != "" && cfg.Mod.TLSKey != "" {
-		go tlsListen("tcp", cfg.Mod.TLSListen, cfg.Mod.TLSCert, cfg.Mod.TLSKey)
+		go tlsListen("tcp", cfg.Mod.TLSListen, cfg.Mod.TLSCert, cfg.Mod.TLSKey, cfg.Mod.TLSMinVer)
 	}
 }
 
@@ -108,9 +110,32 @@ func listen(network, address string) {
 	}
 }
 
-func tlsListen(network, address, certFile, keyFile string) {
+func parseTLSVersion(versionStr string) (uint16, error) {
+	v := strings.ToUpper(strings.TrimSpace(versionStr))
+	if val, ok := tlsVersionMap[v]; ok {
+		return val, nil
+	}
+	return 0, fmt.Errorf("invalid TLS version: %s", versionStr)
+}
+
+// Map string values to the crypto/tls constants
+var tlsVersionMap = map[string]uint16{
+	"TLS1.0": tls.VersionTLS10,
+	"TLS1.1": tls.VersionTLS11,
+	"TLS1.2": tls.VersionTLS12,
+	"TLS1.3": tls.VersionTLS13,
+}
+
+func tlsListen(network, address, certFile, keyFile string, minVersion string) {
+	var minTLSVersion uint16
 	var cert tls.Certificate
 	var err error
+
+	minTLSVersion, err = parseTLSVersion(minVersion)
+	if err != nil {
+		log.Error().Err(err).Caller().Send()
+		return
+	}
 	if strings.IndexByte(certFile, '\n') < 0 && strings.IndexByte(keyFile, '\n') < 0 {
 		// check if file path
 		cert, err = tls.LoadX509KeyPair(certFile, keyFile)
@@ -122,7 +147,6 @@ func tlsListen(network, address, certFile, keyFile string) {
 		log.Error().Err(err).Caller().Send()
 		return
 	}
-
 	ln, err := net.Listen(network, address)
 	if err != nil {
 		log.Error().Err(err).Msg("[api] tls listen")
@@ -132,8 +156,11 @@ func tlsListen(network, address, certFile, keyFile string) {
 	log.Info().Str("addr", address).Msg("[api] tls listen")
 
 	server := &http.Server{
-		Handler:           Handler,
-		TLSConfig:         &tls.Config{Certificates: []tls.Certificate{cert}},
+		Handler: Handler,
+		TLSConfig: &tls.Config{
+			Certificates: []tls.Certificate{cert},
+			MinVersion:   minTLSVersion,
+		},
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	if err = server.ServeTLS(ln, "", ""); err != nil {
