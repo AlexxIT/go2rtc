@@ -77,7 +77,7 @@ Ultimate camera streaming application with support for dozens formats and protoc
 > - [#2130](https://github.com/AlexxIT/go2rtc/pull/2130) — HomeKit Secure Video
 > - [#2160](https://github.com/AlexxIT/go2rtc/pull/2160) — WebCodecs streaming support (@seydx)
 > - [#2159](https://github.com/AlexxIT/go2rtc/pull/2159) - PCMA and PCMU handling (@ludufre)
-
+> - [#2168](https://github.com/AlexxIT/go2rtc/pull/2168) - Socket leaks in go2rtc - creality k2plus issue
 ---
 
 ## Screenshots
