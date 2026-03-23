@@ -20,6 +20,12 @@ func crealityClient(url string) (core.Producer, error) {
 		return nil, err
 	}
 
+	defer func() {
+		if err != nil {
+			_ = pc.Close()
+		}
+	}()
+
 	prod := webrtc.NewConn(pc)
 	prod.FormatName = "webrtc/creality"
 	prod.Mode = core.ModeActiveProducer
