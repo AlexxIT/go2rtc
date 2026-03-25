@@ -499,6 +499,8 @@ export class VideoRTC extends HTMLElement {
                 }
             };
         };
+
+        this.ms = ms;
     }
 
     onwebrtc() {
