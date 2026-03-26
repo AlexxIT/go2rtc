@@ -33,7 +33,7 @@ func NewClient(rawURL string) (*Client, error) {
 			`{"public_key":"%s","sign":"%s","account":"admin"}`,
 			query.Get("client_public"), query.Get("sign"),
 		)
-	} else if model == ModelMijia || model == ModelXiaobai {
+	} else if model == ModelMijia || model == ModelXiaobai || model == ModelLoockV1 {
 		username = "admin"
 		password = query.Get("password")
 	} else if model == ModelDafang || model == ModelXiaofang {
@@ -148,6 +148,25 @@ func (c *Client) StartMedia(video, audio string) error {
 			c.WriteCommandJSON(0x0605, `{"channel":%s}`, video),
 			c.WriteCommandJSON(0x0704, `{}`), // don't know why
 		)
+
+	case ModelLoockV1:
+		// CatY firmware variants behave differently.
+		// Send a wide set of known-safe start commands and ignore partial failures.
+		switch video {
+		case "", "hd":
+			video = "3"
+		case "sd":
+			video = "1"
+		case "auto":
+			video = "0"
+		}
+
+		_ = c.WriteCommandJSON(cmdAudioStart, `{}`)
+		_ = c.WriteCommandJSON(cmdVideoStart, `{}`)
+		_ = c.WriteCommandJSON(cmdStreamCtrlReq, `{"videoquality":%s}`, video)
+		_ = c.WriteCommandJSON(0x0605, `{"channel":1}`)
+		_ = c.WriteCommandJSON(0x0704, `{}`)
+		return nil
 
 	case ModelIMILABA1, ModelMijia:
 		// 0 - auto, 1 - low, 3 - hd
