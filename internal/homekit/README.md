@@ -95,3 +95,61 @@ streams:
 homekit:
   aqara1:  # same stream ID from streams list
 ```
+
+## Doorbell Events
+
+You can subscribe to doorbell button press events from paired HomeKit doorbells (e.g. Aqara G4). Events are forwarded to a webhook URL and/or available via an SSE endpoint.
+
+This runs a separate HAP connection alongside the video stream, with auto-reconnect and keepalive pings.
+
+### Events Configuration
+
+```yaml
+streams:
+  doorbell: homekit://...
+
+events:
+  doorbell:
+    stream: "doorbell"        # references the stream name above (optional, defaults to event name)
+    webhook: "http://homeassistant.local:8123/api/webhook/doorbell_rang"
+```
+
+The webhook receives a JSON POST on each button press:
+
+```json
+{
+  "stream": "doorbell",
+  "event": "single_press",
+  "value": 0,
+  "timestamp": "2026-03-12T10:30:00Z"
+}
+```
+
+Supported events: `single_press`, `double_press`, `long_press`.
+
+### SSE Endpoint
+
+Connect to `/api/homekit/events` for a Server-Sent Events stream of all doorbell events:
+
+```
+GET /api/homekit/events
+
+event: doorbell
+data: {"stream":"doorbell","event":"single_press","value":0,"timestamp":"..."}
+```
+
+### Home Assistant Example
+
+```yaml
+automation:
+  - alias: "Doorbell Rang"
+    trigger:
+      - platform: webhook
+        webhook_id: doorbell_rang
+        local_only: true
+    action:
+      - service: notify.mobile_app_phone
+        data:
+          title: "Doorbell"
+          message: "Someone is at the door!"
+```

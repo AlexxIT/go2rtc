@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	neturl "net/url"
 	"sync"
 	"time"
 
@@ -41,7 +42,18 @@ type eventConfig struct {
 	Webhook string `yaml:"webhook"`
 }
 
+const maxWebhookResponseBody = 1 << 20 // 1 MiB
+
 var (
+	webhookHTTPClient = &http.Client{
+		Timeout: 10 * time.Second,
+		// Redirects can silently move a webhook to another host.
+		// Keep the configured destination explicit.
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
 	sseListenersMu sync.Mutex
 	sseListeners   []chan DoorbellEvent
 )
@@ -263,24 +275,56 @@ func findSwitchEventIID(acc *hap.Accessory) uint64 {
 }
 
 func fireWebhook(url string, ev DoorbellEvent) {
+	webhookURL, err := validateWebhookURL(url)
+	if err != nil {
+		log.Error().Err(err).Str("url", url).Msg("[events] invalid webhook URL")
+		return
+	}
+
 	body, err := json.Marshal(ev)
 	if err != nil {
 		log.Error().Err(err).Msg("[events] marshal webhook body")
 		return
 	}
 
-	httpClient := &http.Client{Timeout: 10 * time.Second}
-	resp, err := httpClient.Post(url, "application/json", bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, webhookURL.String(), bytes.NewReader(body))
 	if err != nil {
-		log.Error().Err(err).Msgf("[events] webhook POST to %s", url)
+		log.Error().Err(err).Str("url", url).Msg("[events] build webhook request")
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := webhookHTTPClient.Do(req)
+	if err != nil {
+		log.Error().Err(err).Str("url", url).Msg("[events] webhook POST")
 		return
 	}
 	defer resp.Body.Close()
-	_, _ = io.ReadAll(resp.Body)
 
-	if resp.StatusCode >= 400 {
-		log.Warn().Msgf("[events] webhook %s returned status %d", url, resp.StatusCode)
-	} else {
-		log.Trace().Msgf("[events] webhook %s returned status %d", url, resp.StatusCode)
+	if _, err = io.Copy(io.Discard, io.LimitReader(resp.Body, maxWebhookResponseBody)); err != nil {
+		log.Debug().Err(err).Str("url", url).Msg("[events] drain webhook response")
 	}
+
+	switch {
+	case resp.StatusCode >= 400:
+		log.Warn().Str("url", url).Int("status", resp.StatusCode).Msg("[events] webhook returned error status")
+	case resp.StatusCode >= 300:
+		log.Warn().Str("url", url).Int("status", resp.StatusCode).Msg("[events] webhook returned redirect status")
+	default:
+		log.Trace().Str("url", url).Int("status", resp.StatusCode).Msg("[events] webhook returned status")
+	}
+}
+
+func validateWebhookURL(rawURL string) (*neturl.URL, error) {
+	webhookURL, err := neturl.Parse(rawURL)
+	if err != nil {
+		return nil, fmt.Errorf("parse webhook URL: %w", err)
+	}
+	if webhookURL.Scheme != "http" && webhookURL.Scheme != "https" {
+		return nil, fmt.Errorf("unsupported webhook scheme %q", webhookURL.Scheme)
+	}
+	if webhookURL.Host == "" {
+		return nil, fmt.Errorf("webhook URL missing host")
+	}
+	return webhookURL, nil
 }
