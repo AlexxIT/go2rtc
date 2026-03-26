@@ -101,11 +101,6 @@ func getCameraURL(url *url.URL) (string, error) {
 
 	// The getMissURL request has a fallback to getP2PURL.
 	// But for known models we can save one request to the cloud.
-	// Loock v01 may run legacy on old firmware and miss on newer firmware,
-	// so always try miss first for this model.
-	if model == "loock.cateye.v01" {
-		return getMissURL(url)
-	}
 	if xiaomi.IsLegacy(model) {
 		return getLegacyURL(url)
 	}
@@ -141,7 +136,7 @@ func getLegacyURL(url *url.URL) (string, error) {
 
 	query.Set("uid", v.UID)
 
-	if v.Sign != "" && query.Get("model") != "loock.cateye.v01" {
+	if v.Sign != "" {
 		query.Set("client_public", hex.EncodeToString(clientPublic))
 		query.Set("client_private", hex.EncodeToString(clientPrivate))
 		query.Set("device_public", v.PublicKey)

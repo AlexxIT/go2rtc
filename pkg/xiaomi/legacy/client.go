@@ -33,7 +33,7 @@ func NewClient(rawURL string) (*Client, error) {
 			`{"public_key":"%s","sign":"%s","account":"admin"}`,
 			query.Get("client_public"), query.Get("sign"),
 		)
-	} else if model == ModelMijia || model == ModelXiaobai || model == ModelLoockV1 {
+	} else if model == ModelMijia || model == ModelXiaobai {
 		username = "admin"
 		password = query.Get("password")
 	} else if model == ModelDafang || model == ModelXiaofang {
