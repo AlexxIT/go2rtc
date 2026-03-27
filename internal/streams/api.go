@@ -177,5 +177,9 @@ func apiPreload(w http.ResponseWriter, r *http.Request) {
 }
 
 func apiSchemes(w http.ResponseWriter, r *http.Request) {
+	if err := api.WaitReady(r.Context()); err != nil {
+		http.Error(w, "starting", http.StatusServiceUnavailable)
+		return
+	}
 	api.ResponseJSON(w, SupportedSchemes())
 }
