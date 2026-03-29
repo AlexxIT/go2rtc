@@ -57,7 +57,7 @@ type Producer struct {
 const codecXiaobaiPCMA = 1 // chuangmi.camera.xiaobai
 
 func probe(client *Client) ([]*core.Media, error) {
-	_ = client.SetDeadline(time.Now().Add(15 * time.Second))
+	_ = client.SetDeadline(time.Now().Add(20 * time.Second))
 
 	var vcodec, acodec *core.Codec
 
@@ -73,6 +73,11 @@ func probe(client *Client) ([]*core.Media, error) {
 		// 18  0000
 		hdr, payload, err := client.ReadPacket()
 		if err != nil {
+			// Some battery/doorbell devices can provide video without audio.
+			// Don't fail probing if we already detected video.
+			if vcodec != nil {
+				break
+			}
 			return nil, err
 		}
 
@@ -118,11 +123,13 @@ func probe(client *Client) ([]*core.Media, error) {
 			Direction: core.DirectionRecvonly,
 			Codecs:    []*core.Codec{vcodec},
 		},
-		{
+	}
+	if acodec != nil {
+		medias = append(medias, &core.Media{
 			Kind:      core.KindAudio,
 			Direction: core.DirectionRecvonly,
 			Codecs:    []*core.Codec{acodec},
-		},
+		})
 	}
 	return medias, nil
 }
@@ -132,11 +139,16 @@ func (c *Producer) Protocol() string {
 }
 
 func (c *Producer) Start() error {
+	timeout := 5 * time.Second
+	if c.client.model == ModelLoockV1 {
+		timeout = 20 * time.Second
+	}
+
 	var audioTS uint32
 	var videoSeq, audioSeq uint16
 
 	for {
-		_ = c.client.SetDeadline(time.Now().Add(5 * time.Second))
+		_ = c.client.SetDeadline(time.Now().Add(timeout))
 		hdr, payload, err := c.client.ReadPacket()
 		if err != nil {
 			return err

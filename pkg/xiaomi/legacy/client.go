@@ -2,9 +2,13 @@ package legacy
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
+	"strconv"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/tutk"
 	"github.com/AlexxIT/go2rtc/pkg/xiaomi/crypto"
@@ -18,6 +22,8 @@ func NewClient(rawURL string) (*Client, error) {
 
 	query := u.Query()
 	model := query.Get("model")
+	rawMode := query.Get("xraw")
+	var localAddr *net.UDPAddr
 
 	var username, password string
 	var key []byte
@@ -42,12 +48,43 @@ func NewClient(rawURL string) (*Client, error) {
 		return nil, fmt.Errorf("xiaomi: unsupported model: %s", model)
 	}
 
-	conn, err := tutk.Dial(u.Host, query.Get("uid"), username, password)
+	if port := query.Get("xport"); port != "" {
+		// Experimental: force direct host port from URL query.
+		if host := u.Hostname(); net.ParseIP(host) != nil {
+			u.Host = net.JoinHostPort(host, port)
+		}
+	} else if model == ModelLoockV1 && query.Get("xdirect") == "1" {
+		// Experimental CatY mode based on captured Mi Home LAN traffic.
+		if host := u.Hostname(); net.ParseIP(host) != nil {
+			u.Host = net.JoinHostPort(host, "6666")
+		}
+	}
+	if model == ModelLoockV1 && rawMode != "" && rawMode != "3" {
+		// Experimental: replay a small subset of observed Mi Home UDP payloads.
+		// This is best-effort and intentionally ignored on error.
+		_ = loockRawKick(u.Host, query.Get("xlocal"), rawMode)
+	}
+	if localPort := query.Get("xlocal"); localPort != "" {
+		port, err := strconv.Atoi(localPort)
+		if err != nil {
+			return nil, fmt.Errorf("xiaomi: invalid xlocal: %w", err)
+		}
+		localAddr = &net.UDPAddr{Port: port}
+	}
+
+	cfg := &tutk.DialConfig{LocalAddr: localAddr}
+	if model == ModelLoockV1 && rawMode == "3" {
+		cfg.PreConnect = func(conn *net.UDPConn, addr *net.UDPAddr) error {
+			return loockRawKickConn(conn, addr, rawMode)
+		}
+	}
+
+	conn, err := tutk.DialWithConfig(u.Host, query.Get("uid"), username, password, cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	if model == ModelDafang || model == ModelXiaofang {
+	if model == ModelDafang || model == ModelXiaofang || (model == ModelLoockV1 && query.Get("xskiplogin") != "1") {
 		err = xiaofangLogin(conn, query.Get("password"))
 		if err != nil {
 			_ = conn.Close()
@@ -62,6 +99,89 @@ func NewClient(rawURL string) (*Client, error) {
 	}
 
 	return c, nil
+}
+
+func loockRawKick(hostport, localPort, mode string) error {
+	host := hostport
+	port := "6666"
+	if h, p, err := net.SplitHostPort(hostport); err == nil {
+		host, port = h, p
+	}
+	if net.ParseIP(host) == nil {
+		return nil
+	}
+
+	addr, err := net.ResolveUDPAddr("udp", net.JoinHostPort(host, port))
+	if err != nil {
+		return err
+	}
+
+	var localAddr *net.UDPAddr
+	if localPort != "" {
+		p, err := strconv.Atoi(localPort)
+		if err != nil {
+			return err
+		}
+		localAddr = &net.UDPAddr{Port: p}
+	}
+
+	conn, err := net.ListenUDP("udp", localAddr)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	if err = loockRawKickConn(conn, addr, mode); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func loockRawKickConn(conn *net.UDPConn, addr *net.UDPAddr, mode string) error {
+	payloadHex, loops, delay := loockRawPayload(mode)
+
+	_ = conn.SetDeadline(time.Now().Add(200 * time.Millisecond))
+	for i := 0; i < loops; i++ {
+		for _, s := range payloadHex {
+			b, err := hex.DecodeString(s)
+			if err != nil {
+				continue
+			}
+			_, _ = conn.WriteToUDP(b, addr)
+
+			buf := make([]byte, 2048)
+			_, _, _ = conn.ReadFromUDP(buf) // ignore result, this is just a wake/kick attempt
+			time.Sleep(delay)
+		}
+	}
+	return nil
+}
+
+func loockRawPayload(mode string) (payloadHex []string, loops int, delay time.Duration) {
+	// Payloads captured from Mi Home <-> CatY local LAN session.
+	// They are protocol-ciphertext and may vary by session/device state.
+	switch mode {
+	case "2", "3":
+		// Replay a longer startup burst captured from phone traffic.
+		payloadHex = []string{
+			"6e4c9d8c40d140ca3d2da82dc0e6cadcfb4bde8b775484ae0ef4ab8815d1af5c6e2e8d8c40d040ca3e6d3b1f40a4cbd8637f06e9a741f6d72d6e280c30e4fad86e2e8d8c40d040ca2d4d280c40e4cad8206c726168656943",
+			"6e6c5df840db30cb3d2da82d20eecafcf7729d2c306140ca8dbd280c3fe5ba946e2ead8e40c060ca2d6d280c40e4cad8e8f8dba72386b65d0a3dc573f6e59dff481dab8f799732cd0e5a0aae0782f8ce685dfbd972d307f80e292b1f73d2accf6d18fb0d24f777e85e2e1b2a52804cff78a8beda2793d3c90e7abe6f67d199da48ccabee7ab767f81e3ebb0f86c65dfa6878fb8920a707a85b7c3b5f4685a8fa3808abcd27c703891e0cbe4f0783acaa1d5dbeb4239342bd0e3a2e7f73dc88df18adeece721352e80e3f1b8a57d1d9fa6d08ff25243692ec5b791e3a128bed3e6e2e8d8c40d040ca2dad2f0c40e4cbd86e2e8d8c40d040ca2d6d280c40e4cad86e2e8d8c40d040ca2d6d280c40e4cad86e2e8d8c40d040ca2d6d280c40e4cad86e2e8d8c40d040ca2d6d280c40e4cad84dadc9183ac517386d7c280c47e4d858dab9eaf81592d3be195c4dafa7d2ed4ddd6bebab32a5c71d0860bb1b44b7bd2e6e2e8d8c40d040ca4b4c1b0b518bcd7c6e2e8d8c40d040ca2d6d280c40e4cad86e2e8d8c40d040ca2d6d280c40e4cad86e2e8d8c40d040ca2d6d280c40e4cad86e2e8d8c40d040ca2d6d280c40e4cad86e2e8d8c40d040ca2d6d280c40e4cad86e2e8d8c40d040ca2d6d280c40e4cad86e2e8d8c40d040ca2d6d280c40e4cad86e2e8d8c40d040ca2d6d280c40e4cad86e2e8d8c40d040ca2d6d280c40e4cad86e2e8d8c40d040ca2d6d280c40e4cad86e2e8d8c40d040ca2d6d280c40e4cad86e2e8d8c40d040ca2d6d280c40e4cad82e2e8d8c406041b42d6c280c40e4cad86e2e8d8c40d070ca2d8d290c40e4cbd8436861726c696e6c5df840db30cb3d2ca82d20eecafcf7729d2c306340ca8dbd280c3fe5ba946e2ead8e40d060ca2d6d280c40e4cad8e8f8dba72386b65d0a1dc573f6e59cff481dab8f799732cd0e5a0aae0782f8ce685dfbd972d307f80e292b1f73d2accf6d18fb0d24f777e85e2e1b2a52804cff78a8beda2793d3c90e7abe6f67d199da48ccabee7ab767f81e3ebb0f86c65dfa6878fb8920a707a85b7c3b5f4685a8fa3808abcd27c703891e0cbe4f0783acaa1d5dbeb4239342bd0e3a2e7f73dc88df18adeece721352e80e3f1b8a57d1d9fa6d08ff25243692ec5b791e3a128bed3e6e2e8d8c40d040ca2dad2f0c40e4cbd86e2e8d8c40d040ca2d6d280c40e4cad86e2e8d8c40d040ca2d6d280c40e4cad86e2e8d8c40d040ca2d6d280c40e4cad86e2e8d8c40d040ca2d6d280c40e4cad84dadc9183ac517386d7c280c47e4d858dab9eaf81592d3be195c4dafa7d2ed4ddd6bebab32a5c71d0860bb1b44b7bd2e6e2e8d8c40d040ca4b4c1b0b518bcd7c6e2e8d8c40d040ca2d6d280c40e4cad86e2e8d8c40d040ca2d6d280c40e4cad86e2e8d8c40d040ca2d6d280c40e4cad86e2e8d8c40d040ca2d6d280c40e4cad86e2e8d8c40d040ca2d6d280c40e4cad86e2e8d8c40d040ca2d6d280c40e4cad86e2e8d8c40d040ca2d6d280c40e4cad86e2e8d8c40d040ca2d6d280c40e4cad86e2e8d8c40d040ca2d6d280c40e4cad86e2e8d8c40d040ca2d6d280c40e4cad86e2e8d8c40d040ca2d6d280c40e4cad86e2e8d8c40d040ca2d6d280c40e4cad82e2e8d8c406041b42d6c280c40e4cad86e2e8d8c40d070ca2d8d290c40e4cbd8436861726c69",
+			"4e6d9d8c40d140ca3d2da82d00e6cadafb4bde8b775484ae0ef4ab8815d1af5cf7729d2c30d140ca9e7d3b1f3fa5bb94627144684e6d9d8c40d140ca3d2da82d00e6cadafb4bde8b775484ae0ef4ab8815d1af5cf7729d2c30d140ca9e7d3b1f3fa5bb9462714468",
+			"4e6d9d8c40d140ca3d2da82d00e6cadafb4bde8b775484ae0ef4ab8815d1af5cf7729d2c30d140ca9e7d3b1f3fa5bb9462714468",
+		}
+		loops = 2
+		delay = 10 * time.Millisecond
+	default:
+		payloadHex = []string{
+			"6e4c9d8c40d140ca3d2da82dc0e6cadcfb4bde8b775484ae0ef4ab8815d1af5c6e2e8d8c40d040ca3e6d3b1f40a4cbd8637f06e9a741f6d72d6e280c30e4fad86e2e8d8c40d040ca2d4d280c40e4cad8206c726168656943",
+			"4e6d9d8c40d140ca3d2da82d00e6cadafb4bde8b775484ae0ef4ab8815d1af5cf7729d2c30d140ca9e7d3b1f3fa5bb9462714468",
+		}
+		loops = 3
+		delay = 15 * time.Millisecond
+	}
+
+	return
 }
 
 func xiaofangLogin(conn *tutk.Conn, password string) error {
@@ -148,6 +268,25 @@ func (c *Client) StartMedia(video, audio string) error {
 			c.WriteCommandJSON(0x0605, `{"channel":%s}`, video),
 			c.WriteCommandJSON(0x0704, `{}`), // don't know why
 		)
+
+	case ModelLoockV1:
+		// CatY firmware variants behave differently.
+		// Send a wide set of known-safe start commands and ignore partial failures.
+		switch video {
+		case "", "hd":
+			video = "3"
+		case "sd":
+			video = "1"
+		case "auto":
+			video = "0"
+		}
+
+		_ = c.WriteCommandJSON(cmdAudioStart, `{}`)
+		_ = c.WriteCommandJSON(cmdVideoStart, `{}`)
+		_ = c.WriteCommandJSON(cmdStreamCtrlReq, `{"videoquality":%s}`, video)
+		_ = c.WriteCommandJSON(0x0605, `{"channel":1}`)
+		_ = c.WriteCommandJSON(0x0704, `{}`)
+		return nil
 
 	case ModelIMILABA1, ModelMijia:
 		// 0 - auto, 1 - low, 3 - hd
