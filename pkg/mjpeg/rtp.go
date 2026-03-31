@@ -72,7 +72,7 @@ func RTPDepay(handlerFunc core.HandlerFunc) core.HandlerFunc {
 			return
 		}
 
-		if end := buf[len(buf)-2:]; end[0] != 0xFF && end[1] != 0xD9 {
+		if len(buf) >= 2 && buf[len(buf)-2] != 0xFF && buf[len(buf)-1] != 0xD9 {
 			buf = append(buf, 0xFF, 0xD9)
 		}
 
@@ -196,12 +196,12 @@ func Transcode(b []byte) ([]byte, error) {
 	if w > 2040 {
 		w = 2040
 	} else if w&3 > 0 {
-		w &= 3
+		w &^= 3 // round down to nearest multiple of 4
 	}
 	if h > 2040 {
 		h = 2040
 	} else if h&3 > 0 {
-		h &= 3
+		h &^= 3 // round down to nearest multiple of 4
 	}
 
 	if w != wh.X || h != wh.Y {
