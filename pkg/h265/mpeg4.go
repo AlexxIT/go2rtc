@@ -10,33 +10,49 @@ import (
 )
 
 func DecodeConfig(conf []byte) (profile, vps, sps, pps []byte) {
+	// minimum: 23-byte header + 5-byte VPS prefix (no data)
+	if len(conf) < 28 {
+		return
+	}
 	profile = conf[1:4]
 
 	b := conf[23:]
-	if binary.BigEndian.Uint16(b[1:]) != 1 {
+	if len(b) < 5 || binary.BigEndian.Uint16(b[1:]) != 1 {
 		return
 	}
-	vpsSize := binary.BigEndian.Uint16(b[3:])
+	vpsSize := int(binary.BigEndian.Uint16(b[3:]))
+	if len(b) < 5+vpsSize {
+		return
+	}
 	vps = b[5 : 5+vpsSize]
 
 	b = conf[23+5+vpsSize:]
-	if binary.BigEndian.Uint16(b[1:]) != 1 {
+	if len(b) < 5 || binary.BigEndian.Uint16(b[1:]) != 1 {
 		return
 	}
-	spsSize := binary.BigEndian.Uint16(b[3:])
+	spsSize := int(binary.BigEndian.Uint16(b[3:]))
+	if len(b) < 5+spsSize {
+		return
+	}
 	sps = b[5 : 5+spsSize]
 
 	b = conf[23+5+vpsSize+5+spsSize:]
-	if binary.BigEndian.Uint16(b[1:]) != 1 {
+	if len(b) < 5 || binary.BigEndian.Uint16(b[1:]) != 1 {
 		return
 	}
-	ppsSize := binary.BigEndian.Uint16(b[3:])
+	ppsSize := int(binary.BigEndian.Uint16(b[3:]))
+	if len(b) < 5+ppsSize {
+		return
+	}
 	pps = b[5 : 5+ppsSize]
 
 	return
 }
 
 func EncodeConfig(vps, sps, pps []byte) []byte {
+	if len(vps) == 0 || len(sps) < 6 || len(pps) == 0 {
+		return nil
+	}
 	vpsSize := uint16(len(vps))
 	spsSize := uint16(len(sps))
 	ppsSize := uint16(len(pps))
