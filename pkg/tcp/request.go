@@ -153,6 +153,8 @@ var insecureConfig = &tls.Config{
 		// but cameras can't work without them https://github.com/AlexxIT/go2rtc/issues/1172
 		tls.TLS_RSA_WITH_AES_128_GCM_SHA256, // insecure
 		tls.TLS_RSA_WITH_AES_256_GCM_SHA384, // insecure
+		tls.TLS_RSA_WITH_AES_128_CBC_SHA, // insecure
+		tls.TLS_RSA_WITH_AES_256_CBC_SHA, // insecure
 	},
 }
 
