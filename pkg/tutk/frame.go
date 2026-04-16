@@ -374,6 +374,9 @@ func (h *FrameHandler) handleVideo(channel byte, hdr *PacketHeader, payload []by
 
 	// New frame number - reset and start fresh
 	if hdr.FrameNo != cs.frameNo {
+		if hdr.PktIdx != 0 {
+			return // stray continuation for a frame we never started / gave up on
+		}
 		// Check if previous frame was incomplete
 		if cs.hasStarted && cs.waitSeq < cs.pktTotal {
 			fmt.Printf("[DROP] ch=0x%02x #%d INCOMPLETE: got %d/%d pkts\n",
@@ -384,11 +387,14 @@ func (h *FrameHandler) handleVideo(channel byte, hdr *PacketHeader, payload []by
 		cs.pktTotal = hdr.PktTotal
 	}
 
-	// If packet index doesn't match expected, reset (data loss)
+	// If packet index doesn't match expected, drop entire frame (data loss)
 	if hdr.PktIdx != cs.waitSeq {
-		fmt.Printf("[OOO] ch=0x%02x #%d frameType=0x%02x pktTotal=%d expected pkt %d, got %d - reset\n",
+		fmt.Printf("[OOO] ch=0x%02x #%d frameType=0x%02x pktTotal=%d expected pkt %d, got %d - drop frame\n",
 			channel, hdr.FrameNo, hdr.FrameType, hdr.PktTotal, cs.waitSeq, hdr.PktIdx)
-		cs.reset()
+		cs.waitData = cs.waitData[:0]
+		cs.frameInfo = nil
+		cs.hasStarted = false
+		cs.waitSeq = cs.pktTotal // sentinel: ignore remaining pkts of this frame
 		return
 	}
 
