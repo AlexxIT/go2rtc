@@ -77,6 +77,7 @@ Ultimate camera streaming application with support for dozens formats and protoc
 > - [#2130](https://github.com/AlexxIT/go2rtc/pull/2130) — HomeKit Secure Video
 > - [#2160](https://github.com/AlexxIT/go2rtc/pull/2160) — WebCodecs streaming support (@seydx)
 > - [#2174](https://github.com/AlexxIT/go2rtc/pull/2174) - Socket leaks in go2rtc - creality k2plus issue
+> - [#2223](https://github.com/AlexxIT/go2rtc/pull/2223) — Fix CORS preflight requests support
 ---
 
 ## Screenshots
