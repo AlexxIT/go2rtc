@@ -121,17 +121,3 @@ func proxy(conn1 net.Conn, address string) {
 	go io.Copy(conn2, conn1)
 	io.Copy(conn1, conn2)
 }
-
-// DialTLS like ssh.Dial but with TLS
-//func DialTLS(network, addr, sni string, config *ssh.ClientConfig) (*ssh.Client, error) {
-//	conn, err := net.DialTimeout(network, addr, config.Timeout)
-//	if err != nil {
-//		return nil, err
-//	}
-//	conn = tls.Client(conn, &tls.Config{ServerName: sni, InsecureSkipVerify: sni == ""})
-//	c, chans, reqs, err := ssh.NewClientConn(conn, addr, config)
-//	if err != nil {
-//		return nil, err
-//	}
-//	return ssh.NewClient(c, chans, reqs), nil
-//}
