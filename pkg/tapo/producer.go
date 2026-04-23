@@ -16,6 +16,7 @@ func (c *Client) GetMedias() []*core.Media {
 				Direction: core.DirectionRecvonly,
 				Codecs: []*core.Codec{
 					{Name: core.CodecH264, ClockRate: 90000, PayloadType: core.PayloadTypeRAW},
+					{Name: core.CodecH265, ClockRate: 90000, PayloadType: core.PayloadTypeRAW},
 				},
 			},
 			{
@@ -52,7 +53,12 @@ func (c *Client) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver,
 	track := core.NewReceiver(media, codec)
 	switch media.Kind {
 	case core.KindVideo:
-		track.ID = mpegts.StreamTypeH264
+		switch codec.Name {
+		case core.CodecH264:
+			track.ID = mpegts.StreamTypeH264
+		case core.CodecH265:
+			track.ID = mpegts.StreamTypeH265
+		}
 	case core.KindAudio:
 		track.ID = mpegts.StreamTypePCMATapo
 	}
