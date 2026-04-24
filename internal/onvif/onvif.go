@@ -22,6 +22,16 @@ import (
 func Init() {
 	log = app.GetLogger("onvif")
 
+	var cfg struct {
+		Mod struct {
+			Username string `yaml:"username"`
+			Password string `yaml:"password"`
+		} `yaml:"onvif"`
+	}
+	app.LoadConfig(&cfg)
+	authUsername = cfg.Mod.Username
+	authPassword = cfg.Mod.Password
+
 	streams.HandleFunc("onvif", streamOnvif)
 
 	// ONVIF server on all suburls
@@ -32,6 +42,8 @@ func Init() {
 }
 
 var log zerolog.Logger
+var authUsername string
+var authPassword string
 
 func streamOnvif(rawURL string) (core.Producer, error) {
 	client, err := onvif.NewClient(rawURL)
@@ -72,6 +84,14 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Trace().Msgf("[onvif] server request %s %s:\n%s", r.Method, r.RequestURI, b)
+
+	if authUsername != "" && operation != onvif.DeviceGetSystemDateAndTime {
+		if !onvif.ValidateUsernameToken(b, authUsername, authPassword, time.Now(), onvif.DefaultUsernameTokenAge) {
+			log.Debug().Str("addr", r.RemoteAddr).Str("operation", operation).Msg("[onvif] auth failed")
+			api.Response(w, onvif.NotAuthorizedResponse(), "application/soap+xml; charset=utf-8")
+			return
+		}
+	}
 
 	switch operation {
 	case onvif.ServiceGetServiceCapabilities, // important for Hass
