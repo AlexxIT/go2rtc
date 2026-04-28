@@ -84,6 +84,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with: { name: go2rtc_linux_mipsel, path: go2rtc }
 
+      - name: Build go2rtc_linux_riscv64
+        env: { GOOS: linux, GOARCH: riscv64 }
+        run: go build -ldflags "-s -w" -trimpath
+      - name: Upload go2rtc_linux_riscv64
+        uses: actions/upload-artifact@v7
+        with: { name: go2rtc_linux_riscv64, path: go2rtc }
+
       - name: Build go2rtc_mac_amd64
         env: { GOOS: darwin, GOARCH: amd64 }
         run: go build -ldflags "-s -w" -trimpath
@@ -111,6 +118,13 @@ jobs:
       - name: Upload go2rtc_freebsd_arm64
         uses: actions/upload-artifact@v4
         with: { name: go2rtc_freebsd_arm64, path: go2rtc }
+
+      - name: Build go2rtc_freebsd_riscv64
+        env: { GOOS: freebsd, GOARCH: riscv64 }
+        run: go build -ldflags "-s -w" -trimpath
+      - name: Upload go2rtc_freebsd_riscv64
+        uses: actions/upload-artifact@v7
+        with: { name: go2rtc_freebsd_riscv64, path: go2rtc }
 
   docker-master:
     name: Build docker master
@@ -163,6 +177,7 @@ jobs:
             linux/arm/v6
             linux/arm/v7
             linux/arm64/v8
+            linux/riscv64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
