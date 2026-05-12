@@ -114,6 +114,8 @@ jobs:
 
   docker-master:
     name: Build docker master
+    permissions:
+      packages: write
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -171,6 +173,8 @@ jobs:
 
   docker-hardware:
     name: Build docker hardware
+    permissions:
+      packages: write
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -226,6 +230,8 @@ jobs:
 
   docker-rockchip:
     name: Build docker rockchip
+    permissions:
+      packages: write
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
