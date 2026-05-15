@@ -27,7 +27,9 @@ type Consumer struct {
 	audioSession *srtp.Session
 	audioRTPTime byte
 
-	backTrack *core.Receiver // backchannel audio (HomeKit viewer → camera)
+	audioCodec *core.Codec
+	backTrack  *core.Receiver // backchannel audio (HomeKit viewer → camera)
+	closers    []io.Closer
 }
 
 func NewConsumer(conn net.Conn, server *srtp.Server) *Consumer {
@@ -51,6 +53,11 @@ func NewConsumer(conn net.Conn, server *srtp.Server) *Consumer {
 			Direction: core.DirectionRecvonly,
 			Codecs: []*core.Codec{
 				{Name: core.CodecOpus},
+				{Name: core.CodecPCMA},
+				{Name: core.CodecPCMU},
+				{Name: core.CodecAAC},
+				{Name: core.CodecPCM},
+				{Name: core.CodecPCML},
 			},
 		},
 	}
@@ -132,6 +139,7 @@ func (c *Consumer) SetConfig(conf *camera.SelectedStreamConfiguration) bool {
 	c.audioSession.PayloadType = conf.AudioCodec.RTPParams[0].PayloadType
 	c.audioSession.RTCPInterval = toDuration(conf.AudioCodec.RTPParams[0].RTCPInterval)
 	c.audioRTPTime = conf.AudioCodec.CodecParams[0].RTPTime[0]
+	c.audioCodec = selectedAudioCodec(&conf.AudioCodec)
 
 	c.srtp.AddSession(c.videoSession)
 	c.srtp.AddSession(c.audioSession)
@@ -144,15 +152,28 @@ func (c *Consumer) GetTrack(media *core.Media, codec *core.Codec) (*core.Receive
 		return nil, core.ErrCantGetTrack
 	}
 
-	c.backTrack = core.NewReceiver(media, codec)
+	actualCodec := c.audioCodec
+	if actualCodec == nil {
+		actualCodec = codec
+	}
+
+	c.backTrack = core.NewReceiver(media, actualCodec)
+	receiver := c.backTrack
+
+	if !sameAudioCodec(actualCodec, codec) {
+		if bridge, err := newAudioTranscoder(c.backTrack, codec); err == nil {
+			c.closers = append(c.closers, bridge)
+			receiver = bridge.Receiver()
+		}
+	}
 
 	c.audioSession.OnReadRTP = func(packet *rtp.Packet) {
 		c.backTrack.WriteRTP(packet)
 		c.Recv += len(packet.Payload)
 	}
 
-	c.Receivers = append(c.Receivers, c.backTrack)
-	return c.backTrack, nil
+	c.Receivers = append(c.Receivers, receiver)
+	return receiver, nil
 }
 
 func (c *Consumer) Start() error {
@@ -214,6 +235,9 @@ func (c *Consumer) Stop() error {
 	if c.deadline != nil {
 		c.deadline.Reset(0)
 	}
+	for _, closer := range c.closers {
+		_ = closer.Close()
+	}
 	return c.Connection.Stop()
 }
 
@@ -230,4 +254,25 @@ func (c *Consumer) srtpEndpoint() *srtp.Endpoint {
 
 func toDuration(seconds float32) time.Duration {
 	return time.Duration(seconds * float32(time.Second))
+}
+
+func selectedAudioCodec(conf *camera.AudioCodecConfiguration) *core.Codec {
+	media := audioToMedia([]camera.AudioCodecConfiguration{*conf})
+	if len(media.Codecs) == 0 {
+		return nil
+	}
+	if media.Codecs[0].Name == core.CodecOpus {
+		codec := media.Codecs[0].Clone()
+		codec.ClockRate = 48000
+		codec.Channels = 2
+		codec.PayloadType = 110
+		return codec
+	}
+	return media.Codecs[0]
+}
+
+func sameAudioCodec(src, dst *core.Codec) bool {
+	return src.Name == dst.Name &&
+		(src.ClockRate == dst.ClockRate || src.ClockRate == 0 || dst.ClockRate == 0) &&
+		(src.Channels == dst.Channels || src.Channels == 0 || dst.Channels == 0)
 }

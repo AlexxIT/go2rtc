@@ -55,7 +55,11 @@ func (s *Server) AddSession(session *Session) {
 func (s *Server) DelSession(session *Session) {
 	s.mu.Lock()
 
-	delete(s.sessions, session.Remote.SSRC)
+	for ssrc, current := range s.sessions {
+		if current == session {
+			delete(s.sessions, ssrc)
+		}
+	}
 
 	// check s.conn for https://github.com/AlexxIT/go2rtc/issues/734
 	if len(s.sessions) == 0 && s.conn != nil {
@@ -83,20 +87,73 @@ func (s *Server) handle() error {
 		// Multiplexing RTP Data and Control Packets on a Single Port
 		// https://datatracker.ietf.org/doc/html/rfc5761
 
-		switch packetType := b[1]; packetType {
-		case 99, 110, 0x80 | 99, 0x80 | 110:
-			// this is default position for SSRC in RTP packet
-			ssrc := binary.BigEndian.Uint32(b[8:])
+		switch kind, ssrc := packetKindAndSSRC(b[:n]); kind {
+		case packetKindRTP:
 			if session := s.GetSession(ssrc); session != nil {
 				session.ReadRTP(b[:n])
+			} else {
+				s.ReadRTP(ssrc, b[:n])
 			}
 
-		case 200, 201, 202, 203, 204, 205, 206, 207:
-			// this is default position for SSRC in RTCP packet
-			ssrc := binary.BigEndian.Uint32(b[4:])
+		case packetKindRTCP:
 			if session := s.GetSession(ssrc); session != nil {
 				session.ReadRTCP(b[:n])
 			}
 		}
 	}
+}
+
+func (s *Server) ReadRTP(ssrc uint32, b []byte) {
+	s.mu.Lock()
+	sessions := make([]*Session, 0, len(s.sessions))
+	for _, session := range s.sessions {
+		sessions = append(sessions, session)
+	}
+	s.mu.Unlock()
+
+	for _, session := range sessions {
+		if session.OnReadRTP == nil {
+			continue
+		}
+		if session.ReadRTP(b) {
+			s.mu.Lock()
+			s.sessions[ssrc] = session
+			s.mu.Unlock()
+			return
+		}
+	}
+}
+
+const (
+	packetKindUnknown = iota
+	packetKindRTP
+	packetKindRTCP
+)
+
+func packetKindAndSSRC(b []byte) (int, uint32) {
+	if len(b) < 2 {
+		return packetKindUnknown, 0
+	}
+
+	// Multiplexing RTP Data and Control Packets on a Single Port
+	// https://datatracker.ietf.org/doc/html/rfc5761
+	switch packetType := b[1]; packetType {
+	case 200, 201, 202, 203, 204, 205, 206, 207:
+		if len(b) < 8 {
+			return packetKindUnknown, 0
+		}
+		return packetKindRTCP, binary.BigEndian.Uint32(b[4:])
+	}
+
+	payloadType := b[1] & 0x7F
+	switch {
+	case payloadType == 13:
+		return packetKindUnknown, 0 // comfort noise
+	case payloadType >= 64 && payloadType <= 95:
+		return packetKindUnknown, 0 // RTCP conflict range
+	case len(b) < 12:
+		return packetKindUnknown, 0
+	}
+
+	return packetKindRTP, binary.BigEndian.Uint32(b[8:])
 }

@@ -119,21 +119,22 @@ func (s *Session) WriteRTCP(packet rtcp.Packet) (int, error) {
 	return s.conn.WriteTo(b, s.Remote.addr)
 }
 
-func (s *Session) ReadRTP(b []byte) {
+func (s *Session) ReadRTP(b []byte) bool {
 	packet := &rtp.Packet{}
 
 	b, err := s.Remote.srtp.DecryptRTP(nil, b, &packet.Header)
 	if err != nil {
-		return
+		return false
 	}
 
 	if err = packet.Unmarshal(b); err != nil {
-		return
+		return false
 	}
 
 	if s.OnReadRTP != nil {
 		s.OnReadRTP(packet)
 	}
+	return true
 }
 
 func (s *Session) ReadRTCP(b []byte) {
