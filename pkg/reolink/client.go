@@ -23,7 +23,6 @@ type Client struct {
 	bc      *baichuan.Client
 	stream  baichuan.Stream
 	channel uint8
-	logger  zerolog.Logger
 
 	medias    []*core.Media
 	receivers []*core.Receiver
@@ -102,12 +101,6 @@ func Dial(rawURL string) (*Client, error) {
 		}
 	}
 
-	c.logger = Log.With().
-		Str("camera", c.url.Hostname()).
-		Uint8("channel", c.channel).
-		Str("stream", string(c.stream)).
-		Logger()
-
 	ctx, cancel := context.WithTimeout(context.Background(), core.ConnDialTimeout)
 	defer cancel()
 
@@ -160,7 +153,7 @@ func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Rece
 
 			if c.talkSession == nil {
 				if err := c.SetupBackchannel(); err != nil {
-					c.logger.Debug().Err(err).Msg("lazy talkback initialization failed")
+					c.logDebugErr(err, "lazy talkback initialization failed")
 					return
 				}
 			}
@@ -172,7 +165,7 @@ func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Rece
 				c.talkMu.Lock()
 				defer c.talkMu.Unlock()
 				if c.talkSession != nil {
-					c.logger.Debug().Msg("closing idle talkback session")
+					c.logDebug("closing idle talkback session")
 					ctx, cancel := context.WithTimeout(context.Background(), core.ConnDialTimeout)
 					_ = c.talkSession.Close(ctx)
 					cancel()
@@ -226,4 +219,12 @@ func (c *Client) SetupBackchannel() error {
 	c.talkSession = session
 	c.talkEncoder = &baichuan.ADPCMEncoder{}
 	return nil
+}
+
+func (c *Client) logDebug(msg string, args ...any) {
+	Log.Debug().Msgf("[reolink] [%s:%d:%s] "+msg, append([]any{c.url.Hostname(), c.channel, c.stream}, args...)...)
+}
+
+func (c *Client) logDebugErr(err error, msg string, args ...any) {
+	Log.Debug().Err(err).Msgf("[reolink] [%s:%d:%s] "+msg, append([]any{c.url.Hostname(), c.channel, c.stream}, args...)...)
 }
