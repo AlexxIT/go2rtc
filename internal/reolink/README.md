@@ -19,6 +19,11 @@ streams:
     # Enable WebRTC two-way talkback audio support:
     - ffmpeg:driveway_main#audio=opus
 
+  # High-definition stream using the camera's local UID (P2P/UDP broadcast)
+  driveway_p2p:
+    - reolink://[user name]:[password]@9527000000000000/main?channel=0
+    - ffmpeg:driveway_p2p#audio=opus
+
   # Standard-definition (H.264) stream with channel 0
   driveway_sub:
     - reolink://[user name]:[password]@192.168.1.123/sub?channel=0
@@ -40,3 +45,14 @@ When you click the microphone button in Frigate or the HA WebUI, the browser ini
 ## Idle Connection Management
 
 By default, `go2rtc` only dials and connects to your Reolink cameras when a client is actively watching. When the last client closes the stream, `go2rtc` waits 30 seconds (idle timeout) and then completely tears down the TCP connection to the camera, freeing up all of the camera's internal sockets and CPU resources.
+
+## Local P2P/UID Connections
+
+If your camera's IP address changes frequently (dynamic DHCP) or if you want to route local traffic purely via the camera's **16-character unique identifier (UID)**, the native `reolink` driver supports automatic local UDP broadcast discovery:
+
+1. Specify the camera's UID in place of the hostname (e.g. `reolink://admin:password@9527000000000000/main`).
+2. When the stream is requested, the driver broadcasts local UDP discovery packets on ports `2015` and `2018`.
+3. The camera automatically answers, and a highly efficient, reliable P2P UDP transport layer is established on your LAN completely bypassing static IP configurations!
+
+> [!NOTE]
+> This is a local-only feature. WAN/Remote P2P (connecting across firewalls when the camera is not on the same LAN) is not supported to ensure your IoT data is kept strictly inside your own private network.
