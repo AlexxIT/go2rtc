@@ -173,13 +173,6 @@ func (c *Client) Start() error {
 func (c *Client) processPacket(packet baichuan.MediaPacket, videoCount, audioCount *int) {
 	c.recv += len(packet.Data)
 
-	if c.baseTime == 0 && packet.HasTimestamp {
-		if packet.Kind == baichuan.MediaPacketIFrame || packet.Kind == baichuan.MediaPacketPFrame {
-			c.baseTime = c.videoTimestamps.unwrap(packet.TimestampMicrosecs)
-			c.systemBaseTime = uint64(time.Now().UnixMicro())
-		}
-	}
-
 	switch packet.Kind {
 	case baichuan.MediaPacketIFrame, baichuan.MediaPacketPFrame:
 		if !packet.HasTimestamp {
@@ -212,18 +205,13 @@ func (c *Client) processPacket(packet baichuan.MediaPacket, videoCount, audioCou
 		packet.Data = annexb.EncodeToAVCC(packet.Data)
 
 		continuousUS := c.videoTimestamps.unwrap(packet.TimestampMicrosecs)
-		var relativeUS uint64
-		if continuousUS > c.baseTime {
-			relativeUS = continuousUS - c.baseTime
-		}
-
-		rawVideoRTP := uint32(relativeUS * 90000 / 1000000)
+		rawVideoRTP := uint32(rtpTimestampForClock(continuousUS, 90000))
 		timestamp := c.videoRTP.next(rawVideoRTP)
 
 
 		pkt := &core.Packet{
 			Header: rtp.Header{
-				Marker:    packet.Kind == baichuan.MediaPacketIFrame,
+				Marker:    true,
 				Timestamp: timestamp,
 			},
 			Payload: packet.Data,
@@ -288,15 +276,12 @@ func (c *Client) processPacket(packet baichuan.MediaPacket, videoCount, audioCou
 			}
 		}
 
-		// Initialize audioSamples based on the elapsed time since systemBaseTime
-		// to keep A/V perfectly synchronized, just in case audio starts late.
-		if c.audioSamples == 0 && *audioCount == 0 {
-			if c.systemBaseTime > 0 {
-				nowUS := uint64(time.Now().UnixMicro())
-				if nowUS > c.systemBaseTime {
-					c.audioSamples = ((nowUS - c.systemBaseTime) * uint64(clockRate)) / 1000000
-				}
-			}
+		if packet.HasTimestamp {
+			continuousUS := c.audioTimestamps.unwrap(packet.TimestampMicrosecs)
+			c.audioSamples = rtpTimestampForClock(continuousUS, int(clockRate))
+		} else if c.audioSamples == 0 && *audioCount == 0 {
+			nowUS := uint64(time.Now().UnixMicro())
+			c.audioSamples = rtpTimestampForClock(nowUS, int(clockRate))
 		}
 
 		for _, pkt := range pkts {
@@ -433,4 +418,10 @@ func (g *rtpTimestampGuard) next(ts uint32) uint32 {
 	}
 	g.last = adjusted
 	return adjusted
+}
+
+func rtpTimestampForClock(microseconds uint64, clockRate int) uint64 {
+	seconds := microseconds / 1_000_000
+	rem := microseconds % 1_000_000
+	return seconds*uint64(clockRate) + (rem*uint64(clockRate))/1_000_000
 }

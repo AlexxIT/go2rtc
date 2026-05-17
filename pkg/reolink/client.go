@@ -41,11 +41,10 @@ type Client struct {
 	videoTimestamps timestampUnwrapper
 	videoRTP        rtpTimestampGuard
 
+	audioTimestamps timestampUnwrapper
 	audioSamples uint64
 	audioRTP     rtpTimestampGuard
 
-	baseTime       uint64
-	systemBaseTime uint64
 	talkMu         sync.Mutex
 	talkTimer      *time.Timer
 }
