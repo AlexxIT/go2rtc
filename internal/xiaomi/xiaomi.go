@@ -149,6 +149,12 @@ func getLegacyURL(url *url.URL) (string, error) {
 	return url.String(), nil
 }
 
+// cs2CloudRelayHost is the Mi-Cloud relay endpoint used by cs2 cameras
+// that do not expose port 32108 on the LAN (e.g. xiaomi.camera.c302n).
+// One of a small published pool of Alibaba Cloud addresses; a future
+// improvement could derive the right one from the p2p_id region prefix.
+const cs2CloudRelayHost = "47.236.156.107"
+
 func getMissURL(url *url.URL) (string, error) {
 	clientPublic, clientPrivate, err := crypto.GenerateKey()
 	if err != nil {
@@ -191,6 +197,17 @@ func getMissURL(url *url.URL) (string, error) {
 
 	if v.Vendor.ID == 1 {
 		query.Set("uid", v.Vendor.Params.UID)
+	}
+
+	// cs2 cloud-relay mode: cameras of the MJA1-secure-element generation
+	// (e.g. xiaomi.camera.c302n) cannot be reached on the LAN port — they
+	// only stream via the Mi-Cloud relay. Pass the p2p_id through and
+	// redirect the host to the relay; the miss client picks this up and
+	// runs the cloud handshake.
+	if v.Vendor.ID == 4 && v.Vendor.Params.UID != "" {
+		query.Set("p2p_id", v.Vendor.Params.UID)
+		log.Debug().Msgf("xiaomi: cs2 cloud-relay mode, redirecting to %s", cs2CloudRelayHost)
+		url.Host = cs2CloudRelayHost
 	}
 
 	url.RawQuery = query.Encode()
