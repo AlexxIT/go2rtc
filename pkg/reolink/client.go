@@ -2,7 +2,6 @@ package reolink
 
 import (
 	"context"
-	"log"
 	"net/url"
 	"strconv"
 	"strings"
@@ -12,7 +11,10 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/baichuan"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/pcm"
+	"github.com/rs/zerolog"
 )
+
+var Log = zerolog.Nop()
 
 type Client struct {
 	core.Listener
@@ -21,6 +23,7 @@ type Client struct {
 	bc      *baichuan.Client
 	stream  baichuan.Stream
 	channel uint8
+	logger  zerolog.Logger
 
 	medias    []*core.Media
 	receivers []*core.Receiver
@@ -99,6 +102,12 @@ func Dial(rawURL string) (*Client, error) {
 		}
 	}
 
+	c.logger = Log.With().
+		Str("camera", c.url.Hostname()).
+		Uint8("channel", c.channel).
+		Str("stream", string(c.stream)).
+		Logger()
+
 	ctx, cancel := context.WithTimeout(context.Background(), core.ConnDialTimeout)
 	defer cancel()
 
@@ -151,7 +160,7 @@ func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Rece
 
 			if c.talkSession == nil {
 				if err := c.SetupBackchannel(); err != nil {
-					log.Printf("[reolink] lazy talkback initialization failed: %v", err)
+					c.logger.Debug().Err(err).Msg("lazy talkback initialization failed")
 					return
 				}
 			}
@@ -163,7 +172,7 @@ func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Rece
 				c.talkMu.Lock()
 				defer c.talkMu.Unlock()
 				if c.talkSession != nil {
-					log.Printf("[reolink] closing idle talkback session")
+					c.logger.Debug().Msg("closing idle talkback session")
 					ctx, cancel := context.WithTimeout(context.Background(), core.ConnDialTimeout)
 					_ = c.talkSession.Close(ctx)
 					cancel()

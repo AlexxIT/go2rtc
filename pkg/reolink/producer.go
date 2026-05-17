@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/aac"
@@ -21,7 +20,7 @@ func (c *Client) GetMedias() []*core.Media {
 }
 
 func (c *Client) Probe() error {
-	log.Printf("[reolink] probing stream %s channel %d...", c.stream, c.channel)
+	c.logger.Debug().Msg("probing stream")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	c.cancel = cancel
@@ -41,7 +40,7 @@ func (c *Client) Probe() error {
 			if vcodec == nil {
 				return fmt.Errorf("reolink: probe timeout waiting for video iframe")
 			}
-			log.Printf("[reolink] probe timeout, got video but no audio")
+			c.logger.Debug().Msg("probe timeout, got video but no audio")
 			goto DoneProbe
 		case packet, ok := <-reader.Packets:
 			if !ok {
@@ -49,7 +48,7 @@ func (c *Client) Probe() error {
 			}
 
 			if packet.Kind == baichuan.MediaPacketIFrame && vcodec == nil {
-				log.Printf("[reolink] probe got iframe codec=%s len=%d", packet.Codec, len(packet.Data))
+				c.logger.Debug().Msgf("probe got iframe codec=%s len=%d", packet.Codec, len(packet.Data))
 				saved := packet
 				c.probeIFrame = &saved
 				if packet.Codec == "H265" {
@@ -66,29 +65,29 @@ func (c *Client) Probe() error {
 					buf := annexb.EncodeToAVCC(b)
 					if len(buf) >= 5 && h265.NALUType(buf) == h265.NALUTypeVPS {
 						vcodec = h265.AVCCToCodec(buf)
-						log.Printf("[reolink] probe H265 fmtp=%s", vcodec.FmtpLine)
+						c.logger.Debug().Msgf("probe H265 fmtp=%s", vcodec.FmtpLine)
 					} else {
-						log.Printf("[reolink] probe H265 iframe missing VPS, using bare codec")
+						c.logger.Debug().Msg("probe H265 iframe missing VPS, using bare codec")
 						vcodec = &core.Codec{Name: core.CodecH265, ClockRate: 90000, PayloadType: core.PayloadTypeRAW}
 					}
 				} else {
 					buf := annexb.EncodeToAVCC(packet.Data)
 					if len(buf) >= 5 && h264.NALUType(buf) == h264.NALUTypeSPS {
 						vcodec = h264.AVCCToCodec(buf)
-						log.Printf("[reolink] probe H264 fmtp=%s", vcodec.FmtpLine)
+						c.logger.Debug().Msgf("probe H264 fmtp=%s", vcodec.FmtpLine)
 					} else {
-						log.Printf("[reolink] probe H264 iframe missing SPS, using bare codec")
+						c.logger.Debug().Msg("probe H264 iframe missing SPS, using bare codec")
 						vcodec = &core.Codec{Name: core.CodecH264, ClockRate: 90000, PayloadType: core.PayloadTypeRAW}
 					}
 				}
 			} else if packet.Kind == baichuan.MediaPacketAAC && acodec == nil {
 				if aac.IsADTS(packet.Data) {
 					acodec = aac.ADTSToCodec(packet.Data)
-					log.Printf("[reolink] probe got AAC (ADTS) rate=%d ch=%d fmtp=%s", acodec.ClockRate, acodec.Channels, acodec.FmtpLine)
+					c.logger.Debug().Msgf("probe got AAC (ADTS) rate=%d ch=%d fmtp=%s", acodec.ClockRate, acodec.Channels, acodec.FmtpLine)
 				} else {
 					config := aac.EncodeConfig(aac.TypeAACLC, 16000, 1, false)
 					acodec = aac.ConfigToCodec(config)
-					log.Printf("[reolink] probe got AAC (raw) rate=%d", acodec.ClockRate)
+					c.logger.Debug().Msgf("probe got AAC (raw) rate=%d", acodec.ClockRate)
 				}
 			}
 		}
@@ -122,7 +121,7 @@ DoneProbe:
 		},
 	})
 
-	log.Printf("[reolink] probe complete, video=%s audio=%v medias=%d", vcodec.Name, acodec != nil, len(c.medias))
+	c.logger.Debug().Msgf("probe complete, video=%s audio=%v medias=%d", vcodec.Name, acodec != nil, len(c.medias))
 	return nil
 }
 
@@ -139,7 +138,7 @@ func (c *Client) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver,
 }
 
 func (c *Client) Start() error {
-	log.Printf("[reolink] Start() called, receivers=%d reader=%v", len(c.receivers), c.reader != nil)
+	c.logger.Debug().Msgf("Start() called, receivers=%d reader=%v", len(c.receivers), c.reader != nil)
 
 	if c.reader == nil {
 		ctx, cancel := context.WithCancel(context.Background())
@@ -232,7 +231,7 @@ func (c *Client) processPacket(packet baichuan.MediaPacket, videoCount, audioCou
 		}
 		*videoCount++
 		if *videoCount <= 3 {
-			log.Printf("[reolink] video pkt #%d codec=%s kind=%d len=%d ts=%d",
+			c.logger.Debug().Msgf("video pkt #%d codec=%s kind=%d len=%d ts=%d",
 				*videoCount, packet.Codec, packet.Kind, len(pkt.Payload), pkt.Timestamp)
 		}
 	case baichuan.MediaPacketAAC:
@@ -301,7 +300,7 @@ func (c *Client) processPacket(packet baichuan.MediaPacket, videoCount, audioCou
 
 		*audioCount += len(pkts)
 		if *audioCount <= 3 && len(pkts) > 0 {
-			log.Printf("[reolink] audio pkt #%d len=%d ts=%d",
+			c.logger.Debug().Msgf("audio pkt #%d len=%d ts=%d",
 				*audioCount, len(pkts[0].Payload), pkts[0].Timestamp)
 		}
 	}
