@@ -110,16 +110,18 @@ DoneProbe:
 		})
 	}
 
-	c.medias = append(c.medias, &core.Media{
-		Kind:      core.KindAudio,
-		Direction: core.DirectionSendonly,
-		Codecs: []*core.Codec{
-			{Name: core.CodecPCMA, ClockRate: 8000},
-			{Name: core.CodecPCMU, ClockRate: 8000},
-			{Name: core.CodecPCML, ClockRate: 16000},
-			{Name: core.CodecPCML, ClockRate: 8000},
-		},
-	})
+	if c.stream != baichuan.StreamMain {
+		c.medias = append(c.medias, &core.Media{
+			Kind:      core.KindAudio,
+			Direction: core.DirectionSendonly,
+			Codecs: []*core.Codec{
+				{Name: core.CodecPCMA, ClockRate: 8000},
+				{Name: core.CodecPCMU, ClockRate: 8000},
+				{Name: core.CodecPCML, ClockRate: 16000},
+				{Name: core.CodecPCML, ClockRate: 8000},
+			},
+		})
+	}
 
 	c.logDebug("probe complete, video=%s audio=%v medias=%d", vcodec.Name, acodec != nil, len(c.medias))
 	return nil

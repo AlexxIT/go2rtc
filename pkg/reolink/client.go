@@ -2,6 +2,7 @@ package reolink
 
 import (
 	"context"
+	"errors"
 	"net/url"
 	"strconv"
 	"strings"
@@ -209,6 +210,10 @@ func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Rece
 }
 
 func (c *Client) SetupBackchannel() error {
+	if c.stream == baichuan.StreamMain {
+		return errors.New("reolink: talkback is not supported on the main stream")
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), core.ConnDialTimeout)
 	defer cancel()
 
