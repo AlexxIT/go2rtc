@@ -228,6 +228,26 @@ func (c *Client) processPacket(packet baichuan.MediaPacket, videoCount, audioCou
 		rawVideoRTP := uint32(rtpTimestampForClock(continuousUS, 90000))
 		timestamp := c.videoRTP.next(rawVideoRTP)
 
+		if c.videoRTP.smooth && !c.lastWriteTime.IsZero() {
+			intervalUs := int64(66666) // default for 15 FPS
+			if c.videoRTP.avgDelta > 100 {
+				intervalUs = int64((c.videoRTP.avgDelta * 1_000_000) / 90000)
+			}
+
+			if intervalUs < 20000 {
+				intervalUs = 20000
+			} else if intervalUs > 150000 {
+				intervalUs = 150000
+			}
+
+			elapsed := time.Since(c.lastWriteTime)
+			expectedInterval := time.Duration(intervalUs) * time.Microsecond
+			if elapsed < expectedInterval {
+				time.Sleep(expectedInterval - elapsed)
+			}
+		}
+		c.lastWriteTime = time.Now()
+
 		pkt := &core.Packet{
 			Header: rtp.Header{
 				Marker:    true,
@@ -250,6 +270,7 @@ func (c *Client) processPacket(packet baichuan.MediaPacket, videoCount, audioCou
 			}
 		}
 		*videoCount++
+
 		if *videoCount <= 3 {
 			c.logDebug("video pkt #%d codec=%s kind=%d len=%d ts=%d",
 				*videoCount, packet.Codec, packet.Kind, len(pkt.Payload), pkt.Timestamp)
@@ -478,30 +499,78 @@ func unwrapTimestamp(ts32 uint32, highest64 uint64) uint64 {
 }
 
 type rtpTimestampGuard struct {
-	offset uint32
-	last   uint32
-	set    bool
+	offset   uint32
+	last     uint32
+	set      bool
+	smooth   bool
+	avgDelta float64
+	lastRaw  uint32
 }
 
 func (g *rtpTimestampGuard) next(ts uint32) uint32 {
 	if !g.set {
 		g.last = ts
+		g.lastRaw = ts
+		g.avgDelta = 6000 // default for 15 FPS
 		g.set = true
 		return ts
 	}
-	adjusted := ts + g.offset
-	if ts == g.last {
-		g.offset = g.last + 1 - ts
-		adjusted = g.last + 1
-	} else if int32(adjusted-g.last) <= 0 {
-		jumpBackward := uint32(int32(g.last - adjusted))
-		if jumpBackward > 90000 {
+
+	if !g.smooth {
+		adjusted := ts + g.offset
+		if ts == g.last {
 			g.offset = g.last + 1 - ts
-			adjusted = ts + g.offset
-		} else {
+			adjusted = g.last + 1
+		} else if int32(adjusted-g.last) <= 0 {
+			jumpBackward := uint32(int32(g.last - adjusted))
+			if jumpBackward > 90000 {
+				g.offset = g.last + 1 - ts
+				adjusted = ts + g.offset
+			} else {
+				adjusted = g.last + 1
+			}
+		}
+		g.last = adjusted
+		return adjusted
+	}
+
+	rawDelta := int32(ts - g.lastRaw)
+	if rawDelta < 100 || rawDelta > 45000 {
+		// Jump or discontinuity (wrap, drop, restart)
+		g.lastRaw = ts
+		g.avgDelta = 6000
+
+		adjusted := ts + g.offset
+		if int32(adjusted-g.last) <= 0 {
 			adjusted = g.last + 1
 		}
+		g.offset = adjusted - ts
+		g.last = adjusted
+		return adjusted
 	}
+
+	// Exponential moving average for average delta
+	g.avgDelta = (g.avgDelta*15 + float64(rawDelta)) / 16
+	g.lastRaw = ts
+
+	// PLL feedback correction
+	step := g.avgDelta
+	expected := ts + g.offset
+	drift := int32(g.last + uint32(step+0.5) - expected)
+
+	if drift > 9000 { // >100ms ahead of camera -> slow down step
+		step -= 200
+	} else if drift < -9000 { // >100ms behind camera -> speed up step
+		step += 200
+	}
+
+	adjusted := g.last + uint32(step+0.5)
+
+	if int32(adjusted-g.last) <= 0 {
+		adjusted = g.last + 1
+	}
+
+	g.offset = adjusted - ts
 	g.last = adjusted
 	return adjusted
 }

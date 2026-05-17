@@ -51,6 +51,8 @@ type Client struct {
 
 	talkMu         sync.Mutex
 	talkTimer      *time.Timer
+
+	lastWriteTime  time.Time
 }
 
 func Dial(rawURL string) (*Client, error) {
@@ -60,6 +62,7 @@ func Dial(rawURL string) (*Client, error) {
 	}
 
 	c := &Client{url: u}
+	c.videoRTP.smooth = true
 
 	// parsing url
 	cfg := baichuan.Config{
