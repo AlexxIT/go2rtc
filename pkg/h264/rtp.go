@@ -2,6 +2,7 @@ package h264
 
 import (
 	"encoding/binary"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264/annexb"
@@ -132,6 +133,9 @@ func RTPPay(mtu uint16, handler core.HandlerFunc) core.HandlerFunc {
 				Payload: payload,
 			}
 			handler(&clone)
+			if i < last {
+				time.Sleep(100 * time.Microsecond)
+			}
 		}
 	}
 }
