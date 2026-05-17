@@ -240,6 +240,8 @@ func (c *Client) keepAliveLoop() {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
+	consecutiveFailures := 0
+
 	for {
 		select {
 		case <-ticker.C:
@@ -249,15 +251,20 @@ func (c *Client) keepAliveLoop() {
 					Class: classModernWithOffset,
 				})
 			} else {
-				pingCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+				pingCtx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 				_, err := c.sendRequest(pingCtx, request{
 					MsgID: msgIDPing,
 					Class: classModernWithOffset,
 				})
 				cancel()
 				if err != nil {
-					c.shutdown(fmt.Errorf("ping failed: %w", err))
-					return
+					consecutiveFailures++
+					if consecutiveFailures >= 3 {
+						c.shutdown(fmt.Errorf("ping failed 3 consecutive times: %w", err))
+						return
+					}
+				} else {
+					consecutiveFailures = 0
 				}
 			}
 		case <-c.closed:
