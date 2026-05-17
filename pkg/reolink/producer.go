@@ -199,6 +199,10 @@ func (c *Client) processPacket(packet baichuan.MediaPacket, videoCount, audioCou
 			return
 		}
 
+		if *videoCount == 0 {
+			c.sendInitialAudioSilence()
+		}
+
 		if packet.Codec == "H265" {
 			if c.probeIFrame != nil && c.probeIFrame.Codec == packet.Codec {
 				packet = *c.probeIFrame
@@ -579,4 +583,48 @@ func rtpTimestampForClock(microseconds uint64, clockRate int) uint64 {
 	seconds := microseconds / 1_000_000
 	rem := microseconds % 1_000_000
 	return seconds*uint64(clockRate) + (rem*uint64(clockRate))/1_000_000
+}
+
+func (c *Client) sendInitialAudioSilence() {
+	for _, receiver := range c.receivers {
+		if receiver.Codec.Name == core.CodecPCMA {
+			clockRate := receiver.Codec.ClockRate
+			nowUS := uint64(time.Now().UnixMicro()) - 100_000
+			c.audioSamples = rtpTimestampForClock(nowUS, int(clockRate))
+
+			for i := 0; i < 5; i++ {
+				payload := make([]byte, 160)
+				for j := range payload {
+					payload[j] = 0xD5
+				}
+
+				pkt := &core.Packet{
+					Header: rtp.Header{
+						Marker:    true,
+						Timestamp: c.audioRTP.next(uint32(c.audioSamples)),
+					},
+					Payload: payload,
+				}
+				receiver.WriteRTP(pkt)
+				c.audioSamples += uint64(len(payload))
+			}
+		} else if receiver.Codec.Name == core.CodecAAC {
+			clockRate := receiver.Codec.ClockRate
+			nowUS := uint64(time.Now().UnixMicro()) - 300_000
+			c.audioSamples = rtpTimestampForClock(nowUS, int(clockRate))
+
+			for i := 0; i < 5; i++ {
+				pkt := &core.Packet{
+					Header: rtp.Header{
+						Version: aac.RTPPacketVersionAAC,
+						Marker:  true,
+						Timestamp: c.audioRTP.next(uint32(c.audioSamples)),
+					},
+					Payload: []byte{0x21, 0x10, 0x05, 0x30, 0x8C, 0x1F, 0xFC},
+				}
+				receiver.WriteRTP(pkt)
+				c.audioSamples += 1024
+			}
+		}
+	}
 }
