@@ -88,14 +88,23 @@ func (c *Client) Probe() error {
 						vcodec = &core.Codec{Name: core.CodecH264, ClockRate: 90000, PayloadType: core.PayloadTypeRAW}
 					}
 				}
-			} else if packet.Kind == baichuan.MediaPacketAAC && acodec == nil {
-				if aac.IsADTS(packet.Data) {
-					acodec = aac.ADTSToCodec(packet.Data)
-					c.logDebug("probe got AAC (ADTS) rate=%d ch=%d fmtp=%s", acodec.ClockRate, acodec.Channels, acodec.FmtpLine)
+			} else if (packet.Kind == baichuan.MediaPacketAAC || packet.Kind == baichuan.MediaPacketADPCM) && acodec == nil {
+				if packet.Kind == baichuan.MediaPacketAAC {
+					if aac.IsADTS(packet.Data) {
+						acodec = aac.ADTSToCodec(packet.Data)
+						c.logDebug("probe got AAC (ADTS) rate=%d ch=%d fmtp=%s", acodec.ClockRate, acodec.Channels, acodec.FmtpLine)
+					} else {
+						config := aac.EncodeConfig(aac.TypeAACLC, 16000, 1, false)
+						acodec = aac.ConfigToCodec(config)
+						c.logDebug("probe got AAC (raw) rate=%d", acodec.ClockRate)
+					}
 				} else {
-					config := aac.EncodeConfig(aac.TypeAACLC, 16000, 1, false)
-					acodec = aac.ConfigToCodec(config)
-					c.logDebug("probe got AAC (raw) rate=%d", acodec.ClockRate)
+					acodec = &core.Codec{
+						Name:      core.CodecPCMA,
+						ClockRate: 8000,
+						Channels:  1,
+					}
+					c.logDebug("probe got ADPCM -> PCMA rate=8000 ch=1")
 				}
 			}
 		}
@@ -110,7 +119,9 @@ DoneProbe:
 	}
 
 	if acodec != nil {
-		acodec.PayloadType = core.PayloadTypeRAW
+		if acodec.Name == core.CodecAAC {
+			acodec.PayloadType = core.PayloadTypeRAW
+		}
 		c.medias = append(c.medias, &core.Media{
 			Kind:      core.KindAudio,
 			Direction: core.DirectionRecvonly,
@@ -202,7 +213,7 @@ func (c *Client) processPacket(packet baichuan.MediaPacket, videoCount, audioCou
 			if len(nalus) == 0 {
 				return
 			}
-			
+
 			var buf []byte
 			for _, n := range nalus {
 				buf = append(buf, 0, 0, 0, 1)
@@ -210,13 +221,12 @@ func (c *Client) processPacket(packet baichuan.MediaPacket, videoCount, audioCou
 			}
 			packet.Data = buf
 		}
-		
+
 		packet.Data = annexb.EncodeToAVCC(packet.Data)
 
 		continuousUS := c.videoTimestamps.unwrap(packet.TimestampMicrosecs)
 		rawVideoRTP := uint32(rtpTimestampForClock(continuousUS, 90000))
 		timestamp := c.videoRTP.next(rawVideoRTP)
-
 
 		pkt := &core.Packet{
 			Header: rtp.Header{
@@ -311,6 +321,73 @@ func (c *Client) processPacket(packet baichuan.MediaPacket, videoCount, audioCou
 		*audioCount += len(pkts)
 		if *audioCount <= 3 && len(pkts) > 0 {
 			c.logDebug("audio pkt #%d len=%d ts=%d",
+				*audioCount, len(pkts[0].Payload), pkts[0].Timestamp)
+		}
+	case baichuan.MediaPacketADPCM:
+		if c.adpcmDecoder == nil {
+			c.adpcmDecoder = &baichuan.ADPCMDecoder{}
+		}
+
+		pcm := c.adpcmDecoder.Decode(packet.Data)
+		pcma := baichuan.EncodePCMA(pcm)
+
+		if len(pcma) == 0 {
+			return
+		}
+
+		var clockRate uint32 = 8000
+		for _, receiver := range c.receivers {
+			if receiver.Codec.Name == core.CodecPCMA {
+				clockRate = receiver.Codec.ClockRate
+				break
+			}
+		}
+
+		if packet.HasTimestamp {
+			continuousUS := c.videoTimestamps.unwrap(packet.TimestampMicrosecs)
+			c.audioSamples = rtpTimestampForClock(continuousUS, int(clockRate))
+		} else if c.audioSamples == 0 && *audioCount == 0 {
+			nowUS := uint64(time.Now().UnixMicro())
+			c.audioSamples = rtpTimestampForClock(nowUS, int(clockRate))
+		}
+
+		var pkts []*core.Packet
+		payload := pcma
+		for len(payload) > 0 {
+			chunkSize := 160
+			if len(payload) < chunkSize {
+				chunkSize = len(payload)
+			}
+			chunk := payload[:chunkSize]
+			payload = payload[chunkSize:]
+
+			pkt := &core.Packet{
+				Header: rtp.Header{
+					Marker: true,
+				},
+				Payload: chunk,
+			}
+			pkts = append(pkts, pkt)
+		}
+
+		for _, pkt := range pkts {
+			rawAudioRTP := uint32(c.audioSamples)
+			pkt.Timestamp = c.audioRTP.next(rawAudioRTP)
+			c.audioSamples += uint64(len(pkt.Payload))
+		}
+
+		for _, receiver := range c.receivers {
+			if receiver.Codec.Name == core.CodecPCMA {
+				for _, pkt := range pkts {
+					clone := *pkt
+					receiver.WriteRTP(&clone)
+				}
+			}
+		}
+
+		*audioCount += len(pkts)
+		if *audioCount <= 3 && len(pkts) > 0 {
+			c.logDebug("audio PCMA pkt #%d len=%d ts=%d",
 				*audioCount, len(pkts[0].Payload), pkts[0].Timestamp)
 		}
 	}

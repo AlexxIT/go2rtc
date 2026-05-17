@@ -47,6 +47,7 @@ type Client struct {
 	audioTimestamps timestampUnwrapper
 	audioSamples uint64
 	audioRTP     rtpTimestampGuard
+	adpcmDecoder *baichuan.ADPCMDecoder
 
 	talkMu         sync.Mutex
 	talkTimer      *time.Timer
