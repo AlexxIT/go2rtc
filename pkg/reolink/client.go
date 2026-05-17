@@ -2,12 +2,16 @@ package reolink
 
 import (
 	"context"
+	"log"
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/baichuan"
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/pcm"
 )
 
 type Client struct {
@@ -42,6 +46,8 @@ type Client struct {
 
 	baseTime       uint64
 	systemBaseTime uint64
+	talkMu         sync.Mutex
+	talkTimer      *time.Timer
 }
 
 func Dial(rawURL string) (*Client, error) {
@@ -119,11 +125,16 @@ func (c *Client) Close() error {
 	if c.reader != nil {
 		c.reader.Close()
 	}
+	c.talkMu.Lock()
+	if c.talkTimer != nil {
+		c.talkTimer.Stop()
+	}
 	if c.talkSession != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), core.ConnDialTimeout)
 		_ = c.talkSession.Close(ctx)
 		cancel()
 	}
+	c.talkMu.Unlock()
 	if c.bc != nil {
 		return c.bc.Close()
 	}
@@ -132,17 +143,49 @@ func (c *Client) Close() error {
 
 func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
 	if c.sender == nil {
-		if err := c.SetupBackchannel(); err != nil {
-			return err
-		}
+		var transcoder func([]byte) []byte
 
 		c.sender = core.NewSender(media, track.Codec)
 		c.sender.Handler = func(packet *core.Packet) {
-			payload := packet.Payload
-			n := len(payload)
+			c.talkMu.Lock()
+			defer c.talkMu.Unlock()
+
+			if c.talkSession == nil {
+				if err := c.SetupBackchannel(); err != nil {
+					log.Printf("[reolink] lazy talkback initialization failed: %v", err)
+					return
+				}
+			}
+
+			if c.talkTimer != nil {
+				c.talkTimer.Stop()
+			}
+			c.talkTimer = time.AfterFunc(5*time.Second, func() {
+				c.talkMu.Lock()
+				defer c.talkMu.Unlock()
+				if c.talkSession != nil {
+					log.Printf("[reolink] closing idle talkback session")
+					ctx, cancel := context.WithTimeout(context.Background(), core.ConnDialTimeout)
+					_ = c.talkSession.Close(ctx)
+					cancel()
+					c.talkSession = nil
+					c.talkEncoder = nil
+				}
+			})
+
+			if transcoder == nil {
+				targetCodec := &core.Codec{
+					Name:      core.CodecPCML,
+					ClockRate: uint32(c.talkSession.SampleRate()),
+				}
+				transcoder = pcm.Transcode(targetCodec, track.Codec)
+			}
+
+			pcmBytes := transcoder(packet.Payload)
+			n := len(pcmBytes)
 			for i := 0; i < n; i += 2 {
-				lo := int16(payload[i])
-				hi := int16(payload[i+1])
+				lo := int16(pcmBytes[i])
+				hi := int16(pcmBytes[i+1])
 				sample := (hi << 8) | lo
 				c.pcmBuf = append(c.pcmBuf, sample)
 			}

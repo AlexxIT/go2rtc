@@ -115,6 +115,8 @@ DoneProbe:
 		Kind:      core.KindAudio,
 		Direction: core.DirectionSendonly,
 		Codecs: []*core.Codec{
+			{Name: core.CodecPCMA, ClockRate: 8000},
+			{Name: core.CodecPCMU, ClockRate: 8000},
 			{Name: core.CodecPCML, ClockRate: 16000},
 			{Name: core.CodecPCML, ClockRate: 8000},
 		},
