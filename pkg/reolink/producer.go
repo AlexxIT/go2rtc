@@ -32,6 +32,7 @@ func (c *Client) Probe() error {
 	c.reader = reader
 
 	var vcodec, acodec *core.Codec
+	var iframeTries int
 	timeout := time.After(core.ProbeTimeout)
 
 	for vcodec == nil || acodec == nil {
@@ -48,9 +49,10 @@ func (c *Client) Probe() error {
 			}
 
 			if packet.Kind == baichuan.MediaPacketIFrame && vcodec == nil {
-				c.logDebug("probe got iframe codec=%s len=%d", packet.Codec, len(packet.Data))
+				c.logDebug("probe got iframe codec=%s len=%d tries=%d", packet.Codec, len(packet.Data), iframeTries)
 				saved := packet
 				c.probeIFrame = &saved
+				iframeTries++
 				if packet.Codec == "H265" {
 					nalus := splitAnnexB(packet.Data)
 					nalus = filterH265DecodableNALs(nalus)
@@ -66,6 +68,9 @@ func (c *Client) Probe() error {
 					if len(buf) >= 5 && h265.NALUType(buf) == h265.NALUTypeVPS {
 						vcodec = h265.AVCCToCodec(buf)
 						c.logDebug("probe H265 fmtp=%s", vcodec.FmtpLine)
+					} else if iframeTries < 3 {
+						c.logDebug("probe H265 iframe missing VPS, waiting for next one")
+						c.probeIFrame = nil
 					} else {
 						c.logDebug("probe H265 iframe missing VPS, using bare codec")
 						vcodec = &core.Codec{Name: core.CodecH265, ClockRate: 90000, PayloadType: core.PayloadTypeRAW}
@@ -75,6 +80,9 @@ func (c *Client) Probe() error {
 					if len(buf) >= 5 && h264.NALUType(buf) == h264.NALUTypeSPS {
 						vcodec = h264.AVCCToCodec(buf)
 						c.logDebug("probe H264 fmtp=%s", vcodec.FmtpLine)
+					} else if iframeTries < 3 {
+						c.logDebug("probe H264 iframe missing SPS, waiting for next one")
+						c.probeIFrame = nil
 					} else {
 						c.logDebug("probe H264 iframe missing SPS, using bare codec")
 						vcodec = &core.Codec{Name: core.CodecH264, ClockRate: 90000, PayloadType: core.PayloadTypeRAW}
@@ -278,7 +286,7 @@ func (c *Client) processPacket(packet baichuan.MediaPacket, videoCount, audioCou
 		}
 
 		if packet.HasTimestamp {
-			continuousUS := c.audioTimestamps.unwrap(packet.TimestampMicrosecs)
+			continuousUS := c.videoTimestamps.unwrap(packet.TimestampMicrosecs)
 			c.audioSamples = rtpTimestampForClock(continuousUS, int(clockRate))
 		} else if c.audioSamples == 0 && *audioCount == 0 {
 			nowUS := uint64(time.Now().UnixMicro())
