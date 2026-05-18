@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -362,6 +363,15 @@ func (c *Client) StartPreview(ctx context.Context, channel uint8, stream Stream)
 					continue
 				}
 
+				// Skip pure keepalive messages (which do not carry media frames).
+				// Legitimate media packets always have a payload size > 8 bytes,
+				// whereas pure keepalive packets only carry a 4-byte check value.
+				// Rare large keepalives (due to MsgNum collision marking them as
+				// binary) will be caught by the self-healing parser reset below.
+				if len(msg.XML) > 0 && strings.Contains(msg.XML, "checkPos") && len(msg.Payload) <= 8 {
+					continue
+				}
+
 				parsed, err := parser.Append(msg.Payload)
 				if err != nil {
 					xmlSnippet := msg.XML
@@ -372,8 +382,10 @@ func (c *Client) StartPreview(ctx context.Context, channel uint8, stream Stream)
 					if prefixLen > 32 {
 						prefixLen = 32
 					}
-					c.shutdown(fmt.Errorf("bcmedia parse: %w (msg_xml=%q payload_prefix=%x)", err, xmlSnippet, msg.Payload[:prefixLen]))
-					return
+					// Reset the parser and continue instead of killing the connection.
+					// This allows recovery from occasional corrupt/unexpected bytes.
+					parser = MediaParser{}
+					continue
 				}
 
 				for _, packet := range parsed {
