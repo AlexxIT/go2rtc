@@ -3,6 +3,7 @@ package homekit
 import (
 	"fmt"
 	"io"
+	"log"
 	"math/rand"
 	"net"
 	"time"
@@ -29,7 +30,8 @@ type Consumer struct {
 
 	audioCodec *core.Codec
 	backTrack  *core.Receiver // backchannel audio (HomeKit viewer → camera)
-	closers    []io.Closer
+	backOutput *core.Receiver
+	backBridge *audioTranscoder
 }
 
 func NewConsumer(conn net.Conn, server *srtp.Server) *Consumer {
@@ -52,12 +54,8 @@ func NewConsumer(conn net.Conn, server *srtp.Server) *Consumer {
 			Kind:      core.KindAudio,
 			Direction: core.DirectionRecvonly,
 			Codecs: []*core.Codec{
-				{Name: core.CodecOpus},
 				{Name: core.CodecPCMA},
 				{Name: core.CodecPCMU},
-				{Name: core.CodecAAC},
-				{Name: core.CodecPCM},
-				{Name: core.CodecPCML},
 			},
 		},
 	}
@@ -157,22 +155,38 @@ func (c *Consumer) GetTrack(media *core.Media, codec *core.Codec) (*core.Receive
 		actualCodec = codec
 	}
 
-	c.backTrack = core.NewReceiver(media, actualCodec)
-	receiver := c.backTrack
-
-	if !sameAudioCodec(actualCodec, codec) {
-		if bridge, err := newAudioTranscoder(c.backTrack, codec); err == nil {
-			c.closers = append(c.closers, bridge)
-			receiver = bridge.Receiver()
-		}
+	if c.backTrack != nil && !sameAudioCodec(c.backTrack.Codec, actualCodec) {
+		c.closeBackchannel()
 	}
+	if c.backOutput != nil && sameAudioCodec(c.backOutput.Codec, codec) {
+		return c.backOutput, nil
+	}
+	if c.backTrack == nil {
+		c.backTrack = core.NewReceiver(media, actualCodec)
+	}
+
+	var receiver *core.Receiver
+	if !sameAudioCodec(actualCodec, codec) {
+		bridge, err := newAudioTranscoder(c.backTrack, codec)
+		if err != nil {
+			log.Printf("[homekit] talkback transcode failed: src=%s dst=%s err=%v", actualCodec.Name, codec.Name, err)
+			return nil, fmt.Errorf("homekit: talkback transcode %s to %s: %w", actualCodec.Name, codec.Name, err)
+		}
+		c.closeBackchannelBridge()
+		c.backBridge = bridge
+		receiver = bridge.Receiver()
+	} else {
+		c.closeBackchannelBridge()
+		receiver = c.backTrack
+	}
+	c.backOutput = receiver
 
 	c.audioSession.OnReadRTP = func(packet *rtp.Packet) {
 		c.backTrack.WriteRTP(packet)
 		c.Recv += len(packet.Payload)
 	}
 
-	c.Receivers = append(c.Receivers, receiver)
+	c.Receivers = []*core.Receiver{receiver}
 	return receiver, nil
 }
 
@@ -235,10 +249,26 @@ func (c *Consumer) Stop() error {
 	if c.deadline != nil {
 		c.deadline.Reset(0)
 	}
-	for _, closer := range c.closers {
-		_ = closer.Close()
-	}
+	c.closeBackchannel()
 	return c.Connection.Stop()
+}
+
+func (c *Consumer) closeBackchannel() {
+	c.closeBackchannelBridge()
+	if c.backTrack != nil {
+		c.backTrack.Close()
+		c.backTrack = nil
+	}
+	c.backOutput = nil
+	c.Receivers = nil
+}
+
+func (c *Consumer) closeBackchannelBridge() {
+	if c.backBridge == nil {
+		return
+	}
+	_ = c.backBridge.Close()
+	c.backBridge = nil
 }
 
 func (c *Consumer) srtpEndpoint() *srtp.Endpoint {

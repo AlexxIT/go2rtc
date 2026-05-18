@@ -98,6 +98,8 @@ func (s *Server) handle() error {
 		case packetKindRTCP:
 			if session := s.GetSession(ssrc); session != nil {
 				session.ReadRTCP(b[:n])
+			} else {
+				s.ReadRTCP(ssrc, b[:n])
 			}
 		}
 	}
@@ -116,6 +118,24 @@ func (s *Server) ReadRTP(ssrc uint32, b []byte) {
 			continue
 		}
 		if session.ReadRTP(b) {
+			s.mu.Lock()
+			s.sessions[ssrc] = session
+			s.mu.Unlock()
+			return
+		}
+	}
+}
+
+func (s *Server) ReadRTCP(ssrc uint32, b []byte) {
+	s.mu.Lock()
+	sessions := make([]*Session, 0, len(s.sessions))
+	for _, session := range s.sessions {
+		sessions = append(sessions, session)
+	}
+	s.mu.Unlock()
+
+	for _, session := range sessions {
+		if session.ReadRTCP(b) {
 			s.mu.Lock()
 			s.sessions[ssrc] = session
 			s.mu.Unlock()

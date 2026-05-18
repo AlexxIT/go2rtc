@@ -46,9 +46,7 @@ func Init() {
 	app.LoadConfig(&cfg)
 
 	log = app.GetLogger("homekit")
-	if bin := cfg.FFmpeg["bin"]; bin != "" {
-		homekit.SetFFmpegBin(bin)
-	}
+	homekit.SetFFmpegBin(cfg.FFmpeg["bin"])
 
 	streams.HandleFunc("homekit", streamHandler)
 

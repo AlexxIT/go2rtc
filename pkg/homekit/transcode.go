@@ -22,10 +22,12 @@ func SetFFmpegBin(bin string) {
 }
 
 type audioTranscoder struct {
-	input net.Conn
-	cmd   *exec.Cmd
-	done  chan struct{}
-	once  sync.Once
+	input    net.Conn
+	cmd      *exec.Cmd
+	sender   *core.Sender
+	once     sync.Once
+	waitOnce sync.Once
+	waitErr  error
 
 	receiver *core.Receiver
 }
@@ -37,18 +39,14 @@ func newAudioTranscoder(src *core.Receiver, dst *core.Codec) (*audioTranscoder, 
 	}
 	output, err := rawAudioOutput(dst)
 	if err != nil {
-		return nil, fmt.Errorf("homekit: unsupported talkback transcode: %s to %s", src.Codec.Name, dst.Name)
+		return nil, fmt.Errorf("homekit: unsupported talkback transcode: %s to %s: %w", src.Codec.Name, dst.Name, err)
 	}
 
-	inPort, err := freeUDPPort()
+	reservation, err := reserveUDPPort()
 	if err != nil {
 		return nil, err
 	}
-
-	udpInput, err := net.Dial("udp", "127.0.0.1:"+strconv.Itoa(inPort))
-	if err != nil {
-		return nil, err
-	}
+	inPort := reservation.LocalAddr().(*net.UDPAddr).Port
 
 	args := []string{
 		"-hide_banner", "-v", "error",
@@ -64,16 +62,17 @@ func newAudioTranscoder(src *core.Receiver, dst *core.Codec) (*audioTranscoder, 
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		_ = udpInput.Close()
+		_ = reservation.Close()
 		return nil, err
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		_ = udpInput.Close()
+		_ = stdin.Close()
+		_ = reservation.Close()
 		return nil, err
 	}
 	if err = cmd.Start(); err != nil {
-		_ = udpInput.Close()
+		_ = reservation.Close()
 		return nil, err
 	}
 
@@ -92,19 +91,34 @@ func newAudioTranscoder(src *core.Receiver, dst *core.Codec) (*audioTranscoder, 
 	if rtpIn.fmtp != "" {
 		sdp += fmt.Sprintf("a=fmtp:%d %s\r\n", payloadType, rtpIn.fmtp)
 	}
-	_, _ = stdin.Write([]byte(sdp))
+
+	udpInput, err := net.Dial("udp", "127.0.0.1:"+strconv.Itoa(inPort))
+	if err != nil {
+		_ = stdin.Close()
+		_ = reservation.Close()
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		return nil, err
+	}
+	_ = reservation.Close()
+	if _, err = stdin.Write([]byte(sdp)); err != nil {
+		_ = stdin.Close()
+		_ = udpInput.Close()
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		return nil, err
+	}
 	_ = stdin.Close()
 
 	t := &audioTranscoder{
 		input:    udpInput,
 		cmd:      cmd,
-		done:     make(chan struct{}),
 		receiver: core.NewReceiver(src.Media, output.codec),
 	}
 
 	go output.read(t, stdout)
 	go func() {
-		_ = cmd.Wait()
+		_ = t.wait()
 		t.Close()
 	}()
 
@@ -115,6 +129,7 @@ func newAudioTranscoder(src *core.Receiver, dst *core.Codec) (*audioTranscoder, 
 		}
 	}
 	sender.HandleRTP(src)
+	t.sender = sender
 
 	return t, nil
 }
@@ -125,15 +140,30 @@ func (t *audioTranscoder) Receiver() *core.Receiver {
 
 func (t *audioTranscoder) Close() error {
 	t.once.Do(func() {
-		close(t.done)
+		if t.sender != nil {
+			t.sender.Close()
+		}
+		if t.receiver != nil {
+			t.receiver.Close()
+		}
 		if t.input != nil {
 			_ = t.input.Close()
 		}
-		if t.cmd != nil && t.cmd.Process != nil {
+		if t.cmd != nil && t.cmd.Process != nil && t.cmd.ProcessState == nil {
 			_ = t.cmd.Process.Kill()
 		}
+		_ = t.wait()
 	})
 	return nil
+}
+
+func (t *audioTranscoder) wait() error {
+	t.waitOnce.Do(func() {
+		if t.cmd != nil {
+			t.waitErr = t.cmd.Wait()
+		}
+	})
+	return t.waitErr
 }
 
 type audioRTPInput struct {
@@ -300,11 +330,6 @@ func (o *audioRawOutput) readADTS(t *audioTranscoder, rd io.Reader) {
 	}
 }
 
-func freeUDPPort() (int, error) {
-	conn, err := net.ListenPacket("udp", "127.0.0.1:0")
-	if err != nil {
-		return 0, err
-	}
-	defer conn.Close()
-	return conn.LocalAddr().(*net.UDPAddr).Port, nil
+func reserveUDPPort() (net.PacketConn, error) {
+	return net.ListenPacket("udp", "127.0.0.1:0")
 }
