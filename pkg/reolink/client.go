@@ -151,7 +151,7 @@ func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Rece
 	if c.sender == nil {
 		var transcoder func([]byte) []byte
 
-		c.sender = core.NewSender(media, track.Codec)
+		c.sender = core.NewSender(media, codec)
 		c.sender.Handler = func(packet *core.Packet) {
 			c.talkMu.Lock()
 			defer c.talkMu.Unlock()
@@ -184,7 +184,7 @@ func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Rece
 					Name:      core.CodecPCML,
 					ClockRate: uint32(c.talkSession.SampleRate()),
 				}
-				transcoder = pcm.Transcode(targetCodec, track.Codec)
+				transcoder = pcm.Transcode(targetCodec, codec)
 			}
 
 			pcmBytes := transcoder(packet.Payload)
