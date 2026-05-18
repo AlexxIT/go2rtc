@@ -62,7 +62,7 @@ func Dial(rawURL string) (*Client, error) {
 	}
 
 	c := &Client{url: u}
-	c.videoRTP.smooth = true
+	c.videoRTP.smooth = false
 
 	// parsing url
 	cfg := baichuan.Config{
