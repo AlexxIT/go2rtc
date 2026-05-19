@@ -35,6 +35,7 @@ func (c *Client) Probe() error {
 	var iframeTries int
 	timeout := time.After(core.ProbeTimeout)
 
+ProbeLoop:
 	for vcodec == nil || acodec == nil {
 		select {
 		case <-timeout:
@@ -42,7 +43,7 @@ func (c *Client) Probe() error {
 				return fmt.Errorf("reolink: probe timeout waiting for video iframe")
 			}
 			c.logDebug("probe timeout, got video but no audio")
-			goto DoneProbe
+			break ProbeLoop
 		case packet, ok := <-reader.Packets:
 			if !ok {
 				return c.bc.Err()
@@ -109,7 +110,6 @@ func (c *Client) Probe() error {
 			}
 		}
 	}
-DoneProbe:
 	c.medias = []*core.Media{
 		{
 			Kind:      core.KindVideo,
