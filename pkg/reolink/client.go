@@ -36,23 +36,27 @@ type Client struct {
 	talkEncoder *baichuan.ADPCMEncoder
 	pcmBuf      []int16
 
-	recv    int
-	send    int
+	recv int
+	send int
 
 	probeIFrame *baichuan.MediaPacket
 
 	videoTimestamps timestampUnwrapper
 	videoRTP        rtpTimestampGuard
 
-	audioTimestamps timestampUnwrapper
 	audioSamples uint64
 	audioRTP     rtpTimestampGuard
 	adpcmDecoder *baichuan.ADPCMDecoder
 
-	talkMu         sync.Mutex
-	talkTimer      *time.Timer
+	baseTicks      uint64
+	baseTime       time.Time
+	baseSet        bool
+	lastVideoUS    uint64
 
-	lastWriteTime  time.Time
+	talkMu    sync.Mutex
+	talkTimer *time.Timer
+
+	lastWriteTime time.Time
 }
 
 func Dial(rawURL string) (*Client, error) {
@@ -200,7 +204,7 @@ func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Rece
 			for len(c.pcmBuf) >= samplesPerBlock {
 				block := c.pcmBuf[:samplesPerBlock]
 				c.pcmBuf = c.pcmBuf[samplesPerBlock:]
-				
+
 				if adpcmBlock, err := c.talkEncoder.EncodeBlock(block); err == nil {
 					_ = c.talkSession.WriteADPCMBlock(context.Background(), adpcmBlock)
 					c.send += len(adpcmBlock)

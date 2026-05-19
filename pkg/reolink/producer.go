@@ -155,6 +155,13 @@ func (c *Client) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver,
 
 	track := core.NewReceiver(media, codec)
 	c.receivers = append(c.receivers, track)
+
+	if codec.Name == core.CodecPCMA {
+		c.sendPCMASilence(track)
+	} else if codec.Name == core.CodecAAC {
+		c.sendAACSilence(track)
+	}
+
 	return track, nil
 }
 
@@ -199,9 +206,6 @@ func (c *Client) processPacket(packet baichuan.MediaPacket, videoCount, audioCou
 			return
 		}
 
-		if *videoCount == 0 {
-			c.sendInitialAudioSilence()
-		}
 
 		if packet.Codec == "H265" {
 			if c.probeIFrame != nil && c.probeIFrame.Codec == packet.Codec {
@@ -229,25 +233,35 @@ func (c *Client) processPacket(packet baichuan.MediaPacket, videoCount, audioCou
 		packet.Data = annexb.EncodeToAVCC(packet.Data)
 
 		continuousUS := c.videoTimestamps.unwrap(packet.TimestampMicrosecs)
-		rawVideoRTP := uint32(rtpTimestampForClock(continuousUS, 90000))
+
+		if !c.baseSet {
+			c.baseTicks = continuousUS
+			c.baseTime = time.Now()
+			c.baseSet = true
+		} else if c.baseTicks == 0 {
+			// Audio started first. Initialize baseTicks based on elapsed time.
+			elapsedUS := uint64(time.Since(c.baseTime).Microseconds())
+			if continuousUS > elapsedUS {
+				c.baseTicks = continuousUS - elapsedUS
+			} else {
+				c.baseTicks = 0
+			}
+		}
+
+		relativeUS := continuousUS - c.baseTicks
+		rawVideoRTP := uint32(relativeUS * 90000 / 1_000_000)
 		timestamp := c.videoRTP.next(rawVideoRTP)
+		c.lastVideoUS = relativeUS
 
-		if c.videoRTP.smooth && !c.lastWriteTime.IsZero() {
-			intervalUs := int64(66666) // default for 15 FPS
-			if c.videoRTP.avgDelta > 100 {
-				intervalUs = int64((c.videoRTP.avgDelta * 1_000_000) / 90000)
-			}
-
-			if intervalUs < 20000 {
-				intervalUs = 20000
-			} else if intervalUs > 150000 {
-				intervalUs = 150000
-			}
-
-			elapsed := time.Since(c.lastWriteTime)
-			expectedInterval := time.Duration(intervalUs) * time.Microsecond
-			if elapsed < expectedInterval {
-				time.Sleep(expectedInterval - elapsed)
+		// Strict hardware-aligned real-time pacing to prevent startup slow-motion and buffer bloat
+		expectedDuration := time.Duration(relativeUS) * time.Microsecond
+		actualDuration := time.Since(c.baseTime)
+		if expectedDuration > actualDuration {
+			sleepDuration := expectedDuration - actualDuration
+			if sleepDuration > 150*time.Millisecond {
+				c.baseTime = time.Now().Add(-expectedDuration)
+			} else {
+				time.Sleep(sleepDuration)
 			}
 		}
 		c.lastWriteTime = time.Now()
@@ -320,12 +334,24 @@ func (c *Client) processPacket(packet baichuan.MediaPacket, videoCount, audioCou
 			}
 		}
 
-		if packet.HasTimestamp {
-			continuousUS := c.videoTimestamps.unwrap(packet.TimestampMicrosecs)
-			c.audioSamples = rtpTimestampForClock(continuousUS, int(clockRate))
-		} else if c.audioSamples == 0 && *audioCount == 0 {
-			nowUS := uint64(time.Now().UnixMicro())
-			c.audioSamples = rtpTimestampForClock(nowUS, int(clockRate))
+		if *audioCount == 0 {
+			if !c.baseSet {
+				c.baseTime = time.Now()
+				c.baseSet = true
+				c.audioSamples = 0
+			} else {
+				c.audioSamples = c.lastVideoUS * uint64(clockRate) / 1_000_000
+			}
+		}
+
+		// Strict real-time pacing for AAC audio to keep it perfectly in sync with video pacing
+		expectedAudioDuration := time.Duration(c.audioSamples) * time.Second / time.Duration(clockRate)
+		actualAudioDuration := time.Since(c.baseTime)
+		if expectedAudioDuration > actualAudioDuration {
+			sleepDuration := expectedAudioDuration - actualAudioDuration
+			if sleepDuration <= 150*time.Millisecond {
+				time.Sleep(sleepDuration)
+			}
 		}
 
 		for _, pkt := range pkts {
@@ -368,12 +394,14 @@ func (c *Client) processPacket(packet baichuan.MediaPacket, videoCount, audioCou
 			}
 		}
 
-		if packet.HasTimestamp {
-			continuousUS := c.videoTimestamps.unwrap(packet.TimestampMicrosecs)
-			c.audioSamples = rtpTimestampForClock(continuousUS, int(clockRate))
-		} else if c.audioSamples == 0 && *audioCount == 0 {
-			nowUS := uint64(time.Now().UnixMicro())
-			c.audioSamples = rtpTimestampForClock(nowUS, int(clockRate))
+		if *audioCount == 0 {
+			if !c.baseSet {
+				c.baseTime = time.Now()
+				c.baseSet = true
+				c.audioSamples = 0
+			} else {
+				c.audioSamples = c.lastVideoUS * uint64(clockRate) / 1_000_000
+			}
 		}
 
 		var pkts []*core.Packet
@@ -393,6 +421,16 @@ func (c *Client) processPacket(packet baichuan.MediaPacket, videoCount, audioCou
 				Payload: chunk,
 			}
 			pkts = append(pkts, pkt)
+		}
+
+		// Strict real-time pacing for PCMA audio to keep it perfectly in sync with video pacing
+		expectedAudioDuration := time.Duration(c.audioSamples) * time.Second / time.Duration(clockRate)
+		actualAudioDuration := time.Since(c.baseTime)
+		if expectedAudioDuration > actualAudioDuration {
+			sleepDuration := expectedAudioDuration - actualAudioDuration
+			if sleepDuration <= 150*time.Millisecond {
+				time.Sleep(sleepDuration)
+			}
 		}
 
 		for _, pkt := range pkts {
@@ -446,25 +484,24 @@ func (c *Client) MarshalJSON() ([]byte, error) {
 
 type timestampUnwrapper struct {
 	highest uint64
-	offset  uint64
 	baseSet bool
 }
 
 func (u *timestampUnwrapper) unwrap(ts32 uint32) uint64 {
 	if !u.baseSet {
-		systemMicro := uint64(time.Now().UnixMicro())
-		u.offset = systemMicro - uint64(ts32)
 		u.highest = uint64(ts32)
 		u.baseSet = true
-		return systemMicro
+		return uint64(ts32)
 	}
 
 	continuous := unwrapTimestamp(ts32, u.highest)
 	if continuous > u.highest {
 		u.highest = continuous
 	}
-	return continuous + u.offset
+	return continuous
 }
+
+
 
 func unwrapTimestamp(ts32 uint32, highest64 uint64) uint64 {
 	if highest64 == 0 {
@@ -579,52 +616,43 @@ func (g *rtpTimestampGuard) next(ts uint32) uint32 {
 	return adjusted
 }
 
-func rtpTimestampForClock(microseconds uint64, clockRate int) uint64 {
-	seconds := microseconds / 1_000_000
-	rem := microseconds % 1_000_000
-	return seconds*uint64(clockRate) + (rem*uint64(clockRate))/1_000_000
+func (c *Client) sendPCMASilence(receiver *core.Receiver) {
+	clockRate := uint64(receiver.Codec.ClockRate)
+	samples := c.lastVideoUS * clockRate / 1_000_000
+
+	for i := 0; i < 5; i++ {
+		payload := make([]byte, 160)
+		for j := range payload {
+			payload[j] = 0xD5
+		}
+
+		pkt := &core.Packet{
+			Header: rtp.Header{
+				Version:   2,
+				Marker:    true,
+				Timestamp: c.audioRTP.next(uint32(samples)),
+			},
+			Payload: payload,
+		}
+		receiver.WriteRTP(pkt)
+		samples += uint64(len(payload))
+	}
 }
 
-func (c *Client) sendInitialAudioSilence() {
-	for _, receiver := range c.receivers {
-		if receiver.Codec.Name == core.CodecPCMA {
-			clockRate := receiver.Codec.ClockRate
-			nowUS := uint64(time.Now().UnixMicro()) - 100_000
-			c.audioSamples = rtpTimestampForClock(nowUS, int(clockRate))
+func (c *Client) sendAACSilence(receiver *core.Receiver) {
+	clockRate := uint64(receiver.Codec.ClockRate)
+	samples := c.lastVideoUS * clockRate / 1_000_000
 
-			for i := 0; i < 5; i++ {
-				payload := make([]byte, 160)
-				for j := range payload {
-					payload[j] = 0xD5
-				}
-
-				pkt := &core.Packet{
-					Header: rtp.Header{
-						Marker:    true,
-						Timestamp: c.audioRTP.next(uint32(c.audioSamples)),
-					},
-					Payload: payload,
-				}
-				receiver.WriteRTP(pkt)
-				c.audioSamples += uint64(len(payload))
-			}
-		} else if receiver.Codec.Name == core.CodecAAC {
-			clockRate := receiver.Codec.ClockRate
-			nowUS := uint64(time.Now().UnixMicro()) - 300_000
-			c.audioSamples = rtpTimestampForClock(nowUS, int(clockRate))
-
-			for i := 0; i < 5; i++ {
-				pkt := &core.Packet{
-					Header: rtp.Header{
-						Version: aac.RTPPacketVersionAAC,
-						Marker:  true,
-						Timestamp: c.audioRTP.next(uint32(c.audioSamples)),
-					},
-					Payload: []byte{0x21, 0x10, 0x05, 0x30, 0x8C, 0x1F, 0xFC},
-				}
-				receiver.WriteRTP(pkt)
-				c.audioSamples += 1024
-			}
+	for i := 0; i < 5; i++ {
+		pkt := &core.Packet{
+			Header: rtp.Header{
+				Version:   aac.RTPPacketVersionAAC,
+				Marker:    true,
+				Timestamp: c.audioRTP.next(uint32(samples)),
+			},
+			Payload: []byte{0x21, 0x10, 0x05, 0x30, 0x8C, 0x1F, 0xFC},
 		}
+		receiver.WriteRTP(pkt)
+		samples += 1024
 	}
 }
