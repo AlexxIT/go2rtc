@@ -33,7 +33,10 @@ func (c *Client) Probe() error {
 
 	var vcodec, acodec *core.Codec
 	var iframeTries int
-	timeout := time.After(core.ProbeTimeout)
+	// Use a 10s timeout instead of core.ProbeTimeout (5s) because long-GOP cameras (e.g. Trackmix)
+	// have 2-4s keyframe intervals, and any packet drop or missing VPS/SPS can require waiting
+	// for a second keyframe, which would exceed a 5s timeout and cause random loading failures.
+	timeout := time.After(10 * time.Second)
 
 ProbeLoop:
 	for vcodec == nil || acodec == nil {
@@ -248,7 +251,18 @@ func (c *Client) processPacket(packet baichuan.MediaPacket, videoCount, audioCou
 			}
 		}
 
+		if continuousUS < c.baseTicks {
+			// Clock jumped backward or reset below baseTicks. Realize new base to prevent uint64 underflow.
+			c.baseTicks = continuousUS
+		}
+
 		relativeUS := continuousUS - c.baseTicks
+
+		if relativeUS < c.lastVideoUS {
+			// Clock jumped backward. Realign baseTime to match the new timeline and preserve pacing.
+			c.baseTime = time.Now().Add(-time.Duration(relativeUS) * time.Microsecond)
+		}
+
 		rawVideoRTP := uint32(relativeUS * 90000 / 1_000_000)
 		timestamp := c.videoRTP.next(rawVideoRTP)
 		c.lastVideoUS = relativeUS
@@ -256,7 +270,7 @@ func (c *Client) processPacket(packet baichuan.MediaPacket, videoCount, audioCou
 		// Strict hardware-aligned real-time pacing to prevent startup slow-motion and buffer bloat
 		expectedDuration := time.Duration(relativeUS) * time.Microsecond
 		actualDuration := time.Since(c.baseTime)
-		if expectedDuration > actualDuration {
+		if expectedDuration > actualDuration && (c.reader == nil || len(c.reader.Packets) == 0) {
 			sleepDuration := expectedDuration - actualDuration
 			if sleepDuration > 150*time.Millisecond {
 				c.baseTime = time.Now().Add(-expectedDuration)
@@ -340,14 +354,27 @@ func (c *Client) processPacket(packet baichuan.MediaPacket, videoCount, audioCou
 				c.baseSet = true
 				c.audioSamples = 0
 			} else {
-				c.audioSamples = c.lastVideoUS * uint64(clockRate) / 1_000_000
+				elapsed := time.Since(c.baseTime)
+				c.audioSamples = uint64(elapsed.Microseconds()) * uint64(clockRate) / 1_000_000
+			}
+		} else if c.baseSet {
+			expectedAudioDuration := time.Duration(c.audioSamples) * time.Second / time.Duration(clockRate)
+			actualAudioDuration := time.Since(c.baseTime)
+			var drift time.Duration
+			if actualAudioDuration > expectedAudioDuration {
+				drift = actualAudioDuration - expectedAudioDuration
+			} else {
+				drift = expectedAudioDuration - actualAudioDuration
+			}
+			if drift > 150*time.Millisecond && actualAudioDuration > 500*time.Millisecond {
+				c.audioSamples = uint64(actualAudioDuration.Microseconds()) * uint64(clockRate) / 1_000_000
 			}
 		}
 
 		// Strict real-time pacing for AAC audio to keep it perfectly in sync with video pacing
 		expectedAudioDuration := time.Duration(c.audioSamples) * time.Second / time.Duration(clockRate)
 		actualAudioDuration := time.Since(c.baseTime)
-		if expectedAudioDuration > actualAudioDuration {
+		if expectedAudioDuration > actualAudioDuration && (c.reader == nil || len(c.reader.Packets) == 0) {
 			sleepDuration := expectedAudioDuration - actualAudioDuration
 			if sleepDuration <= 150*time.Millisecond {
 				time.Sleep(sleepDuration)
@@ -400,7 +427,20 @@ func (c *Client) processPacket(packet baichuan.MediaPacket, videoCount, audioCou
 				c.baseSet = true
 				c.audioSamples = 0
 			} else {
-				c.audioSamples = c.lastVideoUS * uint64(clockRate) / 1_000_000
+				elapsed := time.Since(c.baseTime)
+				c.audioSamples = uint64(elapsed.Microseconds()) * uint64(clockRate) / 1_000_000
+			}
+		} else if c.baseSet {
+			expectedAudioDuration := time.Duration(c.audioSamples) * time.Second / time.Duration(clockRate)
+			actualAudioDuration := time.Since(c.baseTime)
+			var drift time.Duration
+			if actualAudioDuration > expectedAudioDuration {
+				drift = actualAudioDuration - expectedAudioDuration
+			} else {
+				drift = expectedAudioDuration - actualAudioDuration
+			}
+			if drift > 150*time.Millisecond && actualAudioDuration > 500*time.Millisecond {
+				c.audioSamples = uint64(actualAudioDuration.Microseconds()) * uint64(clockRate) / 1_000_000
 			}
 		}
 
@@ -426,7 +466,7 @@ func (c *Client) processPacket(packet baichuan.MediaPacket, videoCount, audioCou
 		// Strict real-time pacing for PCMA audio to keep it perfectly in sync with video pacing
 		expectedAudioDuration := time.Duration(c.audioSamples) * time.Second / time.Duration(clockRate)
 		actualAudioDuration := time.Since(c.baseTime)
-		if expectedAudioDuration > actualAudioDuration {
+		if expectedAudioDuration > actualAudioDuration && (c.reader == nil || len(c.reader.Packets) == 0) {
 			sleepDuration := expectedAudioDuration - actualAudioDuration
 			if sleepDuration <= 150*time.Millisecond {
 				time.Sleep(sleepDuration)
