@@ -13,8 +13,11 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/ffmpeg"
+	"github.com/AlexxIT/go2rtc/pkg/homekit"
 	"github.com/rs/zerolog"
 )
+
+func Bin() string { return defaults["bin"] }
 
 func Init() {
 	var cfg struct {
@@ -55,6 +58,7 @@ func Init() {
 
 	device.Init(defaults["bin"])
 	hardware.Init(defaults["bin"])
+	homekit.SetFFmpegBin(defaults["bin"])
 }
 
 var defaults = map[string]string{
