@@ -146,7 +146,7 @@ func buildP2PIDBlock(p2pID string) ([]byte, error) {
 	numStr := parts[1]
 	suffix := parts[2]
 
-	if len(prefix) > 6 {
+	if len(prefix) > 8 {
 		return nil, fmt.Errorf("cs2 cloud: p2p_id prefix too long: %s", prefix)
 	}
 	if len(suffix) > 5 {
@@ -159,7 +159,7 @@ func buildP2PIDBlock(p2pID string) ([]byte, error) {
 	}
 
 	block := make([]byte, 20)
-	copy(block[0:6], []byte(prefix))
+	copy(block[0:8], []byte(prefix))
 	binary.BigEndian.PutUint32(block[8:12], uint32(num))
 	copy(block[12:17], []byte(suffix))
 	return block, nil
