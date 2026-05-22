@@ -82,7 +82,7 @@ func NewSender(media *Media, codec *Codec) *Sender {
 		if codec.IsRTP() {
 			// in my tests 40Mbit/s 4K-video can generate up to 1500 items
 			// for the h264.RTPDepay => RTPPay queue
-			bufSize = 4096
+			bufSize = 256
 		} else {
 			bufSize = 64
 		}

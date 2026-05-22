@@ -1,11 +1,15 @@
 package h264
 
-import "encoding/binary"
+import (
+	"encoding/binary"
+	"sync"
+)
 
 // Payloader payloads H264 packets
 type Payloader struct {
 	IsAVC     bool
 	stapANalu []byte
+	fuPool    sync.Pool // sync.Pool for FU-A slices to reduce GC pressure
 }
 
 const (
@@ -151,7 +155,11 @@ func (p *Payloader) Payload(mtu uint16, payload []byte) [][]byte {
 
 		for naluDataRemaining > 0 {
 			currentFragmentSize := min(maxFragmentSize, naluDataRemaining)
-			out := make([]byte, fuaHeaderSize+currentFragmentSize)
+			fuBuf := p.fuPool.Get().([]byte)
+			if cap(fuBuf) < fuaHeaderSize+currentFragmentSize {
+				fuBuf = make([]byte, fuaHeaderSize+currentFragmentSize)
+			}
+			out := fuBuf[:fuaHeaderSize+currentFragmentSize]
 
 			// +---------------+
 			// |0|1|2|3|4|5|6|7|
@@ -181,6 +189,9 @@ func (p *Payloader) Payload(mtu uint16, payload []byte) [][]byte {
 
 			naluDataRemaining -= currentFragmentSize
 			naluDataIndex += currentFragmentSize
+
+			// return buffer to pool
+			p.fuPool.Put(fuBuf)
 		}
 	})
 

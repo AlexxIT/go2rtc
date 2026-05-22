@@ -2,10 +2,17 @@ package aac
 
 import (
 	"encoding/binary"
+	"sync"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/pion/rtp"
 )
+
+var aacPayloadPool = sync.Pool{
+	New: func() interface{} {
+		return make([]byte, 1500) // enough for typical AAC frame
+	},
+}
 
 const RTPPacketVersionAAC = 0
 
@@ -76,7 +83,12 @@ func RTPPay(handler core.HandlerFunc) core.HandlerFunc {
 		// support ONLY one unit in payload
 		auSize := uint16(len(packet.Payload))
 		// 2 bytes header size + 2 bytes first payload size
-		payload := make([]byte, 2+2+auSize)
+		buf := aacPayloadPool.Get().([]byte)
+		if cap(buf) < int(2+2+auSize) {
+			aacPayloadPool.Put(buf)
+			buf = make([]byte, 2+2+auSize)
+		}
+		payload := buf[:2+2+auSize]
 		payload[1] = 16 // header size in bits
 		binary.BigEndian.PutUint16(payload[2:], auSize<<3)
 		copy(payload[4:], packet.Payload)
@@ -91,6 +103,8 @@ func RTPPay(handler core.HandlerFunc) core.HandlerFunc {
 			Payload: payload,
 		}
 		handler(&clone)
+
+		aacPayloadPool.Put(buf)
 
 		seq++
 		ts += AUTime

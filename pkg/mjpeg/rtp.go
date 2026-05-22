@@ -5,10 +5,22 @@ import (
 	"encoding/binary"
 	"image"
 	"image/jpeg"
+	"sync"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/pion/rtp"
 )
+
+var mjpegH1Pool = sync.Pool{
+	New: func() interface{} {
+		return make([]byte, 8)
+	},
+}
+var mjpegH2Pool = sync.Pool{
+	New: func() interface{} {
+		return make([]byte, 4, 132)
+	},
+}
 
 func RTPDepay(handlerFunc core.HandlerFunc) core.HandlerFunc {
 	buf := make([]byte, 0, 512*1024) // 512K
@@ -95,19 +107,26 @@ func RTPPay(handlerFunc core.HandlerFunc) core.HandlerFunc {
 	sequencer := rtp.NewRandomSequencer()
 
 	return func(packet *rtp.Packet) {
+		// defer return headers to pool
+		h1 := mjpegH1Pool.Get().([]byte)
+		h2 := mjpegH2Pool.Get().([]byte)
+		defer func() {
+			mjpegH1Pool.Put(h1)
+			mjpegH2Pool.Put(h2)
+		}()
+
 		// reincode image to more common form
 		p, err := Transcode(packet.Payload)
 		if err != nil {
 			return
 		}
 
-		h1 := make([]byte, 8)
 		h1[4] = 1   // Type
 		h1[5] = 255 // Q
 
 		// MBZ=0, Precision=0, Length=128
-		h2 := make([]byte, 4, 132)
-		h2[3] = 128
+		h2 = h2[:0]
+		h2 = append(h2, 0, 0, 0, 128)
 
 		var jpgData []byte
 		for jpgData == nil {

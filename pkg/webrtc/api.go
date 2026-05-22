@@ -21,12 +21,15 @@ func NewAPI() (*webrtc.API, error) {
 }
 
 type Filters struct {
-	Candidates []string `yaml:"candidates"`
-	Loopback   bool     `yaml:"loopback"`
-	Interfaces []string `yaml:"interfaces"`
-	IPs        []string `yaml:"ips"`
-	Networks   []string `yaml:"networks"`
-	UDPPorts   []uint16 `yaml:"udp_ports"`
+	Candidates   []string `yaml:"candidates"`
+	Loopback     bool     `yaml:"loopback"`
+	Interfaces   []string `yaml:"interfaces"`
+	IPs          []string `yaml:"ips"`
+	Networks     []string `yaml:"networks"`
+	UDPPorts     []uint16 `yaml:"udp_ports"`
+	NACKResponderSize uint16 `yaml:"nack_responder_size"` // NACK responder packet cache (default 1024)
+	NACKGeneratorSize uint16 `yaml:"nack_generator_size"` // NACK generator receive log (default 512)
+	NACKSkipLastN     uint16 `yaml:"nack_skip_last_n"`    // skip last N packets in NACK generation (default 0)
 }
 
 func (f *Filters) Network(protocol string) string {
