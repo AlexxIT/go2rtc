@@ -39,13 +39,13 @@ func (c *Client) Probe() error {
 	timeout := time.After(10 * time.Second)
 
 ProbeLoop:
-	for vcodec == nil || acodec == nil {
+	for (c.videoEnabled && vcodec == nil) || (c.audioEnabled && acodec == nil) {
 		select {
 		case <-timeout:
-			if vcodec == nil {
+			if c.videoEnabled && vcodec == nil {
 				return fmt.Errorf("reolink: probe timeout waiting for video iframe")
 			}
-			c.logDebug("probe timeout, got video but no audio")
+			c.logDebug("probe timeout, proceeding with available codecs")
 			break ProbeLoop
 		case packet, ok := <-reader.Packets:
 			if !ok {
@@ -113,15 +113,17 @@ ProbeLoop:
 			}
 		}
 	}
-	c.medias = []*core.Media{
-		{
+	c.medias = []*core.Media{}
+
+	if c.videoEnabled && vcodec != nil {
+		c.medias = append(c.medias, &core.Media{
 			Kind:      core.KindVideo,
 			Direction: core.DirectionRecvonly,
 			Codecs:    []*core.Codec{vcodec},
-		},
+		})
 	}
 
-	if acodec != nil {
+	if c.audioEnabled && acodec != nil {
 		if acodec.Name == core.CodecAAC {
 			acodec.PayloadType = core.PayloadTypeRAW
 		}
@@ -145,7 +147,11 @@ ProbeLoop:
 		})
 	}
 
-	c.logDebug("probe complete, video=%s audio=%v medias=%d", vcodec.Name, acodec != nil, len(c.medias))
+	vcodecName := "disabled"
+	if vcodec != nil {
+		vcodecName = vcodec.Name
+	}
+	c.logDebug("probe complete, video=%s audio=%v medias=%d", vcodecName, acodec != nil, len(c.medias))
 	return nil
 }
 
@@ -170,6 +176,16 @@ func (c *Client) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver,
 
 func (c *Client) Start() error {
 	c.logDebug("Start() called, receivers=%d reader=%v", len(c.receivers), c.reader != nil)
+
+	if len(c.receivers) == 0 {
+		c.logDebug("no receivers, backchannel-only stream started")
+		ch := make(chan struct{})
+		c.cancel = func() {
+			close(ch)
+		}
+		<-ch
+		return nil
+	}
 
 	if c.reader == nil {
 		ctx, cancel := context.WithCancel(context.Background())
@@ -205,6 +221,9 @@ func (c *Client) processPacket(packet baichuan.MediaPacket, videoCount, audioCou
 
 	switch packet.Kind {
 	case baichuan.MediaPacketIFrame, baichuan.MediaPacketPFrame:
+		if !c.videoEnabled {
+			return
+		}
 		if !packet.HasTimestamp {
 			return
 		}
@@ -308,6 +327,9 @@ func (c *Client) processPacket(packet baichuan.MediaPacket, videoCount, audioCou
 				*videoCount, packet.Codec, packet.Kind, len(pkt.Payload), pkt.Timestamp)
 		}
 	case baichuan.MediaPacketAAC:
+		if !c.audioEnabled {
+			return
+		}
 		var pkts []*core.Packet
 		payload := packet.Data
 		for len(payload) > 0 {
@@ -402,6 +424,9 @@ func (c *Client) processPacket(packet baichuan.MediaPacket, videoCount, audioCou
 				*audioCount, len(pkts[0].Payload), pkts[0].Timestamp)
 		}
 	case baichuan.MediaPacketADPCM:
+		if !c.audioEnabled {
+			return
+		}
 		if c.adpcmDecoder == nil {
 			c.adpcmDecoder = &baichuan.ADPCMDecoder{}
 		}

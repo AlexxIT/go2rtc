@@ -25,6 +25,9 @@ type Client struct {
 	stream  baichuan.Stream
 	channel uint8
 
+	videoEnabled bool
+	audioEnabled bool
+
 	medias    []*core.Media
 	receivers []*core.Receiver
 	sender    *core.Sender
@@ -67,6 +70,15 @@ func Dial(rawURL string) (*Client, error) {
 
 	c := &Client{url: u}
 	c.videoRTP.smooth = false
+	c.videoEnabled = true
+	c.audioEnabled = true
+
+	if u.Query().Get("video") == "false" {
+		c.videoEnabled = false
+	}
+	if u.Query().Get("audio") == "false" {
+		c.audioEnabled = false
+	}
 
 	// parsing url
 	cfg := baichuan.Config{
