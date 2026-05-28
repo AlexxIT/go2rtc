@@ -248,6 +248,11 @@ type FrameHandler struct {
 	verbose  bool
 	closed   bool
 	closeMu  sync.Mutex
+	oooDrops uint64 // frames dropped due to out-of-order packets
+}
+
+func (h *FrameHandler) OOODrops() uint64 {
+	return h.oooDrops
 }
 
 func NewFrameHandler(verbose bool) *FrameHandler {
@@ -308,9 +313,8 @@ func (h *FrameHandler) extractPayload(data []byte, channel byte) ([]byte, *Frame
 	}
 
 	frameType := data[1]
-
-	headerSize := 28
 	fiSize := 0
+	headerSize := 28
 
 	switch frameType {
 	case FrameTypeStart:
@@ -323,16 +327,11 @@ func (h *FrameHandler) extractPayload(data []byte, channel byte) ([]byte, *Frame
 				fiSize = frameInfoSize
 			}
 		}
-	case FrameTypeCont, FrameTypeContAlt:
-		headerSize = 28
 	case FrameTypeEndSingle, FrameTypeEndMulti:
-		headerSize = 28
 		fiSize = frameInfoSize
 	case FrameTypeEndExt:
 		headerSize = 36
 		fiSize = frameInfoSize
-	default:
-		headerSize = 28
 	}
 
 	if len(data) < headerSize {
@@ -391,10 +390,11 @@ func (h *FrameHandler) handleVideo(channel byte, hdr *PacketHeader, payload []by
 	if hdr.PktIdx != cs.waitSeq {
 		fmt.Printf("[OOO] ch=0x%02x #%d frameType=0x%02x pktTotal=%d expected pkt %d, got %d - drop frame\n",
 			channel, hdr.FrameNo, hdr.FrameType, hdr.PktTotal, cs.waitSeq, hdr.PktIdx)
-		cs.waitData = cs.waitData[:0]
-		cs.frameInfo = nil
-		cs.hasStarted = false
-		cs.waitSeq = cs.pktTotal // sentinel: ignore remaining pkts of this frame
+		h.oooDrops++
+		// reset() clears frameNo, so the remaining packets of this dropped
+		// frame fall into the new-frame guard above (FrameNo != cs.frameNo,
+		// PktIdx != 0) and are silently absorbed without re-logging [OOO].
+		cs.reset()
 		return
 	}
 
