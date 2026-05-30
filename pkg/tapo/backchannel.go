@@ -33,14 +33,18 @@ func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver
 }
 
 func (c *Client) SetupBackchannel() (err error) {
-	// if conn1 is not used - we will use it for backchannel
-	// or we need to start another conn for session2
-	if c.session1 != "" {
-		if c.conn2, err = c.newConn(); err != nil {
+	// Battery-powered cameras (e.g. D230, DB200, H100) sleep after ~30s without
+	// an active preview stream. Ensure preview is running on conn1 first so the
+	// camera stays awake. Handle() discards frames when no video receivers are
+	// registered, so there is no behavioural change for video+audio consumers.
+	if c.session1 == "" {
+		if err = c.SetupStream(); err != nil {
 			return
 		}
-	} else {
-		c.conn2 = c.conn1
+	}
+
+	if c.conn2, err = c.newConn(); err != nil {
+		return
 	}
 
 	c.session2, err = c.Request(c.conn2, []byte(`{"params":{"talk":{"mode":"aec"},"method":"get"},"seq":3,"type":"request"}`))
