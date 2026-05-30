@@ -209,7 +209,9 @@ func (c *Client) Start() error {
 	for {
 		packet, ok := <-c.reader.Packets
 		if !ok {
-			return c.bc.Err()
+			err := c.bc.Err()
+			c.logWarn("camera disconnected: %v, attempting to reconnect", err)
+			return err
 		}
 
 		c.processPacket(packet, &videoCount, &audioCount)

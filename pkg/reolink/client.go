@@ -253,3 +253,7 @@ func (c *Client) logDebug(msg string, args ...any) {
 func (c *Client) logDebugErr(err error, msg string, args ...any) {
 	Log.Debug().Err(err).Msgf("[reolink] [%s:%d:%s] "+msg, append([]any{c.url.Hostname(), c.channel, c.stream}, args...)...)
 }
+
+func (c *Client) logWarn(msg string, args ...any) {
+	Log.Warn().Msgf("[reolink] [%s:%d:%s] "+msg, append([]any{c.url.Hostname(), c.channel, c.stream}, args...)...)
+}
