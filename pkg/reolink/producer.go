@@ -165,12 +165,6 @@ func (c *Client) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver,
 	track := core.NewReceiver(media, codec)
 	c.receivers = append(c.receivers, track)
 
-	if codec.Name == core.CodecPCMA {
-		c.sendPCMASilence(track)
-	} else if codec.Name == core.CodecAAC {
-		c.sendAACSilence(track)
-	}
-
 	return track, nil
 }
 
@@ -681,45 +675,4 @@ func (g *rtpTimestampGuard) next(ts uint32) uint32 {
 	g.offset = adjusted - ts
 	g.last = adjusted
 	return adjusted
-}
-
-func (c *Client) sendPCMASilence(receiver *core.Receiver) {
-	clockRate := uint64(receiver.Codec.ClockRate)
-	samples := c.lastVideoUS * clockRate / 1_000_000
-
-	for i := 0; i < 5; i++ {
-		payload := make([]byte, 160)
-		for j := range payload {
-			payload[j] = 0xD5
-		}
-
-		pkt := &core.Packet{
-			Header: rtp.Header{
-				Version:   2,
-				Marker:    true,
-				Timestamp: c.audioRTP.next(uint32(samples)),
-			},
-			Payload: payload,
-		}
-		receiver.WriteRTP(pkt)
-		samples += uint64(len(payload))
-	}
-}
-
-func (c *Client) sendAACSilence(receiver *core.Receiver) {
-	clockRate := uint64(receiver.Codec.ClockRate)
-	samples := c.lastVideoUS * clockRate / 1_000_000
-
-	for i := 0; i < 5; i++ {
-		pkt := &core.Packet{
-			Header: rtp.Header{
-				Version:   aac.RTPPacketVersionAAC,
-				Marker:    true,
-				Timestamp: c.audioRTP.next(uint32(samples)),
-			},
-			Payload: []byte{0x21, 0x10, 0x05, 0x30, 0x8C, 0x1F, 0xFC},
-		}
-		receiver.WriteRTP(pkt)
-		samples += 1024
-	}
 }
