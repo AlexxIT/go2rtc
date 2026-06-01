@@ -24,7 +24,7 @@ func (c *Client) GetMedias() []*core.Media {
 				Codecs: []*core.Codec{
 					// Battery cameras (D230, DB200, H100) send Opus at 48kHz.
 					// Non-battery cameras send PCMA at 8kHz (StreamTypePCMATapo=0x90).
-					{Name: core.CodecOpus, ClockRate: 48000, PayloadType: core.PayloadTypeRAW},
+					{Name: core.CodecOpus, ClockRate: 48000, Channels: 2, PayloadType: core.PayloadTypeRAW},
 					{Name: core.CodecPCMA, ClockRate: 8000, PayloadType: 8},
 				},
 			},
