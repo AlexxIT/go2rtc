@@ -291,11 +291,16 @@ func (c *Client) Request(conn net.Conn, body []byte) (string, error) {
 		var v struct {
 			Params struct {
 				SessionID string `json:"session_id"`
+				ErrorCode int    `json:"error_code"`
 			} `json:"params"`
 		}
 
 		if err = json.NewDecoder(p).Decode(&v); err != nil {
 			return "", err
+		}
+
+		if v.Params.ErrorCode != 0 {
+			return "", fmt.Errorf("tapo: session rejected (error_code=%d)", v.Params.ErrorCode)
 		}
 
 		return v.Params.SessionID, nil
