@@ -9,23 +9,7 @@ func EncodePCMA(pcm []int16) []byte {
 	return out
 }
 
-// DecodePCMA converts 8-bit A-law to 16-bit linear PCM.
-func DecodePCMA(data []byte) []int16 {
-	out := make([]int16, len(data))
-	for i, v := range data {
-		out[i] = aLawToLinear(v)
-	}
-	return out
-}
 
-// DecodePCMU converts 8-bit mu-law to 16-bit linear PCM.
-func DecodePCMU(data []byte) []int16 {
-	out := make([]int16, len(data))
-	for i, v := range data {
-		out[i] = muLawToLinear(v)
-	}
-	return out
-}
 
 func linearToALaw(pcm int16) byte {
 	var sign int16
@@ -61,34 +45,3 @@ func linearToALaw(pcm int16) byte {
 	return alaw ^ 0x55
 }
 
-func aLawToLinear(v byte) int16 {
-	v ^= 0x55
-
-	t := int16(v&0x0F) << 4
-	seg := (v & 0x70) >> 4
-	switch seg {
-	case 0:
-		t += 8
-	case 1:
-		t += 0x108
-	default:
-		t += 0x108
-		t <<= seg - 1
-	}
-
-	if (v & 0x80) == 0 {
-		return -t
-	}
-	return t
-}
-
-func muLawToLinear(v byte) int16 {
-	v = ^v
-
-	t := ((int(v) & 0x0F) << 3) + 0x84
-	t <<= (uint(v) & 0x70) >> 4
-	if (v & 0x80) != 0 {
-		return int16(t - 0x84) //#nosec G115
-	}
-	return int16(0x84 - t) //#nosec G115
-}

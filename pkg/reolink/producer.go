@@ -226,11 +226,6 @@ func (c *Client) processPacket(packet baichuan.MediaPacket, videoCount, audioCou
 
 
 		if packet.Codec == "H265" {
-			if c.probeIFrame != nil && c.probeIFrame.Codec == packet.Codec {
-				packet = *c.probeIFrame
-				c.probeIFrame = nil
-			}
-
 			// NALU reordering...
 			nalus := splitAnnexB(packet.Data)
 			nalus = filterH265DecodableNALs(nalus)

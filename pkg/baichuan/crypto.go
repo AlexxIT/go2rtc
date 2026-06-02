@@ -4,7 +4,6 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/md5" //#nosec G501
-	"strings"
 )
 
 var (
@@ -24,8 +23,8 @@ var (
 
 // MD5Modern reproduces Reolink's modern MD5 truncation behavior.
 func MD5Modern(input string) string {
-	sum := md5.Sum([]byte(input)) //#nosec G401
-	return strings.ToUpper(strings.TrimSuffix(strings.ToUpper(stringifyMD5(sum[:])), ""))
+	sum := md5.Sum([]byte(input)) //#nosec G501
+	return stringifyMD5(sum[:])
 }
 
 func stringifyMD5(sum []byte) string {
