@@ -133,8 +133,40 @@ func RTPPay(mtu uint16, handler core.HandlerFunc) core.HandlerFunc {
 				Payload: payload,
 			}
 			handler(&clone)
-			if i < last {
-				time.Sleep(100 * time.Microsecond)
+		}
+	}
+}
+
+func RTPPayPaced(mtu uint16, pacing time.Duration, handler core.HandlerFunc) core.HandlerFunc {
+	if mtu == 0 {
+		mtu = 1472
+	}
+
+	payloader := &Payloader{IsAVC: true}
+	sequencer := rtp.NewRandomSequencer()
+	mtu -= 12 // rtp.Header size
+
+	return func(packet *rtp.Packet) {
+		if packet.Version != RTPPacketVersionAVC {
+			handler(packet)
+			return
+		}
+
+		payloads := payloader.Payload(mtu, packet.Payload)
+		last := len(payloads) - 1
+		for i, payload := range payloads {
+			clone := rtp.Packet{
+				Header: rtp.Header{
+					Version:        2,
+					Marker:         i == last,
+					SequenceNumber: sequencer.NextSequenceNumber(),
+					Timestamp:      packet.Timestamp,
+				},
+				Payload: payload,
+			}
+			handler(&clone)
+			if i < last && pacing > 0 {
+				time.Sleep(pacing)
 			}
 		}
 	}

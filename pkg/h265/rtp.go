@@ -143,9 +143,6 @@ func RTPPay(mtu uint16, handler core.HandlerFunc) core.HandlerFunc {
 				Payload: payload,
 			}
 			handler(&clone)
-			if i < last {
-				time.Sleep(100 * time.Microsecond)
-			}
 		}
 	}
 }
@@ -218,8 +215,115 @@ func SafariPay(mtu uint16, handler core.HandlerFunc) core.HandlerFunc {
 				Payload: b,
 			}
 			handler(&clone)
-			if au != nil {
-				time.Sleep(100 * time.Microsecond)
+
+			b = b[:1] // clear buffer
+		}
+	}
+}
+
+func RTPPayPaced(mtu uint16, pacing time.Duration, handler core.HandlerFunc) core.HandlerFunc {
+	if mtu == 0 {
+		mtu = 1472
+	}
+
+	payloader := &Payloader{}
+	sequencer := rtp.NewRandomSequencer()
+	mtu -= 12 // rtp.Header size
+
+	return func(packet *rtp.Packet) {
+		if packet.Version != h264.RTPPacketVersionAVC {
+			handler(packet)
+			return
+		}
+
+		payloads := payloader.Payload(mtu, packet.Payload)
+		last := len(payloads) - 1
+		for i, payload := range payloads {
+			clone := rtp.Packet{
+				Header: rtp.Header{
+					Version:        2,
+					Marker:         i == last,
+					SequenceNumber: sequencer.NextSequenceNumber(),
+					Timestamp:      packet.Timestamp,
+				},
+				Payload: payload,
+			}
+			handler(&clone)
+			if i < last && pacing > 0 {
+				time.Sleep(pacing)
+			}
+		}
+	}
+}
+
+func SafariPayPaced(mtu uint16, pacing time.Duration, handler core.HandlerFunc) core.HandlerFunc {
+	sequencer := rtp.NewRandomSequencer()
+	size := int(mtu - 12) // rtp.Header size
+
+	return func(packet *rtp.Packet) {
+		if packet.Version != h264.RTPPacketVersionAVC {
+			handler(packet)
+			return
+		}
+
+		// protect original packets from modification
+		au := make([]byte, len(packet.Payload))
+		copy(au, packet.Payload)
+
+		var start byte
+
+		for i := 0; i < len(au); {
+			size := int(binary.BigEndian.Uint32(au[i:])) + 4
+
+			// convert AVC to Annex-B
+			au[i] = 0
+			au[i+1] = 0
+			au[i+2] = 0
+			au[i+3] = 1
+
+			switch NALUType(au[i:]) {
+			case NALUTypeIFrame, NALUTypeIFrame2, NALUTypeIFrame3:
+				start = 3
+			default:
+				if start == 0 {
+					start = 2
+				}
+			}
+
+			i += size
+		}
+
+		// rtp.Packet payload
+		b := make([]byte, 1, size)
+		size-- // minus header byte
+
+		for au != nil {
+			b[0] = start
+
+			if start > 1 {
+				start -= 2
+			}
+
+			if len(au) > size {
+				b = append(b, au[:size]...)
+				au = au[size:]
+			} else {
+				b = append(b, au...)
+				au = nil
+			}
+
+			clone := rtp.Packet{
+				Header: rtp.Header{
+					Version:        2,
+					Marker:         au == nil,
+					SequenceNumber: sequencer.NextSequenceNumber(),
+					Timestamp:      packet.Timestamp,
+				},
+				Payload: b,
+			}
+			handler(&clone)
+			if au != nil && pacing > 0 {
+				time.Sleep(pacing)
 			}
 
 			b = b[:1] // clear buffer
