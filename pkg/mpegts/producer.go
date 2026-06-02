@@ -91,7 +91,7 @@ func (c *Producer) probe() error {
 		case StreamTypeMetadata:
 			for _, streamType := range pkt.Payload {
 				switch streamType {
-				case StreamTypeH264, StreamTypeH265, StreamTypeAAC, StreamTypePrivateOPUS:
+				case StreamTypeH264, StreamTypeH265, StreamTypeAAC, StreamTypePrivateOPUS, StreamTypePCMATapo:
 					waitType = append(waitType, streamType)
 				}
 			}
@@ -128,6 +128,18 @@ func (c *Producer) probe() error {
 				Name:      core.CodecOpus,
 				ClockRate: 48000,
 				Channels:  2,
+			}
+			media := &core.Media{
+				Kind:      core.KindAudio,
+				Direction: core.DirectionRecvonly,
+				Codecs:    []*core.Codec{codec},
+			}
+			c.Medias = append(c.Medias, media)
+
+		case StreamTypePCMATapo:
+			codec := &core.Codec{
+				Name:      core.CodecPCMA,
+				ClockRate: 8000,
 			}
 			media := &core.Media{
 				Kind:      core.KindAudio,
