@@ -3,9 +3,11 @@ package tapo
 import (
 	"bytes"
 	"strconv"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/mpegts"
+	"github.com/rs/zerolog/log"
 	"github.com/pion/rtp"
 )
 
@@ -32,16 +34,30 @@ func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver
 		// one multipart part.  Sending one packet per part produced "beep" artefacts
 		// because the camera parsed each HTTP boundary as a separate audio burst.
 		var (
-			partBuf []byte
-			count   int
+			partBuf   []byte
+			count     int
+			lastSend  time.Time
+			chunkNum  int
 		)
 
+		log.Info().Msg("tapo backchannel: audio forwarding active")
 		c.sender = core.NewSender(media, track.Codec)
 		c.sender.Handler = func(packet *rtp.Packet) {
 			partBuf = append(partBuf, muxer.GetPayload(pid, packet.Timestamp, packet.Payload)...)
 			count++
 			if count >= backchannelFramesPerPart {
-				_ = c.WriteBackchannel(partBuf)
+				now := time.Now()
+				if !lastSend.IsZero() {
+					interval := now.Sub(lastSend).Milliseconds()
+					if interval < 80 || interval > 120 {
+						log.Warn().Int64("interval_ms", interval).Int("chunk", chunkNum).Msg("tapo backchannel timing jitter")
+					}
+				}
+				lastSend = now
+				chunkNum++
+				if err := c.WriteBackchannel(partBuf); err != nil {
+					log.Warn().Err(err).Msg("tapo backchannel write error")
+				}
 				partBuf = partBuf[:0]
 				count = 0
 			}
