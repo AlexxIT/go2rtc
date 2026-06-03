@@ -9,6 +9,13 @@ import (
 	"github.com/pion/rtp"
 )
 
+// backchannelFramesPerPart controls how many 20 ms PCMA frames are bundled
+// into a single multipart HTTP part sent to the camera.  Sending one frame
+// per part (the naive approach) causes the camera to treat each HTTP boundary
+// as a discrete audio burst, producing an audible "beep-beep-beep" pattern.
+// Five frames (100 ms) matches the chunk size that produces continuous audio.
+const backchannelFramesPerPart = 5
+
 func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver) error {
 	if c.sender == nil {
 		if err := c.SetupBackchannel(); err != nil {
@@ -21,10 +28,23 @@ func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver
 			return err
 		}
 
+		// Accumulate backchannelFramesPerPart RTP packets before flushing as
+		// one multipart part.  Sending one packet per part produced "beep" artefacts
+		// because the camera parsed each HTTP boundary as a separate audio burst.
+		var (
+			partBuf []byte
+			count   int
+		)
+
 		c.sender = core.NewSender(media, track.Codec)
 		c.sender.Handler = func(packet *rtp.Packet) {
-			b := muxer.GetPayload(pid, packet.Timestamp, packet.Payload)
-			_ = c.WriteBackchannel(b)
+			partBuf = append(partBuf, muxer.GetPayload(pid, packet.Timestamp, packet.Payload)...)
+			count++
+			if count >= backchannelFramesPerPart {
+				_ = c.WriteBackchannel(partBuf)
+				partBuf = partBuf[:0]
+				count = 0
+			}
 		}
 	}
 
@@ -52,8 +72,7 @@ func (c *Client) SetupBackchannel() (err error) {
 }
 
 func (c *Client) WriteBackchannel(body []byte) (err error) {
-	// TODO: fixme (size)
-	buf := bytes.NewBuffer(nil)
+	buf := bytes.NewBuffer(make([]byte, 0, 256+len(body)))
 	buf.WriteString("----client-stream-boundary--\r\n")
 	buf.WriteString("Content-Type: audio/mp2t\r\n")
 	buf.WriteString("X-If-Encrypt: 0\r\n")
