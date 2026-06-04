@@ -16,14 +16,14 @@ import (
 // per part (the naive approach) causes the camera to treat each HTTP boundary
 // as a discrete audio burst, producing an audible "beep-beep-beep" pattern.
 // Five frames (100 ms) matches the chunk size that produces continuous audio.
-const backchannelFramesPerPart = 5
+const backchannelFramesPerPart = 2
 
 // backchannelPrefillChunks is the number of silence chunks sent immediately
 // when the first real RTP packet arrives.  Without pre-fill the camera
 // starts playing from an empty buffer; any scheduling jitter between chunks
 // (even <1 ms) causes underruns and audible gaps.  Sending N×100 ms of
 // silence before real audio gives the camera a cushion to absorb jitter.
-const backchannelPrefillChunks = 3
+const backchannelPrefillChunks = 2
 
 func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver) error {
 	if c.sender == nil {
