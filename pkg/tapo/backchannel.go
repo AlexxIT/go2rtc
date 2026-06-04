@@ -18,6 +18,13 @@ import (
 // Five frames (100 ms) matches the chunk size that produces continuous audio.
 const backchannelFramesPerPart = 5
 
+// backchannelPrefillChunks is the number of silence chunks sent immediately
+// when the first real RTP packet arrives.  Without pre-fill the camera
+// starts playing from an empty buffer; any scheduling jitter between chunks
+// (even <1 ms) causes underruns and audible gaps.  Sending N×100 ms of
+// silence before real audio gives the camera a cushion to absorb jitter.
+const backchannelPrefillChunks = 3
+
 func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver) error {
 	if c.sender == nil {
 		if err := c.SetupBackchannel(); err != nil {
@@ -30,19 +37,37 @@ func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver
 			return err
 		}
 
-		// Accumulate backchannelFramesPerPart RTP packets before flushing as
-		// one multipart part.  Sending one packet per part produced "beep" artefacts
-		// because the camera parsed each HTTP boundary as a separate audio burst.
+		// PCMA silence: 0xD5 is G.711 A-law encoding of zero amplitude.
+		silenceFrame := make([]byte, 160*backchannelFramesPerPart)
+		for i := range silenceFrame {
+			silenceFrame[i] = 0xD5
+		}
+
 		var (
 			partBuf   []byte
 			count     int
 			lastSend  time.Time
 			chunkNum  int
+			prefilled bool
 		)
 
 		log.Info().Msg("tapo backchannel: audio forwarding active")
 		c.sender = core.NewSender(media, track.Codec)
 		c.sender.Handler = func(packet *rtp.Packet) {
+			// On the very first real packet: pre-fill the camera's jitter buffer
+			// with silence using timestamps that flow naturally into the real audio.
+			// This prevents the camera from underrunning during the ~200 ms gap
+			// between session open and the first real chunk.
+			if !prefilled {
+				prefilled = true
+				framesPerChunk := uint32(backchannelFramesPerPart * 160)
+				for i := uint32(backchannelPrefillChunks); i > 0; i-- {
+					ts := packet.Timestamp - i*framesPerChunk
+					_ = c.WriteBackchannel(muxer.GetPayload(pid, ts, silenceFrame))
+				}
+				log.Info().Int("chunks", backchannelPrefillChunks).Msg("tapo backchannel: pre-fill sent")
+			}
+
 			partBuf = append(partBuf, muxer.GetPayload(pid, packet.Timestamp, packet.Payload)...)
 			count++
 			if count >= backchannelFramesPerPart {
