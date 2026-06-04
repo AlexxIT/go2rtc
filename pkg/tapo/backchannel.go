@@ -52,7 +52,7 @@ func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver
 			prefilled bool
 		)
 
-		log.Info().Msg("tapo backchannel: audio forwarding active")
+		log.Debug().Msg("tapo backchannel: audio forwarding active")
 		c.sender = core.NewSender(media, track.Codec)
 		c.sender.Handler = func(packet *rtp.Packet) {
 			// Pre-fill on first packet using timestamps that flow into real audio,
@@ -64,7 +64,7 @@ func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver
 					ts := packet.Timestamp - i*step
 					_ = c.WriteBackchannel(muxer.GetPayload(pid, ts, silenceFrame))
 				}
-				log.Info().Int("chunks", backchannelPrefillChunks).Msg("tapo backchannel: pre-fill sent")
+				log.Debug().Int("chunks", backchannelPrefillChunks).Msg("tapo backchannel: pre-fill sent")
 			}
 
 			if count == 0 {
