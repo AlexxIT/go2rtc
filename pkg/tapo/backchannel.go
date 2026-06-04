@@ -44,7 +44,8 @@ func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver
 		}
 
 		var (
-			partBuf   []byte
+			rawBuf    []byte
+			firstTS   uint32
 			count     int
 			lastSend  time.Time
 			chunkNum  int
@@ -54,36 +55,41 @@ func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver
 		log.Info().Msg("tapo backchannel: audio forwarding active")
 		c.sender = core.NewSender(media, track.Codec)
 		c.sender.Handler = func(packet *rtp.Packet) {
-			// On the very first real packet: pre-fill the camera's jitter buffer
-			// with silence using timestamps that flow naturally into the real audio.
-			// This prevents the camera from underrunning during the ~200 ms gap
-			// between session open and the first real chunk.
+			// Pre-fill on first packet using timestamps that flow into real audio,
+			// avoiding PTS discontinuities that cause decoder resets.
 			if !prefilled {
 				prefilled = true
-				framesPerChunk := uint32(backchannelFramesPerPart * 160)
+				step := uint32(backchannelFramesPerPart * 160)
 				for i := uint32(backchannelPrefillChunks); i > 0; i-- {
-					ts := packet.Timestamp - i*framesPerChunk
+					ts := packet.Timestamp - i*step
 					_ = c.WriteBackchannel(muxer.GetPayload(pid, ts, silenceFrame))
 				}
 				log.Info().Int("chunks", backchannelPrefillChunks).Msg("tapo backchannel: pre-fill sent")
 			}
 
-			partBuf = append(partBuf, muxer.GetPayload(pid, packet.Timestamp, packet.Payload)...)
+			if count == 0 {
+				firstTS = packet.Timestamp
+				rawBuf = rawBuf[:0]
+			}
+			rawBuf = append(rawBuf, packet.Payload...)
 			count++
+
 			if count >= backchannelFramesPerPart {
+				// Wrap all frames as ONE PES packet, matching test_tapo_backchannel.py
+				chunk := muxer.GetPayload(pid, firstTS, rawBuf)
 				now := time.Now()
 				if !lastSend.IsZero() {
 					interval := now.Sub(lastSend).Milliseconds()
-					if interval < 80 || interval > 120 {
-						log.Warn().Int64("interval_ms", interval).Int("chunk", chunkNum).Msg("tapo backchannel timing jitter")
+					expected := int64(backchannelFramesPerPart * 20)
+					if interval < expected*4/5 || interval > expected*6/5 {
+						log.Warn().Int64("interval_ms", interval).Int64("expected_ms", expected).Int("chunk", chunkNum).Msg("tapo backchannel timing jitter")
 					}
 				}
 				lastSend = now
 				chunkNum++
-				if err := c.WriteBackchannel(partBuf); err != nil {
+				if err := c.WriteBackchannel(chunk); err != nil {
 					log.Warn().Err(err).Msg("tapo backchannel write error")
 				}
-				partBuf = partBuf[:0]
 				count = 0
 			}
 		}
