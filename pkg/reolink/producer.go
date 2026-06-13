@@ -277,17 +277,6 @@ func (c *Client) processPacket(packet baichuan.MediaPacket, videoCount, audioCou
 		timestamp := c.videoRTP.next(rawVideoRTP)
 		c.lastVideoUS = relativeUS
 
-		// Strict hardware-aligned real-time pacing to prevent startup slow-motion and buffer bloat
-		expectedDuration := time.Duration(relativeUS) * time.Microsecond
-		actualDuration := time.Since(c.baseTime)
-		if expectedDuration > actualDuration && (c.reader == nil || len(c.reader.Packets) == 0) {
-			sleepDuration := expectedDuration - actualDuration
-			if sleepDuration > 150*time.Millisecond {
-				c.baseTime = time.Now().Add(-expectedDuration)
-			} else {
-				time.Sleep(sleepDuration)
-			}
-		}
 		c.lastWriteTime = time.Now()
 
 		pkt := &core.Packet{
@@ -366,53 +355,64 @@ func (c *Client) processPacket(packet baichuan.MediaPacket, videoCount, audioCou
 				c.baseTime = time.Now()
 				c.baseSet = true
 				c.audioSamples = 0
+			} else if c.baseTicks != 0 && time.Since(c.lastWriteTime) < 500*time.Millisecond {
+				c.audioSamples = c.guardedVideoUS() * uint64(clockRate) / 1_000_000
 			} else {
 				elapsed := time.Since(c.baseTime)
 				c.audioSamples = uint64(elapsed.Microseconds()) * uint64(clockRate) / 1_000_000
 			}
-		} else if c.baseSet {
-			expectedAudioDuration := time.Duration(c.audioSamples) * time.Second / time.Duration(clockRate)
-			actualAudioDuration := time.Since(c.baseTime)
-			var drift time.Duration
-			if actualAudioDuration > expectedAudioDuration {
-				drift = actualAudioDuration - expectedAudioDuration
-			} else {
-				drift = expectedAudioDuration - actualAudioDuration
-			}
-			if drift > 150*time.Millisecond && actualAudioDuration > 500*time.Millisecond {
-				c.audioSamples = uint64(actualAudioDuration.Microseconds()) * uint64(clockRate) / 1_000_000
-			}
 		}
 
-		// Strict real-time pacing for AAC audio to keep it perfectly in sync with video pacing
-		expectedAudioDuration := time.Duration(c.audioSamples) * time.Second / time.Duration(clockRate)
-		actualAudioDuration := time.Since(c.baseTime)
-		if expectedAudioDuration > actualAudioDuration && (c.reader == nil || len(c.reader.Packets) == 0) {
-			sleepDuration := expectedAudioDuration - actualAudioDuration
-			if sleepDuration <= 150*time.Millisecond {
-				time.Sleep(sleepDuration)
-			}
-		}
 
+
+		var outPkts []*core.Packet
 		for _, pkt := range pkts {
-			rawAudioRTP := uint32(c.audioSamples)
-			pkt.Timestamp = c.audioRTP.next(rawAudioRTP)
-			c.audioSamples += 1024 // AAC frame size
+			if c.baseSet {
+				var targetUS uint64
+				if c.baseTicks != 0 && c.lastVideoUS != 0 && time.Since(c.lastWriteTime) < 500*time.Millisecond {
+					targetUS = c.guardedVideoUS()
+				} else {
+					targetUS = uint64(time.Since(c.baseTime).Microseconds())
+				}
+
+				expectedAudioUS := c.audioSamples * 1_000_000 / uint64(clockRate)
+				driftUS := int64(expectedAudioUS) - int64(targetUS)
+				driftSamples := driftUS * int64(clockRate) / 1_000_000
+
+				if driftSamples >= 1024 {
+					continue // Drop packet
+				} else if driftSamples <= -1024 {
+					clone1 := *pkt
+					clone1.Timestamp = c.audioRTP.next(uint32(c.audioSamples))
+					c.audioSamples += 1024
+					outPkts = append(outPkts, &clone1)
+
+					clone2 := *pkt
+					clone2.Timestamp = c.audioRTP.next(uint32(c.audioSamples))
+					c.audioSamples += 1024
+					outPkts = append(outPkts, &clone2)
+					continue
+				}
+			}
+
+			pkt.Timestamp = c.audioRTP.next(uint32(c.audioSamples))
+			c.audioSamples += 1024
+			outPkts = append(outPkts, pkt)
 		}
 
 		for _, receiver := range c.receivers {
 			if receiver.Codec.Name == core.CodecAAC {
-				for _, pkt := range pkts {
+				for _, pkt := range outPkts {
 					clone := *pkt
 					receiver.WriteRTP(&clone)
 				}
 			}
 		}
 
-		*audioCount += len(pkts)
-		if *audioCount <= 3 && len(pkts) > 0 {
+		*audioCount += len(outPkts)
+		if *audioCount <= 3 && len(outPkts) > 0 {
 			c.logDebug("audio pkt #%d len=%d ts=%d",
-				*audioCount, len(pkts[0].Payload), pkts[0].Timestamp)
+				*audioCount, len(outPkts[0].Payload), outPkts[0].Timestamp)
 		}
 	case baichuan.MediaPacketADPCM:
 		if !c.audioEnabled {
@@ -442,21 +442,11 @@ func (c *Client) processPacket(packet baichuan.MediaPacket, videoCount, audioCou
 				c.baseTime = time.Now()
 				c.baseSet = true
 				c.audioSamples = 0
+			} else if c.baseTicks != 0 && time.Since(c.lastWriteTime) < 500*time.Millisecond {
+				c.audioSamples = c.guardedVideoUS() * uint64(clockRate) / 1_000_000
 			} else {
 				elapsed := time.Since(c.baseTime)
 				c.audioSamples = uint64(elapsed.Microseconds()) * uint64(clockRate) / 1_000_000
-			}
-		} else if c.baseSet {
-			expectedAudioDuration := time.Duration(c.audioSamples) * time.Second / time.Duration(clockRate)
-			actualAudioDuration := time.Since(c.baseTime)
-			var drift time.Duration
-			if actualAudioDuration > expectedAudioDuration {
-				drift = actualAudioDuration - expectedAudioDuration
-			} else {
-				drift = expectedAudioDuration - actualAudioDuration
-			}
-			if drift > 150*time.Millisecond && actualAudioDuration > 500*time.Millisecond {
-				c.audioSamples = uint64(actualAudioDuration.Microseconds()) * uint64(clockRate) / 1_000_000
 			}
 		}
 
@@ -479,37 +469,68 @@ func (c *Client) processPacket(packet baichuan.MediaPacket, videoCount, audioCou
 			pkts = append(pkts, pkt)
 		}
 
-		// Strict real-time pacing for PCMA audio to keep it perfectly in sync with video pacing
-		expectedAudioDuration := time.Duration(c.audioSamples) * time.Second / time.Duration(clockRate)
-		actualAudioDuration := time.Since(c.baseTime)
-		if expectedAudioDuration > actualAudioDuration && (c.reader == nil || len(c.reader.Packets) == 0) {
-			sleepDuration := expectedAudioDuration - actualAudioDuration
-			if sleepDuration <= 150*time.Millisecond {
-				time.Sleep(sleepDuration)
-			}
-		}
 
+
+		var outPkts []*core.Packet
 		for _, pkt := range pkts {
-			rawAudioRTP := uint32(c.audioSamples)
-			pkt.Timestamp = c.audioRTP.next(rawAudioRTP)
-			c.audioSamples += uint64(len(pkt.Payload))
+			chunkSize := int64(len(pkt.Payload))
+			if c.baseSet {
+				var targetUS uint64
+				if c.baseTicks != 0 && c.lastVideoUS != 0 && time.Since(c.lastWriteTime) < 500*time.Millisecond {
+					targetUS = c.guardedVideoUS()
+				} else {
+					targetUS = uint64(time.Since(c.baseTime).Microseconds())
+				}
+
+				expectedAudioUS := c.audioSamples * 1_000_000 / uint64(clockRate)
+				driftUS := int64(expectedAudioUS) - int64(targetUS)
+				driftSamples := driftUS * int64(clockRate) / 1_000_000
+
+				if driftSamples >= chunkSize {
+					continue // Drop packet
+				} else if driftSamples <= -chunkSize {
+					clone1 := *pkt
+					clone1.Timestamp = c.audioRTP.next(uint32(c.audioSamples))
+					c.audioSamples += uint64(chunkSize)
+					outPkts = append(outPkts, &clone1)
+
+					clone2 := *pkt
+					clone2.Timestamp = c.audioRTP.next(uint32(c.audioSamples))
+					c.audioSamples += uint64(chunkSize)
+					outPkts = append(outPkts, &clone2)
+					continue
+				}
+			}
+
+			pkt.Timestamp = c.audioRTP.next(uint32(c.audioSamples))
+			c.audioSamples += uint64(chunkSize)
+			outPkts = append(outPkts, pkt)
 		}
 
 		for _, receiver := range c.receivers {
 			if receiver.Codec.Name == core.CodecPCMA {
-				for _, pkt := range pkts {
+				for _, pkt := range outPkts {
 					clone := *pkt
 					receiver.WriteRTP(&clone)
 				}
 			}
 		}
 
-		*audioCount += len(pkts)
-		if *audioCount <= 3 && len(pkts) > 0 {
-			c.logDebug("audio PCMA pkt #%d len=%d ts=%d",
-				*audioCount, len(pkts[0].Payload), pkts[0].Timestamp)
+		*audioCount += len(outPkts)
+		if *audioCount <= 3 && len(outPkts) > 0 {
+			c.logDebug("audio pkt #%d len=%d ts=%d",
+				*audioCount, len(outPkts[0].Payload), outPkts[0].Timestamp)
 		}
 	}
+}
+
+func (c *Client) guardedVideoUS() uint64 {
+	offsetUS := int64(int32(c.videoRTP.offset)) * 1_000_000 / 90000
+	guarded := int64(c.lastVideoUS) + offsetUS
+	if guarded < 0 {
+		return 0
+	}
+	return uint64(guarded)
 }
 
 func (c *Client) Stop() error {

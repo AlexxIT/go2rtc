@@ -3,6 +3,7 @@ package baichuan
 import (
 	"context"
 	"fmt"
+	"log"
 	"net"
 	"strconv"
 	"strings"
@@ -119,6 +120,7 @@ func (c *Client) readLoop() {
 			select {
 			case respCh <- msg:
 			default:
+				log.Printf("[baichuan] WARNING: pending response channel full, message dropped (msgID=%d, msgNum=%d)", msg.Header.MsgID, msg.Header.MsgNum)
 			}
 		}
 
@@ -132,6 +134,7 @@ func (c *Client) readLoop() {
 			select {
 			case ch <- msg:
 			default:
+				log.Printf("[baichuan] WARNING: subscriber channel full, message dropped (msgID=%d, msgNum=%d, size=%d)", msg.Header.MsgID, msg.Header.MsgNum, len(msg.Payload))
 			}
 		}
 	}
@@ -276,7 +279,7 @@ func (c *Client) keepAliveLoop() {
 
 // Subscribe attaches a best-effort fanout listener for a given msg_id.
 func (c *Client) Subscribe(msgID uint32) (<-chan *Message, func()) {
-	ch := make(chan *Message, 64)
+	ch := make(chan *Message, 4096)
 
 	c.subMu.Lock()
 	if c.subs[msgID] == nil {
@@ -324,7 +327,7 @@ func (c *Client) StartPreview(ctx context.Context, channel uint8, stream Stream)
 		return nil, err
 	}
 
-	packets := make(chan MediaPacket, 128)
+	packets := make(chan MediaPacket, 1024)
 	stop := make(chan struct{})
 
 	reader := &MediaReader{
