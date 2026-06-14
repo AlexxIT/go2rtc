@@ -40,6 +40,14 @@ You can use the API:
 POST http://localhost:1984/api/streams?src=camera1&dst=rtmps://...
 ```
 
+Stop one publish without deleting the stream by sending a `DELETE` with the same `src` and `dst`:
+
+```text
+DELETE http://localhost:1984/api/streams?src=camera1&dst=rtmps://...
+```
+
+A `DELETE` with only `src` stops every publish for that stream and removes the stream, as before.
+
 Or config file:
 
 ```yaml
