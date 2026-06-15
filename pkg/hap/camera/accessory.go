@@ -43,7 +43,7 @@ func NewHKSVAccessory(manuf, model, name, serial, firmware string) *hap.Accessor
 	acc.InitIID()
 
 	// HAP-NodeJS: only RecordingManagement links to DataStreamManagement
-	recordingMgmt.Linked = []int{int(dataStreamMgmt.IID)}
+	recordingMgmt.Linked = []int{int(motionSensor.IID), int(dataStreamMgmt.IID)}
 
 	return acc
 }
