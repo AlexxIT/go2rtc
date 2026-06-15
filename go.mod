@@ -1,4 +1,4 @@
-module github.com/AlexxIT/go2rtc
+module github.com/VaBanck/go2rtc
 
 go 1.26.1
 
