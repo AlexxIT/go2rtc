@@ -4,8 +4,8 @@ const TypeSupportedAudioRecordingConfiguration = "207"
 
 //goland:noinspection ALL
 const (
-	AudioRecordingCodecTypeAACELD = 2
-	AudioRecordingCodecTypeAACLC  = 3
+	AudioRecordingCodecTypeAACELD = 1
+	AudioRecordingCodecTypeAACLC  = 0
 
 	AudioRecordingSampleRate8Khz  = 0
 	AudioRecordingSampleRate16Khz = 1
