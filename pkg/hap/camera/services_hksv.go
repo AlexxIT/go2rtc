@@ -97,7 +97,6 @@ func ServiceCameraEventRecordingManagement() *hap.Service {
 						Channels:        1,
 						BitrateMode:     []byte{AudioCodecBitrateVariable},
 						SampleRate:      []byte{AudioRecordingSampleRate24Khz, AudioRecordingSampleRate32Khz, AudioRecordingSampleRate48Khz},
-						MaxAudioBitrate: []uint32{64},
 					},
 				},
 			},
