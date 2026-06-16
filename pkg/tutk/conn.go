@@ -114,6 +114,14 @@ func (c *Conn) ReadCommand() (ctrlType uint32, ctrlData []byte, err error) {
 }
 
 func (c *Conn) WriteCommand(ctrlType uint32, ctrlData []byte) error {
+	return c.writeCommand(ctrlType, ctrlData)
+}
+
+func (c *Conn) WriteCommandTo(_ byte, ctrlType uint32, ctrlData []byte) error {
+	return c.writeCommand(ctrlType, ctrlData)
+}
+
+func (c *Conn) writeCommand(ctrlType uint32, ctrlData []byte) error {
 	c.cmdMu.Lock()
 	defer c.cmdMu.Unlock()
 
