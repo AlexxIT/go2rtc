@@ -47,6 +47,72 @@ type Conn struct {
 
 	state   State
 	stateMu sync.Mutex
+
+	// audio->video re-clock (go2rtc#2303). On some G.711+H.265 cams the audio
+	// RTP clock runs slower than the video clock, so a long-running consumer's
+	// muxer interleave gap grows until audio is starved to silence. We peg the
+	// audio packet timestamp to VIDEO's elapsed time so the two can't drift
+	// apart. Video timestamps are never touched. Single producer read goroutine
+	// updates these, so no locking needed.
+	vidHave    bool
+	vidLastTS  uint32
+	vidTicks   int64 // accumulated video RTP ticks since first video pkt (wrap-safe)
+	vidClock   float64
+	vidElapsed float64 // seconds of video elapsed
+	audHave    bool
+	audFirstTS uint32
+	audLastOut uint32
+	audClock   float64
+}
+
+// ReclockAudio enables the audio->video re-clock (go2rtc#2303). Off by default;
+// opt in with `rtsp: { audio_reclock: true }`. Set from config by internal/rtsp.
+var ReclockAudio = false
+
+// reclockAudioToVideo pegs an incoming audio packet's RTP timestamp to VIDEO's
+// elapsed time so audio cannot drift away from video (the cause of the
+// long-run muxer audio-starvation on these cams). Video packets only update the
+// reference; their timestamps are never modified.
+func (c *Conn) reclockAudioToVideo(receiver *core.Receiver, packet *rtp.Packet) {
+	codec := receiver.Codec
+	if codec == nil {
+		return
+	}
+	switch codec.Kind() {
+	case core.KindVideo:
+		if !c.vidHave {
+			c.vidHave = true
+			c.vidLastTS = packet.Timestamp
+			c.vidClock = float64(codec.ClockRate)
+			if c.vidClock <= 0 {
+				c.vidClock = 90000
+			}
+			return
+		}
+		c.vidTicks += int64(int32(packet.Timestamp - c.vidLastTS)) // wrap-safe signed delta
+		c.vidLastTS = packet.Timestamp
+		c.vidElapsed = float64(c.vidTicks) / c.vidClock
+	case core.KindAudio:
+		if !c.vidHave {
+			return // no video reference yet — leave audio untouched
+		}
+		if !c.audHave {
+			c.audHave = true
+			c.audFirstTS = packet.Timestamp
+			c.audClock = float64(codec.ClockRate)
+			if c.audClock <= 0 {
+				c.audClock = 8000
+			}
+			c.audLastOut = packet.Timestamp
+			return // anchor audio start to video start; keep first packet
+		}
+		out := c.audFirstTS + uint32(int64(c.vidElapsed*c.audClock+0.5))
+		if int32(out-c.audLastOut) < 1 {
+			out = c.audLastOut + 1 // keep monotonic between video updates
+		}
+		c.audLastOut = out
+		packet.Timestamp = out
+	}
 }
 
 const (
@@ -239,6 +305,9 @@ func (c *Conn) Handle() (err error) {
 
 			for _, receiver := range c.Receivers {
 				if receiver.ID == channelID {
+					if ReclockAudio {
+						c.reclockAudioToVideo(receiver, packet)
+					}
 					receiver.WriteRTP(packet)
 					break
 				}

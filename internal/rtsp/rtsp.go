@@ -23,6 +23,7 @@ func Init() {
 			Password     string `yaml:"password" json:"-"`
 			DefaultQuery string `yaml:"default_query" json:"default_query"`
 			PacketSize   uint16 `yaml:"pkt_size" json:"pkt_size,omitempty"`
+			AudioReclock bool   `yaml:"audio_reclock" json:"audio_reclock,omitempty"`
 		} `yaml:"rtsp"`
 	}
 
@@ -33,7 +34,15 @@ func Init() {
 	app.LoadConfig(&conf)
 	app.Info["rtsp"] = conf.Mod
 
+	// opt-in audio->video re-clock for cameras whose audio RTP clock drifts
+	// from video (go2rtc#2303)
+	rtsp.ReclockAudio = conf.Mod.AudioReclock
+
 	log = app.GetLogger("rtsp")
+
+	if rtsp.ReclockAudio {
+		log.Info().Msg("[rtsp] audio re-clock to video enabled (go2rtc#2303)")
+	}
 
 	// RTSP client support
 	streams.HandleFunc("rtsp", rtspHandler)
