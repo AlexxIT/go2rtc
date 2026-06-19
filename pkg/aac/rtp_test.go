@@ -4,7 +4,7 @@ import (
 	"encoding/hex"
 	"testing"
 
-	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/VaBanck/go2rtc/pkg/core"
 	"github.com/pion/rtp"
 	"github.com/stretchr/testify/require"
 )
