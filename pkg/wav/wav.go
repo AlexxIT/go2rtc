@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"io"
 
-	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/VaBanck/go2rtc/pkg/core"
 )
 
 func Header(codec *core.Codec) []byte {
