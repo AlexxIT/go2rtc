@@ -3,8 +3,8 @@ package h264
 import (
 	"encoding/binary"
 
-	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/h264/annexb"
+	"github.com/VaBanck/go2rtc/pkg/core"
+	"github.com/VaBanck/go2rtc/pkg/h264/annexb"
 	"github.com/pion/rtp"
 	"github.com/pion/rtp/codecs"
 )
