@@ -3,9 +3,9 @@ package alsa
 import (
 	"fmt"
 
-	"github.com/AlexxIT/go2rtc/pkg/alsa/device"
-	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/pcm"
+	"github.com/VaBanck/go2rtc/pkg/alsa/device"
+	"github.com/VaBanck/go2rtc/pkg/core"
+	"github.com/VaBanck/go2rtc/pkg/pcm"
 	"github.com/pion/rtp"
 )
 
