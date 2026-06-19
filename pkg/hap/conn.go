@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/hap/chacha20poly1305"
-	"github.com/AlexxIT/go2rtc/pkg/hap/hkdf"
+	"github.com/VaBanck/go2rtc/pkg/core"
+	"github.com/VaBanck/go2rtc/pkg/hap/chacha20poly1305"
+	"github.com/VaBanck/go2rtc/pkg/hap/hkdf"
 )
 
 type Conn struct {
