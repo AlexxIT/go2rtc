@@ -4,8 +4,8 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/AlexxIT/go2rtc/pkg/bits"
-	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/VaBanck/go2rtc/pkg/bits"
+	"github.com/VaBanck/go2rtc/pkg/core"
 )
 
 const (
