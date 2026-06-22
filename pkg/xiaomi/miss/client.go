@@ -139,6 +139,8 @@ const (
 	ModelLoockV2 = "loock.cateye.v02"
 	ModelC200    = "chuangmi.camera.046c04"
 	ModelC300    = "chuangmi.camera.72ac1"
+	ModelHLC8    = "isa.camera.hlc8"
+	ModelMod11   = "mxiang.camera.mod11"
 	// ModelXiaofang looks like it has the same firmware as the ModelDafang.
 	// There is also an older model "isa.camera.isc5" that only works with the legacy protocol.
 	ModelXiaofang = "isa.camera.isc5c1"
@@ -161,23 +163,7 @@ func (c *Client) StartMedia(channel, quality, audio string) error {
 		)
 	}
 
-	// 0 - auto, 1 - sd, 2 - hd, default - hd
-	switch quality {
-	case "", "hd":
-		// Some models have broken codec settings in quality 3.
-		// Some models have low quality in quality 2.
-		// Different models require different default quality settings.
-		switch c.model {
-		case ModelC200, ModelC300:
-			quality = "3"
-		default:
-			quality = "2"
-		}
-	case "sd":
-		quality = "1"
-	case "auto":
-		quality = "0"
-	}
+	quality = videoQuality(c.model, quality)
 
 	if audio == "" {
 		audio = "1"
@@ -191,6 +177,28 @@ func (c *Client) StartMedia(channel, quality, audio string) error {
 		data = fmt.Appendf(data, `{"videoquality":-1,"videoquality2":%s,"enableaudio":%s}`, quality, audio)
 	}
 	return c.WriteCommand(data)
+}
+
+func videoQuality(model, quality string) string {
+	// 0 - auto, 1 - sd, 2 - hd, default - hd
+	switch quality {
+	case "", "hd":
+		// Some models have broken codec settings in quality 3.
+		// Some models have low quality or don't start media in quality 2.
+		// Different models require different default quality settings.
+		switch model {
+		case ModelC200, ModelC300, ModelHLC8, ModelMod11:
+			return "3"
+		default:
+			return "2"
+		}
+	case "sd":
+		return "1"
+	case "auto":
+		return "0"
+	default:
+		return quality
+	}
 }
 
 func (c *Client) StopMedia() error {
@@ -280,24 +288,6 @@ type Packet struct {
 	//Reserved uint32
 	Payload []byte
 }
-
-func (p *Packet) SampleRate() uint32 {
-	// flag:         1 0011 000 - sample rate 16000
-	// flag: 100 00 01 0000 000 - sample rate  8000
-	v := (p.Flags >> 3) & 0b1111
-	if v != 0 {
-		return 16000
-	}
-	return 8000
-}
-
-//func (p *Packet) AudioUnknown1() byte {
-//	return byte((p.Flags >> 7) & 0b11)
-//}
-//
-//func (p *Packet) AudioUnknown2() byte {
-//	return byte((p.Flags >> 9) & 0b11)
-//}
 
 func dafangRaw(cmd uint32, args ...byte) []byte {
 	payload := tutk.ICAM(cmd, args...)
