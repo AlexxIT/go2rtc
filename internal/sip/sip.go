@@ -15,13 +15,20 @@ import (
 	"github.com/pion/sdp/v3"
 )
 
-type Config struct {
-	Enable bool   `yaml:"enable"`
+// ConsumerConfig defines a single SIP auto-answer consumer instance.
+type ConsumerConfig struct {
 	Port   int    `yaml:"port"`
 	Stream string `yaml:"stream"`
 }
 
-var cfg *Config
+// consumer is a running SIP auto-answer instance listening on its own port.
+type consumer struct {
+	cfg        *ConsumerConfig
+	sessions   map[string]*session
+	sessionsMu sync.Mutex
+	nextPort   int
+	portMu     sync.Mutex
+}
 
 type session struct {
 	callID    string
@@ -33,69 +40,79 @@ type session struct {
 	localPort int    // for Contact header
 }
 
-var (
-	sessions   = map[string]*session{}
-	sessionsMu sync.Mutex
-	nextPort   = 10000
-	portMu     sync.Mutex
-)
-
 func Init() {
-	var c struct{ SIP Config `yaml:"sip"` }
-	app.LoadConfig(&c)
-	if !c.SIP.Enable {
-		return
+	var cfg struct {
+		SIP []ConsumerConfig `yaml:"sip"`
 	}
-	if c.SIP.Port == 0 {
-		c.SIP.Port = 5060
+	app.LoadConfig(&cfg)
+
+	for i := range cfg.SIP {
+		cc := &cfg.SIP[i]
+		if cc.Port == 0 {
+			cc.Port = 5060 + i
+		}
+		if cc.Stream == "" {
+			log := app.GetLogger("sip")
+			log.Warn().Int("port", cc.Port).Msg("[sip] consumer has no stream, skipping")
+			continue
+		}
+		c := &consumer{
+			cfg:      cc,
+			sessions: map[string]*session{},
+			nextPort: 10000 + i*200,
+		}
+		go c.run()
 	}
-	cfg = &c.SIP
-	log := app.GetLogger("sip")
-	log.Info().Int("port", cfg.Port).Msg("[sip] starting")
-	go listen(cfg.Port)
-	go cleanupLoop()
 }
 
-func allocPort() int {
-	portMu.Lock()
-	defer portMu.Unlock()
-	p := nextPort
-	nextPort += 2
-	if nextPort > 65000 {
-		nextPort = 10000
+func (c *consumer) run() {
+	log := app.GetLogger("sip")
+	log.Info().Int("port", c.cfg.Port).Str("stream", c.cfg.Stream).Msg("[sip] starting consumer")
+
+	go c.listen(c.cfg.Port)
+	go c.cleanupLoop()
+}
+
+func (c *consumer) allocPort() int {
+	c.portMu.Lock()
+	defer c.portMu.Unlock()
+	p := c.nextPort
+	c.nextPort += 2
+	if c.nextPort > 65000 {
+		c.nextPort = 10000
 	}
 	return p
 }
 
 // cleanupLoop reaps stale sessions every 30s. If a call ends without BYE
 // (network drop, device crash), the session and its RTP port are freed.
-func cleanupLoop() {
+func (c *consumer) cleanupLoop() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 	for range ticker.C {
-		sessionsMu.Lock()
+		c.sessionsMu.Lock()
 		now := time.Now()
-		for id, s := range sessions {
+		for id, s := range c.sessions {
 			if now.Sub(s.createdAt) > 2*time.Minute {
 				log := app.GetLogger("sip")
-				log.Info().Str("call_id", id).Msg("[sip] reaping stale session")
+				log.Info().Str("call_id", id).Int("port", c.cfg.Port).Msg("[sip] reaping stale session")
 				// RemoveConsumer calls Stop() internally
 				if s.stream != nil {
 					s.stream.RemoveConsumer(s.rtp)
 				}
-				delete(sessions, id)
+				delete(c.sessions, id)
 			}
 		}
-		sessionsMu.Unlock()
+		c.sessionsMu.Unlock()
 	}
 }
 
-func listen(port int) {
+func (c *consumer) listen(port int) {
 	log := app.GetLogger("sip")
 	addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf(":%d", port))
 	conn, err := net.ListenUDP("udp", addr)
 	if err != nil {
-		log.Error().Err(err).Msg("[sip] listen failed")
+		log.Error().Err(err).Int("port", port).Msg("[sip] listen failed")
 		return
 	}
 	defer conn.Close()
@@ -109,31 +126,31 @@ func listen(port int) {
 		msg := string(buf[:n])
 		switch {
 		case strings.HasPrefix(msg, "INVITE"):
-			onInvite(conn, ra, msg)
+			c.onInvite(conn, ra, msg)
 		case strings.HasPrefix(msg, "ACK"):
 			// ACK confirms 200 OK. No response needed.
 		case strings.HasPrefix(msg, "BYE"):
-			onBye(conn, ra, msg)
+			c.onBye(conn, ra, msg)
 		case strings.HasPrefix(msg, "CANCEL"):
-			onCancel(conn, ra, msg)
+			c.onCancel(conn, ra, msg)
 		case strings.HasPrefix(msg, "OPTIONS"):
-			onOptions(conn, ra, msg)
+			c.onOptions(conn, ra, msg)
 		case strings.HasPrefix(msg, "REGISTER"):
-			onRegister(conn, ra, msg)
+			c.onRegister(conn, ra, msg)
 		}
 	}
 }
 
-func onInvite(conn *net.UDPConn, ra *net.UDPAddr, msg string) {
+func (c *consumer) onInvite(conn *net.UDPConn, ra *net.UDPAddr, msg string) {
 	log := app.GetLogger("sip")
 	callID := getHdr(msg, "Call-ID")
 	if callID == "" {
 		callID = randHex(8)
 	}
 
-	stream := streams.Get(cfg.Stream)
+	stream := streams.Get(c.cfg.Stream)
 	if stream == nil {
-		log.Error().Str("stream", cfg.Stream).Msg("[sip] stream not found")
+		log.Error().Str("stream", c.cfg.Stream).Int("port", c.cfg.Port).Msg("[sip] stream not found")
 		reject(conn, ra, msg, callID, 480, "Stream Not Found")
 		return
 	}
@@ -174,13 +191,13 @@ func onInvite(conn *net.UDPConn, ra *net.UDPAddr, msg string) {
 
 	log.Info().Str("call_id", callID).Str("rtp", remoteRTP.String()).
 		Str("remote_codec", remoteCodec.Name).Str("camera_codec", cameraCodec.Name).
-		Msg("[sip] INVITE")
+		Int("port", c.cfg.Port).Msg("[sip] INVITE")
 
-	localPort := allocPort()
+	localPort := c.allocPort()
 	localIP := localAddr(ra)
 	tag := randHex(4)
 	sdp := buildSDPAnswer(localIP, localPort, remoteCodec)
-	resp := mkResponse(msg, callID, tag, sdp, localIP, localPort)
+	resp := mkResponse(msg, callID, tag, sdp, localIP, localPort, c.cfg.Port)
 	if _, err := conn.WriteToUDP([]byte(resp), ra); err != nil {
 		log.Error().Err(err).Msg("[sip] send 200 failed")
 		return
@@ -193,18 +210,18 @@ func onInvite(conn *net.UDPConn, ra *net.UDPAddr, msg string) {
 		return
 	}
 
-	sessionsMu.Lock()
-	sessions[callID] = &session{
+	c.sessionsMu.Lock()
+	c.sessions[callID] = &session{
 		callID: callID, tag: tag, rtp: rtpEp, stream: stream,
 		createdAt: time.Now(), localIP: localIP, localPort: localPort,
 	}
-	sessionsMu.Unlock()
+	c.sessionsMu.Unlock()
 
 	if err := stream.AddConsumer(rtpEp); err != nil {
 		log.Error().Err(err).Msg("[sip] AddConsumer failed")
-		sessionsMu.Lock()
-		delete(sessions, callID)
-		sessionsMu.Unlock()
+		c.sessionsMu.Lock()
+		delete(c.sessions, callID)
+		c.sessionsMu.Unlock()
 		rtpEp.Stop()
 		return
 	}
@@ -214,56 +231,56 @@ func onInvite(conn *net.UDPConn, ra *net.UDPAddr, msg string) {
 		Msg("[sip] answered")
 }
 
-func onBye(conn *net.UDPConn, ra *net.UDPAddr, msg string) {
+func (c *consumer) onBye(conn *net.UDPConn, ra *net.UDPAddr, msg string) {
 	callID := getHdr(msg, "Call-ID")
-	sessionsMu.Lock()
-	s, ok := sessions[callID]
+	c.sessionsMu.Lock()
+	s, ok := c.sessions[callID]
 	if ok {
-		delete(sessions, callID)
+		delete(c.sessions, callID)
 	}
-	sessionsMu.Unlock()
+	c.sessionsMu.Unlock()
 	if ok {
 		// RemoveConsumer calls Stop() internally, no need for separate s.rtp.Stop()
 		if s.stream != nil {
 			s.stream.RemoveConsumer(s.rtp)
 		}
 		// Respond with the same To tag from the original 200 OK
-		conn.WriteToUDP([]byte(mkResponse(msg, callID, s.tag, "", "", 0)), ra)
+		conn.WriteToUDP([]byte(mkResponse(msg, callID, s.tag, "", "", 0, 0)), ra)
 	} else {
-		conn.WriteToUDP([]byte(mkResponse(msg, callID, randHex(4), "", "", 0)), ra)
+		conn.WriteToUDP([]byte(mkResponse(msg, callID, randHex(4), "", "", 0, 0)), ra)
 	}
 }
 
-func onCancel(conn *net.UDPConn, ra *net.UDPAddr, msg string) {
+func (c *consumer) onCancel(conn *net.UDPConn, ra *net.UDPAddr, msg string) {
 	callID := getHdr(msg, "Call-ID")
-	sessionsMu.Lock()
-	s, ok := sessions[callID]
+	c.sessionsMu.Lock()
+	s, ok := c.sessions[callID]
 	if ok {
-		delete(sessions, callID)
+		delete(c.sessions, callID)
 	}
-	sessionsMu.Unlock()
+	c.sessionsMu.Unlock()
 	if ok {
 		log := app.GetLogger("sip")
-	log.Info().Str("call_id", callID).Msg("[sip] CANCEL")
+		log.Info().Str("call_id", callID).Msg("[sip] CANCEL")
 		// RemoveConsumer calls Stop() internally
 		if s.stream != nil {
 			s.stream.RemoveConsumer(s.rtp)
 		}
-		conn.WriteToUDP([]byte(mkResponse(msg, callID, s.tag, "", "", 0)), ra)
+		conn.WriteToUDP([]byte(mkResponse(msg, callID, s.tag, "", "", 0, 0)), ra)
 	} else {
-		conn.WriteToUDP([]byte(mkResponse(msg, callID, randHex(4), "", "", 0)), ra)
+		conn.WriteToUDP([]byte(mkResponse(msg, callID, randHex(4), "", "", 0, 0)), ra)
 	}
 }
 
-func onOptions(conn *net.UDPConn, ra *net.UDPAddr, msg string) {
-	conn.WriteToUDP([]byte(mkResponse(msg, getHdr(msg, "Call-ID"), randHex(4), "", "", 0)), ra)
+func (c *consumer) onOptions(conn *net.UDPConn, ra *net.UDPAddr, msg string) {
+	conn.WriteToUDP([]byte(mkResponse(msg, getHdr(msg, "Call-ID"), randHex(4), "", "", 0, 0)), ra)
 }
 
-func onRegister(conn *net.UDPConn, ra *net.UDPAddr, msg string) {
+func (c *consumer) onRegister(conn *net.UDPConn, ra *net.UDPAddr, msg string) {
 	reject(conn, ra, msg, getHdr(msg, "Call-ID"), 405, "Method Not Allowed")
 }
-
 // --- SDP helpers using pion/sdp ---
+
 
 func extractSDP(msg string) *sdp.SessionDescription {
 	parts := strings.Split(msg, "\r\n\r\n")
@@ -344,6 +361,7 @@ func sdpHasPCMU(s *sdp.SessionDescription) bool {
 		}
 	}
 	return false
+
 }
 
 func buildSDPAnswer(localIP string, port int, codec *core.Codec) string {
@@ -407,8 +425,8 @@ func getHdr(msg, name string) string {
 }
 
 // mkResponse builds a SIP response. When sdp is non-empty, includes Content-Type and Content-Length.
-// When localIP/localPort are provided, includes Contact header.
-func mkResponse(req, callID, tag, sdp string, localIP string, localPort int) string {
+// When localIP/localPort are provided, includes Contact header with the given sipPort.
+func mkResponse(req, callID, tag, sdp string, localIP string, localPort, sipPort int) string {
 	via := getHdr(req, "Via")
 	from := getHdr(req, "From")
 	to := getHdr(req, "To")
@@ -423,7 +441,7 @@ func mkResponse(req, callID, tag, sdp string, localIP string, localPort int) str
 	fmt.Fprintf(&sb, "CSeq: %s\r\n", cseq)
 
 	if localIP != "" && localPort > 0 {
-		fmt.Fprintf(&sb, "Contact: <sip:go2rtc@%s:%d>\r\n", localIP, cfg.Port)
+		fmt.Fprintf(&sb, "Contact: <sip:go2rtc@%s:%d>\r\n", localIP, sipPort)
 	}
 
 	if sdp != "" {
