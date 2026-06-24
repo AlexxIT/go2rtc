@@ -38,6 +38,55 @@ func TestWebRTCAPIv2(t *testing.T) {
 	require.Equal(t, "stun:stun.l.google.com:19302", offer.ICEServers[0].URLs[0])
 }
 
+func TestPeerConfigFromOptions(t *testing.T) {
+	defaultPionConf = pion.Configuration{
+		ICEServers: []pion.ICEServer{
+			{URLs: []string{"stun:stun.l.google.com:19302"}},
+		},
+		SDPSemantics: pion.SDPSemanticsUnifiedPlanWithFallback,
+	}
+
+	require.Nil(t, PeerConfigFromOptions(nil, nil))
+
+	overrideServers := []pion.ICEServer{
+		{URLs: []string{"turn:turn.example.com:3478"}, Username: "u", Credential: "p"},
+	}
+	conf := PeerConfigFromOptions(overrideServers, nil)
+	require.NotNil(t, conf)
+	require.Equal(t, overrideServers, conf.ICEServers)
+	require.Equal(t, defaultPionConf.SDPSemantics, conf.SDPSemantics)
+
+	policy := pion.ICETransportPolicyRelay
+	conf = PeerConfigFromOptions(nil, &policy)
+	require.NotNil(t, conf)
+	require.Equal(t, defaultPionConf.ICEServers, conf.ICEServers)
+	require.Equal(t, pion.ICETransportPolicyRelay, conf.ICETransportPolicy)
+
+	conf = PeerConfigFromOptions(overrideServers, &policy)
+	require.NotNil(t, conf)
+	require.Equal(t, overrideServers, conf.ICEServers)
+	require.Equal(t, pion.ICETransportPolicyRelay, conf.ICETransportPolicy)
+}
+
+func TestJSONWebRTCOffer(t *testing.T) {
+	raw := `{
+		"type":"offer",
+		"sdp":"v=0\n...",
+		"ice_servers":[{"urls":["turn:turn.example.com:3478"],"username":"u","credential":"p"}],
+		"ice_transport_policy":"relay"
+	}`
+
+	var req jsonWebRTCOffer
+	err := json.Unmarshal([]byte(raw), &req)
+	require.Nil(t, err)
+	require.Equal(t, "offer", req.Type)
+	require.Equal(t, "v=0\n...", req.SDP)
+	require.Equal(t, "turn:turn.example.com:3478", req.ICEServers[0].URLs[0])
+	require.Equal(t, "u", req.ICEServers[0].Username)
+	require.NotNil(t, req.ICETransportPolicy)
+	require.Equal(t, pion.ICETransportPolicyRelay, *req.ICETransportPolicy)
+}
+
 func TestCrealitySDP(t *testing.T) {
 	sdp := `v=0
 o=- 1495799811084970 1495799811084970 IN IP4 0.0.0.0
