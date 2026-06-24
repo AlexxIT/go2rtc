@@ -2,12 +2,18 @@ package streams
 
 import (
 	"errors"
+	"fmt"
+	"net"
 	"net/url"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/app"
+	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/rtp"
 	"github.com/rs/zerolog"
 )
 
@@ -30,6 +36,9 @@ func Init() {
 	api.HandleFunc("api/streams.dot", apiStreamsDOT)
 	api.HandleFunc("api/preload", apiPreload)
 	api.HandleFunc("api/schemes", apiSchemes)
+
+	// Initialize RTP bidirectional endpoints
+	initRTPEndpoints(cfg.Streams)
 
 	if cfg.Publish == nil && cfg.Preload == nil {
 		return
@@ -173,4 +182,103 @@ func GetAllSources() map[string][]string {
 	}
 	streamsMu.Unlock()
 	return sources
+}
+
+// initRTPEndpoints processes stream configurations and sets up bidirectional RTP endpoints
+func initRTPEndpoints(streamsCfg map[string]any) {
+	for streamName, item := range streamsCfg {
+		sources := itemToSources(item)
+		for _, source := range sources {
+			if !strings.HasPrefix(source, "rtp://") {
+				continue
+			}
+
+			stream := Get(streamName)
+			if stream == nil {
+				log.Warn().Msgf("[streams] stream %s not found for rtp endpoint", streamName)
+				continue
+			}
+
+			rtpEndpoint, err := parseRTPURL(source)
+			if err != nil {
+				log.Error().Err(err).Msgf("[streams] failed to parse rtp url: %s", source)
+				continue
+			}
+
+			if err := stream.AddConsumer(rtpEndpoint); err != nil {
+				log.Error().Err(err).Msgf("[streams] failed to add rtp consumer to stream %s", streamName)
+				continue
+			}
+
+			log.Info().Str("stream", streamName).Str("remote", rtpEndpoint.remoteAddr.String()).Msg("[streams] added rtp bidirectional endpoint")
+		}
+	}
+}
+
+func itemToSources(item any) []string {
+	switch v := item.(type) {
+	case string:
+		return []string{v}
+	case []string:
+		return v
+	case []any:
+		var sources []string
+		for _, s := range v {
+			if str, ok := s.(string); ok {
+				sources = append(sources, str)
+			}
+		}
+		return sources
+	default:
+		return nil
+	}
+}
+
+type rtpEndpoint struct {
+	*rtp.RTP
+	remoteAddr *net.UDPAddr
+}
+
+func parseRTPURL(rawURL string) (*rtpEndpoint, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, err
+	}
+
+	remoteHost := u.Hostname()
+	remotePort, _ := strconv.Atoi(u.Port())
+	if remotePort == 0 {
+		remotePort = 5000 // Default RTP port
+	}
+
+	localPort, _ := strconv.Atoi(u.Query().Get("local_port"))
+	if localPort == 0 {
+		localPort = remotePort // Default to same port
+	}
+
+	// The remote codec is what we negotiate with the SIP/RTP caller
+	// Default to PCMA for maximum compatibility (like WebRTC uses)
+	codecName := u.Query().Get("codec")
+	if codecName == "" {
+		codecName = core.CodecPCMA
+	}
+
+	remoteCodec := &core.Codec{Name: codecName}
+	if codecName == core.CodecPCMA || codecName == core.CodecPCMU {
+		remoteCodec.ClockRate = 8000
+	}
+
+	// Transcoding is set up automatically in AddTrack/GetTrack when the
+	// actual camera codec is known via the codec matching in AddConsumer.
+	r, err := rtp.NewRTP(fmt.Sprintf("%s:%d", remoteHost, remotePort), localPort, remoteCodec)
+	if err != nil {
+		return nil, err
+	}
+
+	remoteAddr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", remoteHost, remotePort))
+
+	return &rtpEndpoint{
+		RTP:        r,
+		remoteAddr: remoteAddr,
+	}, nil
 }

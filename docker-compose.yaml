@@ -1,0 +1,21 @@
+services:
+  go2rtc:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        GO_VERSION: "1.25"
+        PYTHON_VERSION: "3.13"
+    image: go2rtc:latest
+    container_name: go2rtc
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./go2rtc.yaml:/config/go2rtc.yaml
+    # Using host network mode avoids WebRTC NAT issues and keeps things simple.
+    # If you prefer bridge mode, comment out network_mode and uncomment ports below:
+    # ports:
+    #   - "1984:1984"   # HTTP API + Web UI
+    #   - "8555:8555"   # WebRTC TCP
+    #   - "8555:8555/udp" # WebRTC UDP
+    #   - "5060:5060/udp" # SIP (if enabled)

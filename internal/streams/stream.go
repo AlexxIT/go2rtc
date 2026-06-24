@@ -128,3 +128,37 @@ func (s *Stream) MarshalJSON() ([]byte, error) {
 	}
 	return json.Marshal(info)
 }
+
+// CameraCodec discovers the audio codec that the camera (first producer) uses.
+// Returns nil if no audio codec is found.
+func (s *Stream) CameraCodec() *core.Codec {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for _, prod := range s.producers {
+		if prod.conn == nil {
+			continue
+		}
+		for _, media := range prod.conn.GetMedias() {
+			if media.Kind != core.KindAudio {
+				continue
+			}
+			// Prefer recvonly (camera sending audio to us)
+			if media.Direction != core.DirectionRecvonly {
+				continue
+			}
+			for _, codec := range media.Codecs {
+				// Skip generic/any codecs
+				if codec.Name == core.CodecAny || codec.Name == core.CodecAll {
+					continue
+				}
+				// Skip video codecs that somehow ended up in audio media
+				if codec.IsVideo() {
+					continue
+				}
+				return codec
+			}
+		}
+	}
+	return nil
+}
