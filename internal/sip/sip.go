@@ -155,9 +155,6 @@ func (c *consumer) onInvite(conn *net.UDPConn, ra *net.UDPAddr, msg string) {
 		return
 	}
 
-	// Get the camera's native codec for backchannel audio
-	cameraCodec := stream.CameraCodec()
-
 	offerSDP := extractSDP(msg)
 	if offerSDP == nil {
 		log.Error().Msg("[sip] failed to parse SDP offer")
@@ -170,23 +167,44 @@ func (c *consumer) onInvite(conn *net.UDPConn, ra *net.UDPAddr, msg string) {
 		remoteRTP = &net.UDPAddr{IP: ra.IP, Port: 5000}
 	}
 
-	// Check if caller supports PCMA or PCMU (what we use for the RTP side)
-	// We prefer PCMA for maximum compatibility
+	// Find the best SIP-compatible audio codec from all stream producers.
+	// We prefer codecs that need no transcoding (Opus > G722 > PCMA > PCMU).
+	cameraCodec := stream.BestSIPCodec()
+
+	// Answer with the camera's codec so the SIP link uses the same format
+	// in both directions. If the camera codec is unsupported, fall back to
+	// PCMA/PCMU.
 	var remoteCodec *core.Codec
-	if sdpHasPCMA(offerSDP) {
-		remoteCodec = &core.Codec{Name: core.CodecPCMA, ClockRate: 8000, PayloadType: 8}
-	} else if sdpHasPCMU(offerSDP) {
-		remoteCodec = &core.Codec{Name: core.CodecPCMU, ClockRate: 8000, PayloadType: 0}
-	} else {
-		log.Warn().Msg("[sip] caller doesn't support PCMA or PCMU")
-		reject(conn, ra, msg, callID, 488, "Codec Mismatch - Need PCMA or PCMU")
-		return
+
+	if cameraCodec != nil {
+		switch cameraCodec.Name {
+		case core.CodecOpus:
+			remoteCodec = &core.Codec{Name: core.CodecOpus, ClockRate: 48000, Channels: 2, PayloadType: 111}
+		case core.CodecG722:
+			remoteCodec = &core.Codec{Name: core.CodecG722, ClockRate: 8000, PayloadType: 9}
+		case core.CodecPCMA:
+			remoteCodec = &core.Codec{Name: core.CodecPCMA, ClockRate: 8000, PayloadType: 8}
+		case core.CodecPCMU:
+			remoteCodec = &core.Codec{Name: core.CodecPCMU, ClockRate: 8000, PayloadType: 0}
+		}
 	}
 
-	// If camera codec is not set yet (stream not started), use remote codec as placeholder
-	// The actual transcoding will be set up when AddConsumer is called
-	if cameraCodec == nil {
-		cameraCodec = remoteCodec
+	if remoteCodec == nil {
+		if sdpHasPCMA(offerSDP) {
+			remoteCodec = &core.Codec{Name: core.CodecPCMA, ClockRate: 8000, PayloadType: 8}
+			if cameraCodec == nil {
+				cameraCodec = remoteCodec
+			}
+		} else if sdpHasPCMU(offerSDP) {
+			remoteCodec = &core.Codec{Name: core.CodecPCMU, ClockRate: 8000, PayloadType: 0}
+			if cameraCodec == nil {
+				cameraCodec = remoteCodec
+			}
+		} else {
+			log.Warn().Msg("[sip] caller doesn't support a compatible audio codec")
+			reject(conn, ra, msg, callID, 488, "Codec Mismatch")
+			return
+		}
 	}
 
 	log.Info().Str("call_id", callID).Str("rtp", remoteRTP.String()).
@@ -240,6 +258,8 @@ func (c *consumer) onBye(conn *net.UDPConn, ra *net.UDPAddr, msg string) {
 	}
 	c.sessionsMu.Unlock()
 	if ok {
+		log := app.GetLogger("sip")
+		log.Info().Str("call_id", callID).Msg("[sip] BYE")
 		// RemoveConsumer calls Stop() internally, no need for separate s.rtp.Stop()
 		if s.stream != nil {
 			s.stream.RemoveConsumer(s.rtp)
@@ -363,6 +383,52 @@ func sdpHasPCMU(s *sdp.SessionDescription) bool {
 	return false
 
 }
+// sdpHasOpus checks if the SDP offer includes Opus (payload type 111)
+func sdpHasOpus(s *sdp.SessionDescription) bool {
+	for _, md := range s.MediaDescriptions {
+		if md.MediaName.Media != "audio" {
+			continue
+		}
+		for _, pt := range md.MediaName.Formats {
+			if pt == "111" {
+				return true
+			}
+		}
+		for _, attr := range md.Attributes {
+			if attr.Key != "rtpmap" {
+				continue
+			}
+			if strings.HasPrefix(attr.Value, "111 ") || strings.HasPrefix(attr.Value, "opus") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// sdpHasG722 checks if the SDP offer includes G722 (payload type 9)
+func sdpHasG722(s *sdp.SessionDescription) bool {
+	for _, md := range s.MediaDescriptions {
+		if md.MediaName.Media != "audio" {
+			continue
+		}
+		for _, pt := range md.MediaName.Formats {
+			if pt == "9" {
+				return true
+			}
+		}
+		for _, attr := range md.Attributes {
+			if attr.Key != "rtpmap" {
+				continue
+			}
+			if strings.HasPrefix(attr.Value, "9 ") || strings.HasPrefix(attr.Value, "G722") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 
 func buildSDPAnswer(localIP string, port int, codec *core.Codec) string {
 	pt := codecPT(codec.Name)

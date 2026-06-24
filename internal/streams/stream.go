@@ -162,3 +162,60 @@ func (s *Stream) CameraCodec() *core.Codec {
 	}
 	return nil
 }
+
+// BestSIPCodec returns the best audio codec from all stream producers,
+// preferring codecs that are most widely compatible with SIP.
+// Priority: Opus > G722 > PCMA > PCMU > PCM > PCML
+// Returns nil if no audio codec is found.
+func (s *Stream) BestSIPCodec() *core.Codec {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var best *core.Codec
+	var bestPriority int
+
+	for _, prod := range s.producers {
+		if prod.conn == nil {
+			continue
+		}
+		for _, media := range prod.conn.GetMedias() {
+			if media.Kind != core.KindAudio {
+				continue
+			}
+			if media.Direction != core.DirectionRecvonly {
+				continue
+			}
+			for _, codec := range media.Codecs {
+				if codec.Name == core.CodecAny || codec.Name == core.CodecAll {
+					continue
+				}
+				if codec.IsVideo() {
+					continue
+				}
+				p := codecPriority(codec.Name)
+				if p > 0 && (best == nil || p > bestPriority) {
+					best = codec
+					bestPriority = p
+				}
+			}
+		}
+	}
+	return best
+}
+
+func codecPriority(name string) int {
+	switch name {
+	case core.CodecOpus:
+		return 5
+	case core.CodecG722:
+		return 4
+	case core.CodecPCMA:
+		return 3
+	case core.CodecPCMU:
+		return 2
+	case core.CodecPCM, core.CodecPCML:
+		return 1
+	default:
+		return 0
+	}
+}
