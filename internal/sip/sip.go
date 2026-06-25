@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -22,13 +23,79 @@ type ConsumerConfig struct {
 	Video  bool   `yaml:"video"`
 }
 
+// SIPConfig holds global SIP settings shared across all consumers.
+type SIPConfig struct {
+	RTPPortRange string           `yaml:"rtp_port_range"`
+	HostIP       string           `yaml:"host_ip"`
+	Consumers    []ConsumerConfig `yaml:"consumers"`
+}
+
+// Global RTP port pool — shared across all SIP consumers.
+// Default range 31000-31100 allows Docker bridge mode with a single port forward block.
+var (
+	poolMu   sync.Mutex
+	poolNext int
+	poolMin  int
+	poolMax  int
+)
+
+func initPool(portRange string) error {
+	min, max, ok := parsePortRange(portRange)
+	if !ok {
+		return fmt.Errorf("invalid rtp_port_range: %q", portRange)
+	}
+	if max-min < 4 {
+		return fmt.Errorf("rtp_port_range too small (need at least 4 ports, got %d)", max-min+1)
+	}
+	poolMu.Lock()
+	defer poolMu.Unlock()
+	poolMin = min
+	poolMax = max
+	poolNext = min
+	return nil
+}
+
+func allocatePort() (int, error) {
+	poolMu.Lock()
+	defer poolMu.Unlock()
+	if poolNext > poolMax {
+		return 0, fmt.Errorf("rtp port pool exhausted (range %d-%d)", poolMin, poolMax)
+	}
+	port := poolNext
+	poolNext += 2
+	return port, nil
+}
+
+func parsePortRange(s string) (min, max int, ok bool) {
+	parts := strings.SplitN(s, "-", 2)
+	if len(parts) != 2 {
+		return 0, 0, false
+	}
+	min, err1 := strconv.Atoi(strings.TrimSpace(parts[0]))
+	max, err2 := strconv.Atoi(strings.TrimSpace(parts[1]))
+	if err1 != nil || err2 != nil || min >= max || min < 1024 || max > 65535 {
+		return 0, 0, false
+	}
+	return min, max, true
+}
+
+// advertiseIP returns the IP address to advertise in SDP.
+// If hostIP is set, it is used directly (for Docker/NAT scenarios).
+// Otherwise it falls back to localAddr(ra) which determines the local
+// interface IP by dialing the remote address.
+func advertiseIP(hostIP string, ra *net.UDPAddr) string {
+	if hostIP != "" {
+		return hostIP
+	}
+	return localAddr(ra)
+}
+
 // consumer is a running SIP auto-answer instance listening on its own port.
 type consumer struct {
 	cfg        *ConsumerConfig
+	hostIP     string // global SIP host_ip override
 	sessions   map[string]*session
 	sessionsMu sync.Mutex
-	nextPort   int
-	portMu     sync.Mutex
 }
 
 type session struct {
@@ -44,12 +111,22 @@ type session struct {
 
 func Init() {
 	var cfg struct {
-		SIP []ConsumerConfig `yaml:"sip"`
+		SIP SIPConfig `yaml:"sip"`
 	}
 	app.LoadConfig(&cfg)
 
-	for i := range cfg.SIP {
-		cc := &cfg.SIP[i]
+	// Default range: 31000-31100 (100 ports = 50 simultaneous calls)
+	rtpPortRange := cfg.SIP.RTPPortRange
+	if rtpPortRange == "" {
+		rtpPortRange = "31000-31100"
+	}
+	if err := initPool(rtpPortRange); err != nil {
+		log := app.GetLogger("sip")
+		log.Error().Err(err).Msg("[sip] port pool init failed")
+	}
+
+	for i := range cfg.SIP.Consumers {
+		cc := &cfg.SIP.Consumers[i]
 		if cc.Port == 0 {
 			log := app.GetLogger("sip")
 			log.Warn().Msg("[sip] consumer missing port, skipping")
@@ -62,10 +139,11 @@ func Init() {
 		}
 		c := &consumer{
 			cfg:      cc,
+			hostIP:   cfg.SIP.HostIP,
 			sessions: map[string]*session{},
-			nextPort: 10000 + i*200,
 		}
 		go c.run()
+		_ = i // no longer used for port calculation
 	}
 }
 
@@ -75,17 +153,6 @@ func (c *consumer) run() {
 
 	go c.listen(c.cfg.Port)
 	go c.cleanupLoop()
-}
-
-func (c *consumer) allocPort() int {
-	c.portMu.Lock()
-	defer c.portMu.Unlock()
-	p := c.nextPort
-	c.nextPort += 2
-	if c.nextPort > 65000 {
-		c.nextPort = 10000
-	}
-	return p
 }
 
 // cleanupLoop reaps sessions with no RTP/RTCP activity for over 1 minute.
@@ -193,6 +260,11 @@ func (c *consumer) onInvite(conn *net.UDPConn, ra *net.UDPAddr, msg string) {
 	if remoteRTP == nil {
 		remoteRTP = &net.UDPAddr{IP: ra.IP, Port: 5000}
 	}
+	log.Info().Str("call_id", callID).
+		Str("remote_rtp_from_sdp", remoteRTP.String()).
+		Str("sip_source", ra.String()).
+		Str("host_ip_override", c.hostIP).
+		Msg("[sip] invite received")
 
 	// Find the best SIP-compatible audio codec from all stream producers.
 	// We prefer codecs that need no transcoding (Opus > G722 > PCMA > PCMU).
@@ -234,8 +306,13 @@ func (c *consumer) onInvite(conn *net.UDPConn, ra *net.UDPAddr, msg string) {
 		}
 	}
 
-	localPort := c.allocPort()
-	localIP := localAddr(ra)
+	localPort, err := allocatePort()
+	if err != nil {
+		log.Error().Err(err).Msg("[sip] no free RTP port")
+		reject(conn, ra, msg, callID, 503, "No Free Ports")
+		return
+	}
+	localIP := advertiseIP(c.hostIP, ra)
 	tag := randHex(4)
 
 	// Handle video if configured
@@ -248,7 +325,12 @@ func (c *consumer) onInvite(conn *net.UDPConn, ra *net.UDPAddr, msg string) {
 		if cameraVideoCodec != nil {
 			// Use the camera's native video codec as-is
 			videoCodec = &core.Codec{Name: cameraVideoCodec.Name, ClockRate: cameraVideoCodec.ClockRate}
-			videoPort = c.allocPort()
+			videoPort, err = allocatePort()
+			if err != nil {
+				log.Error().Err(err).Msg("[sip] no free video RTP port")
+				reject(conn, ra, msg, callID, 503, "No Free Ports")
+				return
+			}
 
 			// Create video RTP endpoint (camera→caller only)
 			remoteVideoRTP := &net.UDPAddr{IP: remoteRTP.IP, Port: remoteRTP.Port + 2}
@@ -319,6 +401,8 @@ func (c *consumer) onInvite(conn *net.UDPConn, ra *net.UDPAddr, msg string) {
 
 	log.Info().Str("call_id", callID).Int("port", localPort).
 		Str("remote_codec", remoteCodec.Name).Str("camera_codec", cameraCodec.Name).
+		Str("send_rtp_to", remoteRTP.String()).
+		Str("sdp_advertise", fmt.Sprintf("%s:%d", localIP, localPort)).
 		Msg("[sip] answered")
 }
 

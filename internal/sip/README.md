@@ -8,11 +8,14 @@ backchannel audio from the caller back to the camera.
 
 ```yaml
 sip:
-  - port: 5060
-    stream: front_door
-    video: yes
-  - port: 5061
-    stream: back_door
+  rtp_port_range: "31000-31100"   # optional, default 31000-31100 (50 calls)
+  host_ip: "203.0.113.5"          # optional, overrides SDP c= line (Docker/NAT)
+  consumers:
+    - port: 5060
+      stream: front_door
+      video: yes
+    - port: 5061
+      stream: back_door
 ```
 
 Each entry in the `sip` array creates an independent SIP listener on its own port.
@@ -34,6 +37,30 @@ has no video output, the video port is simply not added to the SDP answer and
 audio continues to work.
 
 Default: `video: no` (audio only).
+
+### RTP port range (optional)
+
+`rtp_port_range` defines the global pool of RTP ports shared across all SIP
+consumers. Format: `"min-max"` (e.g., `"31000-31100"`). Must span at least 4
+ports (one audio+video pair). Default: `31000-31100` (100 ports = 50 simultaneous
+calls with audio+video).
+
+This is critical for Docker bridge mode — only this range needs to be forwarded:
+```bash
+docker run -p 5060-5061:5060-5061/udp -p 31000-31100:31000-31100/udp ...
+```
+
+### Host IP override (optional)
+
+`host_ip` overrides the IP address advertised in the SDP `c=` line and Contact
+header. Use this when running behind Docker NAT or any NAT where the container's
+internal IP is not reachable by the caller.
+
+When unset, the IP is auto-detected by dialing the remote address (works for
+host network mode and LAN scenarios).
+
+Set `host_ip` to your Docker host's public IP (or any IP the caller can reach)
+when using bridge mode.
 
 ## Supported codecs
 
