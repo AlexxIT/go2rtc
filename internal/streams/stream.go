@@ -219,3 +219,31 @@ func codecPriority(name string) int {
 		return 0
 	}
 }
+
+// BestVideoCodec returns the best video codec from all stream producers.
+// Returns nil if no video codec is found.
+func (s *Stream) BestVideoCodec() *core.Codec {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for _, prod := range s.producers {
+		if prod.conn == nil {
+			continue
+		}
+		for _, media := range prod.conn.GetMedias() {
+			if media.Kind != core.KindVideo {
+				continue
+			}
+			if media.Direction != core.DirectionRecvonly {
+				continue
+			}
+			for _, codec := range media.Codecs {
+				if codec.Name == core.CodecAny || codec.Name == core.CodecAll {
+					continue
+				}
+				return codec
+			}
+		}
+	}
+	return nil
+}

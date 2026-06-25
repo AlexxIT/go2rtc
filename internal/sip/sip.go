@@ -19,6 +19,7 @@ import (
 type ConsumerConfig struct {
 	Port   int    `yaml:"port"`
 	Stream string `yaml:"stream"`
+	Video  bool   `yaml:"video"`
 }
 
 // consumer is a running SIP auto-answer instance listening on its own port.
@@ -31,13 +32,14 @@ type consumer struct {
 }
 
 type session struct {
-	callID    string
-	tag       string // To tag from our 200 OK — reused in all subsequent responses
-	rtp       *rtp.RTP
-	stream    *streams.Stream
-	createdAt time.Time
-	localIP   string // for Contact header
-	localPort int    // for Contact header
+	callID      string
+	tag         string // To tag from our 200 OK — reused in all subsequent responses
+	rtp         *rtp.RTP
+	video       *rtp.RTP
+	stream      *streams.Stream
+	lastActivity time.Time
+	localIP     string // for Contact header
+	localPort   int    // for Contact header
 }
 
 func Init() {
@@ -49,7 +51,9 @@ func Init() {
 	for i := range cfg.SIP {
 		cc := &cfg.SIP[i]
 		if cc.Port == 0 {
-			cc.Port = 5060 + i
+			log := app.GetLogger("sip")
+			log.Warn().Msg("[sip] consumer missing port, skipping")
+			continue
 		}
 		if cc.Stream == "" {
 			log := app.GetLogger("sip")
@@ -84,8 +88,7 @@ func (c *consumer) allocPort() int {
 	return p
 }
 
-// cleanupLoop reaps stale sessions every 30s. If a call ends without BYE
-// (network drop, device crash), the session and its RTP port are freed.
+// cleanupLoop reaps sessions with no RTP/RTCP activity for over 1 minute.
 func (c *consumer) cleanupLoop() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
@@ -93,12 +96,16 @@ func (c *consumer) cleanupLoop() {
 		c.sessionsMu.Lock()
 		now := time.Now()
 		for id, s := range c.sessions {
-			if now.Sub(s.createdAt) > 2*time.Minute {
+			if now.Sub(s.lastActivity) > time.Minute {
 				log := app.GetLogger("sip")
-				log.Info().Str("call_id", id).Int("port", c.cfg.Port).Msg("[sip] reaping stale session")
-				// RemoveConsumer calls Stop() internally
+				log.Info().Str("call_id", id).Int("port", c.cfg.Port).Msg("[sip] reaping silent session")
 				if s.stream != nil {
-					s.stream.RemoveConsumer(s.rtp)
+					if s.rtp != nil {
+						s.stream.RemoveConsumer(s.rtp)
+					}
+					if s.video != nil {
+						s.stream.RemoveConsumer(s.video)
+					}
 				}
 				delete(c.sessions, id)
 			}
@@ -137,6 +144,26 @@ func (c *consumer) listen(port int) {
 			c.onOptions(conn, ra, msg)
 		case strings.HasPrefix(msg, "REGISTER"):
 			c.onRegister(conn, ra, msg)
+		default:
+			// RTP or RTCP packet — update lastActivity for matching session
+			c.updateActivityForIP(ra.IP.String())
+		}
+	}
+}
+
+// updateActivityForIP refreshes lastActivity for any session whose audio or
+// video RTP endpoint has a matching remote IP
+func (c *consumer) updateActivityForIP(ip string) {
+	c.sessionsMu.Lock()
+	defer c.sessionsMu.Unlock()
+	for _, s := range c.sessions {
+		if s.rtp != nil && s.rtp.RemoteIP() == ip {
+			s.lastActivity = time.Now()
+			return
+		}
+		if s.video != nil && s.video.RemoteIP() == ip {
+			s.lastActivity = time.Now()
+			return
 		}
 	}
 }
@@ -207,41 +234,87 @@ func (c *consumer) onInvite(conn *net.UDPConn, ra *net.UDPAddr, msg string) {
 		}
 	}
 
-	log.Info().Str("call_id", callID).Str("rtp", remoteRTP.String()).
-		Str("remote_codec", remoteCodec.Name).Str("camera_codec", cameraCodec.Name).
-		Int("port", c.cfg.Port).Msg("[sip] INVITE")
-
 	localPort := c.allocPort()
 	localIP := localAddr(ra)
 	tag := randHex(4)
-	sdp := buildSDPAnswer(localIP, localPort, remoteCodec)
+
+	// Handle video if configured
+	var videoCodec *core.Codec
+	var videoPort int
+	var videoEp *rtp.RTP
+
+	if c.cfg.Video {
+		cameraVideoCodec := stream.BestVideoCodec()
+		if cameraVideoCodec != nil {
+			// Use the camera's native video codec as-is
+			videoCodec = &core.Codec{Name: cameraVideoCodec.Name, ClockRate: cameraVideoCodec.ClockRate}
+			videoPort = c.allocPort()
+
+			// Create video RTP endpoint (camera→caller only)
+			remoteVideoRTP := &net.UDPAddr{IP: remoteRTP.IP, Port: remoteRTP.Port + 2}
+			var err error
+			videoEp, err = rtp.NewRTP(remoteVideoRTP.String(), videoPort, videoCodec)
+			if err != nil {
+				log.Error().Err(err).Msg("[sip] video RTP create failed")
+				videoEp = nil
+				videoCodec = nil
+				videoPort = 0
+			}
+		}
+	}
+
+	// Build SDP answer (audio + optional video)
+	sdp := buildSDPAnswer(localIP, localPort, remoteCodec, videoPort, videoCodec)
 	resp := mkResponse(msg, callID, tag, sdp, localIP, localPort, c.cfg.Port)
 	if _, err := conn.WriteToUDP([]byte(resp), ra); err != nil {
 		log.Error().Err(err).Msg("[sip] send 200 failed")
+		if videoEp != nil {
+			videoEp.Stop()
+		}
 		return
 	}
 
-	// Create RTP endpoint with remote codec (transcoding set up when track connects)
+	// Create audio RTP endpoint with remote codec (transcoding set up when track connects)
 	rtpEp, err := rtp.NewRTP(remoteRTP.String(), localPort, remoteCodec)
 	if err != nil {
-		log.Error().Err(err).Msg("[sip] RTP create failed")
+		log.Error().Err(err).Msg("[sip] audio RTP create failed")
+		if videoEp != nil {
+			videoEp.Stop()
+		}
 		return
 	}
 
 	c.sessionsMu.Lock()
 	c.sessions[callID] = &session{
-		callID: callID, tag: tag, rtp: rtpEp, stream: stream,
-		createdAt: time.Now(), localIP: localIP, localPort: localPort,
+		callID: callID, tag: tag, rtp: rtpEp, video: videoEp, stream: stream,
+		lastActivity: time.Now(), localIP: localIP, localPort: localPort,
 	}
 	c.sessionsMu.Unlock()
 
 	if err := stream.AddConsumer(rtpEp); err != nil {
-		log.Error().Err(err).Msg("[sip] AddConsumer failed")
+		log.Error().Err(err).Msg("[sip] audio AddConsumer failed")
 		c.sessionsMu.Lock()
 		delete(c.sessions, callID)
 		c.sessionsMu.Unlock()
 		rtpEp.Stop()
+		if videoEp != nil {
+			videoEp.Stop()
+		}
 		return
+	}
+
+	if videoEp != nil {
+		if err := stream.AddConsumer(videoEp); err != nil {
+			log.Error().Err(err).Msg("[sip] video AddConsumer failed")
+			// Non-fatal: audio still works without video
+			videoEp.Stop()
+			videoEp = nil
+			c.sessionsMu.Lock()
+			if s, ok := c.sessions[callID]; ok {
+				s.video = nil
+			}
+			c.sessionsMu.Unlock()
+		}
 	}
 
 	log.Info().Str("call_id", callID).Int("port", localPort).
@@ -262,7 +335,12 @@ func (c *consumer) onBye(conn *net.UDPConn, ra *net.UDPAddr, msg string) {
 		log.Info().Str("call_id", callID).Msg("[sip] BYE")
 		// RemoveConsumer calls Stop() internally, no need for separate s.rtp.Stop()
 		if s.stream != nil {
-			s.stream.RemoveConsumer(s.rtp)
+			if s.rtp != nil {
+				s.stream.RemoveConsumer(s.rtp)
+			}
+			if s.video != nil {
+				s.stream.RemoveConsumer(s.video)
+			}
 		}
 		// Respond with the same To tag from the original 200 OK
 		conn.WriteToUDP([]byte(mkResponse(msg, callID, s.tag, "", "", 0, 0)), ra)
@@ -284,7 +362,12 @@ func (c *consumer) onCancel(conn *net.UDPConn, ra *net.UDPAddr, msg string) {
 		log.Info().Str("call_id", callID).Msg("[sip] CANCEL")
 		// RemoveConsumer calls Stop() internally
 		if s.stream != nil {
-			s.stream.RemoveConsumer(s.rtp)
+			if s.rtp != nil {
+				s.stream.RemoveConsumer(s.rtp)
+			}
+			if s.video != nil {
+				s.stream.RemoveConsumer(s.video)
+			}
 		}
 		conn.WriteToUDP([]byte(mkResponse(msg, callID, s.tag, "", "", 0, 0)), ra)
 	} else {
@@ -430,7 +513,7 @@ func sdpHasG722(s *sdp.SessionDescription) bool {
 }
 
 
-func buildSDPAnswer(localIP string, port int, codec *core.Codec) string {
+func buildSDPAnswer(localIP string, port int, codec *core.Codec, videoPort int, videoCodec *core.Codec) string {
 	pt := codecPT(codec.Name)
 	if pt < 0 {
 		pt = 96
@@ -446,9 +529,34 @@ func buildSDPAnswer(localIP string, port int, codec *core.Codec) string {
 	case core.CodecOpus:
 		cn = "opus"
 	}
-	return fmt.Sprintf(
+
+	sdp := fmt.Sprintf(
 		"v=0\r\no=- %d %d IN IP4 %s\r\ns=go2rtc\r\nc=IN IP4 %s\r\nt=0 0\r\nm=audio %d RTP/AVP %d\r\na=rtpmap:%d %s/%d\r\na=sendrecv\r\n",
 		randU32(), randU32(), localIP, localIP, port, pt, pt, cn, codec.ClockRate)
+
+	if videoCodec != nil && videoPort > 0 {
+		vpt := codecPTVideo(videoCodec.Name)
+		if vpt < 0 {
+			vpt = 96
+		}
+		sdp += fmt.Sprintf(
+			"m=video %d RTP/AVP %d\r\na=rtpmap:%d %s/%d\r\na=sendonly\r\n",
+			videoPort, vpt, vpt, videoCodec.Name, videoCodec.ClockRate)
+	}
+
+	return sdp
+}
+
+func codecPTVideo(name string) int {
+	switch name {
+	case core.CodecH264:
+		return 96
+	case core.CodecH265:
+		return 97
+	case core.CodecJPEG:
+		return 26
+	}
+	return -1
 }
 
 func codecPT(name string) int {

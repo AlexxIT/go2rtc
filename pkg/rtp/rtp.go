@@ -10,14 +10,18 @@ import (
 	"github.com/pion/rtp"
 )
 
-// RTP implements bidirectional RTP audio as both Consumer and Producer.
+// RTP implements bidirectional RTP as both Consumer and Producer.
 //
-// As Consumer: receives audio FROM camera, sends to remote RTP endpoint
-// As Producer: receives audio FROM remote RTP endpoint, sends to camera backchannel
+// As Consumer: receives media FROM camera, sends to remote RTP endpoint
+// As Producer: receives media FROM remote RTP endpoint, sends to camera backchannel
 //
-// The RTP endpoint always uses PCMA or PCMU for the remote side (SIP/RTP caller).
+// Audio: The RTP endpoint uses PCMA or PCMU for the remote side (SIP/RTP caller).
 // If the camera uses a different codec (PCMU, PCMA, PCM, PCML), transcoding is
 // set up automatically in AddTrack/GetTrack when the actual codec is known.
+//
+// Video: The RTP endpoint passes through the camera's native video codec (H264/H265)
+// with no transcoding. Only camera→caller direction is supported. RTCP Receiver
+// Reports are generated to keep the remote happy.
 type RTP struct {
 	core.Connection
 
@@ -25,8 +29,15 @@ type RTP struct {
 	remoteAddr *net.UDPAddr
 	localConn  *net.UDPConn
 
-	// remoteCodec is what we send/receive on the RTP side (PCMA or PCMU)
+	// remoteCodec is what we send/receive on the RTP side
 	remoteCodec *core.Codec
+
+	// rtcpEnabled enables RTCP RR responses (needed for video)
+	rtcpEnabled bool
+	// rtcpRRInterval is the interval between RR responses in packets
+	rtcpRRInterval int
+	// rtcpPacketCount counts packets since last RR
+	rtcpPacketCount int
 
 	// For receiving from remote (backchannel audio TO camera)
 	receiver *core.Receiver
@@ -46,8 +57,8 @@ type RTP struct {
 
 // NewRTP creates a bidirectional RTP endpoint.
 // remote: the remote RTP endpoint (e.g. "192.168.1.200:5000")
-// localPort: the local UDP port to listen on for incoming audio (backchannel)
-// remoteCodec: the codec to use for the RTP side (typically PCMA or PCMU)
+// localPort: the local UDP port to listen on for incoming RTP/backchannel
+// remoteCodec: the codec to use for the RTP side
 // Note: transcoding is set up later in AddTrack/GetTrack when camera codec is known.
 func NewRTP(remote string, localPort int, remoteCodec *core.Codec) (*RTP, error) {
 	remoteAddr, err := net.ResolveUDPAddr("udp", remote)
@@ -65,6 +76,12 @@ func NewRTP(remote string, localPort int, remoteCodec *core.Codec) (*RTP, error)
 		localConn:   localConn,
 		remoteCodec: remoteCodec,
 		ssrc:        1,
+	}
+
+	// Enable RTCP handling for video codecs
+	if remoteCodec != nil && remoteCodec.IsVideo() {
+		r.rtcpEnabled = true
+		r.rtcpRRInterval = 60 // send RR roughly every 60 packets (~few seconds)
 	}
 
 	r.SetProtocol("rtp")
@@ -95,9 +112,25 @@ func isTranscodable(codec *core.Codec) bool {
 	return false
 }
 
-// GetMedias returns media descriptions for both directions.
-// We offer both PCMA and PCMU so the remote can choose (like WebRTC does).
+// GetMedias returns media descriptions.
+// For audio: bidirectional (sendonly + recvonly) with PCMA/PCMU/remote codec.
+// For video: sendonly (camera→caller only) with the camera's native codec.
 func (r *RTP) GetMedias() []*core.Media {
+	kind := core.KindAudio
+	if r.remoteCodec != nil && r.remoteCodec.IsVideo() {
+		kind = core.KindVideo
+	}
+
+	if kind == core.KindVideo {
+		return []*core.Media{
+			{
+				Kind:      core.KindVideo,
+				Direction: core.DirectionSendonly,
+				Codecs:    r.getCodecs(),
+			},
+		}
+	}
+
 	return []*core.Media{
 		{
 			Kind:      core.KindAudio,
@@ -113,13 +146,25 @@ func (r *RTP) GetMedias() []*core.Media {
 }
 
 // getCodecs returns the list of codecs we support for the remote side.
-// Always includes PCMA and PCMU for maximum compatibility.
+// For audio: always includes PCMA and PCMU for maximum compatibility.
+// For video: returns the camera's single video codec.
 func (r *RTP) getCodecs() []*core.Codec {
+	// Video: return the configured video codec only (no transcoding)
+	if r.remoteCodec != nil && r.remoteCodec.IsVideo() {
+		pt := r.remoteCodec.PayloadType
+		if pt == 0 {
+			pt = 96 // dynamic payload type
+		}
+		return []*core.Codec{
+			{Name: r.remoteCodec.Name, ClockRate: r.remoteCodec.ClockRate, PayloadType: pt},
+		}
+	}
+
+	// Audio: offer PCMA and PCMU plus the remote codec
 	codecs := []*core.Codec{
 		{Name: core.CodecPCMA, ClockRate: 8000, PayloadType: 8},
 		{Name: core.CodecPCMU, ClockRate: 8000, PayloadType: 0},
 	}
-	// Add the configured remote codec if it's different
 	if r.remoteCodec != nil && r.remoteCodec.Name != core.CodecPCMA && r.remoteCodec.Name != core.CodecPCMU {
 		codecs = append(codecs, r.remoteCodec)
 	}
@@ -231,7 +276,8 @@ func (r *RTP) sendToRemote(packet *core.Packet) {
 }
 
 // readLoop reads incoming RTP packets from the remote endpoint.
-// RTCP packets (PT >= 200) are silently discarded.
+// For audio: RTCP packets are silently discarded.
+// For video: RTCP SR packets trigger RR responses.
 func (r *RTP) readLoop() {
 	buf := make([]byte, 1500)
 	for {
@@ -240,12 +286,14 @@ func (r *RTP) readLoop() {
 			return
 		}
 
-		// Discard RTCP packets (payload type >= 200)
-		if n > 0 && buf[0]&0x80 != 0 {
-			pt := buf[1] & 0x7F
-			if pt >= 200 {
-				continue
-			}
+		if n < 2 {
+			continue
+		}
+
+		// Check if this is an RTCP packet (payload type >= 200 in the second byte)
+		if r.rtcpEnabled && buf[0]&0x80 != 0 && buf[1] >= 200 {
+			r.handleRTCP(buf[:n])
+			continue
 		}
 
 		pkt := &rtp.Packet{}
@@ -253,9 +301,18 @@ func (r *RTP) readLoop() {
 			continue
 		}
 
+		// For video: count packets and periodically send RTCP RR
+		if r.rtcpEnabled {
+			r.rtcpPacketCount++
+			if r.rtcpPacketCount >= r.rtcpRRInterval {
+				r.sendRTCPRR()
+				r.rtcpPacketCount = 0
+			}
+		}
+
 		payload := pkt.Payload
 
-		// Transcode from remote codec to camera codec if needed
+		// Transcode from remote codec to camera codec if needed (audio only)
 		r.mu.Lock()
 		fromRemote := r.FromRemote
 		receiver := r.receiver
@@ -276,6 +333,127 @@ func (r *RTP) readLoop() {
 	}
 }
 
+// handleRTCP parses an RTCP compound packet and responds to SR with RR.
+func (r *RTP) handleRTCP(data []byte) {
+	// RTCP header: V(2 bits), P(1 bit), count(5 bits) in byte 0
+	// PT in byte 1, length in bytes 2-3 (number of 32-bit words minus one)
+	if len(data) < 4 {
+		return
+	}
+
+	// Parse the RTCP compound packet
+	offset := 0
+	for offset+4 <= len(data) {
+		ver := (data[offset] >> 6) & 0x03
+		// padding := (data[offset] >> 5) & 0x01
+		// count := int(data[offset] & 0x1F) // number of report blocks (unused)
+		pt := data[offset+1]
+		// length is in 32-bit words (minus 1)
+		length := int(data[offset+2])<<8 | int(data[offset+3])
+		length = (length + 1) * 4 // convert to bytes
+
+		if ver != 2 || offset+length > len(data) {
+			break
+		}
+
+		// SR (pt=200) or RR (pt=201)
+		if pt == 200 && offset+28 <= len(data) {
+			// Parse SR to get sender SSRC and timestamp
+			ssrc := uint32(data[offset+4])<<24 | uint32(data[offset+5])<<16 | uint32(data[offset+6])<<8 | uint32(data[offset+7])
+			// NTP timestamp at offset+8 (64-bit)
+			// RTP timestamp at offset+16 (32-bit)
+			rtpTS := uint32(data[offset+16])<<24 | uint32(data[offset+17])<<16 | uint32(data[offset+18])<<8 | uint32(data[offset+19])
+			// packet count at offset+20
+			// octet count at offset+24
+
+			// Generate RR response
+			r.sendRTCPRRWithSSRC(ssrc, rtpTS)
+		}
+
+		offset += length
+	}
+}
+
+// sendRTCPRR sends a minimal Receiver Report.
+func (r *RTP) sendRTCPRR() {
+	// Send RR without a specific SR (keepalive)
+	r.sendRTCPRRWithSSRC(0, 0)
+}
+
+// sendRTCPRRWithSSRC sends a Receiver Report for a specific sender.
+func (r *RTP) sendRTCPRRWithSSRC(senderSSRC uint32, lastRTPTS uint32) {
+	if r.localConn == nil || r.remoteAddr == nil {
+		return
+	}
+
+	// Build RTCP RR packet
+	// Header: V=2, P=0, RC=1 (1 report block), PT=201 (RR), length=7 (32-bit words minus 1)
+	rr := make([]byte, 32)
+
+	// Byte 0: V=2, P=0, RC=1
+	rr[0] = 0x81
+	// Byte 1: PT=201 (RR)
+	rr[1] = 201
+	// Bytes 2-3: length = 7 (8 32-bit words - 1)
+	rr[2] = 0
+	rr[3] = 7
+
+	// Bytes 4-7: receiver SSRC (use our SSRC)
+	rr[4] = byte(r.ssrc >> 24)
+	rr[5] = byte(r.ssrc >> 16)
+	rr[6] = byte(r.ssrc >> 8)
+	rr[7] = byte(r.ssrc)
+
+	// Report block (starts at byte 8):
+	// Bytes 8-11: sender SSRC
+	rr[8] = byte(senderSSRC >> 24)
+	rr[9] = byte(senderSSRC >> 16)
+	rr[10] = byte(senderSSRC >> 8)
+	rr[11] = byte(senderSSRC)
+
+	// Byte 12: fraction lost = 0
+	rr[12] = 0
+	// Bytes 13-15: cumulative packets lost = 0
+	rr[13] = 0
+	rr[14] = 0
+	rr[15] = 0
+
+	// Bytes 16-19: extended highest seq number received
+	// Use the RTP timestamp from the SR as a proxy
+	rr[16] = byte(lastRTPTS >> 24)
+	rr[17] = byte(lastRTPTS >> 16)
+	rr[18] = byte(lastRTPTS >> 8)
+	rr[19] = byte(lastRTPTS)
+
+	// Bytes 20-23: interarrival jitter = 0
+	rr[20] = 0
+	rr[21] = 0
+	rr[22] = 0
+	rr[23] = 0
+
+	// Bytes 24-27: LSR (last SR timestamp) = 0
+	rr[24] = 0
+	rr[25] = 0
+	rr[26] = 0
+	rr[27] = 0
+
+	// Bytes 28-31: DLSR (delay since last SR) = 0
+	rr[28] = 0
+	rr[29] = 0
+	rr[30] = 0
+	rr[31] = 0
+
+	r.localConn.WriteToUDP(rr, r.remoteAddr)
+}
+
+// RemoteIP returns the remote IP address as a string, or empty if not set.
+func (r *RTP) RemoteIP() string {
+	if r.remoteAddr == nil {
+		return ""
+	}
+	return r.remoteAddr.IP.String()
+}
+
 func (r *RTP) getPayloadType() byte {
 	switch r.remoteCodec.Name {
 	case core.CodecPCMU:
@@ -287,6 +465,10 @@ func (r *RTP) getPayloadType() byte {
 	case core.CodecOpus:
 		return 111
 	default:
+		// Video and other codecs use dynamic payload type (96-127)
+		if r.remoteCodec != nil && r.remoteCodec.PayloadType != 0 {
+			return r.remoteCodec.PayloadType
+		}
 		return 96
 	}
 }
