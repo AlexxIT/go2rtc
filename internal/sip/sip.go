@@ -373,6 +373,24 @@ func (c *consumer) onInvite(conn *net.UDPConn, ra *net.UDPAddr, msg string) {
 	}
 	c.sessionsMu.Unlock()
 
+	// Keep session alive as long as RTP packets arrive from the caller
+	rtpEp.OnActivity = func() {
+		c.sessionsMu.Lock()
+		if s, ok := c.sessions[callID]; ok {
+			s.lastActivity = time.Now()
+		}
+		c.sessionsMu.Unlock()
+	}
+	if videoEp != nil {
+		videoEp.OnActivity = func() {
+			c.sessionsMu.Lock()
+			if s, ok := c.sessions[callID]; ok {
+				s.lastActivity = time.Now()
+			}
+			c.sessionsMu.Unlock()
+		}
+	}
+
 	if err := stream.AddConsumer(rtpEp); err != nil {
 		log.Error().Err(err).Msg("[sip] audio AddConsumer failed")
 		c.sessionsMu.Lock()

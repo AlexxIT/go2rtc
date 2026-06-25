@@ -53,6 +53,10 @@ type RTP struct {
 	// Sequence number and SSRC for outgoing packets
 	seqNum uint16
 	ssrc   uint32
+
+	// OnActivity is called whenever a valid RTP packet is received from the remote.
+	// Used by session handlers to keep the call alive.
+	OnActivity func()
 }
 
 // NewRTP creates a bidirectional RTP endpoint.
@@ -299,6 +303,11 @@ func (r *RTP) readLoop() {
 		pkt := &rtp.Packet{}
 		if err := pkt.Unmarshal(buf[:n]); err != nil {
 			continue
+		}
+
+		// Notify session handler that we received a packet (keepalive)
+		if r.OnActivity != nil {
+			r.OnActivity()
 		}
 
 		// For video: count packets and periodically send RTCP RR
