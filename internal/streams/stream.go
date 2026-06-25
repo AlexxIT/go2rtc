@@ -129,121 +129,12 @@ func (s *Stream) MarshalJSON() ([]byte, error) {
 	return json.Marshal(info)
 }
 
-// CameraCodec discovers the audio codec that the camera (first producer) uses.
-// Returns nil if no audio codec is found.
-func (s *Stream) CameraCodec() *core.Codec {
+// Producers returns the list of producers for this stream.
+// Used by external packages (e.g. SIP) for codec discovery.
+func (s *Stream) Producers() []*Producer {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
-	for _, prod := range s.producers {
-		if prod.conn == nil {
-			continue
-		}
-		for _, media := range prod.conn.GetMedias() {
-			if media.Kind != core.KindAudio {
-				continue
-			}
-			// Prefer recvonly (camera sending audio to us)
-			if media.Direction != core.DirectionRecvonly {
-				continue
-			}
-			for _, codec := range media.Codecs {
-				// Skip generic/any codecs
-				if codec.Name == core.CodecAny || codec.Name == core.CodecAll {
-					continue
-				}
-				// Skip video codecs that somehow ended up in audio media
-				if codec.IsVideo() {
-					continue
-				}
-				return codec
-			}
-		}
-	}
-	return nil
+	return s.producers
 }
 
-// BestSIPCodec returns the best audio codec from all stream producers,
-// preferring codecs that are most widely compatible with SIP.
-// Priority: Opus > G722 > PCMA > PCMU > PCM > PCML
-// Returns nil if no audio codec is found.
-func (s *Stream) BestSIPCodec() *core.Codec {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 
-	var best *core.Codec
-	var bestPriority int
-
-	for _, prod := range s.producers {
-		if prod.conn == nil {
-			continue
-		}
-		for _, media := range prod.conn.GetMedias() {
-			if media.Kind != core.KindAudio {
-				continue
-			}
-			if media.Direction != core.DirectionRecvonly {
-				continue
-			}
-			for _, codec := range media.Codecs {
-				if codec.Name == core.CodecAny || codec.Name == core.CodecAll {
-					continue
-				}
-				if codec.IsVideo() {
-					continue
-				}
-				p := codecPriority(codec.Name)
-				if p > 0 && (best == nil || p > bestPriority) {
-					best = codec
-					bestPriority = p
-				}
-			}
-		}
-	}
-	return best
-}
-
-func codecPriority(name string) int {
-	switch name {
-	case core.CodecOpus:
-		return 5
-	case core.CodecG722:
-		return 4
-	case core.CodecPCMA:
-		return 3
-	case core.CodecPCMU:
-		return 2
-	case core.CodecPCM, core.CodecPCML:
-		return 1
-	default:
-		return 0
-	}
-}
-
-// BestVideoCodec returns the best video codec from all stream producers.
-// Returns nil if no video codec is found.
-func (s *Stream) BestVideoCodec() *core.Codec {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	for _, prod := range s.producers {
-		if prod.conn == nil {
-			continue
-		}
-		for _, media := range prod.conn.GetMedias() {
-			if media.Kind != core.KindVideo {
-				continue
-			}
-			if media.Direction != core.DirectionRecvonly {
-				continue
-			}
-			for _, codec := range media.Codecs {
-				if codec.Name == core.CodecAny || codec.Name == core.CodecAll {
-					continue
-				}
-				return codec
-			}
-		}
-	}
-	return nil
-}

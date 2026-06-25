@@ -196,7 +196,7 @@ func (c *consumer) onInvite(conn *net.UDPConn, ra *net.UDPAddr, msg string) {
 
 	// Find the best SIP-compatible audio codec from all stream producers.
 	// We prefer codecs that need no transcoding (Opus > G722 > PCMA > PCMU).
-	cameraCodec := stream.BestSIPCodec()
+	cameraCodec := bestSIPCodec(stream)
 
 	// Answer with the camera's codec so the SIP link uses the same format
 	// in both directions. If the camera codec is unsupported, fall back to
@@ -244,7 +244,7 @@ func (c *consumer) onInvite(conn *net.UDPConn, ra *net.UDPAddr, msg string) {
 	var videoEp *rtp.RTP
 
 	if c.cfg.Video {
-		cameraVideoCodec := stream.BestVideoCodec()
+		cameraVideoCodec := bestVideoCodec(stream)
 		if cameraVideoCodec != nil {
 			// Use the camera's native video codec as-is
 			videoCodec = &core.Codec{Name: cameraVideoCodec.Name, ClockRate: cameraVideoCodec.ClockRate}
@@ -649,4 +649,83 @@ func randU32() uint32 {
 	b := make([]byte, 4)
 	rand.Read(b)
 	return uint32(b[0])<<24 | uint32(b[1])<<16 | uint32(b[2])<<8 | uint32(b[3])
+}
+
+// bestSIPCodec returns the best audio codec from all stream producers,
+// preferring codecs that are most widely compatible with SIP.
+// Priority: Opus > G722 > PCMA > PCMU > PCM > PCML
+// Returns nil if no audio codec is found.
+func bestSIPCodec(stream *streams.Stream) *core.Codec {
+	var best *core.Codec
+	var bestPriority int
+
+	for _, prod := range stream.Producers() {
+		if prod == nil {
+			continue
+		}
+		for _, media := range prod.GetMedias() {
+			if media.Kind != core.KindAudio {
+				continue
+			}
+			if media.Direction != core.DirectionRecvonly {
+				continue
+			}
+			for _, codec := range media.Codecs {
+				if codec.Name == core.CodecAny || codec.Name == core.CodecAll {
+					continue
+				}
+				if codec.IsVideo() {
+					continue
+				}
+				p := sipCodecPriority(codec.Name)
+				if p > 0 && (best == nil || p > bestPriority) {
+					best = codec
+					bestPriority = p
+				}
+			}
+		}
+	}
+	return best
+}
+
+func sipCodecPriority(name string) int {
+	switch name {
+	case core.CodecOpus:
+		return 5
+	case core.CodecG722:
+		return 4
+	case core.CodecPCMA:
+		return 3
+	case core.CodecPCMU:
+		return 2
+	case core.CodecPCM, core.CodecPCML:
+		return 1
+	default:
+		return 0
+	}
+}
+
+// bestVideoCodec returns the best video codec from all stream producers.
+// Returns nil if no video codec is found.
+func bestVideoCodec(stream *streams.Stream) *core.Codec {
+	for _, prod := range stream.Producers() {
+		if prod == nil {
+			continue
+		}
+		for _, media := range prod.GetMedias() {
+			if media.Kind != core.KindVideo {
+				continue
+			}
+			if media.Direction != core.DirectionRecvonly {
+				continue
+			}
+			for _, codec := range media.Codecs {
+				if codec.Name == core.CodecAny || codec.Name == core.CodecAll {
+					continue
+				}
+				return codec
+			}
+		}
+	}
+	return nil
 }
