@@ -257,49 +257,31 @@ func (c *consumer) onInvite(conn *net.UDPConn, ra *net.UDPAddr, msg string) {
 	}
 
 	// Discover audio codecs from stream producers.
-	// Retry once after a short delay if producers aren't ready yet
-	// (first call after container restart races against async Dial).
 	var audioRecvonly []*core.Codec // camera sends this (main audio)
 	var audioSendonly []*core.Codec // camera expects this (backchannel)
 
-	for attempt := 0; attempt < 2; attempt++ {
-		audioRecvonly = nil
-		audioSendonly = nil
-
-		for _, prod := range stream.Producers() {
-			if prod == nil {
+	for _, prod := range stream.Producers() {
+		if prod == nil {
+			continue
+		}
+		for _, media := range prod.GetMedias() {
+			if media.Kind != core.KindAudio {
 				continue
 			}
-			for _, media := range prod.GetMedias() {
-				if media.Kind != core.KindAudio {
+			for _, codec := range media.Codecs {
+				if codec.Name == core.CodecAny || codec.Name == core.CodecAll {
 					continue
 				}
-				for _, codec := range media.Codecs {
-					if codec.Name == core.CodecAny || codec.Name == core.CodecAll {
-						continue
-					}
-					if codec.IsVideo() {
-						continue
-					}
-					switch media.Direction {
-					case core.DirectionRecvonly:
-						audioRecvonly = append(audioRecvonly, codec)
-					case core.DirectionSendonly:
-						audioSendonly = append(audioSendonly, codec)
-					case core.DirectionSendRecv:
-						audioRecvonly = append(audioRecvonly, codec)
-						audioSendonly = append(audioSendonly, codec)
-					}
+				switch media.Direction {
+				case core.DirectionRecvonly:
+					audioRecvonly = append(audioRecvonly, codec)
+				case core.DirectionSendonly:
+					audioSendonly = append(audioSendonly, codec)
+				case core.DirectionSendRecv:
+					audioRecvonly = append(audioRecvonly, codec)
+					audioSendonly = append(audioSendonly, codec)
 				}
 			}
-		}
-
-		if len(audioRecvonly) > 0 || len(audioSendonly) > 0 {
-			break
-		}
-
-		if attempt == 0 {
-			time.Sleep(200 * time.Millisecond)
 		}
 	}
 
@@ -690,10 +672,10 @@ func buildSDPAnswer(localIP string, port int, codecs []*core.Codec, direction st
 			if codec.FmtpLine != "" {
 				sdp += fmt.Sprintf("a=fmtp:%d %s\r\n", pt, codec.FmtpLine)
 			}
-			// First line is the main audio (sendrecv), subsequent lines
-			// are backchannel-only (recvonly — caller sends, we receive).
+			// Different codecs: first line is main audio (we send),
+			// subsequent lines are backchannel (we receive).
 			if i == 0 {
-				sdp += fmt.Sprintf("a=%s\r\n", core.DirectionSendRecv)
+				sdp += fmt.Sprintf("a=%s\r\n", core.DirectionSendonly)
 			} else {
 				sdp += fmt.Sprintf("a=%s\r\n", core.DirectionRecvonly)
 			}
