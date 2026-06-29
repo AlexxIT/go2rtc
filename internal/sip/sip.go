@@ -344,22 +344,14 @@ func (c *consumer) onInvite(conn *net.UDPConn, ra *net.UDPAddr, msg string) {
 		}
 	}
 
-	// If we still have no codecs (speaker-only camera where backchannel codec
-	// has priority 0, or recvonly camera with no common codec), fall back to
-	// advertising all SIP codecs. Keep sendrecv when possible.
+	// If we still have no codecs, there's nothing useful to offer.
+	// Either the caller doesn't support the camera's audio codec, or the
+	// camera's backchannel codec isn't a known SIP codec. Reject rather
+	// than answer with a dead session.
 	if len(sdpCodecs) == 0 {
-		if len(audioRecvonly) > 0 {
-			// Camera has a mic but caller doesn't support its codec:
-			// answer recvonly so caller can still send keepalive.
-			direction = core.DirectionRecvonly
-			sdpCodecs = fallbackAudioCodecs()
-		} else {
-			// Camera has a speaker but backchannel codec isn't a known SIP
-			// codec — nothing useful to advertise.  Still answer recvonly
-			// with fallback so at least keepalive works.
-			direction = core.DirectionRecvonly
-			sdpCodecs = fallbackAudioCodecs()
-		}
+		log.Warn().Str("call_id", callID).Msg("[sip] no compatible audio codec with caller")
+		reject(conn, ra, msg, callID, 488, "No Compatible Audio")
+		return
 	}
 
 	sdpAnswer := buildSDPAnswer(localIP, port, sdpCodecs, direction)
@@ -400,10 +392,8 @@ func (c *consumer) onInvite(conn *net.UDPConn, ra *net.UDPAddr, msg string) {
 	}
 	c.sessionsMu.Unlock()
 
-	// Add the RTP endpoint to the stream whenever there's a two-way session.
-	// For sendrecv this wires the main audio path (camera→caller) and/or
-	// the backchannel (caller→camera). For recvonly (keepalive fallback)
-	// we skip adding a consumer since no audio will actually flow.
+	// Add the RTP endpoint to the stream. This wires the main audio path
+	// (camera→caller) and/or the backchannel (caller→camera).
 	if direction != core.DirectionRecvonly {
 		if err := stream.AddConsumer(rtpEp); err != nil {
 			log.Error().Err(err).Msg("[sip] AddConsumer failed")
@@ -637,17 +627,7 @@ func negotiateAudio(prodCodecs []*core.Codec, offer *sdp.SessionDescription) *co
 	return nil
 }
 
-// fallbackAudioCodecs returns the full list of SIP audio codecs when no
-// common codec is available. The session still answers recvonly so the
-// caller can send audio for keepalive purposes.
-func fallbackAudioCodecs() []*core.Codec {
-	return []*core.Codec{
-		{Name: core.CodecOpus, ClockRate: 48000, Channels: 2, PayloadType: 111},
-		{Name: core.CodecG722, ClockRate: 8000, PayloadType: 9},
-		{Name: core.CodecPCMA, ClockRate: 8000, PayloadType: 8},
-		{Name: core.CodecPCMU, ClockRate: 8000, PayloadType: 0},
-	}
-}
+
 
 func buildSDPAnswer(localIP string, port int, codecs []*core.Codec, direction string) string {
 	sdp := fmt.Sprintf(
