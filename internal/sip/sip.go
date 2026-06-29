@@ -663,7 +663,7 @@ func buildSDPAnswer(localIP string, port int, codecs []*core.Codec, direction st
 
 		sdp += fmt.Sprintf("a=%s\r\n", direction)
 	} else {
-		for _, codec := range codecs {
+		for i, codec := range codecs {
 			pt := codec.PayloadType
 			sdp += fmt.Sprintf(
 				"m=audio %d RTP/AVP %d\r\na=rtpmap:%d %s/%d",
@@ -675,7 +675,13 @@ func buildSDPAnswer(localIP string, port int, codecs []*core.Codec, direction st
 			if codec.FmtpLine != "" {
 				sdp += fmt.Sprintf("a=fmtp:%d %s\r\n", pt, codec.FmtpLine)
 			}
-			sdp += fmt.Sprintf("a=%s\r\n", direction)
+			// First line is the main audio (sendrecv), subsequent lines
+			// are backchannel-only (recvonly — caller sends, we receive).
+			if i == 0 {
+				sdp += fmt.Sprintf("a=%s\r\n", core.DirectionSendRecv)
+			} else {
+				sdp += fmt.Sprintf("a=%s\r\n", core.DirectionRecvonly)
+			}
 		}
 	}
 
