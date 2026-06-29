@@ -1,8 +1,9 @@
-# SIP Auto-Answer Consumer
+# SIP Auto-Answer Consumer (audio-only, no transcoding)
 
-Brings up SIP auto-answer listeners that accept incoming SIP calls and stream audio
-(and optionally video) from a configured go2rtc stream to the caller. Supports
-backchannel audio from the caller back to the camera.
+Brings up SIP auto-answer listeners that accept incoming SIP calls and stream
+audio from a configured go2rtc stream to the caller. Supports backchannel audio
+from the caller back to the camera. **No transcoding is performed** — the user
+is responsible for ensuring matching codecs in both directions.
 
 ## Configuration
 
@@ -13,13 +14,11 @@ sip:
   consumers:
     - port: 5060
       stream: front_door
-      video: yes
     - port: 5061
       stream: back_door
 ```
 
-Each entry in the `sip` array creates an independent SIP listener on its own port.
-Calls arriving on that port are answered and connected to the specified stream.
+Each entry in the `consumers` array creates an independent SIP listener on its own port.
 
 ### Port is required
 
@@ -29,21 +28,11 @@ Every SIP entry must have a `port`. Entries without a port are skipped with a wa
 
 Entries without a `stream` are skipped with a warning.
 
-### Video (optional)
-
-Set `video: yes` to include the stream's video in the SDP answer. The camera's
-native video codec is offered as-is — no transcoding is performed. If the camera
-has no video output, the video port is simply not added to the SDP answer and
-audio continues to work.
-
-Default: `video: no` (audio only).
-
 ### RTP port range (optional)
 
 `rtp_port_range` defines the global pool of RTP ports shared across all SIP
 consumers. Format: `"min-max"` (e.g., `"31000-31100"`). Must span at least 4
-ports (one audio+video pair). Default: `31000-31100` (100 ports = 50 simultaneous
-calls with audio+video).
+ports. Default: `31000-31100` (100 ports = 50 simultaneous calls).
 
 This is critical for Docker bridge mode — only this range needs to be forwarded:
 ```bash
@@ -62,69 +51,50 @@ host network mode and LAN scenarios).
 Set `host_ip` to your Docker host's public IP (or any IP the caller can reach)
 when using bridge mode.
 
-## Supported codecs
+## Codec negotiation
 
-### Audio
+go2rtc negotiates the best common audio codec between the camera and the caller.
+No transcoding is performed — the user handles that via `exec`/`ffmpeg` on the
+stream if needed.
 
-The SIP consumer answers with the camera's native audio codec so the SIP link
-uses the same format in both directions (send and receive). This avoids
-transcoding when possible.
+| Main audio exists? | Backchannel exists? | Answer direction | Notes |
+|---|---|---|---|
+| Yes (common codec found) | Yes/No | `sendrecv` | Main codec + any backchannel codecs advertised |
+| No (no common codec) | — | `recvonly` | All codecs advertised; keepalive via RTCP |
 
-| Camera codec | Answer codec | Direction |
-|-------------|-------------|-----------|
-| Opus        | Opus        | Pass-through both ways |
-| G722        | G722        | Pass-through both ways |
-| PCMA        | PCMA        | Pass-through both ways |
-| PCMU        | PCMU        | Pass-through both ways |
-| PCM/PCML    | PCMA        | Transcoded to PCMA |
-| AAC         | PCMA/PCMU   | Rejected (488) |
+- **sendrecv**: Both directions use the same m=audio line. The caller receives
+  the camera's audio and can send backchannel audio. RTP/RTCP from the caller
+  keeps the session alive.
+- **recvonly**: Only the caller can send audio (keepalive path). No audio flows
+  from the camera if no common codec is found.
 
-If the camera codec is unknown or unsupported, the consumer falls back to
-PCMA or PCMU (whichever the caller supports). If the caller supports neither,
-the INVITE is rejected with 488 Codec Mismatch.
+## Audio-only
 
-### Video
+This is an audio-only implementation. Video is not supported. Any video streams
+from the camera are ignored.
 
-Video is passed through using the camera's native codec with no transcoding.
-Video direction is camera → caller only (sendonly).
+## Session management
 
-| Camera codec | Answer codec | Direction |
-|-------------|-------------|-----------|
-| H264        | H264        | Camera → caller only |
-| H265        | H265        | Camera → caller only |
+- Activity timer starts when the session is created.
+- **All RTP packets** from the caller reset the timer.
+- **All RTCP packets** (SR/RR/compound) on RTP or RTCP port reset the timer.
+- RTCP Receiver Reports are sent in response to incoming Sender Reports.
+- 1-minute silent timeout reaps dead sessions regardless of direction.
 
-## How it works
+### Session teardown
 
-1. Each consumer starts a UDP listener on its configured port.
-2. When an `INVITE` arrives, the consumer:
-   - Looks up the configured stream
-   - Parses the SDP offer to find the caller's remote RTP address
-   - Detects the best SIP-compatible audio codec from the stream (via BestSIPCodec)
-   - Answers with the camera's codec (or PCMA/PCMU fallback)
-   - Creates an `rtp.RTP` endpoint on a dynamically allocated local UDP port
-   - Responds with `200 OK` containing an SDP answer
-   - Adds the RTP endpoint as a consumer to the stream (camera -> caller)
-3. If `video: yes`, the consumer also:
-   - Discovers the stream's video codec (via BestVideoCodec)
-   - Allocates a second UDP port for video RTP
-   - Includes an `m=video` line in the SDP answer
-   - Creates a second `rtp.RTP` endpoint for video (camera -> caller only)
-4. The audio RTP endpoint is set up as both a Consumer (camera -> caller)
-   and a Producer (caller -> camera backchannel).
-5. The video RTP endpoint is set up as a Consumer only (camera -> caller).
-6. Transcoding is handled automatically when audio codecs differ. Video is never
-   transcoded — the stream must have a matching video codec.
-7. For video calls, RTCP Receiver Reports are sent to keep the remote happy.
-8. If no RTP or RTCP packets arrive from the remote for 1 minute (network drop,
-   device crash without BYE), the session is reaped and consumers are removed.
+- **BYE**: Cleanup and respond 200 OK.
+- **CANCEL**: Cleanup and respond.
+- **Timeout**: 30-second check loop reaps sessions silent for >1 minute.
 
-## Call termination
+## Limitations
 
-A background goroutine checks every 30 seconds. A session ends when:
-
-- **BYE**: The caller sends a BYE request. The consumer responds with 200 OK,
-  removes the audio and video RTP consumers from the stream, and frees the session.
-- **CANCEL**: The caller cancels an in-progress INVITE. Same cleanup as BYE.
-- **Silent timeout**: No RTP or RTCP from the remote for 1 minute. The session
-  is reaped and both audio and video consumers are removed from the stream.
-  Active calls are unaffected — any incoming packet resets the timer.
+- **No transcoding**: The same codec is used for both directions. Use
+  `exec`/`ffmpeg` on the stream if format conversion is needed.
+- **No video**: This is audio-only.
+- **No AAC**: AAC is not supported. The user must not configure AAC streams with
+  this module.
+- **User responsibility**: It is up to the user to provide matching in and out
+  codecs, and to not provide AAC.
+- **LAN scope**: No authentication is included. Use within a trusted network or
+  behind a PBX. Docker bridge mode with port forwarding is supported.

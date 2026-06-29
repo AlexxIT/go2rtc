@@ -20,7 +20,6 @@ import (
 type ConsumerConfig struct {
 	Port   int    `yaml:"port"`
 	Stream string `yaml:"stream"`
-	Video  bool   `yaml:"video"`
 }
 
 // SIPConfig holds global SIP settings shared across all consumers.
@@ -30,8 +29,7 @@ type SIPConfig struct {
 	Consumers    []ConsumerConfig `yaml:"consumers"`
 }
 
-// Global RTP port pool — shared across all SIP consumers.
-// Default range 31000-31100 allows Docker bridge mode with a single port forward block.
+// Global RTP port pool shared across all SIP consumers.
 var (
 	poolMu   sync.Mutex
 	poolNext int
@@ -80,9 +78,6 @@ func parsePortRange(s string) (min, max int, ok bool) {
 }
 
 // advertiseIP returns the IP address to advertise in SDP.
-// If hostIP is set, it is used directly (for Docker/NAT scenarios).
-// Otherwise it falls back to localAddr(ra) which determines the local
-// interface IP by dialing the remote address.
 func advertiseIP(hostIP string, ra *net.UDPAddr) string {
 	if hostIP != "" {
 		return hostIP
@@ -93,20 +88,19 @@ func advertiseIP(hostIP string, ra *net.UDPAddr) string {
 // consumer is a running SIP auto-answer instance listening on its own port.
 type consumer struct {
 	cfg        *ConsumerConfig
-	hostIP     string // global SIP host_ip override
+	hostIP     string
 	sessions   map[string]*session
 	sessionsMu sync.Mutex
 }
 
 type session struct {
-	callID      string
-	tag         string // To tag from our 200 OK — reused in all subsequent responses
-	rtp         *rtp.RTP
-	video       *rtp.RTP
-	stream      *streams.Stream
+	callID       string
+	tag          string
+	rtp          *rtp.RTP
+	stream       *streams.Stream
 	lastActivity time.Time
-	localIP     string // for Contact header
-	localPort   int    // for Contact header
+	localIP      string
+	localPort    int
 }
 
 func Init() {
@@ -115,7 +109,6 @@ func Init() {
 	}
 	app.LoadConfig(&cfg)
 
-	// Default range: 31000-31100 (100 ports = 50 simultaneous calls)
 	rtpPortRange := cfg.SIP.RTPPortRange
 	if rtpPortRange == "" {
 		rtpPortRange = "31000-31100"
@@ -143,7 +136,7 @@ func Init() {
 			sessions: map[string]*session{},
 		}
 		go c.run()
-		_ = i // no longer used for port calculation
+		_ = i
 	}
 }
 
@@ -166,13 +159,8 @@ func (c *consumer) cleanupLoop() {
 			if now.Sub(s.lastActivity) > time.Minute {
 				log := app.GetLogger("sip")
 				log.Info().Str("call_id", id).Int("port", c.cfg.Port).Msg("[sip] reaping silent session")
-				if s.stream != nil {
-					if s.rtp != nil {
-						s.stream.RemoveConsumer(s.rtp)
-					}
-					if s.video != nil {
-						s.stream.RemoveConsumer(s.video)
-					}
+				if s.stream != nil && s.rtp != nil {
+					s.stream.RemoveConsumer(s.rtp)
 				}
 				delete(c.sessions, id)
 			}
@@ -212,23 +200,18 @@ func (c *consumer) listen(port int) {
 		case strings.HasPrefix(msg, "REGISTER"):
 			c.onRegister(conn, ra, msg)
 		default:
-			// RTP or RTCP packet — update lastActivity for matching session
 			c.updateActivityForIP(ra.IP.String())
 		}
 	}
 }
 
-// updateActivityForIP refreshes lastActivity for any session whose audio or
-// video RTP endpoint has a matching remote IP
+// updateActivityForIP refreshes lastActivity for any session whose RTP endpoint
+// has a matching remote IP. This catches packets arriving on the SIP port.
 func (c *consumer) updateActivityForIP(ip string) {
 	c.sessionsMu.Lock()
 	defer c.sessionsMu.Unlock()
 	for _, s := range c.sessions {
 		if s.rtp != nil && s.rtp.RemoteIP() == ip {
-			s.lastActivity = time.Now()
-			return
-		}
-		if s.video != nil && s.video.RemoteIP() == ip {
 			s.lastActivity = time.Now()
 			return
 		}
@@ -266,114 +249,148 @@ func (c *consumer) onInvite(conn *net.UDPConn, ra *net.UDPAddr, msg string) {
 		Str("host_ip_override", c.hostIP).
 		Msg("[sip] invite received")
 
-	// Find the best SIP-compatible audio codec from all stream producers.
-	// We prefer codecs that need no transcoding (Opus > G722 > PCMA > PCMU).
-	cameraCodec := bestSIPCodec(stream)
-
-	// Answer with the camera's codec so the SIP link uses the same format
-	// in both directions. If the camera codec is unsupported, fall back to
-	// PCMA/PCMU.
-	var remoteCodec *core.Codec
-
-	if cameraCodec != nil {
-		switch cameraCodec.Name {
-		case core.CodecOpus:
-			remoteCodec = &core.Codec{Name: core.CodecOpus, ClockRate: 48000, Channels: 2, PayloadType: 111}
-		case core.CodecG722:
-			remoteCodec = &core.Codec{Name: core.CodecG722, ClockRate: 8000, PayloadType: 9}
-		case core.CodecPCMA:
-			remoteCodec = &core.Codec{Name: core.CodecPCMA, ClockRate: 8000, PayloadType: 8}
-		case core.CodecPCMU:
-			remoteCodec = &core.Codec{Name: core.CodecPCMU, ClockRate: 8000, PayloadType: 0}
+	// Dial all producers so their medias are available for discovery.
+	for _, prod := range stream.Producers() {
+		if prod != nil {
+			_ = prod.Dial()
 		}
 	}
 
-	if remoteCodec == nil {
-		if sdpHasPCMA(offerSDP) {
-			remoteCodec = &core.Codec{Name: core.CodecPCMA, ClockRate: 8000, PayloadType: 8}
-			if cameraCodec == nil {
-				cameraCodec = remoteCodec
+	// Discover audio codecs from stream producers.
+	var audioRecvonly []*core.Codec // camera sends this (main audio)
+	var audioSendonly []*core.Codec // camera expects this (backchannel)
+
+	for _, prod := range stream.Producers() {
+		if prod == nil {
+			continue
+		}
+		for _, media := range prod.GetMedias() {
+			if media.Kind != core.KindAudio {
+				continue
 			}
-		} else if sdpHasPCMU(offerSDP) {
-			remoteCodec = &core.Codec{Name: core.CodecPCMU, ClockRate: 8000, PayloadType: 0}
-			if cameraCodec == nil {
-				cameraCodec = remoteCodec
+			for _, codec := range media.Codecs {
+				if codec.Name == core.CodecAny || codec.Name == core.CodecAll {
+					continue
+				}
+				if codec.IsVideo() {
+					continue
+				}
+				switch media.Direction {
+				case core.DirectionRecvonly:
+					audioRecvonly = append(audioRecvonly, codec)
+				case core.DirectionSendonly:
+					audioSendonly = append(audioSendonly, codec)
+				case core.DirectionSendRecv:
+					audioRecvonly = append(audioRecvonly, codec)
+					audioSendonly = append(audioSendonly, codec)
+				}
 			}
-		} else {
-			log.Warn().Msg("[sip] caller doesn't support a compatible audio codec")
-			reject(conn, ra, msg, callID, 488, "Codec Mismatch")
-			return
 		}
 	}
 
-	localPort, err := allocatePort()
+	// Reject if the camera has no audio at all — no point answering.
+	if len(audioRecvonly) == 0 && len(audioSendonly) == 0 {
+		log.Warn().Str("call_id", callID).Msg("[sip] no audio producers on stream")
+		reject(conn, ra, msg, callID, 488, "No Compatible Audio")
+		return
+	}
+
+	// Negotiate the best audio codec that both camera and caller support.
+	commonCodec := negotiateAudio(audioRecvonly, offerSDP)
+
+	port, err := allocatePort()
 	if err != nil {
 		log.Error().Err(err).Msg("[sip] no free RTP port")
 		reject(conn, ra, msg, callID, 503, "No Free Ports")
 		return
 	}
+
 	localIP := advertiseIP(c.hostIP, ra)
-	tag := randHex(4)
 
-	// Handle video if configured
-	var videoCodec *core.Codec
-	var videoPort int
-	var videoEp *rtp.RTP
+	// Build the codec list for the SDP answer.
+	// If there's main audio (recvonly from camera), use the matched codec.
+	// Otherwise (speaker-only / sendonly camera), use backchannel codecs.
+	// Always answer sendrecv so the caller's RTP/RTCP keeps the session alive.
+	var sdpCodecs []*core.Codec
+	direction := core.DirectionSendRecv
 
-	if c.cfg.Video {
-		cameraVideoCodec := bestVideoCodec(stream)
-		if cameraVideoCodec != nil {
-			// Use the camera's native video codec as-is
-			videoCodec = &core.Codec{Name: cameraVideoCodec.Name, ClockRate: cameraVideoCodec.ClockRate}
-			videoPort, err = allocatePort()
-			if err != nil {
-				log.Error().Err(err).Msg("[sip] no free video RTP port")
-				reject(conn, ra, msg, callID, 503, "No Free Ports")
-				return
+	if commonCodec != nil {
+		sdpCodecs = append(sdpCodecs, commonCodec)
+	}
+
+	// Add backchannel codecs that differ from the common codec.
+	for _, bc := range audioSendonly {
+		if sipCodecPriority(bc.Name) == 0 {
+			continue
+		}
+		already := false
+		for _, c := range sdpCodecs {
+			if c.Name == bc.Name {
+				already = true
+				break
 			}
-
-			// Create video RTP endpoint (camera→caller only)
-			remoteVideoRTP := &net.UDPAddr{IP: remoteRTP.IP, Port: remoteRTP.Port + 2}
-			var err error
-			videoEp, err = rtp.NewRTP(remoteVideoRTP.String(), videoPort, videoCodec)
-			if err != nil {
-				log.Error().Err(err).Msg("[sip] video RTP create failed")
-				videoEp = nil
-				videoCodec = nil
-				videoPort = 0
+		}
+		if !already {
+			c := &core.Codec{
+				Name:        bc.Name,
+				ClockRate:   codecClockRate(bc.Name),
+				Channels:    codecChannels(bc.Name),
+				PayloadType: codecPT(bc.Name),
 			}
+			if bc.FmtpLine != "" {
+				c.FmtpLine = bc.FmtpLine
+			}
+			sdpCodecs = append(sdpCodecs, c)
 		}
 	}
 
-	// Build SDP answer (audio + optional video)
-	sdp := buildSDPAnswer(localIP, localPort, remoteCodec, videoPort, videoCodec)
-	resp := mkResponse(msg, callID, tag, sdp, localIP, localPort, c.cfg.Port)
+	// If we still have no codecs (speaker-only camera where backchannel codec
+	// has priority 0, or recvonly camera with no common codec), fall back to
+	// advertising all SIP codecs. Keep sendrecv when possible.
+	if len(sdpCodecs) == 0 {
+		if len(audioRecvonly) > 0 {
+			// Camera has a mic but caller doesn't support its codec:
+			// answer recvonly so caller can still send keepalive.
+			direction = core.DirectionRecvonly
+			sdpCodecs = fallbackAudioCodecs()
+		} else {
+			// Camera has a speaker but backchannel codec isn't a known SIP
+			// codec — nothing useful to advertise.  Still answer recvonly
+			// with fallback so at least keepalive works.
+			direction = core.DirectionRecvonly
+			sdpCodecs = fallbackAudioCodecs()
+		}
+	}
+
+	sdpAnswer := buildSDPAnswer(localIP, port, sdpCodecs, direction)
+	tag := randHex(4)
+	resp := mkResponse(msg, callID, tag, sdpAnswer, localIP, port, c.cfg.Port)
 	if _, err := conn.WriteToUDP([]byte(resp), ra); err != nil {
 		log.Error().Err(err).Msg("[sip] send 200 failed")
-		if videoEp != nil {
-			videoEp.Stop()
-		}
 		return
 	}
 
-	// Create audio RTP endpoint with remote codec (transcoding set up when track connects)
-	rtpEp, err := rtp.NewRTP(remoteRTP.String(), localPort, remoteCodec)
+	// Create the RTP endpoint.
+	rtpEp, err := rtp.NewRTP(remoteRTP.String(), port)
 	if err != nil {
-		log.Error().Err(err).Msg("[sip] audio RTP create failed")
-		if videoEp != nil {
-			videoEp.Stop()
-		}
+		log.Error().Err(err).Msg("[sip] RTP create failed")
 		return
 	}
 
+	// Register session BEFORE adding to stream so OnActivity is wired up
+	// immediately and no race with the cleanup loop.
 	c.sessionsMu.Lock()
 	c.sessions[callID] = &session{
-		callID: callID, tag: tag, rtp: rtpEp, video: videoEp, stream: stream,
-		lastActivity: time.Now(), localIP: localIP, localPort: localPort,
+		callID:       callID,
+		tag:          tag,
+		rtp:          rtpEp,
+		stream:       stream,
+		lastActivity: time.Now(),
+		localIP:      localIP,
+		localPort:    port,
 	}
-	c.sessionsMu.Unlock()
-
-	// Keep session alive as long as RTP packets arrive from the caller
+	// Wire OnActivity while holding the lock so the cleanup loop
+	// cannot observe a session without its callback.
 	rtpEp.OnActivity = func() {
 		c.sessionsMu.Lock()
 		if s, ok := c.sessions[callID]; ok {
@@ -381,46 +398,34 @@ func (c *consumer) onInvite(conn *net.UDPConn, ra *net.UDPAddr, msg string) {
 		}
 		c.sessionsMu.Unlock()
 	}
-	if videoEp != nil {
-		videoEp.OnActivity = func() {
+	c.sessionsMu.Unlock()
+
+	// Add the RTP endpoint to the stream whenever there's a two-way session.
+	// For sendrecv this wires the main audio path (camera→caller) and/or
+	// the backchannel (caller→camera). For recvonly (keepalive fallback)
+	// we skip adding a consumer since no audio will actually flow.
+	if direction != core.DirectionRecvonly {
+		if err := stream.AddConsumer(rtpEp); err != nil {
+			log.Error().Err(err).Msg("[sip] AddConsumer failed")
 			c.sessionsMu.Lock()
-			if s, ok := c.sessions[callID]; ok {
-				s.lastActivity = time.Now()
-			}
+			delete(c.sessions, callID)
 			c.sessionsMu.Unlock()
+			rtpEp.Stop()
+			return
 		}
 	}
 
-	if err := stream.AddConsumer(rtpEp); err != nil {
-		log.Error().Err(err).Msg("[sip] audio AddConsumer failed")
-		c.sessionsMu.Lock()
-		delete(c.sessions, callID)
-		c.sessionsMu.Unlock()
-		rtpEp.Stop()
-		if videoEp != nil {
-			videoEp.Stop()
-		}
-		return
+	codecName := ""
+	if commonCodec != nil {
+		codecName = commonCodec.Name
+	} else if len(audioSendonly) > 0 {
+		codecName = audioSendonly[0].Name
 	}
-
-	if videoEp != nil {
-		if err := stream.AddConsumer(videoEp); err != nil {
-			log.Error().Err(err).Msg("[sip] video AddConsumer failed")
-			// Non-fatal: audio still works without video
-			videoEp.Stop()
-			videoEp = nil
-			c.sessionsMu.Lock()
-			if s, ok := c.sessions[callID]; ok {
-				s.video = nil
-			}
-			c.sessionsMu.Unlock()
-		}
-	}
-
-	log.Info().Str("call_id", callID).Int("port", localPort).
-		Str("remote_codec", remoteCodec.Name).Str("camera_codec", cameraCodec.Name).
+	log.Info().Str("call_id", callID).Int("port", port).
+		Str("codec", codecName).
+		Str("direction", direction).
 		Str("send_rtp_to", remoteRTP.String()).
-		Str("sdp_advertise", fmt.Sprintf("%s:%d", localIP, localPort)).
+		Str("sdp_advertise", fmt.Sprintf("%s:%d", localIP, port)).
 		Msg("[sip] answered")
 }
 
@@ -435,16 +440,9 @@ func (c *consumer) onBye(conn *net.UDPConn, ra *net.UDPAddr, msg string) {
 	if ok {
 		log := app.GetLogger("sip")
 		log.Info().Str("call_id", callID).Msg("[sip] BYE")
-		// RemoveConsumer calls Stop() internally, no need for separate s.rtp.Stop()
-		if s.stream != nil {
-			if s.rtp != nil {
-				s.stream.RemoveConsumer(s.rtp)
-			}
-			if s.video != nil {
-				s.stream.RemoveConsumer(s.video)
-			}
+		if s.stream != nil && s.rtp != nil {
+			s.stream.RemoveConsumer(s.rtp)
 		}
-		// Respond with the same To tag from the original 200 OK
 		conn.WriteToUDP([]byte(mkResponse(msg, callID, s.tag, "", "", 0, 0)), ra)
 	} else {
 		conn.WriteToUDP([]byte(mkResponse(msg, callID, randHex(4), "", "", 0, 0)), ra)
@@ -462,14 +460,8 @@ func (c *consumer) onCancel(conn *net.UDPConn, ra *net.UDPAddr, msg string) {
 	if ok {
 		log := app.GetLogger("sip")
 		log.Info().Str("call_id", callID).Msg("[sip] CANCEL")
-		// RemoveConsumer calls Stop() internally
-		if s.stream != nil {
-			if s.rtp != nil {
-				s.stream.RemoveConsumer(s.rtp)
-			}
-			if s.video != nil {
-				s.stream.RemoveConsumer(s.video)
-			}
+		if s.stream != nil && s.rtp != nil {
+			s.stream.RemoveConsumer(s.rtp)
 		}
 		conn.WriteToUDP([]byte(mkResponse(msg, callID, s.tag, "", "", 0, 0)), ra)
 	} else {
@@ -484,8 +476,8 @@ func (c *consumer) onOptions(conn *net.UDPConn, ra *net.UDPAddr, msg string) {
 func (c *consumer) onRegister(conn *net.UDPConn, ra *net.UDPAddr, msg string) {
 	reject(conn, ra, msg, getHdr(msg, "Call-ID"), 405, "Method Not Allowed")
 }
-// --- SDP helpers using pion/sdp ---
 
+// --- SDP helpers ---
 
 func extractSDP(msg string) *sdp.SessionDescription {
 	parts := strings.Split(msg, "\r\n\r\n")
@@ -522,146 +514,42 @@ func sdpRemoteAddr(s *sdp.SessionDescription) *net.UDPAddr {
 	return nil
 }
 
-// sdpHasPCMA checks if the SDP offer includes PCMA (payload type 8)
-func sdpHasPCMA(s *sdp.SessionDescription) bool {
-	for _, md := range s.MediaDescriptions {
-		if md.MediaName.Media != "audio" {
-			continue
-		}
-		for _, pt := range md.MediaName.Formats {
-			if pt == "8" {
-				return true
-			}
-		}
-		for _, attr := range md.Attributes {
-			if attr.Key != "rtpmap" {
-				continue
-			}
-			if strings.HasPrefix(attr.Value, "8 ") || strings.HasPrefix(attr.Value, "PCMA") {
-				return true
-			}
-		}
-	}
-	return false
-}
+// --- Codec helpers ---
 
-// sdpHasPCMU checks if the SDP offer includes PCMU (payload type 0)
-func sdpHasPCMU(s *sdp.SessionDescription) bool {
-	for _, md := range s.MediaDescriptions {
-		if md.MediaName.Media != "audio" {
-			continue
-		}
-		for _, pt := range md.MediaName.Formats {
-			if pt == "0" {
-				return true
-			}
-		}
-		for _, attr := range md.Attributes {
-			if attr.Key != "rtpmap" {
-				continue
-			}
-			if strings.HasPrefix(attr.Value, "0 ") || strings.HasPrefix(attr.Value, "PCMU") {
-				return true
-			}
-		}
-	}
-	return false
-
-}
-// sdpHasOpus checks if the SDP offer includes Opus (payload type 111)
-func sdpHasOpus(s *sdp.SessionDescription) bool {
-	for _, md := range s.MediaDescriptions {
-		if md.MediaName.Media != "audio" {
-			continue
-		}
-		for _, pt := range md.MediaName.Formats {
-			if pt == "111" {
-				return true
-			}
-		}
-		for _, attr := range md.Attributes {
-			if attr.Key != "rtpmap" {
-				continue
-			}
-			if strings.HasPrefix(attr.Value, "111 ") || strings.HasPrefix(attr.Value, "opus") {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// sdpHasG722 checks if the SDP offer includes G722 (payload type 9)
-func sdpHasG722(s *sdp.SessionDescription) bool {
-	for _, md := range s.MediaDescriptions {
-		if md.MediaName.Media != "audio" {
-			continue
-		}
-		for _, pt := range md.MediaName.Formats {
-			if pt == "9" {
-				return true
-			}
-		}
-		for _, attr := range md.Attributes {
-			if attr.Key != "rtpmap" {
-				continue
-			}
-			if strings.HasPrefix(attr.Value, "9 ") || strings.HasPrefix(attr.Value, "G722") {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-
-func buildSDPAnswer(localIP string, port int, codec *core.Codec, videoPort int, videoCodec *core.Codec) string {
-	pt := codecPT(codec.Name)
-	if pt < 0 {
-		pt = 96
-	}
-	cn := codec.Name
-	switch codec.Name {
-	case core.CodecPCMA:
-		cn = "PCMA"
-	case core.CodecPCMU:
-		cn = "PCMU"
-	case core.CodecG722:
-		cn = "G722"
-	case core.CodecOpus:
-		cn = "opus"
-	}
-
-	sdp := fmt.Sprintf(
-		"v=0\r\no=- %d %d IN IP4 %s\r\ns=go2rtc\r\nc=IN IP4 %s\r\nt=0 0\r\nm=audio %d RTP/AVP %d\r\na=rtpmap:%d %s/%d\r\na=sendrecv\r\n",
-		randU32(), randU32(), localIP, localIP, port, pt, pt, cn, codec.ClockRate)
-
-	if videoCodec != nil && videoPort > 0 {
-		vpt := codecPTVideo(videoCodec.Name)
-		if vpt < 0 {
-			vpt = 96
-		}
-		sdp += fmt.Sprintf(
-			"m=video %d RTP/AVP %d\r\na=rtpmap:%d %s/%d\r\na=sendonly\r\n",
-			videoPort, vpt, vpt, videoCodec.Name, videoCodec.ClockRate)
-	}
-
-	return sdp
-}
-
-func codecPTVideo(name string) int {
+// sipCodecPriority ranks audio codecs for negotiation preference.
+func sipCodecPriority(name string) int {
 	switch name {
-	case core.CodecH264:
-		return 96
-	case core.CodecH265:
-		return 97
-	case core.CodecJPEG:
-		return 26
+	case core.CodecOpus:
+		return 4
+	case core.CodecG722:
+		return 3
+	case core.CodecPCMA:
+		return 2
+	case core.CodecPCMU:
+		return 1
+	default:
+		return 0
 	}
-	return -1
 }
 
-func codecPT(name string) int {
+func codecClockRate(name string) uint32 {
+	switch name {
+	case core.CodecOpus:
+		return 48000
+	case core.CodecG722, core.CodecPCMA, core.CodecPCMU:
+		return 8000
+	}
+	return 0
+}
+
+func codecChannels(name string) uint8 {
+	if name == core.CodecOpus {
+		return 2
+	}
+	return 0
+}
+
+func codecPT(name string) byte {
 	switch name {
 	case core.CodecPCMU:
 		return 0
@@ -669,8 +557,168 @@ func codecPT(name string) int {
 		return 8
 	case core.CodecG722:
 		return 9
+	case core.CodecOpus:
+		return 111
 	}
-	return -1
+	return 96
+}
+
+func codecSDPName(name string) string {
+	switch name {
+	case core.CodecPCMA:
+		return "PCMA"
+	case core.CodecPCMU:
+		return "PCMU"
+	case core.CodecG722:
+		return "G722"
+	case core.CodecOpus:
+		return "opus"
+	}
+	return name
+}
+
+// callerHasAudioCodec checks if the SDP offer includes the named audio codec.
+func callerHasAudioCodec(s *sdp.SessionDescription, name string) bool {
+	pt := fmt.Sprintf("%d", codecPT(name))
+	sdpName := codecSDPName(name)
+	for _, md := range s.MediaDescriptions {
+		if md.MediaName.Media != "audio" {
+			continue
+		}
+		for _, f := range md.MediaName.Formats {
+			if f == pt {
+				return true
+			}
+		}
+		for _, attr := range md.Attributes {
+			if attr.Key != "rtpmap" {
+				continue
+			}
+			v := strings.ToLower(attr.Value)
+			if strings.HasPrefix(v, pt+" ") || strings.HasPrefix(v, strings.ToLower(sdpName)) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// negotiateAudio finds the best audio codec supported by both the caller (SDP
+// offer) and the stream producers (recvonly direction). Returns nil if no
+// common codec exists.
+func negotiateAudio(prodCodecs []*core.Codec, offer *sdp.SessionDescription) *core.Codec {
+	preferred := []string{core.CodecOpus, core.CodecG722, core.CodecPCMA, core.CodecPCMU}
+	for _, name := range preferred {
+		if !callerHasAudioCodec(offer, name) {
+			continue
+		}
+		for _, pc := range prodCodecs {
+			if pc.Name != name {
+				continue
+			}
+			cr := codecClockRate(name)
+			if pc.ClockRate != 0 && pc.ClockRate != cr {
+				continue
+			}
+			c := &core.Codec{
+				Name:        name,
+				ClockRate:   cr,
+				Channels:    codecChannels(name),
+				PayloadType: codecPT(name),
+			}
+			// Carry forward the producer's fmtp so Opus params
+			// (useinbandfec, stereo, maxplaybackrate, etc.) reach the caller.
+			if pc.FmtpLine != "" {
+				c.FmtpLine = pc.FmtpLine
+			}
+			return c
+		}
+	}
+	return nil
+}
+
+// fallbackAudioCodecs returns the full list of SIP audio codecs when no
+// common codec is available. The session still answers recvonly so the
+// caller can send audio for keepalive purposes.
+func fallbackAudioCodecs() []*core.Codec {
+	return []*core.Codec{
+		{Name: core.CodecOpus, ClockRate: 48000, Channels: 2, PayloadType: 111},
+		{Name: core.CodecG722, ClockRate: 8000, PayloadType: 9},
+		{Name: core.CodecPCMA, ClockRate: 8000, PayloadType: 8},
+		{Name: core.CodecPCMU, ClockRate: 8000, PayloadType: 0},
+	}
+}
+
+func buildSDPAnswer(localIP string, port int, codecs []*core.Codec, direction string) string {
+	sdp := fmt.Sprintf(
+		"v=0\r\no=- %d %d IN IP4 %s\r\ns=go2rtc\r\nc=IN IP4 %s\r\nt=0 0\r\n",
+		randU32(), randU32(), localIP, localIP)
+
+	// If all codecs are the same (e.g. both directions use PCMA), use a
+	// single m=audio line — standard SIP format, one sendrecv stream.
+	// If they differ (e.g. send PCMA, receive PCMU), use separate m=audio
+	// lines so the caller can pick the right PT for each direction.
+	if allSameCodec(codecs) {
+		pts := ""
+		for _, codec := range codecs {
+			if pts != "" {
+				pts += " "
+			}
+			pts += fmt.Sprintf("%d", codec.PayloadType)
+		}
+		sdp += fmt.Sprintf("m=audio %d RTP/AVP %s\r\n", port, pts)
+
+		for _, codec := range codecs {
+			pt := codec.PayloadType
+			sdp += fmt.Sprintf("a=rtpmap:%d %s/%d",
+				pt, codecSDPName(codec.Name), codec.ClockRate)
+			if codec.Channels > 0 {
+				sdp += fmt.Sprintf("/%d", codec.Channels)
+			}
+			sdp += "\r\n"
+			if codec.FmtpLine != "" {
+				sdp += fmt.Sprintf("a=fmtp:%d %s\r\n", pt, codec.FmtpLine)
+			}
+		}
+
+		sdp += fmt.Sprintf("a=%s\r\n", direction)
+	} else {
+		for _, codec := range codecs {
+			pt := codec.PayloadType
+			sdp += fmt.Sprintf(
+				"m=audio %d RTP/AVP %d\r\na=rtpmap:%d %s/%d",
+				port, pt, pt, codecSDPName(codec.Name), codec.ClockRate)
+			if codec.Channels > 0 {
+				sdp += fmt.Sprintf("/%d", codec.Channels)
+			}
+			sdp += "\r\n"
+			if codec.FmtpLine != "" {
+				sdp += fmt.Sprintf("a=fmtp:%d %s\r\n", pt, codec.FmtpLine)
+			}
+			sdp += fmt.Sprintf("a=%s\r\n", direction)
+		}
+	}
+
+	// Advertise RTCP port (RTP port + 1) for keepalive.
+	if port+1 <= 65535 {
+		sdp += fmt.Sprintf("a=rtcp:%d\r\n", port+1)
+	}
+
+	return sdp
+}
+
+// allSameCodec returns true when all codecs in the list share the same name.
+func allSameCodec(codecs []*core.Codec) bool {
+	if len(codecs) <= 1 {
+		return true
+	}
+	name := codecs[0].Name
+	for _, c := range codecs[1:] {
+		if c.Name != name {
+			return false
+		}
+	}
+	return true
 }
 
 func reject(conn *net.UDPConn, ra *net.UDPAddr, msg, callID string, code int, reason string) {
@@ -683,14 +731,12 @@ func reject(conn *net.UDPConn, ra *net.UDPAddr, msg, callID string, code int, re
 	conn.WriteToUDP([]byte(resp), ra)
 }
 
-// getHdr extracts a SIP header value. Handles "Name: Value", "Name :Value", etc.
+// getHdr extracts a SIP header value.
 func getHdr(msg, name string) string {
 	prefix := strings.ToLower(name + ":")
 	for _, line := range strings.Split(msg, "\r\n") {
-		// Trim leading spaces, then check prefix
 		lower := strings.ToLower(strings.TrimSpace(line))
 		if strings.HasPrefix(lower, prefix) {
-			// Extract everything after the colon
 			idx := strings.Index(line, ":")
 			if idx >= 0 {
 				return strings.TrimSpace(line[idx+1:])
@@ -700,8 +746,7 @@ func getHdr(msg, name string) string {
 	return ""
 }
 
-// mkResponse builds a SIP response. When sdp is non-empty, includes Content-Type and Content-Length.
-// When localIP/localPort are provided, includes Contact header with the given sipPort.
+// mkResponse builds a SIP response.
 func mkResponse(req, callID, tag, sdp string, localIP string, localPort, sipPort int) string {
 	via := getHdr(req, "Via")
 	from := getHdr(req, "From")
@@ -751,83 +796,4 @@ func randU32() uint32 {
 	b := make([]byte, 4)
 	rand.Read(b)
 	return uint32(b[0])<<24 | uint32(b[1])<<16 | uint32(b[2])<<8 | uint32(b[3])
-}
-
-// bestSIPCodec returns the best audio codec from all stream producers,
-// preferring codecs that are most widely compatible with SIP.
-// Priority: Opus > G722 > PCMA > PCMU > PCM > PCML
-// Returns nil if no audio codec is found.
-func bestSIPCodec(stream *streams.Stream) *core.Codec {
-	var best *core.Codec
-	var bestPriority int
-
-	for _, prod := range stream.Producers() {
-		if prod == nil {
-			continue
-		}
-		for _, media := range prod.GetMedias() {
-			if media.Kind != core.KindAudio {
-				continue
-			}
-			if media.Direction != core.DirectionRecvonly {
-				continue
-			}
-			for _, codec := range media.Codecs {
-				if codec.Name == core.CodecAny || codec.Name == core.CodecAll {
-					continue
-				}
-				if codec.IsVideo() {
-					continue
-				}
-				p := sipCodecPriority(codec.Name)
-				if p > 0 && (best == nil || p > bestPriority) {
-					best = codec
-					bestPriority = p
-				}
-			}
-		}
-	}
-	return best
-}
-
-func sipCodecPriority(name string) int {
-	switch name {
-	case core.CodecOpus:
-		return 5
-	case core.CodecG722:
-		return 4
-	case core.CodecPCMA:
-		return 3
-	case core.CodecPCMU:
-		return 2
-	case core.CodecPCM, core.CodecPCML:
-		return 1
-	default:
-		return 0
-	}
-}
-
-// bestVideoCodec returns the best video codec from all stream producers.
-// Returns nil if no video codec is found.
-func bestVideoCodec(stream *streams.Stream) *core.Codec {
-	for _, prod := range stream.Producers() {
-		if prod == nil {
-			continue
-		}
-		for _, media := range prod.GetMedias() {
-			if media.Kind != core.KindVideo {
-				continue
-			}
-			if media.Direction != core.DirectionRecvonly {
-				continue
-			}
-			for _, codec := range media.Codecs {
-				if codec.Name == core.CodecAny || codec.Name == core.CodecAll {
-					continue
-				}
-				return codec
-			}
-		}
-	}
-	return nil
 }
