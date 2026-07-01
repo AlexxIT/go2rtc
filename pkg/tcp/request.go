@@ -149,8 +149,9 @@ var insecureConfig = &tls.Config{
 		tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA, tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
 		tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA, tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
 
-		// this cipher suites disabled starting from https://tip.golang.org/doc/go1.22
-		// but cameras can't work without them https://github.com/AlexxIT/go2rtc/issues/1172
+		// these cipher suites are disabled starting from https://tip.golang.org/doc/go1.22
+		// but some cameras can't work without them https://github.com/AlexxIT/go2rtc/issues/1172
+		// including Axis cameras https://github.com/AlexxIT/go2rtc/issues/2211
 		tls.TLS_RSA_WITH_AES_128_GCM_SHA256, // insecure
 		tls.TLS_RSA_WITH_AES_256_GCM_SHA384, // insecure
 		tls.TLS_RSA_WITH_AES_128_CBC_SHA, // insecure
