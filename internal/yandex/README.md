@@ -12,7 +12,7 @@ Source for receiving stream from new [Yandex IP camera](https://alice.yandex.ru/
 1. Open this link in any browser: https://iot.quasar.yandex.ru/m/v3/user/devices
 2. Copy ID of your camera, key: `"id"`.
 
-## Config examples
+## Configuration
 
 ```yaml
 streams:

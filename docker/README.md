@@ -1,8 +1,12 @@
+# Docker
+
+Images are built automatically via [GitHub actions](https://github.com/AlexxIT/go2rtc/actions) and published on [Docker Hub](https://hub.docker.com/r/alexxit/go2rtc) and [GitHub](https://github.com/AlexxIT/go2rtc/pkgs/container/go2rtc).
+
 ## Versions
 
-- `alexxit/go2rtc:latest` - latest release based on `alpine` (`amd64`, `386`, `arm/v6`, `arm/v7`, `arm64`) with support hardware transcoding for Intel iGPU and Raspberry
-- `alexxit/go2rtc:latest-hardware` - latest release based on `debian 13` (`amd64`) with support hardware transcoding for Intel iGPU, AMD GPU and NVidia GPU
-- `alexxit/go2rtc:latest-rockchip` - latest release based on `debian 12` (`arm64`) with support hardware transcoding for Rockchip RK35xx
+- `alexxit/go2rtc:latest` - latest release based on `alpine` (`amd64`, `386`, `arm/v6`, `arm/v7`, `arm64`) with support for hardware transcoding for Intel iGPU and Raspberry
+- `alexxit/go2rtc:latest-hardware` - latest release based on `debian 13` (`amd64`) with support for hardware transcoding for Intel iGPU, AMD GPU and NVidia GPU
+- `alexxit/go2rtc:latest-rockchip` - latest release based on `debian 12` (`arm64`) with support for hardware transcoding for Rockchip RK35xx
 - `alexxit/go2rtc:master` - latest unstable version based on `alpine`
 - `alexxit/go2rtc:master-hardware` - latest unstable version based on `debian 13` (`amd64`)
 - `alexxit/go2rtc:master-rockchip` - latest unstable version based on `debian 12` (`arm64`)

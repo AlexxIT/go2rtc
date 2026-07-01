@@ -107,4 +107,12 @@ func TestUnmarshalICEServers(t *testing.T) {
 	servers, err := UnmarshalICEServers([]byte(s))
 	require.Nil(t, err)
 	require.Len(t, servers, 2)
+	require.Equal(t, []string{"xxx"}, servers[0].URLs)
+
+	s = `[{"urls":"xxx"},{"urls":["yyy","zzz"]}]`
+	servers, err = UnmarshalICEServers([]byte(s))
+	require.Nil(t, err)
+	require.Len(t, servers, 2)
+	require.Equal(t, []string{"xxx"}, servers[0].URLs)
+	require.Equal(t, []string{"yyy", "zzz"}, servers[1].URLs)
 }

@@ -1,3 +1,89 @@
+# Streams
+
+This core module is responsible for managing the stream list.
+
+## Stream to camera
+
+[`new in v1.3.0`](https://github.com/AlexxIT/go2rtc/releases/tag/v1.3.0)
+
+go2rtc supports playing audio files (ex. music or [TTS](https://www.home-assistant.io/integrations/#text-to-speech)) and live streams (ex. radio) on cameras with [two-way audio](../../README.md#two-way-audio) support.
+
+API example:
+
+```text
+POST http://localhost:1984/api/streams?dst=camera1&src=ffmpeg:http://example.com/song.mp3#audio=pcma#input=file
+```
+
+- you can stream: local files, web files, live streams or any format, supported by FFmpeg
+- you should use [ffmpeg source](../ffmpeg/README.md) for transcoding audio to codec, that your camera supports
+- you can check camera codecs on the go2rtc WebUI info page when the stream is active
+- some cameras support only low quality `PCMA/8000` codec (ex. [Tapo](../tapo/README.md))
+- it is recommended to choose higher quality formats if your camera supports them (ex. `PCMA/48000` for some Dahua cameras)
+- if you play files over `http` link, you need to add `#input=file` params for transcoding, so the file will be transcoded and played in real time
+- if you play live streams, you should skip `#input` param, because it is already in real time
+- you can stop active playback by calling the API with the empty `src` parameter
+- you will see one active producer and one active consumer in go2rtc WebUI info page during streaming
+
+## Publish stream
+
+[`new in v1.8.0`](https://github.com/AlexxIT/go2rtc/releases/tag/v1.8.0)
+
+You can publish any stream to streaming services (YouTube, Telegram, etc.) via RTMP/RTMPS. Important:
+
+- Supported codecs: H264 for video and AAC for audio
+- AAC audio is required for YouTube; videos without audio will not work
+- You don't need to enable [RTMP module](../rtmp/README.md) listening for this task
+
+You can use the API:
+
+```text
+POST http://localhost:1984/api/streams?src=camera1&dst=rtmps://...
+```
+
+Or config file:
+
+```yaml
+publish:
+  # publish stream "video_audio_transcode" to Telegram
+  video_audio_transcode:
+    - rtmps://xxx-x.rtmp.t.me/s/xxxxxxxxxx:xxxxxxxxxxxxxxxxxxxxxx
+  # publish stream "audio_transcode" to Telegram and YouTube
+  audio_transcode:
+    - rtmps://xxx-x.rtmp.t.me/s/xxxxxxxxxx:xxxxxxxxxxxxxxxxxxxxxx
+    - rtmp://xxx.rtmp.youtube.com/live2/xxxx-xxxx-xxxx-xxxx-xxxx
+
+streams:
+  video_audio_transcode:
+    - ffmpeg:rtsp://user:pass@192.168.1.123/stream1#video=h264#hardware#audio=aac
+  audio_transcode:
+    - ffmpeg:rtsp://user:pass@192.168.1.123/stream1#video=copy#audio=aac
+```
+
+- **Telegram Desktop App** > Any public or private channel or group (where you admin) > Live stream > Start with... > Start streaming.
+- **YouTube** > Create > Go live > Stream latency: Ultra low-latency > Copy: Stream URL + Stream key.
+
+## Preload stream
+
+[`new in v1.9.11`](https://github.com/AlexxIT/go2rtc/releases/tag/v1.9.11)
+
+You can preload any stream on go2rtc start. This is useful for cameras that take a long time to start up.
+
+```yaml
+preload:
+  camera1:                                     # default: video&audio = ANY
+  camera2: "video"                             # preload only video track
+  camera3: "video=h264&audio=opus"             # preload H264 video and OPUS audio
+
+streams:
+  camera1: 
+    - rtsp://192.168.1.100/stream
+  camera2: 
+    - rtsp://192.168.1.101/stream  
+  camera3: 
+    - rtsp://192.168.1.102/h265stream
+    - ffmpeg:camera3#video=h264#audio=opus#hardware
+```
+
 ## Examples
 
 ```yaml

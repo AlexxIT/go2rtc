@@ -331,8 +331,12 @@ func UnmarshalICEServers(b []byte) ([]webrtc.ICEServer, error) {
 		}
 
 		switch v := src[i].URLs.(type) {
-		case []string:
-			srv.URLs = v
+		case []any:
+			for _, u := range v {
+				if s, ok := u.(string); ok {
+					srv.URLs = append(srv.URLs, s)
+				}
+			}
 		case string:
 			srv.URLs = []string{v}
 		}

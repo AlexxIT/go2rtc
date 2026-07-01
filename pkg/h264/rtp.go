@@ -89,7 +89,7 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 
 		// should not be that huge SPS
 		if NALUType(payload) == NALUTypeSPS && binary.BigEndian.Uint32(payload) >= PSMaxSize {
-			// some Chinese buggy cameras has single packet with SPS+PPS+IFrame separated by 00 00 00 01
+			// some Chinese buggy cameras have a single packet with SPS+PPS+IFrame separated by 00 00 00 01
 			// https://github.com/AlexxIT/WebRTC/issues/391
 			// https://github.com/AlexxIT/WebRTC/issues/392
 			payload = annexb.FixAnnexBInAVCC(payload)

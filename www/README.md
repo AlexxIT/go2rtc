@@ -1,3 +1,49 @@
+# www
+
+This folder contains static HTTP and JS content that is embedded into the application during build. An external developer can use it as a basis for integrating go2rtc into their project or for developing a custom web interface for go2rtc.
+
+## HTTP API
+
+`www/stream.html` - universal viewer with support params in URL:
+
+- multiple streams on page `src=camera1&src=camera2...`
+- stream technology autoselection `mode=webrtc,webrtc/tcp,mse,hls,mp4,mjpeg`
+- stream technology comparison `src=camera1&mode=webrtc&mode=mse&mode=mp4`
+- player width setting in pixels `width=320px` or percents `width=50%`
+
+`www/webrtc.html` - WebRTC viewer with support two way audio and params in URL:
+
+- `media=video+audio` - simple viewer
+- `media=video+audio+microphone` - two way audio from camera
+- `media=camera+microphone` - stream from browser
+- `media=display+speaker` - stream from desktop
+
+## JavaScript API
+
+- You can write your viewer from the scratch
+- You can extend the built-in viewer - `www/video-rtc.js`
+- Check example - `www/video-stream.js`
+- Check example - https://github.com/AlexxIT/WebRTC
+
+`video-rtc.js` features:
+
+- support technologies:
+    - WebRTC over UDP or TCP
+    - MSE or HLS or MP4 or MJPEG over WebSocket
+- automatic selection best technology according on:
+    - codecs inside your stream
+    - current browser capabilities
+    - current network configuration
+- automatic stop stream while browser or page not active
+- automatic stop stream while player not inside page viewport
+- automatic reconnection
+
+Technology selection based on priorities:
+
+1. Video and Audio better than just Video
+2. H265 better than H264
+3. WebRTC better than MSE, than HLS, than MJPEG
+
 ## Browser support
 
 [ECMAScript 2019 (ES10)](https://caniuse.com/?search=es10) supported by [iOS 12](https://en.wikipedia.org/wiki/IOS_12) (iPhone 5S, iPad Air, iPad Mini 2, etc.).
@@ -7,86 +53,6 @@ But [ECMAScript 2017 (ES8)](https://caniuse.com/?search=es8) almost fine (`es6 +
 ## Known problems
 
 - Autoplay doesn't work for WebRTC in Safari [read more](https://developer.apple.com/documentation/webkit/delivering_video_content_for_safari/).
-
-## HTML5
-
-**1. Autoplay video tag**
-
-[Video auto play is not working](https://stackoverflow.com/questions/17994666/video-auto-play-is-not-working-in-safari-and-chrome-desktop-browser)
-
-> Recently many browsers can only autoplay the videos with sound off, so you'll need to add muted attribute to the video tag too
-
-```html
-
-<video id="video" autoplay controls playsinline muted></video>
-```
-
-- https://developer.apple.com/documentation/webkit/delivering_video_content_for_safari/
-
-**2. [Safari] pc.createOffer**
-
-Don't work in Desktop Safari:
-
-```js
-pc.createOffer({offerToReceiveAudio: true, offerToReceiveVideo: true})
-```
-
-Should be replaced with:
-
-```js
-pc.addTransceiver('video', {direction: 'recvonly'});
-pc.addTransceiver('audio', {direction: 'recvonly'});
-pc.createOffer();
-```
-
-**3. pc.ontrack**
-
-TODO
-
-```js
-pc.ontrack = ev => {
-    const video = document.getElementById('video');
-
-    // when audio track not exist in Chrome
-    if (ev.streams.length === 0) return;
-
-    // when audio track not exist in Firefox
-    if (ev.streams[0].id[0] === '{') return;
-
-    // when stream already init
-    if (video.srcObject !== null) return;
-
-    video.srcObject = ev.streams[0];
-}
-```
-
-## Chromecast 1
-
-2023-02-02. Error:
-
-```
-InvalidStateError: Failed to execute 'addTransceiver' on 'RTCPeerConnection': This operation is only supported in 'unified-plan'. 'unified-plan' will become the default behavior in the future, but it is currently experimental. To try it out, construct the RTCPeerConnection with sdpSemantics:'unified-plan' present in the RTCConfiguration argument.
-```
-
-User-Agent: `Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.47 Safari/537.36 CrKey/1.36.159268`
-
-https://webrtc.org/getting-started/unified-plan-transition-guide?hl=en
-
-## Web Icons
-
-[Favicon checker](https://realfavicongenerator.net/), skip:
-
-- Windows 8 and 10 (`browserconfig.xml`)
-- Mac OS X El Capitan Safari
-
-```html
-    <!-- iOS Safari -->
-    <link rel="apple-touch-icon" href="https://go2rtc.org/icons/apple-touch-icon-180x180.png" sizes="180x180">
-    <!-- Classic, desktop browsers -->
-    <link rel="icon" href="https://go2rtc.org/icons/favicon.ico">
-    <!-- Android Chrome -->
-    <link rel="manifest" href="https://go2rtc.org/manifest.json">
-```
 
 ## Useful links
 

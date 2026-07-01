@@ -10,7 +10,7 @@ import (
 )
 
 type Preload struct {
-	stream *Stream      // Don't output the stream to JSON to not worry about its secrets.
+	stream *Stream      // Don't include the stream in JSON to avoid leaking secrets.
 	Cons   *probe.Probe `json:"consumer"`
 	Query  string       `json:"query"`
 }
