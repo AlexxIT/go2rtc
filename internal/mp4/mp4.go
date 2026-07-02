@@ -55,10 +55,21 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// See mjpeg.handlerKeyframe: WriteTo blocks until a keyframe arrives and the
+	// OnceBuffer sink never unblocks it on disconnect. Reap on the request context.
+	ctx := r.Context()
+	go func() {
+		<-ctx.Done()
+		_ = cons.Stop()
+		stream.RemoveConsumer(cons)
+	}()
+
 	once := &core.OnceBuffer{} // init and first frame
 	_, _ = cons.WriteTo(once)
 
-	stream.RemoveConsumer(cons)
+	if ctx.Err() != nil {
+		return // client gone before a keyframe arrived
+	}
 
 	// Apple Safari won't show frame without length
 	header := w.Header()
