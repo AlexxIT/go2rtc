@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/url"
 	"strconv"
@@ -63,6 +64,7 @@ type Conn struct {
 	audFirstTS uint32
 	audLastOut uint32
 	audClock   float64
+	audVidBase float64 // video elapsed captured when audio anchored (offset correction)
 }
 
 // ReclockAudio enables the audio->video re-clock (go2rtc#2303). Off by default;
@@ -103,10 +105,17 @@ func (c *Conn) reclockAudioToVideo(receiver *core.Receiver, packet *rtp.Packet) 
 			if c.audClock <= 0 {
 				c.audClock = 8000
 			}
+			// Capture video's elapsed at the moment audio anchors. Audio often
+			// starts LATER than video on a connection (reconnects bring video up
+			// first); without this, audio elapsed was measured from video's
+			// start and jumped forward by the offset, desyncing audio for the
+			// whole connection (go2rtc#2303 residual).
+			c.audVidBase = c.vidElapsed
 			c.audLastOut = packet.Timestamp
-			return // anchor audio start to video start; keep first packet
+			log.Printf("[reclock] %s audio anchored, video was %.2fs in (offset corrected)", c.URL, c.audVidBase)
+			return
 		}
-		out := c.audFirstTS + uint32(int64(c.vidElapsed*c.audClock+0.5))
+		out := c.audFirstTS + uint32(int64((c.vidElapsed-c.audVidBase)*c.audClock+0.5))
 		if int32(out-c.audLastOut) < 1 {
 			out = c.audLastOut + 1 // keep monotonic between video updates
 		}
