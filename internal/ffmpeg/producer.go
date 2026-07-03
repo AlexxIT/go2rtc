@@ -50,6 +50,7 @@ func NewProducer(url string) (core.Producer, error) {
 				{Name: core.CodecPCM, ClockRate: 8000},
 				{Name: core.CodecPCMA, ClockRate: 8000},
 				{Name: core.CodecPCMU, ClockRate: 8000},
+				{Name: core.CodecELD, ClockRate: 16000, Channels: 1},
 				// AAC has unknown problems on Dahua two way
 				{Name: core.CodecAAC, ClockRate: 16000, FmtpLine: aac.FMTP + "1408"},
 			},
@@ -97,6 +98,8 @@ func (p *Producer) newURL() string {
 		switch codec.Name {
 		case core.CodecOpus:
 			s += "#audio=opus/16000"
+		case core.CodecELD:
+			s += "#audio=eld"
 		case core.CodecAAC:
 			s += "#audio=aac/16000"
 		case core.CodecPCML:

@@ -2,6 +2,7 @@ package srtp
 
 import (
 	"net"
+	"sync"
 	"time"
 
 	"github.com/pion/rtcp"
@@ -25,6 +26,8 @@ type Session struct {
 
 	senderRTCP rtcp.SenderReport
 	senderTime time.Time
+
+	mu sync.Mutex // protects concurrent WriteRTP/WriteRTCP (e.g. backchannel sender vs RTCP auto-reply)
 }
 
 type Endpoint struct {
@@ -69,14 +72,21 @@ func (s *Session) init() error {
 }
 
 func (s *Session) WriteRTP(packet *rtp.Packet) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if s.Local.srtp == nil {
 		return 0, nil // before init call
 	}
 
 	if now := time.Now(); now.After(s.senderTime) {
-		s.senderRTCP.NTPTime = uint64(now.UnixNano())
+		secs := uint64(now.Unix() + 2208988800)
+		nanos := uint64(now.Nanosecond())
+		frac := (nanos << 32) / 1e9
+		s.senderRTCP.NTPTime = (secs << 32) | frac
+		s.senderRTCP.RTPTime = packet.Timestamp
 		s.senderTime = now.Add(s.RTCPInterval)
-		_, _ = s.WriteRTCP(&s.senderRTCP)
+		_, _ = s.writeRTCPLocked(&s.senderRTCP)
 	}
 
 	clone := rtp.Packet{
@@ -108,6 +118,16 @@ func (s *Session) WriteRTP(packet *rtp.Packet) (int, error) {
 }
 
 func (s *Session) WriteRTCP(packet rtcp.Packet) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.writeRTCPLocked(packet)
+}
+
+// writeRTCPLocked must be called with s.mu held.
+func (s *Session) writeRTCPLocked(packet rtcp.Packet) (int, error) {
+	if s.Local.srtp == nil {
+		return 0, nil // before init call
+	}
 	b, err := packet.Marshal()
 	if err != nil {
 		return 0, err
@@ -142,14 +162,6 @@ func (s *Session) ReadRTCP(b []byte) {
 	if err != nil {
 		return
 	}
-
-	//packets, err := rtcp.Unmarshal(b)
-	//if err != nil {
-	//	return
-	//}
-	//if report, ok := packets[0].(*rtcp.SenderReport); ok {
-	//	log.Printf("[srtp] rtcp type=%d report=%v", header.Type, report)
-	//}
 
 	if header.Type != rtcp.TypeSenderReport {
 		return

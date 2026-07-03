@@ -1,11 +1,16 @@
 package camera
 
 import (
+	"encoding/base64"
 	"errors"
+	"fmt"
+	"log"
+	"net"
 
-	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/hap"
+	"github.com/AlexxIT/go2rtc/pkg/hap/tlv8"
 	"github.com/AlexxIT/go2rtc/pkg/srtp"
+	"github.com/google/uuid"
 )
 
 type Stream struct {
@@ -18,8 +23,9 @@ func NewStream(
 	client *hap.Client, videoCodec *VideoCodecConfiguration, audioCodec *AudioCodecConfiguration,
 	videoSession, audioSession *srtp.Session, bitrate int,
 ) (*Stream, error) {
+	u := uuid.New()
 	stream := &Stream{
-		id:     core.RandString(16, 0),
+		id:     string(u[:]),
 		client: client,
 	}
 
@@ -112,13 +118,27 @@ func (s *Stream) ExchangeEndpoints(videoSession, audioSession *srtp.Session) err
 			AudioRTPPort: audioSession.Local.Port,
 		},
 		VideoCrypto: SRTPCryptoSuite{
-			MasterKey:  string(videoSession.Local.MasterKey),
-			MasterSalt: string(videoSession.Local.MasterSalt),
+			CryptoSuite: CryptoAES_CM_128_HMAC_SHA1_80,
+			MasterKey:   string(videoSession.Local.MasterKey),
+			MasterSalt:  string(videoSession.Local.MasterSalt),
 		},
 		AudioCrypto: SRTPCryptoSuite{
-			MasterKey:  string(audioSession.Local.MasterKey),
-			MasterSalt: string(audioSession.Local.MasterSalt),
+			CryptoSuite: CryptoAES_CM_128_HMAC_SHA1_80,
+			MasterKey:   string(audioSession.Local.MasterKey),
+			MasterSalt:  string(audioSession.Local.MasterSalt),
 		},
+	}
+
+	log.Printf("[hap] SetupEndpointsRequest: SessionID=%x IPAddr=%s VideoPort=%d AudioPort=%d VideoKeyLen=%d AudioKeyLen=%d CryptoSuite=%d IPVersion=%d",
+		req.SessionID, req.Address.IPAddr, req.Address.VideoRTPPort, req.Address.AudioRTPPort, len(req.VideoCrypto.MasterKey), len(req.AudioCrypto.MasterKey), req.VideoCrypto.CryptoSuite, req.Address.IPVersion)
+
+	// Hex dump the marshalled TLV8 for debugging
+	debugBytes, debugErr := tlv8.Marshal(&req)
+	if debugErr != nil {
+		log.Printf("[hap] TLV8 marshal debug error: %v", debugErr)
+	} else {
+		log.Printf("[hap] SetupEndpointsRequest TLV8 hex (%d bytes): %x", len(debugBytes), debugBytes)
+		log.Printf("[hap] SetupEndpointsRequest TLV8 base64: %s", base64.StdEncoding.EncodeToString(debugBytes))
 	}
 
 	char := s.service.GetCharacter(TypeSetupEndpoints)
@@ -133,12 +153,35 @@ func (s *Stream) ExchangeEndpoints(videoSession, audioSession *srtp.Session) err
 	if err := s.client.GetCharacter(char); err != nil {
 		return err
 	}
+	if sVal, ok := char.Value.(string); ok {
+		log.Printf("[hap] SetupEndpointsResponse raw base64: %s", sVal)
+	}
+
 	if err := char.ReadTLV8(&res); err != nil {
 		return err
 	}
+	if res.Status != StreamingStatusAvailable {
+		return fmt.Errorf("hap: setup endpoints rejected with status %d", res.Status)
+	}
+	if len(res.VideoCrypto.MasterKey) != 16 || len(res.VideoCrypto.MasterSalt) != 14 ||
+		len(res.AudioCrypto.MasterKey) != 16 || len(res.AudioCrypto.MasterSalt) != 14 {
+		return fmt.Errorf("hap: setup endpoints returned invalid crypto lengths video=%d/%d audio=%d/%d",
+			len(res.VideoCrypto.MasterKey), len(res.VideoCrypto.MasterSalt),
+			len(res.AudioCrypto.MasterKey), len(res.AudioCrypto.MasterSalt))
+	}
+
+	cameraIP, _, _ := net.SplitHostPort(s.client.DeviceAddress)
+	addr := res.Address.IPAddr
+	if addr == "0.0.0.0" || addr == "" {
+		addr = cameraIP
+	}
+
+	log.Printf("[hap] ExchangeEndpoints VideoCrypto key=%d salt=%d AudioCrypto key=%d salt=%d",
+		len(res.VideoCrypto.MasterKey), len(res.VideoCrypto.MasterSalt),
+		len(res.AudioCrypto.MasterKey), len(res.AudioCrypto.MasterSalt))
 
 	videoSession.Remote = &srtp.Endpoint{
-		Addr:       res.Address.IPAddr,
+		Addr:       addr,
 		Port:       res.Address.VideoRTPPort,
 		MasterKey:  []byte(res.VideoCrypto.MasterKey),
 		MasterSalt: []byte(res.VideoCrypto.MasterSalt),
@@ -146,7 +189,7 @@ func (s *Stream) ExchangeEndpoints(videoSession, audioSession *srtp.Session) err
 	}
 
 	audioSession.Remote = &srtp.Endpoint{
-		Addr:       res.Address.IPAddr,
+		Addr:       addr,
 		Port:       res.Address.AudioRTPPort,
 		MasterKey:  []byte(res.AudioCrypto.MasterKey),
 		MasterSalt: []byte(res.AudioCrypto.MasterSalt),

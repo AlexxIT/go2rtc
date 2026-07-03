@@ -2,6 +2,7 @@ package srtp
 
 import (
 	"encoding/binary"
+	"log"
 	"net"
 	"strconv"
 	"sync"
@@ -31,17 +32,33 @@ func (s *Server) Port() int {
 	return i
 }
 
+func (s *Server) Start() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.conn != nil {
+		return nil
+	}
+	var err error
+	if s.conn, err = net.ListenPacket("udp", s.address); err != nil {
+		return err
+	}
+	go s.handle()
+	return nil
+}
+
 func (s *Server) AddSession(session *Session) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if err := session.init(); err != nil {
+		log.Printf("[srtp] AddSession session.init failed: %v", err)
 		return
 	}
 
-	if len(s.sessions) == 0 {
+	if s.conn == nil {
 		var err error
 		if s.conn, err = net.ListenPacket("udp", s.address); err != nil {
+			log.Printf("[srtp] AddSession ListenPacket failed: %v", err)
 			return
 		}
 		go s.handle()
@@ -60,6 +77,7 @@ func (s *Server) DelSession(session *Session) {
 	// check s.conn for https://github.com/AlexxIT/go2rtc/issues/734
 	if len(s.sessions) == 0 && s.conn != nil {
 		_ = s.conn.Close()
+		s.conn = nil
 	}
 
 	s.mu.Unlock()
@@ -98,5 +116,14 @@ func (s *Server) handle() error {
 				session.ReadRTCP(b[:n])
 			}
 		}
+	}
+}
+
+func (s *Server) Close() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.conn != nil {
+		_ = s.conn.Close()
+		s.conn = nil
 	}
 }

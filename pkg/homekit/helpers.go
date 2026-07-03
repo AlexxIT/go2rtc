@@ -134,13 +134,18 @@ func trackToAudio(track *core.Receiver, audio0 *camera.AudioCodecConfiguration) 
 		}
 	}
 
+	rtpTime := uint8(20)
+	if codecType == 2 { // CodecELD (index 2 in audioCodecs list)
+		rtpTime = 30
+	}
+
 	return &camera.AudioCodecConfiguration{
 		CodecType: codecType,
 		CodecParams: []camera.AudioCodecParameters{
 			{
 				Channels:   channels,
 				SampleRate: []byte{sampleRate},
-				RTPTime:    []uint8{20},
+				RTPTime:    []uint8{rtpTime},
 			},
 		},
 	}

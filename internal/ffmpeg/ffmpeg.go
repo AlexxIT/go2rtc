@@ -106,6 +106,11 @@ var defaults = map[string]string{
 	"pcma/48000": "-c:a pcm_alaw -ar:a 48000 -ac:a 1",
 	"aac":        "-c:a aac", // keep sample rate and channels
 	"aac/16000":  "-c:a aac -ar:a 16000 -ac:a 1",
+	// -b:a caps actual output to match the MaxBitrate:24 we advertise to the
+	// camera in SelectedStreamConfiguration (pkg/hap/camera/stream.go); without
+	// it, libfdk_aac's default VBR for ELD runs ~38kbps, well over what we
+	// promised the camera to expect, which some cameras may enforce silently.
+	"eld":        "-c:a libfdk_aac -profile:a aac_eld -ar:a 16000 -ac:a 1 -frame_size 480 -b:a 24k",
 	"mp3":        "-c:a libmp3lame -q:a 8",
 	"pcm":        "-c:a pcm_s16be -ar:a 8000 -ac:a 1",
 	"pcm/8000":   "-c:a pcm_s16be -ar:a 8000 -ac:a 1",
