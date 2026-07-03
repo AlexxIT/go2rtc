@@ -130,25 +130,40 @@ func urlParse(rawURL string) (*url.URL, error) {
 
 	u, err := url.Parse(rawURL)
 	if err != nil && strings.HasSuffix(err.Error(), "after host") {
-		if i := indexN(rawURL, '/', 3); i > 0 {
-			return urlParse(rawURL[:i] + ":" + rawURL[i:])
+		// Unbracketed IPv6 host (rtsp://::ffff:1.2.3.4/stream): bracket it once and
+		// retry. The old trailing-colon workaround recursed and, under Go 1.26 which
+		// rejects the host unconditionally, looped forever.
+		if fixed, ok := bracketIPv6Host(rawURL); ok {
+			if u2, err2 := url.Parse(fixed); err2 == nil {
+				return u2, nil
+			}
 		}
 	}
 
 	return u, err
 }
 
-func indexN(s string, c byte, n int) int {
-	var offset int
-	for {
-		i := strings.IndexByte(s[offset:], c)
-		if i < 0 {
-			break
-		}
-		if n--; n == 0 {
-			return offset + i
-		}
-		offset += i + 1
+// bracketIPv6Host wraps a bare IPv6 host in brackets (rtsp://::1/live ->
+// rtsp://[::1]/live), or returns false when there's no bare IPv6 host to fix.
+func bracketIPv6Host(rawURL string) (string, bool) {
+	scheme, rest, ok := strings.Cut(rawURL, "://")
+	if !ok {
+		return "", false
 	}
-	return -1
+
+	authority, path := rest, ""
+	if i := strings.IndexByte(rest, '/'); i >= 0 {
+		authority, path = rest[:i], rest[i:]
+	}
+
+	userinfo := ""
+	if i := strings.LastIndexByte(authority, '@'); i >= 0 {
+		userinfo, authority = authority[:i+1], authority[i+1:]
+	}
+
+	if strings.HasPrefix(authority, "[") || strings.Count(authority, ":") < 2 {
+		return "", false
+	}
+
+	return scheme + "://" + userinfo + "[" + authority + "]" + path, true
 }

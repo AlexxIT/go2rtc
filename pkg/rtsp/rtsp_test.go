@@ -12,7 +12,7 @@ func TestURLParse(t *testing.T) {
 	base := "rtsp://::ffff:192.168.1.123/onvif/profile.1/"
 	u, err := urlParse(base)
 	assert.NoError(t, err)
-	assert.Equal(t, "::ffff:192.168.1.123:", u.Host)
+	assert.Equal(t, "[::ffff:192.168.1.123]", u.Host)
 
 	// https://github.com/AlexxIT/go2rtc/issues/208
 	base = "rtsp://rtsp://turret2-cam.lan:554/stream1/"
