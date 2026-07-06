@@ -26,7 +26,10 @@ type API struct {
 	StreamToken          string
 	StreamExtensionToken string
 
-	extendTimer *time.Timer
+	credsKey string
+
+	extendMu   sync.Mutex
+	extendStop chan struct{}
 }
 
 type Auth struct {
@@ -49,8 +52,10 @@ func NewAPI(clientID, clientSecret, refreshToken string) (*API, error) {
 	key := clientID + ":" + clientSecret + ":" + refreshToken
 	now := time.Now()
 
+	// Each caller gets its own API instance (sharing only the cached token),
+	// so concurrent streams don't overwrite each other's session state.
 	if api := cache[key]; api != nil && now.Before(api.ExpiresAt) {
-		return api, nil
+		return &API{Token: api.Token, ExpiresAt: api.ExpiresAt, credsKey: key}, nil
 	}
 
 	data := url.Values{
@@ -89,7 +94,7 @@ func NewAPI(clientID, clientSecret, refreshToken string) (*API, error) {
 
 	cache[key] = api
 
-	return api, nil
+	return &API{Token: api.Token, ExpiresAt: api.ExpiresAt, credsKey: key}, nil
 }
 
 func (a *API) GetDevices(projectID string) ([]DeviceInfo, error) {
@@ -228,23 +233,12 @@ func (a *API) ExchangeSDP(projectID, deviceID, offer string) (string, error) {
 }
 
 func (a *API) refreshToken() error {
-	// Get the cached API with matching token to get credentials
-	var refreshKey string
-	cacheMu.Lock()
-	for key, api := range cache {
-		if api.Token == a.Token {
-			refreshKey = key
-			break
-		}
-	}
-	cacheMu.Unlock()
-
-	if refreshKey == "" {
+	if a.credsKey == "" {
 		return errors.New("nest: unable to find cached credentials")
 	}
 
 	// Parse credentials from cache key
-	parts := strings.Split(refreshKey, ":")
+	parts := strings.SplitN(a.credsKey, ":", 3)
 	if len(parts) != 3 {
 		return errors.New("nest: invalid cache key format")
 	}
@@ -464,23 +458,74 @@ type Device struct {
 	} `json:"parentRelations"`
 }
 
+// StartExtendStreamTimer keeps the stream session alive by extending it
+// before every expiry until StopExtendStreamTimer is called. Sessions can
+// be short-lived, so a single extend at expiry minus one minute is not
+// enough: the delay may be negative and the session still dies one expiry
+// later.
 func (a *API) StartExtendStreamTimer() {
-	if a.extendTimer != nil {
+	a.extendMu.Lock()
+	defer a.extendMu.Unlock()
+
+	if a.extendStop != nil {
 		return
 	}
 
-	a.extendTimer = time.NewTimer(time.Until(a.StreamExpiresAt) - time.Minute)
-	go func() {
-		<-a.extendTimer.C
-		if err := a.ExtendStream(); err != nil {
-			return
-		}
-	}()
+	stop := make(chan struct{})
+	a.extendStop = stop
+
+	go a.extendLoop(stop)
 }
 
 func (a *API) StopExtendStreamTimer() {
-	if a.extendTimer != nil {
-		a.extendTimer.Stop()
-		a.extendTimer = nil
+	a.extendMu.Lock()
+	defer a.extendMu.Unlock()
+
+	if a.extendStop != nil {
+		close(a.extendStop)
+		a.extendStop = nil
+	}
+}
+
+func (a *API) extendLoop(stop chan struct{}) {
+	const margin = 30 * time.Second
+	const minDelay = 5 * time.Second
+	const retryDelay = 2 * time.Second
+	const maxFailures = 3
+
+	for {
+		delay := time.Until(a.StreamExpiresAt) - margin
+		if delay < minDelay {
+			delay = minDelay
+		}
+		if !sleep(stop, delay) {
+			return
+		}
+
+		failures := 0
+		for {
+			if err := a.ExtendStream(); err == nil {
+				break
+			}
+
+			failures++
+			if failures >= maxFailures {
+				return
+			}
+			if !sleep(stop, retryDelay) {
+				return
+			}
+		}
+	}
+}
+
+func sleep(stop chan struct{}, d time.Duration) bool {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-stop:
+		return false
+	case <-timer.C:
+		return true
 	}
 }
