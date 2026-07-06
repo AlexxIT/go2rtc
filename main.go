@@ -27,7 +27,6 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/kasa"
 	"github.com/AlexxIT/go2rtc/internal/mjpeg"
 	"github.com/AlexxIT/go2rtc/internal/mp4"
-	"github.com/AlexxIT/go2rtc/internal/webp"
 	"github.com/AlexxIT/go2rtc/internal/mpeg"
 	"github.com/AlexxIT/go2rtc/internal/multitrans"
 	"github.com/AlexxIT/go2rtc/internal/nest"
@@ -44,8 +43,10 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/tuya"
 	"github.com/AlexxIT/go2rtc/internal/v4l2"
 	"github.com/AlexxIT/go2rtc/internal/webcodecs"
+	"github.com/AlexxIT/go2rtc/internal/webp"
 	"github.com/AlexxIT/go2rtc/internal/webrtc"
 	"github.com/AlexxIT/go2rtc/internal/webtorrent"
+	wsdiscovery "github.com/AlexxIT/go2rtc/internal/ws-discovery"
 	"github.com/AlexxIT/go2rtc/internal/wyoming"
 	"github.com/AlexxIT/go2rtc/internal/wyze"
 	"github.com/AlexxIT/go2rtc/internal/xiaomi"
@@ -72,11 +73,11 @@ func main() {
 		{"rtsp", rtsp.Init},     // rtsp source, RTSP server
 		{"webrtc", webrtc.Init}, // webrtc source, WebRTC server
 		// Main API
-		{"mp4", mp4.Init},     // MP4 API
+		{"mp4", mp4.Init},             // MP4 API
 		{"webcodecs", webcodecs.Init}, // WebCodecs API
-		{"hls", hls.Init},     // HLS API
-		{"mjpeg", mjpeg.Init}, // MJPEG API
-		{"webp", webp.Init},   // WebP API
+		{"hls", hls.Init},             // HLS API
+		{"mjpeg", mjpeg.Init},         // MJPEG API
+		{"webp", webp.Init},           // WebP API
 		// Other sources and servers
 		{"hass", hass.Init},             // hass source, Hass API server
 		{"homekit", homekit.Init},       // homekit source, HomeKit server
@@ -117,6 +118,7 @@ func main() {
 		{"ngrok", ngrok.Init},
 		{"pinggy", pinggy.Init},
 		{"srtp", srtp.Init},
+		{"wsdiscovery", wsdiscovery.Init},
 	}
 
 	for _, m := range modules {
