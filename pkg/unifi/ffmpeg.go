@@ -144,7 +144,7 @@ func logFFmpegStderr(stderr io.Reader) {
 }
 
 func buildFFmpegCommand(outputURL, codec string, samplingRate int) (string, error) {
-	audioCodec, err := ffmpegAudioCodec(codec)
+	audioConfig, err := ffmpegAudioCodec(codec)
 	if err != nil {
 		return "", err
 	}
@@ -160,24 +160,40 @@ func buildFFmpegCommand(outputURL, codec string, samplingRate int) (string, erro
 		"-i", "pipe:0",
 		"-map", "0:a:0",
 		"-vn",
-		"-c:a", audioCodec,
-		"-application:a", "lowdelay",
+		"-c:a", audioConfig.encoder,
+	}
+	args = append(args, audioConfig.options...)
+	args = append(args,
 		"-ar:a", strconv.Itoa(samplingRate),
 		"-ac:a", "1",
 		"-flush_packets", "1",
-		"-f", "rtp",
+		"-f", audioConfig.format,
 		outputURL,
-	}
+	)
 
 	return strings.Join(args, " "), nil
 }
 
-func ffmpegAudioCodec(codec string) (string, error) {
+type ffmpegAudioConfig struct {
+	encoder string
+	format  string
+	options []string
+}
+
+func ffmpegAudioCodec(codec string) (*ffmpegAudioConfig, error) {
 	switch strings.ToLower(strings.TrimSpace(codec)) {
+	case "aac":
+		return &ffmpegAudioConfig{encoder: "aac", format: "adts"}, nil
 	case "opus":
-		return "libopus", nil
+		return &ffmpegAudioConfig{
+			encoder: "libopus",
+			format:  "rtp",
+			options: []string{"-application:a", "lowdelay"},
+		}, nil
+	case "vorbis":
+		return &ffmpegAudioConfig{encoder: "libvorbis", format: "ogg"}, nil
 	default:
-		return "", fmt.Errorf("unifi: unsupported talkback codec: %s", codec)
+		return nil, fmt.Errorf("unifi: unsupported talkback codec: %s", codec)
 	}
 }
 

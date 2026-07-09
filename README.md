@@ -199,7 +199,7 @@ A summary table of all modules and features can be found [here](internal/README.
 - [`tapo`](internal/tapo/README.md) - [TP-Link Tapo](https://www.tapo.com/) cameras with two-way audio support.
 - [`vigi`](internal/tapo/README.md#tp-link-vigi) - TP-Link Vigi cameras.
 - [`tuya`](internal/tuya/README.md) - [Tuya](https://www.tuya.com/) ecosystem cameras with two-way audio support.
-- [`unifi`](internal/unifi/README.md) - UniFi Protect cameras with Opus talkback support.
+- [`unifi`](internal/unifi/README.md) - UniFi Protect cameras with talkback support.
 - [`webtorrent`](internal/webtorrent/README.md) - Stream from another go2rtc via [WebTorrent](https://en.wikipedia.org/wiki/WebTorrent) protocol.
 - [`wyze`](internal/wyze/README.md) - [Wyze](https://wyze.com/) cameras using native P2P protocol
 - [`xiaomi`](internal/xiaomi/README.md) - [Xiaomi Mi Home](https://home.mi.com/) ecosystem cameras with two-way audio support.

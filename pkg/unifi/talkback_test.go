@@ -184,7 +184,7 @@ func TestTalkbackRejectsUnsupportedCodec(t *testing.T) {
 
 	server, _ := newProtectServer(t, true, TalkbackSession{
 		URL:          "rtp://127.0.0.1:6500",
-		Codec:        "aac",
+		Codec:        "flac",
 		SamplingRate: 16000,
 	})
 	defer server.Close()
@@ -220,7 +220,7 @@ func TestTalkbackRejectsUnsupportedCodec(t *testing.T) {
 	}, time.Second, 10*time.Millisecond)
 
 	err = <-done
-	require.EqualError(t, err, "unifi: unsupported talkback codec: aac")
+	require.EqualError(t, err, "unifi: unsupported talkback codec: flac")
 	require.Empty(t, ffmpeg.Commands())
 }
 
@@ -237,10 +237,32 @@ func TestBuildFFmpegCommandOpus(t *testing.T) {
 	require.Contains(t, command, "-f rtp rtp://10.0.0.2:4444")
 }
 
-func TestBuildFFmpegCommandUnsupportedCodec(t *testing.T) {
-	command, err := buildFFmpegCommand("rtp://10.0.0.2:4444", "aac", 24000)
+func TestBuildFFmpegCommandAAC(t *testing.T) {
+	command, err := buildFFmpegCommand("udp://10.0.0.2:4444", "aac", 16000)
+	require.NoError(t, err)
 
-	require.EqualError(t, err, "unifi: unsupported talkback codec: aac")
+	require.Contains(t, command, "-c:a aac")
+	require.NotContains(t, command, "-application:a lowdelay")
+	require.Contains(t, command, "-ar:a 16000")
+	require.Contains(t, command, "-ac:a 1")
+	require.Contains(t, command, "-f adts udp://10.0.0.2:4444")
+}
+
+func TestBuildFFmpegCommandVorbis(t *testing.T) {
+	command, err := buildFFmpegCommand("udp://10.0.0.2:4444", "vorbis", 16000)
+	require.NoError(t, err)
+
+	require.Contains(t, command, "-c:a libvorbis")
+	require.NotContains(t, command, "-application:a lowdelay")
+	require.Contains(t, command, "-ar:a 16000")
+	require.Contains(t, command, "-ac:a 1")
+	require.Contains(t, command, "-f ogg udp://10.0.0.2:4444")
+}
+
+func TestBuildFFmpegCommandUnsupportedCodec(t *testing.T) {
+	command, err := buildFFmpegCommand("rtp://10.0.0.2:4444", "flac", 24000)
+
+	require.EqualError(t, err, "unifi: unsupported talkback codec: flac")
 	require.Empty(t, command)
 }
 

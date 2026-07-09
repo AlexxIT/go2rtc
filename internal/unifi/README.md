@@ -19,6 +19,6 @@ The `unifi-talkback:` source uses the UniFi Protect public API:
 
 Normal `video+audio` viewing does not activate talkback. go2rtc opens the UniFi talkback session only after a client sends microphone RTP into the audio backchannel.
 
-Push-to-talk clients should start sending microphone audio when talk begins and stop or disconnect that microphone send session when talk ends. go2rtc closes the FFmpeg RTP output when the backchannel producer stops.
+Push-to-talk clients should start sending microphone audio when talk begins and stop or disconnect that microphone send session when talk ends. go2rtc closes the FFmpeg output when the backchannel producer stops.
 
-Only UniFi talkback sessions that report `codec: "opus"` are supported.
+Supported UniFi talkback session codecs are `opus` over RTP, `aac` over ADTS, and `vorbis` over Ogg. Any other codec is rejected.
