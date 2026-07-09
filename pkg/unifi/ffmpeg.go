@@ -77,14 +77,19 @@ func (w *udpRTPWriter) Write(b []byte) (int, error) {
 }
 
 func startFFmpegRTP(inputCodec *core.Codec, session *TalkbackSession) (*talkbackOutput, error) {
+	command, err := buildFFmpegCommand(session.URL, session.Codec, session.SamplingRate)
+	if err != nil {
+		return nil, err
+	}
+
 	port, err := reserveRTPPort()
 	if err != nil {
 		return nil, err
 	}
 
-	command := buildFFmpegCommand(session.URL, session.SamplingRate)
 	log.Debug().
 		Int("local_port", port).
+		Str("codec", session.Codec).
 		Int("sampling_rate", session.SamplingRate).
 		Str("url", creds.SecretString(session.URL)).
 		Msg("[unifi] start ffmpeg")
@@ -138,7 +143,12 @@ func logFFmpegStderr(stderr io.Reader) {
 	}
 }
 
-func buildFFmpegCommand(outputURL string, samplingRate int) string {
+func buildFFmpegCommand(outputURL, codec string, samplingRate int) (string, error) {
+	audioCodec, err := ffmpegAudioCodec(codec)
+	if err != nil {
+		return "", err
+	}
+
 	args := []string{
 		"ffmpeg",
 		"-hide_banner",
@@ -150,7 +160,7 @@ func buildFFmpegCommand(outputURL string, samplingRate int) string {
 		"-i", "pipe:0",
 		"-map", "0:a:0",
 		"-vn",
-		"-c:a", "libopus",
+		"-c:a", audioCodec,
 		"-application:a", "lowdelay",
 		"-ar:a", strconv.Itoa(samplingRate),
 		"-ac:a", "1",
@@ -159,7 +169,16 @@ func buildFFmpegCommand(outputURL string, samplingRate int) string {
 		outputURL,
 	}
 
-	return strings.Join(args, " ")
+	return strings.Join(args, " "), nil
+}
+
+func ffmpegAudioCodec(codec string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(codec)) {
+	case "opus":
+		return "libopus", nil
+	default:
+		return "", fmt.Errorf("unifi: unsupported talkback codec: %s", codec)
+	}
 }
 
 func buildInputSDP(codec *core.Codec, port int) string {

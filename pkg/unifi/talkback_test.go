@@ -225,7 +225,8 @@ func TestTalkbackRejectsUnsupportedCodec(t *testing.T) {
 }
 
 func TestBuildFFmpegCommandOpus(t *testing.T) {
-	command := buildFFmpegCommand("rtp://10.0.0.2:4444", 24000)
+	command, err := buildFFmpegCommand("rtp://10.0.0.2:4444", "opus", 24000)
+	require.NoError(t, err)
 
 	require.Contains(t, command, "ffmpeg -hide_banner -loglevel error")
 	require.Contains(t, command, "-protocol_whitelist file,pipe,udp,rtp")
@@ -234,6 +235,13 @@ func TestBuildFFmpegCommandOpus(t *testing.T) {
 	require.Contains(t, command, "-ar:a 24000")
 	require.Contains(t, command, "-ac:a 1")
 	require.Contains(t, command, "-f rtp rtp://10.0.0.2:4444")
+}
+
+func TestBuildFFmpegCommandUnsupportedCodec(t *testing.T) {
+	command, err := buildFFmpegCommand("rtp://10.0.0.2:4444", "aac", 24000)
+
+	require.EqualError(t, err, "unifi: unsupported talkback codec: aac")
+	require.Empty(t, command)
 }
 
 func TestBuildInputSDPG711(t *testing.T) {

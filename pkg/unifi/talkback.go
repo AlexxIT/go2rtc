@@ -300,9 +300,6 @@ func (c *Client) openTalkback(inputCodec *core.Codec) (*talkbackOutput, error) {
 		Str("url", creds.SecretString(session.URL)).
 		Msg("[unifi] talkback session")
 
-	if !strings.EqualFold(session.Codec, "opus") {
-		return nil, fmt.Errorf("unifi: unsupported talkback codec: %s", session.Codec)
-	}
 	if session.SamplingRate == 0 {
 		return nil, errors.New("unifi: talkback samplingRate required")
 	}
