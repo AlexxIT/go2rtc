@@ -89,14 +89,15 @@ func (q *EventQueue) Acknowledge(seq uint64) {
 
 // UploadSession tracks an in-flight buffer upload
 type UploadSession struct {
-	ID      uint64
-	ClipID  uint64
-	Command byte
-	Start   time.Time
-	Stop    time.Time
-	StopAct byte
-	Active  bool
-	Cancel  chan struct{}
+	ID          uint64
+	ClipID      uint64
+	Command     byte
+	Start       time.Time
+	Stop        time.Time
+	StopAct     byte
+	Active      bool
+	Cancel      chan struct{}
+	stopEmitted bool
 }
 
 // RecordingManager owns pre-buffer, CMAF publish, credentials and events
@@ -178,9 +179,24 @@ func (m *RecordingManager) HandleActivity(req *camera.BufferActivityCommandReque
 
 // HandleUpload processes Buffer Upload Command and returns Clip ID
 func (m *RecordingManager) HandleUpload(req *camera.BufferUploadCommandRequest) *camera.BufferUploadCommandResponse {
+	// Stop must not replace an in-flight session (would drop its Cancel channel)
+	if req.Command == camera.BufferUploadStop {
+		clipID := m.stopUpload(req.SessionID, req.StopAction)
+		return &camera.BufferUploadCommandResponse{ClipID: clipID}
+	}
+
 	m.mu.Lock()
 	clipID := m.nextClip
 	m.nextClip++
+	// cancel any previous session with the same id before replacing
+	if prev, ok := m.sessions[req.SessionID]; ok && prev.Active {
+		select {
+		case <-prev.Cancel:
+		default:
+			close(prev.Cancel)
+		}
+		prev.Active = false
+	}
 	sess := &UploadSession{
 		ID:      req.SessionID,
 		ClipID:  clipID,
@@ -195,45 +211,59 @@ func (m *RecordingManager) HandleUpload(req *camera.BufferUploadCommandRequest) 
 	m.mu.Unlock()
 
 	switch req.Command {
-	case camera.BufferUploadStart:
+	case camera.BufferUploadStart, camera.BufferUploadStartAndStop:
 		go m.runUpload(sess)
-	case camera.BufferUploadStartAndStop:
-		go m.runUpload(sess)
-	case camera.BufferUploadStop:
-		m.stopUpload(req.SessionID, req.StopAction)
 	}
 
 	return &camera.BufferUploadCommandResponse{ClipID: clipID}
 }
 
-func (m *RecordingManager) stopUpload(sessionID uint64, action byte) {
+// stopUpload cancels an in-flight upload. Returns the clip id (0 if unknown)
+func (m *RecordingManager) stopUpload(sessionID uint64, action byte) uint64 {
 	m.mu.Lock()
 	sess, ok := m.sessions[sessionID]
-	if ok && sess.Active {
-		sess.StopAct = action
+	if !ok {
+		m.mu.Unlock()
+		return 0
+	}
+	sess.StopAct = action
+	wasActive := sess.Active
+	if wasActive {
 		select {
 		case <-sess.Cancel:
 		default:
 			close(sess.Cancel)
 		}
-		sess.Active = false
 	}
+	// Publish already finished for a Start session: emit stop on finalize here
+	needStop := !wasActive && action == camera.BufferStopActionFinalize && !sess.stopEmitted
+	if needStop {
+		sess.stopEmitted = true
+	}
+	clipID := sess.ClipID
 	m.mu.Unlock()
 
-	if ok && action == camera.BufferStopActionFinalize {
+	if needStop {
 		seq := m.Events.Push(Event{
 			Type:    camera.BufferEventTypeCMAFSessionStop,
 			Session: sessionID,
 		})
 		m.fireSeq(seq)
 	}
+	return clipID
 }
 
 func (m *RecordingManager) runUpload(sess *UploadSession) {
-	select {
-	case <-sess.Cancel:
+	defer func() {
+		m.mu.Lock()
+		if s, ok := m.sessions[sess.ID]; ok {
+			s.Active = false
+		}
+		m.mu.Unlock()
+	}()
+
+	if m.canceled(sess) {
 		return
-	default:
 	}
 
 	seq := m.Events.Push(Event{
@@ -242,7 +272,15 @@ func (m *RecordingManager) runUpload(sess *UploadSession) {
 	})
 	m.fireSeq(seq)
 
+	if m.canceled(sess) {
+		m.emitSessionStop(sess)
+		return
+	}
+
 	err := m.publishSession(sess)
+	if m.canceled(sess) && err == nil {
+		err = &cmafPublishError{code: CMAFErrCanceled, err: errString("homekit: upload canceled")}
+	}
 	if err != nil {
 		code := mapPublishError(err)
 		seq = m.Events.Push(Event{
@@ -253,21 +291,40 @@ func (m *RecordingManager) runUpload(sess *UploadSession) {
 		m.fireSeq(seq)
 	}
 
-	finalize := sess.Command == camera.BufferUploadStartAndStop ||
-		sess.StopAct == camera.BufferStopActionFinalize
-	if finalize {
-		seq = m.Events.Push(Event{
-			Type:    camera.BufferEventTypeCMAFSessionStop,
-			Session: sess.ID,
-		})
-		m.fireSeq(seq)
-	}
-
 	m.mu.Lock()
-	if s, ok := m.sessions[sess.ID]; ok {
-		s.Active = false
-	}
+	stopAct := sess.StopAct
+	cmd := sess.Command
 	m.mu.Unlock()
+
+	// StartAndStop always finalizes; Start finalizes only after Stop(finalize)
+	if cmd == camera.BufferUploadStartAndStop || stopAct == camera.BufferStopActionFinalize {
+		m.emitSessionStop(sess)
+	}
+}
+
+func (m *RecordingManager) emitSessionStop(sess *UploadSession) {
+	m.mu.Lock()
+	if sess.stopEmitted {
+		m.mu.Unlock()
+		return
+	}
+	sess.stopEmitted = true
+	m.mu.Unlock()
+
+	seq := m.Events.Push(Event{
+		Type:    camera.BufferEventTypeCMAFSessionStop,
+		Session: sess.ID,
+	})
+	m.fireSeq(seq)
+}
+
+func (m *RecordingManager) canceled(sess *UploadSession) bool {
+	select {
+	case <-sess.Cancel:
+		return true
+	default:
+		return false
+	}
 }
 
 func (m *RecordingManager) publishSession(sess *UploadSession) error {
@@ -303,19 +360,19 @@ func (m *RecordingManager) publishSession(sess *UploadSession) error {
 	// publishing point receives a standards-compliant track (mTLS protects transport)
 	clip, err := BuildClip(packets, nil)
 	if err != nil {
-		return err
+		return &cmafPublishError{code: CMAFErrMP4Error, err: err}
 	}
 
 	url := m.Creds.PublishingPoint()
 	if url == "" {
-		return errString("homekit: publishing point not set")
+		return &cmafPublishError{code: CMAFErrInvalidState, err: errString("homekit: publishing point not set")}
 	}
 
 	cfg, tlsErr := m.Creds.TLSConfig()
 	// plain HTTP is allowed without client cert (local ingest tests)
 	isHTTP := len(url) >= 7 && url[:7] == "http://"
 	if tlsErr != nil && !isHTTP {
-		return tlsErr
+		return &cmafPublishError{code: CMAFErrCertConnectionFailure, err: tlsErr}
 	}
 	if isHTTP {
 		cfg = nil

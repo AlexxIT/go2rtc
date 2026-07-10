@@ -55,9 +55,10 @@ func Marshal(v any) ([]byte, error) {
 	return nil, errors.New("tlv8: not implemented: " + kind.String())
 }
 
-// separator the most confusing meaning in the documentation.
-// It can have a value of 0x00 or 0xFF or even 0x05.
-const separator = 0xFF
+// separator between repeated TLV items. Real HomeKit accessories (and the
+// golden dumps in accessory_test) use type 0x00 with length 0. Unmarshal still
+// accepts 0x00, 0xFF and other values for interoperability.
+const separator = 0x00
 
 func appendSlice(b []byte, value reflect.Value) ([]byte, error) {
 	for i := 0; i < value.Len(); i++ {
