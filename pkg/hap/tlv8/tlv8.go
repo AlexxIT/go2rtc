@@ -128,6 +128,11 @@ func appendValue(b []byte, tag byte, value reflect.Value) ([]byte, error) {
 
 	case reflect.String:
 		v := value.String()
+		if len(v) == 0 {
+			// Skip empty strings so we never emit a zero-length TLV
+			// (length 0 is reserved as an item separator)
+			return b, nil
+		}
 		l := len(v) // support "big" string
 		for ; l > 255; l -= 255 {
 			b = append(b, tag, 255)
