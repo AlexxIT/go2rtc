@@ -100,6 +100,12 @@ func appendValue(b []byte, tag byte, value reflect.Value) ([]byte, error) {
 	var err error
 
 	switch value.Kind() {
+	case reflect.Bool:
+		if value.Bool() {
+			return append(b, tag, 1, 1), nil
+		}
+		return append(b, tag, 1, 0), nil
+
 	case reflect.Uint8:
 		v := value.Uint()
 		return append(b, tag, 1, byte(v)), nil
@@ -296,6 +302,12 @@ func unmarshalStruct(b []byte, value reflect.Value) error {
 
 func unmarshalValue(v []byte, value reflect.Value) error {
 	switch value.Kind() {
+	case reflect.Bool:
+		if len(v) != 1 {
+			return errors.New("tlv8: wrong size: " + value.Type().Name())
+		}
+		value.SetBool(v[0] != 0)
+
 	case reflect.Uint8:
 		if len(v) != 1 {
 			return errors.New("tlv8: wrong size: " + value.Type().Name())
