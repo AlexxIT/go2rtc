@@ -1,12 +1,7 @@
 package homekit
 
 import (
-	"crypto/ecdsa"
-	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/sha256"
-	"crypto/x509"
-	"crypto/x509/pkix"
 	"sync"
 	"time"
 
@@ -29,27 +24,24 @@ type WebRTCSession struct {
 }
 
 // WebRTCManager tracks concurrent HomeKit WebRTC sessions (min 6 required)
+// CMAF credentials and content keys live on RecordingManager
 type WebRTCManager struct {
 	mu       sync.Mutex
 	sessions map[string]*WebRTCSession
 	factory  PeerConnectionFactory
 	max      int
 
-	// CMAF client cert state
-	privKey    *ecdsa.PrivateKey
-	clientCert []byte
-	caCert     []byte
-	keyID      uint64
-	keys       map[uint64][]byte
+	// SFrame receive keys for live view sessions
+	sframeKeys map[uint64][]byte
 }
 
 // NewWebRTCManager creates a session manager
 func NewWebRTCManager(factory PeerConnectionFactory) *WebRTCManager {
 	return &WebRTCManager{
-		sessions: make(map[string]*WebRTCSession),
-		factory:  factory,
-		max:      camera.MinConcurrentWebRTCSessions,
-		keys:     make(map[uint64][]byte),
+		sessions:   make(map[string]*WebRTCSession),
+		factory:    factory,
+		max:        camera.MinConcurrentWebRTCSessions,
+		sframeKeys: make(map[uint64][]byte),
 	}
 }
 
@@ -251,10 +243,10 @@ func (m *WebRTCManager) UpdateSession(req *camera.WebRTCUpdateSessionRequest) *c
 	}
 
 	for _, k := range req.ReceiveKeysToAdd {
-		m.keys[k.KID] = []byte(k.Key)
+		m.sframeKeys[k.KID] = []byte(k.Key)
 	}
 	for _, k := range req.ReceiveKIDsToRemove {
-		delete(m.keys, k.KID)
+		delete(m.sframeKeys, k.KID)
 	}
 
 	return &camera.WebRTCUpdateSessionResponse{
@@ -262,68 +254,3 @@ func (m *WebRTCManager) UpdateSession(req *camera.WebRTCUpdateSessionRequest) *c
 		Status:            camera.WebRTCStatusSuccess,
 	}
 }
-
-// HandleCSR generates a client certificate signing request for CMAF ingest
-func (m *WebRTCManager) HandleCSR(nonce []byte) (*camera.CameraClientCSRResponse, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	if m.privKey == nil {
-		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-		if err != nil {
-			return nil, err
-		}
-		m.privKey = key
-	}
-
-	template := x509.CertificateRequest{
-		Subject: pkix.Name{CommonName: "go2rtc-hksv"},
-	}
-	csrDER, err := x509.CreateCertificateRequest(rand.Reader, &template, m.privKey)
-	if err != nil {
-		return nil, err
-	}
-
-	sum := sha256.Sum256(nonce)
-	sig, err := ecdsa.SignASN1(rand.Reader, m.privKey, sum[:])
-	if err != nil {
-		return nil, err
-	}
-
-	return &camera.CameraClientCSRResponse{
-		CSR:            string(csrDER),
-		NonceSignature: string(sig),
-	}, nil
-}
-
-// InstallClientCertificate stores the issued CMAF client certificate
-func (m *WebRTCManager) InstallClientCertificate(req *camera.CameraClientCertificateRequest) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.clientCert = []byte(req.ClientCertificate)
-	m.caCert = []byte(req.CA)
-}
-
-// CertificateNeedsUpdate reports whether a new client cert is required
-func (m *WebRTCManager) CertificateNeedsUpdate() bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return len(m.clientCert) == 0
-}
-
-// SetKey stores a CMAF content key
-func (m *WebRTCManager) SetKey(key []byte, number uint64) uint64 {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.keys[number] = key
-	m.keyID = number
-	return number
-}
-
-// KeyID returns the current key identifier
-func (m *WebRTCManager) KeyID() uint64 {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.keyID
-}
-

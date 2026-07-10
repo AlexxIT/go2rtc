@@ -92,12 +92,18 @@ Implements the HAP services from [issue #2297](https://github.com/AlexxIT/go2rtc
 - Camera Capabilities, Global Operating Mode, Motion Zones
 - Multi-tier RTP stream management (High/Medium/Low, HEVC + H.264, Opus)
 - WebRTC Stream Management (solicit-offer / provide-answer over HAP, min 6 sessions)
-- Buffer / Key / Client Certificate management for CMAF ingest provisioning
 - Classic RTP kept with 5 concurrent stream slots
+- CMAF recording stack:
+  - 8s ring pre-buffer from the source stream
+  - Client CSR + certificate install (mTLS identity for ingest)
+  - Content key management (stored for CENC; clear fMP4 uploaded, transport protected by mTLS)
+  - Publishing point URL + server CAs from the controller
+  - Buffer activity / upload / event queue with HAP write-response and sequence notifies
+  - DASH-IF Interface-1 POST of init + media segments to the publishing point
 
-The guide is a Developer Preview and may change before release. CMAF clip upload to Apple's
-publishing point is scaffolded (cert CSR flow works); full fMP4 ingest depends on a live
-controller-provided publishing URL after pairing.
+The guide is a Developer Preview and may change before release. Full end-to-end Secure Video
+in Apple Home still depends on Apple accepting the accessory after pairing and providing a
+live publishing point URL.
 
 **Proxy HomeKit camera**
 

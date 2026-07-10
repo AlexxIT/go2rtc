@@ -1,9 +1,6 @@
 package homekit
 
 import (
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
 	"testing"
 
 	"github.com/AlexxIT/go2rtc/pkg/hap/camera"
@@ -77,32 +74,6 @@ func TestWebRTCManagerNilFactory(t *testing.T) {
 	require.Equal(t, byte(camera.WebRTCSolicitError), res.Status)
 }
 
-func TestCSRGeneration(t *testing.T) {
-	m := NewWebRTCManager(nil)
-	nonce := make([]byte, 32)
-	_, _ = rand.Read(nonce)
-
-	res, err := m.HandleCSR(nonce)
-	require.NoError(t, err)
-	require.NotEmpty(t, res.CSR)
-	require.NotEmpty(t, res.NonceSignature)
-	require.True(t, m.CertificateNeedsUpdate())
-
-	// Install cert
-	m.InstallClientCertificate(&camera.CameraClientCertificateRequest{
-		ClientCertificate: "client-der",
-		CA:                "ca-der",
-	})
-	require.False(t, m.CertificateNeedsUpdate())
-}
-
-func TestKeyManagement(t *testing.T) {
-	m := NewWebRTCManager(nil)
-	id := m.SetKey([]byte("key-data"), 7)
-	require.Equal(t, uint64(7), id)
-	require.Equal(t, uint64(7), m.KeyID())
-}
-
 func TestUpdateSessionKeys(t *testing.T) {
 	m := NewWebRTCManager(testFactory)
 	res, err := m.SolicitOffer(false)
@@ -131,10 +102,4 @@ func TestProvideAnswerUnknown(t *testing.T) {
 		SDPAnswer:         "v=0\r\n",
 	})
 	require.Equal(t, byte(camera.WebRTCStatusUnknownSessionIdentifier), res.Status)
-}
-
-func TestECDSAKeyGen(t *testing.T) {
-	// Sanity: P-256 works on this platform (used by CSR)
-	_, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	require.NoError(t, err)
 }

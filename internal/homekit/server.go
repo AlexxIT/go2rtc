@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg"
@@ -45,8 +46,9 @@ type server struct {
 	stream    string // stream name from YAML
 
 	// Experimental HKSV open-source (WebRTC + HEVC + CMAF)
-	hksv    bool
-	webrtc  *homekit.WebRTCManager
+	hksv      bool
+	webrtc    *homekit.WebRTCManager
+	recording *homekit.RecordingManager
 	// last write-response values keyed by characteristic IID
 	wrValues map[uint64]any
 }
@@ -274,14 +276,20 @@ func (s *server) GetCharacteristic(conn net.Conn, aid uint8, iid uint64) any {
 		return 0
 
 	case camera.TypeCameraClientCertificateStatus:
-		if s.webrtc != nil {
+		if s.recording != nil {
 			v, err := tlv8.MarshalBase64(camera.CameraClientCertificateStatusValue{
-				NeedsUpdate: s.webrtc.CertificateNeedsUpdate(),
+				NeedsUpdate: s.recording.Creds.NeedsUpdate(),
 			})
 			if err == nil {
 				return v
 			}
 		}
+
+	case camera.TypeBufferEventSequenceNumber:
+		if s.recording != nil {
+			return s.recording.EventSequence()
+		}
+		return uint32(0)
 	}
 
 	return char.Value
@@ -380,22 +388,34 @@ func (s *server) SetCharacteristic(conn net.Conn, aid uint8, iid uint64, value a
 		s.handleCameraKey(value)
 
 	case camera.TypeCameraRecordingPublishingPoint:
-		// Store publishing point as-is for CMAF ingest (already base64 TLV8 from controller)
-		char.Value = value
+		s.handlePublishingPoint(value)
 
 	case camera.TypeStreamingEnabled, camera.TypeHomeKitCameraActive,
 		camera.TypeMotionEnabled, camera.TypeCameraOperatingModeIndicator:
 		_ = char.Write(value)
 		_ = char.NotifyListeners(conn)
 
-	case camera.TypeActive, camera.TypeRecordingAudioActive:
-		switch v := value.(type) {
-		case float64:
-			char.Value = uint8(v)
-		case int:
-			char.Value = uint8(v)
-		default:
-			char.Value = value
+	case camera.TypeActive:
+		active := truthy(value)
+		if s.recording != nil {
+			s.recording.SetRecordingActive(active)
+		}
+		if active {
+			char.Value = uint8(1)
+		} else {
+			char.Value = uint8(0)
+		}
+		_ = char.NotifyListeners(conn)
+
+	case camera.TypeRecordingAudioActive:
+		active := truthy(value)
+		if s.recording != nil {
+			s.recording.SetAudioActive(active)
+		}
+		if active {
+			char.Value = uint8(1)
+		} else {
+			char.Value = uint8(0)
 		}
 		_ = char.NotifyListeners(conn)
 
@@ -403,8 +423,7 @@ func (s *server) SetCharacteristic(conn net.Conn, aid uint8, iid uint64, value a
 		_ = char.Write(value)
 
 	case camera.TypeBufferActivityCommand:
-		// Acknowledge buffer activity; no response body required
-		return
+		s.handleBufferActivity(value)
 
 	case camera.TypeBufferUploadCommand:
 		s.handleBufferUpload(iid, value)
@@ -598,58 +617,168 @@ func (s *server) handleRTPStreamingControl(iid uint64, value any) {
 }
 
 func (s *server) handleCameraClientCSR(iid uint64, value any) {
-	if s.webrtc == nil {
+	if s.recording == nil {
 		return
 	}
 	var req camera.CameraClientCSRRequest
 	if err := tlv8.UnmarshalBase64(value, &req); err != nil {
 		return
 	}
-	res, err := s.webrtc.HandleCSR([]byte(req.Nonce))
+	csrDER, sig, err := s.recording.Creds.HandleCSR([]byte(req.Nonce))
 	if err != nil {
 		log.Warn().Err(err).Msg("[homekit] csr")
 		return
 	}
-	s.setWriteResponse(iid, res)
+	s.setWriteResponse(iid, camera.CameraClientCSRResponse{
+		CSR:            string(csrDER),
+		NonceSignature: string(sig),
+	})
 }
 
 func (s *server) handleCameraClientCertificate(value any) {
-	if s.webrtc == nil {
+	if s.recording == nil {
 		return
 	}
 	var req camera.CameraClientCertificateRequest
 	if err := tlv8.UnmarshalBase64(value, &req); err != nil {
 		return
 	}
-	s.webrtc.InstallClientCertificate(&req)
+	s.recording.Creds.InstallClientCertificate([]byte(req.ClientCertificate), []byte(req.CA))
 	if char := s.accessory.GetCharacter(camera.TypeCameraClientCertificateStatus); char != nil {
 		_ = char.Set(camera.CameraClientCertificateStatusValue{NeedsUpdate: false})
 	}
 }
 
 func (s *server) handleCameraKey(value any) {
-	if s.webrtc == nil {
+	if s.recording == nil {
 		return
 	}
 	var req camera.CameraKeyValue
 	if err := tlv8.UnmarshalBase64(value, &req); err != nil {
 		return
 	}
-	id := s.webrtc.SetKey([]byte(req.Key), req.KeyNumber)
+	id := s.recording.Creds.SetKey([]byte(req.Key), req.KeyNumber)
 	if char := s.accessory.GetCharacter(camera.TypeCameraKeyID); char != nil {
 		_ = char.Set(camera.CameraKeyIDValue{KeyID: id})
 	}
 }
 
+func (s *server) handlePublishingPoint(value any) {
+	if s.recording == nil {
+		return
+	}
+	var req camera.CameraRecordingPublishingPointValue
+	if err := tlv8.UnmarshalBase64(value, &req); err != nil {
+		// store raw value if not TLV8-shaped
+		if char := s.accessory.GetCharacter(camera.TypeCameraRecordingPublishingPoint); char != nil {
+			char.Value = value
+		}
+		return
+	}
+	var cas [][]byte
+	for _, c := range req.ServerCACertificates {
+		cas = append(cas, []byte(c.Certificate))
+	}
+	s.recording.Creds.SetPublishingPoint(req.URL, cas)
+	if char := s.accessory.GetCharacter(camera.TypeCameraRecordingPublishingPoint); char != nil {
+		char.Value = value
+	}
+	log.Debug().Str("stream", s.stream).Str("url", req.URL).Msg("[homekit] cmaf publishing point set")
+}
+
+func (s *server) handleBufferActivity(value any) {
+	if s.recording == nil {
+		return
+	}
+	var req camera.BufferActivityCommandRequest
+	if err := tlv8.UnmarshalBase64(value, &req); err != nil {
+		return
+	}
+	s.recording.HandleActivity(&req)
+}
+
 func (s *server) handleBufferUpload(iid uint64, value any) {
-	// CMAF clip upload requires a live publishing point; return a clip id placeholder
+	if s.recording == nil {
+		s.setWriteResponse(iid, camera.BufferUploadCommandResponse{})
+		return
+	}
 	var req camera.BufferUploadCommandRequest
-	_ = tlv8.UnmarshalBase64(value, &req)
-	s.setWriteResponse(iid, camera.BufferUploadCommandResponse{ClipID: req.SessionID})
+	if err := tlv8.UnmarshalBase64(value, &req); err != nil {
+		s.setWriteResponse(iid, camera.BufferUploadCommandResponse{})
+		return
+	}
+	res := s.recording.HandleUpload(&req)
+	s.setWriteResponse(iid, res)
+	log.Debug().Str("stream", s.stream).
+		Uint64("session", req.SessionID).
+		Uint64("clip", res.ClipID).
+		Uint8("cmd", req.Command).
+		Msg("[homekit] buffer upload command")
 }
 
 func (s *server) handleBufferEvent(iid uint64, value any) {
-	s.setWriteResponse(iid, camera.BufferEventCommandResponse{})
+	if s.recording == nil {
+		s.setWriteResponse(iid, camera.BufferEventCommandResponse{})
+		return
+	}
+	var req camera.BufferEventCommandRequest
+	if err := tlv8.UnmarshalBase64(value, &req); err != nil {
+		s.setWriteResponse(iid, camera.BufferEventCommandResponse{})
+		return
+	}
+	s.setWriteResponse(iid, s.recording.HandleEventCommand(&req))
+}
+
+func truthy(value any) bool {
+	switch v := value.(type) {
+	case bool:
+		return v
+	case float64:
+		return v != 0
+	case int:
+		return v != 0
+	case uint8:
+		return v != 0
+	case uint64:
+		return v != 0
+	case string:
+		return v == "1" || v == "true"
+	default:
+		return false
+	}
+}
+
+// startRecordingBuffer attaches a ring-buffer consumer to the source stream
+// Retries until the stream can provide matching tracks
+func (s *server) startRecordingBuffer() {
+	if s.recording == nil {
+		return
+	}
+	cons := s.recording.EnsureConsumer()
+	for {
+		stream := streams.Get(s.stream)
+		if stream == nil {
+			return
+		}
+		if err := stream.AddConsumer(cons); err != nil {
+			log.Debug().Err(err).Str("stream", s.stream).Msg("[homekit] recording buffer wait for tracks")
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		log.Info().Str("stream", s.stream).Msg("[homekit] recording pre-buffer started")
+		return
+	}
+}
+
+// notifyEventSequence updates the HAP event sequence characteristic
+func (s *server) notifyEventSequence(seq uint32) {
+	if s.accessory == nil {
+		return
+	}
+	if char := s.accessory.GetCharacter(camera.TypeBufferEventSequenceNumber); char != nil {
+		char.Value = seq
+		_ = char.NotifyListeners(nil)
+	}
 }
 
 func (s *server) streamingAllowed() bool {
