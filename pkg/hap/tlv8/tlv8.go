@@ -204,8 +204,9 @@ func UnmarshalReader(r io.Reader, n int64, v any) error {
 }
 
 func Unmarshal(data []byte, v any) error {
+	// Empty TLV is valid (e.g. write-response with no fields / empty event list)
 	if len(data) == 0 {
-		return errors.New("tlv8: unmarshal zero data")
+		return nil
 	}
 
 	value := reflect.ValueOf(v)

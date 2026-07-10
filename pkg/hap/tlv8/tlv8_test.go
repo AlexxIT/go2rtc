@@ -171,3 +171,14 @@ func TestSlice2(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, b00, b2)
 }
+
+func TestUnmarshalEmpty(t *testing.T) {
+	// Empty TLV is a valid write-response with no fields
+	var v struct {
+		N uint8 `tlv8:"1"`
+	}
+	require.NoError(t, Unmarshal(nil, &v))
+	require.NoError(t, Unmarshal([]byte{}, &v))
+	require.Equal(t, uint8(0), v.N)
+	require.NoError(t, UnmarshalBase64("", &v))
+}

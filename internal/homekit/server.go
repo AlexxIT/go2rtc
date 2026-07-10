@@ -50,6 +50,7 @@ type server struct {
 	webrtc    *homekit.WebRTCManager
 	recording *homekit.RecordingManager
 	// last write-response values keyed by characteristic IID
+	wrMu     sync.Mutex
 	wrValues map[uint64]any
 }
 
@@ -248,11 +249,14 @@ func (s *server) GetCharacteristic(conn net.Conn, aid uint8, iid uint64) any {
 	}
 
 	// Prefer last write-response payload when present
+	s.wrMu.Lock()
 	if s.wrValues != nil {
 		if v, ok := s.wrValues[iid]; ok {
+			s.wrMu.Unlock()
 			return v
 		}
 	}
+	s.wrMu.Unlock()
 
 	switch char.Type {
 	case camera.TypeSetupEndpoints:
@@ -434,16 +438,21 @@ func (s *server) SetCharacteristic(conn net.Conn, aid uint8, iid uint64, value a
 }
 
 func (s *server) setWriteResponse(iid uint64, v any) {
-	if s.wrValues == nil {
-		s.wrValues = map[uint64]any{}
-	}
 	encoded, err := tlv8.MarshalBase64(v)
 	if err != nil {
 		return
 	}
+	s.wrMu.Lock()
+	if s.wrValues == nil {
+		s.wrValues = map[uint64]any{}
+	}
 	s.wrValues[iid] = encoded
+	s.wrMu.Unlock()
 	if char := s.accessory.GetCharacterByID(iid); char != nil {
+		// char.Value is also read by HAP status/event paths; serialize with wrMu
+		s.wrMu.Lock()
 		char.Value = encoded
+		s.wrMu.Unlock()
 	}
 }
 
@@ -776,7 +785,9 @@ func (s *server) notifyEventSequence(seq uint32) {
 		return
 	}
 	if char := s.accessory.GetCharacter(camera.TypeBufferEventSequenceNumber); char != nil {
+		s.wrMu.Lock()
 		char.Value = seq
+		s.wrMu.Unlock()
 		_ = char.NotifyListeners(nil)
 	}
 }
@@ -809,7 +820,10 @@ func (s *server) updateWebRTCSessionCount() {
 		return
 	}
 	if char := s.accessory.GetCharacter(camera.TypeWebRTCNumberOfActiveSessions); char != nil {
-		char.Value = s.webrtc.ActiveCount()
+		n := s.webrtc.ActiveCount()
+		s.wrMu.Lock()
+		char.Value = n
+		s.wrMu.Unlock()
 		_ = char.NotifyListeners(nil)
 	}
 }
