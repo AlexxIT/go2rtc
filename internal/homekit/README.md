@@ -51,7 +51,8 @@ HomeKit module can work in two modes:
 
 **Important**
 
-- HomeKit cameras support only H264 video and OPUS audio
+- Classic HomeKit cameras support H264 video and OPUS audio
+- With experimental `hksv: true`, the accessory also advertises HEVC (H.265) and WebRTC live view per Apple's HomeKit Secure Video Open Source Compatibility Guide (Developer Preview 17.99)
 
 ### Server Configuration
 
@@ -79,7 +80,24 @@ homekit:
     name: Dahua camera      # custom camera name, default: generated from stream ID
     device_id: dahua1       # custom ID, default: generated from stream ID
     device_private: dahua1  # custom key, default: generated from stream ID
+    hksv: true              # experimental: HKSV open-source (WebRTC + HEVC tiers + CMAF certs)
 ```
+
+### Experimental HKSV open-source (`hksv: true`)
+
+Implements the HAP services from [issue #2297](https://github.com/AlexxIT/go2rtc/issues/2297) / Apple's
+[HomeKit Secure Video Open Source Compatibility Guide](https://developer.apple.com/download/files/HomeKit-Secure-Video-Open-Source-Compatibility-Guide.pdf)
+(Developer Preview, capabilities version `17.99`):
+
+- Camera Capabilities, Global Operating Mode, Motion Zones
+- Multi-tier RTP stream management (High/Medium/Low, HEVC + H.264, Opus)
+- WebRTC Stream Management (solicit-offer / provide-answer over HAP, min 6 sessions)
+- Buffer / Key / Client Certificate management for CMAF ingest provisioning
+- Classic RTP kept with 5 concurrent stream slots
+
+The guide is a Developer Preview and may change before release. CMAF clip upload to Apple's
+publishing point is scaffolded (cert CSR flow works); full fMP4 ingest depends on a live
+controller-provided publishing URL after pairing.
 
 **Proxy HomeKit camera**
 
