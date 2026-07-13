@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg"
@@ -27,6 +28,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/homekit"
 	"github.com/AlexxIT/go2rtc/pkg/magic"
 	"github.com/AlexxIT/go2rtc/pkg/mdns"
+	pion "github.com/pion/webrtc/v4"
 )
 
 type server struct {
@@ -42,6 +44,14 @@ type server struct {
 	proxyURL  string
 	setupID   string
 	stream    string // stream name from YAML
+
+	// Experimental HKSV open-source (WebRTC + HEVC + CMAF)
+	hksv      bool
+	webrtc    *homekit.WebRTCManager
+	recording *homekit.RecordingManager
+	// last write-response values keyed by characteristic IID
+	wrMu     sync.Mutex
+	wrValues map[uint64]any
 }
 
 func (s *server) MarshalJSON() ([]byte, error) {
@@ -238,6 +248,16 @@ func (s *server) GetCharacteristic(conn net.Conn, aid uint8, iid uint64) any {
 		return nil
 	}
 
+	// Prefer last write-response payload when present
+	s.wrMu.Lock()
+	if s.wrValues != nil {
+		if v, ok := s.wrValues[iid]; ok {
+			s.wrMu.Unlock()
+			return v
+		}
+	}
+	s.wrMu.Unlock()
+
 	switch char.Type {
 	case camera.TypeSetupEndpoints:
 		consumer := s.consumer
@@ -252,6 +272,28 @@ func (s *server) GetCharacteristic(conn net.Conn, aid uint8, iid uint64) any {
 		}
 
 		return v
+
+	case camera.TypeWebRTCNumberOfActiveSessions:
+		if s.webrtc != nil {
+			return s.webrtc.ActiveCount()
+		}
+		return 0
+
+	case camera.TypeCameraClientCertificateStatus:
+		if s.recording != nil {
+			v, err := tlv8.MarshalBase64(camera.CameraClientCertificateStatusValue{
+				NeedsUpdate: s.recording.Creds.NeedsUpdate(),
+			})
+			if err == nil {
+				return v
+			}
+		}
+
+	case camera.TypeBufferEventSequenceNumber:
+		if s.recording != nil {
+			return s.recording.EventSequence()
+		}
+		return uint32(0)
 	}
 
 	return char.Value
@@ -321,6 +363,468 @@ func (s *server) SetCharacteristic(conn net.Conn, aid uint8, iid uint64, value a
 				s.DelConn(consumer)
 			}()
 		}
+
+	case camera.TypeWebRTCSolicitOffer:
+		s.handleWebRTCSolicitOffer(iid, value)
+
+	case camera.TypeWebRTCProvideAnswer:
+		s.handleWebRTCProvideAnswer(iid, value)
+
+	case camera.TypeWebRTCStreamingControl:
+		s.handleWebRTCStreamingControl(iid, value)
+
+	case camera.TypeWebRTCReoffer:
+		s.handleWebRTCReoffer(iid, value)
+
+	case camera.TypeWebRTCUpdateSession:
+		s.handleWebRTCUpdateSession(iid, value)
+
+	case camera.TypeRTPStreamingControl:
+		s.handleRTPStreamingControl(iid, value)
+
+	case camera.TypeCameraClientCSR:
+		s.handleCameraClientCSR(iid, value)
+
+	case camera.TypeCameraClientCertificate:
+		s.handleCameraClientCertificate(value)
+
+	case camera.TypeCameraKey:
+		s.handleCameraKey(value)
+
+	case camera.TypeCameraRecordingPublishingPoint:
+		s.handlePublishingPoint(value)
+
+	case camera.TypeStreamingEnabled, camera.TypeHomeKitCameraActive,
+		camera.TypeMotionEnabled, camera.TypeCameraOperatingModeIndicator:
+		_ = char.Write(value)
+		_ = char.NotifyListeners(conn)
+
+	case camera.TypeActive:
+		active := truthy(value)
+		if s.recording != nil {
+			s.recording.SetRecordingActive(active)
+		}
+		if active {
+			char.Value = uint8(1)
+		} else {
+			char.Value = uint8(0)
+		}
+		_ = char.NotifyListeners(conn)
+
+	case camera.TypeRecordingAudioActive:
+		active := truthy(value)
+		if s.recording != nil {
+			s.recording.SetAudioActive(active)
+		}
+		if active {
+			char.Value = uint8(1)
+		} else {
+			char.Value = uint8(0)
+		}
+		_ = char.NotifyListeners(conn)
+
+	case camera.TypeCameraZones:
+		_ = char.Write(value)
+
+	case camera.TypeBufferActivityCommand:
+		s.handleBufferActivity(value)
+
+	case camera.TypeBufferUploadCommand:
+		s.handleBufferUpload(iid, value)
+
+	case camera.TypeBufferEventCommand:
+		s.handleBufferEvent(iid, value)
+	}
+}
+
+func (s *server) setWriteResponse(iid uint64, v any) {
+	encoded, err := tlv8.MarshalBase64(v)
+	if err != nil {
+		return
+	}
+	s.wrMu.Lock()
+	if s.wrValues == nil {
+		s.wrValues = map[uint64]any{}
+	}
+	s.wrValues[iid] = encoded
+	s.wrMu.Unlock()
+	if char := s.accessory.GetCharacterByID(iid); char != nil {
+		// char.Value is also read by HAP status/event paths; serialize with wrMu
+		s.wrMu.Lock()
+		char.Value = encoded
+		s.wrMu.Unlock()
+	}
+}
+
+func (s *server) handleWebRTCSolicitOffer(iid uint64, value any) {
+	if s.webrtc == nil {
+		s.setWriteResponse(iid, camera.WebRTCSolicitOfferResponse{Status: camera.WebRTCSolicitError})
+		return
+	}
+
+	var req camera.WebRTCSolicitOfferRequest
+	if err := tlv8.UnmarshalBase64(value, &req); err != nil {
+		s.setWriteResponse(iid, camera.WebRTCSolicitOfferResponse{Status: camera.WebRTCSolicitError})
+		return
+	}
+
+	// Check global streaming gates
+	if !s.streamingAllowed() {
+		s.setWriteResponse(iid, camera.WebRTCSolicitOfferResponse{Status: camera.WebRTCSolicitPrivacyModeActive})
+		return
+	}
+
+	res, err := s.webrtc.SolicitOffer(req.Options.SFrameEnabled)
+	if err != nil || res == nil {
+		s.setWriteResponse(iid, camera.WebRTCSolicitOfferResponse{Status: camera.WebRTCSolicitError})
+		return
+	}
+
+	s.setWriteResponse(iid, res)
+	s.updateWebRTCSessionCount()
+	log.Debug().Str("stream", s.stream).Msgf("[homekit] webrtc solicit-offer status=%d sessions=%d", res.Status, s.webrtc.ActiveCount())
+}
+
+func (s *server) handleWebRTCProvideAnswer(iid uint64, value any) {
+	if s.webrtc == nil {
+		s.setWriteResponse(iid, camera.WebRTCProvideAnswerResponse{Status: camera.WebRTCStatusError})
+		return
+	}
+
+	var req camera.WebRTCProvideAnswerRequest
+	if err := tlv8.UnmarshalBase64(value, &req); err != nil {
+		s.setWriteResponse(iid, camera.WebRTCProvideAnswerResponse{Status: camera.WebRTCStatusError})
+		return
+	}
+
+	res := s.webrtc.ProvideAnswer(&req)
+	s.setWriteResponse(iid, res)
+
+	if res.Status != camera.WebRTCStatusSuccess {
+		return
+	}
+
+	sess := s.webrtc.GetSession(req.SessionIdentifier)
+	if sess == nil || sess.Conn == nil {
+		return
+	}
+
+	stream := streams.Get(s.stream)
+	if stream == nil {
+		return
+	}
+
+	s.AddConn(sess.Conn)
+	if err := stream.AddConsumer(sess.Conn); err != nil {
+		log.Warn().Err(err).Str("stream", s.stream).Msg("[homekit] webrtc add consumer")
+		return
+	}
+
+	sessionID := req.SessionIdentifier
+	conn := sess.Conn
+	conn.Listen(func(msg any) {
+		state, ok := msg.(pion.PeerConnectionState)
+		if !ok {
+			return
+		}
+		switch state {
+		case pion.PeerConnectionStateDisconnected, pion.PeerConnectionStateFailed, pion.PeerConnectionStateClosed:
+			stream.RemoveConsumer(conn)
+			s.DelConn(conn)
+			_ = s.webrtc.EndSession(sessionID)
+			s.updateWebRTCSessionCount()
+		}
+	})
+
+	log.Debug().Str("stream", s.stream).Msg("[homekit] webrtc provide-answer ok")
+}
+
+func (s *server) handleWebRTCStreamingControl(iid uint64, value any) {
+	if s.webrtc == nil {
+		s.setWriteResponse(iid, camera.WebRTCStreamingControlResponse{Status: camera.WebRTCStatusError})
+		return
+	}
+
+	var req camera.WebRTCStreamingControlRequest
+	if err := tlv8.UnmarshalBase64(value, &req); err != nil {
+		s.setWriteResponse(iid, camera.WebRTCStreamingControlResponse{Status: camera.WebRTCStatusError})
+		return
+	}
+
+	if req.Command == camera.WebRTCCommandEnd {
+		res := s.webrtc.EndSession(req.SessionIdentifier)
+		s.setWriteResponse(iid, res)
+		s.updateWebRTCSessionCount()
+		return
+	}
+
+	s.setWriteResponse(iid, camera.WebRTCStreamingControlResponse{
+		SessionIdentifier: req.SessionIdentifier,
+		Status:            camera.WebRTCStatusError,
+	})
+}
+
+func (s *server) handleWebRTCReoffer(iid uint64, value any) {
+	if s.webrtc == nil {
+		s.setWriteResponse(iid, camera.WebRTCReofferResponse{Status: camera.WebRTCStatusError})
+		return
+	}
+	var req camera.WebRTCReofferRequest
+	if err := tlv8.UnmarshalBase64(value, &req); err != nil {
+		s.setWriteResponse(iid, camera.WebRTCReofferResponse{Status: camera.WebRTCStatusError})
+		return
+	}
+	s.setWriteResponse(iid, s.webrtc.Reoffer(&req))
+}
+
+func (s *server) handleWebRTCUpdateSession(iid uint64, value any) {
+	if s.webrtc == nil {
+		s.setWriteResponse(iid, camera.WebRTCUpdateSessionResponse{Status: camera.WebRTCStatusError})
+		return
+	}
+	var req camera.WebRTCUpdateSessionRequest
+	if err := tlv8.UnmarshalBase64(value, &req); err != nil {
+		s.setWriteResponse(iid, camera.WebRTCUpdateSessionResponse{Status: camera.WebRTCStatusError})
+		return
+	}
+	s.setWriteResponse(iid, s.webrtc.UpdateSession(&req))
+}
+
+func (s *server) handleRTPStreamingControl(iid uint64, value any) {
+	var req camera.RTPStreamingControlRequest
+	if err := tlv8.UnmarshalBase64(value, &req); err != nil {
+		s.setWriteResponse(iid, camera.RTPStreamingControlResponse{Status: camera.StreamStatusError})
+		return
+	}
+
+	// Multi-tier RTP control: map Start onto the classic consumer path when possible
+	status := byte(camera.StreamStatusSuccess)
+	switch req.Command {
+	case camera.RTPStreamCommandEnd:
+		for _, consumer := range s.conns {
+			if consumer, ok := consumer.(*homekit.Consumer); ok {
+				if consumer.SessionID() == req.SessionIdentifier {
+					_ = consumer.Stop()
+					break
+				}
+			}
+		}
+	case camera.RTPStreamCommandStart:
+		if !s.streamingAllowed() {
+			status = camera.StreamStatusError
+		}
+		// Full multi-tier encoder reconfiguration is left to the stream source;
+		// Start still relies on Setup Endpoints + classic selected stream for media
+	default:
+		status = camera.StreamStatusError
+	}
+
+	s.setWriteResponse(iid, camera.RTPStreamingControlResponse{
+		SessionIdentifier: req.SessionIdentifier,
+		Status:            status,
+	})
+}
+
+func (s *server) handleCameraClientCSR(iid uint64, value any) {
+	if s.recording == nil {
+		return
+	}
+	var req camera.CameraClientCSRRequest
+	if err := tlv8.UnmarshalBase64(value, &req); err != nil {
+		return
+	}
+	csrDER, sig, err := s.recording.Creds.HandleCSR([]byte(req.Nonce))
+	if err != nil {
+		log.Warn().Err(err).Msg("[homekit] csr")
+		return
+	}
+	s.setWriteResponse(iid, camera.CameraClientCSRResponse{
+		CSR:            string(csrDER),
+		NonceSignature: string(sig),
+	})
+}
+
+func (s *server) handleCameraClientCertificate(value any) {
+	if s.recording == nil {
+		return
+	}
+	var req camera.CameraClientCertificateRequest
+	if err := tlv8.UnmarshalBase64(value, &req); err != nil {
+		return
+	}
+	s.recording.Creds.InstallClientCertificate([]byte(req.ClientCertificate), []byte(req.CA))
+	if char := s.accessory.GetCharacter(camera.TypeCameraClientCertificateStatus); char != nil {
+		_ = char.Set(camera.CameraClientCertificateStatusValue{NeedsUpdate: false})
+	}
+}
+
+func (s *server) handleCameraKey(value any) {
+	if s.recording == nil {
+		return
+	}
+	var req camera.CameraKeyValue
+	if err := tlv8.UnmarshalBase64(value, &req); err != nil {
+		return
+	}
+	id := s.recording.Creds.SetKey([]byte(req.Key), req.KeyNumber)
+	if char := s.accessory.GetCharacter(camera.TypeCameraKeyID); char != nil {
+		_ = char.Set(camera.CameraKeyIDValue{KeyID: id})
+	}
+}
+
+func (s *server) handlePublishingPoint(value any) {
+	if s.recording == nil {
+		return
+	}
+	var req camera.CameraRecordingPublishingPointValue
+	if err := tlv8.UnmarshalBase64(value, &req); err != nil {
+		// store raw value if not TLV8-shaped
+		if char := s.accessory.GetCharacter(camera.TypeCameraRecordingPublishingPoint); char != nil {
+			char.Value = value
+		}
+		return
+	}
+	var cas [][]byte
+	for _, c := range req.ServerCACertificates {
+		cas = append(cas, []byte(c.Certificate))
+	}
+	s.recording.Creds.SetPublishingPoint(req.URL, cas)
+	if char := s.accessory.GetCharacter(camera.TypeCameraRecordingPublishingPoint); char != nil {
+		char.Value = value
+	}
+	log.Debug().Str("stream", s.stream).Str("url", req.URL).Msg("[homekit] cmaf publishing point set")
+}
+
+func (s *server) handleBufferActivity(value any) {
+	if s.recording == nil {
+		return
+	}
+	var req camera.BufferActivityCommandRequest
+	if err := tlv8.UnmarshalBase64(value, &req); err != nil {
+		return
+	}
+	s.recording.HandleActivity(&req)
+}
+
+func (s *server) handleBufferUpload(iid uint64, value any) {
+	if s.recording == nil {
+		s.setWriteResponse(iid, camera.BufferUploadCommandResponse{})
+		return
+	}
+	var req camera.BufferUploadCommandRequest
+	if err := tlv8.UnmarshalBase64(value, &req); err != nil {
+		s.setWriteResponse(iid, camera.BufferUploadCommandResponse{})
+		return
+	}
+	res := s.recording.HandleUpload(&req)
+	s.setWriteResponse(iid, res)
+	log.Debug().Str("stream", s.stream).
+		Uint64("session", req.SessionID).
+		Uint64("clip", res.ClipID).
+		Uint8("cmd", req.Command).
+		Msg("[homekit] buffer upload command")
+}
+
+func (s *server) handleBufferEvent(iid uint64, value any) {
+	if s.recording == nil {
+		s.setWriteResponse(iid, camera.BufferEventCommandResponse{})
+		return
+	}
+	var req camera.BufferEventCommandRequest
+	if err := tlv8.UnmarshalBase64(value, &req); err != nil {
+		s.setWriteResponse(iid, camera.BufferEventCommandResponse{})
+		return
+	}
+	s.setWriteResponse(iid, s.recording.HandleEventCommand(&req))
+}
+
+func truthy(value any) bool {
+	switch v := value.(type) {
+	case bool:
+		return v
+	case float64:
+		return v != 0
+	case int:
+		return v != 0
+	case uint8:
+		return v != 0
+	case uint64:
+		return v != 0
+	case string:
+		return v == "1" || v == "true"
+	default:
+		return false
+	}
+}
+
+// startRecordingBuffer attaches a ring-buffer consumer to the source stream
+// Retries until the stream can provide matching tracks
+func (s *server) startRecordingBuffer() {
+	if s.recording == nil {
+		return
+	}
+	cons := s.recording.EnsureConsumer()
+	for {
+		stream := streams.Get(s.stream)
+		if stream == nil {
+			return
+		}
+		if err := stream.AddConsumer(cons); err != nil {
+			log.Debug().Err(err).Str("stream", s.stream).Msg("[homekit] recording buffer wait for tracks")
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		log.Info().Str("stream", s.stream).Msg("[homekit] recording pre-buffer started")
+		return
+	}
+}
+
+// notifyEventSequence updates the HAP event sequence characteristic
+func (s *server) notifyEventSequence(seq uint32) {
+	if s.accessory == nil {
+		return
+	}
+	if char := s.accessory.GetCharacter(camera.TypeBufferEventSequenceNumber); char != nil {
+		s.wrMu.Lock()
+		char.Value = seq
+		s.wrMu.Unlock()
+		_ = char.NotifyListeners(nil)
+	}
+}
+
+func (s *server) streamingAllowed() bool {
+	if s.accessory == nil {
+		return true
+	}
+	// HomeKit Camera Active
+	if char := s.accessory.GetCharacter(camera.TypeHomeKitCameraActive); char != nil {
+		if v, err := char.ReadBool(); err == nil && !v {
+			return false
+		}
+	}
+	// Global / service Streaming Enabled (any false blocks)
+	for _, srv := range s.accessory.Services {
+		for _, char := range srv.Characters {
+			if char.Type == camera.TypeStreamingEnabled {
+				if v, err := char.ReadBool(); err == nil && !v {
+					return false
+				}
+			}
+		}
+	}
+	return true
+}
+
+func (s *server) updateWebRTCSessionCount() {
+	if s.accessory == nil || s.webrtc == nil {
+		return
+	}
+	if char := s.accessory.GetCharacter(camera.TypeWebRTCNumberOfActiveSessions); char != nil {
+		n := s.webrtc.ActiveCount()
+		s.wrMu.Lock()
+		char.Value = n
+		s.wrMu.Unlock()
+		_ = char.NotifyListeners(nil)
 	}
 }
 
