@@ -35,8 +35,13 @@ func getReplacer() *strings.Replacer {
 	defer secretsMu.Unlock()
 
 	if secretsReplacer == nil {
-		oldnew := make([]string, 0, 2*len(secrets))
-		for _, s := range secrets {
+		values := slices.Clone(secrets)
+		slices.SortFunc(values, func(a, b string) int {
+			return len(b) - len(a)
+		})
+
+		oldnew := make([]string, 0, 2*len(values))
+		for _, s := range values {
 			oldnew = append(oldnew, s, "***")
 		}
 		secretsReplacer = strings.NewReplacer(oldnew...)
@@ -59,14 +64,24 @@ const (
 
 func SecretString(s string) string {
 	re := getReplacer()
-	s = userinfoRegexp.ReplaceAllString(s, `://***@`)
+	s = secretUserinfo(s)
 	return re.Replace(s)
 }
 
 func SecretWrite(w io.Writer, s string) (n int, err error) {
 	re := getReplacer()
-	s = userinfoRegexp.ReplaceAllString(s, `://***@`)
+	s = secretUserinfo(s)
 	return re.WriteString(w, s)
+}
+
+func secretUserinfo(s string) string {
+	return userinfoRegexp.ReplaceAllStringFunc(s, func(match string) string {
+		userinfo := match[3 : len(match)-1]
+		if strings.Contains(userinfo, ":") {
+			return `://***:***@`
+		}
+		return `://***@`
+	})
 }
 
 func SecretWriter(w io.Writer) io.Writer {

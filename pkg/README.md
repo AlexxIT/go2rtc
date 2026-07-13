@@ -42,6 +42,7 @@ Some formats and protocols go2rtc supports exclusively. They have no equivalent 
 | Net (priv) | roborock     | webrtc          |         | h264, opus                      | opus                | `roborock:`   |
 | Net (priv) | tapo         | http            |         | h264, pcma                      | pcm_alaw            | `tapo:`       |
 | Net (priv) | tuya         | webrtc          |         |                                 |                     | `tuya:`       |
+| Net (priv) | unifi        | http, rtp, udp  |         |                                 | aac, opus, vorbis   | `unifi-talkback:` |
 | Net (priv) | vigi         | http            |         |                                 |                     | `vigi:`       |
 | Net (priv) | webtorrent   | webrtc          | TODO    | TODO                            | TODO                | `webtorrent:` |
 | Net (priv) | xiaomi*      | cs2, tutk       |         |                                 |                     | `xiaomi:`     |
