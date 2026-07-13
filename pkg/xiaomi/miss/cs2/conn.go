@@ -24,9 +24,11 @@ func Dial(host, transport string) (*Conn, error) {
 		Conn:  conn,
 		isTCP: isTCP,
 		channels: [4]*dataChannel{
-			newDataChannel(0, 10), nil, newDataChannel(250, 100), nil,
+			newDataChannel(0, 10), newDataChannel(2000, 4096), newDataChannel(2000, 4096), newDataChannel(2000, 4096),
 		},
 	}
+	c.channels[1].redirect = c.channels[2]
+	c.channels[3].redirect = c.channels[2]
 	go c.worker()
 	return c, nil
 }
@@ -108,8 +110,11 @@ func handshake(host, transport string) (net.Conn, error) {
 
 func (c *Conn) worker() {
 	defer func() {
-		c.channels[0].Close()
-		c.channels[2].Close()
+		for _, ch := range c.channels {
+			if ch != nil {
+				ch.Close()
+			}
+		}
 	}()
 
 	var keepaliveTS time.Time // only for TCP
@@ -131,7 +136,14 @@ func (c *Conn) worker() {
 		switch buf[1] {
 		case msgDrw:
 			ch := buf[5]
+			if int(ch) >= len(c.channels) {
+				continue // skip unsupported channel
+			}
+
 			channel := c.channels[ch]
+			if channel == nil {
+				continue // skip uninitialized channel
+			}
 
 			if c.isTCP {
 				// For TCP we should send ping every second to keep connection alive.
@@ -143,14 +155,13 @@ func (c *Conn) worker() {
 
 				err = channel.Push(buf[8:n])
 			} else {
-				var pushed int
-
 				seqHI, seqLO := buf[6], buf[7]
 				seq := uint16(seqHI)<<8 | uint16(seqLO)
-				pushed, err = channel.PushSeq(seq, buf[8:n])
 
+				// All UDP channels use PushSeq to ensure correct ordering and reassembly of packet fragments
+				var pushed int
+				pushed, err = channel.PushSeq(seq, buf[8:n])
 				if pushed >= 0 {
-					// For UDP we should send ACK.
 					ack := []byte{magic, msgDrwAck, 0, 6, magicDrw, ch, 0, 1, seqHI, seqLO}
 					_, _ = c.Conn.Write(ack)
 				}
@@ -193,20 +204,35 @@ func (c *Conn) Error() error {
 }
 
 func (c *Conn) ReadCommand() (cmd uint32, data []byte, err error) {
-	buf, ok := c.channels[0].Pop()
-	if !ok {
-		return 0, nil, c.Error()
+	// Read from both channel 0 and channel 1, since some devices
+	// (e.g. doorbells) send command responses on channel 1.
+	select {
+	case buf, ok := <-c.channels[0].popBuf:
+		if !ok {
+			return 0, nil, c.Error()
+		}
+		cmd = binary.LittleEndian.Uint32(buf)
+		data = buf[4:]
+		return
+	case buf, ok := <-c.channels[1].popBuf:
+		if !ok {
+			return 0, nil, c.Error()
+		}
+		cmd = binary.LittleEndian.Uint32(buf)
+		data = buf[4:]
+		return
 	}
-	cmd = binary.LittleEndian.Uint32(buf)
-	data = buf[4:]
-	return
 }
 
 func (c *Conn) WriteCommand(cmd uint32, data []byte) error {
+	return c.WriteCommandTo(0, cmd, data)
+}
+
+func (c *Conn) WriteCommandTo(channel byte, cmd uint32, data []byte) error {
 	c.cmdMu.Lock()
 	defer c.cmdMu.Unlock()
 
-	req := marshalCmd(0, c.seqCh0, cmd, data)
+	req := marshalCmd(channel, c.seqCh0, cmd, data)
 	c.seqCh0++
 
 	if c.isTCP {
@@ -427,6 +453,7 @@ type dataChannel struct {
 	waitData []byte
 	waitSize int
 	popBuf   chan []byte
+	redirect *dataChannel
 }
 
 func (c *dataChannel) Push(b []byte) error {
@@ -442,8 +469,13 @@ func (c *dataChannel) Push(b []byte) error {
 			break
 		}
 
+		targetBuf := c.popBuf
+		if c.redirect != nil {
+			targetBuf = c.redirect.popBuf
+		}
+
 		select {
-		case c.popBuf <- c.waitData[:c.waitSize]:
+		case targetBuf <- c.waitData[:c.waitSize]:
 		default:
 			return fmt.Errorf("pop buffer is full")
 		}
