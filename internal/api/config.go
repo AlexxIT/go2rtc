@@ -1,11 +1,15 @@
 package api
 
 import (
+	"errors"
 	"io"
+	"maps"
 	"net/http"
 	"os"
+	"slices"
 
 	"github.com/AlexxIT/go2rtc/internal/app"
+	pkgyaml "github.com/AlexxIT/go2rtc/pkg/yaml"
 	"gopkg.in/yaml.v3"
 )
 
@@ -55,47 +59,100 @@ func configHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func mergeYAML(file1 string, yaml2 []byte) ([]byte, error) {
-	// Read the contents of the first YAML file
 	data1, err := os.ReadFile(file1)
 	if err != nil {
 		return nil, err
 	}
 
-	// Unmarshal the first YAML file into a map
-	var config1 map[string]any
-	if err = yaml.Unmarshal(data1, &config1); err != nil {
+	var patch map[string]any
+	if err = yaml.Unmarshal(yaml2, &patch); err != nil {
 		return nil, err
 	}
 
-	// Unmarshal the second YAML document into a map
-	var config2 map[string]any
-	if err = yaml.Unmarshal(yaml2, &config2); err != nil {
+	data1, err = mergeYAMLMap(data1, nil, patch)
+	if err != nil {
 		return nil, err
 	}
 
-	// Merge the two maps
-	config1 = merge(config1, config2)
+	// validate config after merge
+	if err = yaml.Unmarshal(data1, map[string]any{}); err != nil {
+		return nil, err
+	}
 
-	// Marshal the merged map into YAML
-	return yaml.Marshal(&config1)
+	return data1, nil
 }
 
-func merge(dst, src map[string]any) map[string]any {
-	for k, v := range src {
-		if vv, ok := dst[k]; ok {
-			switch vv := vv.(type) {
-			case map[string]any:
-				v := v.(map[string]any)
-				dst[k] = merge(vv, v)
-			case []any:
-				v := v.([]any)
-				dst[k] = v
-			default:
-				dst[k] = v
+// mergeYAMLMap recursively applies patch values onto config bytes.
+func mergeYAMLMap(data []byte, path []string, patch map[string]any) ([]byte, error) {
+	for _, key := range slices.Sorted(maps.Keys(patch)) {
+		value := patch[key]
+		currPath := append(append([]string(nil), path...), key)
+
+		if valueMap, ok := value.(map[string]any); ok {
+			isMap, exists, err := pathIsMapping(data, currPath)
+			if err != nil {
+				return nil, err
 			}
-		} else {
-			dst[k] = v
+
+			if exists && isMap {
+				data, err = mergeYAMLMap(data, currPath, valueMap)
+			} else {
+				data, err = pkgyaml.Patch(data, currPath, valueMap)
+			}
+			if err != nil {
+				return nil, err
+			}
+			continue
+		}
+
+		var err error
+		data, err = pkgyaml.Patch(data, currPath, value)
+		if err != nil {
+			return nil, err
 		}
 	}
-	return dst
+	return data, nil
+}
+
+// pathIsMapping reports whether path exists and ends with a mapping node.
+func pathIsMapping(data []byte, path []string) (isMap, exists bool, err error) {
+	var root yaml.Node
+	if err = yaml.Unmarshal(data, &root); err != nil {
+		return false, false, err
+	}
+
+	if len(root.Content) == 0 {
+		return false, false, nil
+	}
+
+	if len(root.Content) != 1 || root.Content[0].Kind != yaml.MappingNode {
+		return false, false, errors.New("yaml: expected mapping document")
+	}
+
+	node := root.Content[0]
+	for i, part := range path {
+		idx := -1
+		for j := 0; j < len(node.Content); j += 2 {
+			if node.Content[j].Value == part {
+				idx = j
+				break
+			}
+		}
+		if idx < 0 {
+			return false, false, nil
+		}
+
+		valueNode := node.Content[idx+1]
+		if i == len(path)-1 {
+			return valueNode.Kind == yaml.MappingNode, true, nil
+		}
+
+		if valueNode.Kind != yaml.MappingNode {
+			return false, false, nil
+		}
+
+		node = valueNode
+	}
+
+	return false, false, nil
 }
