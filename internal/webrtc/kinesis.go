@@ -68,6 +68,38 @@ func kinesisClient(
 		return nil, err
 	}
 
+	// Wyze cameras select stream quality via a viewer-created data channel;
+	// without the switch command the camera serves its lowest profile.
+	if profile := query.Get("profile"); profile != "" {
+		dc, dcErr := pc.CreateDataChannel("My Data", nil)
+		if dcErr != nil {
+			log.Warn().Err(dcErr).Caller().Send()
+		} else {
+			dc.OnMessage(func(m pion.DataChannelMessage) {
+				log.Debug().Msgf("[webrtc] wyze dc recv: %s", m.Data)
+			})
+			// OnDial instead of OnOpen: OnOpen fires only after the remote's
+			// DATA_CHANNEL_ACK, which the Amazon KVS WebRTC C SDK on these
+			// cameras never sends (its DCEP handler consumes OPEN without
+			// replying). OnDial fires once OPEN is sent, and RFC 8832 allows
+			// sending data without waiting for the ACK.
+			dc.OnDial(func() {
+				var dcID uint16
+				if dc.ID() != nil {
+					dcID = *dc.ID()
+				}
+				log.Debug().Msgf("[webrtc] wyze dc dialed, requesting profile=%s", profile)
+				msg := fmt.Sprintf(
+					`{"function":"switch","version":1,"payload":{"profile":%q},"interface":"resolution","resource_id":%d}`,
+					profile, dcID,
+				)
+				if err := dc.SendText(msg); err != nil {
+					log.Warn().Err(err).Caller().Send()
+				}
+			})
+		}
+	}
+
 	// protect from sending ICE candidate before Offer
 	var sendOffer core.Waiter
 
@@ -205,7 +237,7 @@ type wyzeKVS struct {
 	URL      string          `json:"signalingUrl"`
 }
 
-func wyzeClient(rawURL string) (core.Producer, error) {
+func wyzeClient(rawURL string, query url.Values) (core.Producer, error) {
 	client := http.Client{Timeout: 5 * time.Second}
 	res, err := client.Get(rawURL)
 	if err != nil {
@@ -226,10 +258,16 @@ func wyzeClient(rawURL string) (core.Producer, error) {
 		return nil, errors.New("wyse: wrong result: " + kvs.Result)
 	}
 
-	query := url.Values{
+	params := url.Values{
 		"client_id":   []string{kvs.ClientId},
 		"ice_servers": []string{string(kvs.Servers)},
 	}
 
-	return kinesisClient(kvs.URL, query, "webrtc/wyze", nil)
+	// forward stream-URL fragment params (e.g. #profile=2k) to the
+	// kinesis client for the data-channel quality switch
+	if profile := query.Get("profile"); profile != "" {
+		params.Set("profile", profile)
+	}
+
+	return kinesisClient(kvs.URL, params, "webrtc/wyze", nil)
 }
