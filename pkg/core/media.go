@@ -177,33 +177,30 @@ func UnmarshalMedia(md *sdp.MediaDescription) *Media {
 }
 
 func ParseQuery(query map[string][]string) (medias []*Media) {
-	// set media candidates from query list
-	for key, values := range query {
-		switch key {
-		case KindVideo, KindAudio:
-			for _, value := range values {
-				media := &Media{Kind: key, Direction: DirectionSendonly}
+	for _, key := range []string{KindVideo, KindAudio} {
+		values := query[key]
+		for _, value := range values {
+			media := &Media{Kind: key, Direction: DirectionSendonly}
 
-				for _, name := range strings.Split(value, ",") {
-					name = strings.ToUpper(name)
+			for _, name := range strings.Split(value, ",") {
+				name = strings.ToUpper(name)
 
-					// check aliases
-					switch name {
-					case "", "COPY":
-						name = CodecAny
-					case "MJPEG":
-						name = CodecJPEG
-					case "AAC":
-						name = CodecAAC
-					case "MP3":
-						name = CodecMP3
-					}
-
-					media.Codecs = append(media.Codecs, &Codec{Name: name})
+				// check aliases
+				switch name {
+				case "", "COPY":
+					name = CodecAny
+				case "MJPEG":
+					name = CodecJPEG
+				case "AAC":
+					name = CodecAAC
+				case "MP3":
+					name = CodecMP3
 				}
 
-				medias = append(medias, media)
+				media.Codecs = append(media.Codecs, &Codec{Name: name})
 			}
+
+			medias = append(medias, media)
 		}
 	}
 

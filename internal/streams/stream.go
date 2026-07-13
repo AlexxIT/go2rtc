@@ -118,6 +118,21 @@ producers:
 	s.mu.Unlock()
 }
 
+func (s *Stream) stopAll() {
+	s.mu.Lock()
+	consumers := append([]core.Consumer(nil), s.consumers...)
+	producers := append([]*Producer(nil), s.producers...)
+	s.consumers = nil
+	s.mu.Unlock()
+
+	for _, consumer := range consumers {
+		_ = consumer.Stop()
+	}
+	for _, producer := range producers {
+		producer.stop()
+	}
+}
+
 func (s *Stream) MarshalJSON() ([]byte, error) {
 	var info = struct {
 		Producers []*Producer     `json:"producers"`

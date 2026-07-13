@@ -27,6 +27,7 @@ type Conn struct {
 	Media       string
 	OnClose     func() error
 	PacketSize  uint16
+	Repack      bool
 	SessionName string
 	Timeout     int
 	Transport   string // custom transport support, ex. RTSP over WebSocket
@@ -107,7 +108,7 @@ func (c *Conn) Handle() (err error) {
 
 		if c.Timeout == 0 {
 			// polling frames from remote RTSP Server (ex Camera)
-			timeout = time.Second * 5
+			timeout = defaultActiveProducerTimeout(c.URL)
 
 			if len(c.Receivers) == 0 || c.Transport == "udp" {
 				// if we only send audio to camera
@@ -121,7 +122,7 @@ func (c *Conn) Handle() (err error) {
 	case core.ModePassiveProducer:
 		// polling frames from remote RTSP Client (ex FFmpeg)
 		if c.Timeout == 0 {
-			timeout = time.Second * 15
+			timeout = defaultPassiveProducerTimeout(c.RemoteAddr)
 		} else {
 			timeout = time.Second * time.Duration(c.Timeout)
 		}
@@ -149,6 +150,30 @@ func (c *Conn) Handle() (err error) {
 	}
 
 	return
+}
+
+func defaultActiveProducerTimeout(uri *url.URL) time.Duration {
+	if uri != nil {
+		host := uri.Hostname()
+		switch host {
+		case "127.0.0.1", "::1", "localhost":
+			return 20 * time.Second
+		}
+	}
+
+	return 5 * time.Second
+}
+
+func defaultPassiveProducerTimeout(remoteAddr string) time.Duration {
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err == nil {
+		switch host {
+		case "127.0.0.1", "::1", "localhost":
+			return 60 * time.Second
+		}
+	}
+
+	return 15 * time.Second
 }
 
 func (c *Conn) handleKeepalive(ctx context.Context, d time.Duration) {
