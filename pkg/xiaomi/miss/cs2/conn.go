@@ -374,7 +374,10 @@ func newTCPConn(addr string) (net.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &tcpConn{conn.(*net.TCPConn), bufio.NewReader(conn)}, nil
+	tcp := conn.(*net.TCPConn)
+tcp.SetKeepAlive(true)
+tcp.SetKeepAlivePeriod(3 * time.Second)
+return &tcpConn{tcp, bufio.NewReader(conn)}, nil
 }
 
 type tcpConn struct {
