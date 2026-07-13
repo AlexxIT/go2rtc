@@ -56,6 +56,14 @@ streams:
   xiaomi1: xiaomi://***&subtype=sd
 ```
 
+Some cameras report offline while waking from standby.
+Use `retries=4` to retry MISS startup before returning an error.
+
+```yaml
+streams:
+  xiaomi1: xiaomi://***&retries=4
+```
+
 You can use a second channel for dual cameras: `channel=2`.
 
 ```yaml
