@@ -51,6 +51,12 @@ type Conn struct {
 
 	udpConn []*net.UDPConn
 	udpAddr []*net.UDPAddr
+
+	lastTimestamp   map[byte]uint32
+	lastSeq         map[byte]uint16
+	timestampOffset map[byte]uint32
+	seqOffset       map[byte]uint16
+	trackMu         sync.Mutex
 }
 
 const (
@@ -292,6 +298,40 @@ func (c *Conn) handleRawPacket(channel byte, buf []byte) error {
 		if err := packet.Unmarshal(buf); err != nil {
 			return err
 		}
+
+		// Detect and fix timestamp resets after reconnect
+		// Some cameras (e.g., Tapo) reset RTP timestamp to 0 after reconnect,
+		// which causes "non monotonically increasing dts" in clients
+		c.trackMu.Lock()
+
+		// Calculate offset on first packet with timestamp=0 after reconnect
+		if packet.Timestamp == 0 && c.timestampOffset[channel] == 0 {
+			if lastTS := c.lastTimestamp[channel]; lastTS > 0 {
+				var offsetTs uint32 = 0
+
+				for _, r := range c.Receivers {
+					if r.ID == channel {
+						offsetTs = r.Codec.ClockRate / 10 // 100ms
+						break
+					}
+				}
+
+				c.timestampOffset[channel] = lastTS + offsetTs
+			}
+		}
+		if packet.SequenceNumber == 0 && c.seqOffset[channel] == 0 {
+			if lastSeq := c.lastSeq[channel]; lastSeq > 0 {
+				c.seqOffset[channel] = lastSeq + 1
+			}
+		}
+
+		packet.Timestamp += c.timestampOffset[channel]
+		packet.SequenceNumber += c.seqOffset[channel]
+
+		c.lastTimestamp[channel] = packet.Timestamp
+		c.lastSeq[channel] = packet.SequenceNumber
+
+		c.trackMu.Unlock()
 
 		for _, receiver := range c.Receivers {
 			if receiver.ID == channel {
