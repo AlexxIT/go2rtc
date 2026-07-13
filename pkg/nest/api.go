@@ -26,7 +26,10 @@ type API struct {
 	StreamToken          string
 	StreamExtensionToken string
 
+	key string // credentials cache key, used to refresh the OAuth token
+
 	extendTimer *time.Timer
+	extendStop  chan struct{}
 }
 
 type Auth struct {
@@ -49,8 +52,12 @@ func NewAPI(clientID, clientSecret, refreshToken string) (*API, error) {
 	key := clientID + ":" + clientSecret + ":" + refreshToken
 	now := time.Now()
 
+	// The cache only stores the OAuth token. Each caller gets its own API
+	// instance, because the Stream* fields hold per-stream session state -
+	// multiple cameras sharing one instance overwrite each other's session
+	// and only the last one gets extended.
 	if api := cache[key]; api != nil && now.Before(api.ExpiresAt) {
-		return api, nil
+		return &API{Token: api.Token, ExpiresAt: api.ExpiresAt, key: key}, nil
 	}
 
 	data := url.Values{
@@ -89,7 +96,7 @@ func NewAPI(clientID, clientSecret, refreshToken string) (*API, error) {
 
 	cache[key] = api
 
-	return api, nil
+	return &API{Token: api.Token, ExpiresAt: api.ExpiresAt, key: key}, nil
 }
 
 func (a *API) GetDevices(projectID string) ([]DeviceInfo, error) {
@@ -228,23 +235,12 @@ func (a *API) ExchangeSDP(projectID, deviceID, offer string) (string, error) {
 }
 
 func (a *API) refreshToken() error {
-	// Get the cached API with matching token to get credentials
-	var refreshKey string
-	cacheMu.Lock()
-	for key, api := range cache {
-		if api.Token == a.Token {
-			refreshKey = key
-			break
-		}
-	}
-	cacheMu.Unlock()
-
-	if refreshKey == "" {
+	if a.key == "" {
 		return errors.New("nest: unable to find cached credentials")
 	}
 
-	// Parse credentials from cache key
-	parts := strings.Split(refreshKey, ":")
+	// Parse credentials from the cache key
+	parts := strings.SplitN(a.key, ":", 3)
 	if len(parts) != 3 {
 		return errors.New("nest: invalid cache key format")
 	}
@@ -469,11 +465,30 @@ func (a *API) StartExtendStreamTimer() {
 		return
 	}
 
-	a.extendTimer = time.NewTimer(time.Until(a.StreamExpiresAt) - time.Minute)
+	// Google expires sessions after ~5 minutes; each successful extension
+	// returns a new expiresAt, so keep extending until the stream stops.
+	timer := time.NewTimer(time.Until(a.StreamExpiresAt) - time.Minute)
+	stop := make(chan struct{})
+	a.extendTimer = timer
+	a.extendStop = stop
+
 	go func() {
-		<-a.extendTimer.C
-		if err := a.ExtendStream(); err != nil {
-			return
+		for {
+			select {
+			case <-timer.C:
+				// The OAuth token lives ~1 hour, sessions can live longer
+				if time.Now().After(a.ExpiresAt.Add(-30 * time.Second)) {
+					if err := a.refreshToken(); err != nil {
+						return
+					}
+				}
+				if err := a.ExtendStream(); err != nil {
+					return
+				}
+				timer.Reset(time.Until(a.StreamExpiresAt) - time.Minute)
+			case <-stop:
+				return
+			}
 		}
 	}()
 }
@@ -482,5 +497,9 @@ func (a *API) StopExtendStreamTimer() {
 	if a.extendTimer != nil {
 		a.extendTimer.Stop()
 		a.extendTimer = nil
+	}
+	if a.extendStop != nil {
+		close(a.extendStop)
+		a.extendStop = nil
 	}
 }
