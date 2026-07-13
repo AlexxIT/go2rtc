@@ -649,6 +649,7 @@ func (g *rtpTimestampGuard) next(ts uint32) uint32 {
 			}
 		}
 		g.last = adjusted
+		g.offset = adjusted - ts
 		return adjusted
 	}
 
