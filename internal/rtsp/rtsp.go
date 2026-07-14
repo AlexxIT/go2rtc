@@ -167,6 +167,14 @@ func tcpHandler(conn *rtsp.Conn) {
 				return
 			}
 
+			// Clean up previous consumer on re-DESCRIBE (e.g. ONVIF clients)
+			if closer != nil {
+				closer()
+				closer = nil
+			}
+			conn.Senders = nil
+			conn.Receivers = nil
+
 			name = conn.URL.Path[1:]
 
 			stream := streams.Get(name)
