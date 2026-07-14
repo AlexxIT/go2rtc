@@ -8,32 +8,20 @@
         main > div {
             display: flex;
             flex-wrap: wrap;
-            gap: 10px;
+            gap: 8px;
+            margin-bottom: 12px;
         }
 
         table tbody {
             font-size: 13px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
         }
 
-        .trace {
-            color: #585858 !important;
-        }
-
-        .debug {
-            color: #808080 !important;
-        }
-
-        .info {
-            color: #0174DF !important;
-        }
-
-        .warn {
-            color: #FF9966 !important;
-        }
-
-        .error {
-            color: #DF0101 !important;
-        }
+        .trace { color: var(--text-muted) !important; }
+        .debug { color: var(--text-secondary) !important; }
+        .info { color: var(--accent) !important; }
+        .warn { color: var(--yellow) !important; }
+        .error { color: var(--red) !important; }
     </style>
 </head>
 <body>
