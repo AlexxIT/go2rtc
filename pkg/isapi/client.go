@@ -162,3 +162,7 @@ func (c *Client) Close() (err error) {
 //	Enabled string `xml:"enabled"`
 //	Codec   string `xml:"audioCompressionType"`
 //}
+
+func (c *Client) IsClosed() bool {
+	return c.conn == nil
+}
