@@ -423,7 +423,13 @@ func (p *PES) GetPacket() (pkt *rtp.Packet) {
 			},
 		}
 
-		pkt.Payload, p.Payload = CutOPUSPacket(p.Payload)
+		raw := p.Payload
+		pkt.Payload, p.Payload = CutOPUSPacket(raw)
+		if pkt.Payload == nil {
+			// Camera sends raw Opus frames without IETF AU control header
+			pkt.Payload = raw
+			p.Payload = nil
+		}
 		p.PTS += opusDT
 		return
 	}

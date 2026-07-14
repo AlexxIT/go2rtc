@@ -22,6 +22,9 @@ func (c *Client) GetMedias() []*core.Media {
 				Kind:      core.KindAudio,
 				Direction: core.DirectionRecvonly,
 				Codecs: []*core.Codec{
+					// Battery cameras (D230, DB200, H100) send Opus at 48kHz.
+					// Non-battery cameras send PCMA at 8kHz (StreamTypePCMATapo=0x90).
+					{Name: core.CodecOpus, ClockRate: 48000, Channels: 2, PayloadType: core.PayloadTypeRAW},
 					{Name: core.CodecPCMA, ClockRate: 8000, PayloadType: 8},
 				},
 			},
@@ -54,7 +57,11 @@ func (c *Client) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver,
 	case core.KindVideo:
 		track.ID = mpegts.StreamTypeH264
 	case core.KindAudio:
-		track.ID = mpegts.StreamTypePCMATapo
+		if codec.Name == core.CodecOpus {
+			track.ID = mpegts.StreamTypePrivateOPUS
+		} else {
+			track.ID = mpegts.StreamTypePCMATapo
+		}
 	}
 	c.receivers = append(c.receivers, track)
 	return track, nil
