@@ -21,6 +21,16 @@ A regular camera has a single video source (`GetVideoSources`) and two profiles 
 
 Go2rtc has one video source and one profile per stream.
 
+You can protect the ONVIF SOAP service independently from the Web API:
+
+```yaml
+onvif:
+  username: "admin"
+  password: "pass"
+```
+
+This uses WS-Security `UsernameToken` authentication for ONVIF SOAP requests. `GetSystemDateAndTime` stays available without authentication so clients can calculate clock offset before sending password digests.
+
 ## Tested clients
 
 Go2rtc works as ONVIF server:
