@@ -135,6 +135,7 @@ It comes preinstalled with [FFmpeg](internal/ffmpeg/README.md) and [Python](inte
 Latest, but maybe unstable version:
 
 - Binary: [latest master build](https://nightly.link/AlexxIT/go2rtc/workflows/build/master)
+- Pull Requests: binaries are built for every PR and are available in the summary of the corresponding GitHub Actions run
 - Docker: `alexxit/go2rtc:master` or `alexxit/go2rtc:master-hardware` versions
 - Home Assistant add-on: `go2rtc master` or `go2rtc master hardware` versions
 
