@@ -1,6 +1,7 @@
 package homekit
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -166,6 +167,35 @@ func apiUnpair(id string) error {
 	streams.Delete(id)
 
 	return app.PatchConfig([]string{"streams", id}, nil)
+}
+
+func apiHomekitEvents(w http.ResponseWriter, r *http.Request) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	flusher.Flush()
+
+	ch := make(chan DoorbellEvent, 8)
+	addSSEListener(ch)
+	defer removeSSEListener(ch)
+
+	ctx := r.Context()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case ev := <-ch:
+			data, _ := json.Marshal(ev)
+			fmt.Fprintf(w, "event: doorbell\ndata: %s\n\n", data)
+			flusher.Flush()
+		}
+	}
 }
 
 func findHomeKitURLs() map[string]*url.URL {

@@ -239,6 +239,37 @@ func (c *Client) Close() error {
 	return c.Conn.Close()
 }
 
+// StartEventsReader starts the background goroutine that demuxes regular
+// HTTP responses from EVENT/1.0 push notifications on the encrypted
+// connection.  Must be called before SubscribeEvent and before any
+// concurrent request/response exchange that could race with events.
+func (c *Client) StartEventsReader() {
+	go c.eventsReader()
+}
+
+// SubscribeEvent asks the accessory to push EVENT notifications for the
+// characteristic identified by its IID.  The events will arrive on the
+// OnEvent callback.  StartEventsReader must be called first.
+func (c *Client) SubscribeEvent(iid uint64) error {
+	v := JSONCharacters{
+		Value: []JSONCharacter{
+			{AID: DeviceAID, IID: iid, Event: true},
+		},
+	}
+	body, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	res, err := c.Put(PathCharacteristics, MimeJSON, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+
+	_, _ = io.ReadAll(res.Body)
+	return nil
+}
+
 func (c *Client) eventsReader() {
 	c.res = make(chan *http.Response)
 

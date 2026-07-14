@@ -36,7 +36,10 @@ func Init() {
 
 	api.HandleFunc("api/homekit", apiHomekit)
 	api.HandleFunc("api/homekit/accessories", apiHomekitAccessories)
+	api.HandleFunc("api/homekit/events", apiHomekitEvents)
 	api.HandleFunc("api/discovery/homekit", apiDiscovery)
+
+	initEvents()
 
 	if cfg.Mod == nil {
 		return

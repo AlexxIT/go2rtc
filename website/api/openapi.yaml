@@ -1077,6 +1077,20 @@ paths:
         "404":
           description: Stream not found
 
+  /api/homekit/events:
+    get:
+      summary: Doorbell events (SSE)
+      description: |
+        Server-Sent Events stream of HomeKit doorbell button press events.
+        Events are sent with type `doorbell` and a JSON data payload.
+      tags: [ HomeKit ]
+      responses:
+        "200":
+          description: SSE stream
+          content:
+            text/event-stream:
+              example: "event: doorbell\ndata: {\"stream\":\"doorbell\",\"event\":\"single_press\",\"value\":0,\"timestamp\":\"2026-03-12T10:30:00Z\"}\n\n"
+
   /pair-setup:
     post:
       summary: HomeKit Pair Setup (HAP)
