@@ -2,6 +2,7 @@ package iot
 
 import (
 	"crypto/md5"
+	"crypto/rand"
 	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
@@ -160,7 +161,12 @@ func Dial(rawURL string) (*rpc.Client, error) {
 		devTopic: query.Get("u") + "/" + user + "/" + query.Get("did"),
 	}
 
-	if err = c.mqtt.Connect("com.roborock.smart:mbrriot", user, pass); err != nil {
+	// some brokers (ex. mqtt-cn-*) drop connections whose client ID is already
+	// in use, and the fixed ID is shared by every go2rtc install, so make it unique
+	cid := make([]byte, 6)
+	_, _ = rand.Read(cid)
+
+	if err = c.mqtt.Connect("com.roborock.smart:mbrriot-"+hex.EncodeToString(cid), user, pass); err != nil {
 		return nil, err
 	}
 
