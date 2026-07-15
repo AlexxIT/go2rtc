@@ -92,6 +92,22 @@ func patch(in []byte, path []string, value any) ([]byte, error) {
 	} else {
 		// parent value is nil (use parent indent + 2)
 		paste = addIndent(paste, pKey.Column+1)
+
+		// An explicit null scalar on the key's line (e.g. "streams: null", as emitted by
+		// yaml.Marshal of an empty map) can't hold a child: pasting one after it yields
+		// "streams: null\n  x: y", which fails to parse ("mapping values are not allowed
+		// in this context"). Strip the scalar so the key becomes a bare mapping parent,
+		// then append the child. A bare/implicit-null value ("streams:") carries no token
+		// (pVal.Value == "") and keeps the original behaviour below.
+		if value != nil && pVal.Value != "" && pVal.Line == pKey.Line {
+			vOff := lineOffset(in, pVal.Line) + pVal.Column - 1
+			colon := bytes.LastIndexByte(in[:vOff], ':')
+			eol := lineOffset(in, pKey.Line+1)
+			if eol < 0 {
+				eol = len(in)
+			}
+			return join(in[:colon+1], paste, in[eol:]), nil
+		}
 	}
 
 	_, i1 := nodeBounds(in, pKey)
@@ -137,9 +153,11 @@ func nodeBounds(in []byte, node *yaml.Node) (offset0, offset1 int) {
 	return
 }
 
+var ErrPathNotExist = errors.New("yaml: path not exist")
+
 func addToEnd(in []byte, path []string, value any) ([]byte, error) {
 	if len(path) != 2 || value == nil {
-		return nil, errors.New("yaml: path not exist")
+		return nil, ErrPathNotExist
 	}
 
 	v := map[string]map[string]any{
