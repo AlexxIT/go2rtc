@@ -107,3 +107,11 @@ func TestPatch(t *testing.T) {
 		})
 	}
 }
+
+func TestPatchDeleteMissing(t *testing.T) {
+	// Deleting a path whose parent does not exist routes through addToEnd and
+	// must return the ErrPathNotExist sentinel so callers can treat a missing
+	// delete target as a no-op via errors.Is.
+	_, err := Patch([]byte("streams:\n  camera1: url1\n"), []string{"homekit", "camera1"}, nil)
+	require.ErrorIs(t, err, ErrPathNotExist)
+}

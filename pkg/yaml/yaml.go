@@ -137,9 +137,11 @@ func nodeBounds(in []byte, node *yaml.Node) (offset0, offset1 int) {
 	return
 }
 
+var ErrPathNotExist = errors.New("yaml: path not exist")
+
 func addToEnd(in []byte, path []string, value any) ([]byte, error) {
 	if len(path) != 2 || value == nil {
-		return nil, errors.New("yaml: path not exist")
+		return nil, ErrPathNotExist
 	}
 
 	v := map[string]map[string]any{
