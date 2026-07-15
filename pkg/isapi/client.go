@@ -246,39 +246,49 @@ func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Rece
 		return nil
 	}
 
-	c.sender = core.NewSender(media, track.Codec)
-	src := track.Codec.Name
+	// Prefer matched producer codec. WebRTC often passes track.Codec=ANY;
+	// path must follow the negotiated codec (Opus/PCMU/…), not ANY.
+	pathCodec := codec
+	if pathCodec == nil || pathCodec.Name == "" || pathCodec.Name == core.CodecAny || pathCodec.Name == core.CodecAll {
+		pathCodec = track.Codec
+	}
+	c.sender = core.NewSender(media, pathCodec)
+	src := pathCodec.Name
 	Log.Info().
 		Str("src", src).
-		Uint32("src_rate", track.Codec.ClockRate).
-		Uint8("src_ch", track.Codec.Channels).
+		Str("track", track.Codec.Name).
+		Uint32("src_rate", pathCodec.ClockRate).
+		Uint8("src_ch", pathCodec.Channels).
 		Str("cam", c.codecName).
 		Msg("[isapi] AddTrack")
 
 	switch {
-	case c.codecName == core.CodecAAC && track.Codec.Name == core.CodecAAC:
+	case c.codecName == core.CodecAAC && src == core.CodecAAC:
 		c.sender.Handler = func(packet *rtp.Packet) {
 			c.noteIn(packet)
 			c.writeADTSFrames(packet.Payload)
 		}
-		if track.Codec.IsRTP() {
-			c.sender.Handler = aac.RTPToADTS(codec, c.sender.Handler)
+		if track.Codec.IsRTP() || pathCodec.IsRTP() {
+			c.sender.Handler = aac.RTPToADTS(pathCodec, c.sender.Handler)
 		} else {
-			c.sender.Handler = aac.EncodeToADTS(codec, c.sender.Handler)
+			c.sender.Handler = aac.EncodeToADTS(pathCodec, c.sender.Handler)
 		}
+		Log.Info().Str("path", "AAC→AAC").Msg("[isapi] talk path")
 
-	case c.codecName == core.CodecAAC && track.Codec.Name == core.CodecOpus:
+	case c.codecName == core.CodecAAC && src == core.CodecOpus:
 		c.sender.Handler = func(packet *rtp.Packet) {
 			c.noteIn(packet)
 			c.writeOpusToAAC(packet)
 		}
+		Log.Info().Str("path", "Opus→AAC").Msg("[isapi] talk path")
 
-	case c.codecName == core.CodecAAC && (track.Codec.Name == core.CodecPCMU || track.Codec.Name == core.CodecPCMA):
-		srcCodec := track.Codec.Name
+	case c.codecName == core.CodecAAC && (src == core.CodecPCMU || src == core.CodecPCMA):
+		srcCodec := src
 		c.sender.Handler = func(packet *rtp.Packet) {
 			c.noteIn(packet)
 			c.writePCMUToAAC(srcCodec, packet.Payload)
 		}
+		Log.Info().Str("path", "G.711→AAC").Str("codec", src).Msg("[isapi] talk path")
 
 	default:
 		// G.711 cam: raw bytes straight through (no ffmpeg).
