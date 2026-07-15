@@ -1,6 +1,7 @@
 package isapi
 
 import (
+	"bufio"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
@@ -13,12 +14,14 @@ import (
 	"os/exec"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/aac"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/pion/rtp"
+	"github.com/pion/webrtc/v4/pkg/media/oggwriter"
 )
 
 // Deprecated: should be rewritten to core.Connection
@@ -37,10 +40,15 @@ type Client struct {
 	sender *core.Sender
 	send   int
 
-	mu     sync.Mutex
-	ffCmd  *exec.Cmd
-	ffIn   io.WriteCloser
-	ffDone chan struct{}
+	mu      sync.Mutex
+	ffCmd   *exec.Cmd
+	ffIn    io.WriteCloser
+	ffOgg   *oggwriter.OggWriter
+	ffSrc   string // matched source codec for current ffmpeg session
+	ffDone  chan struct{}
+	inPkts  atomic.Uint64
+	inBytes atomic.Uint64
+	outFrm  atomic.Uint64
 }
 
 func Dial(rawURL string) (*Client, error) {
@@ -119,13 +127,16 @@ func (c *Client) Dial() (err error) {
 	if c.codecName == core.CodecAAC {
 		conf := aac.EncodeConfig(aac.TypeAACLC, c.sampleRate, 1, false)
 		media.Codecs = []*core.Codec{
+			// Prefer Opus (WebRTC mic) → ffmpeg → AAC. Avoid PCMU mush when possible.
+			{Name: core.CodecOpus, ClockRate: 48000, Channels: 2},
+			{Name: core.CodecOpus, ClockRate: 48000},
 			{
 				Name:      core.CodecAAC,
 				ClockRate: c.sampleRate,
 				Channels:  1,
 				FmtpLine:  aac.FMTP + hex.EncodeToString(conf),
 			},
-			// WebRTC mic offers Opus/PCMU/PCMA. Match G.711 and transcode to AAC.
+			// Fallback: same G.711 match as stock, then transcode to AAC.
 			{Name: core.CodecPCMU, ClockRate: 8000},
 			{Name: core.CodecPCMA, ClockRate: 8000},
 		}
@@ -137,6 +148,12 @@ func (c *Client) Dial() (err error) {
 	}
 
 	c.medias = append(c.medias, media)
+	Log.Info().
+		Str("host", c.url).
+		Str("cam_codec", c.codecName).
+		Uint32("sample_rate", c.sampleRate).
+		Str("channel", c.channel).
+		Msg("[isapi] dial two-way")
 	return nil
 }
 
@@ -192,6 +209,10 @@ func (c *Client) Open() (err error) {
 	_, _ = c.conn.Read(buf)
 
 	tcp.Close(res)
+	Log.Info().
+		Str("session", c.sessionID).
+		Str("cam_codec", c.codecName).
+		Msg("[isapi] open audioData OK")
 	return nil
 }
 
@@ -226,10 +247,18 @@ func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Rece
 	}
 
 	c.sender = core.NewSender(media, track.Codec)
+	src := track.Codec.Name
+	Log.Info().
+		Str("src", src).
+		Uint32("src_rate", track.Codec.ClockRate).
+		Uint8("src_ch", track.Codec.Channels).
+		Str("cam", c.codecName).
+		Msg("[isapi] AddTrack")
 
 	switch {
 	case c.codecName == core.CodecAAC && track.Codec.Name == core.CodecAAC:
 		c.sender.Handler = func(packet *rtp.Packet) {
+			c.noteIn(packet)
 			c.writeADTSFrames(packet.Payload)
 		}
 		if track.Codec.IsRTP() {
@@ -238,19 +267,31 @@ func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Rece
 			c.sender.Handler = aac.EncodeToADTS(codec, c.sender.Handler)
 		}
 
+	case c.codecName == core.CodecAAC && track.Codec.Name == core.CodecOpus:
+		c.sender.Handler = func(packet *rtp.Packet) {
+			c.noteIn(packet)
+			c.writeOpusToAAC(packet)
+		}
+
 	case c.codecName == core.CodecAAC && (track.Codec.Name == core.CodecPCMU || track.Codec.Name == core.CodecPCMA):
 		srcCodec := track.Codec.Name
 		c.sender.Handler = func(packet *rtp.Packet) {
+			c.noteIn(packet)
 			c.writePCMUToAAC(srcCodec, packet.Payload)
 		}
 
 	default:
+		// G.711 cam: raw bytes straight through (no ffmpeg).
+		Log.Info().Str("path", "raw").Str("codec", src).Msg("[isapi] G.711 passthrough")
 		c.sender.Handler = func(packet *rtp.Packet) {
 			if c.conn == nil {
 				return
 			}
+			c.noteIn(packet)
 			c.send += len(packet.Payload)
-			_, _ = c.conn.Write(packet.Payload)
+			if _, err := c.conn.Write(packet.Payload); err != nil {
+				Log.Debug().Err(err).Msg("[isapi] G.711 write")
+			}
 		}
 	}
 
@@ -258,11 +299,41 @@ func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Rece
 	return nil
 }
 
+func (c *Client) noteIn(packet *rtp.Packet) {
+	n := c.inPkts.Add(1)
+	c.inBytes.Add(uint64(len(packet.Payload)))
+	if n == 1 || n%50 == 0 {
+		Log.Debug().
+			Uint64("in_pkts", n).
+			Uint64("in_bytes", c.inBytes.Load()).
+			Uint64("out_frames", c.outFrm.Load()).
+			Int("sent_bytes", c.send).
+			Str("ff_src", c.ffSrcSnapshot()).
+			Msg("[isapi] talk stats")
+	}
+}
+
+func (c *Client) ffSrcSnapshot() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.ffSrc
+}
+
 func (c *Client) Start() (err error) {
 	return c.Open()
 }
 
 func (c *Client) Stop() (err error) {
+	inPkts := c.inPkts.Load()
+	outFrm := c.outFrm.Load()
+	Log.Info().
+		Uint64("in_pkts", inPkts).
+		Uint64("in_bytes", c.inBytes.Load()).
+		Uint64("out_frames", outFrm).
+		Int("sent_bytes", c.send).
+		Str("ff_src", c.ffSrcSnapshot()).
+		Msg("[isapi] stop")
+
 	c.stopFFmpeg()
 
 	if c.sender != nil {
@@ -315,12 +386,33 @@ func (c *Client) writeADTSFrames(b []byte) {
 		var hdr [4]byte
 		binary.BigEndian.PutUint32(hdr[:], uint32(size))
 		if _, err := c.conn.Write(hdr[:]); err != nil {
+			Log.Debug().Err(err).Msg("[isapi] AAC len write")
 			return
 		}
 		if _, err := c.conn.Write(frame); err != nil {
+			Log.Debug().Err(err).Msg("[isapi] AAC frame write")
 			return
 		}
 		c.send += 4 + size
+		c.outFrm.Add(1)
+	}
+}
+
+func (c *Client) writeOpusToAAC(packet *rtp.Packet) {
+	if packet == nil || len(packet.Payload) == 0 {
+		return
+	}
+	if err := c.ensureFFmpeg(core.CodecOpus, packet); err != nil {
+		return
+	}
+	c.mu.Lock()
+	ogg := c.ffOgg
+	c.mu.Unlock()
+	if ogg == nil {
+		return
+	}
+	if err := ogg.WriteRTP(packet); err != nil {
+		Log.Debug().Err(err).Msg("[isapi] opus ogg write")
 	}
 }
 
@@ -328,7 +420,7 @@ func (c *Client) writePCMUToAAC(codecName string, payload []byte) {
 	if len(payload) == 0 {
 		return
 	}
-	if err := c.ensureFFmpeg(codecName); err != nil {
+	if err := c.ensureFFmpeg(codecName, nil); err != nil {
 		return
 	}
 	c.mu.Lock()
@@ -337,7 +429,9 @@ func (c *Client) writePCMUToAAC(codecName string, payload []byte) {
 	if in == nil {
 		return
 	}
-	_, _ = in.Write(payload)
+	if _, err := in.Write(payload); err != nil {
+		Log.Debug().Err(err).Msg("[isapi] g711→aac write")
+	}
 }
 
 // findFFmpeg returns a usable ffmpeg binary.
@@ -363,10 +457,10 @@ func findFFmpeg() (string, error) {
 			}
 		}
 	}
-	return "", errors.New("isapi: ffmpeg not found (needed for PCMU/PCMA → AAC)")
+	return "", errors.New("isapi: ffmpeg not found (needed for Opus/PCMU/PCMA → AAC)")
 }
 
-func (c *Client) ensureFFmpeg(codecName string) error {
+func (c *Client) ensureFFmpeg(codecName string, firstOpus *rtp.Packet) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.ffCmd != nil {
@@ -375,22 +469,44 @@ func (c *Client) ensureFFmpeg(codecName string) error {
 
 	bin, err := findFFmpeg()
 	if err != nil {
+		Log.Error().Err(err).Str("src", codecName).Msg("[isapi] ffmpeg missing")
 		return err
 	}
 
-	sampleFmt := "mulaw"
-	if codecName == core.CodecPCMA {
-		sampleFmt = "alaw"
+	args := []string{
+		"-hide_banner", "-loglevel", "warning",
+		"-fflags", "nobuffer",
+		"-flags", "low_delay",
+		"-probesize", "32",
+		"-analyzeduration", "0",
 	}
 
-	cmd := exec.Command(
-		bin,
-		"-hide_banner", "-loglevel", "error",
-		"-f", sampleFmt, "-ar", "8000", "-ac", "1", "-i", "pipe:0",
+	switch codecName {
+	case core.CodecOpus:
+		args = append(args,
+			"-f", "ogg", "-i", "pipe:0",
+		)
+	case core.CodecPCMU:
+		args = append(args,
+			"-f", "mulaw", "-ar", "8000", "-ac", "1", "-i", "pipe:0",
+		)
+	case core.CodecPCMA:
+		args = append(args,
+			"-f", "alaw", "-ar", "8000", "-ac", "1", "-i", "pipe:0",
+		)
+	default:
+		return errors.New("isapi: unsupported ffmpeg input: " + codecName)
+	}
+
+	args = append(args,
 		"-c:a", "aac", "-profile:a", "aac_low",
 		"-ar", strconv.Itoa(int(c.sampleRate)), "-ac", "1", "-b:a", "64k",
-		"-f", "adts", "pipe:1",
+		"-f", "adts",
+		"-flush_packets", "1",
+		"pipe:1",
 	)
+
+	cmd := exec.Command(bin, args...)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return err
@@ -407,15 +523,58 @@ func (c *Client) ensureFFmpeg(codecName string) error {
 	}
 	if err = cmd.Start(); err != nil {
 		_ = stdin.Close()
+		Log.Error().Err(err).Str("bin", bin).Msg("[isapi] ffmpeg start")
 		return err
 	}
 
 	c.ffCmd = cmd
 	c.ffIn = stdin
+	c.ffSrc = codecName
 	c.ffDone = make(chan struct{})
 
+	if codecName == core.CodecOpus {
+		_ = firstOpus
+		ch := uint16(2)
+		rate := uint32(48000)
+		if c.sender != nil && c.sender.Codec != nil {
+			if c.sender.Codec.ClockRate > 0 {
+				rate = c.sender.Codec.ClockRate
+			}
+			if c.sender.Codec.Channels > 0 {
+				ch = uint16(c.sender.Codec.Channels)
+			}
+		}
+		ogg, err := oggwriter.NewWith(stdin, rate, ch)
+		if err != nil {
+			_ = stdin.Close()
+			_ = cmd.Process.Kill()
+			Log.Error().Err(err).Msg("[isapi] oggwriter")
+			c.ffCmd = nil
+			c.ffIn = nil
+			c.ffDone = nil
+			return err
+		}
+		c.ffOgg = ogg
+		Log.Info().
+			Str("bin", bin).
+			Str("src", "OPUS").
+			Uint32("opus_rate", rate).
+			Uint16("opus_ch", ch).
+			Uint32("aac_rate", c.sampleRate).
+			Msg("[isapi] ffmpeg Opus→AAC started")
+	} else {
+		Log.Info().
+			Str("bin", bin).
+			Str("src", codecName).
+			Uint32("aac_rate", c.sampleRate).
+			Msg("[isapi] ffmpeg G.711→AAC started")
+	}
+
 	go func() {
-		_, _ = io.Copy(io.Discard, stderr)
+		sc := bufio.NewScanner(stderr)
+		for sc.Scan() {
+			Log.Warn().Str("ffmpeg", sc.Text()).Msg("[isapi] ffmpeg stderr")
+		}
 	}()
 
 	go func() {
@@ -444,6 +603,9 @@ func (c *Client) ensureFFmpeg(codecName string) error {
 				}
 			}
 			if err != nil {
+				if !errors.Is(err, io.EOF) {
+					Log.Debug().Err(err).Msg("[isapi] ffmpeg stdout")
+				}
 				return
 			}
 		}
@@ -456,13 +618,19 @@ func (c *Client) stopFFmpeg() {
 	c.mu.Lock()
 	cmd := c.ffCmd
 	in := c.ffIn
+	ogg := c.ffOgg
 	done := c.ffDone
+	src := c.ffSrc
 	c.ffCmd = nil
 	c.ffIn = nil
+	c.ffOgg = nil
 	c.ffDone = nil
+	c.ffSrc = ""
 	c.mu.Unlock()
 
-	if in != nil {
+	if ogg != nil {
+		_ = ogg.Close()
+	} else if in != nil {
 		_ = in.Close()
 	}
 	if cmd != nil && cmd.Process != nil {
@@ -471,5 +639,8 @@ func (c *Client) stopFFmpeg() {
 	}
 	if done != nil {
 		<-done
+	}
+	if src != "" {
+		Log.Debug().Str("src", src).Msg("[isapi] ffmpeg stopped")
 	}
 }
