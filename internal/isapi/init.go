@@ -1,13 +1,16 @@
 package isapi
 
 import (
+	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/isapi"
+	pkg "github.com/AlexxIT/go2rtc/pkg/isapi"
 )
 
 func Init() {
+	pkg.SetLogger(app.GetLogger("isapi"))
+
 	streams.HandleFunc("isapi", func(source string) (core.Producer, error) {
-		return isapi.Dial(source)
+		return pkg.Dial(source)
 	})
 }
