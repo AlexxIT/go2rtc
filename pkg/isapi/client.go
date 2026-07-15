@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"os/exec"
 	"strconv"
 	"sync"
@@ -339,11 +340,42 @@ func (c *Client) writePCMUToAAC(codecName string, payload []byte) {
 	_, _ = in.Write(payload)
 }
 
+// findFFmpeg returns a usable ffmpeg binary.
+// Frigate's go2rtc process often does NOT have `ffmpeg` on PATH; the ffmpeg
+// module is configured with something like /usr/lib/ffmpeg/7.0/bin/ffmpeg.
+func findFFmpeg() (string, error) {
+	candidates := []string{
+		"ffmpeg",
+		"/usr/lib/ffmpeg/7.0/bin/ffmpeg",
+		"/usr/lib/ffmpeg/5.0/bin/ffmpeg",
+		"/usr/local/bin/ffmpeg",
+		"/usr/bin/ffmpeg",
+	}
+	for _, bin := range candidates {
+		path, err := exec.LookPath(bin)
+		if err == nil {
+			return path, nil
+		}
+		// Absolute paths: LookPath fails if not in PATH; check directly.
+		if len(bin) > 0 && bin[0] == '/' {
+			if st, err := os.Stat(bin); err == nil && !st.IsDir() {
+				return bin, nil
+			}
+		}
+	}
+	return "", errors.New("isapi: ffmpeg not found (needed for PCMU/PCMA → AAC)")
+}
+
 func (c *Client) ensureFFmpeg(codecName string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.ffCmd != nil {
 		return nil
+	}
+
+	bin, err := findFFmpeg()
+	if err != nil {
+		return err
 	}
 
 	sampleFmt := "mulaw"
@@ -352,7 +384,7 @@ func (c *Client) ensureFFmpeg(codecName string) error {
 	}
 
 	cmd := exec.Command(
-		"ffmpeg",
+		bin,
 		"-hide_banner", "-loglevel", "error",
 		"-f", sampleFmt, "-ar", "8000", "-ac", "1", "-i", "pipe:0",
 		"-c:a", "aac", "-profile:a", "aac_low",
@@ -368,6 +400,11 @@ func (c *Client) ensureFFmpeg(codecName string) error {
 		_ = stdin.Close()
 		return err
 	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		_ = stdin.Close()
+		return err
+	}
 	if err = cmd.Start(); err != nil {
 		_ = stdin.Close()
 		return err
@@ -376,6 +413,10 @@ func (c *Client) ensureFFmpeg(codecName string) error {
 	c.ffCmd = cmd
 	c.ffIn = stdin
 	c.ffDone = make(chan struct{})
+
+	go func() {
+		_, _ = io.Copy(io.Discard, stderr)
+	}()
 
 	go func() {
 		defer close(c.ffDone)
