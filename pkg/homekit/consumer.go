@@ -5,6 +5,7 @@ import (
 	"io"
 	"math/rand"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -87,11 +88,29 @@ func (c *Consumer) GetAnswer() *camera.SetupEndpointsResponse {
 	c.videoSession.Local = c.srtpEndpoint()
 	c.audioSession.Local = c.srtpEndpoint()
 
+	// HAP Address.IPVersion: 0 = IPv4, 1 = IPv6 (HAP R15 §10.4.2). The
+	// previous code called addr.IP.To4().String() unconditionally, which
+	// returns "<nil>" on an IPv6 socket and breaks the response.
+	addr := c.conn.LocalAddr().(*net.TCPAddr)
+	var ipVersion byte
+	var ipStr string
+	if ip4 := addr.IP.To4(); ip4 != nil {
+		ipVersion = 0
+		ipStr = ip4.String()
+	} else {
+		ipVersion = 1
+		ipStr = addr.IP.String()
+		if i := strings.IndexByte(ipStr, '%'); i > 0 {
+			ipStr = ipStr[:i] // strip zone — iOS expects the bare address
+		}
+	}
+
 	return &camera.SetupEndpointsResponse{
 		SessionID: c.sessionID,
 		Status:    camera.StreamingStatusAvailable,
 		Address: camera.Address{
-			IPAddr:       c.videoSession.Local.Addr,
+			IPVersion:    ipVersion,
+			IPAddr:       ipStr,
 			VideoRTPPort: c.videoSession.Local.Port,
 			AudioRTPPort: c.audioSession.Local.Port,
 		},
@@ -126,6 +145,15 @@ func (c *Consumer) SetConfig(conf *camera.SelectedStreamConfiguration) bool {
 
 	c.srtp.AddSession(c.videoSession)
 	c.srtp.AddSession(c.audioSession)
+
+	// IPv6 link-local: iOS sends only the bare address in the SetupEndpoints
+	// request, so the kernel cannot pick an outgoing interface for our SRTP
+	// writes. Recover the zone from the local HAP-control TCP socket — that
+	// socket is necessarily on the same interface as the controller itself.
+	if a, ok := c.conn.LocalAddr().(*net.TCPAddr); ok && a != nil {
+		c.videoSession.SetZone(a.Zone)
+		c.audioSession.SetZone(a.Zone)
+	}
 
 	return true
 }
@@ -190,8 +218,18 @@ func (c *Consumer) Stop() error {
 
 func (c *Consumer) srtpEndpoint() *srtp.Endpoint {
 	addr := c.conn.LocalAddr().(*net.TCPAddr)
+	ip := addr.IP.To4()
+	var ipStr string
+	if ip != nil {
+		ipStr = ip.String()
+	} else {
+		ipStr = addr.IP.String()
+		if i := strings.IndexByte(ipStr, '%'); i > 0 {
+			ipStr = ipStr[:i]
+		}
+	}
 	return &srtp.Endpoint{
-		Addr:       addr.IP.To4().String(),
+		Addr:       ipStr,
 		Port:       uint16(c.srtp.Port()),
 		MasterKey:  []byte(core.RandString(16, 0)),
 		MasterSalt: []byte(core.RandString(14, 0)),
