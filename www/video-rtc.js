@@ -1,3 +1,5 @@
+import {WebCodecsPlayer} from './video-webcodecs.js';
+
 /**
  * VideoRTC v1.6.0 - Video player for go2rtc streaming application.
  *
@@ -33,10 +35,17 @@ export class VideoRTC extends HTMLElement {
         ];
 
         /**
-         * [config] Supported modes (webrtc, webrtc/tcp, mse, hls, mp4, mjpeg).
+         * [config] Supported modes (webrtc, webrtc/tcp, mse, hls, mp4, mjpeg, webcodecs).
          * @type {string}
          */
         this.mode = 'webrtc,mse,hls,mjpeg';
+
+        /**
+         * [config] Renderer cascade for WebCodecs (webgpu, webgl, 2d).
+         * Order defines priority. Default: try all in order.
+         * @type {string}
+         */
+        this.renderer = 'webgpu,webgl,2d';
 
         /**
          * [Config] Requested medias (video, audio, microphone).
@@ -338,6 +347,13 @@ export class VideoRTC extends HTMLElement {
             this.pc = null;
         }
 
+        // cleanup WebCodecs resources
+        if (this._wc) {
+            this._wc.destroy();
+            this._wc = null;
+        }
+        this.video.style.display = 'block';
+
         this.video.src = '';
         this.video.srcObject = null;
     }
@@ -365,7 +381,10 @@ export class VideoRTC extends HTMLElement {
 
         const modes = [];
 
-        if (this.mode.includes('mse') && ('MediaSource' in window || 'ManagedMediaSource' in window)) {
+        if (this.mode.includes('webcodecs') && 'VideoDecoder' in window) {
+            modes.push('webcodecs');
+            this.onwebcodecs();
+        } else if (this.mode.includes('mse') && ('MediaSource' in window || 'ManagedMediaSource' in window)) {
             modes.push('mse');
             this.onmse();
         } else if (this.mode.includes('hls') && this.video.canPlayType('application/vnd.apple.mpegurl')) {
@@ -499,6 +518,35 @@ export class VideoRTC extends HTMLElement {
                 }
             };
         };
+    }
+
+    onwebcodecsready() {}
+
+    onwebcodecserror(error) {}
+
+    onwebcodecs() {
+        this._wc = new WebCodecsPlayer(this, {
+            cascade: this.renderer,
+            media: this.media,
+        });
+
+        this.onmessage['webcodecs'] = msg => {
+            if (msg.type !== 'webcodecs') return;
+            this._wc.init(msg.value).then(result => {
+                if (result.error) {
+                    this.onwebcodecserror(result.error);
+                } else {
+                    this.video.style.display = 'none';
+                    this.onwebcodecsready();
+                }
+            });
+        };
+
+        this.ondata = data => {
+            this._wc.feed(data);
+        };
+
+        this.send({type: 'webcodecs', value: ''});
     }
 
     onwebrtc() {
