@@ -87,10 +87,19 @@ func NewConn(pc *webrtc.PeerConnection) *Conn {
 			}
 		}
 
-		if c.Mode == core.ModePassiveProducer && remote.Kind() == webrtc.RTPCodecTypeVideo {
+		// Also request periodic keyframes for the Nest source (ModeActiveProducer,
+		// FormatName "nest/webrtc"). Upstream only does this for PassiveProducer (WHIP/browser
+		// push, which have no other keyframe path). Nest is an active-pull WebRTC source, so
+		// without this its keyframe interval drifts long when idle and RTSP/consumer opens are
+		// slow. Gating on FormatName (not the mode) avoids forcing a 2s IDR on other
+		// ModeActiveProducer WebRTC sources (ring/tuya battery cams etc.) where it'd be
+		// battery- and bandwidth-hostile. PLI is media-plane RTCP: zero SDM API quota impact.
+		if (c.Mode == core.ModePassiveProducer || c.FormatName == "nest/webrtc") && remote.Kind() == webrtc.RTPCodecTypeVideo {
 			go func() {
 				pkts := []rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: uint32(remote.SSRC())}}
-				for range time.NewTicker(time.Second * 2).C {
+				t := time.NewTicker(time.Second * 2)
+				defer t.Stop()
+				for range t.C {
 					if err := pc.WriteRTCP(pkts); err != nil {
 						return
 					}
