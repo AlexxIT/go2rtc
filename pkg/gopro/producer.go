@@ -1,7 +1,9 @@
 package gopro
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -11,6 +13,34 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/mpegts"
 )
 
+type Status int
+type Error int
+
+const (
+	StatusOff Status = iota
+	StatusIdle
+	StatusHigh_Power_Preview
+	StatusLow_Power_Preview
+	StatusUnavailable
+)
+
+const (
+	ErrorNone Error = iota
+	ErrorSet_Preset
+	ErrorSet_Window_Size
+	ErrorExec_Stream
+	ErrorShutter
+	ErrorCom_Timeout
+	ErrorInvalid_Param
+	ErrorUnavailable
+	ErrorExit
+)
+
+type StatusResponse struct {
+	Status Status `json:"status"`
+	Error  Error  `json:"error"`
+}
+
 func Dial(rawURL string) (*mpegts.Producer, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
@@ -19,16 +49,36 @@ func Dial(rawURL string) (*mpegts.Producer, error) {
 
 	r := &listener{host: u.Host}
 
-	if err = r.command("/gopro/webcam/stop"); err != nil {
+	// check if webcam is already active, if so, stop it before starting a new one
+	status, err := r.command("/gopro/webcam/status")
+	// fmt.Printf("[gopro] webcam status: %d\n", status)
+	if err != nil {
 		return nil, err
+	}
+
+	if status == StatusHigh_Power_Preview || status == StatusLow_Power_Preview {
+		// fmt.Printf("[gopro] webcam is active, stopping it before starting a new one\n")
+		if _, err = r.command("/gopro/webcam/stop"); err != nil {
+			return nil, err
+		}
 	}
 
 	if err = r.listen(); err != nil {
 		return nil, err
 	}
 
-	if err = r.command("/gopro/webcam/start"); err != nil {
+	// check if webcam is active, if not, start it
+	status, err = r.command("/gopro/webcam/status")
+	// fmt.Printf("[gopro] webcam status: %d\n", status)
+	if err != nil {
 		return nil, err
+	}
+
+	if status == StatusOff || status == StatusIdle {
+		// fmt.Printf("[gopro] webcam is not active, starting it\n")
+		if _, err = r.command("/gopro/webcam/start"); err != nil {
+			return nil, err
+		}
 	}
 
 	prod, err := mpegts.Open(r)
@@ -72,21 +122,30 @@ func (r *listener) Close() error {
 	return r.conn.Close()
 }
 
-func (r *listener) command(api string) error {
+func (r *listener) command(api string) (Status, error) {
 	client := &http.Client{Timeout: 5 * time.Second}
 
 	res, err := client.Get("http://" + r.host + ":8080" + api)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	_ = res.Body.Close()
+	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
-		return errors.New("gopro: wrong response: " + res.Status)
+		return 0, errors.New("gopro: wrong response: " + res.Status)
 	}
 
-	return nil
+	var statusResponse StatusResponse
+	if err = json.NewDecoder(res.Body).Decode(&statusResponse); err != nil {
+		return 0, err
+	}
+
+	if statusResponse.Error > 0 {
+		return 0, fmt.Errorf("gopro: error in status response: %d", statusResponse.Error)
+	}
+
+	return statusResponse.Status, nil
 }
 
 func (r *listener) listen() (err error) {
@@ -120,5 +179,5 @@ func (r *listener) worker() {
 
 	close(r.packets)
 
-	_ = r.command("/gopro/webcam/stop")
+	_, _ = r.command("/gopro/webcam/stop")
 }
