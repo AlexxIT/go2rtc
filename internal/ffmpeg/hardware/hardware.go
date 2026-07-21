@@ -58,7 +58,11 @@ func MakeHardware(args *ffmpeg.Args, engine string, defaults map[string]string) 
 			args.Codecs[i] = defaults[name+"/"+engine]
 
 			if !args.HasFilters("drawtext=") {
-				args.Input = "-hwaccel vaapi -hwaccel_output_format vaapi -hwaccel_flags allow_profile_mismatch " + args.Input
+				// `-init_hw_device`/`-filter_hw_device` - bind a device to the
+				// filter graph, so `hwupload` works when the input isn't
+				// hardware decoded. Required since FFmpeg 8, which no longer
+				// derives the filter device from `-hwaccel` alone.
+				args.Input = "-init_hw_device vaapi=vaapi0 -filter_hw_device vaapi0 -hwaccel vaapi -hwaccel_output_format vaapi -hwaccel_flags allow_profile_mismatch " + args.Input
 
 				if name == "h264" {
 					fixPixelFormat(args)
@@ -82,7 +86,7 @@ func MakeHardware(args *ffmpeg.Args, engine string, defaults map[string]string) 
 				args.InsertFilter("format=vaapi|nv12,hwupload")
 			} else {
 				// enable software pixel for drawtext, scale and transpose
-				args.Input = "-hwaccel vaapi -hwaccel_output_format nv12 -hwaccel_flags allow_profile_mismatch " + args.Input
+				args.Input = "-init_hw_device vaapi=vaapi0 -filter_hw_device vaapi0 -hwaccel vaapi -hwaccel_output_format nv12 -hwaccel_flags allow_profile_mismatch " + args.Input
 
 				args.AddFilter("hwupload")
 			}
