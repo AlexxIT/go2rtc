@@ -62,3 +62,10 @@ You can use a second channel for dual cameras: `channel=2`.
 streams:
   xiaomi1: xiaomi://***&channel=2
 ```
+
+You can change the media buffer size (in packets) if your consumers are slow: `buffer=256` (default).
+
+```yaml
+streams:
+  xiaomi1: xiaomi://***&buffer=1024
+```
