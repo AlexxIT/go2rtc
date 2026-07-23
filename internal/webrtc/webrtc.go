@@ -86,6 +86,7 @@ func Init() {
 		ICEServers:   cfg.Mod.IceServers,
 		SDPSemantics: pion.SDPSemanticsUnifiedPlanWithFallback,
 	}
+	defaultPionConf = pionConf
 
 	PeerConnection = func(active bool) (*pion.PeerConnection, error) {
 		// active - client, passive - server
@@ -112,7 +113,26 @@ var serverAPI, clientAPI *pion.API
 
 var log zerolog.Logger
 
+var defaultPionConf pion.Configuration
+
 var PeerConnection func(active bool) (*pion.PeerConnection, error)
+
+// PeerConfigFromOptions returns per-request PeerConnection config when JSON
+// options override YAML defaults. Returns nil when no overrides are present.
+func PeerConfigFromOptions(iceServers []pion.ICEServer, policy *pion.ICETransportPolicy) *pion.Configuration {
+	if iceServers == nil && policy == nil {
+		return nil
+	}
+
+	conf := defaultPionConf
+	if iceServers != nil {
+		conf.ICEServers = iceServers
+	}
+	if policy != nil {
+		conf.ICETransportPolicy = *policy
+	}
+	return &conf
+}
 
 func asyncHandler(tr *ws.Transport, msg *ws.Message) (err error) {
 	var stream *streams.Stream
@@ -239,8 +259,13 @@ func asyncHandler(tr *ws.Transport, msg *ws.Message) (err error) {
 	return nil
 }
 
-func ExchangeSDP(stream *streams.Stream, offer, desc, userAgent string) (answer string, err error) {
-	pc, err := PeerConnection(false)
+func ExchangeSDP(stream *streams.Stream, offer, desc, userAgent string, conf *pion.Configuration) (answer string, err error) {
+	var pc *pion.PeerConnection
+	if conf == nil {
+		pc, err = PeerConnection(false)
+	} else {
+		pc, err = serverAPI.NewPeerConnection(*conf)
+	}
 	if err != nil {
 		log.Error().Err(err).Caller().Send()
 		return
