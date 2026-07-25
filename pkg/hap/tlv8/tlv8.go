@@ -135,7 +135,7 @@ func appendValue(b []byte, tag byte, value reflect.Value) ([]byte, error) {
 		if value.Type().Elem().Kind() == reflect.Uint8 {
 			n := value.Len()
 			b = append(b, tag, byte(n))
-			for i := 0; i < n; i++ {
+			for i := range n {
 				b = append(b, byte(value.Index(i).Uint()))
 			}
 			return b, nil

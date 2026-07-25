@@ -71,7 +71,7 @@ type RingApi struct {
 	Using2FA       bool
 	PromptFor2FA   string
 	RefreshToken   string
-	auth           interface{} // EmailAuth or RefreshTokenAuth
+	auth           any // EmailAuth or RefreshTokenAuth
 	onTokenRefresh func(string)
 	authMutex      sync.Mutex
 	session        *SessionResponse
@@ -93,12 +93,12 @@ type CameraData struct {
 type RingDeviceType string
 
 type RingDevicesResponse struct {
-	Doorbots           []CameraData             `json:"doorbots"`
-	AuthorizedDoorbots []CameraData             `json:"authorized_doorbots"`
-	StickupCams        []CameraData             `json:"stickup_cams"`
-	AllCameras         []CameraData             `json:"all_cameras"`
-	Chimes             []CameraData             `json:"chimes"`
-	Other              []map[string]interface{} `json:"other"`
+	Doorbots           []CameraData     `json:"doorbots"`
+	AuthorizedDoorbots []CameraData     `json:"authorized_doorbots"`
+	StickupCams        []CameraData     `json:"stickup_cams"`
+	AllCameras         []CameraData     `json:"all_cameras"`
+	Chimes             []CameraData     `json:"chimes"`
+	Other              []map[string]any `json:"other"`
 }
 
 const (
@@ -153,7 +153,7 @@ const (
 	sessionValidTime   = 12 * time.Hour
 )
 
-func NewRestClient(auth interface{}, onTokenRefresh func(string)) (*RingApi, error) {
+func NewRestClient(auth any, onTokenRefresh func(string)) (*RingApi, error) {
 	var cacheKey string
 
 	// Create cache key based on auth data
@@ -400,7 +400,7 @@ func (c *RingApi) GetSocketTicket() (*SocketTicketResponse, error) {
 	return &ticket, nil
 }
 
-func (c *RingApi) Request(method, url string, body interface{}) ([]byte, error) {
+func (c *RingApi) Request(method, url string, body any) ([]byte, error) {
 	// Ensure we have a valid session
 	if err := c.ensureSession(); err != nil {
 		return nil, fmt.Errorf("session validation failed: %w", err)
@@ -476,7 +476,7 @@ func (c *RingApi) Request(method, url string, body interface{}) ([]byte, error) 
 
 		// Handle 404 error with hardware_id reference - session issue
 		if resp.StatusCode == 404 && strings.Contains(url, clientAPIBaseURL) {
-			var errorBody map[string]interface{}
+			var errorBody map[string]any
 			if err := json.Unmarshal(responseBody, &errorBody); err == nil {
 				if errorStr, ok := errorBody["error"].(string); ok && strings.Contains(errorStr, c.hardwareID) {
 					// Session with hardware_id not found, refresh session
@@ -523,10 +523,10 @@ func (c *RingApi) ensureSession() error {
 		return fmt.Errorf("authentication failed while creating session: %w", err)
 	}
 
-	sessionPayload := map[string]interface{}{
-		"device": map[string]interface{}{
+	sessionPayload := map[string]any{
+		"device": map[string]any{
 			"hardware_id": c.hardwareID,
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"api_version":  apiVersion,
 				"device_model": "ring-client-go",
 			},
@@ -686,7 +686,7 @@ func generateHardwareID() string {
 	return hex.EncodeToString(h.Sum(nil)[:16])
 }
 
-func interfaceSlice(slice interface{}) []CameraData {
+func interfaceSlice(slice any) []CameraData {
 	s := reflect.ValueOf(slice)
 	if s.Kind() != reflect.Slice {
 		return nil

@@ -98,7 +98,7 @@ func (w *Client) Write(b []byte) (n int, err error) {
 		return 0, err
 	}
 
-	for i := 0; i < len(b); i++ {
+	for i := range len(b) {
 		msg[i] = b[i] ^ mask[i%4]
 	}
 

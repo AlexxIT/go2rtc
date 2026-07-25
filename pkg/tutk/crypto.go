@@ -43,7 +43,7 @@ func ReverseTransCodePartial(dst, src []byte) []byte {
 
 	swap(tmp16, src16, n)
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		dst16[i] = tmp16[i] ^ charlie[i]
 	}
 
@@ -111,7 +111,7 @@ func TransCodePartial(dst, src []byte) []byte {
 		src16 = src16[16:]
 	}
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		tmp16[i] = src16[i] ^ charlie[i]
 	}
 

@@ -54,7 +54,7 @@ func (m *milestoneAPI) GetToken() error {
 		return errors.New("milesone: authentication failed: " + res.Status)
 	}
 
-	var payload map[string]interface{}
+	var payload map[string]any
 	if err = json.NewDecoder(res.Body).Decode(&payload); err != nil {
 		return err
 	}

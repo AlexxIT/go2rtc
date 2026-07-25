@@ -2,7 +2,7 @@
 
 # 0. Prepare images
 ARG PYTHON_VERSION="3.13"
-ARG GO_VERSION="1.25"
+ARG GO_VERSION="1.26"
 
 
 # 1. Build go2rtc binary

@@ -8,7 +8,7 @@ import (
 )
 
 func TestPCMUtoPCM(t *testing.T) {
-	for pcmu := byte(0); pcmu < 255; pcmu++ {
+	for pcmu := range byte(255) {
 		pcm1 := MuLawDecompressTable[pcmu]
 		pcm2 := v2.PCMUtoPCM(pcmu)
 		require.Equal(t, pcm1, pcm2)
@@ -16,7 +16,7 @@ func TestPCMUtoPCM(t *testing.T) {
 }
 
 func TestPCMAtoPCM(t *testing.T) {
-	for pcma := byte(0); pcma < 255; pcma++ {
+	for pcma := range byte(255) {
 		pcm1 := ALawDecompressTable[pcma]
 		pcm2 := v2.PCMAtoPCM(pcma)
 		require.Equal(t, pcm1, pcm2)

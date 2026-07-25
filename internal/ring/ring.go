@@ -45,7 +45,7 @@ func apiRing(w http.ResponseWriter, r *http.Request) {
 		if _, err = ringAPI.GetAuth(code); err != nil {
 			if ringAPI.Using2FA {
 				// Return 2FA prompt
-				api.ResponseJSON(w, map[string]interface{}{
+				api.ResponseJSON(w, map[string]any{
 					"needs_2fa": true,
 					"prompt":    ringAPI.PromptFor2FA,
 				})

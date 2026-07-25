@@ -7,7 +7,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func Unmarshal(in []byte, out interface{}) (err error) {
+func Unmarshal(in []byte, out any) (err error) {
 	return yaml.Unmarshal(in, out)
 }
 
@@ -190,7 +190,7 @@ func addPrefix(src, pre []byte) (dst []byte) {
 
 func addIndent(in []byte, indent int) (dst []byte) {
 	pre := make([]byte, indent)
-	for i := 0; i < indent; i++ {
+	for i := range indent {
 		pre[i] = ' '
 	}
 	return addPrefix(in, pre)

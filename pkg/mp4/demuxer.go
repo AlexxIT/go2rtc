@@ -97,7 +97,7 @@ func (d *Demuxer) Demux(data2 []byte) (trackID uint32, packets []*core.Packet) {
 	n := len(trun.SamplesDuration)
 	packets = make([]*core.Packet, n)
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		duration := trun.SamplesDuration[i]
 		size := trun.SamplesSize[i]
 

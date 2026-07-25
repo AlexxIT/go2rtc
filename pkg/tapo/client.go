@@ -389,7 +389,7 @@ func securityEncode(s string) string {
 
 	b := make([]byte, n)
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		c1 := 187
 		c2 := 187
 		if i >= size {

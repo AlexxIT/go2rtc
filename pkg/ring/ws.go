@@ -142,8 +142,8 @@ func (c *WSClient) Close() error {
 		close(c.closed)
 	}
 
-	closePayload := map[string]interface{}{
-		"reason": map[string]interface{}{
+	closePayload := map[string]any{
+		"reason": map[string]any{
 			"code": CloseReasonNormalClose,
 			"text": "",
 		},
@@ -198,7 +198,7 @@ func (c *WSClient) activateSession() error {
 		return err
 	}
 
-	streamPayload := map[string]interface{}{
+	streamPayload := map[string]any{
 		"audio_enabled": true,
 		"video_enabled": true,
 	}
@@ -210,7 +210,7 @@ func (c *WSClient) activateSession() error {
 	return nil
 }
 
-func (c *WSClient) sendSessionMessage(method string, payload map[string]interface{}) error {
+func (c *WSClient) sendSessionMessage(method string, payload map[string]any) error {
 	select {
 	case <-c.closed:
 		return nil
@@ -222,7 +222,7 @@ func (c *WSClient) sendSessionMessage(method string, payload map[string]interfac
 	defer c.wsMutex.Unlock()
 
 	if payload == nil {
-		payload = make(map[string]interface{})
+		payload = make(map[string]any)
 	}
 
 	payload["doorbot_id"] = c.cameraID
@@ -230,7 +230,7 @@ func (c *WSClient) sendSessionMessage(method string, payload map[string]interfac
 		payload["session_id"] = c.sessionID
 	}
 
-	msg := map[string]interface{}{
+	msg := map[string]any{
 		"method":    method,
 		"dialog_id": c.dialogID,
 		"body":      payload,
