@@ -103,16 +103,29 @@ func (c *Client) ReadPacket() (hdr, payload []byte, err error) {
 	if err != nil {
 		return
 	}
-	if c.key != nil {
-		if c.model == ModelAqaraG2 && hdr[0] == tutk.CodecH265 {
-			payload, err = DecodeVideo(payload, c.key)
-		} else {
-			// ModelAqaraG2: audio AAC
-			// ModelIMILABA1: video HEVC, audio PCMA
-			payload, err = crypto.Decode(payload, c.key)
-		}
-	}
+	payload, err = c.decodePayload(hdr[0], payload)
 	return
+}
+
+func (c *Client) decodePayload(codec byte, payload []byte) ([]byte, error) {
+	if c.key == nil {
+		return payload, nil
+	}
+
+	switch {
+	case c.model == ModelIPC017:
+		// IPC017 encrypts video but sends its proprietary PCMA packets as-is.
+		if tutk.IsVideoCodec(codec) {
+			return crypto.Decode(payload, c.key)
+		}
+		return payload, nil
+	case c.model == ModelAqaraG2 && codec == tutk.CodecH265:
+		return DecodeVideo(payload, c.key)
+	default:
+		// ModelAqaraG2: audio AAC
+		// ModelIMILABA1: video HEVC, audio PCMA
+		return crypto.Decode(payload, c.key)
+	}
 }
 
 const (
@@ -149,7 +162,7 @@ func (c *Client) StartMedia(video, audio string) error {
 			c.WriteCommandJSON(0x0704, `{}`), // don't know why
 		)
 
-	case ModelIMILABA1, ModelMijia:
+	case ModelIMILABA1, ModelIPC017, ModelMijia:
 		// 0 - auto, 1 - low, 3 - hd
 		switch video {
 		case "", "hd":
@@ -253,6 +266,7 @@ func DecodeVideo(data, key []byte) ([]byte, error) {
 const (
 	ModelAqaraG2  = "lumi.camera.gwagl01"
 	ModelIMILABA1 = "chuangmi.camera.ipc019e"
+	ModelIPC017   = "chuangmi.camera.ipc017"
 	ModelLoockV1  = "loock.cateye.v01"
 	ModelXiaobai  = "chuangmi.camera.xiaobai"
 	ModelXiaofang = "isa.camera.isc5"
@@ -264,7 +278,7 @@ const (
 
 func Supported(model string) bool {
 	switch model {
-	case ModelAqaraG2, ModelIMILABA1, ModelLoockV1, ModelXiaobai, ModelXiaofang:
+	case ModelAqaraG2, ModelIMILABA1, ModelIPC017, ModelLoockV1, ModelXiaobai, ModelXiaofang:
 		return true
 	}
 	return false
