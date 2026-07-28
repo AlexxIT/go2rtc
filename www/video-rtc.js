@@ -460,7 +460,10 @@ export class VideoRTC extends HTMLElement {
                         sb.appendBuffer(data);
                         bufLen = 0;
                     } catch (e) {
-                        // console.debug(e);
+                        // A failed appendBuffer starts no update cycle, so updateend
+                        // never fires again and this drain is never re-entered. Clear
+                        // the backlog instead of wedging it forever.
+                        bufLen = 0;
                     }
                 }
 
@@ -487,6 +490,21 @@ export class VideoRTC extends HTMLElement {
             this.ondata = data => {
                 if (sb.updating || bufLen > 0) {
                     const b = new Uint8Array(data);
+                    if (bufLen + b.byteLength > buf.byteLength) {
+                        // Staging buffer full because the SourceBuffer stopped draining.
+                        // Drop the backlog and try to restart the update cycle, instead
+                        // of throwing RangeError on every frame that follows.
+                        bufLen = 0;
+                        if (b.byteLength > buf.byteLength) return;
+                        if (!sb.updating) {
+                            try {
+                                sb.appendBuffer(b);
+                            } catch (e) {
+                                // console.debug(e);
+                            }
+                            return;
+                        }
+                    }
                     buf.set(b, bufLen);
                     bufLen += b.byteLength;
                     // console.debug('VideoRTC.buffer', b.byteLength, bufLen);
