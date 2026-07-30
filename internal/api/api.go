@@ -238,6 +238,8 @@ var mu sync.Mutex
 func apiHandler(w http.ResponseWriter, r *http.Request) {
 	mu.Lock()
 	app.Info["host"] = r.Host
+	app.Info["pid"] = os.Getpid()
+	app.Info["system"] = getSystemInfo()
 	mu.Unlock()
 
 	ResponseJSON(w, app.Info)
