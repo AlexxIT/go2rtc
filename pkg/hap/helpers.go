@@ -57,6 +57,9 @@ const (
 
 const DeviceAID = 1 // TODO: fix someday
 
+// DefaultPIN is the HomeKit pairing PIN used when none is configured.
+const DefaultPIN = "19550224"
+
 type JSONAccessories struct {
 	Value []*Accessory `json:"accessories"`
 }
