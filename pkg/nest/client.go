@@ -13,13 +13,13 @@ import (
 )
 
 type WebRTCClient struct {
-	conn *webrtc.Conn
-	api  *API
+	conn    *webrtc.Conn
+	session *Session
 }
 
 type RTSPClient struct {
-	conn *rtsp.Conn
-	api  *API
+	conn    *rtsp.Conn
+	session *Session
 }
 
 func Dial(rawURL string) (core.Producer, error) {
@@ -83,12 +83,12 @@ func (c *WebRTCClient) AddTrack(media *core.Media, codec *core.Codec, track *cor
 }
 
 func (c *WebRTCClient) Start() error {
-	c.api.StartExtendStreamTimer()
+	c.session.StartExtendStreamTimer()
 	return c.conn.Start()
 }
 
 func (c *WebRTCClient) Stop() error {
-	c.api.StopExtendStreamTimer()
+	c.session.StopExtendStreamTimer()
 	return c.conn.Stop()
 }
 
@@ -102,6 +102,8 @@ func rtcConn(nestAPI *API, rawURL, projectID, deviceID string) (*WebRTCClient, e
 	var lastErr error
 
 	for attempt := 0; attempt < maxRetries; attempt++ {
+		session := nestAPI.NewSession()
+
 		rtcAPI, err := webrtc.NewAPI()
 		if err != nil {
 			return nil, err
@@ -133,7 +135,7 @@ func rtcConn(nestAPI *API, rawURL, projectID, deviceID string) (*WebRTCClient, e
 		}
 
 		// 4. Exchange SDP via Hass
-		answer, err := nestAPI.ExchangeSDP(projectID, deviceID, offer)
+		answer, err := session.ExchangeSDP(projectID, deviceID, offer)
 		if err != nil {
 			lastErr = err
 			if attempt < maxRetries-1 {
@@ -149,14 +151,16 @@ func rtcConn(nestAPI *API, rawURL, projectID, deviceID string) (*WebRTCClient, e
 			return nil, err
 		}
 
-		return &WebRTCClient{conn: conn, api: nestAPI}, nil
+		return &WebRTCClient{conn: conn, session: session}, nil
 	}
 
 	return nil, lastErr
 }
 
 func rtspConn(nestAPI *API, rawURL, projectID, deviceID string) (*RTSPClient, error) {
-	rtspURL, err := nestAPI.GenerateRtspStream(projectID, deviceID)
+	session := nestAPI.NewSession()
+
+	rtspURL, err := session.GenerateRtspStream(projectID, deviceID)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +173,7 @@ func rtspConn(nestAPI *API, rawURL, projectID, deviceID string) (*RTSPClient, er
 		return nil, err
 	}
 
-	return &RTSPClient{conn: rtspClient, api: nestAPI}, nil
+	return &RTSPClient{conn: rtspClient, session: session}, nil
 }
 
 func (c *RTSPClient) GetMedias() []*core.Media {
@@ -182,13 +186,13 @@ func (c *RTSPClient) GetTrack(media *core.Media, codec *core.Codec) (*core.Recei
 }
 
 func (c *RTSPClient) Start() error {
-	c.api.StartExtendStreamTimer()
+	c.session.StartExtendStreamTimer()
 	return c.conn.Start()
 }
 
 func (c *RTSPClient) Stop() error {
-	c.api.StopRTSPStream()
-	c.api.StopExtendStreamTimer()
+	c.session.StopRTSPStream()
+	c.session.StopExtendStreamTimer()
 	return c.conn.Stop()
 }
 
