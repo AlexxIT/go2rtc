@@ -34,8 +34,8 @@ type Session struct {
 	StreamToken          string
 	StreamExtensionToken string
 
-	mu          sync.Mutex
-	extendTimer *time.Timer
+	mu         sync.Mutex
+	extendStop chan struct{}
 }
 
 type Auth struct {
@@ -467,29 +467,70 @@ type Device struct {
 	} `json:"parentRelations"`
 }
 
+const (
+	// extendMargin is how long before the session expiry an extension is requested
+	extendMargin = time.Minute
+	// extendRetryDelay is the pause before retrying a failed extension
+	extendRetryDelay = 15 * time.Second
+)
+
 func (s *Session) StartExtendStreamTimer() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.extendTimer != nil {
+	if s.extendStop != nil {
 		return
 	}
 
-	s.extendTimer = time.NewTimer(time.Until(s.StreamExpiresAt) - time.Minute)
-	go func() {
-		<-s.extendTimer.C
-		if err := s.ExtendStream(); err != nil {
-			return
-		}
-	}()
+	stop := make(chan struct{})
+	s.extendStop = stop
+	go s.extendLoop(stop)
 }
 
 func (s *Session) StopExtendStreamTimer() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.extendTimer != nil {
-		s.extendTimer.Stop()
-		s.extendTimer = nil
+	if s.extendStop != nil {
+		close(s.extendStop)
+		s.extendStop = nil
+	}
+}
+
+// extendLoop re-arms after every successful extension: SDM grants ~5 minutes
+// per extension, so a session that should outlive its first grant needs an
+// extension roughly every 4 minutes, not exactly once. Failed extensions are
+// retried until the session expiry has passed.
+func (s *Session) extendLoop(stop <-chan struct{}) {
+	for {
+		delay := time.Until(s.StreamExpiresAt) - extendMargin
+		if delay < time.Second {
+			delay = time.Second
+		}
+
+		if !sleep(stop, delay) {
+			return
+		}
+
+		if err := s.ExtendStream(); err != nil {
+			if time.Now().After(s.StreamExpiresAt) {
+				return // session already expired, nothing left to extend
+			}
+			if !sleep(stop, extendRetryDelay) {
+				return
+			}
+		}
+	}
+}
+
+// sleep waits for d, returning false if stop closes first
+func sleep(stop <-chan struct{}, d time.Duration) bool {
+	timer := time.NewTimer(d)
+	select {
+	case <-stop:
+		timer.Stop()
+		return false
+	case <-timer.C:
+		return true
 	}
 }
