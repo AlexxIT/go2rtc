@@ -176,9 +176,15 @@ func (c *Client) SetResolution(quality byte) error {
 	if c.verbose {
 		fmt.Printf("[Wyze] SetResolution: quality=%d frameSize=%d bitrate=%d model=%s\n", quality, frameSize, bitrate, c.model)
 	}
-
 	// Use K10052 (doorbell format) for certain models
 	if c.useDoorbellResolution() {
+		switch c.model {
+		case "WYZEDB3":
+			frameSize = 3
+			bitrate = 0xB4 // 0x78 works too
+			fmt.Printf("[Wyze] Set Doorbell Resolution: quality=%d frameSize=%d bitrate=%d model=%s\n", quality, frameSize, bitrate, c.model)
+		}
+
 		k10052 := c.buildK10052(frameSize, bitrate)
 		_, err := c.conn.WriteAndWaitIOCtrl(k10052, c.matchHL(KCmdSetResolutionDBRes), 5*time.Second)
 		return err
@@ -308,7 +314,6 @@ func (c *Client) connect() error {
 	if err != nil {
 		return fmt.Errorf("wyze: connect failed: %w", err)
 	}
-
 	c.conn = conn
 	if c.verbose {
 		fmt.Printf("[Wyze] Connected to %s (IOTC + DTLS)\n", conn.RemoteAddr())
