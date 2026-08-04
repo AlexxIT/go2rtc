@@ -203,14 +203,15 @@ func IsContinuationFrame(frameType uint8) bool {
 
 // isFrameInfoMarker returns true when the field at [14:16] (or [22:24] for 36-byte
 // headers) is a FrameInfo size marker rather than a packet index.
-// Standard devices use 0x0028 (40 bytes); some devices (e.g. doorbells) use
-// 0x0030 (48 bytes). Any value >= PktTotal is also impossible as a packet index
-// and is treated as a size marker.
+// Known marker values are matched explicitly: 0x0028 (40 bytes, standard) and
+// 0x0030 (48 bytes, e.g. doorbells). As a backstop, any value >= PktTotal is
+// impossible as a packet index and is also treated as a size marker (this
+// heuristic alone is insufficient for frames larger than the marker value).
 func isFrameInfoMarker(val, pktTotal uint16, frameType uint8) bool {
 	if !IsEndFrame(frameType) && pktTotal != 1 {
 		return false
 	}
-	return val == 0x0028 || (pktTotal > 0 && val >= pktTotal)
+	return val == 0x0028 || val == 0x0030 || (pktTotal > 0 && val >= pktTotal)
 }
 
 type channelState struct {

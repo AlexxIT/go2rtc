@@ -182,7 +182,9 @@ func (c *Client) SetResolution(quality byte) error {
 		case "WYZEDB3":
 			frameSize = 3
 			bitrate = 0xB4 // 0x78 works too
-			fmt.Printf("[Wyze] Set Doorbell Resolution: quality=%d frameSize=%d bitrate=%d model=%s\n", quality, frameSize, bitrate, c.model)
+			if c.verbose {
+				fmt.Printf("[Wyze] Set Doorbell Resolution: quality=%d frameSize=%d bitrate=%d model=%s\n", quality, frameSize, bitrate, c.model)
+			}
 		}
 
 		k10052 := c.buildK10052(frameSize, bitrate)
