@@ -133,13 +133,16 @@ func (p *videoPacer) run() {
 				}
 			}
 			now = time.Now()
+			lastRelease = pacedReleaseAnchor(lastRelease, now, interval)
 		}
 
 		for _, packet := range frame.packets {
 			frame.receiver.WriteRTP(packet)
 		}
 		lastTimestamp = frame.timestamp
-		lastRelease = now
+		if lastRelease.IsZero() {
+			lastRelease = now
+		}
 	}
 }
 
@@ -166,4 +169,17 @@ func pacedFrameInterval(interval, backlog, buffer time.Duration) time.Duration {
 		return interval * 3 / 4
 	}
 	return interval
+}
+
+// pacedReleaseAnchor advances the pacing clock by the requested media interval
+// instead of anchoring every frame to the timer's actual wake-up time. Timer
+// overshoot is expected and would otherwise accumulate into seconds of latency
+// during a long-running prebuffer. Rebase only after falling more than one
+// frame behind so a real scheduler stall is not released as a packet burst.
+func pacedReleaseAnchor(lastRelease, actual time.Time, interval time.Duration) time.Time {
+	target := lastRelease.Add(interval)
+	if actual.Sub(target) > interval {
+		return actual
+	}
+	return target
 }
