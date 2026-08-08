@@ -32,6 +32,8 @@ tags:
     description: "[Module: WebTorrent](https://github.com/AlexxIT/go2rtc#module-webtorrent)"
   - name: FFmpeg
   - name: Debug
+  - name: MCP
+    description: "[Module: MCP](https://github.com/AlexxIT/go2rtc#module-mcp)"
 
 components:
   parameters:
@@ -107,6 +109,87 @@ components:
       content:
         application/json:
           example: { share: AKDypPy4zz, pwd: H0Km1HLTTP }
+
+  schemas:
+    mcp_request:
+      type: object
+      required:
+        - jsonrpc
+        - method
+      properties:
+        jsonrpc:
+          type: string
+          const: "2.0"
+        id:
+          oneOf:
+            - type: string
+            - type: integer
+          description: Request identifier (required for responses)
+        method:
+          type: string
+          description: MCP method name (e.g., tools/list, resources/read)
+          enum:
+            - initialize
+            - ping
+            - tools/list
+            - tools/call
+            - resources/list
+            - resources/templates/list
+            - resources/read
+            - prompts/list
+            - prompts/get
+            - notifications/initialized
+            - notifications/cancelled
+            - notifications/progress
+        params:
+          oneOf:
+            - type: object
+            - type: string
+
+    mcp_response:
+      type: object
+      required:
+        - jsonrpc
+      properties:
+        jsonrpc:
+          type: string
+          const: "2.0"
+        id:
+          oneOf:
+            - type: string
+            - type: integer
+          description: Request identifier (matches request)
+        result:
+          type: object
+          description: Result data (present on success)
+        error:
+          type: object
+          description: Error information (present on failure)
+          properties:
+            code:
+              type: integer
+              description: JSON-RPC error code
+            message:
+              type: string
+              description: Error message
+            data:
+              type: object
+              description: Additional error data"
+
+    mcp_error:
+      type: object
+      properties:
+        jsonrpc:
+          type: string
+        error:
+          type: object
+          properties:
+            code:
+              type: integer
+            message:
+              type: string
+            data:
+              type: object
 
 paths:
   /api:
@@ -1185,6 +1268,154 @@ paths:
       responses:
         200: { $ref: "#/components/responses/discovery" }
 
+
+  /mcp:
+    post:
+      summary: MCP server endpoint (JSON-RPC over HTTP)
+      description: |
+        [Module: MCP](https://github.com/AlexxIT/go2rtc#module-mcp)
+
+        Model Context Protocol server for AI assistant integration.
+        Implements JSON-RPC 2.0 with MCP protocol version 2024-11-05.
+
+        Supports tools, resources and prompts for stream management.
+      tags: [ MCP ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: "#/components/schemas/mcp_request"
+                - type: array
+                  items:
+                    $ref: "#/components/schemas/mcp_request"
+            examples:
+              initialize:
+                summary: Initialize MCP session
+                value:
+                  jsonrpc: "2.0"
+                  id: 1
+                  method: initialize
+                  params:
+                    protocolVersion: "2024-11-05"
+                    capabilities: {}
+              tools_list:
+                summary: List available tools
+                value:
+                  jsonrpc: "2.0"
+                  id: 2
+                  method: tools/list
+              tools_call:
+                summary: Call a tool
+                value:
+                  jsonrpc: "2.0"
+                  id: 3
+                  method: tools/call
+                  params:
+                    name: list_streams
+                    arguments:
+                      details: true
+              tools_call_urls:
+                summary: Get stream URLs
+                value:
+                  jsonrpc: "2.0"
+                  id: 5
+                  method: tools/call
+                  params:
+                    name: get_stream_urls
+                    arguments:
+                      name: camera
+              tools_call_events:
+                summary: Get recent events
+                value:
+                  jsonrpc: "2.0"
+                  id: 6
+                  method: tools/call
+                  params:
+                    name: get_events
+                    arguments:
+                      count: 20
+              tools_call_restart:
+                summary: Restart a stream
+                value:
+                  jsonrpc: "2.0"
+                  id: 7
+                  method: tools/call
+                  params:
+                    name: restart_stream
+                    arguments:
+                      name: camera
+              resources_list:
+                summary: List available resources
+                value:
+                  jsonrpc: "2.0"
+                  id: 10
+                  method: resources/list
+              resources_read_events:
+                summary: Read events resource
+                value:
+                  jsonrpc: "2.0"
+                  id: 11
+                  method: resources/read
+                  params:
+                    uri: "events://"
+      responses:
+        "200":
+          description: MCP response
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/mcp_response"
+                  - type: array
+                    items:
+                      $ref: "#/components/schemas/mcp_response"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/mcp_error"
+
+  /mcp/sse:
+    get:
+      summary: MCP Server-Sent Events endpoint
+      description: |
+        SSE endpoint for real-time bidirectional MCP communication.
+        Supports GET for SSE subscription and POST for sending messages.
+      tags: [ MCP ]
+      responses:
+        "200":
+          description: SSE stream established
+          content:
+            text/event-stream: { example: "" }
+    post:
+      summary: Send MCP message via SSE
+      tags: [ MCP ]
+      requestBody:
+        $ref: "#/components/schemas/mcp_request"
+      responses:
+        "200":
+          description: MCP response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/mcp_response"
+
+  /mcp/ws:
+    get:
+      summary: MCP WebSocket endpoint
+      description: |
+        WebSocket endpoint for real-time bidirectional MCP communication.
+        Both JSON-RPC requests and responses are sent as text messages.
+        Supports automatic reconnection and ping/pong keepalive.
+      tags: [ MCP ]
+      responses:
+        "101":
+          description: WebSocket connection established
+        "400":
+          description: Invalid WebSocket request
 
 
   /api/stack:

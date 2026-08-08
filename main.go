@@ -25,6 +25,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/isapi"
 	"github.com/AlexxIT/go2rtc/internal/ivideon"
 	"github.com/AlexxIT/go2rtc/internal/kasa"
+	"github.com/AlexxIT/go2rtc/internal/mcp"
 	"github.com/AlexxIT/go2rtc/internal/mjpeg"
 	"github.com/AlexxIT/go2rtc/internal/mp4"
 	"github.com/AlexxIT/go2rtc/internal/mpeg"
@@ -64,6 +65,7 @@ func main() {
 		{"", app.Init},    // init config and logs
 		{"api", api.Init}, // init API before all others
 		{"ws", ws.Init},   // init WS API endpoint
+		{"mcp", mcp.Init}, // init MCP server
 		{"", streams.Init},
 		// Main sources and servers
 		{"http", http.Init},     // rtsp source, HTTP server
@@ -118,6 +120,11 @@ func main() {
 	for _, m := range modules {
 		if app.Modules == nil || m.name == "" || slices.Contains(app.Modules, m.name) {
 			m.init()
+
+			if app.MCPProxy {
+				mcp.RunProxy()
+				return
+			}
 		}
 	}
 

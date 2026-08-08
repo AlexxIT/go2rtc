@@ -10,16 +10,20 @@ import (
 )
 
 var (
-	Version    string
-	Modules    []string
-	UserAgent  string
-	ConfigPath string
-	Info       = make(map[string]any)
+	Version     string
+	Modules     []string
+	UserAgent   string
+	ConfigPath  string
+	MCPProxy    bool
+	MCPProxyURL string
+	Info        = make(map[string]any)
 )
 
 const usage = `Usage of go2rtc:
 
   -c, --config   Path to config file or config string as YAML or JSON, support multiple
+  -mcp           Run MCP stdio proxy mode and forward requests to existing go2rtc instance
+  -mcp-url       Upstream MCP HTTP endpoint for -mcp mode (default: http://127.0.0.1:1984/mcp)
   -d, --daemon   Run in background
   -v, --version  Print version and exit
 `
@@ -27,10 +31,14 @@ const usage = `Usage of go2rtc:
 func Init() {
 	var config flagConfig
 	var daemon bool
+	var mcp bool
+	var mcpURL string
 	var version bool
 
 	flag.Var(&config, "config", "")
 	flag.Var(&config, "c", "")
+	flag.BoolVar(&mcp, "mcp", false, "")
+	flag.StringVar(&mcpURL, "mcp-url", "", "")
 	flag.BoolVar(&daemon, "daemon", false, "")
 	flag.BoolVar(&daemon, "d", false, "")
 	flag.BoolVar(&version, "version", false, "")
@@ -63,6 +71,14 @@ func Init() {
 	}
 
 	UserAgent = "go2rtc/" + Version
+	MCPProxy = mcp
+	MCPProxyURL = mcpURL
+
+	// Proxy mode uses stdout for JSON-RPC transport.
+	// Keep logs on stderr to avoid corrupting MCP messages.
+	if MCPProxy && modules["output"] == "stdout" {
+		modules["output"] = "stderr"
+	}
 
 	Info["version"] = Version
 	Info["revision"] = revision
