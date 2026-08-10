@@ -26,7 +26,7 @@ export default defineConfig({
         // second line of Telegram card (black bold), autodetect from site description
         ['meta', { property: 'og:title', content: 'go2rtc - Ultimate camera streaming application' }],
         // third line of Telegram card, autodetect from site description
-        ['meta', { property: 'og:description', content: 'Support alsa, doorbird, dvrip, eseecloud, ffmpeg, gopro, hass, hls, homekit, mjpeg, mp4, mpegts, nest, onvif, ring, roborock, rtmp, rtsp, tapo, vigi, tuya, v4l2, webrtc, wyze, xiaomi.' }],
+        ['meta', { property: 'og:description', content: 'Support alsa, doorbird, dvrip, eseecloud, ffmpeg, gopro, hass, hls, homekit, mjpeg, mp4, mpegts, nest, onvif, reolink, ring, roborock, rtmp, rtsp, tapo, vigi, tuya, v4l2, webrtc, wyze, xiaomi.' }],
         ['meta', { property: 'og:url', content: 'https://go2rtc.org/' }],
         ['meta', { property: 'og:image', content: 'https://go2rtc.org/images/logo.png' }],
         // important for Telegram - the image will be at the bottom and large
@@ -138,6 +138,7 @@ export default defineConfig({
                     {text: 'mpeg', link: '/internal/mpeg/'},
                     {text: 'multitrans', link: '/internal/multitrans/'},
                     {text: 'nest', link: '/internal/nest/'},
+                    {text: 'reolink', link: '/internal/reolink/'},
                     {text: 'ring', link: '/internal/ring/'},
                     {text: 'roborock', link: '/internal/roborock/'},
                     {text: 'tapo', link: '/internal/tapo/'},
