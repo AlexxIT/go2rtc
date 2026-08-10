@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/AlexxIT/go2rtc/internal/api"
+	api "github.com/AlexxIT/go2rtc/internal/api/server"
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg"
@@ -40,7 +40,7 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	stream, _ := streams.GetOrPatch(query)
 	if stream == nil {
-		http.Error(w, api.StreamNotFound, http.StatusNotFound)
+		http.Error(w, streams.StreamNotFound, http.StatusNotFound)
 		return
 	}
 
@@ -139,7 +139,7 @@ func outputMjpeg(w http.ResponseWriter, r *http.Request) {
 	src := r.URL.Query().Get("src")
 	stream := streams.Get(src)
 	if stream == nil {
-		http.Error(w, api.StreamNotFound, http.StatusNotFound)
+		http.Error(w, streams.StreamNotFound, http.StatusNotFound)
 		return
 	}
 
@@ -174,7 +174,7 @@ func inputMjpeg(w http.ResponseWriter, r *http.Request) {
 	dst := r.URL.Query().Get("dst")
 	stream := streams.Get(dst)
 	if stream == nil {
-		http.Error(w, api.StreamNotFound, http.StatusNotFound)
+		http.Error(w, streams.StreamNotFound, http.StatusNotFound)
 		return
 	}
 
@@ -193,7 +193,7 @@ func inputMjpeg(w http.ResponseWriter, r *http.Request) {
 func handlerWS(tr *ws.Transport, _ *ws.Message) error {
 	stream, _ := streams.GetOrPatch(tr.Request.URL.Query())
 	if stream == nil {
-		return errors.New(api.StreamNotFound)
+		return errors.New(streams.StreamNotFound)
 	}
 
 	cons := mjpeg.NewConsumer()
@@ -219,7 +219,7 @@ func apiStreamY4M(w http.ResponseWriter, r *http.Request) {
 	src := r.URL.Query().Get("src")
 	stream := streams.Get(src)
 	if stream == nil {
-		http.Error(w, api.StreamNotFound, http.StatusNotFound)
+		http.Error(w, streams.StreamNotFound, http.StatusNotFound)
 		return
 	}
 

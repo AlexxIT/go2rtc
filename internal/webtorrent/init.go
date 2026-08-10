@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/AlexxIT/go2rtc/internal/api"
+	api "github.com/AlexxIT/go2rtc/internal/api/server"
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/internal/webrtc"
@@ -45,7 +45,7 @@ func Init() {
 		Exchange: func(src, offer string) (answer string, err error) {
 			stream := streams.Get(src)
 			if stream == nil {
-				return "", errors.New(api.StreamNotFound)
+				return "", errors.New(streams.StreamNotFound)
 			}
 			return webrtc.ExchangeSDP(stream, offer, "webtorrent", "")
 		},

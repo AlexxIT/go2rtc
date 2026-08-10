@@ -2,6 +2,7 @@ package exec
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/md5"
 	"encoding/hex"
 	"errors"
@@ -102,6 +103,12 @@ func execHandle(rawURL string) (prod core.Producer, err error) {
 
 	if s := query.Get("killtimeout"); s != "" {
 		cmd.WaitDelay = time.Duration(core.Atoi(s)) * time.Second
+	}
+
+	if s := query.Get("quitstdin"); s != "" {
+		buffer := bytes.Buffer{}
+		buffer.Write([]byte(s + "\n"))
+		cmd.Stdin = &buffer
 	}
 
 	if query.Get("backchannel") == "1" {

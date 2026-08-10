@@ -8,6 +8,8 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
+const StreamNotFound = "stream not found"
+
 type Stream struct {
 	producers []*Producer
 	consumers []core.Consumer
@@ -73,7 +75,7 @@ func (s *Stream) RemoveConsumer(cons core.Consumer) {
 	}
 	s.mu.Unlock()
 
-	s.stopProducers()
+	s.StopProducers()
 }
 
 func (s *Stream) AddProducer(prod core.Producer) {
@@ -94,7 +96,12 @@ func (s *Stream) RemoveProducer(prod core.Producer) {
 	s.mu.Unlock()
 }
 
-func (s *Stream) stopProducers() {
+func (s *Stream) StopProducers(force ...bool) {
+	// Default force=false, only stop producers without active tracks
+	// If force=true, stop all producers regardless of active tracks
+	if len(force) == 0 {
+		force = append(force, false)
+	}
 	if s.pending.Load() > 0 {
 		log.Trace().Msg("[streams] skip stop pending producer")
 		return
@@ -103,14 +110,16 @@ func (s *Stream) stopProducers() {
 	s.mu.Lock()
 producers:
 	for _, producer := range s.producers {
-		for _, track := range producer.receivers {
-			if len(track.Senders()) > 0 {
-				continue producers
+		if !force[0] {
+			for _, track := range producer.receivers {
+				if len(track.Senders()) > 0 {
+					continue producers
+				}
 			}
-		}
-		for _, track := range producer.senders {
-			if len(track.Senders()) > 0 {
-				continue producers
+			for _, track := range producer.senders {
+				if len(track.Senders()) > 0 {
+					continue producers
+				}
 			}
 		}
 		producer.stop()

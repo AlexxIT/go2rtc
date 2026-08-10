@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/AlexxIT/go2rtc/internal/api"
+	api "github.com/AlexxIT/go2rtc/internal/api/server"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 

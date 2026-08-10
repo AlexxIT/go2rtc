@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/AlexxIT/go2rtc/internal/api"
+	api "github.com/AlexxIT/go2rtc/internal/api/server"
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/streams"
@@ -52,7 +52,7 @@ func handlerStream(w http.ResponseWriter, r *http.Request) {
 	src := r.URL.Query().Get("src")
 	stream := streams.Get(src)
 	if stream == nil {
-		http.Error(w, api.StreamNotFound, http.StatusNotFound)
+		http.Error(w, streams.StreamNotFound, http.StatusNotFound)
 		return
 	}
 

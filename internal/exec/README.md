@@ -20,6 +20,7 @@ Pipe commands support parameters (format: `exec:{command}#{param1}#{param2}`):
 
 - `killsignal` - signal which will be sent to stop the process (numeric form)
 - `killtimeout` - time in seconds for forced termination with sigkill
+- `quitstdin` - string to pass on stdin for graceful termination
 - `backchannel` - enable backchannel for two-way audio
 - `starttimeout` - time in seconds for waiting first byte from RTSP
 

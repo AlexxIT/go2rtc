@@ -1,7 +1,7 @@
 package debug
 
 import (
-	"github.com/AlexxIT/go2rtc/internal/api"
+	api "github.com/AlexxIT/go2rtc/internal/api/server"
 )
 
 func Init() {
