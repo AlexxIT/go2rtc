@@ -252,6 +252,53 @@ func TestNewServer_CustomName(t *testing.T) {
 	require.Equal(t, "Living Room Camera", srv.MDNSEntry().Name)
 }
 
+func TestNewServer_AccessoryMetadata(t *testing.T) {
+	tests := []struct {
+		name       string
+		hksv       bool
+		categoryID string
+	}{
+		{name: "HomeKit"},
+		{name: "HKSV", hksv: true},
+		{name: "HKSV doorbell", hksv: true, categoryID: "doorbell"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			srv := newTestServer(t, func(c *Config) {
+				c.HKSV = test.hksv
+				c.CategoryID = test.categoryID
+				c.Name = "Front Door"
+				c.Manufacturer = "Acme"
+				c.Model = "Camera X"
+				c.SerialNumber = "CAM-001"
+				c.Firmware = "2.3.4"
+			})
+
+			info := srv.Accessory().GetService("3E")
+			require.NotNil(t, info)
+			require.Equal(t, "Acme", info.GetCharacter("20").Value)
+			require.Equal(t, "Camera X", info.GetCharacter("21").Value)
+			require.Equal(t, "Front Door", info.GetCharacter("23").Value)
+			require.Equal(t, "CAM-001", info.GetCharacter("30").Value)
+			require.Equal(t, "2.3.4", info.GetCharacter("52").Value)
+		})
+	}
+}
+
+func TestNewServer_AccessoryMetadataDefaults(t *testing.T) {
+	srv := newTestServer(t, func(c *Config) {
+		c.Version = "1.2.3"
+	})
+
+	info := srv.Accessory().GetService("3E")
+	require.NotNil(t, info)
+	require.Equal(t, "AlexxIT", info.GetCharacter("20").Value)
+	require.Equal(t, "go2rtc", info.GetCharacter("21").Value)
+	require.Equal(t, "-", info.GetCharacter("30").Value)
+	require.Equal(t, "1.2.3", info.GetCharacter("52").Value)
+}
+
 func TestNewServer_CustomDeviceID(t *testing.T) {
 	srv := newTestServer(t, func(c *Config) {
 		c.DeviceID = "AA:BB:CC:DD:EE:FF"

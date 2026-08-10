@@ -30,6 +30,10 @@ func Init() {
 		Mod map[string]struct {
 			Pin             string   `yaml:"pin"`
 			Name            string   `yaml:"name"`
+			Manufacturer    string   `yaml:"manufacturer"`
+			Model           string   `yaml:"model"`
+			SerialNumber    string   `yaml:"serial_number"`
+			Firmware        string   `yaml:"firmware"`
 			DeviceID        string   `yaml:"device_id"`
 			DevicePrivate   string   `yaml:"device_private"`
 			CategoryID      string   `yaml:"category_id"`
@@ -84,6 +88,10 @@ func Init() {
 			StreamName:      id,
 			Pin:             conf.Pin,
 			Name:            conf.Name,
+			Manufacturer:    conf.Manufacturer,
+			Model:           conf.Model,
+			SerialNumber:    conf.SerialNumber,
+			Firmware:        conf.Firmware,
 			DeviceID:        conf.DeviceID,
 			DevicePrivate:   conf.DevicePrivate,
 			CategoryID:      conf.CategoryID,
