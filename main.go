@@ -41,6 +41,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/internal/tapo"
 	"github.com/AlexxIT/go2rtc/internal/tuya"
+	"github.com/AlexxIT/go2rtc/internal/ui"
 	"github.com/AlexxIT/go2rtc/internal/v4l2"
 	"github.com/AlexxIT/go2rtc/internal/webrtc"
 	"github.com/AlexxIT/go2rtc/internal/webtorrent"
@@ -64,6 +65,7 @@ func main() {
 		{"", app.Init},    // init config and logs
 		{"api", api.Init}, // init API before all others
 		{"ws", ws.Init},   // init WS API endpoint
+		{"ui", ui.Init},   // extra static UI from mounted directory
 		{"", streams.Init},
 		// Main sources and servers
 		{"http", http.Init},     // rtsp source, HTTP server

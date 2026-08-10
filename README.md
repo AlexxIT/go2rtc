@@ -57,6 +57,7 @@ Ultimate camera streaming application with support for dozens formats and protoc
   - [go2rtc: Home Assistant Integration](#go2rtc-home-assistant-integration)
   - [go2rtc: Master version](#go2rtc-master-version)
 - [Configuration](#configuration)
+  - [Extra UI](#extra-ui)
 - [Features](#features)
   - [Streaming input](#streaming-input)
   - [Streaming output](#streaming-output)
@@ -160,6 +161,21 @@ streams:
 
 More information can be [found here](internal/app/README.md).
 
+### Extra UI
+
+You can serve an additional static web UI (HTML, CSS, JS) from a local directory on the same port as the built-in [HTTP API](internal/api/README.md) (default **1984**). When `ui.dir` exists and is a directory, files are served under `{api.base_path}/ui/` (for example `http://<host>:1984/ui/` when `api.base_path` is empty).
+
+```yaml
+ui:
+  dir: /path/to/your/static/files # optional; default is /ui
+```
+
+If `ui.dir` is omitted, go2rtc uses `/ui` (a Unix-style absolute path; on Windows set an explicit path). Set `ui.dir` to `""` to disable this feature.
+
+If you restrict which modules load with `app.modules` (see [Security](#security)), include `ui` or the extra UI will not be registered. If you use `api.allow_paths`, add the extra UI path (for example `/ui/` or `{base_path}/ui/`).
+
+With Docker, bind-mount your files at `/ui` or set `ui.dir` accordingly (see [docker/README.md](docker/README.md#extra-ui)).
+
 ## Features
 
 A summary table of all modules and features can be found [here](internal/README.md).
@@ -168,6 +184,7 @@ A summary table of all modules and features can be found [here](internal/README.
 
 - [`app`](internal/app/README.md) - Reading [configs](internal/app/README.md) and setting up [logs](internal/app/README.md#log).
 - [`api`](internal/api/README.md) - Handle [HTTP](internal/api/README.md) and [WebSocket](internal/api/ws/README.md) API.
+- [`ui`](internal/ui/ui.go) - Optional extra static UI from `ui.dir` (default `/ui`).
 - [`streams`](internal/streams/README.md) - Handle a list of streams.
 
 ### Streaming input
