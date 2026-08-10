@@ -18,6 +18,7 @@ require (
 	github.com/pion/sdp/v3 v3.0.17
 	github.com/pion/srtp/v3 v3.0.10
 	github.com/pion/stun/v3 v3.1.1
+	github.com/pion/turn/v4 v4.1.4
 	github.com/pion/webrtc/v4 v4.2.3
 	github.com/rs/zerolog v1.34.0
 	github.com/sigurn/crc16 v0.0.0-20240131213347-83fcde1e29d1
@@ -41,7 +42,6 @@ require (
 	github.com/pion/sctp v1.9.2 // indirect
 	github.com/pion/transport/v3 v3.1.1 // indirect
 	github.com/pion/transport/v4 v4.0.1 // indirect
-	github.com/pion/turn/v4 v4.1.4 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/wlynxg/anet v0.0.5 // indirect
 	golang.org/x/mod v0.32.0 // indirect

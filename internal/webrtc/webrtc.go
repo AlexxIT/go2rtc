@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net"
 	"strings"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
@@ -11,22 +12,61 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
+	"github.com/pion/turn/v4"
 	pion "github.com/pion/webrtc/v4"
 	"github.com/rs/zerolog"
 )
 
+// ICEServerConfig extends pion.ICEServer with TURN REST API (shared secret) support.
+type ICEServerConfig struct {
+	URLs          []string `yaml:"urls" json:"urls"`
+	Username      string   `yaml:"username,omitempty" json:"username,omitempty"`
+	Credential    string   `yaml:"credential,omitempty" json:"credential,omitempty"`
+	SharedSecret  string   `yaml:"shared_secret,omitempty" json:"shared_secret,omitempty"`
+	CredentialTTL int      `yaml:"credential_ttl,omitempty" json:"credential_ttl,omitempty"`
+}
+
+func resolveICEServers(configs []ICEServerConfig) []pion.ICEServer {
+	servers := make([]pion.ICEServer, 0, len(configs))
+	for _, cfg := range configs {
+		if cfg.SharedSecret != "" {
+			ttl := time.Duration(cfg.CredentialTTL) * time.Second
+			if ttl == 0 {
+				ttl = 24 * time.Hour
+			}
+			username, password, err := turn.GenerateLongTermTURNRESTCredentials(cfg.SharedSecret, "go2rtc", ttl)
+			if err != nil {
+				log.Error().Err(err).Msg("[webrtc] failed to generate TURN credentials")
+				continue
+			}
+			servers = append(servers, pion.ICEServer{
+				URLs:       cfg.URLs,
+				Username:   username,
+				Credential: password,
+			})
+		} else {
+			servers = append(servers, pion.ICEServer{
+				URLs:       cfg.URLs,
+				Username:   cfg.Username,
+				Credential: cfg.Credential,
+			})
+		}
+	}
+	return servers
+}
+
 func Init() {
 	var cfg struct {
 		Mod struct {
-			Listen     string           `yaml:"listen"`
-			Candidates []string         `yaml:"candidates"`
-			IceServers []pion.ICEServer `yaml:"ice_servers"`
-			Filters    webrtc.Filters   `yaml:"filters"`
+			Listen     string            `yaml:"listen"`
+			Candidates []string          `yaml:"candidates"`
+			IceServers []ICEServerConfig `yaml:"ice_servers"`
+			Filters    webrtc.Filters    `yaml:"filters"`
 		} `yaml:"webrtc"`
 	}
 
 	cfg.Mod.Listen = ":8555"
-	cfg.Mod.IceServers = []pion.ICEServer{
+	cfg.Mod.IceServers = []ICEServerConfig{
 		{URLs: []string{"stun:stun.cloudflare.com:3478", "stun:stun.l.google.com:19302"}},
 	}
 
@@ -82,12 +122,13 @@ func Init() {
 		clientAPI, _ = webrtc.NewAPI()
 	}
 
-	pionConf := pion.Configuration{
-		ICEServers:   cfg.Mod.IceServers,
-		SDPSemantics: pion.SDPSemanticsUnifiedPlanWithFallback,
-	}
+	iceConfigs := cfg.Mod.IceServers
 
 	PeerConnection = func(active bool) (*pion.PeerConnection, error) {
+		pionConf := pion.Configuration{
+			ICEServers:   resolveICEServers(iceConfigs),
+			SDPSemantics: pion.SDPSemanticsUnifiedPlanWithFallback,
+		}
 		// active - client, passive - server
 		if active {
 			return clientAPI.NewPeerConnection(pionConf)
