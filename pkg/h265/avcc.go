@@ -16,6 +16,14 @@ func RepairAVCC(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 	ps := h264.JoinNALU(vds, sps, pps)
 
 	return func(packet *rtp.Packet) {
+		// AVCC needs a four-byte length prefix followed by a NALU header.
+		// Some cameras intermittently emit an empty/truncated video packet.
+		// Dropping that packet keeps one malformed source from panicking the
+		// sender goroutine and terminating the whole go2rtc process.
+		if packet == nil || len(packet.Payload) < 5 {
+			return
+		}
+
 		switch NALUType(packet.Payload) {
 		case NALUTypeIFrame, NALUTypeIFrame2, NALUTypeIFrame3:
 			clone := *packet
@@ -31,7 +39,18 @@ func AVCCToCodec(avcc []byte) *core.Codec {
 	buf := bytes.NewBufferString("profile-id=1")
 
 	for {
-		size := 4 + int(binary.BigEndian.Uint32(avcc))
+		n := len(avcc)
+		if n < 5 {
+			break
+		}
+
+		naluSize := binary.BigEndian.Uint32(avcc)
+		// An H.265 NAL unit has a two-byte header. Reject zero-length,
+		// one-byte, and over-declared units before inspecting their type.
+		if naluSize < 2 || naluSize > uint32(n-4) {
+			break
+		}
+		size := 4 + int(naluSize)
 
 		switch NALUType(avcc) {
 		case NALUTypeVPS:
@@ -45,11 +64,7 @@ func AVCCToCodec(avcc []byte) *core.Codec {
 			buf.WriteString(base64.StdEncoding.EncodeToString(avcc[4:size]))
 		}
 
-		if size < len(avcc) {
-			avcc = avcc[size:]
-		} else {
-			break
-		}
+		avcc = avcc[size:]
 	}
 
 	return &core.Codec{
