@@ -55,7 +55,11 @@ func NewClient(rawURL string) (*Client, error) {
 	var conn Conn
 	switch s := query.Get("vendor"); s {
 	case "cs2":
-		conn, err = cs2.Dial(u.Host, query.Get("transport"))
+		if model == ModelLoockV6 {
+			conn, err = cs2.DialBroadcast(u.Host, query.Get("transport"))
+		} else {
+			conn, err = cs2.Dial(u.Host, query.Get("transport"))
+		}
 	case "tutk":
 		conn, err = tutk.Dial(u.Host, query.Get("uid"), "Miss", "client")
 	default:
@@ -137,6 +141,7 @@ func (c *Client) WriteCommand(data []byte) error {
 const (
 	ModelDafang  = "isa.camera.df3"
 	ModelLoockV2 = "loock.cateye.v02"
+	ModelLoockV6 = "loock.cateye.v06"
 	ModelC200    = "chuangmi.camera.046c04"
 	ModelC300    = "chuangmi.camera.72ac1"
 	// ModelXiaofang looks like it has the same firmware as the ModelDafang.
