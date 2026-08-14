@@ -51,6 +51,8 @@ type Conn struct {
 
 	cmdMu  sync.Mutex
 	cmdAck func()
+
+	cmdResponseAck atomic.Bool
 }
 
 const (
@@ -171,6 +173,9 @@ func (c *Conn) worker() {
 					// For UDP we should send ACK.
 					ack := []byte{magic, msgDrwAck, 0, 6, magicDrw, ch, 0, 1, seqHI, seqLO}
 					_, _ = c.Conn.Write(ack)
+					if ch == 0 && c.cmdResponseAck.Load() && c.cmdAck != nil {
+						c.cmdAck()
+					}
 				}
 			}
 
@@ -190,6 +195,10 @@ func (c *Conn) worker() {
 			fmt.Printf("%s: unknown msg: %x\n", "cs2", buf[:n])
 		}
 	}
+}
+
+func (c *Conn) AcceptCommandResponseAsAck() {
+	c.cmdResponseAck.Store(true)
 }
 
 func (c *Conn) Protocol() string {

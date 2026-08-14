@@ -56,7 +56,12 @@ func NewClient(rawURL string) (*Client, error) {
 	switch s := query.Get("vendor"); s {
 	case "cs2":
 		if model == ModelLoockV6 {
-			conn, err = cs2.DialBroadcast(u.Host, query.Get("transport"))
+			var cs2Conn *cs2.Conn
+			cs2Conn, err = cs2.DialBroadcast(u.Host, query.Get("transport"))
+			if err == nil {
+				cs2Conn.AcceptCommandResponseAsAck()
+			}
+			conn = cs2Conn
 		} else {
 			conn, err = cs2.Dial(u.Host, query.Get("transport"))
 		}
