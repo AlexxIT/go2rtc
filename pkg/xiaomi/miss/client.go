@@ -254,9 +254,10 @@ func (c *Client) ReadPacket() (*Packet, error) {
 	}
 
 	switch c.model {
-	case ModelDafang, ModelXiaofang, ModelLoockV2:
+	case ModelDafang, ModelXiaofang, ModelLoockV2, ModelLoockV6:
 		// Dafang has ts in sec
 		// LoockV2 has ts in msec for video, but zero ts for audio
+		// LoockV6 has zero ts for video and audio
 		pkt.Timestamp = uint64(time.Now().UnixMilli())
 	default:
 		pkt.Timestamp = binary.LittleEndian.Uint64(hdr[16:])
