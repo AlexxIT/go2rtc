@@ -212,6 +212,28 @@ func getVendorName(i byte) string {
 }
 
 func wakeUpCamera(url *url.URL) error {
+	if url.Query().Get("model") == "loock.cateye.v06" {
+		params := fmt.Sprintf(
+			`{"params":{"did":"%s","siid":7,"aiid":1,"in":[]}}`,
+			url.Query().Get("did"),
+		)
+		res, err := cloudUserRequest(url.User, "/miotspec/action", params)
+		if err != nil {
+			return err
+		}
+
+		var result struct {
+			Code int `json:"code"`
+		}
+		if err = json.Unmarshal(res, &result); err != nil {
+			return err
+		}
+		if result.Code != 0 {
+			return fmt.Errorf("xiaomi: start p2p stream: code %d", result.Code)
+		}
+		return nil
+	}
+
 	const params = `{"id":1,"method":"wakeup","params":{"video":"1"}}`
 	did := url.Query().Get("did")
 	_, err := cloudUserRequest(url.User, "/home/rpc/"+did, params)
