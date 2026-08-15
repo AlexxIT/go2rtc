@@ -83,10 +83,23 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// handle when the client drops the connection, otherwise WriteTo below
+	// blocks until a keyframe arrives - which never happens for sources that
+	// don't emit one - leaking the consumer and holding the producer open
+	stopped := make(chan struct{})
+	go func() {
+		select {
+		case <-r.Context().Done():
+			_ = cons.Stop()
+		case <-stopped:
+		}
+	}()
+
 	once := &core.OnceBuffer{} // init and first frame
 	_, _ = cons.WriteTo(once)
 	b = once.Buffer()
 
+	close(stopped)
 	stream.RemoveConsumer(cons)
 
 	switch cons.CodecName() {
