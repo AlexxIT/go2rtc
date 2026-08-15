@@ -3,6 +3,7 @@ package homekit
 import (
 	"errors"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
@@ -10,6 +11,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/srtp"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/creds"
 	"github.com/AlexxIT/go2rtc/pkg/hap"
 	"github.com/AlexxIT/go2rtc/pkg/hap/camera"
 	"github.com/AlexxIT/go2rtc/pkg/homekit"
@@ -33,6 +35,17 @@ func Init() {
 	log = app.GetLogger("homekit")
 
 	streams.HandleFunc("homekit", streamHandler)
+
+	// Mask pairing keys for sources already present in the config. streamHandler
+	// only runs when a stream is first dialled, and the API will happily return
+	// the source URL before that happens.
+	for _, sources := range streams.GetAllSources() {
+		for _, source := range sources {
+			if strings.HasPrefix(source, "homekit") {
+				maskClientPrivate(source)
+			}
+		}
+	}
 
 	api.HandleFunc("api/homekit", apiHomekit)
 	api.HandleFunc("api/homekit/accessories", apiHomekitAccessories)
@@ -134,6 +147,13 @@ func streamHandler(rawURL string) (core.Producer, error) {
 	}
 
 	rawURL, rawQuery, _ := strings.Cut(rawURL, "#")
+
+	// A paired source URL carries the controller's long term private key, and
+	// the URL is echoed verbatim by the streams API and in log lines. Register
+	// the key so it is masked, otherwise anything able to reach the API can
+	// read it and pair itself against the accessory.
+	maskClientPrivate(rawURL)
+
 	client, err := homekit.Dial(rawURL, srtp.Server)
 	if client != nil && rawQuery != "" {
 		query := streams.ParseQuery(rawQuery)
@@ -143,6 +163,20 @@ func streamHandler(rawURL string) (core.Producer, error) {
 	}
 
 	return client, err
+}
+
+// maskClientPrivate registers the controller private key from a homekit source
+// URL with the credential masker. Only client_private is sensitive - device_id
+// and client_id are identifiers, and device_public is the accessory's public
+// key.
+func maskClientPrivate(rawURL string) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return
+	}
+	if key := u.Query().Get("client_private"); key != "" {
+		creds.AddSecret(key)
+	}
 }
 
 func resolve(host string) *server {
