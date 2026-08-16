@@ -150,6 +150,7 @@ type NetSDKTransport struct {
 	rate      uint32
 	frameSize int
 	opened    bool
+	opening   bool // serialises a single in-flight Open (see Open guard)
 	closed    bool
 	stopKeep  chan struct{}
 }
@@ -199,6 +200,14 @@ func (t *NetSDKTransport) Codecs() []*core.Codec {
 
 func (t *NetSDKTransport) FrameSize() int { return t.frameSize }
 
+// Open lifecycle errors returned by the guard. They are detectable via
+// errors.Is so a caller (e.g. a reconnect policy) can tell "already open,
+// Close first" apart from "a previous Open is still dialling".
+var (
+	ErrTransportAlreadyOpen  = errors.New("dahua: transport already open, call Close first")
+	ErrOpenAlreadyInProgress = errors.New("dahua: open already in progress, wait for the in-flight Open")
+)
+
 // Open runs the full handshake and leaves the sub channel ready for audio.
 func (t *NetSDKTransport) Open(codec *core.Codec) error {
 	codecID, ok := dhavAudioCodecID(codec.Name)
@@ -222,17 +231,51 @@ func (t *NetSDKTransport) Open(codec *core.Codec) error {
 		rate = 8000
 	}
 
-	// A failed Open tears itself down via Close (latches closed, closes
-	// stopKeep). Reset here so a retry doesn't start its keepalive goroutine
-	// on an already-closed channel - the camera would see no 0xA1 and drop the
-	// session a few seconds later, masking the real failure.
+	// Serialise Open in a single critical section: reset the closed latch AND
+	// claim the in-flight slot. The claim is a check-and-set under t.mu, so
+	// only one goroutine can pass it at a time. This is what actually closes
+	// the re-entrant Open data race - two concurrent Open calls would both see
+	// t.opened==false before either sets it and would then both dial and clobber
+	// t.ctrl/t.sub (see TestOpenReentrantNoRace). A plain "if t.opened" guard
+	// alone cannot catch that, because t.opened is only set at the end of a
+	// successful handshake.
 	t.mu.Lock()
 	if t.closed {
 		t.closed = false
 		t.stopKeep = make(chan struct{})
 	}
+	if t.opened {
+		t.mu.Unlock()
+		return ErrTransportAlreadyOpen
+	}
+	if t.opening {
+		t.mu.Unlock()
+		return ErrOpenAlreadyInProgress
+	}
+	t.opening = true
 	t.mu.Unlock()
 
+	// Release the in-flight slot whether Open succeeds or fails, so a retry or
+	// a Close-then-reopen can proceed.
+	defer func() {
+		t.mu.Lock()
+		t.opening = false
+		t.mu.Unlock()
+	}()
+
+	// The dials below (dialAndLogin -> t.ctrl, and the t.sub assignment in
+	// Open) assign the connection pointers WITHOUT t.mu. That is safe only
+	// because the guard above serialises Open to a single in-flight call, and
+	// keepAliveLoop/receiveLoop are spawned only after these writes (they
+	// observe them via the goroutine's happens-before edge).
+	//
+	// Known SECONDARY race (out of scope for this change): a Close() that lands
+	// while a dial is still in flight (e.g. the user hangs up during a slow
+	// connect) can race its locked capture of t.ctrl/t.sub against these
+	// unlocked writes. It is bounded by the dial timeout and far less likely
+	// than a re-entrant Open, so it is left as an explicit follow-up. The fix
+	// would be to take t.mu only around the pointer assignment, never around
+	// the blocking DialTimeout call itself.
 	if err := t.dialAndLogin(); err != nil {
 		return err
 	}
