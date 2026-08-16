@@ -180,7 +180,13 @@ func (s *Session16) RecvFrameData() (frameInfo, frameData []byte, err error) {
 
 func (s *Session16) SessionRead(chID byte, cmd []byte) int {
 	if chID != 0 {
+		if len(cmd) < cmdHdrSize {
+			return msgUnknown
+		}
 		return s.handleCh1(cmd)
+	}
+	if len(cmd) < cmdHdrSize {
+		return msgMediaLost
 	}
 
 	// 0  01030800  command + version
@@ -200,12 +206,12 @@ func (s *Session16) SessionRead(chID byte, cmd []byte) int {
 		case 0x03:
 			frameSeq := binary.LittleEndian.Uint16(cmd[4:])
 			chunkSeq := binary.LittleEndian.Uint16(cmd[12:])
+			payloadSize := binary.LittleEndian.Uint32(cmd[8:])
+			hdrSize := binary.LittleEndian.Uint16(cmd[14:])
 			if chunkSeq == 0 {
 				s.waitFSeq = frameSeq
 				s.waitCSeq = 0
 				s.waitData = s.waitData[:0]
-				payloadSize := binary.LittleEndian.Uint32(cmd[8:])
-				hdrSize := binary.LittleEndian.Uint16(cmd[14:])
 				s.waitSize = int(hdrSize) + int(payloadSize)
 			} else if frameSeq != s.waitFSeq || chunkSeq != s.waitCSeq {
 				s.waitCSeq = 0
@@ -220,13 +226,25 @@ func (s *Session16) SessionRead(chID byte, cmd []byte) int {
 
 			s.waitCSeq = 0
 
-			payloadSize := binary.LittleEndian.Uint32(cmd[8:])
+			// Every fragment repeats the frame layout. A malformed fragment can
+			// advertise a larger payload than the frame buffer assembled from the
+			// first fragment; never slice based on that untrusted value.
+			if int(payloadSize)+int(hdrSize) != s.waitSize ||
+				int(payloadSize) > len(s.waitData) ||
+				int(hdrSize) > len(s.waitData) ||
+				len(s.waitData) != s.waitSize {
+				s.waitData = s.waitData[:0]
+				return msgMediaLost
+			}
 			packetData[0] = bytes.Clone(s.waitData[payloadSize:])
 			packetData[1] = bytes.Clone(s.waitData[:payloadSize])
 
 		case 0x04:
 			data := cmd[24:]
 			hdrSize := binary.LittleEndian.Uint16(cmd[14:])
+			if int(hdrSize) > len(data) {
+				return msgMediaLost
+			}
 			packetData[0] = bytes.Clone(data[:hdrSize])
 			packetData[1] = bytes.Clone(data[hdrSize:])
 
