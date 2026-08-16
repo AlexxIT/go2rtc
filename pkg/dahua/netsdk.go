@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -239,10 +238,16 @@ func (t *NetSDKTransport) Open(codec *core.Codec) error {
 	}
 
 	var err error
-	if t.connID, err = t.addObject(); err != nil {
+	var cid string
+	if cid, err = t.addObject(); err != nil {
 		t.Close()
 		return err
 	}
+	// Publish the connection id under the lock so setTalkState's lock-protected
+	// read (and the Close teardown) stay race-free with this write.
+	t.mu.Lock()
+	t.connID = cid
+	t.mu.Unlock()
 
 	if t.sub, err = net.DialTimeout("tcp", t.addr, t.timeout); err != nil {
 		t.Close()
@@ -341,11 +346,12 @@ func (t *NetSDKTransport) Close() error {
 	ctrl := t.ctrl
 	sub := t.sub
 	connID := t.connID
+	rate := t.rate
 	close(t.stopKeep)
 	t.mu.Unlock()
 
 	if wasOpen && ctrl != nil {
-		_ = t.setTalkState(false, t.rate)
+		_ = t.setTalkState(false, rate)
 		_ = t.sendText(ctrl, []string{
 			"TransactionID:9",
 			"Method:DeleteObject",
@@ -589,12 +595,14 @@ func (t *NetSDKTransport) setTalkState(on bool, rate uint32) error {
 		depth, freq, state, tid = "0", "0", "0", "8"
 	}
 
-	// Read the control handle under the lock. keepAliveLoop reads it the same
-	// way, and the goroutines only ever read (never reassign) it, so this stays
-	// race-free. t.channel / t.encodeFormat / t.connID are immutable after Open,
-	// so reading them directly is safe.
+	// Read the control handle and connection id under the lock. keepAliveLoop
+	// reads ctrl the same way (never reassigns it), and Open() publishes
+	// connID under this same lock, so neither read races. t.channel /
+	// t.encodeFormat are immutable after NewTransport, so reading them directly
+	// is safe.
 	t.mu.Lock()
 	ctrl := t.ctrl
+	connID := t.connID
 	t.mu.Unlock()
 	if ctrl == nil {
 		return nil
@@ -609,7 +617,7 @@ func (t *NetSDKTransport) setTalkState(on bool, rate uint32) error {
 		"Depth:" + depth,
 		"Frequency:" + freq,
 		"State:" + state,
-		"ConnectionID:" + t.connID,
+		"ConnectionID:" + connID,
 		"TalkMode:0",
 	})
 }
@@ -656,11 +664,32 @@ func (t *NetSDKTransport) keepAliveLoop() {
 // Downlink audio is consumed only when OnAudio is set (full duplex); otherwise
 // each frame body is discarded via io.CopyN (no allocation), one frame ~40 ms.
 func (t *NetSDKTransport) receiveLoop() {
+	// Capture the stop channel once (same reasoning as keepAliveLoop): Open may
+	// reassign t.stopKeep on a same-instance reopen, so watch a local copy.
+	stop := t.stopKeep
 	for {
+		// Exit promptly on Close even if the device holds a half-open TCP
+		// connection and goes silent (no RST, no data). Without this check the
+		// loop would block in readHeader until the OS TCP timeout.
+		select {
+		case <-stop:
+			return
+		default:
+		}
+
+		// Bound the header read so a silent device cannot pin this goroutine
+		// until the OS TCP timeout; the 2s deadline also re-runs the stop check
+		// above regularly. A timeout here is expected on a quiet link, not an
+		// error.
+		_ = t.sub.SetReadDeadline(time.Now().Add(2 * time.Second))
 		hdr, err := readHeader(t.sub)
 		if err != nil {
+			if ne, ok := err.(net.Error); ok && ne.Timeout() {
+				continue
+			}
 			return
 		}
+		_ = t.sub.SetReadDeadline(time.Time{})
 		n := binary.LittleEndian.Uint32(hdr[4:8])
 		if n > maxFrame {
 			return
@@ -795,6 +824,16 @@ func (t *NetSDKTransport) sendText(conn net.Conn, lines []string) error {
 	if t.Debug != nil {
 		t.Debug("text ->", body)
 	}
+	// Writes to the sub channel compete with WriteAudio (which holds t.mu);
+	// writes to the control channel compete with keepAliveLoop (which holds
+	// t.ctrlMu). Lock the one that matches this connection so the two byte
+	// streams never interleave.
+	if conn == t.sub {
+		t.mu.Lock()
+		_, err := conn.Write(frame)
+		t.mu.Unlock()
+		return err
+	}
 	t.ctrlMu.Lock()
 	_, err := conn.Write(frame)
 	t.ctrlMu.Unlock()
@@ -875,8 +914,13 @@ func parseDHAVAudio(body []byte) ([]byte, byte) {
 	}
 
 	codecID := byte(0x0E) // G.711A, what the E4702 microphone sends
-	if int(body[22]) >= 4 && body[24] == 0x83 {
+	// FFmpeg dhav.c parse_ext: the audio extension type sits at body[24]; the
+	// codec id is at body[26] for type 0x83 and at body[27] for type 0x8c.
+	switch {
+	case int(body[22]) >= 4 && body[24] == 0x83:
 		codecID = body[26]
+	case int(body[22]) >= 4 && body[24] == 0x8c:
+		codecID = body[27]
 	}
 	return body[start:end], codecID
 }
@@ -933,7 +977,7 @@ func trimNUL(b []byte) []byte {
 }
 
 // ---------------------------------------------------------------------------
-// codec / URL / credential helpers
+// codec / credential helpers
 // ---------------------------------------------------------------------------
 
 // payloadType maps a codec name to its static RTP payload type. NetSDK does not
@@ -954,18 +998,4 @@ func payloadType(name string) uint8 {
 // uses, so a password can be printed and compared without ever revealing it.
 func passFingerprint(pass string) string {
 	return gen1Hash(pass)
-}
-
-// BuildURL renders a dahua:// URL with the credentials correctly escaped.
-//
-// url.UserPassword is used rather than QueryEscape because userinfo has its own
-// escaping rules: a space stays a space here, but becomes '+' in a query.
-func BuildURL(host, user, pass string, query string) string {
-	u := &url.URL{
-		Scheme:   "dahua",
-		User:     url.UserPassword(user, pass),
-		Host:     host,
-		RawQuery: query,
-	}
-	return u.String()
 }

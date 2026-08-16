@@ -85,7 +85,9 @@ silent on `1`, try `0`, `2` or `4` (unverified on E4702).
 The SDK `DH_TALK_CODING_TYPE` enum defines more values (`3` = AMR, plus G726, G729, AAC, MP3, …) but this
 fork emits PCM16 (`0x0C`), G.711 A-law (`0x0E`), G.711 µ-law (`0x0A`) and AAC (`0x1A`, opt-in via
 `codec=aac`) on the wire; of the SDK enum, only `0`/`1`/`2`/`4` (PCM16 and the two G.711 variants) are
-meaningful `encodeformat` values — AAC's `encodeformat=8` is unverified on E4702.
+meaningful `encodeformat` values. AAC is carried with the default `EncodeFormat` (`1`); its dedicated
+`DH_TALK_CODING_TYPE` value is not listed in the SDK header used for this fork, so do not set
+`encodeformat` to a number outside `0`/`1`/`2`/`4` for AAC.
 
 > **Browser pitfall — PCM16 / L16 is not web-encodable.** WebRTC browsers can only *send*
 > Opus, G.711 A-law (PCMA), G.711 µ-law (PCMU) and G722. PCM16 (L16) and AAC are not in the
