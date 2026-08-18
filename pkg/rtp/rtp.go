@@ -142,6 +142,9 @@ func (r *RTP) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, er
 
 	r.receiver = core.NewReceiver(media, codec)
 
+	// FIX: Register the receiver with the Connection so Stop() will close it
+	r.Receivers = append(r.Receivers, r.receiver)
+
 	return r.receiver, nil
 }
 
