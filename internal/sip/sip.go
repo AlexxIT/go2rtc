@@ -351,7 +351,7 @@ func (c *consumer) onInvite(conn *net.UDPConn, ra *net.UDPAddr, msg string) {
 		return
 	}
 
-	sdpAnswer := buildSDPAnswer(localIP, port, sdpCodecs, direction)
+	sdpAnswer := buildSDPAnswer(localIP, port, sdpCodecs)
 	tag := randHex(4)
 	resp := mkResponse(msg, callID, tag, sdpAnswer, localIP, port, c.cfg.Port)
 	if _, err := conn.WriteToUDP([]byte(resp), ra); err != nil {
@@ -626,61 +626,55 @@ func negotiateAudio(prodCodecs []*core.Codec, offer *sdp.SessionDescription) *co
 
 
 
-func buildSDPAnswer(localIP string, port int, codecs []*core.Codec, direction string) string {
+func buildSDPAnswer(localIP string, port int, codecs []*core.Codec) string {
 	sdp := fmt.Sprintf(
 		"v=0\r\no=- %d %d IN IP4 %s\r\ns=go2rtc\r\nc=IN IP4 %s\r\nt=0 0\r\n",
 		randU32(), randU32(), localIP, localIP)
 
-	// If all codecs are the same (e.g. both directions use PCMA), use a
-	// single m=audio line — standard SIP format, one sendrecv stream.
-	// If they differ (e.g. send PCMA, receive PCMU), use separate m=audio
-	// lines so the caller can pick the right PT for each direction.
-	if allSameCodec(codecs) {
-		pts := ""
-		for _, codec := range codecs {
-			if pts != "" {
-				pts += " "
-			}
-			pts += fmt.Sprintf("%d", codec.PayloadType)
+	// go2sip: standard SIP always uses ONE sendrecv m=audio line. List every
+	// negotiated payload type on a single line and mark it sendrecv, even if one
+	// direction is missing, so the caller's RTP/RTCP still keeps the session
+	// alive. No multi-line recvonly fan-out.
+	seen := make(map[uint8]bool)
+	pts := make([]uint8, 0, len(codecs))
+	for _, c := range codecs {
+		if seen[c.PayloadType] {
+			continue
 		}
-		sdp += fmt.Sprintf("m=audio %d RTP/AVP %s\r\n", port, pts)
+		seen[c.PayloadType] = true
+		pts = append(pts, c.PayloadType)
+	}
 
-		for _, codec := range codecs {
-			pt := codec.PayloadType
-			sdp += fmt.Sprintf("a=rtpmap:%d %s/%d",
-				pt, codecSDPName(codec.Name), codec.ClockRate)
-			if codec.Channels > 0 {
-				sdp += fmt.Sprintf("/%d", codec.Channels)
-			}
-			sdp += "\r\n"
-			if codec.FmtpLine != "" {
-				sdp += fmt.Sprintf("a=fmtp:%d %s\r\n", pt, codec.FmtpLine)
-			}
+	ptStr := ""
+	for i, pt := range pts {
+		if i > 0 {
+			ptStr += " "
 		}
+		ptStr += strconv.Itoa(int(pt))
+	}
+	sdp += fmt.Sprintf("m=audio %d RTP/AVP %s\r\n", port, ptStr)
 
-		sdp += fmt.Sprintf("a=%s\r\n", direction)
-	} else {
-		for i, codec := range codecs {
-			pt := codec.PayloadType
-			sdp += fmt.Sprintf(
-				"m=audio %d RTP/AVP %d\r\na=rtpmap:%d %s/%d",
-				port, pt, pt, codecSDPName(codec.Name), codec.ClockRate)
-			if codec.Channels > 0 {
-				sdp += fmt.Sprintf("/%d", codec.Channels)
-			}
-			sdp += "\r\n"
-			if codec.FmtpLine != "" {
-				sdp += fmt.Sprintf("a=fmtp:%d %s\r\n", pt, codec.FmtpLine)
-			}
-			// Different codecs: first line is main audio (we send),
-			// subsequent lines are backchannel (we receive).
-			if i == 0 {
-				sdp += fmt.Sprintf("a=%s\r\n", core.DirectionSendonly)
-			} else {
-				sdp += fmt.Sprintf("a=%s\r\n", core.DirectionRecvonly)
-			}
+	for i := range pts {
+		seen[pts[i]] = false // emit rtpmap/fmtp once per PT
+	}
+	for _, c := range codecs {
+		if seen[c.PayloadType] {
+			continue
+		}
+		seen[c.PayloadType] = true
+		pt := c.PayloadType
+		sdp += fmt.Sprintf("a=rtpmap:%d %s/%d",
+			pt, codecSDPName(c.Name), c.ClockRate)
+		if c.Channels > 0 {
+			sdp += fmt.Sprintf("/%d", c.Channels)
+		}
+		sdp += "\r\n"
+		if c.FmtpLine != "" {
+			sdp += fmt.Sprintf("a=fmtp:%d %s\r\n", pt, c.FmtpLine)
 		}
 	}
+
+	sdp += fmt.Sprintf("a=%s\r\n", core.DirectionSendRecv)
 
 	// Advertise RTCP port (RTP port + 1) for keepalive.
 	if port+1 <= 65535 {
