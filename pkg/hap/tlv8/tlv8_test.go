@@ -118,7 +118,7 @@ func TestSlice1(t *testing.T) {
 		} `tlv8:"3"`
 	}
 
-	s := `030b010280070202380403011e ff00 030b010200050202d00203011e`
+	s := `030b010280070202380403011e 0000 030b010200050202d00203011e`
 	b1, err := hex.DecodeString(strings.ReplaceAll(s, " ", ""))
 	require.NoError(t, err)
 
@@ -140,7 +140,7 @@ func TestSlice2(t *testing.T) {
 		Framerate uint8  `tlv8:"3"`
 	}
 
-	s := `010280070202380403011e ff00 010200050202d00203011e`
+	s := `010280070202380403011e 0000 010200050202d00203011e`
 	b1, err := hex.DecodeString(strings.ReplaceAll(s, " ", ""))
 	require.NoError(t, err)
 
@@ -153,4 +153,30 @@ func TestSlice2(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, b1, b2)
+}
+
+// Readers must accept any zero-length TLV as a list separator, whatever byte
+// the remote implementation picked. Encoding uses 0x00 (see const separator).
+func TestSeparatorLeniency(t *testing.T) {
+	type Item struct {
+		Width  uint16 `tlv8:"1"`
+		Height uint16 `tlv8:"2"`
+	}
+
+	for _, sep := range []string{"0000", "ff00", "0500"} {
+		t.Run(sep, func(t *testing.T) {
+			s := `01028007 02023804` + sep + `01020005 02023804`
+			b, err := hex.DecodeString(strings.ReplaceAll(s, " ", ""))
+			require.NoError(t, err)
+
+			var v []Item
+			err = Unmarshal(b, &v)
+			require.NoError(t, err)
+
+			require.Equal(t, []Item{
+				{Width: 1920, Height: 1080},
+				{Width: 1280, Height: 1080},
+			}, v)
+		})
+	}
 }

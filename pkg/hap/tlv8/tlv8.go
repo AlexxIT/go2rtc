@@ -56,8 +56,10 @@ func Marshal(v any) ([]byte, error) {
 }
 
 // separator the most confusing meaning in the documentation.
-// It can have a value of 0x00 or 0xFF or even 0x05.
-const separator = 0xFF
+// Readers must accept any zero-length TLV as a separator, but real
+// implementations all write 0x00: see the captured fixtures from Aqara G3,
+// Homebridge and Scrypted in pkg/hap/camera/accessory_test.go.
+const separator = 0x00
 
 func appendSlice(b []byte, value reflect.Value) ([]byte, error) {
 	for i := 0; i < value.Len(); i++ {
