@@ -2,6 +2,7 @@ package tlv8
 
 import (
 	"encoding/hex"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -118,7 +119,7 @@ func TestSlice1(t *testing.T) {
 		} `tlv8:"3"`
 	}
 
-	s := `030b010280070202380403011e ff00 030b010200050202d00203011e`
+	s := `030b010280070202380403011e 0000 030b010200050202d00203011e`
 	b1, err := hex.DecodeString(strings.ReplaceAll(s, " ", ""))
 	require.NoError(t, err)
 
@@ -140,7 +141,7 @@ func TestSlice2(t *testing.T) {
 		Framerate uint8  `tlv8:"3"`
 	}
 
-	s := `010280070202380403011e ff00 010200050202d00203011e`
+	s := `010280070202380403011e 0000 010200050202d00203011e`
 	b1, err := hex.DecodeString(strings.ReplaceAll(s, " ", ""))
 	require.NoError(t, err)
 
@@ -153,4 +154,120 @@ func TestSlice2(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, b1, b2)
+}
+
+func TestBool(t *testing.T) {
+	type Struct struct {
+		True  bool `tlv8:"1"`
+		False bool `tlv8:"2"`
+	}
+
+	src := Struct{True: true, False: false}
+
+	b, err := Marshal(src)
+	require.NoError(t, err)
+	require.Equal(t, []byte{1, 1, 1, 2, 1, 0}, b)
+
+	var dst Struct
+	err = Unmarshal(b, &dst)
+	require.NoError(t, err)
+
+	require.Equal(t, src, dst)
+}
+
+func TestBigNestedStruct(t *testing.T) {
+	type Inner struct {
+		Data string `tlv8:"1"`
+	}
+	type Outer struct {
+		In Inner `tlv8:"2"`
+	}
+
+	src := Outer{In: Inner{Data: strings.Repeat("x", 300)}}
+
+	b, err := Marshal(src)
+	require.NoError(t, err)
+
+	// nested value is 304 bytes, so it must be split into a 255-byte
+	// fragment plus a 49-byte remainder, both tagged 2
+	require.Equal(t, byte(2), b[0])
+	require.Equal(t, byte(255), b[1])
+	require.Equal(t, byte(2), b[257])
+	require.Equal(t, byte(49), b[258])
+
+	var dst Outer
+	err = Unmarshal(b, &dst)
+	require.NoError(t, err)
+
+	require.Equal(t, src, dst)
+}
+
+func TestBigArray(t *testing.T) {
+	type Struct struct {
+		Data [300]byte `tlv8:"1"`
+	}
+
+	var src Struct
+	for i := range src.Data {
+		src.Data[i] = byte(i)
+	}
+
+	b, err := Marshal(src)
+	require.NoError(t, err)
+
+	var dst Struct
+	err = Unmarshal(b, &dst)
+	require.NoError(t, err)
+
+	require.Equal(t, src, dst)
+}
+
+// Readers must accept any zero-length TLV as a list separator, whatever byte
+// the remote implementation picked. Encoding uses 0x00 (see const separator).
+func TestSeparatorLeniency(t *testing.T) {
+	type Item struct {
+		Width  uint16 `tlv8:"1"`
+		Height uint16 `tlv8:"2"`
+	}
+
+	for _, sep := range []string{"0000", "ff00", "0500"} {
+		t.Run(sep, func(t *testing.T) {
+			s := `01028007 02023804` + sep + `01020005 02023804`
+			b, err := hex.DecodeString(strings.ReplaceAll(s, " ", ""))
+			require.NoError(t, err)
+
+			var v []Item
+			err = Unmarshal(b, &v)
+			require.NoError(t, err)
+
+			require.Equal(t, []Item{
+				{Width: 1920, Height: 1080},
+				{Width: 1280, Height: 1080},
+			}, v)
+		})
+	}
+}
+
+// TestExact255Fragment documents the boundary described on appendPayload: a
+// value that fills its last fragment round-trips as the final item, and a
+// following same-tag item would be absorbed into it.
+func TestExact255Fragment(t *testing.T) {
+	type Struct struct {
+		Data string `tlv8:"1"`
+	}
+
+	for _, n := range []int{254, 255, 256, 510} {
+		t.Run(strconv.Itoa(n), func(t *testing.T) {
+			src := Struct{Data: strings.Repeat("y", n)}
+
+			b, err := Marshal(src)
+			require.NoError(t, err)
+
+			var dst Struct
+			err = Unmarshal(b, &dst)
+			require.NoError(t, err)
+
+			require.Equal(t, src, dst)
+		})
+	}
 }

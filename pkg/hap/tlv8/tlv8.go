@@ -56,8 +56,10 @@ func Marshal(v any) ([]byte, error) {
 }
 
 // separator the most confusing meaning in the documentation.
-// It can have a value of 0x00 or 0xFF or even 0x05.
-const separator = 0xFF
+// Readers must accept any zero-length TLV as a separator, but real
+// implementations all write 0x00: see the captured fixtures from Aqara G3,
+// Homebridge and Scrypted in pkg/hap/camera/accessory_test.go.
+const separator = 0x00
 
 func appendSlice(b []byte, value reflect.Value) ([]byte, error) {
 	for i := 0; i < value.Len(); i++ {
@@ -120,25 +122,24 @@ func appendValue(b []byte, tag byte, value reflect.Value) ([]byte, error) {
 		v := math.Float32bits(float32(value.Float()))
 		return append(b, tag, 4, byte(v), byte(v>>8), byte(v>>16), byte(v>>24)), nil
 
-	case reflect.String:
-		v := value.String()
-		l := len(v) // support "big" string
-		for ; l > 255; l -= 255 {
-			b = append(b, tag, 255)
-			b = append(b, v[:255]...)
-			v = v[255:]
+	case reflect.Bool:
+		var v byte
+		if value.Bool() {
+			v = 1
 		}
-		b = append(b, tag, byte(l))
-		return append(b, v...), nil
+		return append(b, tag, 1, v), nil
+
+	case reflect.String:
+		return appendPayload(b, tag, []byte(value.String())), nil
 
 	case reflect.Array:
 		if value.Type().Elem().Kind() == reflect.Uint8 {
 			n := value.Len()
-			b = append(b, tag, byte(n))
+			v := make([]byte, n)
 			for i := 0; i < n; i++ {
-				b = append(b, byte(value.Index(i).Uint()))
+				v[i] = byte(value.Index(i).Uint())
 			}
-			return b, nil
+			return appendPayload(b, tag, v), nil
 		}
 
 	case reflect.Slice:
@@ -153,16 +154,35 @@ func appendValue(b []byte, tag byte, value reflect.Value) ([]byte, error) {
 		return b, nil
 
 	case reflect.Struct:
-		b = append(b, tag, 0)
-		i := len(b)
-		if b, err = appendStruct(b, value); err != nil {
+		v, err := appendStruct(nil, value)
+		if err != nil {
 			return nil, err
 		}
-		b[i-1] = byte(len(b) - i) // set struct size
-		return b, nil
+		return appendPayload(b, tag, v), nil
 	}
 
 	return nil, errors.New("tlv8: not implemented: " + value.Kind().String())
+}
+
+// appendPayload writes v as one or more TLVs sharing the same tag, splitting
+// payloads over 255 bytes into consecutive fragments. Unmarshal reassembles
+// them by concatenating same-tag TLVs of length 255.
+//
+// A payload whose length is an exact non-zero multiple of 255 ends on a full
+// fragment, so a reader cannot tell it ended except by running out of data.
+// HAP terminates those with a zero-length TLV, but this codec already reads a
+// zero-length TLV as a list separator, so such a value is only unambiguous as
+// the last item of its list. This matches how strings have always been encoded
+// here (see TestBytes, which round-trips exactly 255 bytes).
+func appendPayload(b []byte, tag byte, v []byte) []byte {
+	l := len(v)
+	for ; l > 255; l -= 255 {
+		b = append(b, tag, 255)
+		b = append(b, v[:255]...)
+		v = v[255:]
+	}
+	b = append(b, tag, byte(l))
+	return append(b, v...)
 }
 
 func UnmarshalBase64(in any, out any) error {
@@ -296,6 +316,12 @@ func unmarshalStruct(b []byte, value reflect.Value) error {
 
 func unmarshalValue(v []byte, value reflect.Value) error {
 	switch value.Kind() {
+	case reflect.Bool:
+		if len(v) != 1 {
+			return errors.New("tlv8: wrong size: " + value.Type().Name())
+		}
+		value.SetBool(v[0] != 0)
+
 	case reflect.Uint8:
 		if len(v) != 1 {
 			return errors.New("tlv8: wrong size: " + value.Type().Name())
