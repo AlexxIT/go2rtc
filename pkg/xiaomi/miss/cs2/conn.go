@@ -123,6 +123,10 @@ func (c *Conn) worker() {
 			return
 		}
 
+		if n < 2 {
+			continue // too short to have msg type
+		}
+
 		// 0  f1d0  magic
 		// 2  005d  size = total size + 4
 		// 4  d1    magic
@@ -130,7 +134,13 @@ func (c *Conn) worker() {
 		// 6  0000  seq
 		switch buf[1] {
 		case msgDrw:
-			ch := buf[5]
+			if n < 8 {
+				continue // DRW needs at least 8 bytes
+			}
+			ch := int(buf[5])
+			if ch < 0 || ch >= len(c.channels) || c.channels[ch] == nil {
+				continue // skip invalid channel
+			}
 			channel := c.channels[ch]
 
 			if c.isTCP {
@@ -141,7 +151,10 @@ func (c *Conn) worker() {
 					keepaliveTS = now.Add(time.Second)
 				}
 
-				err = channel.Push(buf[8:n])
+				if err = channel.Push(buf[8:n]); err != nil {
+					c.err = fmt.Errorf("cs2: push channel %d: %w", ch, err)
+					return
+				}
 			} else {
 				var pushed int
 
@@ -151,7 +164,7 @@ func (c *Conn) worker() {
 
 				if pushed >= 0 {
 					// For UDP we should send ACK.
-					ack := []byte{magic, msgDrwAck, 0, 6, magicDrw, ch, 0, 1, seqHI, seqLO}
+					ack := []byte{magic, msgDrwAck, 0, 6, magicDrw, byte(ch), 0, 1, seqHI, seqLO}
 					_, _ = c.Conn.Write(ack)
 				}
 			}
@@ -429,29 +442,54 @@ type dataChannel struct {
 	popBuf   chan []byte
 }
 
+const maxFrameSize = 2 * 1024 * 1024 // 2MB — reasonable max for 2K H265 keyframe
+
 func (c *dataChannel) Push(b []byte) error {
 	c.waitData = append(c.waitData, b...)
 
-	for len(c.waitData) > 4 {
-		// Every new data starts with size. There can be several data inside one packet.
+	for {
 		if c.waitSize == 0 {
-			c.waitSize = int(binary.BigEndian.Uint32(c.waitData))
+			if len(c.waitData) < 4 {
+				return nil
+			}
+			c.waitSize = int(binary.BigEndian.Uint32(c.waitData[:4]))
 			c.waitData = c.waitData[4:]
+
+			// Validate frame size to prevent permanent desync on corrupt size header
+			// Size 0 is valid protocol padding — skip silently (original behavior)
+			if c.waitSize == 0 {
+				continue
+			}
+			if c.waitSize > maxFrameSize {
+				c.waitData = nil
+				c.waitSize = 0
+				return fmt.Errorf("cs2: invalid frame size %d", c.waitSize)
+			}
 		}
 		if c.waitSize > len(c.waitData) {
-			break
+			return nil
 		}
 
+		// Copy frame data — sending a slice of waitData would share the backing
+		// array, allowing subsequent appends to overwrite unconsumed frame data
+		// in the consumer goroutine (causes scrambled H265 pixels).
+		frame := make([]byte, c.waitSize)
+		copy(frame, c.waitData[:c.waitSize])
+
 		select {
-		case c.popBuf <- c.waitData[:c.waitSize]:
+		case c.popBuf <- frame:
 		default:
 			return fmt.Errorf("pop buffer is full")
 		}
 
 		c.waitData = c.waitData[c.waitSize:]
 		c.waitSize = 0
+
+		// Release backing array when fully consumed to avoid unbounded retention
+		if len(c.waitData) == 0 {
+			c.waitData = nil
+		}
 	}
-	return nil
 }
 
 func (c *dataChannel) Pop() ([]byte, bool) {

@@ -72,13 +72,29 @@ func NewClient(rawURL string) (*Client, error) {
 		return nil, err
 	}
 
-	return &Client{Conn: conn, key: key, model: model}, nil
+	client := &Client{Conn: conn, key: key, model: model}
+	client.startCommandLoop()
+	return client, nil
 }
 
 type Client struct {
 	Conn
 	key   []byte
 	model string
+}
+
+// startCommandLoop drains the command channel (channel 0) in the background.
+// Without this, cameras that send periodic control messages (~1 per 10s) fill
+// the channel buffer (cap 10) in ~100s, causing "cs2: pop buffer is full" and
+// a connection crash.  Fixes https://github.com/AlexxIT/go2rtc/issues/2234.
+func (c *Client) startCommandLoop() {
+	go func() {
+		for {
+			if _, _, err := c.Conn.ReadCommand(); err != nil {
+				return
+			}
+		}
+	}()
 }
 
 const (
