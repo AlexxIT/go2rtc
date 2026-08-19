@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 
 	"github.com/AlexxIT/go2rtc/pkg/hap/tlv8"
 )
@@ -30,10 +31,13 @@ type Character struct {
 	//ValidVal []any  `json:"valid-values,omitempty"`
 
 	listeners map[io.Writer]bool
+	mu        sync.Mutex
 }
 
 func (c *Character) AddListener(w io.Writer) {
-	// TODO: sync.Mutex
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	if c.listeners == nil {
 		c.listeners = map[io.Writer]bool{}
 	}
@@ -41,6 +45,9 @@ func (c *Character) AddListener(w io.Writer) {
 }
 
 func (c *Character) RemoveListener(w io.Writer) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	delete(c.listeners, w)
 
 	if len(c.listeners) == 0 {
@@ -49,7 +56,19 @@ func (c *Character) RemoveListener(w io.Writer) {
 }
 
 func (c *Character) NotifyListeners(ignore io.Writer) error {
-	if c.listeners == nil {
+	// snapshot the listeners so no lock is held while writing to a connection:
+	// a slow peer would otherwise block every subscribe and unsubscribe, and a
+	// writer that unsubscribes itself would deadlock
+	c.mu.Lock()
+	listeners := make([]io.Writer, 0, len(c.listeners))
+	for w := range c.listeners {
+		if w != ignore {
+			listeners = append(listeners, w)
+		}
+	}
+	c.mu.Unlock()
+
+	if len(listeners) == 0 {
 		return nil
 	}
 
@@ -58,10 +77,7 @@ func (c *Character) NotifyListeners(ignore io.Writer) error {
 		return err
 	}
 
-	for w := range c.listeners {
-		if w == ignore {
-			continue
-		}
+	for _, w := range listeners {
 		if _, err = w.Write(data); err != nil {
 			// error not a problem - just remove listener
 			c.RemoveListener(w)
