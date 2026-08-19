@@ -31,34 +31,58 @@ type Accessory struct {
 	Services []*Service `json:"services"`
 }
 
-func (a *Accessory) InitIID() {
-	serviceN := map[string]byte{}
-	for _, service := range a.Services {
-		if len(service.Type) > 3 {
-			panic(service.Type)
-		}
+// minLegacyIID is the smallest IID the positional ANSSSCCC layout can produce:
+// AID and the service instance are both at least 1, and the smallest service
+// type in use is two hex digits. Sequentially allocated IIDs are counted up
+// from 1 and so can never reach it, which is what lets both schemes coexist in
+// one accessory.
+const minLegacyIID = 0x11000000
 
+// InitIID assigns instance IDs. Types of three hex digits or fewer keep the
+// positional layout go2rtc has always published, because controllers cache the
+// accessory database and renumbering invalidates every existing pairing. The
+// four hex digit types added by the HomeKit Secure Video open source spec do
+// not fit that layout and are numbered sequentially instead, so adding them to
+// an accessory leaves the IIDs of its existing services untouched.
+func (a *Accessory) InitIID() {
+	var seq uint64
+	serviceN := map[string]byte{}
+
+	for _, service := range a.Services {
 		n := serviceN[service.Type] + 1
 		serviceN[service.Type] = n
 
-		if n > 15 {
-			panic(n)
+		legacy := fitsLegacyIID(service.Type) && n <= 15
+		if legacy {
+			// ServiceID = ANSSS000
+			s := fmt.Sprintf("%x%x%03s000", a.AID, n, service.Type)
+			service.IID, _ = strconv.ParseUint(s, 16, 64)
+		} else {
+			seq++
+			service.IID = seq
 		}
-
-		// ServiceID   = ANSSS000
-		s := fmt.Sprintf("%x%x%03s000", a.AID, n, service.Type)
-		service.IID, _ = strconv.ParseUint(s, 16, 64)
 
 		for _, character := range service.Characters {
-			if len(character.Type) > 3 {
-				panic(character.Type)
+			// A sequentially numbered service has no positional base to offset
+			// its characteristics from, so they follow it.
+			if legacy && fitsLegacyIID(character.Type) {
+				// CharacterID = ANSSSCCC
+				character.IID, _ = strconv.ParseUint(character.Type, 16, 64)
+				character.IID += service.IID
+			} else {
+				seq++
+				character.IID = seq
 			}
-
-			// CharacterID = ANSSSCCC
-			character.IID, _ = strconv.ParseUint(character.Type, 16, 64)
-			character.IID += service.IID
 		}
 	}
+
+	if seq >= minLegacyIID {
+		panic("hap: too many sequential IIDs")
+	}
+}
+
+func fitsLegacyIID(typ string) bool {
+	return len(typ) <= 3
 }
 
 func (a *Accessory) GetService(servType string) *Service {
