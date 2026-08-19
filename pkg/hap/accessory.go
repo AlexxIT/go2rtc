@@ -26,6 +26,11 @@ var PRPW = []string{"pr", "pw"}
 var EVPRPW = []string{"ev", "pr", "pw"}
 var EVPR = []string{"ev", "pr"}
 
+// WR is a write response characteristic: the controller sets "r" in the write
+// request and reads the result back from the same response.
+var WR = []string{"pr", "pw", "wr"}
+var EVWR = []string{"ev", "pr", "pw", "wr"}
+
 type Accessory struct {
 	AID      uint8      `json:"aid"` // 150 unique accessories per bridge
 	Services []*Service `json:"services"`
