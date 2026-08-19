@@ -2,6 +2,7 @@ package tlv8
 
 import (
 	"encoding/hex"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -155,6 +156,72 @@ func TestSlice2(t *testing.T) {
 	require.Equal(t, b1, b2)
 }
 
+func TestBool(t *testing.T) {
+	type Struct struct {
+		True  bool `tlv8:"1"`
+		False bool `tlv8:"2"`
+	}
+
+	src := Struct{True: true, False: false}
+
+	b, err := Marshal(src)
+	require.NoError(t, err)
+	require.Equal(t, []byte{1, 1, 1, 2, 1, 0}, b)
+
+	var dst Struct
+	err = Unmarshal(b, &dst)
+	require.NoError(t, err)
+
+	require.Equal(t, src, dst)
+}
+
+func TestBigNestedStruct(t *testing.T) {
+	type Inner struct {
+		Data string `tlv8:"1"`
+	}
+	type Outer struct {
+		In Inner `tlv8:"2"`
+	}
+
+	src := Outer{In: Inner{Data: strings.Repeat("x", 300)}}
+
+	b, err := Marshal(src)
+	require.NoError(t, err)
+
+	// nested value is 304 bytes, so it must be split into a 255-byte
+	// fragment plus a 49-byte remainder, both tagged 2
+	require.Equal(t, byte(2), b[0])
+	require.Equal(t, byte(255), b[1])
+	require.Equal(t, byte(2), b[257])
+	require.Equal(t, byte(49), b[258])
+
+	var dst Outer
+	err = Unmarshal(b, &dst)
+	require.NoError(t, err)
+
+	require.Equal(t, src, dst)
+}
+
+func TestBigArray(t *testing.T) {
+	type Struct struct {
+		Data [300]byte `tlv8:"1"`
+	}
+
+	var src Struct
+	for i := range src.Data {
+		src.Data[i] = byte(i)
+	}
+
+	b, err := Marshal(src)
+	require.NoError(t, err)
+
+	var dst Struct
+	err = Unmarshal(b, &dst)
+	require.NoError(t, err)
+
+	require.Equal(t, src, dst)
+}
+
 // Readers must accept any zero-length TLV as a list separator, whatever byte
 // the remote implementation picked. Encoding uses 0x00 (see const separator).
 func TestSeparatorLeniency(t *testing.T) {
@@ -177,6 +244,30 @@ func TestSeparatorLeniency(t *testing.T) {
 				{Width: 1920, Height: 1080},
 				{Width: 1280, Height: 1080},
 			}, v)
+		})
+	}
+}
+
+// TestExact255Fragment documents the boundary described on appendPayload: a
+// value that fills its last fragment round-trips as the final item, and a
+// following same-tag item would be absorbed into it.
+func TestExact255Fragment(t *testing.T) {
+	type Struct struct {
+		Data string `tlv8:"1"`
+	}
+
+	for _, n := range []int{254, 255, 256, 510} {
+		t.Run(strconv.Itoa(n), func(t *testing.T) {
+			src := Struct{Data: strings.Repeat("y", n)}
+
+			b, err := Marshal(src)
+			require.NoError(t, err)
+
+			var dst Struct
+			err = Unmarshal(b, &dst)
+			require.NoError(t, err)
+
+			require.Equal(t, src, dst)
 		})
 	}
 }
