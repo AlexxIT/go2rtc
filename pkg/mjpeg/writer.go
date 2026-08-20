@@ -20,6 +20,11 @@ type writer struct {
 }
 
 func (w *writer) Write(p []byte) (n int, err error) {
+	// Safari can't decode JPEG without DHT (AVI1 MJPEG from USB cams),
+	// same as api/frame.jpeg already fixes via FixJPEG
+	// - https://github.com/pion/mediadevices/pull/493
+	p = FixJPEG(p)
+
 	w.buf = w.buf[:len(header)]
 	w.buf = append(w.buf, strconv.Itoa(len(p))...)
 	w.buf = append(w.buf, "\r\n\r\n"...)
