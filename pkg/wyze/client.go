@@ -180,10 +180,15 @@ func (c *Client) SetResolution(quality byte) error {
 	if c.useDoorbellResolution() {
 		switch c.model {
 		case "WYZEDB3":
-			frameSize = 3
-			bitrate = 0xB4 // 0x78 works too
-			if c.verbose {
-				fmt.Printf("[Wyze] Set Doorbell Resolution: quality=%d frameSize=%d bitrate=%d model=%s\n", quality, frameSize, bitrate, c.model)
+			// The doorbell firmware does not stream with the generic frame sizes
+			// selected above; this pair is the only combination observed to work.
+			// Only applied for auto, so an explicit quality still reaches the camera.
+			if quality == 0 {
+				frameSize = 3
+				bitrate = 0xB4 // 0x78 works too
+				if c.verbose {
+					fmt.Printf("[Wyze] Set Doorbell Resolution: quality=%d frameSize=%d bitrate=%d model=%s\n", quality, frameSize, bitrate, c.model)
+				}
 			}
 		}
 
