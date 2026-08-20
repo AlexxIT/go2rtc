@@ -54,6 +54,13 @@ PCM16 (L16) over WebRTC, so pcml is for ffmpeg/file sources.
 > the opposite of go2rtc's RTSP scheme `#backchannel=0`, which *disables* the WebRTC backchannel
 > switch. Same word, opposite polarity — don't mix them up.
 
+> **Out-of-range channels crash some firmware.** `backchannel` is forwarded verbatim as the
+> device's talk-channel table index — there is NO clamping. On the tested E4702, `backchannel=3`
+> rebooted the device repeatedly while 0/1/2 worked (firmware-dependent; the crash resembles the
+> CWE-617 malformed-input reboot class, e.g. CVE-2026-29116, but the specific trigger is
+> unconfirmed). Other models legitimately accept higher channels (e.g. multi-channel NVRs) — use
+> only a channel the device actually exposes.
+
 ## Login lockout guard
 
 Firmware enforces a per-session login lock after a few bad logins (E4702; validated). Only the offending TCP/login session is blocked, not the whole account — a new session with the correct password still authenticates. This is a PER-SESSION lock, NOT a global account lock. Because go2rtc

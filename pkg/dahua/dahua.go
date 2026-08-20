@@ -41,8 +41,14 @@ func Dial(rawURL string) (core.Producer, error) {
 	pass, _ := u.User.Password()
 	backchannel, _ := strconv.Atoi(query.Get("backchannel"))
 
-	// Guard: Dahua talk channel must be >= 0. Single-IPC cameras (e.g. Dahua E4702)
-	// only expose talk channel 0; a non-zero value is silently ignored by the device.
+	// Guard: Dahua talk channel must be >= 0. It is forwarded verbatim to the
+	// device as the talk-channel table index - there is NO clamping. An
+	// out-of-range value can crash some firmware (tested E4702: backchannel=3
+	// rebooted the device repeatedly; 0/1/2 worked; behavior is
+	// firmware-dependent). The crash resembles the CWE-617 malformed-input
+	// reboot class (e.g. CVE-2026-29116) but the specific trigger is unconfirmed
+	// - some models legitimately accept higher channel numbers, so use only one
+	// the device actually exposes.
 	if backchannel < 0 {
 		return nil, fmt.Errorf("dahua: invalid backchannel=%d (must be >= 0)", backchannel)
 	}
