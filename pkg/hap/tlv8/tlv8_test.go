@@ -118,7 +118,7 @@ func TestSlice1(t *testing.T) {
 		} `tlv8:"3"`
 	}
 
-	s := `030b010280070202380403011e ff00 030b010200050202d00203011e`
+	s := `030b010280070202380403011e 0000 030b010200050202d00203011e`
 	b1, err := hex.DecodeString(strings.ReplaceAll(s, " ", ""))
 	require.NoError(t, err)
 
@@ -140,7 +140,7 @@ func TestSlice2(t *testing.T) {
 		Framerate uint8  `tlv8:"3"`
 	}
 
-	s := `010280070202380403011e ff00 010200050202d00203011e`
+	s := `010280070202380403011e 0000 010200050202d00203011e`
 	b1, err := hex.DecodeString(strings.ReplaceAll(s, " ", ""))
 	require.NoError(t, err)
 

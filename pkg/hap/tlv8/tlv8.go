@@ -55,9 +55,12 @@ func Marshal(v any) ([]byte, error) {
 	return nil, errors.New("tlv8: not implemented: " + kind.String())
 }
 
-// separator the most confusing meaning in the documentation.
-// It can have a value of 0x00 or 0xFF or even 0x05.
-const separator = 0xFF
+// separator marks the boundary between consecutive instances of the same
+// TLV8 tag (HAP TLV8: "instances of the same TLV type must be separated by
+// a TLV item with zero length"). Confirmed against real device captures
+// (pkg/hap/camera's TestAqaraG3/TestHomebridge/TestScrypted): tag 0x00,
+// length 0 - not 0xFF as previously assumed here.
+const separator = 0x00
 
 func appendSlice(b []byte, value reflect.Value) ([]byte, error) {
 	for i := 0; i < value.Len(); i++ {
