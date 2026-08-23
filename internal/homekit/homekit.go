@@ -139,8 +139,11 @@ func Init() {
 		log.Trace().Msgf("[homekit] new server: %s", entry)
 	}
 
-	api.HandleFunc(hap.PathPairSetup, hapHandler)
-	api.HandleFunc(hap.PathPairVerify, hapHandler)
+	// Exempt from API auth: a HomeKit controller cannot send Basic
+	// credentials, so these 401 and pairing silently fails when
+	// api.username is set. See api.HandleFuncNoAuth.
+	api.HandleFuncNoAuth(hap.PathPairSetup, hapHandler)
+	api.HandleFuncNoAuth(hap.PathPairVerify, hapHandler)
 
 	go func() {
 		if err := mdns.Serve(mdns.ServiceHAP, entries); err != nil {
