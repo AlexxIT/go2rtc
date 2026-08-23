@@ -238,9 +238,15 @@ var mu sync.Mutex
 func apiHandler(w http.ResponseWriter, r *http.Request) {
 	mu.Lock()
 	app.Info["host"] = r.Host
+	// copy under the lock: json.Encoder ranges over the map, and another
+	// concurrent request writing app.Info["host"] would be a data race
+	info := make(map[string]any, len(app.Info))
+	for k, v := range app.Info {
+		info[k] = v
+	}
 	mu.Unlock()
 
-	ResponseJSON(w, app.Info)
+	ResponseJSON(w, info)
 }
 
 func exitHandler(w http.ResponseWriter, r *http.Request) {
