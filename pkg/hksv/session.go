@@ -32,6 +32,7 @@ func newHKSVSession(srv *Server, hapConn *hap.Conn, hdsConn *hds.Conn) *hksvSess
 	}
 	session.OnDataSendOpen = hs.handleOpen
 	session.OnDataSendClose = hs.handleClose
+	session.OnMessage = hs.logMessage
 	return hs
 }
 
@@ -114,4 +115,19 @@ func (hs *hksvSession) stopRecording() {
 	hs.server.streams.RemoveConsumer(hs.server.stream, consumer)
 	_ = consumer.Stop()
 	hs.server.DelConn(consumer)
+}
+
+// logMessage surfaces what the controller sends back, including the reason
+// it gives when it closes a dataSend stream - the only place a rejected
+// recording is explained.
+func (hs *hksvSession) logMessage(msg *hds.Message) {
+	e := hs.log.Debug().
+		Str("stream", hs.server.stream).
+		Str("proto", msg.Protocol).
+		Str("topic", msg.Topic).
+		Int64("status", msg.Status)
+	for k, v := range msg.Body {
+		e = e.Interface(k, v)
+	}
+	e.Msg("[hksv] hds message")
 }

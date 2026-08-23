@@ -38,6 +38,12 @@ type Session struct {
 
 	OnDataSendOpen  func(streamID int) error
 	OnDataSendClose func(streamID int) error
+
+	// OnMessage, if set, is called for every decoded message - including
+	// ones this loop does not act on, which are otherwise dropped silently.
+	// The controller reports why it rejected a recording in the close
+	// reason, so without this there is no way to see it.
+	OnMessage func(msg *Message)
 }
 
 func NewSession(conn *Conn) *Session {
@@ -237,6 +243,10 @@ func (s *Session) Run() error {
 		msg, err := s.ReadMessage()
 		if err != nil {
 			return err
+		}
+
+		if s.OnMessage != nil {
+			s.OnMessage(msg)
 		}
 
 		if msg.Protocol != ProtoDataSend {
