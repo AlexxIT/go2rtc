@@ -63,83 +63,47 @@ func ServiceCameraEventRecordingManagement() *hap.Service {
 		},
 	})
 
+	// Bitrate and IFrameInterval are deliberately absent: they belong only in
+	// the controller's Selected write. Including them here makes the
+	// controller reject the whole characteristic (see ch206.go).
+	//
+	// ProfileID and Level are advertised as lists of what the accessory
+	// accepts. Offering Main and High up to Level 4.0 lets a camera whose
+	// native stream already conforms be recorded without transcoding.
 	val206, _ := tlv8.MarshalBase64(SupportedVideoRecordingConfiguration{
 		CodecConfigs: []VideoRecordingCodecConfiguration{
 			{
 				CodecType: VideoCodecTypeH264,
 				CodecParams: VideoRecordingCodecParameters{
-					ProfileID:      VideoCodecProfileHigh,
-					Level:          VideoCodecLevel40,
-					Bitrate:        2000,
-					IFrameInterval: 4000,
+					ProfileID: []byte{VideoCodecProfileMain, VideoCodecProfileHigh},
+					Level:     []byte{VideoCodecLevel31, VideoCodecLevel32, VideoCodecLevel40},
 				},
 				CodecAttrs: VideoCodecAttributes{Width: 1920, Height: 1080, Framerate: 30},
 			},
 			{
 				CodecType: VideoCodecTypeH264,
 				CodecParams: VideoRecordingCodecParameters{
-					ProfileID:      VideoCodecProfileMain,
-					Level:          VideoCodecLevel31,
-					Bitrate:        1000,
-					IFrameInterval: 4000,
+					ProfileID: []byte{VideoCodecProfileMain, VideoCodecProfileHigh},
+					Level:     []byte{VideoCodecLevel31, VideoCodecLevel32, VideoCodecLevel40},
 				},
 				CodecAttrs: VideoCodecAttributes{Width: 1280, Height: 720, Framerate: 30},
 			},
 		},
 	})
 
+	// MaxAudioBitrate omitted for the same reason as the video Bitrate.
 	val207, _ := tlv8.MarshalBase64(SupportedAudioRecordingConfiguration{
 		CodecConfigs: []AudioRecordingCodecConfiguration{
 			{
 				CodecType: AudioRecordingCodecTypeAACLC,
 				CodecParams: []AudioRecordingCodecParameters{
 					{
-						Channels:        1,
-						BitrateMode:     []byte{AudioCodecBitrateVariable},
-						SampleRate:      []byte{AudioRecordingSampleRate24Khz, AudioRecordingSampleRate32Khz, AudioRecordingSampleRate48Khz},
-						MaxAudioBitrate: []uint32{64},
-					},
-				},
-			},
-		},
-	})
-
-	// Default selected recording configuration (Home Hub expects this to persist)
-	val209, _ := tlv8.MarshalBase64(SelectedCameraRecordingConfiguration{
-		GeneralConfig: SupportedCameraRecordingConfiguration{
-			PrebufferLength:     4000,
-			EventTriggerOptions: 0x01, // motion
-			MediaContainerConfigurations: MediaContainerConfigurations{
-				MediaContainerType: 0,
-				MediaContainerParameters: MediaContainerParameters{
-					FragmentLength: 4000,
-				},
-			},
-		},
-		VideoConfig: SupportedVideoRecordingConfiguration{
-			CodecConfigs: []VideoRecordingCodecConfiguration{
-				{
-					CodecType: VideoCodecTypeH264,
-					CodecParams: VideoRecordingCodecParameters{
-						ProfileID:      VideoCodecProfileHigh,
-						Level:          VideoCodecLevel40,
-						Bitrate:        2000,
-						IFrameInterval: 4000,
-					},
-					CodecAttrs: VideoCodecAttributes{Width: 1920, Height: 1080, Framerate: 30},
-				},
-			},
-		},
-		AudioConfig: SupportedAudioRecordingConfiguration{
-			CodecConfigs: []AudioRecordingCodecConfiguration{
-				{
-					CodecType: AudioRecordingCodecTypeAACLC,
-					CodecParams: []AudioRecordingCodecParameters{
-						{
-							Channels:        1,
-							BitrateMode:     []byte{AudioCodecBitrateVariable},
-							SampleRate:      []byte{AudioRecordingSampleRate24Khz},
-							MaxAudioBitrate: []uint32{64},
+						Channels:    1,
+						BitrateMode: []byte{AudioCodecBitrateVariable},
+						SampleRate: []byte{
+							AudioRecordingSampleRate24Khz,
+							AudioRecordingSampleRate32Khz,
+							AudioRecordingSampleRate48Khz,
 						},
 					},
 				},
@@ -177,8 +141,11 @@ func ServiceCameraEventRecordingManagement() *hap.Service {
 			{
 				Type:   TypeSelectedCameraRecordingConfiguration,
 				Format: hap.FormatTLV8,
-				Value:  val209,
-				Perms:  hap.EVPRPW,
+				// Must start empty: the controller writes it. Advertising a
+				// pre-selected configuration tells the controller the
+				// accessory is already configured.
+				Value: "",
+				Perms: hap.EVPRPW,
 			},
 			{
 				Type:   "226",
