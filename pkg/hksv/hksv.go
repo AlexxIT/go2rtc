@@ -21,6 +21,8 @@
 package hksv
 
 import (
+	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -30,6 +32,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -233,7 +236,33 @@ func NewServer(cfg Config) (*Server, error) {
 		srv.accessory.InitIID() // recalculate IIDs
 	}
 
+	// A paired controller only re-reads /accessories when the mDNS config
+	// number changes. Advertising a constant "1" means any change to the
+	// service list - enabling HKSV, adding the Speaker, switching to
+	// doorbell - stays invisible to an already-paired Home Hub, which is
+	// why users otherwise have to re-pair the camera. Derive it from the
+	// accessory database so the change is actually picked up.
+	if srv.accessory != nil {
+		srv.mdns.Info[hap.TXTConfigNumber] = configNumber(srv.accessory)
+	}
+
 	return srv, nil
+}
+
+// configNumber derives the HAP c# TXT value from the accessory database, so
+// it changes if and only if the database does.
+//
+// HAP strictly wants a persisted counter that increments on every change;
+// a hash gives the same "did it change" signal without any state to store,
+// at the cost of not being monotonic.
+func configNumber(acc *hap.Accessory) string {
+	b, err := json.Marshal(acc)
+	if err != nil {
+		return "1"
+	}
+	sum := sha256.Sum256(b)
+	// c# is a uint16 and must be >= 1
+	return strconv.Itoa(int(binary.BigEndian.Uint16(sum[:2]))%65535 + 1)
 }
 
 // MDNSEntry returns the mDNS service entry for advertisement.

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -1189,4 +1190,25 @@ func TestConnLabel_HDSConn(t *testing.T) {
 
 	label := connLabel(hdsConn)
 	require.Contains(t, label, "hds")
+}
+
+func TestConfigNumber(t *testing.T) {
+	plain := camera.NewAccessory("AlexxIT", "go2rtc", "cam", "-", "1.0")
+	hksv := camera.NewHKSVAccessory("AlexxIT", "go2rtc", "cam", "-", "1.0")
+
+	// Stable for an unchanged database: a controller that already re-read
+	// /accessories must not be told to do it again on every restart.
+	require.Equal(t, configNumber(plain), configNumber(plain))
+
+	// Changed when the database changes, which is the whole point - a paired
+	// Home Hub only re-reads /accessories when c# moves.
+	require.NotEqual(t, configNumber(plain), configNumber(hksv))
+
+	// c# is a uint16 and must be >= 1.
+	for _, acc := range []*hap.Accessory{plain, hksv} {
+		n, err := strconv.Atoi(configNumber(acc))
+		require.NoError(t, err)
+		require.GreaterOrEqual(t, n, 1)
+		require.LessOrEqual(t, n, 65535)
+	}
 }
