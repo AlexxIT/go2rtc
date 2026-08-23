@@ -78,7 +78,7 @@ func ServiceCameraEventRecordingManagement() *hap.Service {
 					ProfileID: []byte{VideoCodecProfileMain, VideoCodecProfileHigh},
 					Level:     []byte{VideoCodecLevel31, VideoCodecLevel32, VideoCodecLevel40},
 				},
-				CodecAttrs: VideoCodecAttributes{Width: 1920, Height: 1080, Framerate: 30},
+				CodecAttrs: []VideoCodecAttributes{{Width: 1920, Height: 1080, Framerate: 30}},
 			},
 			{
 				CodecType: VideoCodecTypeH264,
@@ -86,7 +86,7 @@ func ServiceCameraEventRecordingManagement() *hap.Service {
 					ProfileID: []byte{VideoCodecProfileMain, VideoCodecProfileHigh},
 					Level:     []byte{VideoCodecLevel31, VideoCodecLevel32, VideoCodecLevel40},
 				},
-				CodecAttrs: VideoCodecAttributes{Width: 1280, Height: 720, Framerate: 30},
+				CodecAttrs: []VideoCodecAttributes{{Width: 1280, Height: 720, Framerate: 30}},
 			},
 		},
 	})

@@ -612,8 +612,7 @@ func (s *Server) SetCharacteristic(conn net.Conn, aid uint8, iid uint64, value a
 					e = e.Interface("video", map[string]any{
 						"profile": cc.CodecParams.ProfileID, "level": cc.CodecParams.Level,
 						"bitrate": cc.CodecParams.Bitrate, "iframe_ms": cc.CodecParams.IFrameInterval,
-						"width": cc.CodecAttrs.Width, "height": cc.CodecAttrs.Height,
-						"fps": cc.CodecAttrs.Framerate,
+						"attrs": cc.CodecAttrs,
 					})
 				}
 				for _, ac := range sel.AudioConfig.CodecConfigs {

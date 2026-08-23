@@ -9,7 +9,10 @@ type SupportedVideoRecordingConfiguration struct {
 type VideoRecordingCodecConfiguration struct {
 	CodecType   uint8                         `tlv8:"1"`
 	CodecParams VideoRecordingCodecParameters `tlv8:"2"`
-	CodecAttrs  VideoCodecAttributes          `tlv8:"3"`
+	// Slice, not a single struct: the controller may send several, and a
+	// one-element slice encodes to identical bytes so the wire format for
+	// what we advertise is unchanged.
+	CodecAttrs []VideoCodecAttributes `tlv8:"3"`
 }
 
 // ProfileID and Level are lists of supported values, like the live-view
