@@ -93,16 +93,21 @@ type ConnTracker interface {
 
 // Config for creating an HKSV server.
 type Config struct {
-	StreamName      string
-	Pin             string   // HomeKit pairing PIN (e.g., "27041991")
-	Name            string   // mDNS display name (auto-generated if empty)
-	DeviceID        string   // MAC-like device ID (auto-generated if empty)
-	DevicePrivate   string   // ed25519 private key hex (auto-generated if empty)
-	CategoryID      string   // "camera" or "doorbell"
-	Pairings        []string // pre-existing pairings
-	ProxyURL        string   // if set, acts as transparent proxy (no local accessory)
-	HKSV            bool
-	MotionMode      string  // "api", "continuous", "detect"
+	StreamName    string
+	Pin           string   // HomeKit pairing PIN (e.g., "27041991")
+	Name          string   // mDNS display name (auto-generated if empty)
+	DeviceID      string   // MAC-like device ID (auto-generated if empty)
+	DevicePrivate string   // ed25519 private key hex (auto-generated if empty)
+	CategoryID    string   // "camera" or "doorbell"
+	Pairings      []string // pre-existing pairings
+	ProxyURL      string   // if set, acts as transparent proxy (no local accessory)
+	HKSV          bool
+	MotionMode    string // "api", "continuous", "detect"
+	// RecordingResolution overrides what the accessory advertises for
+	// recording, as "WIDTHxHEIGHT". Needed for cameras whose sensor is not
+	// 16:9, which cannot use the default sizes without cropping.
+	RecordingResolution string
+
 	MotionThreshold float64 // ratio threshold for "detect" mode (default 2.0)
 	Speaker         *bool   // include Speaker service for 2-way audio (default false)
 	UserAgent       string  // for mDNS TXTModel field
@@ -216,9 +221,9 @@ func NewServer(cfg Config) (*Server, error) {
 			Float64("threshold", srv.motionThreshold).Msg("[hksv] HKSV mode")
 
 		if cfg.CategoryID == "doorbell" {
-			srv.accessory = camera.NewHKSVDoorbellAccessory("AlexxIT", "go2rtc", name, "-", cfg.Version)
+			srv.accessory = camera.NewHKSVDoorbellAccessory("AlexxIT", "go2rtc", name, "-", cfg.Version, recordingAttrs(cfg.RecordingResolution)...)
 		} else {
-			srv.accessory = camera.NewHKSVAccessory("AlexxIT", "go2rtc", name, "-", cfg.Version)
+			srv.accessory = camera.NewHKSVAccessory("AlexxIT", "go2rtc", name, "-", cfg.Version, recordingAttrs(cfg.RecordingResolution)...)
 		}
 	} else {
 		srv.accessory = camera.NewAccessory("AlexxIT", "go2rtc", name, "-", cfg.Version)
@@ -870,4 +875,23 @@ func isClosedConnErr(err error) bool {
 		return false
 	}
 	return strings.Contains(err.Error(), "use of closed network connection")
+}
+
+// recordingAttrs parses a "WIDTHxHEIGHT" override into what the accessory
+// should advertise. An empty or malformed value keeps the defaults.
+func recordingAttrs(res string) []camera.VideoCodecAttributes {
+	if res == "" {
+		return nil
+	}
+
+	w, h, ok := strings.Cut(res, "x")
+	width, err1 := strconv.Atoi(w)
+	height, err2 := strconv.Atoi(h)
+	if !ok || err1 != nil || err2 != nil || width <= 0 || height <= 0 {
+		return nil
+	}
+
+	return []camera.VideoCodecAttributes{
+		{Width: uint16(width), Height: uint16(height), Framerate: 30},
+	}
 }

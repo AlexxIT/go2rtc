@@ -51,7 +51,26 @@ func ServiceCameraOperatingMode() *hap.Service {
 	}
 }
 
+// DefaultRecordingAttrs is what HKSV advertises when a camera does not
+// override it: the standard 16:9 sizes.
+var DefaultRecordingAttrs = []VideoCodecAttributes{
+	{Width: 1920, Height: 1080, Framerate: 30},
+	{Width: 1280, Height: 720, Framerate: 30},
+}
+
 func ServiceCameraEventRecordingManagement() *hap.Service {
+	return ServiceCameraEventRecordingManagementAttrs(DefaultRecordingAttrs)
+}
+
+// ServiceCameraEventRecordingManagementAttrs advertises specific resolutions.
+// A camera whose sensor is not 16:9 - a doorbell in portrait, say - cannot be
+// recorded at any of the default sizes without cropping away the part of the
+// frame that matters, so it needs to advertise its own.
+func ServiceCameraEventRecordingManagementAttrs(attrs []VideoCodecAttributes) *hap.Service {
+	if len(attrs) == 0 {
+		attrs = DefaultRecordingAttrs
+	}
+
 	val205, _ := tlv8.MarshalBase64(SupportedCameraRecordingConfiguration{
 		PrebufferLength:     4000,
 		EventTriggerOptions: 0x01, // motion
@@ -70,25 +89,27 @@ func ServiceCameraEventRecordingManagement() *hap.Service {
 	// ProfileID and Level are advertised as lists of what the accessory
 	// accepts. Offering Main and High up to Level 4.0 lets a camera whose
 	// native stream already conforms be recorded without transcoding.
+	// Bitrate and IFrameInterval are deliberately absent: they belong only in
+	// the controller's Selected write. Including them here makes the
+	// controller reject the whole characteristic (see ch206.go).
+	//
+	// ProfileID and Level are advertised as lists of what the accessory
+	// accepts. Offering Main and High up to Level 4.0 lets a camera whose
+	// native stream already conforms be recorded without transcoding.
+	var codecConfigs []VideoRecordingCodecConfiguration
+	for _, a := range attrs {
+		codecConfigs = append(codecConfigs, VideoRecordingCodecConfiguration{
+			CodecType: VideoCodecTypeH264,
+			CodecParams: VideoRecordingCodecParameters{
+				ProfileID: []byte{VideoCodecProfileMain, VideoCodecProfileHigh},
+				Level:     []byte{VideoCodecLevel31, VideoCodecLevel32, VideoCodecLevel40},
+			},
+			CodecAttrs: []VideoCodecAttributes{a},
+		})
+	}
+
 	val206, _ := tlv8.MarshalBase64(SupportedVideoRecordingConfiguration{
-		CodecConfigs: []VideoRecordingCodecConfiguration{
-			{
-				CodecType: VideoCodecTypeH264,
-				CodecParams: VideoRecordingCodecParameters{
-					ProfileID: []byte{VideoCodecProfileMain, VideoCodecProfileHigh},
-					Level:     []byte{VideoCodecLevel31, VideoCodecLevel32, VideoCodecLevel40},
-				},
-				CodecAttrs: []VideoCodecAttributes{{Width: 1920, Height: 1080, Framerate: 30}},
-			},
-			{
-				CodecType: VideoCodecTypeH264,
-				CodecParams: VideoRecordingCodecParameters{
-					ProfileID: []byte{VideoCodecProfileMain, VideoCodecProfileHigh},
-					Level:     []byte{VideoCodecLevel31, VideoCodecLevel32, VideoCodecLevel40},
-				},
-				CodecAttrs: []VideoCodecAttributes{{Width: 1280, Height: 720, Framerate: 30}},
-			},
-		},
+		CodecConfigs: codecConfigs,
 	})
 
 	// MaxAudioBitrate omitted for the same reason as the video Bitrate.
