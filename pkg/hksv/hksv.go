@@ -596,7 +596,32 @@ func (s *Server) SetCharacteristic(conn net.Conn, aid uint8, iid uint64, value a
 		go s.acceptHDS(hapConn, ln, combinedSalt)
 
 	case camera.TypeSelectedCameraRecordingConfiguration:
-		s.log.Debug().Str("stream", s.stream).Str("motion", s.motionMode).Msg("[hksv] selected recording config")
+		// Log what the controller actually selected. It picks one of the
+		// advertised configurations per camera, and a clip that does not
+		// match the selection is discarded without any error.
+		var sel camera.SelectedCameraRecordingConfiguration
+		if str, ok := value.(string); ok {
+			if err := tlv8.UnmarshalBase64(str, &sel); err != nil {
+				s.log.Warn().Err(err).Str("stream", s.stream).Msg("[hksv] selected recording config: decode")
+			} else {
+				e := s.log.Info().Str("stream", s.stream).Str("motion", s.motionMode).
+					Uint32("prebuffer_ms", sel.GeneralConfig.PrebufferLength).
+					Uint64("trigger", sel.GeneralConfig.EventTriggerOptions).
+					Uint32("fragment_ms", sel.GeneralConfig.MediaContainerConfigurations.MediaContainerParameters.FragmentLength)
+				for _, cc := range sel.VideoConfig.CodecConfigs {
+					e = e.Interface("video", map[string]any{
+						"profile": cc.CodecParams.ProfileID, "level": cc.CodecParams.Level,
+						"bitrate": cc.CodecParams.Bitrate, "iframe_ms": cc.CodecParams.IFrameInterval,
+						"width": cc.CodecAttrs.Width, "height": cc.CodecAttrs.Height,
+						"fps": cc.CodecAttrs.Framerate,
+					})
+				}
+				for _, ac := range sel.AudioConfig.CodecConfigs {
+					e = e.Interface("audio", map[string]any{"codec": ac.CodecType, "params": ac.CodecParams})
+				}
+				e.Msg("[hksv] selected recording config")
+			}
+		}
 		char.Value = value
 
 		switch s.motionMode {
