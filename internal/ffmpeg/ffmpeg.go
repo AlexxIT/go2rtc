@@ -106,6 +106,11 @@ var defaults = map[string]string{
 	"pcma/48000": "-c:a pcm_alaw -ar:a 48000 -ac:a 1",
 	"aac":        "-c:a aac", // keep sample rate and channels
 	"aac/16000":  "-c:a aac -ar:a 16000 -ac:a 1",
+	// HomeKit Secure Video advertises AAC-LC at 24/32/48 kHz mono only (see
+	// SupportedAudioRecordingConfiguration). A camera with 8 kHz G.711 audio
+	// otherwise produces an 8 kHz AAC track that does not match the
+	// configuration the Home Hub selected.
+	"aac/24000":  "-c:a aac -ar:a 24000 -ac:a 1",
 	"mp3":        "-c:a libmp3lame -q:a 8",
 	"pcm":        "-c:a pcm_s16be -ar:a 8000 -ac:a 1",
 	"pcm/8000":   "-c:a pcm_s16be -ar:a 8000 -ac:a 1",
