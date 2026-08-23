@@ -51,6 +51,7 @@ func Init() {
 	api.HandleFunc("api/homekit", apiHomekit)
 	api.HandleFunc("api/homekit/accessories", apiHomekitAccessories)
 	api.HandleFunc("api/homekit/motion", apiMotion)
+	api.HandleFunc("api/homekit/recording.mp4", apiRecording)
 	api.HandleFunc("api/homekit/doorbell", apiDoorbell)
 	api.HandleFunc("api/discovery/homekit", apiDiscovery)
 

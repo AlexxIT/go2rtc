@@ -35,6 +35,10 @@ type HKSVConsumer struct {
 	// GOP buffer - accumulate moof+mdat pairs, flush on next keyframe
 	fragBuf []byte
 
+	// tap, when set, receives the init segment and every fragment instead
+	// of the HDS session - the exact fMP4 the controller would be sent.
+	tap io.Writer
+
 	// Pre-built init segment (built when tracks connect)
 	initData []byte
 	initErr  error
@@ -180,8 +184,9 @@ func (c *HKSVConsumer) buildInit() {
 
 // Activate is called when the HDS session is ready (dataSend.open).
 // It sends the pre-built init segment and starts streaming.
-func (c *HKSVConsumer) Activate(session *hds.Session, streamID int) error {
-	// Wait for init to be ready (should already be done if consumer was pre-started)
+// waitInit blocks until the init segment is built, falling back to whatever
+// tracks are connected after a timeout.
+func (c *HKSVConsumer) waitInit() error {
 	select {
 	case <-c.initDone:
 	case <-time.After(5 * time.Second):
@@ -198,8 +203,32 @@ func (c *HKSVConsumer) Activate(session *hds.Session, streamID int) error {
 		}
 	}
 
-	if c.initErr != nil {
-		return c.initErr
+	return c.initErr
+}
+
+// ActivateTap diverts the fMP4 to w instead of an HDS session, so the exact
+// bytes the controller receives can be captured and inspected.
+func (c *HKSVConsumer) ActivateTap(w io.Writer) error {
+	if err := c.waitInit(); err != nil {
+		return err
+	}
+
+	if _, err := w.Write(c.initData); err != nil {
+		return err
+	}
+
+	c.mu.Lock()
+	c.tap = w
+	c.seqNum = 2
+	c.active = true
+	c.mu.Unlock()
+
+	return nil
+}
+
+func (c *HKSVConsumer) Activate(session *hds.Session, streamID int) error {
+	if err := c.waitInit(); err != nil {
+		return err
 	}
 
 	c.log.Debug().Int("initSize", len(c.initData)).Msg("[hksv] sending init segment")
@@ -229,7 +258,11 @@ func (c *HKSVConsumer) flushFragment() {
 
 	c.log.Debug().Int("fragSize", len(fragment)).Int("seq", c.seqNum).Msg("[hksv] flush fragment")
 
-	if err := c.session.SendMediaFragment(c.streamID, fragment, c.seqNum); err == nil {
+	if c.tap != nil {
+		if _, err := c.tap.Write(fragment); err == nil {
+			c.Send += len(fragment)
+		}
+	} else if err := c.session.SendMediaFragment(c.streamID, fragment, c.seqNum); err == nil {
 		c.Send += len(fragment)
 	}
 	c.seqNum++
