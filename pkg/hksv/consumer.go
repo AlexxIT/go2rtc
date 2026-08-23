@@ -43,7 +43,12 @@ type HKSVConsumer struct {
 
 // NewHKSVConsumer creates a new HKSV consumer that muxes H264+AAC into fMP4
 // and sends fragments over an HDS DataStream session.
-func NewHKSVConsumer(log zerolog.Logger) *HKSVConsumer {
+func NewHKSVConsumer(log zerolog.Logger, stream string) *HKSVConsumer {
+	// Every log line from a consumer is otherwise indistinguishable from the
+	// other cameras', which makes fragments and init segments impossible to
+	// attribute when several are recording at once.
+	log = log.With().Str("stream", stream).Logger()
+
 	medias := []*core.Media{
 		{
 			Kind:      core.KindVideo,

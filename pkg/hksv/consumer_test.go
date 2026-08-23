@@ -33,7 +33,7 @@ func newTestSessionPair(t *testing.T) (accessory *hds.Session, controller *hds.S
 }
 
 func TestHKSVConsumer_Creation(t *testing.T) {
-	c := NewHKSVConsumer(testLog)
+	c := NewHKSVConsumer(testLog, "test")
 
 	require.Equal(t, "hksv", c.FormatName)
 	require.Equal(t, "hds", c.Protocol)
@@ -55,7 +55,7 @@ func TestHKSVConsumer_Creation(t *testing.T) {
 
 func TestHKSVConsumer_FlushFragment_SendsAndIncrements(t *testing.T) {
 	acc, ctrl := newTestSessionPair(t)
-	c := NewHKSVConsumer(testLog)
+	c := NewHKSVConsumer(testLog, "test")
 
 	// Manually set up the consumer as if Activate() was called
 	c.session = acc
@@ -95,7 +95,7 @@ func TestHKSVConsumer_FlushFragment_SendsAndIncrements(t *testing.T) {
 
 func TestHKSVConsumer_FlushFragment_MultipleFlushes(t *testing.T) {
 	acc, ctrl := newTestSessionPair(t)
-	c := NewHKSVConsumer(testLog)
+	c := NewHKSVConsumer(testLog, "test")
 	c.session = acc
 	c.streamID = 1
 	c.seqNum = 2
@@ -137,7 +137,7 @@ func TestHKSVConsumer_FlushFragment_MultipleFlushes(t *testing.T) {
 }
 
 func TestHKSVConsumer_FlushFragment_EmptyBuffer(t *testing.T) {
-	c := NewHKSVConsumer(testLog)
+	c := NewHKSVConsumer(testLog, "test")
 	c.seqNum = 2
 
 	// flushFragment with empty/nil buffer should still increment seqNum
@@ -153,7 +153,7 @@ func TestHKSVConsumer_FlushFragment_EmptyBuffer(t *testing.T) {
 }
 
 func TestHKSVConsumer_BufferAccumulation(t *testing.T) {
-	c := NewHKSVConsumer(testLog)
+	c := NewHKSVConsumer(testLog, "test")
 	c.active = true
 
 	data1 := []byte("chunk-1")
@@ -170,7 +170,7 @@ func TestHKSVConsumer_BufferAccumulation(t *testing.T) {
 
 func TestHKSVConsumer_ActivateSeqNum(t *testing.T) {
 	acc, ctrl := newTestSessionPair(t)
-	c := NewHKSVConsumer(testLog)
+	c := NewHKSVConsumer(testLog, "test")
 
 	// Simulate init ready
 	c.initData = []byte("fake-init")
@@ -204,7 +204,7 @@ func TestHKSVConsumer_ActivateSeqNum(t *testing.T) {
 
 func TestHKSVConsumer_ActivateTimeout(t *testing.T) {
 	acc, _ := newTestSessionPair(t)
-	c := NewHKSVConsumer(testLog)
+	c := NewHKSVConsumer(testLog, "test")
 	// Don't close initDone — simulate init never becoming ready
 
 	// Override the timeout for faster test
@@ -230,7 +230,7 @@ type timeoutError struct{}
 func (e *timeoutError) Error() string { return "activate timeout" }
 
 func TestHKSVConsumer_ActivateWithError(t *testing.T) {
-	c := NewHKSVConsumer(testLog)
+	c := NewHKSVConsumer(testLog, "test")
 	c.initErr = &timeoutError{}
 	close(c.initDone)
 
@@ -241,7 +241,7 @@ func TestHKSVConsumer_ActivateWithError(t *testing.T) {
 }
 
 func TestHKSVConsumer_StopSafety(t *testing.T) {
-	c := NewHKSVConsumer(testLog)
+	c := NewHKSVConsumer(testLog, "test")
 	c.active = true
 
 	// First stop
@@ -255,7 +255,7 @@ func TestHKSVConsumer_StopSafety(t *testing.T) {
 }
 
 func TestHKSVConsumer_StopDeactivates(t *testing.T) {
-	c := NewHKSVConsumer(testLog)
+	c := NewHKSVConsumer(testLog, "test")
 	c.active = true
 	c.start = true
 
@@ -265,7 +265,7 @@ func TestHKSVConsumer_StopDeactivates(t *testing.T) {
 }
 
 func TestHKSVConsumer_WriteToDone(t *testing.T) {
-	c := NewHKSVConsumer(testLog)
+	c := NewHKSVConsumer(testLog, "test")
 
 	done := make(chan struct{})
 	go func() {
@@ -293,7 +293,7 @@ func TestHKSVConsumer_WriteToDone(t *testing.T) {
 
 func TestHKSVConsumer_GOPFlushIntegration(t *testing.T) {
 	acc, ctrl := newTestSessionPair(t)
-	c := NewHKSVConsumer(testLog)
+	c := NewHKSVConsumer(testLog, "test")
 	c.session = acc
 	c.streamID = 1
 	c.seqNum = 2
@@ -342,7 +342,7 @@ func TestHKSVConsumer_GOPFlushIntegration(t *testing.T) {
 
 func TestHKSVConsumer_FlushClearsBuffer(t *testing.T) {
 	acc, ctrl := newTestSessionPair(t)
-	c := NewHKSVConsumer(testLog)
+	c := NewHKSVConsumer(testLog, "test")
 	c.session = acc
 	c.streamID = 1
 	c.seqNum = 2
@@ -373,7 +373,7 @@ func TestHKSVConsumer_FlushClearsBuffer(t *testing.T) {
 
 func TestHKSVConsumer_SendTracking(t *testing.T) {
 	acc, ctrl := newTestSessionPair(t)
-	c := NewHKSVConsumer(testLog)
+	c := NewHKSVConsumer(testLog, "test")
 	c.session = acc
 	c.streamID = 1
 	c.seqNum = 2
@@ -419,7 +419,7 @@ func BenchmarkHKSVConsumer_FlushFragment(b *testing.B) {
 		}
 	}()
 
-	c := NewHKSVConsumer(testLog)
+	c := NewHKSVConsumer(testLog, "test")
 	c.session = acc
 	c.streamID = 1
 	c.seqNum = 2
@@ -438,7 +438,7 @@ func BenchmarkHKSVConsumer_FlushFragment(b *testing.B) {
 }
 
 func BenchmarkHKSVConsumer_BufferAppend(b *testing.B) {
-	c := NewHKSVConsumer(testLog)
+	c := NewHKSVConsumer(testLog, "test")
 	frame := make([]byte, 1500) // typical frame fragment
 
 	b.SetBytes(int64(len(frame)))
@@ -454,7 +454,7 @@ func BenchmarkHKSVConsumer_BufferAppend(b *testing.B) {
 func BenchmarkHKSVConsumer_CreateAndStop(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		c := NewHKSVConsumer(testLog)
+		c := NewHKSVConsumer(testLog, "test")
 		_ = c.Stop()
 	}
 }

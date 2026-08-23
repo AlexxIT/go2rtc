@@ -802,7 +802,7 @@ func TestTakePreparedConsumer_None(t *testing.T) {
 
 func TestTakePreparedConsumer_Available(t *testing.T) {
 	srv := newTestServer(t)
-	consumer := NewHKSVConsumer(zerolog.Nop())
+	consumer := NewHKSVConsumer(zerolog.Nop(), "test")
 	srv.preparedConsumer = consumer
 
 	got := srv.takePreparedConsumer()
@@ -812,7 +812,7 @@ func TestTakePreparedConsumer_Available(t *testing.T) {
 
 func TestTakePreparedConsumer_OnlyOnce(t *testing.T) {
 	srv := newTestServer(t)
-	srv.preparedConsumer = NewHKSVConsumer(zerolog.Nop())
+	srv.preparedConsumer = NewHKSVConsumer(zerolog.Nop(), "test")
 
 	first := srv.takePreparedConsumer()
 	require.NotNil(t, first)
@@ -926,7 +926,7 @@ func TestIsClosedConnErr(t *testing.T) {
 // ====================================================================
 
 func TestConsumer_AddTrack_H264(t *testing.T) {
-	c := NewHKSVConsumer(zerolog.Nop())
+	c := NewHKSVConsumer(zerolog.Nop(), "test")
 
 	videoMedia := c.Medias[0]
 	videoCodec := &core.Codec{
@@ -942,7 +942,7 @@ func TestConsumer_AddTrack_H264(t *testing.T) {
 }
 
 func TestConsumer_AddTrack_H264AndAAC(t *testing.T) {
-	c := NewHKSVConsumer(zerolog.Nop())
+	c := NewHKSVConsumer(zerolog.Nop(), "test")
 
 	videoCodec := &core.Codec{
 		Name:      core.CodecH264,
@@ -977,7 +977,7 @@ func TestConsumer_AddTrack_H264AndAAC(t *testing.T) {
 }
 
 func TestConsumer_AddTrack_UnsupportedCodec(t *testing.T) {
-	c := NewHKSVConsumer(zerolog.Nop())
+	c := NewHKSVConsumer(zerolog.Nop(), "test")
 
 	codec := &core.Codec{Name: core.CodecVP9, ClockRate: 90000}
 	receiver := core.NewReceiver(c.Medias[0], codec)
@@ -988,7 +988,7 @@ func TestConsumer_AddTrack_UnsupportedCodec(t *testing.T) {
 }
 
 func TestConsumer_AddTrack_LateTrackIgnored(t *testing.T) {
-	c := NewHKSVConsumer(zerolog.Nop())
+	c := NewHKSVConsumer(zerolog.Nop(), "test")
 
 	// Build init with one track
 	videoCodec := &core.Codec{Name: core.CodecH264, ClockRate: 90000}
@@ -1023,7 +1023,7 @@ func TestConsumer_FullRecordingFlow(t *testing.T) {
 	// 5. Verify fragment received on controller side
 
 	acc, ctrl := newTestSessionPair(t)
-	c := NewHKSVConsumer(zerolog.Nop())
+	c := NewHKSVConsumer(zerolog.Nop(), "test")
 
 	// Add tracks
 	videoCodec := &core.Codec{Name: core.CodecH264, ClockRate: 90000}

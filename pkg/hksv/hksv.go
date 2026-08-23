@@ -719,7 +719,7 @@ func (s *Server) acceptHDS(hapConn *hap.Conn, ln net.Listener, salt string) {
 
 // prepareHKSVConsumer pre-starts a consumer and adds it to the stream.
 func (s *Server) prepareHKSVConsumer() {
-	consumer := NewHKSVConsumer(s.log)
+	consumer := NewHKSVConsumer(s.log, s.stream)
 
 	if err := s.streams.AddConsumer(s.stream, consumer); err != nil {
 		s.log.Debug().Err(err).Str("stream", s.stream).Msg("[hksv] prepare consumer failed")

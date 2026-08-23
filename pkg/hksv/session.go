@@ -76,7 +76,7 @@ func (hs *hksvSession) handleOpen(streamID int) error {
 
 	// Fallback: create new consumer (will be slow ~3s)
 	hs.log.Debug().Str("stream", hs.server.stream).Msg("[hksv] no prepared consumer, creating new")
-	consumer = NewHKSVConsumer(hs.log)
+	consumer = NewHKSVConsumer(hs.log, hs.server.stream)
 
 	if err := hs.server.streams.AddConsumer(hs.server.stream, consumer); err != nil {
 		hs.log.Error().Err(err).Str("stream", hs.server.stream).Msg("[hksv] add consumer failed")
