@@ -154,3 +154,55 @@ func TestSlice2(t *testing.T) {
 
 	require.Equal(t, b1, b2)
 }
+
+func TestBigStruct(t *testing.T) {
+	// A nested struct whose body runs past 255 bytes must be split across
+	// fragments sharing the same tag. Writing the length as a single byte
+	// truncated it modulo 256 and silently corrupted the payload.
+	type inner struct {
+		Data string `tlv8:"1"`
+	}
+	type outer struct {
+		Inner inner `tlv8:"9"`
+	}
+
+	v := outer{Inner: inner{Data: strings.Repeat("A", 300)}}
+
+	b, err := Marshal(v)
+	require.NoError(t, err)
+
+	// inner body is 300 bytes of string split as 255+45, plus two 2-byte
+	// headers = 304; the outer struct then splits that as 255+49.
+	require.Equal(t, byte(9), b[0])
+	require.Equal(t, byte(255), b[1])
+	require.Equal(t, byte(9), b[257])
+	require.Equal(t, byte(49), b[258])
+
+	var out outer
+	require.NoError(t, Unmarshal(b, &out))
+	require.Equal(t, v.Inner.Data, out.Inner.Data)
+}
+
+func TestBigArray(t *testing.T) {
+	// Same truncation applied to fixed-size byte arrays.
+	type payload struct {
+		Key [300]byte `tlv8:"1"`
+	}
+
+	var v payload
+	for i := range v.Key {
+		v.Key[i] = byte(i)
+	}
+
+	b, err := Marshal(v)
+	require.NoError(t, err)
+
+	require.Equal(t, byte(1), b[0])
+	require.Equal(t, byte(255), b[1])
+	require.Equal(t, byte(1), b[257])
+	require.Equal(t, byte(45), b[258])
+
+	var out payload
+	require.NoError(t, Unmarshal(b, &out))
+	require.Equal(t, v.Key, out.Key)
+}
