@@ -801,7 +801,9 @@ func (s *Server) startMotionDetector() {
 		s.mu.Unlock()
 		return
 	}
-	det := NewMotionDetector(s.motionThreshold, s.SetMotionDetected, s.log)
+	// motion: ON/OFF and the ratio log lines otherwise carry no stream field,
+	// which makes them unattributable with more than one camera running.
+	det := NewMotionDetector(s.motionThreshold, s.SetMotionDetected, s.log.With().Str("stream", s.stream).Logger())
 	s.motionDetector = det
 	s.mu.Unlock()
 
