@@ -318,6 +318,10 @@ func (c *Cloud) finishAuth(location string) error {
 	if err != nil {
 		return err
 	}
+	if skipURL := res.Request.URL.Query().Get("skipUrl"); skipURL != "" {
+		res.Body.Close()
+		return c.finishAuth(skipURL)
+	}
 	defer res.Body.Close()
 
 	// LoginWithVerify
