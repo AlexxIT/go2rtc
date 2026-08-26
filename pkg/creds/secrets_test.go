@@ -11,5 +11,7 @@ func TestString(t *testing.T) {
 	AddSecret("pa$$word")
 
 	s := SecretString("rtsp://admin:pa$$word@192.168.1.123/stream1")
-	require.Equal(t, "rtsp://***:***@192.168.1.123/stream1", s)
+	// Since "Strip Userinfo from log entries and errors" (#2051) the whole
+	// user:pass@ block collapses to ***@ — one marker, no hint of the shape.
+	require.Equal(t, "rtsp://***@192.168.1.123/stream1", s)
 }
