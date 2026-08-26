@@ -44,6 +44,15 @@ func Init() {
 			// need this to avoid cropping away the useful part of the frame.
 			RecordingResolution string `yaml:"recording_resolution"`
 			Speaker             *bool  `yaml:"speaker"`
+
+			// Persisted controller-set toggles. These are written back by
+			// SaveCharacteristic whenever Home flips one of these switches,
+			// and read here on the next startup so a config change (which
+			// restarts the whole process) doesn't silently revert them.
+			RecordingAudioActive    *bool `yaml:"recording_audio_active"`
+			HomeKitCameraActive     *bool `yaml:"homekit_camera_active"`
+			EventSnapshotsActive    *bool `yaml:"event_snapshots_active"`
+			PeriodicSnapshotsActive *bool `yaml:"periodic_snapshots_active"`
 		} `yaml:"homekit"`
 	}
 	app.LoadConfig(&cfg)
@@ -99,6 +108,11 @@ func Init() {
 			MotionThreshold:     conf.MotionThreshold,
 			RecordingResolution: conf.RecordingResolution,
 			Speaker:             conf.Speaker,
+
+			RecordingAudioActive:    conf.RecordingAudioActive,
+			HomeKitCameraActive:     conf.HomeKitCameraActive,
+			EventSnapshotsActive:    conf.EventSnapshotsActive,
+			PeriodicSnapshotsActive: conf.PeriodicSnapshotsActive,
 			UserAgent:           app.UserAgent,
 			Version:             app.Version,
 			Streams:             &go2rtcStreamProvider{},
@@ -184,6 +198,24 @@ type go2rtcPairingStore struct{}
 
 func (s *go2rtcPairingStore) SavePairings(name string, pairings []string) error {
 	return app.PatchConfig([]string{"homekit", name, "pairings"}, pairings)
+}
+
+// characteristicConfigKeys maps a HAP characteristic type to the yaml key it
+// gets persisted under, for controller-set toggles that must survive a
+// restart (see PairingStore).
+var characteristicConfigKeys = map[string]string{
+	"226": "recording_audio_active",
+	"21B": "homekit_camera_active",
+	"223": "event_snapshots_active",
+	"225": "periodic_snapshots_active",
+}
+
+func (s *go2rtcPairingStore) SaveCharacteristic(name, charType string, value bool) error {
+	key, ok := characteristicConfigKeys[charType]
+	if !ok {
+		return nil
+	}
+	return app.PatchConfig([]string{"homekit", name, key}, value)
 }
 
 // go2rtcSnapshotProvider implements hksv.SnapshotProvider

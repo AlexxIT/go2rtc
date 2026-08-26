@@ -25,30 +25,60 @@ func ServiceMotionSensor() *hap.Service {
 	}
 }
 
-func ServiceCameraOperatingMode() *hap.Service {
+// OperatingState holds the controller-writable toggle values that must
+// survive a restart: Home's per-camera "Record Audio", "Show As Camera",
+// "Capture Snapshots" and "Periodic Snapshots" switches. HAP gives the
+// controller no way to resend its last value, so whatever the accessory
+// advertises at boot is what Home displays - these need to come from
+// persisted state, not a hardcoded default, or every restart silently
+// reverts them.
+type OperatingState struct {
+	RecordingAudioActive    bool
+	HomeKitCameraActive     bool
+	EventSnapshotsActive    bool
+	PeriodicSnapshotsActive bool
+}
+
+// DefaultOperatingState matches HAP's spec-recommended defaults for an
+// accessory with no persisted state yet: audio recording off, everything
+// else on.
+var DefaultOperatingState = OperatingState{
+	HomeKitCameraActive:     true,
+	EventSnapshotsActive:    true,
+	PeriodicSnapshotsActive: true,
+}
+
+func ServiceCameraOperatingMode(state OperatingState) *hap.Service {
 	return &hap.Service{
 		Type: "21A",
 		Characters: []*hap.Character{
 			{
 				Type:   "21B",
 				Format: hap.FormatBool,
-				Value:  true,
+				Value:  state.HomeKitCameraActive,
 				Perms:  hap.EVPRPW,
 			},
 			{
 				Type:   "223",
 				Format: hap.FormatBool,
-				Value:  true,
+				Value:  state.EventSnapshotsActive,
 				Perms:  hap.EVPRPW,
 			},
 			{
 				Type:   "225",
 				Format: hap.FormatBool,
-				Value:  true,
+				Value:  state.PeriodicSnapshotsActive,
 				Perms:  hap.EVPRPW,
 			},
 		},
 	}
+}
+
+func boolToUint8(b bool) uint8 {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 // DefaultRecordingAttrs is what HKSV advertises when a camera does not
@@ -59,14 +89,14 @@ var DefaultRecordingAttrs = []VideoCodecAttributes{
 }
 
 func ServiceCameraEventRecordingManagement() *hap.Service {
-	return ServiceCameraEventRecordingManagementAttrs(DefaultRecordingAttrs)
+	return ServiceCameraEventRecordingManagementAttrs(DefaultRecordingAttrs, false)
 }
 
 // ServiceCameraEventRecordingManagementAttrs advertises specific resolutions.
 // A camera whose sensor is not 16:9 - a doorbell in portrait, say - cannot be
 // recorded at any of the default sizes without cropping away the part of the
 // frame that matters, so it needs to advertise its own.
-func ServiceCameraEventRecordingManagementAttrs(attrs []VideoCodecAttributes) *hap.Service {
+func ServiceCameraEventRecordingManagementAttrs(attrs []VideoCodecAttributes, recordingAudioActive bool) *hap.Service {
 	if len(attrs) == 0 {
 		attrs = DefaultRecordingAttrs
 	}
@@ -171,7 +201,7 @@ func ServiceCameraEventRecordingManagementAttrs(attrs []VideoCodecAttributes) *h
 			{
 				Type:   "226",
 				Format: hap.FormatUInt8,
-				Value:  0,
+				Value:  boolToUint8(recordingAudioActive),
 				Perms:  hap.EVPRPW,
 			},
 		},

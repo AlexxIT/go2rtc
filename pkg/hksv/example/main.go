@@ -208,3 +208,7 @@ func (s *filePairingStore) SavePairings(_ string, pairings []string) error {
 	}
 	return os.WriteFile(s.path, data, 0644)
 }
+
+func (s *filePairingStore) SaveCharacteristic(_, _ string, _ bool) error {
+	return nil
+}

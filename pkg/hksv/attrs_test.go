@@ -21,8 +21,8 @@ func TestRecordingAttrs(t *testing.T) {
 
 func TestPortraitAdvertised(t *testing.T) {
 	// The advertised TLV must actually carry the override, not the default.
-	portrait := camera.NewHKSVAccessory("m", "mo", "n", "-", "1", recordingAttrs("1200x1600")...)
-	def := camera.NewHKSVAccessory("m", "mo", "n", "-", "1")
+	portrait := camera.NewHKSVAccessory("m", "mo", "n", "-", "1", camera.DefaultOperatingState, recordingAttrs("1200x1600")...)
+	def := camera.NewHKSVAccessory("m", "mo", "n", "-", "1", camera.DefaultOperatingState)
 
 	var pVal, dVal string
 	for _, svc := range portrait.Services {

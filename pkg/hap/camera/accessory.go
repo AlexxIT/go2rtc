@@ -20,11 +20,11 @@ func NewAccessory(manuf, model, name, serial, firmware string) *hap.Accessory {
 	return acc
 }
 
-func NewHKSVAccessory(manuf, model, name, serial, firmware string, attrs ...VideoCodecAttributes) *hap.Accessory {
+func NewHKSVAccessory(manuf, model, name, serial, firmware string, state OperatingState, attrs ...VideoCodecAttributes) *hap.Accessory {
 	rtpStream := ServiceCameraRTPStreamManagement()
 	motionSensor := ServiceMotionSensor()
-	operatingMode := ServiceCameraOperatingMode()
-	recordingMgmt := ServiceCameraEventRecordingManagementAttrs(attrs)
+	operatingMode := ServiceCameraOperatingMode(state)
+	recordingMgmt := ServiceCameraEventRecordingManagementAttrs(attrs, state.RecordingAudioActive)
 	dataStreamMgmt := ServiceDataStreamManagement()
 
 	acc := &hap.Accessory{
@@ -48,11 +48,11 @@ func NewHKSVAccessory(manuf, model, name, serial, firmware string, attrs ...Vide
 	return acc
 }
 
-func NewHKSVDoorbellAccessory(manuf, model, name, serial, firmware string, attrs ...VideoCodecAttributes) *hap.Accessory {
+func NewHKSVDoorbellAccessory(manuf, model, name, serial, firmware string, state OperatingState, attrs ...VideoCodecAttributes) *hap.Accessory {
 	rtpStream := ServiceCameraRTPStreamManagement()
 	motionSensor := ServiceMotionSensor()
-	operatingMode := ServiceCameraOperatingMode()
-	recordingMgmt := ServiceCameraEventRecordingManagementAttrs(attrs)
+	operatingMode := ServiceCameraOperatingMode(state)
+	recordingMgmt := ServiceCameraEventRecordingManagementAttrs(attrs, state.RecordingAudioActive)
 	dataStreamMgmt := ServiceDataStreamManagement()
 	doorbell := ServiceDoorbell()
 

@@ -57,9 +57,14 @@ type StreamProvider interface {
 	RemoveConsumer(streamName string, consumer core.Consumer)
 }
 
-// PairingStore persists HAP pairing data.
+// PairingStore persists HAP pairing data and controller-set characteristic
+// state that must survive a restart - e.g. Home's per-camera "Record Audio"
+// toggle. HAP gives the controller no way to resend its last value, so
+// whatever the accessory advertises at boot is what Home displays; without
+// this, every restart silently reverts these toggles to their defaults.
 type PairingStore interface {
 	SavePairings(streamName string, pairings []string) error
+	SaveCharacteristic(streamName, charType string, value bool) error
 }
 
 // SnapshotProvider generates JPEG snapshots for HomeKit /resource requests.
@@ -112,6 +117,14 @@ type Config struct {
 	Speaker         *bool   // include Speaker service for 2-way audio (default false)
 	UserAgent       string  // for mDNS TXTModel field
 	Version         string  // for accessory firmware version
+
+	// Persisted controller-set toggles, loaded from prior state. nil means
+	// "no controller has written this yet" - use the HAP-spec default
+	// rather than false, since e.g. HomeKitCameraActive defaults to true.
+	RecordingAudioActive    *bool
+	HomeKitCameraActive     *bool
+	EventSnapshotsActive    *bool
+	PeriodicSnapshotsActive *bool
 
 	// Dependencies (injected by host)
 	Streams    StreamProvider
@@ -220,10 +233,24 @@ func NewServer(cfg Config) (*Server, error) {
 		srv.log.Debug().Str("stream", cfg.StreamName).Str("motion", cfg.MotionMode).
 			Float64("threshold", srv.motionThreshold).Msg("[hksv] HKSV mode")
 
+		state := camera.DefaultOperatingState
+		if cfg.RecordingAudioActive != nil {
+			state.RecordingAudioActive = *cfg.RecordingAudioActive
+		}
+		if cfg.HomeKitCameraActive != nil {
+			state.HomeKitCameraActive = *cfg.HomeKitCameraActive
+		}
+		if cfg.EventSnapshotsActive != nil {
+			state.EventSnapshotsActive = *cfg.EventSnapshotsActive
+		}
+		if cfg.PeriodicSnapshotsActive != nil {
+			state.PeriodicSnapshotsActive = *cfg.PeriodicSnapshotsActive
+		}
+
 		if cfg.CategoryID == "doorbell" {
-			srv.accessory = camera.NewHKSVDoorbellAccessory("AlexxIT", "go2rtc", name, "-", cfg.Version, recordingAttrs(cfg.RecordingResolution)...)
+			srv.accessory = camera.NewHKSVDoorbellAccessory("AlexxIT", "go2rtc", name, "-", cfg.Version, state, recordingAttrs(cfg.RecordingResolution)...)
 		} else {
-			srv.accessory = camera.NewHKSVAccessory("AlexxIT", "go2rtc", name, "-", cfg.Version, recordingAttrs(cfg.RecordingResolution)...)
+			srv.accessory = camera.NewHKSVAccessory("AlexxIT", "go2rtc", name, "-", cfg.Version, state, recordingAttrs(cfg.RecordingResolution)...)
 		}
 	} else {
 		srv.accessory = camera.NewAccessory("AlexxIT", "go2rtc", name, "-", cfg.Version)
@@ -635,8 +662,38 @@ func (s *Server) SetCharacteristic(conn net.Conn, aid uint8, iid uint64, value a
 			go s.startMotionDetector()
 		}
 
+	case "226", "21B", "223", "225":
+		char.Value = value
+		s.saveCharacteristic(char.Type, value)
+
 	default:
 		char.Value = value
+	}
+}
+
+// saveCharacteristic persists a controller-writable toggle so it survives a
+// restart. HAP delivers bool-formatted characteristics as JSON bool and
+// uint8-formatted ones (like "226") as JSON number, decoded to float64 - so
+// both representations need handling here.
+func (s *Server) saveCharacteristic(charType string, value any) {
+	if s.store == nil {
+		return
+	}
+
+	var b bool
+	switch v := value.(type) {
+	case bool:
+		b = v
+	case float64:
+		b = v != 0
+	default:
+		s.log.Warn().Str("stream", s.stream).Str("char", charType).
+			Msgf("[hksv] save characteristic: unexpected value type %T", value)
+		return
+	}
+
+	if err := s.store.SaveCharacteristic(s.stream, charType, b); err != nil {
+		s.log.Error().Err(err).Str("stream", s.stream).Str("char", charType).Msg("[hksv] save characteristic failed")
 	}
 }
 

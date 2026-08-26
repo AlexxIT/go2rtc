@@ -65,11 +65,12 @@ func (m *mockStreamProvider) count(streamName string) int {
 type mockPairingStore struct {
 	mu    sync.Mutex
 	saved map[string][]string
+	chars map[string]bool
 	err   error
 }
 
 func newMockPairingStore() *mockPairingStore {
-	return &mockPairingStore{saved: make(map[string][]string)}
+	return &mockPairingStore{saved: make(map[string][]string), chars: make(map[string]bool)}
 }
 
 func (m *mockPairingStore) SavePairings(streamName string, pairings []string) error {
@@ -88,6 +89,23 @@ func (m *mockPairingStore) get(streamName string) []string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.saved[streamName]
+}
+
+func (m *mockPairingStore) SaveCharacteristic(streamName, charType string, value bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.err != nil {
+		return m.err
+	}
+	m.chars[streamName+"/"+charType] = value
+	return nil
+}
+
+func (m *mockPairingStore) getChar(streamName, charType string) (bool, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	v, ok := m.chars[streamName+"/"+charType]
+	return v, ok
 }
 
 type mockSnapshotProvider struct {
@@ -648,6 +666,67 @@ func TestSetCharacteristic_GenericChar(t *testing.T) {
 	require.Equal(t, 0, char.Value)
 }
 
+func TestSetCharacteristic_PersistsAudioToggle(t *testing.T) {
+	store := newMockPairingStore()
+	srv := newTestServer(t, func(c *Config) { c.Store = store })
+
+	// RecordingAudioActive ("226") is FormatUInt8: HAP delivers it as a JSON
+	// number, decoded to float64 - not bool - so this must be handled as
+	// such, or the persisted value silently never gets set.
+	char := srv.accessory.GetCharacter("226")
+	require.NotNil(t, char)
+
+	srv.SetCharacteristic(nil, 1, char.IID, float64(1))
+	require.Equal(t, float64(1), char.Value)
+
+	v, ok := store.getChar("test-camera", "226")
+	require.True(t, ok, "value should have been persisted")
+	require.True(t, v)
+
+	srv.SetCharacteristic(nil, 1, char.IID, float64(0))
+	v, ok = store.getChar("test-camera", "226")
+	require.True(t, ok)
+	require.False(t, v)
+}
+
+func TestSetCharacteristic_PersistsOperatingModeToggle(t *testing.T) {
+	store := newMockPairingStore()
+	srv := newTestServer(t, func(c *Config) { c.Store = store })
+
+	// HomeKitCameraActive ("21B") is FormatBool: HAP delivers it as a JSON
+	// bool directly.
+	char := srv.accessory.GetCharacter("21B")
+	require.NotNil(t, char)
+
+	srv.SetCharacteristic(nil, 1, char.IID, false)
+
+	v, ok := store.getChar("test-camera", "21B")
+	require.True(t, ok)
+	require.False(t, v)
+}
+
+func TestNewServer_LoadsPersistedOperatingState(t *testing.T) {
+	recAudio := true
+	camActive := false
+	srv := newTestServer(t, func(c *Config) {
+		c.RecordingAudioActive = &recAudio
+		c.HomeKitCameraActive = &camActive
+	})
+
+	char226 := srv.accessory.GetCharacter("226")
+	require.NotNil(t, char226)
+	require.EqualValues(t, 1, char226.Value, "persisted true should override the hardcoded default of off")
+
+	char21B := srv.accessory.GetCharacter("21B")
+	require.NotNil(t, char21B)
+	require.Equal(t, false, char21B.Value, "persisted false should override the hardcoded default of on")
+
+	// Untouched toggle keeps the spec default (on).
+	char223 := srv.accessory.GetCharacter("223")
+	require.NotNil(t, char223)
+	require.Equal(t, true, char223.Value)
+}
+
 func TestSetCharacteristic_UnknownIID(t *testing.T) {
 	srv := newTestServer(t)
 	// Should not panic
@@ -1194,7 +1273,7 @@ func TestConnLabel_HDSConn(t *testing.T) {
 
 func TestConfigNumber(t *testing.T) {
 	plain := camera.NewAccessory("AlexxIT", "go2rtc", "cam", "-", "1.0")
-	hksv := camera.NewHKSVAccessory("AlexxIT", "go2rtc", "cam", "-", "1.0")
+	hksv := camera.NewHKSVAccessory("AlexxIT", "go2rtc", "cam", "-", "1.0", camera.DefaultOperatingState)
 
 	// Stable for an unchanged database: a controller that already re-read
 	// /accessories must not be told to do it again on every restart.
