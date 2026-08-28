@@ -103,7 +103,53 @@ func TestProducerRejectsTruncatedAVCConfig(t *testing.T) {
 func TestValidAVCDecoderConfig(t *testing.T) {
 	sps := []byte{0x67, 0x42, 0, 0x1f, 0xe5, 0x88}
 	pps := []byte{0x68, 0xce, 0x38, 0x80}
-	require.True(t, validAVCDecoderConfig(h264.EncodeConfig(sps, pps)))
+	config := h264.EncodeConfig(sps, pps)
+	require.True(t, validAVCDecoderConfig(config))
+
+	for lengthSizeMinusOne := byte(0); lengthSizeMinusOne < 3; lengthSizeMinusOne++ {
+		unsupported := append([]byte(nil), config...)
+		unsupported[4] = unsupported[4]&^3 | lengthSizeMinusOne
+		require.False(t, validAVCDecoderConfig(unsupported))
+	}
+}
+
+func TestValidAVCCPayload(t *testing.T) {
+	tests := []struct {
+		name string
+		data []byte
+		want bool
+	}{
+		{name: "empty"},
+		{name: "missing length", data: []byte{0, 0, 1}},
+		{name: "truncated NAL", data: []byte{0, 0, 0, 2, 0x65}},
+		{name: "oversized length", data: []byte{0xff, 0xff, 0xff, 0xff, 0x65}},
+		{name: "zero length NAL", data: []byte{0, 0, 0, 0}},
+		{name: "trailing partial bytes", data: []byte{0, 0, 0, 1, 0x65, 0, 0}},
+		{name: "single NAL", data: []byte{0, 0, 0, 2, 0x65, 0x88}, want: true},
+		{name: "multiple NALs", data: []byte{0, 0, 0, 1, 0x65, 0, 0, 0, 2, 0x41, 0x88}, want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, validAVCCPayload(tt.data))
+		})
+	}
+}
+
+func TestProducerDropsMalformedAVCCFrame(t *testing.T) {
+	sps := []byte{0x67, 0x42, 0, 0x1f, 0xe5, 0x88}
+	pps := []byte{0x68, 0xce, 0x38, 0x80}
+	config := append([]byte{0x17, 0, 0, 0, 0}, h264.EncodeConfig(sps, pps)...)
+	malformed := []byte{0x17, 1, 0, 0, 0, 0, 0, 0, 2, 0x65}
+	p, err := Open(io.NopCloser(bytes.NewReader(extendedWire(
+		&Tag{Type: TagVideo, Data: config},
+		&Tag{Type: TagVideo, Data: malformed},
+	))), AudioNone)
+	require.NoError(t, err)
+
+	packets := attach(t, p, p.Medias[0])
+	require.ErrorIs(t, p.Start(), io.EOF)
+	require.Empty(t, *packets)
 }
 
 func TestProducerProbeBufferLimit(t *testing.T) {

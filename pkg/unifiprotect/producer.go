@@ -205,7 +205,7 @@ func (p *Producer) writeTag(tag *Tag) {
 
 	switch tag.Type {
 	case TagVideo:
-		if p.video == nil || len(tag.Data) < 5 || tag.Data[0]&0x0f != 7 || tag.Data[1] != 1 {
+		if p.video == nil || len(tag.Data) < 5 || tag.Data[0]&0x0f != 7 || tag.Data[1] != 1 || !validAVCCPayload(tag.Data[5:]) {
 			return
 		}
 		p.video.WriteRTP(&rtp.Packet{
@@ -258,7 +258,7 @@ func isAVCConfig(data []byte) bool {
 }
 
 func validAVCDecoderConfig(config []byte) bool {
-	if len(config) < 7 || config[0] != 1 {
+	if len(config) < 7 || config[0] != 1 || config[4]&3 != 3 {
 		return false
 	}
 
@@ -292,6 +292,22 @@ func validAVCDecoderConfig(config []byte) bool {
 	}
 
 	return true
+}
+
+func validAVCCPayload(data []byte) bool {
+	valid := false
+	for len(data) != 0 {
+		if len(data) < 4 {
+			return false
+		}
+		size := binary.BigEndian.Uint32(data)
+		if size == 0 || uint64(size) > uint64(len(data)-4) {
+			return false
+		}
+		data = data[4+int(size):]
+		valid = true
+	}
+	return valid
 }
 
 func isAACConfig(data []byte) bool {
