@@ -13,9 +13,11 @@ import (
 )
 
 const (
-	websocketPath     = "/camera/1.0/ws"
-	websocketProtocol = "secure_transfer"
-	maxControlMessage = 8 * 1024 * 1024
+	websocketPath       = "/camera/1.0/ws"
+	websocketProtocol   = "secure_transfer"
+	maxControlMessage   = 8 * 1024 * 1024
+	handshakeTimeout    = 30 * time.Second
+	controlWriteTimeout = 5 * time.Second
 )
 
 type controlMessage struct {
@@ -50,13 +52,15 @@ type helloPayload struct {
 }
 
 type controller struct {
-	manager  *Manager
-	upgrader websocket.Upgrader
+	manager          *Manager
+	handshakeTimeout time.Duration
+	upgrader         websocket.Upgrader
 }
 
 func newController(manager *Manager) *controller {
 	return &controller{
-		manager: manager,
+		manager:          manager,
+		handshakeTimeout: handshakeTimeout,
 		upgrader: websocket.Upgrader{
 			Subprotocols: []string{websocketProtocol},
 			CheckOrigin:  func(*http.Request) bool { return true },
@@ -83,6 +87,10 @@ func (c *controller) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	conn.SetReadLimit(maxControlMessage)
+	if err := conn.SetReadDeadline(time.Now().Add(c.handshakeTimeout)); err != nil {
+		_ = conn.Close()
+		return
+	}
 
 	s := &session{
 		manager:        c.manager,
@@ -176,6 +184,9 @@ func (s *session) handle(msg controlMessage) error {
 
 	case "ubnt_avclient_paramAgreement":
 		if msg.InResponseTo == s.paramID && s.paramID != 0 {
+			if err := s.conn.SetReadDeadline(time.Time{}); err != nil {
+				return err
+			}
 			s.manager.addSession(s)
 			return nil
 		}
@@ -231,7 +242,13 @@ func (s *session) send(function string, payload any, responseExpected bool, inRe
 		return 0, err
 	}
 	log.Debug().Str("camera", s.mac).Str("function", function).Int64("message_id", msg.MessageID).Msg("[unifi-protect] control send")
-	return msg.MessageID, s.conn.WriteMessage(websocket.BinaryMessage, b)
+	if err = s.conn.SetWriteDeadline(time.Now().Add(controlWriteTimeout)); err == nil {
+		err = s.conn.WriteMessage(websocket.BinaryMessage, b)
+	}
+	if err != nil {
+		s.close()
+	}
+	return msg.MessageID, err
 }
 
 func (s *session) startStream(channel, destination, token string, audio bool) error {

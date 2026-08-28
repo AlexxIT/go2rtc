@@ -39,6 +39,27 @@ func TestControllerRejectsMalformedCameraMAC(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, recorder.Code)
 }
 
+func TestControllerClosesIncompleteHandshake(t *testing.T) {
+	m := newManager("", 7550, "test", "controller-id")
+	controller := newController(m)
+	controller.handshakeTimeout = 20 * time.Millisecond
+	server := httptest.NewServer(controller)
+	defer server.Close()
+
+	dialer := websocket.Dialer{Subprotocols: []string{websocketProtocol}}
+	header := http.Header{"camera-mac": []string{"02AABBCCDDEE"}}
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + websocketPath
+	ws, _, err := dialer.Dial(wsURL, header)
+	require.NoError(t, err)
+	defer ws.Close()
+
+	require.NoError(t, ws.SetReadDeadline(time.Now().Add(time.Second)))
+	started := time.Now()
+	_, _, err = ws.ReadMessage()
+	require.Error(t, err)
+	require.Less(t, time.Since(started), 500*time.Millisecond)
+}
+
 func connectCamera(t *testing.T, m *Manager) (*websocket.Conn, *httptest.Server) {
 	t.Helper()
 	server := httptest.NewServer(newController(m))
