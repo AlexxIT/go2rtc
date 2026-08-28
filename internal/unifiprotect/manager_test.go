@@ -257,6 +257,53 @@ func TestSettledCandidateHonorsDeadline(t *testing.T) {
 	require.ErrorContains(t, err, "timed out waiting for camera media")
 }
 
+func TestWaitProducerCapsProbeDeadline(t *testing.T) {
+	req := &streamRequest{
+		candidates: make(chan candidate, 1),
+		done:       make(chan struct{}),
+	}
+	server, client := net.Pipe()
+	defer server.Close()
+	defer client.Close()
+	conn := &deadlineConn{
+		Conn:      server,
+		deadlines: make(chan time.Time, 1),
+	}
+	req.candidates <- candidate{
+		conn: conn,
+		rd:   io.NopCloser(bytes.NewReader(nil)),
+	}
+	deadline := time.Now().Add(4 * time.Second)
+	done := make(chan struct{})
+	go func() {
+		_, _ = newManager("", 7550, "test", "controller-id").waitProducer(req, deadline)
+		close(done)
+	}()
+
+	select {
+	case got := <-conn.deadlines:
+		require.Equal(t, deadline, got)
+		req.close()
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for probe deadline")
+	}
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for producer")
+	}
+}
+
+type deadlineConn struct {
+	net.Conn
+	deadlines chan time.Time
+}
+
+func (c *deadlineConn) SetReadDeadline(deadline time.Time) error {
+	c.deadlines <- deadline
+	return c.Conn.SetReadDeadline(deadline)
+}
+
 func TestMediaRouteProbeLimit(t *testing.T) {
 	m := newManager("", 7550, "test", "controller-id")
 	m.mediaProbeLimit = 64

@@ -153,10 +153,18 @@ func TestProducerDropsMalformedAVCCFrame(t *testing.T) {
 }
 
 func TestProducerProbeBufferLimit(t *testing.T) {
-	p := &Producer{probeBytes: maxProbeBuffer - 1}
+	p := &Producer{probeBytes: maxProbeBuffer - probeTagOverhead - 1}
 	require.NoError(t, p.bufferProbeTag(&Tag{Data: []byte{1}}))
-	require.ErrorContains(t, p.bufferProbeTag(&Tag{Data: []byte{1}}), "probe exceeds")
+	require.ErrorContains(t, p.bufferProbeTag(&Tag{}), "probe exceeds")
 	require.Len(t, p.pending, 1)
+}
+
+func TestProducerProbeBufferCountsTagOverhead(t *testing.T) {
+	p := &Producer{probeBytes: maxProbeBuffer - 2*probeTagOverhead - 1}
+	require.NoError(t, p.bufferProbeTag(&Tag{}))
+	require.NoError(t, p.bufferProbeTag(&Tag{Data: []byte{1}}))
+	require.ErrorContains(t, p.bufferProbeTag(&Tag{}), "probe exceeds")
+	require.Len(t, p.pending, 2)
 }
 
 func TestProducerStopCallbackOnce(t *testing.T) {

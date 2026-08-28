@@ -248,7 +248,11 @@ func (m *Manager) waitProducer(req *streamRequest, deadline time.Time) (*unifipr
 			return nil, err
 		}
 
-		_ = selected.conn.SetReadDeadline(time.Now().Add(probeTimeout))
+		probeDeadline := time.Now().Add(probeTimeout)
+		if deadline.Before(probeDeadline) {
+			probeDeadline = deadline
+		}
+		_ = selected.conn.SetReadDeadline(probeDeadline)
 		prod, err := unifiprotect.Open(selected.rd, req.audioMode)
 		if err != nil {
 			lastErr = err

@@ -16,7 +16,10 @@ import (
 
 var opusConfig = []byte{0xcf, 0x00, 0x03, 0x02}
 
-const maxProbeBuffer = 16 * 1024 * 1024
+const (
+	maxProbeBuffer   = 16 * 1024 * 1024
+	probeTagOverhead = 64
+)
 
 type AudioMode byte
 
@@ -192,10 +195,14 @@ func (p *Producer) probe() error {
 }
 
 func (p *Producer) bufferProbeTag(tag *Tag) error {
-	if len(tag.Data) > maxProbeBuffer-p.probeBytes {
+	if len(tag.Data) > maxProbeBuffer-probeTagOverhead {
 		return fmt.Errorf("unifi-protect: probe exceeds %d bytes", maxProbeBuffer)
 	}
-	p.probeBytes += len(tag.Data)
+	cost := probeTagOverhead + len(tag.Data)
+	if p.probeBytes > maxProbeBuffer-cost {
+		return fmt.Errorf("unifi-protect: probe exceeds %d bytes", maxProbeBuffer)
+	}
+	p.probeBytes += cost
 	p.pending = append(p.pending, tag)
 	return nil
 }
