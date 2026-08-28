@@ -108,10 +108,10 @@ func TestManagerReleaseKeepsChannelActiveUntilStopSent(t *testing.T) {
 	s, err := m.waitSession("02AABBCCDDEE", time.Now().Add(time.Second))
 	require.NoError(t, err)
 	req := &streamRequest{
-		key:        streamKey{mac: "02AABBCCDDEE", channel: "video2"},
-		token:      "test-token",
-		candidates: make(chan candidate, 1),
-		done:       make(chan struct{}),
+		key:            streamKey{mac: "02AABBCCDDEE", channel: "video2"},
+		token:          "test-token",
+		candidates:     make(chan candidate, 1),
+		candidatesDone: make(chan struct{}),
 	}
 	m.mu.Lock()
 	m.active[req.key] = req
@@ -248,8 +248,8 @@ func TestManagerConcurrentSessionReplacement(t *testing.T) {
 
 func TestSettledCandidateHonorsDeadline(t *testing.T) {
 	req := &streamRequest{
-		candidates: make(chan candidate, 1),
-		done:       make(chan struct{}),
+		candidates:     make(chan candidate, 1),
+		candidatesDone: make(chan struct{}),
 	}
 	req.candidates <- candidate{rd: io.NopCloser(bytes.NewReader(nil))}
 
@@ -259,8 +259,8 @@ func TestSettledCandidateHonorsDeadline(t *testing.T) {
 
 func TestWaitProducerCapsProbeDeadline(t *testing.T) {
 	req := &streamRequest{
-		candidates: make(chan candidate, 1),
-		done:       make(chan struct{}),
+		candidates:     make(chan candidate, 1),
+		candidatesDone: make(chan struct{}),
 	}
 	server, client := net.Pipe()
 	defer server.Close()
@@ -283,7 +283,7 @@ func TestWaitProducerCapsProbeDeadline(t *testing.T) {
 	select {
 	case got := <-conn.deadlines:
 		require.Equal(t, deadline, got)
-		req.close()
+		req.retireCandidates()
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for probe deadline")
 	}
@@ -296,9 +296,9 @@ func TestWaitProducerCapsProbeDeadline(t *testing.T) {
 
 func TestWaitProducerRetiresLateCandidate(t *testing.T) {
 	req := &streamRequest{
-		token:      "test-token",
-		candidates: make(chan candidate, 1),
-		done:       make(chan struct{}),
+		token:          "test-token",
+		candidates:     make(chan candidate, 1),
+		candidatesDone: make(chan struct{}),
 	}
 	winnerServer, winnerClient := net.Pipe()
 	defer winnerServer.Close()
@@ -330,7 +330,7 @@ func TestWaitProducerRetiresLateCandidate(t *testing.T) {
 	defer duplicateServer.Close()
 	defer duplicateClient.Close()
 	require.NoError(t, duplicateClient.SetReadDeadline(time.Now().Add(time.Second)))
-	require.True(t, req.offer(candidate{conn: duplicateServer, rd: duplicateServer}))
+	require.True(t, req.offerCandidate(candidate{conn: duplicateServer, rd: duplicateServer}))
 	_, err := winnerClient.Write(syntheticMedia(req.token))
 	require.NoError(t, err)
 

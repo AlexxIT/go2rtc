@@ -1,7 +1,6 @@
 package unifiprotect
 
 import (
-	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -36,11 +35,14 @@ type streamRequest struct {
 	cameraIP  string
 	audioMode unifiprotect.AudioMode
 
-	candidates  chan candidate
-	done        chan struct{}
-	mu          sync.Mutex
-	closed      bool
-	releaseOnce sync.Once
+	// Lifecycle: pending -> probing -> committed -> released. Pending and
+	// probing requests accept media candidates. Committing retires candidates,
+	// while the request remains active until the producer is released.
+	candidates        chan candidate
+	candidatesDone    chan struct{}
+	mu                sync.Mutex
+	candidatesRetired bool
+	releaseOnce       sync.Once
 }
 
 type candidate struct {
@@ -201,12 +203,12 @@ func (m *Manager) open(source string) (core.Producer, error) {
 		}
 	}
 	req := &streamRequest{
-		key:        streamKey{mac: parsed.mac, channel: parsed.channel},
-		token:      token,
-		cameraIP:   s.cameraIP,
-		audioMode:  audioMode,
-		candidates: make(chan candidate, 1),
-		done:       make(chan struct{}),
+		key:            streamKey{mac: parsed.mac, channel: parsed.channel},
+		token:          token,
+		cameraIP:       s.cameraIP,
+		audioMode:      audioMode,
+		candidates:     make(chan candidate, 1),
+		candidatesDone: make(chan struct{}),
 	}
 
 	m.mu.Lock()
@@ -259,7 +261,7 @@ func (m *Manager) waitProducer(req *streamRequest, deadline time.Time) (*unifipr
 			continue
 		}
 		_ = selected.conn.SetReadDeadline(time.Time{})
-		req.close()
+		req.retireCandidates()
 
 		m.mu.Lock()
 		if m.pending[req.token] == req {
@@ -286,7 +288,7 @@ func (r *streamRequest) settledCandidate(deadline time.Time) (candidate, error) 
 	defer deadlineTimer.Stop()
 	select {
 	case selected = <-r.candidates:
-	case <-r.done:
+	case <-r.candidatesDone:
 		return selected, net.ErrClosed
 	case <-deadlineTimer.C:
 		return selected, errors.New("unifi-protect: timed out waiting for camera media")
@@ -305,7 +307,7 @@ func (r *streamRequest) settledCandidate(deadline time.Time) (candidate, error) 
 			settle.Reset(settleTime)
 		case <-settle.C:
 			return selected, nil
-		case <-r.done:
+		case <-r.candidatesDone:
 			_ = selected.rd.Close()
 			return candidate{}, net.ErrClosed
 		case <-deadlineTimer.C:
@@ -315,10 +317,10 @@ func (r *streamRequest) settledCandidate(deadline time.Time) (candidate, error) 
 	}
 }
 
-func (r *streamRequest) offer(c candidate) bool {
+func (r *streamRequest) offerCandidate(c candidate) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.closed {
+	if r.candidatesRetired {
 		return false
 	}
 	select {
@@ -330,14 +332,14 @@ func (r *streamRequest) offer(c candidate) bool {
 	return true
 }
 
-func (r *streamRequest) close() {
+func (r *streamRequest) retireCandidates() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.closed {
+	if r.candidatesRetired {
 		return
 	}
-	r.closed = true
-	close(r.done)
+	r.candidatesRetired = true
+	close(r.candidatesDone)
 	select {
 	case c := <-r.candidates:
 		_ = c.rd.Close()
@@ -347,7 +349,7 @@ func (r *streamRequest) close() {
 
 func (m *Manager) release(req *streamRequest, stop bool) {
 	req.releaseOnce.Do(func() {
-		req.close()
+		req.retireCandidates()
 
 		m.mu.Lock()
 		if m.active[req.key] != req {
@@ -372,76 +374,6 @@ func (m *Manager) release(req *streamRequest, stop bool) {
 		}
 		m.mu.Unlock()
 	})
-}
-
-func (m *Manager) serveMedia(ln net.Listener) {
-	for {
-		conn, err := ln.Accept()
-		if err != nil {
-			return
-		}
-		go m.handleMedia(conn)
-	}
-}
-
-func (m *Manager) handleMedia(conn net.Conn) {
-	log.Debug().Str("remote", conn.RemoteAddr().String()).Msg("[unifi-protect] media connection")
-	owned := true
-	defer func() {
-		if owned {
-			_ = conn.Close()
-		}
-	}()
-
-	_ = conn.SetReadDeadline(time.Now().Add(probeTimeout))
-	var prefix bytes.Buffer
-	limited := &io.LimitedReader{R: conn, N: m.mediaProbeLimit}
-	rd := unifiprotect.NewReader(io.TeeReader(limited, &prefix))
-
-	var token string
-	for i := 0; i < 8; i++ {
-		tag, err := rd.ReadTag()
-		if err != nil {
-			log.Debug().Err(err).Str("remote", conn.RemoteAddr().String()).Msg("[unifi-protect] media header")
-			return
-		}
-		metadata, ok, err := unifiprotect.ParseMetadata(tag)
-		if err != nil {
-			log.Debug().Err(err).Str("remote", conn.RemoteAddr().String()).Msg("[unifi-protect] media metadata")
-			return
-		}
-		if ok {
-			token = metadata.StreamName
-			break
-		}
-	}
-	if token == "" {
-		log.Debug().Str("remote", conn.RemoteAddr().String()).Msg("[unifi-protect] media stream name missing")
-		return
-	}
-
-	m.mu.Lock()
-	req := m.pending[token]
-	m.mu.Unlock()
-	if req == nil || req.cameraIP != remoteHost(conn.RemoteAddr().String()) {
-		log.Debug().Str("remote", conn.RemoteAddr().String()).Str("stream_name", token).Msg("[unifi-protect] unrouted media")
-		return
-	}
-
-	replay := &replayReadCloser{
-		Reader: io.MultiReader(bytes.NewReader(append([]byte(nil), prefix.Bytes()...)), conn),
-		Closer: conn,
-	}
-	if !req.offer(candidate{conn: conn, rd: replay}) {
-		return
-	}
-	log.Debug().Str("camera", req.key.mac).Str("channel", req.key.channel).Msg("[unifi-protect] routed media")
-	owned = false
-}
-
-type replayReadCloser struct {
-	io.Reader
-	io.Closer
 }
 
 func randomToken() (string, error) {
