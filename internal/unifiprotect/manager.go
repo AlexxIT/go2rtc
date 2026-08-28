@@ -35,10 +35,11 @@ type streamRequest struct {
 	cameraIP  string
 	audioMode unifiprotect.AudioMode
 
-	candidates chan candidate
-	done       chan struct{}
-	mu         sync.Mutex
-	closed     bool
+	candidates  chan candidate
+	done        chan struct{}
+	mu          sync.Mutex
+	closed      bool
+	releaseOnce sync.Once
 }
 
 type candidate struct {
@@ -322,25 +323,32 @@ func (r *streamRequest) close() {
 }
 
 func (m *Manager) release(req *streamRequest, stop bool) {
-	req.close()
+	req.releaseOnce.Do(func() {
+		req.close()
 
-	m.mu.Lock()
-	if m.active[req.key] != req {
-		m.mu.Unlock()
-		return
-	}
-	delete(m.active, req.key)
-	if m.pending[req.token] == req {
-		delete(m.pending, req.token)
-	}
-	s := m.sessions[req.key.mac]
-	m.mu.Unlock()
-
-	if stop && s != nil {
-		if err := s.stopStreams([]string{req.key.channel}); err != nil {
-			log.Debug().Err(err).Str("camera", req.key.mac).Str("channel", req.key.channel).Msg("[unifi-protect] stop stream")
+		m.mu.Lock()
+		if m.active[req.key] != req {
+			m.mu.Unlock()
+			return
 		}
-	}
+		if m.pending[req.token] == req {
+			delete(m.pending, req.token)
+		}
+		s := m.sessions[req.key.mac]
+		m.mu.Unlock()
+
+		if stop && s != nil {
+			if err := s.stopStreams([]string{req.key.channel}); err != nil {
+				log.Debug().Err(err).Str("camera", req.key.mac).Str("channel", req.key.channel).Msg("[unifi-protect] stop stream")
+			}
+		}
+
+		m.mu.Lock()
+		if m.active[req.key] == req {
+			delete(m.active, req.key)
+		}
+		m.mu.Unlock()
+	})
 }
 
 func (m *Manager) serveMedia(ln net.Listener) {

@@ -96,6 +96,65 @@ func TestManagerSyntheticCamera(t *testing.T) {
 	require.Equal(t, []string{"file:///dev/null"}, stopped2.Destinations)
 }
 
+func TestManagerReleaseKeepsChannelActiveUntilStopSent(t *testing.T) {
+	m := newManager("", 7550, "test", "controller-id")
+	ws, server := connectCamera(t, m)
+	defer server.Close()
+	defer ws.Close()
+
+	s, err := m.waitSession("02AABBCCDDEE", time.Now().Add(time.Second))
+	require.NoError(t, err)
+	req := &streamRequest{
+		key:        streamKey{mac: "02AABBCCDDEE", channel: "video2"},
+		token:      "test-token",
+		candidates: make(chan candidate, 1),
+		done:       make(chan struct{}),
+	}
+	m.mu.Lock()
+	m.active[req.key] = req
+	m.pending[req.token] = req
+	m.mu.Unlock()
+
+	s.writeMu.Lock()
+	locked := true
+	defer func() {
+		if locked {
+			s.writeMu.Unlock()
+		}
+	}()
+
+	released := make(chan struct{})
+	go func() {
+		m.release(req, true)
+		close(released)
+	}()
+
+	require.Eventually(t, func() bool {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		return m.pending[req.token] == nil
+	}, time.Second, time.Millisecond)
+
+	m.mu.Lock()
+	require.Same(t, req, m.active[req.key])
+	m.mu.Unlock()
+
+	s.writeMu.Unlock()
+	locked = false
+	stop := readController(t, ws)
+	stopped := decodeVideoCommand(t, stop, "video2")
+	require.Equal(t, []string{"file:///dev/null"}, stopped.Destinations)
+
+	select {
+	case <-released:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for release")
+	}
+	m.mu.Lock()
+	require.Nil(t, m.active[req.key])
+	m.mu.Unlock()
+}
+
 func TestLoadOrCreateCertificate(t *testing.T) {
 	dir := t.TempDir()
 	certPath := filepath.Join(dir, defaultTLSCert)
