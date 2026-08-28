@@ -255,6 +255,37 @@ func TestSettledCandidateHonorsDeadline(t *testing.T) {
 	require.ErrorContains(t, err, "timed out waiting for camera media")
 }
 
+func TestMediaRouteProbeLimit(t *testing.T) {
+	m := newManager("", 7550, "test", "controller-id")
+	m.mediaProbeLimit = 64
+	server, client := net.Pipe()
+	done := make(chan struct{})
+	go func() {
+		m.handleMedia(server)
+		close(done)
+	}()
+
+	type writeResult struct {
+		n   int
+		err error
+	}
+	written := make(chan writeResult, 1)
+	go func() {
+		n, err := client.Write(bytes.Repeat([]byte{0}, 128))
+		written <- writeResult{n: n, err: err}
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for media probe")
+	}
+	result := <-written
+	require.LessOrEqual(t, result.n, int(m.mediaProbeLimit))
+	require.Error(t, result.err)
+	require.NoError(t, client.Close())
+}
+
 func TestLoadOrCreateCertificate(t *testing.T) {
 	dir := t.TempDir()
 	certPath := filepath.Join(dir, defaultTLSCert)

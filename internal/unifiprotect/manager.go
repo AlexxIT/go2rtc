@@ -17,9 +17,10 @@ import (
 )
 
 const (
-	sourceTimeout = 25 * time.Second
-	probeTimeout  = 5 * time.Second
-	settleTime    = 800 * time.Millisecond
+	sourceTimeout   = 25 * time.Second
+	probeTimeout    = 5 * time.Second
+	settleTime      = 800 * time.Millisecond
+	mediaProbeLimit = 8 * 1024 * 1024
 )
 
 var cameraChannels = [...]string{"video1", "video2", "video3"}
@@ -59,6 +60,7 @@ type Manager struct {
 	mediaPort         int
 	controllerUUID    string
 	controllerVersion string
+	mediaProbeLimit   int64
 }
 
 func newManager(mediaHost string, mediaPort int, controllerVersion, controllerUUID string) *Manager {
@@ -71,6 +73,7 @@ func newManager(mediaHost string, mediaPort int, controllerVersion, controllerUU
 		mediaPort:         mediaPort,
 		controllerUUID:    controllerUUID,
 		controllerVersion: controllerVersion,
+		mediaProbeLimit:   mediaProbeLimit,
 	}
 }
 
@@ -387,7 +390,8 @@ func (m *Manager) handleMedia(conn net.Conn) {
 
 	_ = conn.SetReadDeadline(time.Now().Add(probeTimeout))
 	var prefix bytes.Buffer
-	rd := unifiprotect.NewReader(io.TeeReader(conn, &prefix))
+	limited := &io.LimitedReader{R: conn, N: m.mediaProbeLimit}
+	rd := unifiprotect.NewReader(io.TeeReader(limited, &prefix))
 
 	var token string
 	for i := 0; i < 8; i++ {

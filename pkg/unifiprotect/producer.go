@@ -16,6 +16,8 @@ import (
 
 var opusConfig = []byte{0xcf, 0x00, 0x03, 0x02}
 
+const maxProbeBuffer = 16 * 1024 * 1024
+
 type AudioMode byte
 
 const (
@@ -27,10 +29,11 @@ const (
 type Producer struct {
 	core.Connection
 
-	rd        *Reader
-	pending   []*Tag
-	audioMode AudioMode
-	audioType byte
+	rd         *Reader
+	pending    []*Tag
+	probeBytes int
+	audioMode  AudioMode
+	audioType  byte
 
 	video *core.Receiver
 	audio *core.Receiver
@@ -84,6 +87,7 @@ func (p *Producer) Start() error {
 		p.writeTag(tag)
 	}
 	p.pending = nil
+	p.probeBytes = 0
 
 	for {
 		tag, err := p.rd.ReadTag()
@@ -118,7 +122,9 @@ func (p *Producer) probe() error {
 			}
 			break
 		}
-		p.pending = append(p.pending, tag)
+		if err := p.bufferProbeTag(tag); err != nil {
+			return err
+		}
 
 		switch tag.Type {
 		case TagVideo:
@@ -182,6 +188,15 @@ func (p *Producer) probe() error {
 		})
 	}
 
+	return nil
+}
+
+func (p *Producer) bufferProbeTag(tag *Tag) error {
+	if len(tag.Data) > maxProbeBuffer-p.probeBytes {
+		return fmt.Errorf("unifi-protect: probe exceeds %d bytes", maxProbeBuffer)
+	}
+	p.probeBytes += len(tag.Data)
+	p.pending = append(p.pending, tag)
 	return nil
 }
 

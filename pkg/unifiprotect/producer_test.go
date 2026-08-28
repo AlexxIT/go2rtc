@@ -106,6 +106,13 @@ func TestValidAVCDecoderConfig(t *testing.T) {
 	require.True(t, validAVCDecoderConfig(h264.EncodeConfig(sps, pps)))
 }
 
+func TestProducerProbeBufferLimit(t *testing.T) {
+	p := &Producer{probeBytes: maxProbeBuffer - 1}
+	require.NoError(t, p.bufferProbeTag(&Tag{Data: []byte{1}}))
+	require.ErrorContains(t, p.bufferProbeTag(&Tag{Data: []byte{1}}), "probe exceeds")
+	require.Len(t, p.pending, 1)
+}
+
 func TestProducerStopCallbackOnce(t *testing.T) {
 	sps := []byte{0x67, 0x42, 0, 0x1f, 0xe5, 0x88}
 	pps := []byte{0x68, 0xce, 0x38, 0x80}
