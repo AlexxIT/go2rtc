@@ -43,7 +43,9 @@ func TestManagerSyntheticCamera(t *testing.T) {
 	require.Equal(t, "ChangeVideoSettings", start.FunctionName)
 	command := decodeVideoCommand(t, start, "video2")
 	require.True(t, command.Parameters.SuppressAudio)
-	require.False(t, command.Parameters.WithOpus)
+	require.True(t, command.Parameters.WithOpus)
+	require.NotNil(t, command.Parameters.OpusSampleRate)
+	require.Equal(t, 16000, *command.Parameters.OpusSampleRate)
 	require.Len(t, command.Destinations, 1)
 	require.NotEmpty(t, command.Parameters.StreamName)
 
@@ -327,13 +329,9 @@ func TestManagerSyntheticCameraAACFallback(t *testing.T) {
 
 	m := newManager("", mediaListener.Addr().(*net.TCPAddr).Port, "test", "controller-id")
 	go m.serveMedia(mediaListener)
-	ws, server := connectCamera(t, m)
+	ws, server := connectCameraFeatures(t, m, cameraFeatures{AudioCodecs: []string{"aac"}})
 	defer server.Close()
 	defer ws.Close()
-
-	s, err := m.waitSession("02AABBCCDDEE", time.Now().Add(time.Second))
-	require.NoError(t, err)
-	s.opusRate = 0
 
 	type openResult struct {
 		producer core.Producer
@@ -349,6 +347,7 @@ func TestManagerSyntheticCameraAACFallback(t *testing.T) {
 	command := decodeVideoCommand(t, start, "video1")
 	require.False(t, command.Parameters.SuppressAudio)
 	require.False(t, command.Parameters.WithOpus)
+	require.Nil(t, command.Parameters.OpusSampleRate)
 
 	media, err := net.Dial("tcp", mediaListener.Addr().String())
 	require.NoError(t, err)
@@ -373,9 +372,10 @@ func TestManagerSyntheticCameraAACFallback(t *testing.T) {
 type videoCommand struct {
 	Destinations []string `json:"destinations"`
 	Parameters   struct {
-		StreamName    string `json:"streamName"`
-		SuppressAudio bool   `json:"suppressAudio"`
-		WithOpus      bool   `json:"withOpus"`
+		StreamName     string `json:"streamName"`
+		SuppressAudio  bool   `json:"suppressAudio"`
+		WithOpus       bool   `json:"withOpus"`
+		OpusSampleRate *int   `json:"opusSampleRate"`
 	} `json:"parameters"`
 }
 

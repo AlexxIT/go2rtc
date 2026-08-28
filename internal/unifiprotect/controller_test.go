@@ -24,6 +24,79 @@ func TestControllerHandshake(t *testing.T) {
 	require.Equal(t, "127.0.0.1", s.cameraIP)
 }
 
+func TestStartStreamPreservesNegotiatedAudioProfile(t *testing.T) {
+	m := newManager("", 7550, "test", "controller-id")
+	ws, server := connectCamera(t, m)
+	defer server.Close()
+	defer ws.Close()
+
+	s, err := m.waitSession("02AABBCCDDEE", time.Now().Add(time.Second))
+	require.NoError(t, err)
+
+	require.NoError(t, s.startStream("video1", "tcp://127.0.0.1:7550", "muted", false))
+	muted := decodeVideoCommand(t, readController(t, ws), "video1")
+	require.True(t, muted.Parameters.SuppressAudio)
+	require.True(t, muted.Parameters.WithOpus)
+	require.NotNil(t, muted.Parameters.OpusSampleRate)
+	require.Equal(t, 16000, *muted.Parameters.OpusSampleRate)
+
+	require.NoError(t, s.startStream("video1", "tcp://127.0.0.1:7550", "audio", true))
+	withAudio := decodeVideoCommand(t, readController(t, ws), "video1")
+	require.False(t, withAudio.Parameters.SuppressAudio)
+	require.True(t, withAudio.Parameters.WithOpus)
+	require.NotNil(t, withAudio.Parameters.OpusSampleRate)
+	require.Equal(t, 16000, *withAudio.Parameters.OpusSampleRate)
+}
+
+func TestStartStreamAACFallback(t *testing.T) {
+	m := newManager("", 7550, "test", "controller-id")
+	ws, server := connectCameraFeatures(t, m, cameraFeatures{AudioCodecs: []string{"aac"}})
+	defer server.Close()
+	defer ws.Close()
+
+	s, err := m.waitSession("02AABBCCDDEE", time.Now().Add(time.Second))
+	require.NoError(t, err)
+	require.NoError(t, s.startStream("video1", "tcp://127.0.0.1:7550", "audio", true))
+
+	command := decodeVideoCommand(t, readController(t, ws), "video1")
+	require.False(t, command.Parameters.SuppressAudio)
+	require.False(t, command.Parameters.WithOpus)
+	require.Nil(t, command.Parameters.OpusSampleRate)
+}
+
+func TestControllerIgnoresHelloCapabilitiesAfterReady(t *testing.T) {
+	m := newManager("", 7550, "test", "controller-id")
+	ws, server := connectCamera(t, m)
+	defer server.Close()
+	defer ws.Close()
+
+	s, err := m.waitSession("02AABBCCDDEE", time.Now().Add(time.Second))
+	require.NoError(t, err)
+
+	hello, err := json.Marshal(helloPayload{
+		ProtocolVersion: 67,
+		Features: cameraFeatures{
+			AudioCodecs:    []string{"aac", "opus"},
+			OpusSampleRate: []int{48000},
+		},
+	})
+	require.NoError(t, err)
+	sendCamera(t, ws, controlMessage{
+		From:         "ubnt_avclient",
+		FunctionName: "ubnt_avclient_hello",
+		MessageID:    4,
+		Payload:      hello,
+		To:           "UniFiVideo",
+	})
+
+	response := readController(t, ws)
+	require.Equal(t, "ubnt_avclient_hello", response.FunctionName)
+	require.Equal(t, int64(4), response.InResponseTo)
+	agreement := readController(t, ws)
+	require.Equal(t, "ubnt_avclient_paramAgreement", agreement.FunctionName)
+	require.Equal(t, 16000, s.opusRate)
+}
+
 func TestControllerRejectsMalformedCameraMAC(t *testing.T) {
 	m := newManager("", 7550, "test", "controller-id")
 	request := httptest.NewRequest(http.MethodGet, websocketPath, nil)
@@ -61,6 +134,13 @@ func TestControllerClosesIncompleteHandshake(t *testing.T) {
 }
 
 func connectCamera(t *testing.T, m *Manager) (*websocket.Conn, *httptest.Server) {
+	return connectCameraFeatures(t, m, cameraFeatures{
+		AudioCodecs:    []string{"aac", "opus"},
+		OpusSampleRate: []int{16000},
+	})
+}
+
+func connectCameraFeatures(t *testing.T, m *Manager, features cameraFeatures) (*websocket.Conn, *httptest.Server) {
 	t.Helper()
 	server := httptest.NewServer(newController(m))
 
@@ -83,12 +163,9 @@ func connectCamera(t *testing.T, m *Manager) (*websocket.Conn, *httptest.Server)
 	require.Equal(t, "ubnt_avclient_timeSync", timeSync.FunctionName)
 	require.Equal(t, int64(1), timeSync.InResponseTo)
 
-	hello, err := json.Marshal(map[string]any{
-		"protocolVersion": 67,
-		"features": map[string]any{
-			"audioCodecs":     []string{"aac", "opus"},
-			"opusSampleRates": []int{16000},
-		},
+	hello, err := json.Marshal(helloPayload{
+		ProtocolVersion: 67,
+		Features:        features,
 	})
 	require.NoError(t, err)
 	sendCamera(t, ws, controlMessage{

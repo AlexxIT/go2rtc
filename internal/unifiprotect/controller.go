@@ -154,7 +154,11 @@ func (s *session) handle(msg controlMessage) error {
 		if err := json.Unmarshal(msg.Payload, &hello); err != nil {
 			return err
 		}
-		s.opusRate = preferredOpusRate(hello.Features)
+		s.manager.mu.Lock()
+		if !s.ready {
+			s.opusRate = preferredOpusRate(hello.Features)
+		}
+		s.manager.mu.Unlock()
 
 		if err := s.respond(msg, map[string]any{
 			"protocolVersion":   hello.ProtocolVersion,
@@ -256,9 +260,9 @@ func (s *session) startStream(channel, destination, token string, audio bool) er
 		"streamName":    token,
 		"suppressAudio": !audio,
 		"suppressVideo": false,
-		"withOpus":      audio && s.opusRate != 0,
+		"withOpus":      s.opusRate != 0,
 	}
-	if audio && s.opusRate != 0 {
+	if s.opusRate != 0 {
 		parameters["opusSampleRate"] = s.opusRate
 	}
 
