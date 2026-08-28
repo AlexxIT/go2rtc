@@ -5,6 +5,26 @@ without a UniFi Protect console or NVR. It implements only the controller
 handshake and pushed-media path required for streaming. It has been tested with
 a G5 Flex running firmware `4.70.37`.
 
+## Architecture
+
+The internal module owns controller state and network listeners; the package
+under `pkg/unifiprotect` handles the media format independently of configuration
+and session management.
+
+| Component | Responsibility |
+| --- | --- |
+| [`unifiprotect.go`](unifiprotect.go) | Module setup, TLS identity, and listeners |
+| [`source.go`](source.go) | Source URL and camera/channel validation |
+| [`controller.go`](controller.go) | Camera WebSocket handshake and stream commands |
+| [`manager.go`](manager.go) | Camera sessions and stream-request lifecycle |
+| [`media.go`](media.go) | Incoming TCP routing by request token |
+| [`pkg/unifiprotect/flv.go`](../../pkg/unifiprotect/flv.go) | Extended-FLV framing and metadata |
+| [`pkg/unifiprotect/producer.go`](../../pkg/unifiprotect/producer.go) | Codec probing and native go2rtc tracks |
+
+The camera keeps the control WebSocket open. When a source gains a consumer,
+the manager requests its channel, routes the resulting TCP push by token, and
+hands the stream to the producer as H.264 with Opus or AAC.
+
 ## Configuration
 
 ```yaml
