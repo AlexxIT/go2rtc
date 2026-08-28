@@ -86,6 +86,9 @@ func (m *Manager) addSession(s *session) {
 		m.mu.Unlock()
 		return
 	}
+	// Install the replacement before closing the old session. removeSession
+	// checks identity, so a late close can't remove the new session. Keep it
+	// unready until channels left behind by the previous connection are stopped.
 	s.ready = false
 	m.sessions[s.mac] = s
 	active := make(map[string]bool)
@@ -261,6 +264,8 @@ func (m *Manager) waitProducer(req *streamRequest, deadline time.Time) (*unifipr
 			continue
 		}
 		_ = selected.conn.SetReadDeadline(time.Time{})
+		// Open owns the selected connection now. Retiring candidate intake closes
+		// late duplicate pushes without touching the producer transport.
 		req.retireCandidates()
 
 		m.mu.Lock()
@@ -294,6 +299,8 @@ func (r *streamRequest) settledCandidate(deadline time.Time) (candidate, error) 
 		return selected, errors.New("unifi-protect: timed out waiting for camera media")
 	}
 
+	// A camera may open several connections for one request. Let the burst
+	// settle and keep the newest attempt, closing the ones it supersedes.
 	settle := time.NewTimer(settleTime)
 	defer settle.Stop()
 	for {
@@ -362,6 +369,8 @@ func (m *Manager) release(req *streamRequest, stop bool) {
 		s := m.sessions[req.key.mac]
 		m.mu.Unlock()
 
+		// Keep the request active until the stop command completes. Otherwise a
+		// replacement could start the same channel while its old push still runs.
 		if stop && s != nil {
 			if err := s.stopStreams([]string{req.key.channel}); err != nil {
 				log.Debug().Err(err).Str("camera", req.key.mac).Str("channel", req.key.channel).Msg("[unifi-protect] stop stream")

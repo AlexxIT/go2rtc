@@ -63,6 +63,8 @@ func (m *Manager) handleMedia(conn net.Conn) {
 		return
 	}
 
+	// The routing metadata is part of the media stream. Replay everything read
+	// while finding its token so the producer receives the complete FLV input.
 	replay := &replayReadCloser{
 		Reader: io.MultiReader(bytes.NewReader(append([]byte(nil), prefix.Bytes()...)), conn),
 		Closer: conn,

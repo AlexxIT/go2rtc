@@ -154,6 +154,8 @@ func (s *session) handle(msg controlMessage) error {
 		if err := json.Unmarshal(msg.Payload, &hello); err != nil {
 			return err
 		}
+		// Some cameras repeat hello on an established connection. Capabilities are
+		// immutable once ready so active streams keep the profile they negotiated.
 		s.manager.mu.Lock()
 		if !s.ready {
 			s.opusRate = preferredOpusRate(hello.Features)
@@ -256,6 +258,8 @@ func (s *session) send(function string, payload any, responseExpected bool, inRe
 }
 
 func (s *session) startStream(channel, destination, token string, audio bool) error {
+	// withOpus is the negotiated serializer profile, not a per-destination mute.
+	// suppressAudio controls whether this particular stream includes audio.
 	parameters := map[string]any{
 		"streamName":    token,
 		"suppressAudio": !audio,
