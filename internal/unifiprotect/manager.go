@@ -259,6 +259,7 @@ func (m *Manager) waitProducer(req *streamRequest, deadline time.Time) (*unifipr
 			continue
 		}
 		_ = selected.conn.SetReadDeadline(time.Time{})
+		req.close()
 
 		m.mu.Lock()
 		if m.pending[req.token] == req {

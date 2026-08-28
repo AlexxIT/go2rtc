@@ -294,6 +294,69 @@ func TestWaitProducerCapsProbeDeadline(t *testing.T) {
 	}
 }
 
+func TestWaitProducerRetiresLateCandidate(t *testing.T) {
+	req := &streamRequest{
+		token:      "test-token",
+		candidates: make(chan candidate, 1),
+		done:       make(chan struct{}),
+	}
+	winnerServer, winnerClient := net.Pipe()
+	defer winnerServer.Close()
+	defer winnerClient.Close()
+	winner := &deadlineConn{
+		Conn:      winnerServer,
+		deadlines: make(chan time.Time, 1),
+	}
+	req.candidates <- candidate{conn: winner, rd: winner}
+
+	m := newManager("", 7550, "test", "controller-id")
+	m.pending[req.token] = req
+	type result struct {
+		producer core.Producer
+		err      error
+	}
+	done := make(chan result, 1)
+	go func() {
+		producer, err := m.waitProducer(req, time.Now().Add(5*time.Second))
+		done <- result{producer: producer, err: err}
+	}()
+
+	select {
+	case <-winner.deadlines:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for media probe")
+	}
+	duplicateServer, duplicateClient := net.Pipe()
+	defer duplicateServer.Close()
+	defer duplicateClient.Close()
+	require.NoError(t, duplicateClient.SetReadDeadline(time.Now().Add(time.Second)))
+	require.True(t, req.offer(candidate{conn: duplicateServer, rd: duplicateServer}))
+	_, err := winnerClient.Write(syntheticMedia(req.token))
+	require.NoError(t, err)
+
+	var producer core.Producer
+	select {
+	case got := <-done:
+		require.NoError(t, got.err)
+		producer = got.producer
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for producer")
+	}
+
+	_, err = duplicateClient.Read(make([]byte, 1))
+	require.ErrorIs(t, err, io.EOF)
+
+	require.NoError(t, winnerClient.SetReadDeadline(time.Now().Add(20*time.Millisecond)))
+	_, err = winnerClient.Read(make([]byte, 1))
+	var netErr net.Error
+	require.ErrorAs(t, err, &netErr)
+	require.True(t, netErr.Timeout())
+	require.NoError(t, winnerClient.SetReadDeadline(time.Time{}))
+	require.NoError(t, producer.Stop())
+	_, err = winnerClient.Read(make([]byte, 1))
+	require.ErrorIs(t, err, io.EOF)
+}
+
 type deadlineConn struct {
 	net.Conn
 	deadlines chan time.Time
