@@ -77,18 +77,29 @@ func newManager(mediaHost string, mediaPort int, controllerVersion, controllerUU
 func (m *Manager) addSession(s *session) {
 	m.mu.Lock()
 	old := m.sessions[s.mac]
-	delete(m.sessions, s.mac)
+	if old == s && s.ready {
+		m.mu.Unlock()
+		return
+	}
+	s.ready = false
+	m.sessions[s.mac] = s
 	active := make(map[string]bool)
 	for key := range m.active {
 		if key.mac == s.mac {
 			active[key.channel] = true
 		}
 	}
-	m.signalLocked()
 	m.mu.Unlock()
 
 	if old != nil && old != s {
 		old.close()
+	}
+
+	m.mu.Lock()
+	current := m.sessions[s.mac] == s
+	m.mu.Unlock()
+	if !current {
+		return
 	}
 
 	var inactive []string
@@ -102,7 +113,11 @@ func (m *Manager) addSession(s *session) {
 	}
 
 	m.mu.Lock()
-	m.sessions[s.mac] = s
+	if m.sessions[s.mac] != s {
+		m.mu.Unlock()
+		return
+	}
+	s.ready = true
 	m.signalLocked()
 	m.mu.Unlock()
 
@@ -126,7 +141,7 @@ func (m *Manager) signalLocked() {
 func (m *Manager) waitSession(mac string, deadline time.Time) (*session, error) {
 	for {
 		m.mu.Lock()
-		if s := m.sessions[mac]; s != nil {
+		if s := m.sessions[mac]; s != nil && s.ready {
 			m.mu.Unlock()
 			return s, nil
 		}

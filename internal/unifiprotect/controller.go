@@ -108,6 +108,7 @@ type session struct {
 	cameraIP       string
 	controllerHost string
 	opusRate       int
+	ready          bool // guarded by manager.mu
 
 	writeMu       sync.Mutex
 	nextMessageID int64

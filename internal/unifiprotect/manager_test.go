@@ -155,6 +155,94 @@ func TestManagerReleaseKeepsChannelActiveUntilStopSent(t *testing.T) {
 	m.mu.Unlock()
 }
 
+func TestManagerConcurrentSessionReplacement(t *testing.T) {
+	m := newManager("", 7550, "test", "controller-id")
+	newBlockedSession := func() *session {
+		s := &session{
+			manager:  m,
+			mac:      "02AABBCCDDEE",
+			cameraIP: "127.0.0.1",
+			done:     make(chan struct{}),
+		}
+		// The test closes done before releasing writeMu, so stopStreams exits
+		// before it needs a WebSocket connection.
+		s.closeOnce.Do(func() {})
+		s.writeMu.Lock()
+		return s
+	}
+
+	first := newBlockedSession()
+	second := newBlockedSession()
+	firstLocked, secondLocked := true, true
+	firstClosed, secondClosed := false, false
+	defer func() {
+		if !firstClosed {
+			close(first.done)
+		}
+		if !secondClosed {
+			close(second.done)
+		}
+		if firstLocked {
+			first.writeMu.Unlock()
+		}
+		if secondLocked {
+			second.writeMu.Unlock()
+		}
+	}()
+
+	firstDone := make(chan struct{})
+	go func() {
+		m.addSession(first)
+		close(firstDone)
+	}()
+	require.Eventually(t, func() bool {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		return m.sessions[first.mac] == first && !first.ready
+	}, time.Second, time.Millisecond)
+
+	secondDone := make(chan struct{})
+	go func() {
+		m.addSession(second)
+		close(secondDone)
+	}()
+	require.Eventually(t, func() bool {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		return m.sessions[second.mac] == second && !second.ready
+	}, time.Second, time.Millisecond)
+
+	close(first.done)
+	firstClosed = true
+	first.writeMu.Unlock()
+	firstLocked = false
+	select {
+	case <-firstDone:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for displaced session")
+	}
+
+	m.mu.Lock()
+	require.Same(t, second, m.sessions[second.mac])
+	require.False(t, second.ready)
+	m.mu.Unlock()
+
+	close(second.done)
+	secondClosed = true
+	second.writeMu.Unlock()
+	secondLocked = false
+	select {
+	case <-secondDone:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for current session")
+	}
+
+	m.mu.Lock()
+	require.Same(t, second, m.sessions[second.mac])
+	require.True(t, second.ready)
+	m.mu.Unlock()
+}
+
 func TestLoadOrCreateCertificate(t *testing.T) {
 	dir := t.TempDir()
 	certPath := filepath.Join(dir, defaultTLSCert)
