@@ -71,25 +71,39 @@ func Init() {
 		return
 	}
 
-	mediaListener, err := net.Listen("tcp", cfg.Mod.MediaListen)
-	if err != nil {
-		log.Error().Err(err).Msg("[unifi-protect] media listen")
-		return
+	var controlListener net.Listener
+	if cfg.Mod.Listen == cfg.Mod.MediaListen {
+		listener, err := net.Listen("tcp", cfg.Mod.Listen)
+		if err != nil {
+			log.Error().Err(err).Msg("[unifi-protect] shared listen")
+			return
+		}
+		mediaPort := listener.Addr().(*net.TCPAddr).Port
+		manager = newManager(cfg.Mod.MediaHost, mediaPort, app.Version, certificateUUID(cert))
+		shared := newSharedListener(listener)
+		controlListener = shared
+		log.Info().Str("addr", listener.Addr().String()).Msg("[unifi-protect] shared listen")
+		go shared.serve(manager)
+	} else {
+		mediaListener, err := net.Listen("tcp", cfg.Mod.MediaListen)
+		if err != nil {
+			log.Error().Err(err).Msg("[unifi-protect] media listen")
+			return
+		}
+		listener, err := net.Listen("tcp", cfg.Mod.Listen)
+		if err != nil {
+			_ = mediaListener.Close()
+			log.Error().Err(err).Msg("[unifi-protect] control listen")
+			return
+		}
+		controlListener = listener
+		mediaPort := mediaListener.Addr().(*net.TCPAddr).Port
+		manager = newManager(cfg.Mod.MediaHost, mediaPort, app.Version, certificateUUID(cert))
+		log.Info().Str("addr", controlListener.Addr().String()).Msg("[unifi-protect] control listen")
+		log.Info().Str("addr", mediaListener.Addr().String()).Msg("[unifi-protect] media listen")
+		go manager.serveMedia(mediaListener)
 	}
-	controlListener, err := net.Listen("tcp", cfg.Mod.Listen)
-	if err != nil {
-		_ = mediaListener.Close()
-		log.Error().Err(err).Msg("[unifi-protect] control listen")
-		return
-	}
 
-	mediaPort := mediaListener.Addr().(*net.TCPAddr).Port
-	manager = newManager(cfg.Mod.MediaHost, mediaPort, app.Version, certificateUUID(cert))
-
-	log.Info().Str("addr", controlListener.Addr().String()).Msg("[unifi-protect] control listen")
-	log.Info().Str("addr", mediaListener.Addr().String()).Msg("[unifi-protect] media listen")
-
-	go manager.serveMedia(mediaListener)
 	go func() {
 		server := &http.Server{
 			Handler:           newController(manager),

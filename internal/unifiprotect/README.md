@@ -18,6 +18,7 @@ and session management.
 | [`controller.go`](controller.go) | Camera WebSocket handshake and stream commands |
 | [`manager.go`](manager.go) | Camera sessions and stream-request lifecycle |
 | [`media.go`](media.go) | Incoming TCP routing by request token |
+| [`shared_listener.go`](shared_listener.go) | Optional control/media connection routing on one port |
 | [`pkg/unifiprotect/flv.go`](../../pkg/unifiprotect/flv.go) | Extended-FLV framing and metadata |
 | [`pkg/unifiprotect/producer.go`](../../pkg/unifiprotect/producer.go) | Codec probing and native go2rtc tracks |
 
@@ -44,8 +45,8 @@ example address; replace it with the camera's MAC. `channel` defaults to
 `video1`; supported values are `video1`, `video2`, and `video3`. Audio is enabled
 by default and can be disabled per source with `audio=0`.
 
-All cameras and channels share the two listeners. The WebSocket handshake uses
-the TLS listener on `7442`; pushed media uses plain TCP on `7550`. Both ports
+All cameras and channels share the configured listeners. The WebSocket
+handshake uses TLS on `7442`; pushed media uses plain TCP on `7550`. Both ports
 must be reachable from the camera. If the host from the camera's WebSocket
 request is not a reachable media address, set it explicitly:
 
@@ -55,6 +56,19 @@ unifi_protect:
   media_listen: ":7550"
   media_host: "192.168.1.10"
 ```
+
+Control and media can instead share one port by setting both listen addresses
+to the same value:
+
+```yaml
+unifi_protect:
+  listen: ":7442"
+  media_listen: ":7442"
+```
+
+The shared listener routes TLS handshakes to the controller and all other
+connections to media ingest. This is useful when a container or firewall can
+expose only one incoming TCP port.
 
 ## Camera setup
 
