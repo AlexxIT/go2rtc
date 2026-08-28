@@ -640,16 +640,12 @@ func (s *Server) SetCharacteristic(conn net.Conn, aid uint8, iid uint64, value a
 					Uint32("prebuffer_ms", sel.GeneralConfig.PrebufferLength).
 					Uint64("trigger", sel.GeneralConfig.EventTriggerOptions).
 					Uint32("fragment_ms", sel.GeneralConfig.MediaContainerConfigurations.MediaContainerParameters.FragmentLength)
-				for _, cc := range sel.VideoConfig.CodecConfigs {
-					e = e.Interface("video", map[string]any{
-						"profile": cc.CodecParams.ProfileID, "level": cc.CodecParams.Level,
-						"bitrate": cc.CodecParams.Bitrate, "iframe_ms": cc.CodecParams.IFrameInterval,
-						"attrs": cc.CodecAttrs,
-					})
-				}
-				for _, ac := range sel.AudioConfig.CodecConfigs {
-					e = e.Interface("audio", map[string]any{"codec": ac.CodecType, "params": ac.CodecParams})
-				}
+				e = e.Interface("video", map[string]any{
+					"profile": sel.VideoConfig.CodecParams.ProfileID, "level": sel.VideoConfig.CodecParams.Level,
+					"bitrate": sel.VideoConfig.CodecParams.Bitrate, "iframe_ms": sel.VideoConfig.CodecParams.IFrameInterval,
+					"attrs": sel.VideoConfig.CodecAttrs,
+				})
+				e = e.Interface("audio", map[string]any{"codec": sel.AudioConfig.CodecType, "params": sel.AudioConfig.CodecParams})
 				e.Msg("[hksv] selected recording config")
 			}
 		}
