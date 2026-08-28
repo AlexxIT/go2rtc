@@ -274,16 +274,13 @@ func (r *streamRequest) settledCandidate(deadline time.Time) (candidate, error) 
 	if remaining <= 0 {
 		return selected, errors.New("unifi-protect: timed out waiting for camera media")
 	}
-	timer := time.NewTimer(remaining)
+	deadlineTimer := time.NewTimer(remaining)
+	defer deadlineTimer.Stop()
 	select {
 	case selected = <-r.candidates:
-		if !timer.Stop() {
-			<-timer.C
-		}
 	case <-r.done:
-		timer.Stop()
 		return selected, net.ErrClosed
-	case <-timer.C:
+	case <-deadlineTimer.C:
 		return selected, errors.New("unifi-protect: timed out waiting for camera media")
 	}
 
@@ -303,6 +300,9 @@ func (r *streamRequest) settledCandidate(deadline time.Time) (candidate, error) 
 		case <-r.done:
 			_ = selected.rd.Close()
 			return candidate{}, net.ErrClosed
+		case <-deadlineTimer.C:
+			_ = selected.rd.Close()
+			return candidate{}, errors.New("unifi-protect: timed out waiting for camera media")
 		}
 	}
 }

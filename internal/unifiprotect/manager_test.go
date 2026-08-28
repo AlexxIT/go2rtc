@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/x509"
 	"encoding/json"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -241,6 +242,17 @@ func TestManagerConcurrentSessionReplacement(t *testing.T) {
 	require.Same(t, second, m.sessions[second.mac])
 	require.True(t, second.ready)
 	m.mu.Unlock()
+}
+
+func TestSettledCandidateHonorsDeadline(t *testing.T) {
+	req := &streamRequest{
+		candidates: make(chan candidate, 1),
+		done:       make(chan struct{}),
+	}
+	req.candidates <- candidate{rd: io.NopCloser(bytes.NewReader(nil))}
+
+	_, err := req.settledCandidate(time.Now().Add(20 * time.Millisecond))
+	require.ErrorContains(t, err, "timed out waiting for camera media")
 }
 
 func TestLoadOrCreateCertificate(t *testing.T) {
