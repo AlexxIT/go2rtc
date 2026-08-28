@@ -59,6 +59,7 @@ Some formats and protocols go2rtc supports exclusively. They have no equivalent 
 | [`rtsp`]       | `rtsp`          | `rtsp`           | yes   | yes    | yes    | yes     |
 | [`tapo`]       | `mpegts`        | `http`           | yes   |        |        | yes     |
 | [`tuya`]       | `srtp`          | `webrtc`         | yes   |        |        | yes     |
+| [`unifi-protect`] | `extendedFlv` | `wss`, `tcp`     | yes   |        | yes    |         |
 | [`v4l2`]       | `rawvideo`      | `ioctl`          | yes   |        |        |         |
 | [`webrtc`]     | `srtp`          | `webrtc`         | yes   | yes    | yes    | yes     |
 | [`webtorrent`] | `srtp`          | `webrtc`         | yes   | yes    |        |         |
@@ -104,6 +105,7 @@ Some formats and protocols go2rtc supports exclusively. They have no equivalent 
 [`streams`]: streams/README.md
 [`tapo`]: tapo/README.md
 [`tuya`]: tuya/README.md
+[`unifi-protect`]: unifiprotect/README.md
 [`v4l2`]: v4l2/README.md
 [`webrtc`]: webrtc/README.md
 [`webtorrent`]: webtorrent/README.md
