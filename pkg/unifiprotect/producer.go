@@ -2,6 +2,7 @@ package unifiprotect
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"sync"
@@ -122,9 +123,13 @@ func (p *Producer) probe() error {
 		switch tag.Type {
 		case TagVideo:
 			if video == nil && isAVCConfig(tag.Data) {
-				_, sps, pps := h264.DecodeConfig(tag.Data[5:])
+				config := tag.Data[5:]
+				if !validAVCDecoderConfig(config) {
+					continue
+				}
+				_, sps, pps := h264.DecodeConfig(config)
 				if len(sps) != 0 && len(pps) != 0 {
-					video = h264.ConfigToCodec(tag.Data[5:])
+					video = h264.ConfigToCodec(config)
 				}
 			}
 
@@ -235,6 +240,43 @@ func (p *Producer) timestamp(ms, clockRate uint32) uint32 {
 
 func isAVCConfig(data []byte) bool {
 	return len(data) >= 6 && data[0]&0x0f == 7 && data[1] == 0
+}
+
+func validAVCDecoderConfig(config []byte) bool {
+	if len(config) < 7 || config[0] != 1 {
+		return false
+	}
+
+	count := int(config[5] & 0x1f)
+	config = config[6:]
+	for i := 0; i < count; i++ {
+		if len(config) < 2 {
+			return false
+		}
+		size := 2 + int(binary.BigEndian.Uint16(config))
+		if len(config) < size {
+			return false
+		}
+		config = config[size:]
+	}
+
+	if len(config) < 1 {
+		return false
+	}
+	count = int(config[0])
+	config = config[1:]
+	for i := 0; i < count; i++ {
+		if len(config) < 2 {
+			return false
+		}
+		size := 2 + int(binary.BigEndian.Uint16(config))
+		if len(config) < size {
+			return false
+		}
+		config = config[size:]
+	}
+
+	return true
 }
 
 func isAACConfig(data []byte) bool {

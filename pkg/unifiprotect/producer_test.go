@@ -84,6 +84,28 @@ func TestProducerVideoOnly(t *testing.T) {
 	require.Len(t, p.Medias, 1)
 }
 
+func TestProducerRejectsTruncatedAVCConfig(t *testing.T) {
+	// This is a valid FLV AVC sequence header whose AVCDecoderConfigurationRecord
+	// ends after the first SPS, before the PPS count byte.
+	config := []byte{1, 0x42, 0, 0x1f, 0xff, 0xe1, 0, 1, 0x67}
+	wire := extendedWire(&Tag{
+		Type: TagVideo,
+		Data: append([]byte{0x17, 0, 0, 0, 0}, config...),
+	})
+
+	var err error
+	require.NotPanics(t, func() {
+		_, err = Open(io.NopCloser(bytes.NewReader(wire)), AudioNone)
+	})
+	require.Error(t, err)
+}
+
+func TestValidAVCDecoderConfig(t *testing.T) {
+	sps := []byte{0x67, 0x42, 0, 0x1f, 0xe5, 0x88}
+	pps := []byte{0x68, 0xce, 0x38, 0x80}
+	require.True(t, validAVCDecoderConfig(h264.EncodeConfig(sps, pps)))
+}
+
 func TestProducerStopCallbackOnce(t *testing.T) {
 	sps := []byte{0x67, 0x42, 0, 0x1f, 0xe5, 0x88}
 	pps := []byte{0x68, 0xce, 0x38, 0x80}
