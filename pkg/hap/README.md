@@ -17,7 +17,7 @@
 - ClientPublic/ClientPrivate - static random 32 byte keypair
 - can pair with Device (exchange ClientID/ClientPublic, ServerID/ServerPublic using Pin)
 - can auth to Device using ClientPrivate
-- holding persistant Secure connection to device
+- holding persistent Secure connection to device
 - can read device Accessories
 - can read and write device Characters
 - can subscribe on device Characters change (Event)
