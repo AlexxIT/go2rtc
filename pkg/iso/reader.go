@@ -86,7 +86,7 @@ func DecodeAtom(b []byte) (any, error) {
 			return DecodeAtom(data[1+3+4:])
 		}
 
-	case "avc1", "hev1":
+	case "avc1", "hev1", "hvc1":
 		b = data[6+2+2+2+4+4+4+2+2+4+4+4+2+32+2+2:]
 		atom, err := DecodeAtom(b)
 		if err != nil {
