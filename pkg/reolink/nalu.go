@@ -60,7 +60,7 @@ func h265NALUnitType(header0 byte) byte {
 }
 
 func h265IsSliceNAL(typ byte) bool {
-	return typ <= 9 || (typ >= 16 && typ <= 21)
+	return typ <= 31
 }
 
 func reorderH265NALsForAccessUnit(nalus [][]byte) [][]byte {

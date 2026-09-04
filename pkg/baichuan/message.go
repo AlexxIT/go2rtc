@@ -105,7 +105,15 @@ func (c *Client) readMessage() (*Message, error) {
 	binaryPayload := false
 	if extensionMeta != nil && extensionMeta.BinaryData != nil && *extensionMeta.BinaryData == 1 {
 		c.binaryMu.Lock()
-		c.binaryMsgNums[header.MsgNum] = struct{}{}
+		if _, exists := c.binaryMsgNums[header.MsgNum]; !exists {
+			if len(c.binaryOrder) >= 64 {
+				oldest := c.binaryOrder[0]
+				c.binaryOrder = c.binaryOrder[1:]
+				delete(c.binaryMsgNums, oldest)
+			}
+			c.binaryOrder = append(c.binaryOrder, header.MsgNum)
+			c.binaryMsgNums[header.MsgNum] = struct{}{}
+		}
 		c.binaryMu.Unlock()
 		binaryPayload = true
 	} else {

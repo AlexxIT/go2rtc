@@ -27,6 +27,7 @@ type Client struct {
 	hasAESKey     bool
 	binaryMu      sync.RWMutex
 	binaryMsgNums map[uint16]struct{}
+	binaryOrder   []uint16
 
 	loginMu  sync.Mutex
 	loggedIn bool
@@ -93,6 +94,7 @@ func Dial(ctx context.Context, cfg Config) (*Client, error) {
 		isUDP:         isUDP,
 		mode:          EncryptionNone,
 		binaryMsgNums: make(map[uint16]struct{}),
+		binaryOrder:   make([]uint16, 0, 64),
 		pending:       make(map[pendingKey]chan *Message),
 		subs:          make(map[uint32]map[chan *Message]struct{}),
 		closed:        make(chan struct{}),
@@ -362,7 +364,7 @@ func (c *Client) StartPreview(ctx context.Context, channel uint8, stream Stream)
 					continue
 				}
 
-				if msg.Header.StreamType != streamType {
+				if msg.Header.ChannelID != channel || msg.Header.StreamType != streamType {
 					continue
 				}
 

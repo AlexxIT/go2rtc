@@ -269,8 +269,10 @@ func (c *Client) processPacket(packet baichuan.MediaPacket, videoCount, audioCou
 		relativeUS := continuousUS - c.baseTicks
 
 		if relativeUS < c.lastVideoUS {
-			// Clock jumped backward. Realign baseTime to match the new timeline and preserve pacing.
-			c.baseTime = time.Now().Add(-time.Duration(relativeUS) * time.Microsecond)
+			// Clock jumped backward by more than 5s (camera reset). Realign baseTime to match new timeline.
+			if c.lastVideoUS-relativeUS > 5_000_000 {
+				c.baseTime = time.Now().Add(-time.Duration(relativeUS) * time.Microsecond)
+			}
 		}
 
 		rawVideoRTP := uint32(relativeUS * 90000 / 1_000_000)
@@ -379,9 +381,10 @@ func (c *Client) processPacket(packet baichuan.MediaPacket, videoCount, audioCou
 				driftUS := int64(expectedAudioUS) - int64(targetUS)
 				driftSamples := driftUS * int64(clockRate) / 1_000_000
 
-				if driftSamples >= 1024 {
+				const maxDriftAACSamples = 4800
+				if driftSamples >= maxDriftAACSamples {
 					continue // Drop packet
-				} else if driftSamples <= -1024 {
+				} else if driftSamples <= -maxDriftAACSamples {
 					clone1 := *pkt
 					clone1.Timestamp = c.audioRTP.next(uint32(c.audioSamples))
 					c.audioSamples += 1024
@@ -486,9 +489,10 @@ func (c *Client) processPacket(packet baichuan.MediaPacket, videoCount, audioCou
 				driftUS := int64(expectedAudioUS) - int64(targetUS)
 				driftSamples := driftUS * int64(clockRate) / 1_000_000
 
-				if driftSamples >= chunkSize {
+				const maxDriftPCMASamples = 2400
+				if driftSamples >= maxDriftPCMASamples {
 					continue // Drop packet
-				} else if driftSamples <= -chunkSize {
+				} else if driftSamples <= -maxDriftPCMASamples {
 					clone1 := *pkt
 					clone1.Timestamp = c.audioRTP.next(uint32(c.audioSamples))
 					c.audioSamples += uint64(chunkSize)
@@ -617,79 +621,29 @@ func unwrapTimestamp(ts32 uint32, highest64 uint64) uint64 {
 }
 
 type rtpTimestampGuard struct {
-	offset   uint32
-	last     uint32
-	set      bool
-	smooth   bool
-	avgDelta float64
-	lastRaw  uint32
+	offset uint32
+	last   uint32
+	set    bool
 }
 
 func (g *rtpTimestampGuard) next(ts uint32) uint32 {
 	if !g.set {
 		g.last = ts
-		g.lastRaw = ts
-		g.avgDelta = 6000 // default for 15 FPS
 		g.set = true
 		return ts
 	}
 
-	if !g.smooth {
-		adjusted := ts + g.offset
-		if ts == g.last {
-			g.offset = g.last + 1 - ts
-			adjusted = g.last + 1
-		} else if int32(adjusted-g.last) <= 0 {
-			jumpBackward := uint32(int32(g.last - adjusted))
-			if jumpBackward > 90000 {
-				g.offset = g.last + 1 - ts
-				adjusted = ts + g.offset
-			} else {
-				adjusted = g.last + 1
-			}
-		}
-		g.last = adjusted
-		g.offset = adjusted - ts
-		return adjusted
-	}
+	adjusted := ts + g.offset
+	delta := int32(adjusted - g.last)
 
-	rawDelta := int32(ts - g.lastRaw)
-	if rawDelta < 100 || rawDelta > 45000 {
-		// Jump or discontinuity (wrap, drop, restart)
-		g.lastRaw = ts
-		g.avgDelta = 6000
-
-		adjusted := ts + g.offset
-		if int32(adjusted-g.last) <= 0 {
-			adjusted = g.last + 1
-		}
-		g.offset = adjusted - ts
-		g.last = adjusted
-		return adjusted
-	}
-
-	// Exponential moving average for average delta
-	g.avgDelta = (g.avgDelta*15 + float64(rawDelta)) / 16
-	g.lastRaw = ts
-
-	// PLL feedback correction
-	step := g.avgDelta
-	expected := ts + g.offset
-	drift := int32(g.last + uint32(step+0.5) - expected)
-
-	if drift > 9000 { // >100ms ahead of camera -> slow down step
-		step -= 200
-	} else if drift < -9000 { // >100ms behind camera -> speed up step
-		step += 200
-	}
-
-	adjusted := g.last + uint32(step+0.5)
-
-	if int32(adjusted-g.last) <= 0 {
+	if delta < -900000 || delta > 900000 {
+		g.offset = g.last + 1 - ts
 		adjusted = g.last + 1
+	} else if delta <= 0 {
+		g.last++
+		return g.last
 	}
 
-	g.offset = adjusted - ts
 	g.last = adjusted
 	return adjusted
 }

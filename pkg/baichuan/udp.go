@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"encoding/xml"
 	"fmt"
+	"math"
 	"sort"
 )
 
@@ -196,9 +197,21 @@ func udpCRC32(buf []byte) uint32 {
 
 func contiguousPayloads(store map[uint32][]byte, consumed *uint32, hasConsumed *bool) [][]byte {
 	results := make([][]byte, 0)
-	next := uint32(0)
+	if len(store) == 0 {
+		return results
+	}
+
+	var next uint32
 	if *hasConsumed {
 		next = *consumed + 1
+	} else {
+		minID := uint32(math.MaxUint32)
+		for id := range store {
+			if id < minID {
+				minID = id
+			}
+		}
+		next = minID
 	}
 
 	for {

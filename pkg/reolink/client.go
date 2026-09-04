@@ -2,6 +2,7 @@ package reolink
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"net/url"
 	"strconv"
@@ -69,7 +70,6 @@ func Dial(rawURL string) (*Client, error) {
 	}
 
 	c := &Client{url: u}
-	c.videoRTP.smooth = false
 	c.videoEnabled = true
 	c.audioEnabled = true
 
@@ -204,11 +204,9 @@ func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Rece
 			}
 
 			pcmBytes := transcoder(packet.Payload)
-			n := len(pcmBytes)
+			n := len(pcmBytes) &^ 1
 			for i := 0; i < n; i += 2 {
-				lo := int16(pcmBytes[i])
-				hi := int16(pcmBytes[i+1])
-				sample := (hi << 8) | lo
+				sample := int16(binary.LittleEndian.Uint16(pcmBytes[i : i+2]))
 				c.pcmBuf = append(c.pcmBuf, sample)
 			}
 
