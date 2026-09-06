@@ -3,6 +3,7 @@ package homekit
 import (
 	"fmt"
 	"io"
+	"log"
 	"math/rand"
 	"net"
 	"time"
@@ -27,7 +28,10 @@ type Consumer struct {
 	audioSession *srtp.Session
 	audioRTPTime byte
 
-	backTrack *core.Receiver // backchannel audio (HomeKit viewer → camera)
+	audioCodec *core.Codec
+	backTrack  *core.Receiver // backchannel audio (HomeKit viewer → camera)
+	backOutput *core.Receiver
+	backBridge *audioTranscoder
 }
 
 func NewConsumer(conn net.Conn, server *srtp.Server) *Consumer {
@@ -50,7 +54,8 @@ func NewConsumer(conn net.Conn, server *srtp.Server) *Consumer {
 			Kind:      core.KindAudio,
 			Direction: core.DirectionRecvonly,
 			Codecs: []*core.Codec{
-				{Name: core.CodecOpus},
+				{Name: core.CodecPCMA},
+				{Name: core.CodecPCMU},
 			},
 		},
 	}
@@ -132,6 +137,7 @@ func (c *Consumer) SetConfig(conf *camera.SelectedStreamConfiguration) bool {
 	c.audioSession.PayloadType = conf.AudioCodec.RTPParams[0].PayloadType
 	c.audioSession.RTCPInterval = toDuration(conf.AudioCodec.RTPParams[0].RTCPInterval)
 	c.audioRTPTime = conf.AudioCodec.CodecParams[0].RTPTime[0]
+	c.audioCodec = selectedAudioCodec(&conf.AudioCodec)
 
 	c.srtp.AddSession(c.videoSession)
 	c.srtp.AddSession(c.audioSession)
@@ -144,15 +150,44 @@ func (c *Consumer) GetTrack(media *core.Media, codec *core.Codec) (*core.Receive
 		return nil, core.ErrCantGetTrack
 	}
 
-	c.backTrack = core.NewReceiver(media, codec)
+	actualCodec := c.audioCodec
+	if actualCodec == nil {
+		actualCodec = codec
+	}
+
+	if c.backTrack != nil && !sameAudioCodec(c.backTrack.Codec, actualCodec) {
+		c.closeBackchannel()
+	}
+	if c.backOutput != nil && sameAudioCodec(c.backOutput.Codec, codec) {
+		return c.backOutput, nil
+	}
+	if c.backTrack == nil {
+		c.backTrack = core.NewReceiver(media, actualCodec)
+	}
+
+	var receiver *core.Receiver
+	if !sameAudioCodec(actualCodec, codec) {
+		bridge, err := newAudioTranscoder(c.backTrack, codec)
+		if err != nil {
+			log.Printf("[homekit] talkback transcode failed: src=%s dst=%s err=%v", actualCodec.Name, codec.Name, err)
+			return nil, fmt.Errorf("homekit: talkback transcode %s to %s: %w", actualCodec.Name, codec.Name, err)
+		}
+		c.closeBackchannelBridge()
+		c.backBridge = bridge
+		receiver = bridge.Receiver()
+	} else {
+		c.closeBackchannelBridge()
+		receiver = c.backTrack
+	}
+	c.backOutput = receiver
 
 	c.audioSession.OnReadRTP = func(packet *rtp.Packet) {
 		c.backTrack.WriteRTP(packet)
 		c.Recv += len(packet.Payload)
 	}
 
-	c.Receivers = append(c.Receivers, c.backTrack)
-	return c.backTrack, nil
+	c.Receivers = []*core.Receiver{receiver}
+	return receiver, nil
 }
 
 func (c *Consumer) Start() error {
@@ -214,7 +249,26 @@ func (c *Consumer) Stop() error {
 	if c.deadline != nil {
 		c.deadline.Reset(0)
 	}
+	c.closeBackchannel()
 	return c.Connection.Stop()
+}
+
+func (c *Consumer) closeBackchannel() {
+	c.closeBackchannelBridge()
+	if c.backTrack != nil {
+		c.backTrack.Close()
+		c.backTrack = nil
+	}
+	c.backOutput = nil
+	c.Receivers = nil
+}
+
+func (c *Consumer) closeBackchannelBridge() {
+	if c.backBridge == nil {
+		return
+	}
+	_ = c.backBridge.Close()
+	c.backBridge = nil
 }
 
 func (c *Consumer) srtpEndpoint() *srtp.Endpoint {
@@ -230,4 +284,25 @@ func (c *Consumer) srtpEndpoint() *srtp.Endpoint {
 
 func toDuration(seconds float32) time.Duration {
 	return time.Duration(seconds * float32(time.Second))
+}
+
+func selectedAudioCodec(conf *camera.AudioCodecConfiguration) *core.Codec {
+	media := audioToMedia([]camera.AudioCodecConfiguration{*conf})
+	if len(media.Codecs) == 0 {
+		return nil
+	}
+	if media.Codecs[0].Name == core.CodecOpus {
+		codec := media.Codecs[0].Clone()
+		codec.ClockRate = 48000
+		codec.Channels = 2
+		codec.PayloadType = 110
+		return codec
+	}
+	return media.Codecs[0]
+}
+
+func sameAudioCodec(src, dst *core.Codec) bool {
+	return src.Name == dst.Name &&
+		(src.ClockRate == dst.ClockRate || src.ClockRate == 0 || dst.ClockRate == 0) &&
+		(src.Channels == dst.Channels || src.Channels == 0 || dst.Channels == 0)
 }

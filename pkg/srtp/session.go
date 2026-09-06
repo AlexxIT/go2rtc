@@ -119,28 +119,29 @@ func (s *Session) WriteRTCP(packet rtcp.Packet) (int, error) {
 	return s.conn.WriteTo(b, s.Remote.addr)
 }
 
-func (s *Session) ReadRTP(b []byte) {
+func (s *Session) ReadRTP(b []byte) bool {
 	packet := &rtp.Packet{}
 
 	b, err := s.Remote.srtp.DecryptRTP(nil, b, &packet.Header)
 	if err != nil {
-		return
+		return false
 	}
 
 	if err = packet.Unmarshal(b); err != nil {
-		return
+		return false
 	}
 
 	if s.OnReadRTP != nil {
 		s.OnReadRTP(packet)
 	}
+	return true
 }
 
-func (s *Session) ReadRTCP(b []byte) {
+func (s *Session) ReadRTCP(b []byte) bool {
 	header := rtcp.Header{}
 	b, err := s.Remote.srtp.DecryptRTCP(nil, b, &header)
 	if err != nil {
-		return
+		return false
 	}
 
 	//packets, err := rtcp.Unmarshal(b)
@@ -152,9 +153,10 @@ func (s *Session) ReadRTCP(b []byte) {
 	//}
 
 	if header.Type != rtcp.TypeSenderReport {
-		return
+		return true
 	}
 
 	receiverRTCP := rtcp.ReceiverReport{SSRC: s.Local.SSRC}
 	_, _ = s.WriteRTCP(&receiverRTCP)
+	return true
 }
