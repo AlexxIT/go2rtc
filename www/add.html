@@ -377,6 +377,71 @@
     </script>
 
 
+    <button id="arenti">Arenti</button>
+    <div>
+        <form id="arenti-login-form">
+            <input type="email" name="email" placeholder="email / username" required>
+            <input type="password" name="password" placeholder="password" required>
+            <input type="text" name="country_code" placeholder="country code (e.g. US, DE)" value="US" size="4">
+            <select name="region">
+                <option value="">auto (by country)</option>
+                <option value="us">Americas (US)</option>
+                <option value="eu">Europe (EU)</option>
+            </select>
+            <button type="submit">login</button>
+        </form>
+        <form id="arenti-devices-form">
+            <select id="arenti-id" name="id" required></select>
+            <button type="submit">load devices</button>
+        </form>
+        <table id="arenti-table"></table>
+    </div>
+    <script>
+        async function arentiReload(ev) {
+            if (ev) ev.target.nextElementSibling.style.display = 'grid';
+
+            const r = await fetch('api/arenti', {'cache': 'no-cache'});
+            if (!r.ok) return;
+
+            const data = await r.json();
+            const users = document.getElementById('arenti-id');
+            if (Array.isArray(data) && data.length > 0 && typeof data[0] === 'string') {
+                users.innerHTML = data.map(item => `<option value="${item}">${item}</option>`).join('');
+            } else if (data && data.sources) {
+                drawTable(document.getElementById('arenti-table'), data);
+            }
+        }
+
+        document.getElementById('arenti').addEventListener('click', arentiReload);
+
+        document.getElementById('arenti-login-form').addEventListener('submit', async ev => {
+            ev.preventDefault();
+
+            const table = document.getElementById('arenti-table');
+            table.innerText = 'loading...';
+
+            const params = new URLSearchParams(new FormData(ev.target));
+            const r = await fetch('api/arenti', {method: 'POST', body: params});
+
+            if (!r.ok) {
+                table.innerText = (await r.text()) || 'Unknown error';
+                return;
+            }
+
+            const data = await r.json();
+            table.innerText = '';
+            drawTable(table, data);
+            arentiReload();
+        });
+
+        document.getElementById('arenti-devices-form').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const params = new URLSearchParams(new FormData(ev.target));
+            await getSources('arenti-table', 'api/arenti?' + params.toString());
+        });
+    </script>
+
+
     <button id="roborock">Roborock</button>
     <div>
         <form id="roborock-form">
