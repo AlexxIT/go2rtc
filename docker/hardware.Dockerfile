@@ -64,6 +64,6 @@ ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/entrypoint.sh"]
 VOLUME /config
 WORKDIR /config
 # https://github.com/NVIDIA/nvidia-docker/wiki/Installation-(Native-GPU-Support)
-ENV NVIDIA_VISIBLE_DEVICES all
-ENV NVIDIA_DRIVER_CAPABILITIES compute,video,utility
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
 
