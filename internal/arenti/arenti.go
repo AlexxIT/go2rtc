@@ -366,7 +366,10 @@ func apiDeviceList(w http.ResponseWriter, r *http.Request) {
 
 	var items []*api.Source
 	for _, dev := range devices {
-		infoParts := []string{dev.Model}
+		var infoParts []string
+		if dev.Model != "" {
+			infoParts = append(infoParts, dev.Model)
+		}
 		if dev.Battery > 0 {
 			infoParts = append(infoParts, fmt.Sprintf("battery: %d%%", dev.Battery))
 		}
@@ -462,7 +465,10 @@ func apiAuth(w http.ResponseWriter, r *http.Request) {
 
 	var items []*api.Source
 	for _, dev := range devices {
-		infoParts := []string{dev.Model}
+		var infoParts []string
+		if dev.Model != "" {
+			infoParts = append(infoParts, dev.Model)
+		}
 		if dev.Battery > 0 {
 			infoParts = append(infoParts, fmt.Sprintf("battery: %d%%", dev.Battery))
 		}

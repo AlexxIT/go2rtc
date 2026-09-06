@@ -38,11 +38,13 @@ type Device struct {
 	Category     string `json:"category"`
 	Capability   string `json:"capability"`
 	IsOwner      int    `json:"isOwner"`
-	IconURL      string `json:"iconUrl"`
-	Version      string `json:"version"`
-	UpgradeVer   string `json:"upgradeVer"`
-	WifiStrength int    `json:"wifiStrength"`
-	Battery      int    `json:"battery"`
+	IconURL        string `json:"iconUrl"`
+	DeviceTypeName string `json:"deviceTypeName"`
+	Version        string `json:"version"`
+	UpgradeVer     string `json:"upgradeVer"`
+	WifiStrength   int    `json:"wifiStrength"`
+	Battery        int    `json:"battery"`
+	IP             string `json:"ip"`
 }
 
 // DeviceStatusResponse represents the response from /ipc_web/iot/query_device_status

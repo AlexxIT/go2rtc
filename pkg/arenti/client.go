@@ -15,6 +15,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"path"
 	"strings"
 	"sync"
 	"time"
@@ -319,7 +321,88 @@ func (c *Client) GetDevices() ([]Device, error) {
 	allDevices = append(allDevices, devListResp.Data.Ipc...)
 	allDevices = append(allDevices, devListResp.Data.Nvr...)
 
+	var wg sync.WaitGroup
+	for i := range allDevices {
+		dev := &allDevices[i]
+		if dev.DeviceTypeName != "" {
+			filename := path.Base(dev.DeviceTypeName)
+			name := strings.TrimSuffix(filename, path.Ext(filename))
+			if strings.HasPrefix(name, "Arenti") {
+				name = "Arenti " + strings.TrimPrefix(name, "Arenti")
+			}
+			dev.Model = name
+		}
+
+		if dev.SnNum == "" {
+			continue
+		}
+
+		wg.Add(1)
+		go func(d *Device) {
+			defer wg.Done()
+			battery, wifi, model, ip, err := c.GetDeviceInfo(d.SnNum)
+			if err != nil {
+				return
+			}
+			if battery > 0 {
+				d.Battery = battery
+			}
+			if wifi > 0 {
+				d.WifiStrength = wifi
+			}
+			if d.Model == "" && model != "" {
+				d.Model = model
+			}
+			if ip != "" {
+				d.IP = ip
+			}
+		}(dev)
+	}
+	wg.Wait()
+
 	return allDevices, nil
+}
+
+// GetDeviceInfo fetches detailed device telemetry (battery %, wifi %, IP, model) via /ipc_web/device/info
+func (c *Client) GetDeviceInfo(snNum string) (battery, wifi int, model, ip string, err error) {
+	rawQuery := "snNum=" + url.QueryEscape(snNum)
+	respBytes, err := c.doAuthRequest(http.MethodGet, "/ipc_web/device/info", rawQuery, nil)
+	if err != nil {
+		return 0, 0, "", "", err
+	}
+
+	var resp struct {
+		Code string `json:"code"`
+		Msg  string `json:"msg"`
+		Data struct {
+			Data map[string]any `json:"data"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(respBytes, &resp); err != nil {
+		return 0, 0, "", "", err
+	}
+	if resp.Code != "1001" {
+		return 0, 0, "", "", fmt.Errorf("arenti: device info error code %s: %s", resp.Code, resp.Msg)
+	}
+
+	if val, ok := resp.Data.Data["204"].(string); ok {
+		var p struct {
+			Wifi int `json:"wifi"`
+			Bt   int `json:"bt"`
+		}
+		if json.Unmarshal([]byte(val), &p) == nil {
+			battery = p.Bt
+			wifi = p.Wifi
+		}
+	}
+	if val, ok := resp.Data.Data["63"].(string); ok && val != "" {
+		model = val
+	}
+	if val, ok := resp.Data.Data["126"].(string); ok {
+		ip = val
+	}
+
+	return battery, wifi, model, ip, nil
 }
 
 // GetDevice finds a device by name, serial number (with or without ppsl), or device ID.
