@@ -380,7 +380,7 @@ func apiDeviceList(w http.ResponseWriter, r *http.Request) {
 		items = append(items, &api.Source{
 			Name: dev.DeviceName,
 			Info: strings.Join(infoParts, " | "),
-			URL:  fmt.Sprintf("arenti://%s", dev.DeviceName),
+			URL:  fmt.Sprintf("arenti://%s", url.PathEscape(dev.DeviceName)),
 		})
 	}
 
@@ -479,7 +479,7 @@ func apiAuth(w http.ResponseWriter, r *http.Request) {
 		items = append(items, &api.Source{
 			Name: dev.DeviceName,
 			Info: strings.Join(infoParts, " | "),
-			URL:  fmt.Sprintf("arenti://%s", dev.DeviceName),
+			URL:  fmt.Sprintf("arenti://%s", url.PathEscape(dev.DeviceName)),
 		})
 	}
 
