@@ -25,10 +25,12 @@ func DialPlay(rawURL string) (*flv.Producer, error) {
 
 	client, err := NewClient(conn, u)
 	if err != nil {
+		_ = conn.Close()
 		return nil, err
 	}
 
 	if err = client.play(); err != nil {
+		_ = client.Close()
 		return nil, err
 	}
 
@@ -48,10 +50,12 @@ func DialPublish(rawURL string, cons *flv.Consumer) (io.Writer, error) {
 
 	client, err := NewClient(conn, u)
 	if err != nil {
+		_ = conn.Close()
 		return nil, err
 	}
 
 	if err = client.publish(); err != nil {
+		_ = client.Close()
 		return nil, err
 	}
 
