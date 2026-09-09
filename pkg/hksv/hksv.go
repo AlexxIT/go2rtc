@@ -93,6 +93,10 @@ type Config struct {
 	StreamName      string
 	Pin             string   // HomeKit pairing PIN (e.g., "27041991")
 	Name            string   // mDNS display name (auto-generated if empty)
+	Manufacturer    string   // accessory manufacturer (default "AlexxIT")
+	Model           string   // accessory model (default "go2rtc")
+	SerialNumber    string   // accessory serial number (default "-")
+	Firmware        string   // accessory firmware revision (defaults to Version)
 	DeviceID        string   // MAC-like device ID (auto-generated if empty)
 	DevicePrivate   string   // ed25519 private key hex (auto-generated if empty)
 	CategoryID      string   // "camera" or "doorbell"
@@ -161,6 +165,18 @@ func NewServer(cfg Config) (*Server, error) {
 	deviceID := CalcDeviceID(cfg.DeviceID, cfg.StreamName)
 	name := CalcName(cfg.Name, deviceID)
 	setupID := CalcSetupID(cfg.StreamName)
+	if cfg.Manufacturer == "" {
+		cfg.Manufacturer = "AlexxIT"
+	}
+	if cfg.Model == "" {
+		cfg.Model = "go2rtc"
+	}
+	if cfg.SerialNumber == "" {
+		cfg.SerialNumber = "-"
+	}
+	if cfg.Firmware == "" {
+		cfg.Firmware = cfg.Version
+	}
 
 	srv := &Server{
 		stream:          cfg.StreamName,
@@ -213,12 +229,12 @@ func NewServer(cfg Config) (*Server, error) {
 			Float64("threshold", srv.motionThreshold).Msg("[hksv] HKSV mode")
 
 		if cfg.CategoryID == "doorbell" {
-			srv.accessory = camera.NewHKSVDoorbellAccessory("AlexxIT", "go2rtc", name, "-", cfg.Version)
+			srv.accessory = camera.NewHKSVDoorbellAccessory(cfg.Manufacturer, cfg.Model, name, cfg.SerialNumber, cfg.Firmware)
 		} else {
-			srv.accessory = camera.NewHKSVAccessory("AlexxIT", "go2rtc", name, "-", cfg.Version)
+			srv.accessory = camera.NewHKSVAccessory(cfg.Manufacturer, cfg.Model, name, cfg.SerialNumber, cfg.Firmware)
 		}
 	} else {
-		srv.accessory = camera.NewAccessory("AlexxIT", "go2rtc", name, "-", cfg.Version)
+		srv.accessory = camera.NewAccessory(cfg.Manufacturer, cfg.Model, name, cfg.SerialNumber, cfg.Firmware)
 	}
 
 	// Remove Speaker service unless explicitly enabled (default: disabled)

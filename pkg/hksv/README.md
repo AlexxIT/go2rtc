@@ -400,8 +400,12 @@ type Config struct {
     Speaker *bool // include Speaker service for 2-way audio (default false)
 
     // Optional - metadata
-    UserAgent string // for mDNS TXTModel field
-    Version   string // for accessory firmware version
+    Manufacturer string // accessory manufacturer (default "AlexxIT")
+    Model        string // accessory model (default "go2rtc")
+    SerialNumber string // accessory serial number (default "-")
+    Firmware     string // accessory firmware revision (defaults to Version)
+    UserAgent    string // for mDNS TXTModel field
+    Version      string // host version and default accessory firmware revision
 
     // Optional - persistence and features
     Store      PairingStore     // nil = pairings not persisted

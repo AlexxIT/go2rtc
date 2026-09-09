@@ -77,6 +77,10 @@ homekit:
   dahua1:                   # same stream ID from streams list
     pin: 12345678           # custom PIN, default: 19550224
     name: Dahua camera      # custom camera name, default: generated from stream ID
+    manufacturer: Dahua     # custom manufacturer, default: AlexxIT
+    model: IPC-HDW1230T     # custom model, default: go2rtc
+    serial_number: CAM-001  # custom serial number, default: -
+    firmware: "2.800"       # custom firmware revision, default: go2rtc version
     device_id: dahua1       # custom ID, default: generated from stream ID
     device_private: dahua1  # custom key, default: generated from stream ID
     speaker: true           # enable 2-way audio (default: false, enable only if camera has a speaker)
