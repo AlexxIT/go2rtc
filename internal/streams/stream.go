@@ -13,6 +13,7 @@ type Stream struct {
 	consumers []core.Consumer
 	mu        sync.Mutex
 	pending   atomic.Int32
+	publishes map[string]*publishHandle // active publishes by dst URL (guarded by mu)
 }
 
 func NewStream(source any) *Stream {

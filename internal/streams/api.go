@@ -105,6 +105,20 @@ func apiStreams(w http.ResponseWriter, r *http.Request) {
 		}
 
 	case "DELETE":
+		// with dst - stop one publish, keep the stream
+		if dst := query.Get("dst"); dst != "" {
+			if stream := Get(src); stream != nil {
+				stream.StopPublish(dst)
+			} else {
+				http.Error(w, "", http.StatusNotFound)
+			}
+			return
+		}
+
+		// without dst - stop all publishes, then delete the stream
+		if s, ok := streams[src]; ok {
+			s.StopAllPublish()
+		}
 		delete(streams, src)
 
 		if err := app.PatchConfig([]string{"streams", src}, nil); err != nil {
