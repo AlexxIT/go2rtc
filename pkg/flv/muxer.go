@@ -79,7 +79,10 @@ func (m *Muxer) GetInit() []byte {
 func (m *Muxer) GetPayloader(codec *core.Codec) func(packet *rtp.Packet) []byte {
 	m.codecs = append(m.codecs, codec)
 
+	// Baseline off the first packet. Guard with tsInit, not ts0 == 0: some cameras
+	// send that first packet at timestamp 0, so a 0 sentinel never latches it.
 	var ts0 uint32
+	var tsInit bool
 	var k = codec.ClockRate / 1000
 
 	switch codec.Name {
@@ -95,8 +98,9 @@ func (m *Muxer) GetPayloader(codec *core.Codec) func(packet *rtp.Packet) []byte 
 
 			buf = append(buf[:5], packet.Payload...) // reset buffer to previous place
 
-			if ts0 == 0 {
+			if !tsInit {
 				ts0 = packet.Timestamp
+				tsInit = true
 			}
 
 			timeMS := (packet.Timestamp - ts0) / k
@@ -109,8 +113,9 @@ func (m *Muxer) GetPayloader(codec *core.Codec) func(packet *rtp.Packet) []byte 
 		return func(packet *rtp.Packet) []byte {
 			buf = append(buf[:2], packet.Payload...)
 
-			if ts0 == 0 {
+			if !tsInit {
 				ts0 = packet.Timestamp
+				tsInit = true
 			}
 
 			timeMS := (packet.Timestamp - ts0) / k
