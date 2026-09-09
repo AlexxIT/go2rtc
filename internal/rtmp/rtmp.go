@@ -135,9 +135,11 @@ func streamsConsumerHandle(url string) (core.Consumer, func(), error) {
 	run := func() {
 		wr, err := rtmp.DialPublish(url, cons)
 		if err != nil {
+			log.Warn().Err(err).Str("url", url).Msg("[rtmp] publish dial failed")
 			return
 		}
-		_, err = cons.WriteTo(wr)
+		n, err := cons.WriteTo(wr)
+		log.Warn().Err(err).Int64("bytes", n).Str("url", url).Msg("[rtmp] publish ended")
 	}
 
 	return cons, run, nil
