@@ -26,6 +26,14 @@ const (
 )
 
 const (
+	PTZGetConfigurations = "GetConfigurations"
+	PTZGetNodes          = "GetNodes"
+	PTZGetStatus         = "GetStatus"
+	PTZContinuousMove    = "ContinuousMove"
+	PTZStop              = "Stop"
+)
+
+const (
 	MediaGetAudioEncoderConfiguration        = "GetAudioEncoderConfiguration"
 	MediaGetAudioEncoderConfigurations       = "GetAudioEncoderConfigurations"
 	MediaGetAudioSources                     = "GetAudioSources"
@@ -85,8 +93,11 @@ func GetCapabilitiesResponse(host string) []byte {
 		<tt:Imaging>
 			<tt:XAddr>http://%s/onvif/imaging_service</tt:XAddr>
 		</tt:Imaging>
+		<tt:PTZ>
+			<tt:XAddr>http://%s/onvif/ptz_service</tt:XAddr>
+		</tt:PTZ>
 	</tds:Capabilities>
-</tds:GetCapabilitiesResponse>`, host, host, host)
+</tds:GetCapabilitiesResponse>`, host, host, host, host)
 	return e.Bytes()
 }
 
@@ -108,7 +119,12 @@ func GetServicesResponse(host string) []byte {
 		<tds:XAddr>http://%s/onvif/imaging_service</tds:XAddr>
 		<tds:Version><tt:Major>2</tt:Major><tt:Minor>5</tt:Minor></tds:Version>
 	</tds:Service>
-</tds:GetServicesResponse>`, host, host, host)
+	<tds:Service>
+		<tds:Namespace>http://www.onvif.org/ver20/ptz/wsdl</tds:Namespace>
+		<tds:XAddr>http://%s/onvif/ptz_service</tds:XAddr>
+		<tds:Version><tt:Major>2</tt:Major><tt:Minor>5</tt:Minor></tds:Version>
+	</tds:Service>
+</tds:GetServicesResponse>`, host, host, host, host)
 	return e.Bytes()
 }
 
@@ -177,6 +193,7 @@ func appendProfile(e *Envelope, tag, name string) {
 	e.Appendf(`<tt:Name>%s</tt:Name>`, name)
 	appendVideoSourceConfiguration(e, "VideoSourceConfiguration", name)
 	appendVideoEncoderConfiguration(e, "VideoEncoderConfiguration")
+	appendPTZConfiguration(e)
 	appendAudioSourceConfiguration(e, "AudioSourceConfiguration")
 	appendAudioEncoderConfiguration(e, "AudioEncoderConfiguration")
 	e.Appendf(`</trt:%s>`, tag)
@@ -237,6 +254,10 @@ func GetVideoEncoderConfigurationResponse() []byte {
 	appendVideoEncoderConfiguration(e, "VideoEncoderConfiguration")
 	e.Append(`</trt:GetVideoEncoderConfigurationResponse>`)
 	return e.Bytes()
+}
+
+func appendPTZConfiguration(e *Envelope) {
+	e.Append(`<tt:PTZConfiguration token="ptz"><tt:Name>PTZ</tt:Name><tt:UseCount>1</tt:UseCount><tt:NodeToken>ptz</tt:NodeToken><tt:DefaultPTZTimeout>PT1S</tt:DefaultPTZTimeout></tt:PTZConfiguration>`)
 }
 
 func appendVideoEncoderConfiguration(e *Envelope, tag string) {
@@ -386,6 +407,36 @@ func GetStreamUriResponse(uri string) []byte {
 func GetSnapshotUriResponse(uri string) []byte {
 	e := NewEnvelope()
 	e.Appendf(`<trt:GetSnapshotUriResponse><trt:MediaUri><tt:Uri>%s</tt:Uri></trt:MediaUri></trt:GetSnapshotUriResponse>`, uri)
+	return e.Bytes()
+}
+
+func GetPTZConfigurationsResponse() []byte {
+	e := NewEnvelope()
+	e.Append(`<tptz:GetConfigurationsResponse><tptz:PTZConfiguration token="ptz"><tt:Name>PTZ</tt:Name><tt:UseCount>1</tt:UseCount><tt:NodeToken>ptz</tt:NodeToken><tt:DefaultPTZTimeout>PT1S</tt:DefaultPTZTimeout><tt:PanTiltLimits><tt:Range><tt:URI>http://www.onvif.org/ver10/tptz/PanTiltSpaces/VelocityGenericSpace</tt:URI><tt:XRange><tt:Min>-1</tt:Min><tt:Max>1</tt:Max></tt:XRange><tt:YRange><tt:Min>-1</tt:Min><tt:Max>1</tt:Max></tt:YRange></tt:Range></tt:PanTiltLimits></tptz:PTZConfiguration></tptz:GetConfigurationsResponse>`)
+	return e.Bytes()
+}
+
+func GetPTZNodesResponse() []byte {
+	e := NewEnvelope()
+	e.Append(`<tptz:GetNodesResponse><tptz:PTZNode token="ptz" fixedHomePosition="false"><tt:Name>PTZ</tt:Name><tt:SupportedPTZSpaces><tt:ContinuousPanTiltVelocitySpace><tt:URI>http://www.onvif.org/ver10/tptz/PanTiltSpaces/VelocityGenericSpace</tt:URI><tt:XRange><tt:Min>-1</tt:Min><tt:Max>1</tt:Max></tt:XRange><tt:YRange><tt:Min>-1</tt:Min><tt:Max>1</tt:Max></tt:YRange></tt:ContinuousPanTiltVelocitySpace></tt:SupportedPTZSpaces></tptz:PTZNode></tptz:GetNodesResponse>`)
+	return e.Bytes()
+}
+
+func GetPTZStatusResponse() []byte {
+	e := NewEnvelope()
+	e.Append(`<tptz:GetStatusResponse><tptz:PTZStatus><tt:Position><tt:PanTilt x="0" y="0" /></tt:Position><tt:MoveStatus><tt:PanTilt>IDLE</tt:PanTilt></tt:MoveStatus></tptz:PTZStatus></tptz:GetStatusResponse>`)
+	return e.Bytes()
+}
+
+func GetPTZContinuousMoveResponse() []byte {
+	e := NewEnvelope()
+	e.Append(`<tptz:ContinuousMoveResponse />`)
+	return e.Bytes()
+}
+
+func GetPTZStopResponse() []byte {
+	e := NewEnvelope()
+	e.Append(`<tptz:StopResponse />`)
 	return e.Bytes()
 }
 

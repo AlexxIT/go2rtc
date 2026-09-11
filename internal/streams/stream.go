@@ -2,6 +2,7 @@ package streams
 
 import (
 	"encoding/json"
+	"errors"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -71,6 +72,18 @@ func (s *Stream) SetSource(source string) {
 	for _, prod := range s.producers {
 		prod.SetSource(source)
 	}
+}
+
+func (s *Stream) Move(pan, tilt float64) error {
+	for _, prod := range s.producers {
+		if err := prod.Dial(); err != nil {
+			continue
+		}
+		if err := prod.Move(pan, tilt); err == nil {
+			return nil
+		}
+	}
+	return errors.New("streams: PTZ not supported")
 }
 
 func (s *Stream) RemoveConsumer(cons core.Consumer) {

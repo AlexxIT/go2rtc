@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"mime/multipart"
 	"net"
 	"net/http"
@@ -179,6 +180,26 @@ func (c *Client) SetupStream() (err error) {
 	// audio: default, disable, enable
 	c.session1, err = c.Request(c.conn1, []byte(c.request))
 	return
+}
+
+func (c *Client) Move(pan, tilt float64) error {
+	if pan == 0 && tilt == 0 {
+		return nil
+	}
+
+	conn, err := c.newConn()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	direction := int(90 - 180*math.Atan2(tilt, pan)/math.Pi)
+	if direction < 0 {
+		direction += 360
+	}
+
+	_, err = c.Request(conn, []byte(fmt.Sprintf(`{"method":"do","motor":{"movestep":{"direction":"%03d"}}}`, direction)))
+	return err
 }
 
 // Handle - first run will be in probe state

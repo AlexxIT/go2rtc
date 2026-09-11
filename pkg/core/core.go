@@ -69,6 +69,10 @@ type Consumer interface {
 	Stop() error
 }
 
+type PTZ interface {
+	Move(pan, tilt float64) error
+}
+
 // LifetimeLimited is an optional interface for Producers whose upstream
 // has a known maximum stream lifetime (e.g. Google Nest WebRTC enforces
 // a ~60 min cap per session, after which a fresh offer/answer is

@@ -363,3 +363,30 @@ func TestStaticResponseRoutesImagingOps(t *testing.T) {
 		})
 	}
 }
+
+func TestPTZResponses(t *testing.T) {
+	capabilities := string(GetCapabilitiesResponse("192.168.1.123:1984"))
+	require.Contains(t, capabilities, "http://192.168.1.123:1984/onvif/ptz_service")
+
+	services := string(GetServicesResponse("192.168.1.123:1984"))
+	require.Contains(t, services, "http://www.onvif.org/ver20/ptz/wsdl")
+
+	profile := string(GetProfilesResponse([]string{"porton"}))
+	require.Contains(t, profile, "<tt:PTZConfiguration")
+
+	for _, response := range []string{
+		string(GetPTZConfigurationsResponse()),
+		string(GetPTZNodesResponse()),
+		string(GetPTZStatusResponse()),
+		string(GetPTZContinuousMoveResponse()),
+		string(GetPTZStopResponse()),
+	} {
+		require.Contains(t, response, `xmlns:tptz="http://www.onvif.org/ver20/ptz/wsdl"`)
+	}
+}
+
+func TestFindTagAttribute(t *testing.T) {
+	request := []byte(`<tptz:ContinuousMove><tptz:Velocity><tt:PanTilt x="-0.5" y="1" /></tptz:Velocity></tptz:ContinuousMove>`)
+	require.Equal(t, "-0.5", FindTagAttribute(request, "PanTilt", "x"))
+	require.Equal(t, "1", FindTagAttribute(request, "PanTilt", "y"))
+}

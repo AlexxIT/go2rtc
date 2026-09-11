@@ -175,6 +175,22 @@ func (p *Producer) AddTrack(media *core.Media, codec *core.Codec, track *core.Re
 	return nil
 }
 
+func (p *Producer) Move(pan, tilt float64) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.state == stateNone {
+		return errors.New("move from none state")
+	}
+
+	ptz, ok := p.conn.(core.PTZ)
+	if !ok {
+		return errors.New("PTZ not supported")
+	}
+
+	return ptz.Move(pan, tilt)
+}
+
 func (p *Producer) MarshalJSON() ([]byte, error) {
 	if conn := p.conn; conn != nil {
 		return json.Marshal(conn)

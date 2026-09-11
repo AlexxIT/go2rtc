@@ -125,14 +125,44 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 		onvif.ImagingGetOptions,
 		onvif.ImagingGetMoveOptions,
 		onvif.ImagingGetStatus:
-		// GetServiceCapabilities is reused by both Media and Imaging services
-		// (same operation name, different responses). Differentiate by URL.
 		if operation == onvif.ServiceGetServiceCapabilities &&
 			strings.Contains(r.URL.Path, "imaging_service") {
 			b = onvif.GetImagingServiceCapabilitiesResponse()
+		} else if operation == onvif.PTZGetStatus &&
+			strings.Contains(r.URL.Path, "ptz_service") {
+			b = onvif.GetPTZStatusResponse()
 		} else {
 			b = onvif.StaticResponse(operation)
 		}
+
+	case onvif.PTZGetConfigurations:
+		if strings.Contains(r.URL.Path, "ptz_service") {
+			b = onvif.GetPTZConfigurationsResponse()
+		} else {
+			b = onvif.StaticResponse(operation)
+		}
+
+	case onvif.PTZGetNodes:
+		b = onvif.GetPTZNodesResponse()
+
+	case onvif.PTZContinuousMove:
+		name := onvif.FindTagValue(b, "ProfileToken")
+		pan, _ := strconv.ParseFloat(onvif.FindTagAttribute(b, "PanTilt", "x"), 64)
+		tilt, _ := strconv.ParseFloat(onvif.FindTagAttribute(b, "PanTilt", "y"), 64)
+		stream := streams.Get(name)
+		if stream == nil {
+			http.Error(w, "unknown profile", http.StatusBadRequest)
+			return
+		}
+		if err = stream.Move(pan, tilt); err != nil {
+			log.Warn().Err(err).Str("stream", name).Msg("[onvif] PTZ move")
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		b = onvif.GetPTZContinuousMoveResponse()
+
+	case onvif.PTZStop:
+		b = onvif.GetPTZStopResponse()
 
 	case onvif.DeviceGetCapabilities:
 		// important for Hass: Media section

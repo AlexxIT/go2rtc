@@ -27,6 +27,15 @@ func FindTagValue(b []byte, tag string) string {
 	return string(m[1])
 }
 
+func FindTagAttribute(b []byte, tag, attribute string) string {
+	re := regexp.MustCompile(`(?s)<(?:\w+:)?` + tag + `\b[^>]*\b` + attribute + `="([^"]+)"`)
+	m := re.FindSubmatch(b)
+	if len(m) != 2 {
+		return ""
+	}
+	return string(m[1])
+}
+
 // UUID - generate something like 44302cbf-0d18-4feb-79b3-33b575263da3
 func UUID() string {
 	s := core.RandString(32, 16)
