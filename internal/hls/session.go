@@ -73,6 +73,11 @@ func (s *Session) Main() []byte {
 		Codecs() []*core.Codec
 	}
 
+	// AV1 codec params only arrive with the first keyframe
+	if cons, ok := s.cons.(*mp4.Consumer); ok {
+		cons.WaitInit(time.Second * 3)
+	}
+
 	codecs := mp4.MimeCodecs(s.cons.(withCodecs).Codecs())
 	codecs = strings.Replace(codecs, mp4.MimeFlac, "fLaC", 1)
 

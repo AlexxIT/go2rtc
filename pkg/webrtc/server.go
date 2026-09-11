@@ -47,11 +47,57 @@ func (c *Conn) SetOffer(offer string) (err error) {
 	return
 }
 
+// preferRecvCodecs moves AV1 to the end of the codec list for every video
+// transceiver we receive on. A remote publishes with the first codec of our
+// answer, so without this every browser that supports AV1 would switch away
+// from H264 as soon as go2rtc registered AV1.
+//
+// Must run after SetRemoteDescription, because only then does the media engine
+// hold the negotiated codecs, which carry the payload types and the rtcp-fb of
+// the offer.
+func preferRecvCodecs(tr *webrtc.RTPTransceiver) {
+	if tr.Kind() != webrtc.RTPCodecTypeVideo {
+		return
+	}
+
+	switch tr.Direction() {
+	case webrtc.RTPTransceiverDirectionSendrecv, webrtc.RTPTransceiverDirectionRecvonly:
+	default:
+		return // we don't receive on this transceiver
+	}
+
+	recv := tr.Receiver()
+	if recv == nil {
+		return
+	}
+
+	var codecs, av1 []webrtc.RTPCodecParameters
+	for _, codec := range recv.GetParameters().Codecs {
+		if codec.MimeType == webrtc.MimeTypeAV1 {
+			av1 = append(av1, codec)
+		} else {
+			codecs = append(codecs, codec)
+		}
+	}
+
+	if len(av1) == 0 || len(codecs) == 0 {
+		return // nothing to reorder
+	}
+
+	// pion rejects the whole list if one entry is unknown to the media engine,
+	// so this must only ever contain codecs it gave us
+	_ = tr.SetCodecPreferences(append(codecs, av1...))
+}
+
 func (c *Conn) GetAnswer() (answer string, err error) {
 	// we need to process remote offer after we create transeivers
 	desc := webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: c.offer}
 	if err = c.pc.SetRemoteDescription(desc); err != nil {
 		return "", err
+	}
+
+	for _, tr := range c.pc.GetTransceivers() {
+		preferRecvCodecs(tr)
 	}
 
 	// disable transceivers if we don't have track, make direction=inactive

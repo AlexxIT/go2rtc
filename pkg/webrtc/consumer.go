@@ -3,6 +3,7 @@ package webrtc
 import (
 	"errors"
 
+	"github.com/AlexxIT/go2rtc/pkg/av1"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
@@ -61,6 +62,12 @@ func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiv
 			sender.Handler = h265.RTPDepay(track.Codec, sender.Handler)
 		} else {
 			sender.Handler = h265.RepairAVCC(track.Codec, sender.Handler)
+		}
+
+	case core.CodecAV1:
+		sender.Handler = av1.RTPPay(1200, sender.Handler)
+		if track.Codec.IsRTP() {
+			sender.Handler = av1.RTPDepay(sender.Handler)
 		}
 
 	case core.CodecPCMA, core.CodecPCMU, core.CodecPCM, core.CodecPCML:
