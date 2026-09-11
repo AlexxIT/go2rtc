@@ -34,12 +34,12 @@ type mockInternalConsumer struct {
 }
 
 // Satisfy core.Info — we only need GetSource for the kick-skip check.
-func (m *mockInternalConsumer) SetProtocol(string)             {}
-func (m *mockInternalConsumer) SetRemoteAddr(string)           {}
-func (m *mockInternalConsumer) SetSource(string)               {}
-func (m *mockInternalConsumer) SetURL(string)                  {}
-func (m *mockInternalConsumer) WithRequest(*http.Request)      {}
-func (m *mockInternalConsumer) GetSource() string              { return m.source }
+func (m *mockInternalConsumer) SetProtocol(string)        {}
+func (m *mockInternalConsumer) SetRemoteAddr(string)      {}
+func (m *mockInternalConsumer) SetSource(string)          {}
+func (m *mockInternalConsumer) SetURL(string)             {}
+func (m *mockInternalConsumer) WithRequest(*http.Request) {}
+func (m *mockInternalConsumer) GetSource() string         { return m.source }
 
 func TestRecursion(t *testing.T) {
 	// create stream with some source
@@ -236,5 +236,15 @@ func TestNewStreamLinksProducers(t *testing.T) {
 			require.Same(t, s, p.stream,
 				"producer %d stream back-ref not set", i)
 		}
+	})
+
+	t.Run("presentation stream control source", func(t *testing.T) {
+		s := NewStream(map[string]any{
+			"url":     "ffmpeg:rtsp://127.0.0.1:8554/porton#video=copy#audio=aac",
+			"control": "porton",
+		})
+		require.Equal(t, "porton", s.control)
+		require.Len(t, s.producers, 1)
+		require.Equal(t, "ffmpeg:rtsp://127.0.0.1:8554/porton#video=copy#audio=aac", s.producers[0].url)
 	})
 }

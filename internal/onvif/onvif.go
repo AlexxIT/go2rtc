@@ -145,7 +145,7 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 	case onvif.PTZGetNodes:
 		b = onvif.GetPTZNodesResponse()
 
-	case onvif.PTZContinuousMove:
+	case onvif.PTZAbsoluteMove, onvif.PTZContinuousMove:
 		name := onvif.FindTagValue(b, "ProfileToken")
 		pan, _ := strconv.ParseFloat(onvif.FindTagAttribute(b, "PanTilt", "x"), 64)
 		tilt, _ := strconv.ParseFloat(onvif.FindTagAttribute(b, "PanTilt", "y"), 64)
@@ -159,7 +159,11 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		b = onvif.GetPTZContinuousMoveResponse()
+		if operation == onvif.PTZAbsoluteMove {
+			b = onvif.GetPTZAbsoluteMoveResponse()
+		} else {
+			b = onvif.GetPTZContinuousMoveResponse()
+		}
 
 	case onvif.PTZStop:
 		b = onvif.GetPTZStopResponse()

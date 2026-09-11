@@ -13,6 +13,7 @@ import (
 type Stream struct {
 	producers []*Producer
 	consumers []core.Consumer
+	control   string
 	mu        sync.Mutex
 	pending   atomic.Int32
 }
@@ -43,7 +44,11 @@ func NewStream(source any) *Stream {
 		s.linkProducers()
 		return s
 	case map[string]any:
-		return NewStream(source["url"])
+		stream := NewStream(source["url"])
+		if control, ok := source["control"].(string); ok {
+			stream.control = control
+		}
+		return stream
 	case nil:
 		return new(Stream)
 	default:
@@ -75,13 +80,28 @@ func (s *Stream) SetSource(source string) {
 }
 
 func (s *Stream) Move(pan, tilt float64) error {
+	if s.control != "" {
+		control := Get(s.control)
+		if control == nil {
+			return errors.New("streams: control stream not found")
+		}
+		return control.Move(pan, tilt)
+	}
+
+	var lastErr error
 	for _, prod := range s.producers {
 		if err := prod.Dial(); err != nil {
+			lastErr = err
 			continue
 		}
 		if err := prod.Move(pan, tilt); err == nil {
 			return nil
+		} else {
+			lastErr = err
 		}
+	}
+	if lastErr != nil {
+		return lastErr
 	}
 	return errors.New("streams: PTZ not supported")
 }

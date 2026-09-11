@@ -29,6 +29,7 @@ const (
 	PTZGetConfigurations = "GetConfigurations"
 	PTZGetNodes          = "GetNodes"
 	PTZGetStatus         = "GetStatus"
+	PTZAbsoluteMove      = "AbsoluteMove"
 	PTZContinuousMove    = "ContinuousMove"
 	PTZStop              = "Stop"
 )
@@ -425,6 +426,12 @@ func GetPTZNodesResponse() []byte {
 func GetPTZStatusResponse() []byte {
 	e := NewEnvelope()
 	e.Append(`<tptz:GetStatusResponse><tptz:PTZStatus><tt:Position><tt:PanTilt x="0" y="0" /></tt:Position><tt:MoveStatus><tt:PanTilt>IDLE</tt:PanTilt></tt:MoveStatus></tptz:PTZStatus></tptz:GetStatusResponse>`)
+	return e.Bytes()
+}
+
+func GetPTZAbsoluteMoveResponse() []byte {
+	e := NewEnvelope()
+	e.Append(`<tptz:AbsoluteMoveResponse />`)
 	return e.Bytes()
 }
 

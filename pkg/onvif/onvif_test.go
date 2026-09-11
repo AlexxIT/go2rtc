@@ -378,6 +378,7 @@ func TestPTZResponses(t *testing.T) {
 		string(GetPTZConfigurationsResponse()),
 		string(GetPTZNodesResponse()),
 		string(GetPTZStatusResponse()),
+		string(GetPTZAbsoluteMoveResponse()),
 		string(GetPTZContinuousMoveResponse()),
 		string(GetPTZStopResponse()),
 	} {
