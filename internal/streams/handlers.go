@@ -4,6 +4,7 @@ import (
 	"errors"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 )
@@ -12,11 +13,37 @@ type Handler func(source string) (core.Producer, error)
 
 var handlers = map[string]Handler{}
 
+// handlersMu guards handlers and redirects. Registration is normally init-time
+// only, but GetProducer is now also reached from the bounded-dial goroutine in
+// producer.go, so the reads no longer all happen on the init goroutine. Locked
+// around map access only, never across a handler call, which can block for
+// seconds and may re-enter GetProducer via a redirect.
+var handlersMu sync.RWMutex
+
 func HandleFunc(scheme string, handler Handler) {
+	handlersMu.Lock()
 	handlers[scheme] = handler
+	handlersMu.Unlock()
+}
+
+func getHandler(scheme string) (Handler, bool) {
+	handlersMu.RLock()
+	defer handlersMu.RUnlock()
+	h, ok := handlers[scheme]
+	return h, ok
+}
+
+func getRedirect(scheme string) (Redirect, bool) {
+	handlersMu.RLock()
+	defer handlersMu.RUnlock()
+	r, ok := redirects[scheme]
+	return r, ok
 }
 
 func SupportedSchemes() []string {
+	handlersMu.RLock()
+	defer handlersMu.RUnlock()
+
 	uniqueKeys := make(map[string]struct{}, len(handlers)+len(redirects))
 	for scheme := range handlers {
 		uniqueKeys[scheme] = struct{}{}
@@ -35,11 +62,11 @@ func HasProducer(url string) bool {
 	if i := strings.IndexByte(url, ':'); i > 0 {
 		scheme := url[:i]
 
-		if _, ok := handlers[scheme]; ok {
+		if _, ok := getHandler(scheme); ok {
 			return true
 		}
 
-		if _, ok := redirects[scheme]; ok {
+		if _, ok := getRedirect(scheme); ok {
 			return true
 		}
 	}
@@ -51,7 +78,7 @@ func GetProducer(url string) (core.Producer, error) {
 	if i := strings.IndexByte(url, ':'); i > 0 {
 		scheme := url[:i]
 
-		if redirect, ok := redirects[scheme]; ok {
+		if redirect, ok := getRedirect(scheme); ok {
 			location, err := redirect(url)
 			if err != nil {
 				return nil, err
@@ -61,7 +88,7 @@ func GetProducer(url string) (core.Producer, error) {
 			}
 		}
 
-		if handler, ok := handlers[scheme]; ok {
+		if handler, ok := getHandler(scheme); ok {
 			return handler(url)
 		}
 	}
@@ -75,14 +102,16 @@ type Redirect func(url string) (string, error)
 var redirects = map[string]Redirect{}
 
 func RedirectFunc(scheme string, redirect Redirect) {
+	handlersMu.Lock()
 	redirects[scheme] = redirect
+	handlersMu.Unlock()
 }
 
 func Location(url string) (string, error) {
 	if i := strings.IndexByte(url, ':'); i > 0 {
 		scheme := url[:i]
 
-		if redirect, ok := redirects[scheme]; ok {
+		if redirect, ok := getRedirect(scheme); ok {
 			return redirect(url)
 		}
 	}
