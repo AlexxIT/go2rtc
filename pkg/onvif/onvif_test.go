@@ -22,6 +22,14 @@ func TestVerifyUsernameToken(t *testing.T) {
 	require.False(t, VerifyUsernameToken([]byte(stale), "admin", "secret"))
 }
 
+func TestVerifyUsernameTokenReplay(t *testing.T) {
+	e := NewEnvelopeWithUser(url.UserPassword("admin", "secret"))
+	b := e.Bytes()
+
+	require.True(t, VerifyUsernameToken(b, "admin", "secret"))
+	require.False(t, VerifyUsernameToken(b, "admin", "secret"))
+}
+
 func TestGetStreamUri(t *testing.T) {
 	tests := []struct {
 		name string

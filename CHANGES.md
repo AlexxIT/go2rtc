@@ -121,7 +121,13 @@ as the primary client/source combination.
   (>5 minute skew) or mismatched tokens with a SOAP
   `ter:NotAuthorized` fault and HTTP 401.
   `GetSystemDateAndTime` is exempted so clients can learn the
-  server's clock before computing a digest against it.
+  server's clock before computing a digest against it. Digest
+  comparison uses `crypto/subtle.ConstantTimeCompare` (not `==`)
+  to avoid a timing side-channel, and a bounded in-memory cache
+  of seen (username, nonce, created) triples rejects replays of
+  a captured token within its freshness window; a future-dated
+  `Created` gets only 30s of clock-skew grace rather than the
+  full 5-minute window.
 - **Why:** The ONVIF server previously dispatched every operation
   regardless of credentials (see 4b). Real ONVIF clients (NVRs,
   Home Assistant) authenticate via WS-Security, not HTTP Basic,
