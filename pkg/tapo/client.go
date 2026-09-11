@@ -187,19 +187,20 @@ func (c *Client) Move(pan, tilt float64) error {
 		return nil
 	}
 
-	conn, err := c.newConn()
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-
 	direction := int(90 - 180*math.Atan2(tilt, pan)/math.Pi)
 	if direction < 0 {
 		direction += 360
 	}
 
-	_, err = c.Request(conn, []byte(fmt.Sprintf(`{"method":"do","motor":{"movestep":{"direction":"%03d"}}}`, direction)))
-	return err
+	host := c.url.Hostname()
+	username := c.url.User.Username()
+	password, _ := c.url.User.Password()
+	if c.url.Scheme == "tapo" && password == "" {
+		password = username
+		username = "admin"
+	}
+
+	return newControlClient(host, username, password).Move(direction)
 }
 
 // Handle - first run will be in probe state
