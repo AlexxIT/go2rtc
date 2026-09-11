@@ -26,8 +26,9 @@ type Client struct {
 	stream  baichuan.Stream
 	channel uint8
 
-	videoEnabled bool
-	audioEnabled bool
+	videoEnabled       bool
+	audioEnabled       bool
+	backchannelEnabled bool
 
 	medias    []*core.Media
 	receivers []*core.Receiver
@@ -72,12 +73,16 @@ func Dial(rawURL string) (*Client, error) {
 	c := &Client{url: u}
 	c.videoEnabled = true
 	c.audioEnabled = true
+	c.backchannelEnabled = true
 
 	if u.Query().Get("video") == "false" {
 		c.videoEnabled = false
 	}
 	if u.Query().Get("audio") == "false" {
 		c.audioEnabled = false
+	}
+	if bc := u.Query().Get("backchannel"); bc == "0" || bc == "false" {
+		c.backchannelEnabled = false
 	}
 
 	// parsing url
@@ -228,8 +233,8 @@ func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Rece
 }
 
 func (c *Client) SetupBackchannel() error {
-	if c.stream == baichuan.StreamMain {
-		return errors.New("reolink: talkback is not supported on the main stream")
+	if !c.backchannelEnabled {
+		return errors.New("reolink: talkback is disabled")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), core.ConnDialTimeout)

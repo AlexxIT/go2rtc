@@ -134,7 +134,7 @@ ProbeLoop:
 		})
 	}
 
-	if c.stream != baichuan.StreamMain {
+	if c.backchannelEnabled {
 		c.medias = append(c.medias, &core.Media{
 			Kind:      core.KindAudio,
 			Direction: core.DirectionSendonly,
@@ -269,10 +269,8 @@ func (c *Client) processPacket(packet baichuan.MediaPacket, videoCount, audioCou
 		relativeUS := continuousUS - c.baseTicks
 
 		if relativeUS < c.lastVideoUS {
-			// Clock jumped backward by more than 5s (camera reset). Realign baseTime to match new timeline.
-			if c.lastVideoUS-relativeUS > 5_000_000 {
-				c.baseTime = time.Now().Add(-time.Duration(relativeUS) * time.Microsecond)
-			}
+			// Clock jumped backward (camera reset or timeline jump). Realign baseTime to match new timeline.
+			c.baseTime = time.Now().Add(-time.Duration(relativeUS) * time.Microsecond)
 		}
 
 		rawVideoRTP := uint32(relativeUS * 90000 / 1_000_000)
@@ -636,12 +634,9 @@ func (g *rtpTimestampGuard) next(ts uint32) uint32 {
 	adjusted := ts + g.offset
 	delta := int32(adjusted - g.last)
 
-	if delta < -900000 || delta > 900000 {
-		g.offset = g.last + 1 - ts
+	if delta <= 0 || delta > 900000 {
 		adjusted = g.last + 1
-	} else if delta <= 0 {
-		g.last++
-		return g.last
+		g.offset = adjusted - ts
 	}
 
 	g.last = adjusted
