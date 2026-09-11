@@ -22,6 +22,16 @@ import (
 func Init() {
 	log = app.GetLogger("onvif")
 
+	var cfg struct {
+		Mod struct {
+			Username string `yaml:"username"`
+			Password string `yaml:"password"`
+		} `yaml:"onvif"`
+	}
+	app.LoadConfig(&cfg)
+	username = cfg.Mod.Username
+	password = cfg.Mod.Password
+
 	streams.HandleFunc("onvif", streamOnvif)
 
 	// ONVIF server on all suburls
@@ -31,7 +41,11 @@ func Init() {
 	api.HandleFunc("api/onvif", apiOnvif)
 }
 
-var log zerolog.Logger
+var (
+	log      zerolog.Logger
+	username string
+	password string
+)
 
 func streamOnvif(rawURL string) (core.Producer, error) {
 	client, err := onvif.NewClient(rawURL)
@@ -76,6 +90,16 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 		Str("user_agent", r.Header.Get("User-Agent")).
 		Str("op", operation).
 		Msgf("[onvif] server request %s %s:\n%s", r.Method, r.RequestURI, b)
+
+	if username != "" && operation != onvif.DeviceGetSystemDateAndTime {
+		if !onvif.VerifyUsernameToken(b, username, password) {
+			log.Warn().Str("remote", r.RemoteAddr).Msg("[onvif] unauthorized")
+			w.Header().Set("Content-Type", "application/soap+xml; charset=utf-8")
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write(onvif.NotAuthorizedResponse())
+			return
+		}
+	}
 
 	switch operation {
 	case onvif.ServiceGetServiceCapabilities, // important for Hass; routed by URL path below

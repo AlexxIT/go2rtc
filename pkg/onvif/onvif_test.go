@@ -10,6 +10,26 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestVerifyUsernameToken(t *testing.T) {
+	u := url.UserPassword("admin", "secret")
+	e := NewEnvelopeWithUser(u)
+
+	require.True(t, VerifyUsernameToken(e.Bytes(), "admin", "secret"))
+	require.False(t, VerifyUsernameToken(e.Bytes(), "admin", "wrong"))
+	require.False(t, VerifyUsernameToken(e.Bytes(), "other", "secret"))
+
+	stale := `<wsse:Security><wsse:UsernameToken><wsse:Username>admin</wsse:Username><wsse:Password>x</wsse:Password><wsse:Nonce>eA==</wsse:Nonce><wsu:Created>2000-01-01T00:00:00Z</wsu:Created></wsse:UsernameToken></wsse:Security>`
+	require.False(t, VerifyUsernameToken([]byte(stale), "admin", "secret"))
+}
+
+func TestVerifyUsernameTokenReplay(t *testing.T) {
+	e := NewEnvelopeWithUser(url.UserPassword("admin", "secret"))
+	b := e.Bytes()
+
+	require.True(t, VerifyUsernameToken(b, "admin", "secret"))
+	require.False(t, VerifyUsernameToken(b, "admin", "secret"))
+}
+
 func TestGetStreamUri(t *testing.T) {
 	tests := []struct {
 		name string

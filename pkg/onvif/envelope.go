@@ -2,9 +2,11 @@ package onvif
 
 import (
 	"crypto/sha1"
+	"crypto/subtle"
 	"encoding/base64"
 	"fmt"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -56,6 +58,79 @@ func NewEnvelopeWithUser(user *url.Userinfo) *Envelope {
 		created)
 	e.Append(prefix2)
 	return e
+}
+
+// nonceTTL bounds both how stale a Created timestamp may be and how long a
+// (username, nonce) pair is remembered for replay rejection.
+const nonceTTL = 5 * time.Minute
+
+// futureSkew is the only leeway given to a Created timestamp that's ahead of
+// our clock (normal clock drift); tokens claiming to be further in the
+// future than this are rejected outright rather than accepted into the
+// full nonceTTL window.
+const futureSkew = 30 * time.Second
+
+var (
+	seenNoncesMu sync.Mutex
+	seenNonces   = map[string]time.Time{}
+)
+
+func VerifyUsernameToken(b []byte, username, password string) bool {
+	if FindTagValue(b, "Username") != username {
+		return false
+	}
+
+	created := FindTagValue(b, "Created")
+	t, err := time.Parse(time.RFC3339Nano, created)
+	if err != nil {
+		return false
+	}
+	if age := time.Since(t); age < -futureSkew || age > nonceTTL {
+		return false
+	}
+
+	nonceB64 := FindTagValue(b, "Nonce")
+	nonce, err := base64.StdEncoding.DecodeString(nonceB64)
+	if err != nil {
+		return false
+	}
+
+	provided, err := base64.StdEncoding.DecodeString(FindTagValue(b, "Password"))
+	if err != nil {
+		return false
+	}
+
+	h := sha1.New()
+	h.Write(nonce)
+	h.Write([]byte(created))
+	h.Write([]byte(password))
+	digest := h.Sum(nil)
+
+	if subtle.ConstantTimeCompare(digest, provided) != 1 {
+		return false
+	}
+
+	// Reject replays of a previously-seen (username, nonce, created) triple.
+	// ponytail: in-memory map, so restarting the process resets it; fine for
+	// a single-instance server, add a shared store if you ever run more than one.
+	key := username + "\x00" + nonceB64 + "\x00" + created
+
+	seenNoncesMu.Lock()
+	defer seenNoncesMu.Unlock()
+
+	if _, dup := seenNonces[key]; dup {
+		return false
+	}
+
+	now := time.Now()
+	for k, exp := range seenNonces {
+		if now.After(exp) {
+			delete(seenNonces, k)
+		}
+	}
+	seenNonces[key] = now.Add(nonceTTL)
+
+	return true
 }
 
 func (e *Envelope) Append(args ...string) {
