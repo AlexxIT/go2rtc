@@ -7,17 +7,6 @@ on:
       - 'master'
     tags:
       - 'v*'
-  # Weekly rebuild so the published image picks up CVE fixes in the
-  # upstream Alpine and Python base layers between tagged releases.
-  # Without this, the master/latest images' OS package set is frozen
-  # at the last push to master — and Alpine ships package updates
-  # constantly. Sunday 04:00 UTC = low-traffic window for both build
-  # runners and any downstream pulls.
-  #
-  # Pattern adopted from upstream PR
-  # https://github.com/AlexxIT/go2rtc/pull/2242.
-  schedule:
-    - cron: '0 4 * * 0'
 
 permissions:
   contents: read
@@ -66,17 +55,6 @@ jobs:
             linux/arm/v7
             linux/arm64/v8
           push: true
-          # Re-resolve FROM golang:${GO_VERSION}-alpine and
-          # FROM python:${PYTHON_VERSION}-alpine against the registry on
-          # every build. When Alpine ships a refreshed base image (which
-          # happens whenever any included apk package is updated), this
-          # bumps the layer SHA and invalidates the GitHub-Actions cache
-          # for downstream layers — forcing the `apk add` instructions to
-          # re-run and pick up current OS package versions. Without
-          # pull:true a cached layer could indefinitely re-use a
-          # vulnerable apk install even though the FROM tag now points
-          # at a newer image. Coupled with the weekly schedule above,
-          # this gives a steady CVE-fix refresh between tagged releases.
           pull: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
