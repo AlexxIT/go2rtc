@@ -103,16 +103,30 @@ as the primary client/source combination.
   leak camera-setup details to unauthenticated callers. This is
   upstream behaviour, not specific to this fork; the note exists
   to make the implicit explicit. No code change.
-- **Upstream fix in progress (not adopted here):** the open
-  pull request https://github.com/AlexxIT/go2rtc/pull/2231 adds
-  WS-Security `UsernameToken` validation to the ONVIF server,
-  gated by dedicated `onvif.username` / `onvif.password` config
-  keys and with a `GetSystemDateAndTime` carve-out so clients
-  can compute clock skew before generating password digests.
-  Tracking the PR rather than merging it locally — this fork
-  prefers to wait for upstream review. The README links to the
-  PR so operators who need authenticated ONVIF in their own
-  deployment know where to find a reference implementation.
+- **Superseded by [4c](#4c-ws-security-usernametoken-authentication-for-onvif-server):**
+  this fork has since implemented WS-Security `UsernameToken`
+  validation (see below) rather than waiting on upstream PR
+  https://github.com/AlexxIT/go2rtc/pull/2231.
+
+### 4c. WS-Security UsernameToken authentication for ONVIF server
+
+- **Files:** `pkg/onvif/envelope.go`, `pkg/onvif/server.go`,
+  `internal/onvif/onvif.go`, `internal/onvif/README.md`
+- **Change:** New `onvif.username` / `onvif.password` config keys
+  (separate from the WebUI/JSON-API `api.username` /
+  `api.password` Basic auth). When set, `VerifyUsernameToken`
+  checks every ONVIF operation's `wsse:UsernameToken` header
+  (PasswordDigest: `Base64(SHA1(nonce + created + password))`)
+  against the configured credentials, rejecting stale
+  (>5 minute skew) or mismatched tokens with a SOAP
+  `ter:NotAuthorized` fault and HTTP 401.
+  `GetSystemDateAndTime` is exempted so clients can learn the
+  server's clock before computing a digest against it.
+- **Why:** The ONVIF server previously dispatched every operation
+  regardless of credentials (see 4b). Real ONVIF clients (NVRs,
+  Home Assistant) authenticate via WS-Security, not HTTP Basic,
+  so `api.username`/`api.password` can't protect this endpoint —
+  dedicated ONVIF-native auth was needed.
 
 ---
 

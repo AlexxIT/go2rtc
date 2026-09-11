@@ -389,6 +389,10 @@ func GetSnapshotUriResponse(uri string) []byte {
 	return e.Bytes()
 }
 
+func NotAuthorizedResponse() []byte {
+	return []byte(`<?xml version="1.0" encoding="utf-8"?><s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"><s:Body><s:Fault><s:Code><s:Value>s:Sender</s:Value><s:Subcode><s:Value xmlns:ter="http://www.onvif.org/ver10/error">ter:NotAuthorized</s:Value></s:Subcode></s:Code><s:Reason><s:Text xml:lang="en">Sender not Authorized</s:Text></s:Reason></s:Fault></s:Body></s:Envelope>`)
+}
+
 func StaticResponse(operation string) []byte {
 	switch operation {
 	case DeviceGetSystemDateAndTime:

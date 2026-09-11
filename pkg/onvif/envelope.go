@@ -58,6 +58,31 @@ func NewEnvelopeWithUser(user *url.Userinfo) *Envelope {
 	return e
 }
 
+func VerifyUsernameToken(b []byte, username, password string) bool {
+	if FindTagValue(b, "Username") != username {
+		return false
+	}
+
+	created := FindTagValue(b, "Created")
+	t, err := time.Parse(time.RFC3339Nano, created)
+	if err != nil || time.Since(t).Abs() > 5*time.Minute {
+		return false
+	}
+
+	nonce, err := base64.StdEncoding.DecodeString(FindTagValue(b, "Nonce"))
+	if err != nil {
+		return false
+	}
+
+	h := sha1.New()
+	h.Write(nonce)
+	h.Write([]byte(created))
+	h.Write([]byte(password))
+	digest := base64.StdEncoding.EncodeToString(h.Sum(nil))
+
+	return FindTagValue(b, "Password") == digest
+}
+
 func (e *Envelope) Append(args ...string) {
 	for _, s := range args {
 		e.buf = append(e.buf, s...)
