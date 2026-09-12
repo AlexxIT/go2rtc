@@ -26,6 +26,10 @@ export class VideoRTC extends HTMLElement {
             'avc1.64002A',      // H.264 high 4.2 (Chromecast 3rd Gen)
             'avc1.640033',      // H.264 high 5.1 (Chromecast with Google TV)
             'hvc1.1.6.L153.B0', // H.265 main 5.1 (Chromecast Ultra)
+            'av01.0.08M.08',    // AV1 Main 4.0 8-bit (up to 2048x1152)
+            'av01.0.12M.08',    // AV1 Main 5.0 8-bit (up to 4K 30fps)
+            'av01.0.13M.08',    // AV1 Main 5.1 8-bit (up to 4K 60fps)
+            'av01.0.13M.10',    // AV1 Main 5.1 10-bit (4K HDR)
             'mp4a.40.2',        // AAC LC
             'mp4a.40.5',        // AAC HE
             'flac',             // FLAC (PCM compatible)
@@ -185,7 +189,7 @@ export class VideoRTC extends HTMLElement {
     /** @param {Function} isSupported */
     codecs(isSupported) {
         return this.CODECS
-            .filter(codec => this.media.includes(codec.includes('vc1') ? 'video' : 'audio'))
+            .filter(codec => this.media.includes(codec.includes('vc1') || codec.startsWith('av01') ? 'video' : 'audio'))
             .filter(codec => isSupported(`video/mp4; codecs="${codec}"`)).join();
     }
 
@@ -451,8 +455,20 @@ export class VideoRTC extends HTMLElement {
 
             this.mseCodecs = msg.value;
 
-            const sb = ms.addSourceBuffer(msg.value);
+            // the server answers with the codec string of the stream, which for
+            // AV1 can be a profile or bit depth this browser can't decode
+            let sb;
+            try {
+                sb = ms.addSourceBuffer(msg.value);
+            } catch (e) {
+                console.warn(e);
+                // stop offering AV1, or every reconnect negotiates it again
+                this.CODECS = this.CODECS.filter(codec => !codec.startsWith('av01.'));
+                this.ws.close(); // reconnect without AV1, or fall to the next mode
+                return;
+            }
             sb.mode = 'segments'; // segments or sequence
+
             sb.addEventListener('updateend', () => {
                 if (!sb.updating && bufLen > 0) {
                     try {
@@ -602,6 +618,7 @@ export class VideoRTC extends HTMLElement {
             }
             if (stream.getAudioTracks().length > 0) rtcPriority += 0x102;
 
+            if (this.mseCodecs.includes('av01.')) msePriority += 0x220;
             if (this.mseCodecs.includes('hvc1.')) msePriority += 0x230;
             if (this.mseCodecs.includes('avc1.')) msePriority += 0x210;
             if (this.mseCodecs.includes('mp4a.')) msePriority += 0x101;

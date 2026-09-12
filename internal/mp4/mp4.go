@@ -123,6 +123,12 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 	header := w.Header()
 	header.Set("Content-Type", mp4.ContentType(cons.Codecs()))
 
+	// AV1 codec params are only known once the first keyframe has arrived,
+	// still before the first write, so the header can be corrected here
+	cons.OnInit = func(contentType string) {
+		header.Set("Content-Type", contentType)
+	}
+
 	if filename := query.Get("filename"); filename != "" {
 		header.Set("Content-Disposition", `attachment; filename="`+filename+`"`)
 	}
