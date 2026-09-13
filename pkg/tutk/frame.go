@@ -11,7 +11,7 @@ import (
 
 const (
 	FrameTypeStart     uint8 = 0x08 // Extended start (36-byte header)
-	FrameTypeStartAlt  uint8 = 0x09 // StartAlt (36-byte header)
+	FrameTypeStartAlt  uint8 = 0x09 // Extended end, including multi-packet frames (36-byte header)
 	FrameTypeCont      uint8 = 0x00 // Continuation (28-byte header)
 	FrameTypeContAlt   uint8 = 0x04 // Continuation alt
 	FrameTypeEndSingle uint8 = 0x01 // Single-packet frame (28-byte)
@@ -184,6 +184,7 @@ func IsStartFrame(frameType uint8) bool {
 func IsEndFrame(frameType uint8) bool {
 	return frameType == FrameTypeEndSingle ||
 		frameType == FrameTypeEndMulti ||
+		frameType == FrameTypeStartAlt ||
 		frameType == FrameTypeEndExt
 }
 
@@ -317,12 +318,7 @@ func (h *FrameHandler) extractPayload(data []byte, channel byte) ([]byte, *Frame
 		headerSize = 36
 	case FrameTypeStartAlt:
 		headerSize = 36
-		if len(data) >= 22 {
-			pktTotal := binary.LittleEndian.Uint16(data[20:])
-			if pktTotal == 1 {
-				fiSize = frameInfoSize
-			}
-		}
+		fiSize = frameInfoSize
 	case FrameTypeCont, FrameTypeContAlt:
 		headerSize = 28
 	case FrameTypeEndSingle, FrameTypeEndMulti:
