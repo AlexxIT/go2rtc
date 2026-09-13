@@ -74,7 +74,7 @@ func NewConn(pc *webrtc.PeerConnection) *Conn {
 			return
 		}
 
-		track, err := c.GetTrack(media, codec)
+		track, err := c.receiverFor(media, codec)
 		if err != nil {
 			return
 		}
@@ -179,6 +179,33 @@ func (c *Conn) getTranseiver(mid string) *webrtc.RTPTransceiver {
 		}
 	}
 	return nil
+}
+
+// receiverFor returns the receiver that should carry a remote track.
+//
+// A consumer that dials this connection calls GetTrack before any track has
+// arrived (nest, for example, returns from Dial right after SetAnswer). It
+// picks a codec entry from the SDP answer - for H264 the first of several
+// payload types - and gets a receiver bound to that pointer. When the remote
+// side then sends on a different payload type, getMediaCodec resolves to a
+// different *Codec and a plain GetTrack would create a second receiver, leaving
+// the consumer attached to one that never receives a packet. Reuse the idle
+// receiver for the same media and codec name instead, and point its codec at
+// the one actually in use.
+func (c *Conn) receiverFor(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
+	for _, receiver := range c.Receivers {
+		if receiver.Codec == codec {
+			return receiver, nil
+		}
+	}
+	for _, receiver := range c.Receivers {
+		if receiver.Media == media && receiver.Packets == 0 &&
+			receiver.Codec != nil && receiver.Codec.Name == codec.Name {
+			receiver.Codec = codec
+			return receiver, nil
+		}
+	}
+	return c.GetTrack(media, codec)
 }
 
 func (c *Conn) getMediaCodec(remote *webrtc.TrackRemote) (*core.Media, *core.Codec) {
