@@ -22,6 +22,11 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
+// ErrUnauthorized is returned when the cloud rejects the session cookies.
+// The serviceToken has a limited lifetime, so a long lived Cloud will start
+// getting it and has to be replaced with a freshly logged in one.
+var ErrUnauthorized = errors.New("xiaomi: unauthorized")
+
 type Cloud struct {
 	client *http.Client
 
@@ -435,6 +440,9 @@ func (c *Cloud) Request(baseURL, apiURL, params string, headers map[string]strin
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
+		if res.StatusCode == http.StatusUnauthorized {
+			return nil, fmt.Errorf("%w: %s", ErrUnauthorized, res.Status)
+		}
 		return nil, errors.New(res.Status)
 	}
 
