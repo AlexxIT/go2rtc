@@ -102,6 +102,9 @@ func listen(network, address string) {
 	server := http.Server{
 		Handler:           Handler,
 		ReadHeaderTimeout: 5 * time.Second, // Example: Set to 5 seconds
+		// no WriteTimeout on purpose: it would cut off long-lived MJPEG/MP4/HLS
+		// streams. Snapshot handlers bound their own wait instead.
+		IdleTimeout: 60 * time.Second,
 	}
 	if err = server.Serve(ln); err != nil {
 		log.Fatal().Err(err).Msg("[api] serve")
@@ -135,6 +138,7 @@ func tlsListen(network, address, certFile, keyFile string) {
 		Handler:           Handler,
 		TLSConfig:         &tls.Config{Certificates: []tls.Certificate{cert}},
 		ReadHeaderTimeout: 5 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 	if err = server.ServeTLS(ln, "", ""); err != nil {
 		log.Fatal().Err(err).Msg("[api] tls serve")

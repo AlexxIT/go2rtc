@@ -1,9 +1,11 @@
 package mjpeg
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -80,14 +82,35 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 
 	if err := stream.AddConsumer(cons); err != nil {
 		log.Error().Err(err).Caller().Send()
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	// handle client disconnect and cameras that never send a keyframe,
+	// otherwise WriteTo below waits forever and the producer can't be stopped
+	ctx, cancel := context.WithTimeout(r.Context(), keyframeTimeout(query))
+	defer cancel()
+
+	var removeOnce sync.Once
+	remove := func() { removeOnce.Do(func() { stream.RemoveConsumer(cons) }) }
+	defer remove()
+
+	go func() {
+		<-ctx.Done()
+		remove()
+	}()
 
 	once := &core.OnceBuffer{} // init and first frame
 	_, _ = cons.WriteTo(once)
 	b = once.Buffer()
 
-	stream.RemoveConsumer(cons)
+	remove()
+
+	if len(b) == 0 {
+		log.Warn().Str("src", query.Get("src")).Msgf("[mjpeg] no keyframe: %s", ctx.Err())
+		http.Error(w, "timeout waiting for keyframe", http.StatusGatewayTimeout)
+		return
+	}
 
 	switch cons.CodecName() {
 	case core.CodecH264, core.CodecH265:
@@ -103,6 +126,18 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJPEGResponse(w, b)
+}
+
+// defaultKeyframeTimeout caps how long a snapshot request waits for a keyframe.
+// Should be above the camera GOP interval, but low enough to not pile up requests.
+const defaultKeyframeTimeout = 10 * time.Second
+
+// keyframeTimeout reads the optional `timeout` query param (seconds).
+func keyframeTimeout(query url.Values) time.Duration {
+	if i := core.Atoi(query.Get("timeout")); i > 0 {
+		return time.Duration(i) * time.Second
+	}
+	return defaultKeyframeTimeout
 }
 
 var cache map[string]cacheEntry
