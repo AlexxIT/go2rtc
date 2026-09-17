@@ -47,12 +47,18 @@ func (w *WriteBuffer) WriteTo(wr io.Writer) (n int64, err error) {
 }
 
 func (w *WriteBuffer) Close() error {
-	if closer, ok := w.Writer.(io.Closer); ok {
+	// Writer is guarded by mu, Reset can swap it concurrently
+	w.mu.Lock()
+	closer, ok := w.Writer.(io.Closer)
+	if !ok {
+		w.done()
+	}
+	w.mu.Unlock()
+
+	if ok {
+		// called outside the lock, Close may write back into the buffer
 		return closer.Close()
 	}
-	w.mu.Lock()
-	w.done()
-	w.mu.Unlock()
 	return nil
 }
 
@@ -83,9 +89,13 @@ func (w *WriteBuffer) add() {
 }
 
 func (w *WriteBuffer) done() {
-	if w.state == start {
+	switch w.state {
+	case start:
 		w.state = end
 		w.wg.Done()
+	case none:
+		// closed before WriteTo, so add() should not start waiting anymore
+		w.state = end
 	}
 }
 

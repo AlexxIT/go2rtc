@@ -126,16 +126,22 @@ func rtspHandler(rawURL string) (core.Producer, error) {
 
 	if err := conn.Describe(); err != nil {
 		if !conn.Backchannel {
+			// Dial opened a socket, Describe failed - don't leak it
+			_ = conn.Close()
 			return nil, err
 		}
 		log.Trace().Msgf("[rtsp] describe (backchannel=%t) err: %v", conn.Backchannel, err)
 
 		// second try without backchannel, we need to reconnect
+		// close the first socket, because Dial overwrites it
+		_ = conn.Close()
+
 		conn.Backchannel = false
 		if err = conn.Dial(); err != nil {
 			return nil, err
 		}
 		if err = conn.Describe(); err != nil {
+			_ = conn.Close()
 			return nil, err
 		}
 	}

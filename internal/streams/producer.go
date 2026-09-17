@@ -34,7 +34,13 @@ type Producer struct {
 	state    state
 	mu       sync.Mutex
 	workerID int
+	failures int // consecutive short-lived sessions, drives the reconnect backoff
 }
+
+// shortSession is the minimum duration of a session that counts as "working".
+// Anything shorter keeps the backoff counter growing, so a camera that accepts
+// the connection but never sends data is not hammered every few seconds.
+const shortSession = 10 * time.Second
 
 const SourceTemplate = "{input}"
 
@@ -158,6 +164,8 @@ func (p *Producer) start() {
 }
 
 func (p *Producer) worker(conn core.Producer, workerID int) {
+	start := time.Now()
+
 	if err := conn.Start(); err != nil {
 		p.mu.Lock()
 		closed := p.workerID != workerID
@@ -170,7 +178,42 @@ func (p *Producer) worker(conn core.Producer, workerID int) {
 		log.Warn().Err(err).Str("url", p.url).Caller().Send()
 	}
 
-	p.reconnect(workerID, 0)
+	// only a session that actually ran resets the backoff, otherwise a camera
+	// that connects and immediately times out would retry every few seconds forever
+	p.mu.Lock()
+	if time.Since(start) < shortSession {
+		p.failures++
+	} else {
+		p.failures = 0
+	}
+	retry := p.failures
+	p.mu.Unlock()
+
+	if retry > 0 {
+		// GetProducer may well succeed (DESCRIBE works) while the session dies
+		// right after PLAY, so the delay has to be applied here too - not just
+		// on the dial-failed path in reconnect()
+		time.AfterFunc(backoff(retry-1), func() {
+			p.reconnect(workerID, retry)
+		})
+		return
+	}
+
+	p.reconnect(workerID, retry)
+}
+
+// backoff returns how long to wait before the next connection attempt.
+func backoff(retry int) time.Duration {
+	switch {
+	case retry < 5:
+		return time.Second
+	case retry < 10:
+		return time.Second * 5
+	case retry < 20:
+		return time.Second * 10
+	default:
+		return time.Minute
+	}
 }
 
 func (p *Producer) reconnect(workerID, retry int) {
@@ -188,16 +231,9 @@ func (p *Producer) reconnect(workerID, retry int) {
 	if err != nil {
 		log.Debug().Msgf("[streams] producer=%s", err)
 
-		timeout := time.Minute
-		if retry < 5 {
-			timeout = time.Second
-		} else if retry < 10 {
-			timeout = time.Second * 5
-		} else if retry < 20 {
-			timeout = time.Second * 10
-		}
+		p.failures = retry + 1 // keep both counters in sync for the next worker
 
-		time.AfterFunc(timeout, func() {
+		time.AfterFunc(backoff(retry), func() {
 			p.reconnect(workerID, retry+1)
 		})
 		return
@@ -267,4 +303,5 @@ func (p *Producer) stop() {
 	p.state = stateNone
 	p.receivers = nil
 	p.senders = nil
+	p.failures = 0
 }

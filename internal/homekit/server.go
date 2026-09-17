@@ -1,6 +1,7 @@
 package homekit
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/sha512"
 	"encoding/hex"
@@ -14,6 +15,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg"
@@ -324,21 +326,48 @@ func (s *server) SetCharacteristic(conn net.Conn, aid uint8, iid uint64, value a
 	}
 }
 
+// keyframeTimeout caps how long a HomeKit snapshot waits for a keyframe.
+const keyframeTimeout = 10 * time.Second
+
 func (s *server) GetImage(conn net.Conn, width, height int) []byte {
 	log.Trace().Str("stream", s.stream).Msgf("[homekit] get image width=%d height=%d", width, height)
 
 	stream := streams.Get(s.stream)
+	if stream == nil {
+		log.Warn().Str("stream", s.stream).Msg("[homekit] get image: stream not found")
+		return nil
+	}
+
 	cons := magic.NewKeyframe()
 
 	if err := stream.AddConsumer(cons); err != nil {
 		return nil
 	}
 
+	// bound the wait, a camera that never sends a keyframe would otherwise
+	// block here forever and pin the producer
+	ctx, cancel := context.WithTimeout(context.Background(), keyframeTimeout)
+	defer cancel()
+
+	var removeOnce sync.Once
+	remove := func() { removeOnce.Do(func() { stream.RemoveConsumer(cons) }) }
+	defer remove()
+
+	go func() {
+		<-ctx.Done()
+		remove()
+	}()
+
 	once := &core.OnceBuffer{} // init and first frame
 	_, _ = cons.WriteTo(once)
 	b := once.Buffer()
 
-	stream.RemoveConsumer(cons)
+	remove()
+
+	if len(b) == 0 {
+		log.Warn().Str("stream", s.stream).Msg("[homekit] get image: no keyframe")
+		return nil
+	}
 
 	switch cons.CodecName() {
 	case core.CodecH264, core.CodecH265:
