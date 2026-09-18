@@ -69,16 +69,19 @@ const (
 )
 
 type DTLSConn struct {
-	conn    *net.UDPConn
-	addr    *net.UDPAddr
-	frames  *tutk.FrameHandler
-	err     error
-	verbose bool
-	ctx     context.Context
-	cancel  context.CancelFunc
-	wg      sync.WaitGroup
-	mu      sync.RWMutex
-	writeMu sync.Mutex
+	conn     *net.UDPConn
+	addr     *net.UDPAddr
+	frames   *tutk.FrameHandler
+	err      error
+	verbose  bool
+	ctx      context.Context
+	cancel   context.CancelFunc
+	wg       sync.WaitGroup
+	mu       sync.RWMutex
+	avMu     sync.Mutex
+	ackMu    sync.Mutex
+	writeMu  sync.Mutex
+	reliable reliableMedia
 
 	// DTLS
 	clientConn *dtls.Conn
@@ -168,19 +171,28 @@ func DialDTLS(host string, port int, uid, authKey, enr string, verbose bool) (*D
 	return c, nil
 }
 
-func (c *DTLSConn) AVClientStart(timeout time.Duration) error {
+func (c *DTLSConn) AVClientStart(timeout time.Duration, resend bool) error {
+	if resend {
+		c.reliable.enable()
+	}
+	c.mu.RLock()
+	conn := c.clientConn
+	c.mu.RUnlock()
+	if conn == nil {
+		return net.ErrClosed
+	}
 	randomID := tutk.GenSessionID()
-	pkt1 := c.msgAVLogin(magicAVLogin1, 570, 0x0001, randomID)
-	pkt2 := c.msgAVLogin(magicAVLogin2, 572, 0x0000, randomID)
+	pkt1 := c.msgAVLogin(magicAVLogin1, 570, 0x0001, randomID, resend)
+	pkt2 := c.msgAVLogin(magicAVLogin2, 572, 0x0000, randomID, resend)
 	pkt2[20]++ // pkt2 has randomID incremented by 1
 
-	if _, err := c.clientConn.Write(pkt1); err != nil {
+	if _, err := conn.Write(pkt1); err != nil {
 		return fmt.Errorf("av login 1 failed: %w", err)
 	}
 
 	time.Sleep(10 * time.Millisecond)
 
-	if _, err := c.clientConn.Write(pkt2); err != nil {
+	if _, err := conn.Write(pkt2); err != nil {
 		return fmt.Errorf("av login 2 failed: %w", err)
 	}
 
@@ -196,14 +208,19 @@ func (c *DTLSConn) AVClientStart(timeout time.Duration) error {
 			if len(data) >= 32 && binary.LittleEndian.Uint16(data) == magicAVLoginResp {
 				c.hasTwoWayStreaming = data[31] == 1
 
-				ack := c.msgACK()
-				c.clientConn.Write(ack)
+				if err := c.sendACK(conn); err != nil {
+					return err
+				}
 
 				// Start ACK sender for continuous streaming
 				c.wg.Add(1)
 				go func() {
 					defer c.wg.Done()
-					ackTicker := time.NewTicker(100 * time.Millisecond)
+					ackInterval := 100 * time.Millisecond
+					if resend {
+						ackInterval = 20 * time.Millisecond
+					}
+					ackTicker := time.NewTicker(ackInterval)
 					defer ackTicker.Stop()
 
 					for {
@@ -211,9 +228,9 @@ func (c *DTLSConn) AVClientStart(timeout time.Duration) error {
 						case <-c.ctx.Done():
 							return
 						case <-ackTicker.C:
-							if c.clientConn != nil {
-								ack := c.msgACK()
-								c.clientConn.Write(ack)
+							if err := c.sendACK(conn); err != nil {
+								c.fail(err)
+								return
 							}
 						}
 					}
@@ -437,8 +454,15 @@ func (c *DTLSConn) WriteAndWaitIOCtrl(payload []byte, match func([]byte) bool, t
 				return nil, io.EOF
 			}
 
-			ack := c.msgACK()
-			c.clientConn.Write(ack)
+			c.mu.RLock()
+			conn := c.clientConn
+			c.mu.RUnlock()
+			if conn == nil {
+				return nil, net.ErrClosed
+			}
+			if err := c.sendACK(conn); err != nil {
+				return nil, err
+			}
 
 			if match(data) {
 				return data, nil
@@ -588,6 +612,9 @@ func (c *DTLSConn) connect() error {
 
 func (c *DTLSConn) worker() {
 	defer c.wg.Done()
+	c.mu.RLock()
+	conn := c.clientConn
+	c.mu.RUnlock()
 
 	buf := make([]byte, 2048)
 
@@ -598,7 +625,7 @@ func (c *DTLSConn) worker() {
 		default:
 		}
 
-		n, err := c.clientConn.Read(buf)
+		n, err := conn.Read(buf)
 		if err != nil {
 			c.fail(err)
 			return
@@ -609,6 +636,29 @@ func (c *DTLSConn) worker() {
 		}
 
 		data := buf[:n]
+		packets, stats, handled, err := c.reliable.handle(data, time.Now())
+		if err != nil {
+			c.fail(err)
+			return
+		}
+		if stats != nil {
+			if _, err := conn.Write(stats); err != nil {
+				c.fail(err)
+				return
+			}
+		}
+		for _, packet := range packets {
+			c.frames.Handle(packet)
+		}
+		if handled {
+			if data[0] == 0x0c && data[1]&5 != 0 {
+				if err := c.sendACK(conn); err != nil {
+					c.fail(err)
+					return
+				}
+			}
+			continue
+		}
 		magic := binary.LittleEndian.Uint16(data)
 
 		if c.verbose {
@@ -623,7 +673,8 @@ func (c *DTLSConn) worker() {
 			c.queue(c.rawCmd, data)
 
 		case protoVersion:
-			// Seq-Tracking
+			// Seq-Tracking for sessions without media retransmission.
+			c.avMu.Lock()
 			if len(data) >= 8 {
 				seq := binary.LittleEndian.Uint16(data[4:])
 				if !c.rxSeqInit {
@@ -633,6 +684,7 @@ func (c *DTLSConn) worker() {
 					c.rxSeqEnd = seq
 				}
 			}
+			c.avMu.Unlock()
 			c.queue(c.rawCmd, data)
 
 		case magicACK:
@@ -808,7 +860,7 @@ func (c *DTLSConn) msgSession() []byte {
 	return b
 }
 
-func (c *DTLSConn) msgAVLogin(magic uint16, size int, flags uint16, randomID []byte) []byte {
+func (c *DTLSConn) msgAVLogin(magic uint16, size int, flags uint16, randomID []byte, resend bool) []byte {
 	b := make([]byte, size)
 	binary.LittleEndian.PutUint16(b, magic)
 	binary.LittleEndian.PutUint16(b[2:], protoVersion)
@@ -819,6 +871,10 @@ func (c *DTLSConn) msgAVLogin(magic uint16, size int, flags uint16, randomID []b
 	copy(b[280:], c.enr)                                // password/ENR
 	binary.LittleEndian.PutUint32(b[540:], 4)           // security_mode ?
 	binary.LittleEndian.PutUint32(b[552:], defaultCaps) // capabilities
+	// Resend flag after the two 257-byte credential fields.
+	if resend {
+		b[538] = 1
+	}
 	return b
 }
 
@@ -921,6 +977,8 @@ func (c *DTLSConn) msgTxDataCC51(payload []byte, channel byte) []byte {
 }
 
 func (c *DTLSConn) msgACK() []byte {
+	c.avMu.Lock()
+	defer c.avMu.Unlock()
 	c.ackFlags++
 	b := make([]byte, 24)
 	binary.LittleEndian.PutUint16(b[0:], magicACK)     // 0x0009
@@ -952,6 +1010,8 @@ func (c *DTLSConn) msgKeepalive(incoming []byte) []byte {
 }
 
 func (c *DTLSConn) msgIOCtrl(payload []byte) []byte {
+	c.avMu.Lock()
+	defer c.avMu.Unlock()
 	b := make([]byte, 40+len(payload))
 	binary.LittleEndian.PutUint16(b, protoVersion)     // magic
 	binary.LittleEndian.PutUint16(b[2:], protoVersion) // version
@@ -1000,4 +1060,25 @@ func (c *DTLSConn) fail(err error) {
 	}
 	c.mu.Unlock()
 	c.cancel()
+}
+
+// sendACK sends a selective ACK when retransmission is enabled, or the
+// legacy ACK otherwise.
+func (c *DTLSConn) sendACK(conn *dtls.Conn) error {
+	c.ackMu.Lock()
+	defer c.ackMu.Unlock()
+	ack, err := c.reliable.ack(time.Now())
+	if err != nil {
+		return err
+	}
+	if ack == nil {
+		ack = c.msgACK()
+	} else {
+		c.avMu.Lock()
+		binary.LittleEndian.PutUint32(ack[4:], c.avSeq)
+		c.avSeq++
+		c.avMu.Unlock()
+	}
+	_, err = conn.Write(ack)
+	return err
 }
