@@ -78,6 +78,7 @@ type DTLSConn struct {
 	cancel  context.CancelFunc
 	wg      sync.WaitGroup
 	mu      sync.RWMutex
+	writeMu sync.Mutex
 
 	// DTLS
 	clientConn *dtls.Conn
@@ -357,6 +358,9 @@ func (c *DTLSConn) Write(data []byte) error {
 }
 
 func (c *DTLSConn) WriteDTLS(payload []byte, channel byte) error {
+	// The client and server DTLS channels share c.seq.
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
 	var frame []byte
 	if c.isCC51 {
 		frame = c.msgTxDataCC51(payload, channel)
@@ -490,6 +494,8 @@ func (c *DTLSConn) Close() error {
 }
 
 func (c *DTLSConn) Error() error {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	if c.err != nil {
 		return c.err
 	}
@@ -594,7 +600,7 @@ func (c *DTLSConn) worker() {
 
 		n, err := c.clientConn.Read(buf)
 		if err != nil {
-			c.err = err
+			c.fail(err)
 			return
 		}
 
@@ -984,4 +990,14 @@ func hexDump(data []byte) string {
 		result += fmt.Sprintf("    ... (truncated, showing %d of %d bytes)\n", maxBytes, totalLen)
 	}
 	return result
+}
+
+// fail records the first error and stops the background goroutines.
+func (c *DTLSConn) fail(err error) {
+	c.mu.Lock()
+	if c.err == nil {
+		c.err = err
+	}
+	c.mu.Unlock()
+	c.cancel()
 }
