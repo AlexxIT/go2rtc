@@ -18,6 +18,13 @@ type Conn struct {
 
 	Mode core.Mode `json:"mode"`
 
+	// IgnoreDisconnected - don't close connection on transient `disconnected` state,
+	// wait for `failed` or `closed` instead. Pion fires `disconnected` after 5 seconds
+	// without incoming packets and can return to `connected` when packets resume,
+	// or fires `failed` after 25 more seconds.
+	// Useful for producers with expensive reconnect (ex. Nest with API rate limits).
+	IgnoreDisconnected bool
+
 	pc *webrtc.PeerConnection
 
 	offer  string
@@ -129,22 +136,29 @@ func NewConn(pc *webrtc.PeerConnection) *Conn {
 	// Fail connection:
 	// 14:53:08 ICE connection state changed: checking
 	// 14:53:39 peer connection state changed: failed
-	pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
-		c.Fire(state)
-
-		switch state {
-		case webrtc.PeerConnectionStateConnected:
-			for _, sender := range c.Senders {
-				sender.Start()
-			}
-		case webrtc.PeerConnectionStateDisconnected, webrtc.PeerConnectionStateFailed, webrtc.PeerConnectionStateClosed:
-			// disconnect event comes earlier, than failed
-			// but it comes only for success connections
-			_ = c.Close()
-		}
-	})
+	pc.OnConnectionStateChange(c.onConnectionStateChange)
 
 	return c
+}
+
+func (c *Conn) onConnectionStateChange(state webrtc.PeerConnectionState) {
+	c.Fire(state)
+
+	switch state {
+	case webrtc.PeerConnectionStateConnected:
+		for _, sender := range c.Senders {
+			sender.Start()
+		}
+	case webrtc.PeerConnectionStateDisconnected:
+		// disconnect event comes earlier, than failed
+		// but it comes only for success connections
+		if c.IgnoreDisconnected {
+			return
+		}
+		_ = c.Close()
+	case webrtc.PeerConnectionStateFailed, webrtc.PeerConnectionStateClosed:
+		_ = c.Close()
+	}
 }
 
 func (c *Conn) MarshalJSON() ([]byte, error) {

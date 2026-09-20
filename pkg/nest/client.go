@@ -118,6 +118,10 @@ func rtcConn(nestAPI *API, rawURL, projectID, deviceID string) (*WebRTCClient, e
 		conn.Mode = core.ModeActiveProducer
 		conn.Protocol = "http"
 		conn.URL = rawURL
+		// Nest stream can pause for several seconds and continue, so `disconnected` state
+		// is not a reason to reconnect - each reconnect is a new stream session on Google API
+		// https://github.com/AlexxIT/go2rtc/issues/723
+		conn.IgnoreDisconnected = true
 
 		// https://developers.google.com/nest/device-access/traits/device/camera-live-stream#generatewebrtcstream-request-fields
 		medias := []*core.Media{
