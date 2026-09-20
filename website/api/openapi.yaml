@@ -206,6 +206,31 @@ paths:
         default:
           description: ""
 
+  /api/macwatch:
+    get:
+      summary: Get state of the MAC Watch module
+      description: |
+        Returns the MAC address and the actual IP address of every camera from
+        the config file.
+      tags: [ Config ]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              example: '{"enabled":true,"cameras":[{"stream":"dahua1","mac":"aa:bb:cc:dd:ee:ff","ip":"192.168.1.71","status":"updated"}]}'
+    post:
+      summary: Rescan camera IP addresses
+      description: |
+        Force a rescan of the ARP table and rewrite the config file for all
+        cameras with a changed IP address. Returns the same response as GET.
+      tags: [ Config ]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json: { example: '{"enabled":true,"cameras":[]}' }
+
 
 
   /api/streams:
