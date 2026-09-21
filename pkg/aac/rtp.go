@@ -120,15 +120,25 @@ func RTPToADTS(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 
 	return func(packet *rtp.Packet) {
 		src := packet.Payload
-		dst := make([]byte, 0, len(src))
+		if len(src) < 2 {
+			return
+		}
 
 		headersSize := binary.BigEndian.Uint16(src) >> 3
+		if headersSize%2 != 0 || int(headersSize) > len(src)-2 {
+			return
+		}
+
+		dst := make([]byte, 0, len(src))
 		headers := src[2 : 2+headersSize]
 		units := src[2+headersSize:]
 
-		for len(headers) > 0 {
+		for len(headers) >= 2 {
 			unitSize := binary.BigEndian.Uint16(headers) >> 3
 			headers = headers[2:]
+			if int(unitSize) > len(units) {
+				return
+			}
 			unit := units[:unitSize]
 			units = units[unitSize:]
 
