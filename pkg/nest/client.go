@@ -184,6 +184,9 @@ func rtcConn(nestAPI *API, rawURL, projectID, deviceID string) (*WebRTCClient, e
 		// is not a reason to reconnect - each reconnect is a new stream session on Google API
 		// https://github.com/AlexxIT/go2rtc/issues/723
 		conn.IgnoreDisconnected = true
+		// Google sends the first keyframe late (observed: >20 s) and consumers like
+		// Frigate's ffmpeg give up before that, so ask for one when none arrived.
+		conn.KeyframeInterval = 5 * time.Second
 
 		conn.Listen(func(msg any) {
 			if state, ok := msg.(pion.PeerConnectionState); ok {
