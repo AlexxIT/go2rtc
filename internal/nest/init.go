@@ -5,12 +5,15 @@ import (
 	"strings"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
+	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/nest"
 )
 
 func Init() {
+	nest.Log = app.GetLogger("nest")
+
 	streams.HandleFunc("nest", func(source string) (core.Producer, error) {
 		return nest.Dial(source)
 	})
