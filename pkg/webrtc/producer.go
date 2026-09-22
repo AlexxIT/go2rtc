@@ -14,6 +14,21 @@ func (c *Conn) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, e
 		}
 	}
 
+	// A producer m-line carries a single incoming RTP stream even when it was
+	// negotiated with several codecs (ex. Nest offers two H264 payload types on
+	// one video m-line). Reuse the receiver already created for this media so the
+	// incoming track and the consumer bind to the same receiver; otherwise the
+	// consumer attaches to one codec's receiver while the RTP arrives on the
+	// other, and no media is forwarded.
+	switch c.Mode {
+	case core.ModeActiveProducer, core.ModePassiveProducer:
+		for _, track := range c.Receivers {
+			if track.Media == media {
+				return track, nil
+			}
+		}
+	}
+
 	switch c.Mode {
 	case core.ModePassiveConsumer: // backchannel from browser
 		// set codec for consumer recv track so remote peer should send media with this codec
