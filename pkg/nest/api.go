@@ -209,11 +209,8 @@ func (a *API) ExchangeSDP(projectID, deviceID, offer string) (string, error) {
 		if res.StatusCode == 409 || res.StatusCode == 429 || res.StatusCode == 401 {
 			res.Body.Close()
 			if attempt < maxRetries-1 {
-				Log.Warn().Str("status", res.Status).Int("attempt", attempt+1).
-					Dur("retry_in", retryDelay).Msg("[nest] exchange sdp failed, retrying")
 				// Get new token from Google
 				if err := a.refreshToken(); err != nil {
-					Log.Warn().Err(err).Msg("[nest] token refresh failed")
 					return "", err
 				}
 				time.Sleep(retryDelay)
@@ -494,8 +491,6 @@ func (a *API) StartExtendStreamTimer() {
 				err := a.extendOnce()
 				if err == nil {
 					attempt = 0
-					Log.Debug().Time("stream_expires_at", a.StreamExpiresAt).
-						Msg("[nest] stream extended")
 					timer.Reset(a.extendDelay())
 					continue
 				}
@@ -505,9 +500,6 @@ func (a *API) StartExtendStreamTimer() {
 				// has expired the stream is dead for sure: report it and exit,
 				// the owner closes the producer and go2rtc re-dials.
 				if !time.Now().Before(a.StreamExpiresAt) {
-					Log.Warn().Err(err).Int("attempt", attempt).
-						Time("stream_expires_at", a.StreamExpiresAt).
-						Msg("[nest] stream session lost")
 					if f := a.OnSessionLost; f != nil {
 						f(err)
 					}
@@ -515,9 +507,6 @@ func (a *API) StartExtendStreamTimer() {
 				}
 
 				delay := extendRetryDelays[min(attempt, len(extendRetryDelays))-1]
-				Log.Warn().Err(err).Int("attempt", attempt).Dur("retry_in", delay).
-					Time("stream_expires_at", a.StreamExpiresAt).
-					Msg("[nest] extend stream failed")
 				timer.Reset(delay)
 			case <-stop:
 				return
@@ -540,7 +529,6 @@ func (a *API) extendOnce() error {
 		if err := a.refreshToken(); err != nil {
 			return errors.New("nest: token refresh: " + err.Error())
 		}
-		Log.Debug().Time("token_expires_at", a.ExpiresAt).Msg("[nest] token refreshed")
 	}
 	return a.ExtendStream()
 }
