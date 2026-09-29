@@ -157,6 +157,9 @@ func (c *Conn) readMessage() (byte, uint32, []byte, error) {
 		if _, err = io.ReadFull(c.rd, data); err != nil {
 			return 0, 0, nil, err
 		}
+		if ch.tagType == TypeSetPacketSize && len(data) == 4 {
+			c.rdPacketSize = binary.BigEndian.Uint32(data)
+		}
 		return ch.tagType, ch.timeMS, data, nil
 	}
 

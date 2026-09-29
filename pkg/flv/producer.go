@@ -1,10 +1,10 @@
 package flv
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/aac"
@@ -133,93 +133,91 @@ func (c *Producer) probe() error {
 	c.rd.BufferSize = core.ProbeSize
 	defer c.rd.Reset()
 
-	// Normal software sends:
-	// 1. Video/audio flag in header
-	// 2. MetaData as first tag (with video/audio codec info)
-	// 3. Video/audio headers in 2nd and 3rd tag
-
-	// Reolink camera sends:
-	// 1. Empty video/audio flag
-	// 2. MedaData without stereo key for AAC
-	// 3. Audio header after Video keyframe tag
-
-	// OpenIPC camera (on old firmwares) sends:
-	// 1. Empty video/audio flag
-	// 2. No MetaData packet
-	// 3. Sends a video packet in more than 3 seconds
 	waitVideo := true
-	waitAudio := true
+	hasAudio := false
 	timeout := time.Now().Add(time.Second * 5)
 
-	for (waitVideo || waitAudio) && time.Now().Before(timeout) {
+	for waitVideo && time.Now().Before(timeout) {
 		pkt, err := c.readPacket()
 		if err != nil {
 			return err
 		}
 
-		//log.Printf("%d %0.20s", pkt.PayloadType, pkt.Payload)
-
 		switch pkt.PayloadType {
 		case TagAudio:
-			if !waitAudio {
+			if hasAudio || len(pkt.Payload) < 2 {
 				continue
 			}
-
-			_ = pkt.Payload[1] // bounds
 
 			codecID := pkt.Payload[0] >> 4 // SoundFormat
-			_ = pkt.Payload[0] & 0b1100    // SoundRate
-			_ = pkt.Payload[0] & 0b0010    // SoundSize
-			_ = pkt.Payload[0] & 0b0001    // SoundType
-
-			if codecID != CodecAAC {
-				continue
+			if codecID == CodecAAC {
+				var codec *core.Codec
+				if pkt.Payload[1] == 0 {
+					codec = aac.ConfigToCodec(pkt.Payload[2:])
+				} else {
+					codec = &core.Codec{
+						Name:        core.CodecAAC,
+						ClockRate:   44100,
+						Channels:    2,
+						PayloadType: core.PayloadTypeRAW,
+					}
+				}
+				if codec != nil {
+					media := &core.Media{
+						Kind:      core.KindAudio,
+						Direction: core.DirectionRecvonly,
+						Codecs:    []*core.Codec{codec},
+					}
+					c.Medias = append(c.Medias, media)
+					hasAudio = true
+				}
 			}
-
-			if pkt.Payload[1] != 0 { // check if header
-				continue
-			}
-
-			codec := aac.ConfigToCodec(pkt.Payload[2:])
-			media := &core.Media{
-				Kind:      core.KindAudio,
-				Direction: core.DirectionRecvonly,
-				Codecs:    []*core.Codec{codec},
-			}
-			c.Medias = append(c.Medias, media)
-			waitAudio = false
 
 		case TagVideo:
-			if !waitVideo {
+			if !waitVideo || len(pkt.Payload) < 2 {
 				continue
 			}
 
 			var codec *core.Codec
 
 			if isExHeader(pkt.Payload) {
-				if string(pkt.Payload[1:5]) != "hvc1" {
-					continue
-				}
-
-				if packetType := pkt.Payload[0] & 0b1111; packetType != PacketTypeSequenceStart {
-					continue
-				}
-
-				codec = h265.ConfigToCodec(pkt.Payload[5:])
-			} else {
-				_ = pkt.Payload[0] >> 4 // FrameType
-
-				if packetType := pkt.Payload[1]; packetType != PacketTypeAVCHeader { // check if header
-					continue
-				}
-
-				switch codecID := pkt.Payload[0] & 0b1111; codecID {
-				case CodecH264:
-					codec = h264.ConfigToCodec(pkt.Payload[5:])
-				case CodecHEVC:
+				if len(pkt.Payload) >= 5 && string(pkt.Payload[1:5]) == "hvc1" {
 					codec = h265.ConfigToCodec(pkt.Payload[5:])
-				default:
-					continue
+				}
+			} else {
+				packetType := pkt.Payload[1]
+				codecID := pkt.Payload[0] & 0b1111
+
+				if packetType == PacketTypeAVCHeader {
+					switch codecID {
+					case CodecH264:
+						codec = h264.ConfigToCodec(pkt.Payload[5:])
+					case CodecHEVC:
+						codec = h265.ConfigToCodec(pkt.Payload[5:])
+					}
+				} else if packetType == PacketTypeAVCNALU {
+					switch codecID {
+					case CodecH264:
+						c := h264.AVCCToCodec(pkt.Payload[5:])
+						if c != nil && strings.Contains(c.FmtpLine, "sprop-parameter-sets") {
+							codec = c
+						}
+					case CodecHEVC:
+						codec = &core.Codec{
+							Name:        core.CodecH265,
+							ClockRate:   90000,
+							PayloadType: core.PayloadTypeRAW,
+						}
+					}
+				}
+			}
+
+			if codec == nil {
+				codec = &core.Codec{
+					Name:        core.CodecH264,
+					ClockRate:   90000,
+					FmtpLine:    "packetization-mode=1",
+					PayloadType: core.PayloadTypeRAW,
 				}
 			}
 
@@ -232,19 +230,22 @@ func (c *Producer) probe() error {
 			waitVideo = false
 
 		case TagData:
-			if !bytes.Contains(pkt.Payload, []byte("onMetaData")) {
-				continue
-			}
-			// Dahua cameras doesn't send videocodecid
-			if !bytes.Contains(pkt.Payload, []byte("videocodecid")) &&
-				!bytes.Contains(pkt.Payload, []byte("width")) &&
-				!bytes.Contains(pkt.Payload, []byte("framerate")) {
-				waitVideo = false
-			}
-			if !bytes.Contains(pkt.Payload, []byte("audiocodecid")) {
-				waitAudio = false
-			}
+			// No-op for onMetaData
 		}
+	}
+
+	if len(c.Medias) == 0 {
+		media := &core.Media{
+			Kind:      core.KindVideo,
+			Direction: core.DirectionRecvonly,
+			Codecs: []*core.Codec{{
+				Name:        core.CodecH264,
+				ClockRate:   90000,
+				FmtpLine:    "packetization-mode=1",
+				PayloadType: core.PayloadTypeRAW,
+			}},
+		}
+		c.Medias = append(c.Medias, media)
 	}
 
 	return nil
