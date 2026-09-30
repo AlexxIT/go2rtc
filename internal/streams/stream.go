@@ -47,6 +47,21 @@ func NewStream(source any) *Stream {
 	}
 }
 
+// Conns returns the live connections of this stream's producers (nil for
+// producers that are not connected), so a module can reach a source's own
+// control channel -- e.g. a camera's motor -- over the session already open.
+func (s *Stream) Conns() []core.Producer {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	conns := make([]core.Producer, 0, len(s.producers))
+	for _, prod := range s.producers {
+		prod.mu.Lock()
+		conns = append(conns, prod.conn)
+		prod.mu.Unlock()
+	}
+	return conns
+}
+
 func (s *Stream) Sources() []string {
 	sources := make([]string, 0, len(s.producers))
 	for _, prod := range s.producers {
