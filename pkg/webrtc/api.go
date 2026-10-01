@@ -297,6 +297,15 @@ func RegisterDefaultCodecs(m *webrtc.MediaEngine) error {
 			},
 			PayloadType: 98, // Chrome v110 - PayloadType: 112
 		},
+		// Chrome 111, Firefox 136
+		{
+			RTPCodecCapability: webrtc.RTPCodecCapability{
+				MimeType:     webrtc.MimeTypeAV1,
+				ClockRate:    90000,
+				RTCPFeedback: videoRTCPFeedback,
+			},
+			PayloadType: 99,
+		},
 		// macOS Safari 15.1
 		{
 			RTPCodecCapability: webrtc.RTPCodecCapability{

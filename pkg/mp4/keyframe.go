@@ -3,6 +3,7 @@ package mp4
 import (
 	"io"
 
+	"github.com/AlexxIT/go2rtc/pkg/av1"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
@@ -25,6 +26,7 @@ func NewKeyframe(medias []*core.Media) *Keyframe {
 				Codecs: []*core.Codec{
 					{Name: core.CodecH264},
 					{Name: core.CodecH265},
+					{Name: core.CodecAV1},
 				},
 			},
 		}
@@ -45,13 +47,21 @@ func NewKeyframe(medias []*core.Media) *Keyframe {
 }
 
 func (c *Keyframe) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver) error {
-	c.muxer.AddTrack(track.Codec)
-	init, err := c.muxer.GetInit()
-	if err != nil {
-		return err
+	// clone because the AV1 branch fills FmtpLine from the first keyframe
+	codec := track.Codec.Clone()
+	c.muxer.AddTrack(codec)
+
+	// AV1 has no codec params in the SDP, its init segment is built below
+	var init []byte
+	if track.Codec.Name != core.CodecAV1 {
+		var err error
+		if init, err = c.muxer.GetInit(); err != nil {
+			return err
+		}
 	}
 
-	handler := core.NewSender(media, track.Codec)
+	// the clone, so Codecs reports the params the AV1 branch fills in below
+	handler := core.NewSender(media, codec)
 
 	switch track.Codec.Name {
 	case core.CodecH264:
@@ -90,6 +100,40 @@ func (c *Keyframe) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 
 		if track.Codec.IsRTP() {
 			handler.Handler = h265.RTPDepay(track.Codec, handler.Handler)
+		}
+
+	case core.CodecAV1:
+		seqHdrOK := av1.GetSequenceHeader(codec.FmtpLine) != nil
+
+		handler.Handler = func(packet *rtp.Packet) {
+			// the av1C box needs the sequence header, which encoders repeat in
+			// front of every keyframe
+			if !seqHdrOK {
+				seqHdr := av1.SequenceHeader(packet.Payload)
+				if seqHdr == nil {
+					return
+				}
+				codec.FmtpLine = av1.EncodeFmtpLine(seqHdr)
+				seqHdrOK = true
+			}
+
+			if !av1.IsKeyframe(packet.Payload) {
+				return
+			}
+
+			init, err := c.muxer.GetInit()
+			if err != nil {
+				return
+			}
+
+			b := append(init, c.muxer.GetPayload(0, packet)...)
+			if n, err := c.wr.Write(b); err == nil {
+				c.Send += n
+			}
+		}
+
+		if track.Codec.IsRTP() {
+			handler.Handler = av1.RTPDepay(handler.Handler)
 		}
 	}
 
