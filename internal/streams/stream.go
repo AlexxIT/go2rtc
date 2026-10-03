@@ -12,6 +12,7 @@ type Stream struct {
 	producers []*Producer
 	consumers []core.Consumer
 	mu        sync.Mutex
+	preloadMu sync.Mutex // Also serialize preload changes through stream aliases.
 	pending   atomic.Int32
 }
 
