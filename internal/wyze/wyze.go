@@ -190,6 +190,11 @@ func buildStreamURL(cam *wyze.Camera) string {
 		query.Set("dtls", "true")
 	}
 
+	if cam.ParentMAC != "" {
+		query.Set("parent_mac", cam.ParentMAC)
+		query.Set("parent_enr", cam.ParentENR)
+	}
+
 	return fmt.Sprintf("wyze://%s?%s", cam.IP, query.Encode())
 }
 

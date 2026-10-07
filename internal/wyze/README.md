@@ -9,7 +9,7 @@ This source allows you to stream from [Wyze](https://wyze.com/) cameras using na
 1. **Requires Wyze account**. You need to login once via the WebUI to load your cameras.
 2. **Requires firmware with DTLS**. Only cameras with DTLS-enabled firmware are supported.
 3. Internet access is only needed when loading cameras from your account. After that, all streaming is local P2P.
-4. Connection to the camera is local only (direct P2P to camera IP).
+4. Connection to the camera is local only (direct P2P to camera IP, or to the base station's IP for cameras behind a base station).
 
 **Features:**
 
@@ -46,15 +46,17 @@ The stream URL is automatically generated when you add cameras via the WebUI:
 wyze://[IP]?uid=[P2P_ID]&enr=[ENR]&mac=[MAC]&model=[MODEL]&subtype=[hd|sd]&dtls=true
 ```
 
-| Parameter | Description                                     |
-|-----------|-------------------------------------------------|
-| `IP`      | Camera's local IP address                       |
-| `uid`     | P2P identifier (20 chars)                       |
-| `enr`     | Encryption key for DTLS                         |
-| `mac`     | Device MAC address                              |
-| `model`   | Camera model (e.g., HL_CAM4)                    |
-| `dtls`    | Enable DTLS encryption (default: true)          |
-| `subtype` | Camera resolution: `hd` or `sd` (default: `hd`) |
+| Parameter    | Description                                         |
+|--------------|-----------------------------------------------------|
+| `IP`         | Camera's local IP address                           |
+| `uid`        | P2P identifier (20 chars)                           |
+| `enr`        | Encryption key for DTLS                             |
+| `mac`        | Device MAC address                                  |
+| `model`      | Camera model (e.g., HL_CAM4)                        |
+| `dtls`       | Enable DTLS encryption (default: true)              |
+| `subtype`    | Camera resolution: `hd` or `sd` (default: `hd`)     |
+| `parent_mac` | Base station MAC, for cameras behind a base station |
+| `parent_enr` | Base station ENR, for cameras behind a base station |
 
 ## Configuration
 
@@ -67,6 +69,20 @@ streams:
   wyze_hd: wyze://...&subtype=hd
   wyze_sd: wyze://...&subtype=sd
 ```
+
+### Cameras Behind a Base Station
+
+The Wyze Cam Outdoor connects to its base station's own Wi-Fi, so it isn't reachable on your LAN. The WebUI handles this automatically: the stream URL points to the base station's IP and adds `parent_mac` and `parent_enr`.
+
+```yaml
+streams:
+  wyze_outdoor: wyze://192.168.1.124?uid=WYZEUID1234567890AB&enr=xxx&mac=AABBCCDDEEFF&model=WVOD1&dtls=true&parent_mac=AABBCCDDEE00&parent_enr=yyy
+```
+
+- The camera and its base station share one P2P UID. The DTLS session uses the base station's ENR and MAC.
+- The camera is selected by MAC and woken up, so the first frame takes a few seconds longer.
+- The camera answers the challenge with status 6; the key is the camera's ENR followed by the base station's.
+- Video only: the camera's G.726 audio isn't supported, so the stream has no audio track.
 
 ### Two-Way Audio
 
@@ -90,7 +106,7 @@ Two-way audio (intercom) is supported automatically. When a consumer sends audio
 | Wyze Cam OG Telephoto       |                |              | Gwell*   |            |            |
 | Wyze Cam OG (2025)          |                |              | Gwell*   |            |            |
 | Wyze Cam Outdoor v2         |                |              | TUTK     |            |            |
-| Wyze Cam Outdoor v1         |                |              | TUTK     |            |            |
+| Wyze Cam Outdoor v1         | WVOD1          | 4.17.4.450   | TUTK     | TransCode  | h264**     |
 | Wyze Cam Floodlight Pro     |                |              | ?        |            |            |
 | Wyze Cam Floodlight v2      |                |              | TUTK     |            |            |
 | Wyze Cam Floodlight         |                |              | TUTK     |            |            |
@@ -106,3 +122,5 @@ Two-way audio (intercom) is supported automatically. When a consumer sends audio
 | Wyze Bulb Cam               |                |              | ?        |            |            |
 
 _* Gwell based protocols are not yet supported._
+
+_** Via its base station (WVODB1, firmware 4.16.4.545). The camera's G.726 audio isn't supported._
