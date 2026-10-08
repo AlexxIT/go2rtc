@@ -22,7 +22,6 @@ go list -deps .\cmd\go2rtc_rtsp\
 
 ```
 - gopkg.in/yaml.v3
-  - github.com/kr/pretty
 - github.com/AlexxIT/go2rtc/pkg/hap
   - github.com/tadglines/go-pkgs
   - golang.org/x/crypto
@@ -38,8 +37,7 @@ go list -deps .\cmd\go2rtc_rtsp\
   - github.com/mattn/go-colorable
   - github.com/mattn/go-isatty
 - github.com/stretchr/testify
-  - github.com/davecgh/go-spew
-  - github.com/pmezard/go-difflib
+  - go.yaml.in/yaml/v3
 - ???
   - golang.org/x/mod
   - golang.org/x/net
