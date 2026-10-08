@@ -547,6 +547,17 @@ export class VideoRTC extends HTMLElement {
                 case 'error':
                     if (!msg.value.includes('webrtc/offer')) return;
                     pc.close();
+
+                    // The source is unreachable (e.g. the camera is rebooting). Drop the dead
+                    // PeerConnection and the WebSocket, otherwise onconnect() returns early on
+                    // `this.pc` forever and the player never recovers without a page reload.
+                    // onclose() then reconnects, throttled by RECONNECT_TIMEOUT.
+                    // A codec mismatch won't heal by retrying, so keep the mjpeg fallback for it.
+                    if (this.pc === pc && msg.value.includes('streams:') && !msg.value.includes('codecs not matched')) {
+                        this.pcState = WebSocket.CLOSED;
+                        this.pc = null;
+                        if (this.ws) this.ws.close();
+                    }
             }
         };
 
