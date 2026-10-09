@@ -38,7 +38,9 @@ func TestMissedControl(t *testing.T) {
 		b := make([]byte, 8192)
 		for {
 			n, err := conn.Read(b)
-			require.Nil(t, err)
+			if err != nil {
+				return // client conn can be closed by GC after the test
+			}
 
 			req := string(b[:n])
 
