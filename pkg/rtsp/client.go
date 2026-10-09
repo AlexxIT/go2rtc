@@ -98,6 +98,10 @@ func (c *Conn) Do(req *tcp.Request) (*tcp.Response, error) {
 		return res, nil
 
 	case http.StatusMovedPermanently, http.StatusFound:
+		if c.redirects++; c.redirects > 5 {
+			return nil, errors.New("rtsp: too many redirects")
+		}
+
 		rawURL := res.Header.Get("Location")
 
 		var u *url.URL
@@ -105,8 +109,13 @@ func (c *Conn) Do(req *tcp.Request) (*tcp.Response, error) {
 			return nil, err
 		}
 
-		if u.User == nil {
-			u.User = c.auth.UserInfo() // restore auth if we don't have it in the new URL
+		// support relative Location
+		u = c.URL.ResolveReference(u)
+
+		// restore auth if we don't have it in the new URL, but only for the same host,
+		// like net/http does with the Authorization header
+		if u.User == nil && sameHost(u, c.URL) {
+			u.User = c.auth.UserInfo()
 		}
 
 		c.uri = u.String() // so auth will be saved on reconnect
@@ -138,6 +147,18 @@ func (c *Conn) Do(req *tcp.Request) (*tcp.Response, error) {
 	}
 
 	return res, fmt.Errorf("wrong response on %s", req.Method)
+}
+
+// sameHost checks scheme, host and port (with RTSP default port)
+func sameHost(u1, u2 *url.URL) bool {
+	return u1.Scheme == u2.Scheme && hostPort(u1) == hostPort(u2)
+}
+
+func hostPort(u *url.URL) string {
+	if u.Port() == "" {
+		return u.Host + ":554"
+	}
+	return u.Host
 }
 
 func (c *Conn) Options() error {
