@@ -17,6 +17,8 @@ func TestRepairAVCCDropsMalformedPayload(t *testing.T) {
 		append(JoinNALU([]byte{6}), 0, 0, 0, 1),
 		append(JoinNALU([]byte{1}), 0, 0, 0, 2, 1),
 		append(JoinNALU([]byte{5}), 0, 0, 0, 0),
+		append([]byte{0, 0, 0, 0}, JoinNALU([]byte{1, 2})...),
+		append(append(JoinNALU([]byte{1, 2}), 0, 0, 0, 0), JoinNALU([]byte{1, 3})...),
 	} {
 		t.Run(hex.EncodeToString(payload), func(t *testing.T) {
 			called := false
