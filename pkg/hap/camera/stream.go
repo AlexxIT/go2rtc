@@ -2,6 +2,8 @@ package camera
 
 import (
 	"errors"
+	"fmt"
+	"net"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/hap"
@@ -103,11 +105,20 @@ func (s *Stream) GetFreeStream() error {
 }
 
 func (s *Stream) ExchangeEndpoints(videoSession, audioSession *srtp.Session) error {
+	ip := net.ParseIP(videoSession.Local.Addr)
+	if ip == nil {
+		return fmt.Errorf("hap: invalid local IP address: %s", videoSession.Local.Addr)
+	}
+	var ipVersion byte
+	if ip.To4() == nil {
+		ipVersion = 1
+	}
+
 	req := SetupEndpointsRequest{
 		SessionID: s.id,
 		Address: Address{
-			IPVersion:    0,
-			IPAddr:       videoSession.Local.Addr,
+			IPVersion:    ipVersion,
+			IPAddr:       ip.String(),
 			VideoRTPPort: videoSession.Local.Port,
 			AudioRTPPort: audioSession.Local.Port,
 		},
