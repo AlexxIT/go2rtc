@@ -257,6 +257,7 @@ var AvailableRegions = []Region{
 	{"us-east", "protect-ue.ismartlife.me", "East America", "AZ"},
 	{"china", "protect.ismartlife.me", "China", "AY"},
 	{"india", "protect-in.ismartlife.me", "India", "IN"},
+	{"singapore", "protect-sg.ismartlife.me", "Singapore", "SG"},
 }
 
 func NewTuyaSmartApiClient(httpClient *http.Client, baseUrl, email, password, deviceId string) (*TuyaSmartApiClient, error) {
