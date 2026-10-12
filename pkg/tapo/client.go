@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -41,6 +42,10 @@ type Client struct {
 	videoType byte           // mpegts stream type of the camera video
 	audioType byte           // mpegts stream type of the camera audio
 	probed    []*core.Packet // packets read while probing the codecs
+
+	backMu      sync.Mutex
+	mixer       *mixer              // paced backchannel
+	backSenders []backchannelSender // senders of the paced backchannel
 
 	conn1 net.Conn
 	conn2 net.Conn

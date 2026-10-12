@@ -84,9 +84,7 @@ func (c *Client) Stop() error {
 	for _, receiver := range c.receivers {
 		receiver.Close()
 	}
-	if c.sender != nil {
-		c.sender.Close()
-	}
+	c.stopBackchannel()
 	return c.Close()
 }
 
@@ -100,9 +98,14 @@ func (c *Client) MarshalJSON() ([]byte, error) {
 		Receivers:  c.receivers,
 		Send:       c.send,
 	}
+	c.backMu.Lock()
 	if c.sender != nil {
 		info.Senders = []*core.Sender{c.sender}
 	}
+	for _, bs := range c.backSenders {
+		info.Senders = append(info.Senders, bs.sender)
+	}
+	c.backMu.Unlock()
 	if c.conn1 != nil {
 		info.RemoteAddr = c.conn1.RemoteAddr().String()
 	}
