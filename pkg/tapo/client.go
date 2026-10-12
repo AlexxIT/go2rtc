@@ -46,6 +46,7 @@ type Client struct {
 	backMu      sync.Mutex
 	mixer       *mixer              // paced backchannel
 	backSenders []backchannelSender // senders of the paced backchannel
+	stopTimeout time.Duration       // how long Stop waits for the mixer
 
 	conn1 net.Conn
 	conn2 net.Conn
@@ -84,10 +85,32 @@ func Dial(rawURL string) (*Client, error) {
 	}
 
 	c := &Client{url: u}
+
+	t := time.Now()
 	if c.conn1, err = c.newConn(); err != nil {
 		return nil, err
 	}
+	if time.Since(t) > wakeDialTime {
+		// a sleeping battery camera answers only after it has woken up
+		wakeTimes.Store(u.Host, time.Now())
+	}
 	return c, nil
+}
+
+// wakeDialTime is how long a connection to a camera that is awake takes at
+// most. A sleeping battery camera needs more than a second.
+const wakeDialTime = 700 * time.Millisecond
+
+// wakeTimes has the time when a camera (host) was woken up by a connection.
+var wakeTimes sync.Map
+
+// sinceWake returns the time since the camera was woken up by one of our
+// connections, false if it is not known.
+func (c *Client) sinceWake() (time.Duration, bool) {
+	if v, ok := wakeTimes.Load(c.url.Host); ok {
+		return time.Since(v.(time.Time)), true
+	}
+	return 0, false
 }
 
 func (c *Client) newConn() (net.Conn, error) {

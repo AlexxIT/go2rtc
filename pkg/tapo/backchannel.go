@@ -46,14 +46,19 @@ const (
 	// paced mode: silence in milliseconds sent in real time before the
 	// audio, 0..5000
 	backchannelLeadInParam = "backchannel_leadin"
+	// paced mode: milliseconds between the wake up of a battery camera and
+	// the talk session, 0..15000
+	backchannelWakeParam = "backchannel_wake"
 )
 
-// backchannelStopTimeout limits how long Stop waits for the queued audio.
+// backchannelStopTimeout limits how long Stop waits for the queued audio,
+// plus the delays before the audio.
 const backchannelStopTimeout = 10 * time.Second
 
 // backchannelOptions are parsed from the query of the source URL.
 type backchannelOptions struct {
 	paced bool
+	wake  time.Duration // time between the wake up and the talk session
 	mixerOptions
 }
 
@@ -79,6 +84,9 @@ func parseBackchannelOptions(query url.Values) (opts backchannelOptions) {
 	}
 	if ms, ok := param(backchannelLeadInParam, 5000); ok {
 		opts.leadChunks = ms / chunkMs
+	}
+	if ms, ok := param(backchannelWakeParam, 15000); ok {
+		opts.wake = time.Duration(ms) * time.Millisecond
 	}
 	return
 }
@@ -109,18 +117,38 @@ func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver
 	defer c.backMu.Unlock()
 
 	if c.sender == nil && c.mixer == nil {
-		if err := c.SetupBackchannel(); err != nil {
-			return err
-		}
+		opts := parseBackchannelOptions(c.url.Query())
 
 		muxer := mpegts.NewMuxer()
 		pid := muxer.AddTrack(mpegts.StreamTypePCMATapo)
-		if err := c.WriteBackchannel(muxer.GetHeader()); err != nil {
-			return err
+
+		setup := func() error {
+			if err := c.SetupBackchannel(); err != nil {
+				return err
+			}
+			Logger.Debug().Bool("paced", opts.paced).Msg("[tapo] backchannel: talk session started")
+			return c.WriteBackchannel(muxer.GetHeader())
 		}
 
-		opts := parseBackchannelOptions(c.url.Query())
-		Logger.Debug().Bool("paced", opts.paced).Msg("[tapo] backchannel: talk session started")
+		// A battery doorbell (D235) freezes for 2-3 seconds about 4 seconds
+		// after the wake up if a talk session is active at this time. So the
+		// talk session is started later and the audio waits in the mixer.
+		var delay time.Duration
+		if opts.paced && opts.wake > 0 {
+			if d, ok := c.sinceWake(); ok && d < opts.wake {
+				delay = opts.wake - d
+			}
+		}
+
+		if delay > 0 {
+			// the preview keeps the camera awake
+			if err := c.SetupStream(); err != nil {
+				return err
+			}
+			Logger.Debug().Dur("delay", delay).Msg("[tapo] backchannel: camera woke up, talk session delayed")
+		} else if err := setup(); err != nil {
+			return err
+		}
 
 		if opts.paced {
 			// muxer ignores the step after timestamp 0
@@ -130,7 +158,13 @@ func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver
 				ts += mixerChunkSize
 				return err
 			}, logMixer)
-			go c.mixer.run()
+			c.stopTimeout = backchannelStopTimeout + delay + time.Duration(opts.leadChunks)*mixerChunkTime
+
+			if delay > 0 {
+				c.mixer.start(delay, setup)
+			} else {
+				c.mixer.start(0, func() error { return nil })
+			}
 		} else {
 			c.sender = core.NewSender(media, track.Codec)
 			c.sender.Handler = c.directBackchannel(muxer, pid, opts.prefillChunks)
@@ -231,7 +265,7 @@ func logMixer(event string, stats *mixerStats) {
 // its queue.
 func (c *Client) stopBackchannel() {
 	c.backMu.Lock()
-	sender, senders, mix := c.sender, c.backSenders, c.mixer
+	sender, senders, mix, timeout := c.sender, c.backSenders, c.mixer, c.stopTimeout
 	c.backMu.Unlock()
 
 	if sender != nil {
@@ -241,7 +275,7 @@ func (c *Client) stopBackchannel() {
 		bs.sender.Close()
 	}
 	if mix != nil {
-		mix.Stop(backchannelStopTimeout)
+		mix.Stop(timeout)
 	}
 }
 

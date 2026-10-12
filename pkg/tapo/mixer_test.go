@@ -115,7 +115,7 @@ func TestMixerRun(t *testing.T) {
 			mu.Unlock()
 		}
 	})
-	go m.run()
+	m.start(0, func() error { return nil })
 
 	// 5.5 chunks of audio in packets of 24 ms, as FFmpeg sends an MP3
 	audio := pcma(1000, mixerChunkSize*5+mixerChunkSize/2)
@@ -149,4 +149,45 @@ func TestMixerRun(t *testing.T) {
 	require.Equal(t, 6, stats.Chunks)
 	require.Equal(t, 0, stats.Mixed)
 	require.Equal(t, 0, stats.Underruns)
+}
+
+func TestMixerStartDelay(t *testing.T) {
+	var mu sync.Mutex
+	var chunks int
+	var setup time.Time
+
+	m := newMixer(mixerOptions{}, func(chunk []byte) error {
+		mu.Lock()
+		chunks++
+		mu.Unlock()
+		return nil
+	}, nil)
+
+	begin := time.Now()
+	m.start(200*time.Millisecond, func() error {
+		setup = time.Now()
+		return nil
+	})
+
+	// the audio is queued during the delay and played after a Stop
+	src := m.AddSource()
+	src.Push(&rtp.Packet{Payload: pcma(1000, mixerChunkSize*3)})
+	m.Stop(5 * time.Second)
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.GreaterOrEqual(t, setup.Sub(begin), 200*time.Millisecond)
+	require.Equal(t, 3, chunks)
+
+	// nothing queued: Stop doesn't wait for the delay
+	m = newMixer(mixerOptions{}, func([]byte) error { return nil }, nil)
+	called := false
+	m.start(10*time.Second, func() error {
+		called = true
+		return nil
+	})
+	begin = time.Now()
+	m.Stop(5 * time.Second)
+	require.Less(t, time.Since(begin), time.Second)
+	require.False(t, called)
 }

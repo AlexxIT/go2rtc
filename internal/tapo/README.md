@@ -43,7 +43,7 @@ streams:
   # video and two-way audio from a browser, lowest latency
   doorbell: tapo://cloud-password@192.168.1.123
   # playback only: POST /api/streams?dst=doorbell_playback&src=...
-  doorbell_playback: tapo://cloud-password@192.168.1.123?backchannel_pace=120&backchannel_prefill=400&backchannel_leadin=1500
+  doorbell_playback: tapo://cloud-password@192.168.1.123?backchannel_pace=120&backchannel_prefill=400&backchannel_leadin=1500&backchannel_wake=7000
 ```
 
 | Param                 | Range   | Default | Description                                                                                                                                              |
@@ -51,6 +51,12 @@ streams:
 | `backchannel_pace`    | 0..2000 | off     | Enables the paced mode: the audio is queued, cut into chunks of exactly 40 ms and sent on a 40 ms clock. Value: ms of audio collected before the start. |
 | `backchannel_prefill` | 0..2000 | 80      | Silence in ms sent at once before the audio. It is the cushion of the camera for the jitter of the network.                                              |
 | `backchannel_leadin`  | 0..5000 | 0       | Paced mode only: silence in ms sent in real time before the audio. A doorbell needs a moment to switch on the speaker, short messages are lost without. |
+| `backchannel_wake`    | 0..15000 | 0      | Paced mode only: ms between the wake up of a battery camera and the start of the talk session, the audio waits. See below.                                |
+
+A D235 on battery freezes for 2-3 seconds about 4 seconds after it was woken up, if a talk session is active at this
+time: it sends no video and reads no audio, the playback stutters. A talk session that starts 7 seconds after the wake
+up is not affected. With `backchannel_wake=7000` the talk session of a camera that was just woken up by go2rtc is
+delayed and the audio is queued. A camera that is already awake gets the audio at once.
 
 In the paced mode:
 

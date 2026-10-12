@@ -153,6 +153,54 @@ func (m *mixer) Stop(timeout time.Duration) {
 	}
 }
 
+// start runs the sender loop after the delay and the setup of the output.
+// The sources can be added and filled at once. A Stop during the delay ends
+// the mixer only if nothing is queued.
+func (m *mixer) start(delay time.Duration, setup func() error) {
+	go func() {
+		if delay > 0 {
+			timer := time.NewTimer(delay)
+			defer timer.Stop()
+
+			done := m.done
+		wait:
+			for {
+				select {
+				case <-done:
+					done = nil
+					if m.empty() {
+						close(m.finished)
+						return
+					}
+				case <-timer.C:
+					break wait
+				}
+			}
+		}
+
+		if err := setup(); err != nil {
+			m.log("setup error: "+err.Error(), nil)
+			close(m.finished)
+			return
+		}
+
+		m.run()
+	}()
+}
+
+// empty reports that no source has queued audio.
+func (m *mixer) empty() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for _, src := range m.sources {
+		if len(src.queue) > 0 {
+			return false
+		}
+	}
+	return true
+}
+
 // next returns the next chunk of audio and how many sources are in it. It
 // returns nil if no source has a full chunk. With flush also the rest of the
 // queues is taken and filled up with silence.
