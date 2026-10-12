@@ -161,12 +161,20 @@ func (c *Client) newDectypter(res *http.Response, brand, username, password stri
 		// restore IV
 		cbc.SetIV(iv[:])
 
+		// broken part (ex. incomplete read), CryptBlocks will panic on it
+		n := len(b)
+		if n == 0 || n%aes.BlockSize != 0 {
+			return nil
+		}
+
 		// decrypt
 		cbc.CryptBlocks(b, b)
 
 		// unpad
-		n := len(b)
 		padSize := int(b[n-1])
+		if padSize > n {
+			return nil
+		}
 		return b[:n-padSize]
 	}
 }
