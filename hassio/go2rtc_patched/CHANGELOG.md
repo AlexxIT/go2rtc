@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.14-tapo17
+
+- `backchannel_wake` also waits if the camera was woken up by something else
+
 ## 1.9.14-tapo16
 
 - `backchannel_wake`: later talk session for a battery camera that was just woken up, a D235 freezes otherwise

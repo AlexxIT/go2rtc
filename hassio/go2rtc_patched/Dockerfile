@@ -4,7 +4,7 @@
 FROM golang:1.26-alpine AS build
 RUN apk add --no-cache git
 ARG GO2RTC_REPO=https://git.btaubmann.de/tux/go2rtc.git
-ARG GO2RTC_REF=2b04d7c1b96d1bd8743b05fa0c7a557e99a7c8fd
+ARG GO2RTC_REF=650c9bba7d5e80d0adb895245925fb3f7de334e0
 RUN git clone ${GO2RTC_REPO} /src \
     && cd /src && git checkout ${GO2RTC_REF} \
     && CGO_ENABLED=0 go build -ldflags "-s -w" -trimpath -o /go2rtc .
