@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.14-tapo16
+
+- `backchannel_wake`: later talk session for a battery camera that was just woken up, a D235 freezes otherwise
+
 ## 1.9.14-tapo15
 
 - The audio codec of the camera (Opus or PCMA) is detected, mains powered cameras keep PCMA

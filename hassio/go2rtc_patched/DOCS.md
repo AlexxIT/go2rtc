@@ -20,7 +20,7 @@ streams:
     - tapo://cloud-password@192.168.1.123
   # only for the media player
   doorbell_playback:
-    - tapo://cloud-password@192.168.1.123?backchannel_pace=120&backchannel_prefill=400&backchannel_leadin=1500
+    - tapo://cloud-password@192.168.1.123?backchannel_pace=120&backchannel_prefill=400&backchannel_leadin=1500&backchannel_wake=7000
 
 ffmpeg:
   # no spaces are allowed in the source of the API, so use a preset
@@ -35,6 +35,10 @@ log:
 | `backchannel_pace`    | 0..2000 | off     | Paced mode for playback. Value: ms of audio collected before the start.             |
 | `backchannel_prefill` | 0..2000 | 80      | Silence in ms sent at once before the audio, the cushion for the network jitter.    |
 | `backchannel_leadin`  | 0..5000 | 0       | Silence in ms sent in real time before the audio, until the speaker is switched on. |
+| `backchannel_wake`    | 0..15000 | 0      | Ms between the wake up of a battery camera and the talk session, the audio waits.   |
+
+A D235 on battery freezes for 2-3 seconds about 4 seconds after the wake up if a talk session is active, the playback
+stutters. `backchannel_wake=7000` starts the talk session of a just woken camera later.
 
 The paced mode and the lead-in delay everything that is sent to the camera. Use a separate stream for the media
 player, so two-way audio of a camera card is not delayed. The camera supports only one talk session: two-way audio
