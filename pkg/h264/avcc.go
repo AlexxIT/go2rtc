@@ -16,10 +16,27 @@ func RepairAVCC(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 	ps := JoinNALU(sps, pps)
 
 	return func(packet *rtp.Packet) {
+		for payload := packet.Payload; ; {
+			if len(payload) < 5 {
+				return
+			}
+			size := binary.BigEndian.Uint32(payload)
+			if size == 0 || uint64(size) > uint64(len(payload)-4) {
+				return
+			}
+			payload = payload[4+int(size):]
+			if len(payload) == 0 {
+				break
+			}
+		}
+
 		// this can happen for FLV from FFmpeg
 		if NALUType(packet.Payload) == NALUTypeSEI {
 			size := int(binary.BigEndian.Uint32(packet.Payload)) + 4
 			packet.Payload = packet.Payload[size:]
+			if len(packet.Payload) == 0 {
+				return
+			}
 		}
 		if NALUType(packet.Payload) == NALUTypeIFrame {
 			packet.Payload = Join(ps, packet.Payload)
