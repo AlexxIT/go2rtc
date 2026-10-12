@@ -3,10 +3,25 @@ package tapo
 import (
 	"bytes"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/mpegts"
 	"github.com/pion/rtp"
+	"github.com/rs/zerolog"
+)
+
+// Logger is used for the diagnostics of the backchannel. It is silent by
+// default, go2rtc sets it to the logger of the module.
+var Logger = zerolog.Nop()
+
+// The camera needs a moment to release the talk session of a previous
+// connection and rejects a new one with error_code=-52411.
+const (
+	talkBusyError   = "-52411"
+	talkBusyRetries = 3
+	talkBusyDelay   = 700 * time.Millisecond
 )
 
 func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver) error {
@@ -33,23 +48,37 @@ func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver
 }
 
 func (c *Client) SetupBackchannel() (err error) {
-	// if conn1 is not used - we will use it for backchannel
-	// or we need to start another conn for session2
-	if c.session1 != "" {
+	// Battery powered cameras (ex. D230, D235) sleep after ~30 s without an
+	// active preview stream. So the preview always runs on conn1 and the
+	// talk session gets its own connection. Handle drops the packets if
+	// there are no receivers.
+	if err = c.SetupStream(); err != nil {
+		return
+	}
+
+	for i := 0; ; i++ {
 		if c.conn2, err = c.newConn(); err != nil {
 			return
 		}
-	} else {
-		c.conn2 = c.conn1
-	}
 
-	c.session2, err = c.Request(c.conn2, []byte(`{"params":{"talk":{"mode":"aec"},"method":"get"},"seq":3,"type":"request"}`))
-	return
+		c.session2, err = c.Request(c.conn2, []byte(`{"params":{"talk":{"mode":"aec"},"method":"get"},"seq":3,"type":"request"}`))
+		if err == nil {
+			return
+		}
+
+		_ = c.conn2.Close()
+
+		if i == talkBusyRetries || !strings.Contains(err.Error(), talkBusyError) {
+			return
+		}
+
+		Logger.Debug().Int("try", i+1).Msg("[tapo] backchannel: talk session busy, retry")
+		time.Sleep(talkBusyDelay)
+	}
 }
 
 func (c *Client) WriteBackchannel(body []byte) (err error) {
-	// TODO: fixme (size)
-	buf := bytes.NewBuffer(nil)
+	buf := bytes.NewBuffer(make([]byte, 0, 256+len(body)))
 	buf.WriteString("----client-stream-boundary--\r\n")
 	buf.WriteString("Content-Type: audio/mp2t\r\n")
 	buf.WriteString("X-If-Encrypt: 0\r\n")
