@@ -48,6 +48,9 @@ type Client struct {
 	backSenders []backchannelSender // senders of the paced backchannel
 	stopTimeout time.Duration       // how long Stop waits for the mixer
 
+	awake     *awakeState
+	awakeOnce sync.Once
+
 	conn1 net.Conn
 	conn2 net.Conn
 
@@ -85,32 +88,60 @@ func Dial(rawURL string) (*Client, error) {
 	}
 
 	c := &Client{url: u}
-
-	t := time.Now()
 	if c.conn1, err = c.newConn(); err != nil {
 		return nil, err
 	}
-	if time.Since(t) > wakeDialTime {
-		// a sleeping battery camera answers only after it has woken up
-		wakeTimes.Store(u.Host, time.Now())
-	}
+	c.awake = awakeOpen(u.Host)
 	return c, nil
 }
 
-// wakeDialTime is how long a connection to a camera that is awake takes at
-// most. A sleeping battery camera needs more than a second.
-const wakeDialTime = 700 * time.Millisecond
+// awakeGap is how long a battery camera stays awake for sure after the last
+// connection was closed.
+const awakeGap = 5 * time.Second
 
-// wakeTimes has the time when a camera (host) was woken up by a connection.
-var wakeTimes sync.Map
+// awakeState tells since when a camera is known to be awake: as long as
+// there are connections to it without a longer gap.
+type awakeState struct {
+	since     time.Time
+	open      int
+	lastClose time.Time
+}
 
-// sinceWake returns the time since the camera was woken up by one of our
-// connections, false if it is not known.
-func (c *Client) sinceWake() (time.Duration, bool) {
-	if v, ok := wakeTimes.Load(c.url.Host); ok {
-		return time.Since(v.(time.Time)), true
+var (
+	awakeMu     sync.Mutex
+	awakeStates = map[string]*awakeState{}
+)
+
+func awakeOpen(host string) *awakeState {
+	awakeMu.Lock()
+	defer awakeMu.Unlock()
+
+	now := time.Now()
+	st := awakeStates[host]
+	if st == nil {
+		st = &awakeState{}
+		awakeStates[host] = st
 	}
-	return 0, false
+	if st.open == 0 && now.Sub(st.lastClose) > awakeGap {
+		// It was asleep or was woken up by someone else a moment ago
+		st.since = now
+	}
+	st.open++
+	return st
+}
+
+func (st *awakeState) close() {
+	awakeMu.Lock()
+	st.open--
+	st.lastClose = time.Now()
+	awakeMu.Unlock()
+}
+
+// sinceWake returns for how long the camera is known to be awake.
+func (c *Client) sinceWake() time.Duration {
+	awakeMu.Lock()
+	defer awakeMu.Unlock()
+	return time.Since(c.awake.since)
 }
 
 func (c *Client) newConn() (net.Conn, error) {
@@ -375,6 +406,9 @@ func (c *Client) Handle() error {
 }
 
 func (c *Client) Close() (err error) {
+	if c.awake != nil {
+		c.awakeOnce.Do(c.awake.close)
+	}
 	if c.conn1 != nil {
 		err = c.conn1.Close()
 	}

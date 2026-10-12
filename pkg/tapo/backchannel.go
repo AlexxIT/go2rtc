@@ -132,10 +132,11 @@ func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver
 
 		// A battery doorbell (D235) freezes for 2-3 seconds about 4 seconds
 		// after the wake up if a talk session is active at this time. So the
-		// talk session is started later and the audio waits in the mixer.
+		// talk session is started only when the camera is awake long enough,
+		// the audio waits in the mixer.
 		var delay time.Duration
-		if opts.paced && opts.wake > 0 {
-			if d, ok := c.sinceWake(); ok && d < opts.wake {
+		if opts.paced && opts.wake > 0 && c.awake != nil {
+			if d := c.sinceWake(); d < opts.wake {
 				delay = opts.wake - d
 			}
 		}
@@ -145,7 +146,7 @@ func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver
 			if err := c.SetupStream(); err != nil {
 				return err
 			}
-			Logger.Debug().Dur("delay", delay).Msg("[tapo] backchannel: camera woke up, talk session delayed")
+			Logger.Debug().Dur("delay", delay).Msg("[tapo] backchannel: camera just woke up, talk session delayed")
 		} else if err := setup(); err != nil {
 			return err
 		}

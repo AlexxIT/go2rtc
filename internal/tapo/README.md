@@ -55,8 +55,9 @@ streams:
 
 A D235 on battery freezes for 2-3 seconds about 4 seconds after it was woken up, if a talk session is active at this
 time: it sends no video and reads no audio, the playback stutters. A talk session that starts 7 seconds after the wake
-up is not affected. With `backchannel_wake=7000` the talk session of a camera that was just woken up by go2rtc is
-delayed and the audio is queued. A camera that is already awake gets the audio at once.
+up is not affected. With `backchannel_wake=7000` the talk session is started only when go2rtc is connected to the
+camera for 7 seconds (other streams of the same camera count, also a few seconds after they were closed). Until then
+the audio is queued. A camera with a running stream gets the audio at once.
 
 In the paced mode:
 
