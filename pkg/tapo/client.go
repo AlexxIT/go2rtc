@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/mpegts"
@@ -33,6 +34,13 @@ type Client struct {
 	medias    []*core.Media
 	receivers []*core.Receiver
 	sender    *core.Sender
+
+	rd        *multipart.Reader
+	demux     *mpegts.Demuxer
+	transcode func([]byte) []byte
+	videoType byte           // mpegts stream type of the camera video
+	audioType byte           // mpegts stream type of the camera audio
+	probed    []*core.Packet // packets read while probing the codecs
 
 	conn1 net.Conn
 	conn2 net.Conn
@@ -189,17 +197,17 @@ func (c *Client) SetupStream() (err error) {
 	return
 }
 
-// Handle - first run will be in probe state
-func (c *Client) Handle() error {
-	rd := multipart.NewReader(c.conn1, "--device-stream-boundary--")
-	demux := mpegts.NewDemuxer()
-
-	var transcode func([]byte) []byte
+// readPart reads one multipart part from the camera and returns its packets
+func (c *Client) readPart() ([]*core.Packet, error) {
+	if c.rd == nil {
+		c.rd = multipart.NewReader(c.conn1, "--device-stream-boundary--")
+		c.demux = mpegts.NewDemuxer()
+	}
 
 	for {
-		p, err := rd.NextRawPart()
+		p, err := c.rd.NextRawPart()
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		if ct := p.Header.Get("Content-Type"); ct != "video/mp2t" {
@@ -209,7 +217,7 @@ func (c *Client) Handle() error {
 		cl := p.Header.Get("Content-Length")
 		size, err := strconv.Atoi(cl)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		c.recv += size
@@ -228,13 +236,15 @@ func (c *Client) Handle() error {
 		body = c.decrypt(body)
 		bytesRd := bytes.NewReader(body)
 
+		var pkts []*core.Packet
+
 		for {
-			pkt, err2 := demux.ReadPacket(bytesRd)
+			pkt, err2 := c.demux.ReadPacket(bytesRd)
 			if pkt == nil || err2 == io.EOF {
 				break
 			}
 			if err2 != nil {
-				return err2
+				return nil, err2
 			}
 
 			if pkt.PayloadType == mpegts.StreamTypePCMUTapo {
@@ -244,16 +254,82 @@ func (c *Client) Handle() error {
 				// I don't know why Tapo considers this an improvement. The codec is no better than the previous one.
 				// Unfortunately, we don't know in advance what codec the camera will use.
 				// Therefore, it's easier to transcode to a standard codec that all Tapo cameras have.
-				if transcode == nil {
-					transcode = pcm.Transcode(
+				if c.transcode == nil {
+					c.transcode = pcm.Transcode(
 						&core.Codec{Name: core.CodecPCMA, ClockRate: 8000},
 						&core.Codec{Name: core.CodecPCMU, ClockRate: 16000},
 					)
 				}
 				pkt.PayloadType = mpegts.StreamTypePCMATapo
-				pkt.Payload = transcode(pkt.Payload)
+				pkt.Payload = c.transcode(pkt.Payload)
 			}
 
+			pkts = append(pkts, pkt)
+		}
+
+		return pkts, nil
+	}
+}
+
+// probeAudioPackets is how many packets after the first video packet the
+// probe waits for audio. A camera with a disabled microphone sends none.
+const probeAudioPackets = 50
+
+// probe starts the stream and reads it until the codecs are known. Battery
+// powered cameras (ex. D235) send H265 and Opus instead of H264 and PCMA and
+// there is no way to know it in advance. The packets are kept and replayed
+// by Handle.
+func (c *Client) probe() {
+	if c.videoType != 0 {
+		return
+	}
+
+	c.videoType = mpegts.StreamTypeH264
+	c.audioType = mpegts.StreamTypePCMATapo
+
+	if err := c.SetupStream(); err != nil {
+		return
+	}
+
+	_ = c.conn1.SetReadDeadline(time.Now().Add(5 * time.Second))
+	defer c.conn1.SetReadDeadline(time.Time{})
+
+	var video, audio bool
+	var afterVideo int
+
+	for len(c.probed) < 500 {
+		pkts, err := c.readPart()
+		if err != nil {
+			return
+		}
+		c.probed = append(c.probed, pkts...)
+
+		for _, pkt := range pkts {
+			switch pkt.PayloadType {
+			case mpegts.StreamTypeH264, mpegts.StreamTypeH265:
+				c.videoType = pkt.PayloadType
+				video = true
+			case mpegts.StreamTypePCMATapo, mpegts.StreamTypePrivateOPUS:
+				c.audioType = pkt.PayloadType
+				audio = true
+			}
+			if video {
+				afterVideo++
+			}
+		}
+
+		if video && (audio || afterVideo > probeAudioPackets) {
+			return
+		}
+	}
+}
+
+func (c *Client) Handle() error {
+	pkts := c.probed
+	c.probed = nil
+
+	for {
+		for _, pkt := range pkts {
 			for _, receiver := range c.receivers {
 				if receiver.ID == pkt.PayloadType {
 					mpegts.TimestampToRTP(pkt, receiver.Codec)
@@ -261,6 +337,11 @@ func (c *Client) Handle() error {
 					break
 				}
 			}
+		}
+
+		var err error
+		if pkts, err = c.readPart(); err != nil {
+			return err
 		}
 	}
 }

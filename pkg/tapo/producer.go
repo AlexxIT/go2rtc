@@ -9,21 +9,29 @@ import (
 
 func (c *Client) GetMedias() []*core.Media {
 	if c.medias == nil {
+		c.probe()
+
+		video := &core.Codec{Name: core.CodecH264, ClockRate: 90000, PayloadType: core.PayloadTypeRAW}
+		if c.videoType == mpegts.StreamTypeH265 {
+			video.Name = core.CodecH265
+		}
+
+		audio := &core.Codec{Name: core.CodecPCMA, ClockRate: 8000, PayloadType: 8}
+		if c.audioType == mpegts.StreamTypePrivateOPUS {
+			audio = &core.Codec{Name: core.CodecOpus, ClockRate: 48000, Channels: 2, PayloadType: core.PayloadTypeRAW}
+		}
+
 		// don't know if all Tapo has this capabilities...
 		c.medias = []*core.Media{
 			{
 				Kind:      core.KindVideo,
 				Direction: core.DirectionRecvonly,
-				Codecs: []*core.Codec{
-					{Name: core.CodecH264, ClockRate: 90000, PayloadType: core.PayloadTypeRAW},
-				},
+				Codecs:    []*core.Codec{video},
 			},
 			{
 				Kind:      core.KindAudio,
 				Direction: core.DirectionRecvonly,
-				Codecs: []*core.Codec{
-					{Name: core.CodecPCMA, ClockRate: 8000, PayloadType: 8},
-				},
+				Codecs:    []*core.Codec{audio},
 			},
 			{
 				Kind:      core.KindAudio,
@@ -52,9 +60,17 @@ func (c *Client) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver,
 	track := core.NewReceiver(media, codec)
 	switch media.Kind {
 	case core.KindVideo:
-		track.ID = mpegts.StreamTypeH264
+		if codec.Name == core.CodecH265 {
+			track.ID = mpegts.StreamTypeH265
+		} else {
+			track.ID = mpegts.StreamTypeH264
+		}
 	case core.KindAudio:
-		track.ID = mpegts.StreamTypePCMATapo
+		if codec.Name == core.CodecOpus {
+			track.ID = mpegts.StreamTypePrivateOPUS
+		} else {
+			track.ID = mpegts.StreamTypePCMATapo
+		}
 	}
 	c.receivers = append(c.receivers, track)
 	return track, nil

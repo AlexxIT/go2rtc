@@ -30,6 +30,11 @@ echo -n "cloud password" | md5 | awk '{print toupper($0)}'
 echo -n "cloud password" | shasum -a 256 | awk '{print toupper($0)}'
 ```
 
+## Codecs
+
+Battery powered cameras and doorbells (ex. D235 on battery) send H265 video and Opus audio over this protocol, other
+cameras send H264 and PCMA. The codecs are detected from the first packets when the connection is opened.
+
 ## TP-Link Kasa
 
 [`new in v1.7.0`](https://github.com/AlexxIT/go2rtc/releases/tag/v1.7.0)
