@@ -26,7 +26,7 @@ func Dial(host, uid, username, password string) (*Conn, error) {
 
 	sid := GenSessionID()
 
-	_ = c.SetDeadline(time.Now().Add(5 * time.Second))
+	_ = c.SetDeadline(time.Now().Add(15 * time.Second))
 
 	if addr.Port != 10001 {
 		err = c.connectDirect(uid, sid)
