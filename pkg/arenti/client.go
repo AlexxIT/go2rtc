@@ -163,6 +163,34 @@ func NewUUID() string {
 	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 }
 
+// FormatAPIError translates Arenti/Meari API result codes into descriptive English error messages.
+func FormatAPIError(code, msg string) error {
+	switch code {
+	case "1001":
+		return nil
+	case "1017":
+		return fmt.Errorf("arenti: incorrect password (code 1017)")
+	case "1018":
+		return fmt.Errorf("arenti: account does not exist — please check your email and region/country code (code 1018)")
+	case "1023":
+		return fmt.Errorf("arenti: authentication failed or session expired (code 1023)")
+	default:
+		if msg != "" {
+			return fmt.Errorf("arenti: server error: %s (code %s)", msg, code)
+		}
+		return fmt.Errorf("arenti: unknown server error (code %s)", code)
+	}
+}
+
+func (c *Client) checkError(code, msg string) error {
+	if code == "1023" {
+		c.mu.Lock()
+		c.UserToken = ""
+		c.mu.Unlock()
+	}
+	return FormatAPIError(code, msg)
+}
+
 func (c *Client) Login() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -214,8 +242,9 @@ func (c *Client) Login() error {
 		return fmt.Errorf("arenti: failed to decode login response: %w", err)
 	}
 
-	if loginResp.Code != "1001" {
-		return fmt.Errorf("arenti: login returned error code %s: %s", loginResp.Code, loginResp.Msg)
+	if err := FormatAPIError(loginResp.Code, loginResp.Msg); err != nil {
+		c.UserToken = ""
+		return err
 	}
 
 	c.UserID = loginResp.Data.UserID
@@ -242,62 +271,110 @@ func (c *Client) EnsureLogin() error {
 	return c.Login()
 }
 
-func (c *Client) doAuthRequest(method, path string, rawQuery string, bodyData []byte) ([]byte, error) {
-	if err := c.EnsureLogin(); err != nil {
-		return nil, err
+func isSessionInvalid(data []byte) bool {
+	var env struct {
+		Code any `json:"code"`
 	}
+	if err := json.Unmarshal(data, &env); err == nil {
+		switch v := env.Code.(type) {
+		case string:
+			return v == "1023"
+		case float64:
+			return v == 1023
+		}
+	}
+	return false
+}
 
+func (c *Client) refreshToken(failedToken string) error {
 	c.mu.RLock()
-	userIDStr := fmt.Sprintf("%d", c.UserID)
-	userToken := c.UserToken
-	baseURL := c.BaseURL
-	appID := c.SourceApp
+	currentToken := c.UserToken
 	c.mu.RUnlock()
 
-	bodyStr := ""
-	if len(bodyData) > 0 {
-		bodyStr = string(bodyData)
+	if currentToken != "" && currentToken != failedToken {
+		return nil
 	}
 
-	t := fmt.Sprintf("%d", time.Now().UnixMilli())
-	nonce := NewNonce()
-	sign := CalcSign(userIDStr, t, nonce, rawQuery, bodyStr, userToken)
+	c.mu.Lock()
+	if c.UserToken == failedToken {
+		c.UserToken = ""
+	}
+	c.mu.Unlock()
 
-	reqURL := fmt.Sprintf("%s%s", baseURL, path)
-	if rawQuery != "" {
-		reqURL += "?" + rawQuery
+	return c.EnsureLogin()
+}
+
+func (c *Client) doAuthRequest(method, path string, rawQuery string, bodyData []byte) ([]byte, error) {
+	var lastResp []byte
+	for attempt := 0; attempt < 2; attempt++ {
+		if err := c.EnsureLogin(); err != nil {
+			return nil, err
+		}
+
+		c.mu.RLock()
+		userIDStr := fmt.Sprintf("%d", c.UserID)
+		userToken := c.UserToken
+		baseURL := c.BaseURL
+		appID := c.SourceApp
+		c.mu.RUnlock()
+
+		bodyStr := ""
+		if len(bodyData) > 0 {
+			bodyStr = string(bodyData)
+		}
+
+		t := fmt.Sprintf("%d", time.Now().UnixMilli())
+		nonce := NewNonce()
+		sign := CalcSign(userIDStr, t, nonce, rawQuery, bodyStr, userToken)
+
+		reqURL := fmt.Sprintf("%s%s", baseURL, path)
+		if rawQuery != "" {
+			reqURL += "?" + rawQuery
+		}
+
+		var bodyReader io.Reader
+		if len(bodyData) > 0 {
+			bodyReader = bytes.NewReader(bodyData)
+		}
+
+		req, err := http.NewRequest(method, reqURL, bodyReader)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("identity", userIDStr)
+		req.Header.Set("t", t)
+		req.Header.Set("nonce", nonce)
+		req.Header.Set("sign", sign)
+		req.Header.Set("signVer", "1.1")
+		req.Header.Set("app", appID)
+
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			return nil, err
+		}
+
+		respBytes, err := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if err != nil {
+			return nil, err
+		}
+
+		lastResp = respBytes
+
+		if attempt == 0 && isSessionInvalid(respBytes) {
+			Log("arenti: session invalidated (code 1023), re-authenticating and retrying...")
+			if err := c.refreshToken(userToken); err != nil {
+				return nil, err
+			}
+			continue
+		}
+
+		return respBytes, nil
 	}
 
-	var bodyReader io.Reader
-	if len(bodyData) > 0 {
-		bodyReader = bytes.NewReader(bodyData)
-	}
-
-	req, err := http.NewRequest(method, reqURL, bodyReader)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("identity", userIDStr)
-	req.Header.Set("t", t)
-	req.Header.Set("nonce", nonce)
-	req.Header.Set("sign", sign)
-	req.Header.Set("signVer", "1.1")
-	req.Header.Set("app", appID)
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	respBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	return respBytes, nil
+	return lastResp, nil
 }
 
 // GetDevices returns all discovered cameras from the user's account.
@@ -312,8 +389,8 @@ func (c *Client) GetDevices() ([]Device, error) {
 		return nil, fmt.Errorf("arenti: decode device list failed: %w", err)
 	}
 
-	if devListResp.Code != "1001" {
-		return nil, fmt.Errorf("arenti: device list error code %s: %s", devListResp.Code, devListResp.Msg)
+	if err := c.checkError(devListResp.Code, devListResp.Msg); err != nil {
+		return nil, err
 	}
 
 	var allDevices []Device
@@ -381,8 +458,8 @@ func (c *Client) GetDeviceInfo(snNum string) (battery, wifi int, model, ip strin
 	if err := json.Unmarshal(respBytes, &resp); err != nil {
 		return 0, 0, "", "", err
 	}
-	if resp.Code != "1001" {
-		return 0, 0, "", "", fmt.Errorf("arenti: device info error code %s: %s", resp.Code, resp.Msg)
+	if err := c.checkError(resp.Code, resp.Msg); err != nil {
+		return 0, 0, "", "", err
 	}
 
 	if val, ok := resp.Data.Data["204"].(string); ok {
@@ -445,6 +522,10 @@ func (c *Client) GetDeviceStatus(deviceID string) (string, error) {
 		return "", err
 	}
 
+	if err := c.checkError(statusResp.Code, statusResp.Msg); err != nil {
+		return "", err
+	}
+
 	for _, s := range statusResp.Data {
 		if s.DeviceID == deviceID {
 			return s.Status, nil
@@ -472,8 +553,8 @@ func (c *Client) GetSignWss(callee, deviceCode, expires string) (*SignWssRespons
 		return nil, fmt.Errorf("arenti: decode iot_sign/wss response failed: %w", err)
 	}
 
-	if signResp.Code != "1001" {
-		return nil, fmt.Errorf("arenti: iot_sign/wss returned code %s: %s", signResp.Code, signResp.Msg)
+	if err := c.checkError(signResp.Code, signResp.Msg); err != nil {
+		return nil, err
 	}
 
 	return &signResp, nil
