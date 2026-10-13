@@ -1,7 +1,9 @@
 package legacy
 
 import (
+	"errors"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/aac"
@@ -34,7 +36,9 @@ func Dial(rawURL string) (*Producer, error) {
 		return nil, err
 	}
 
+	did := query.Get("did")
 	c := &Producer{
+		did: did,
 		Connection: core.Connection{
 			ID:         core.NewID(),
 			FormatName: "xiaomi/legacy",
@@ -46,12 +50,84 @@ func Dial(rawURL string) (*Producer, error) {
 		},
 		client: client,
 	}
+	if len(medias) > 0 && medias[0].Kind == core.KindVideo {
+		c.vcodec = medias[0].Codecs[0]
+	}
+	if q, ok := g2Quality(query.Get("subtype")); ok && client.model == ModelAqaraG2 {
+		c.quality = q.name
+	}
+	if did != "" {
+		active.Store(did, c)
+	}
 	return c, nil
 }
 
 type Producer struct {
 	core.Connection
 	client *Client
+	did    string
+	vcodec *core.Codec
+
+	mu      sync.Mutex
+	quality string        // current G2 quality name
+	want    uint16        // picture height SetQuality waits for
+	done    chan struct{} // closed once a keyframe of that height arrived
+}
+
+// ErrQualityUnsupported: only the Aqara G2 switches quality inside a session (verified on a Mi Home capture).
+var ErrQualityUnsupported = errors.New("xiaomi: quality is only switchable on the Aqara G2")
+
+// active: running producers by camera did, for SetQuality.
+var active sync.Map
+
+// SetQuality switches a running G2 session to fhd/hd/sd, as Mi Home does (one 0x0605 command, no
+// reconnect), and returns once the camera's first keyframe of the new size has updated the codec, so
+// RTSP clients that connect afterwards get an SDP that matches the picture.
+func SetQuality(did, quality string) error {
+	v, ok := active.Load(did)
+	if !ok {
+		return errors.New("xiaomi: no running session for " + did)
+	}
+	c := v.(*Producer)
+	q, ok := g2Quality(quality)
+	if !ok || c.client.model != ModelAqaraG2 {
+		return ErrQualityUnsupported
+	}
+
+	c.mu.Lock()
+	if c.quality == q.name {
+		c.mu.Unlock()
+		return nil
+	}
+	done := make(chan struct{})
+	c.want, c.done, c.quality = q.height, done, q.name
+	c.mu.Unlock()
+
+	if err := c.client.WriteCommandJSON(0x0605, `{"channel":%d}`, q.channel); err != nil {
+		return err
+	}
+	select {
+	case <-done:
+	case <-time.After(8 * time.Second):
+	}
+	return nil
+}
+
+// keyframe: a VPS packet of the picture size SetQuality is waiting for updates the codec in place.
+func (c *Producer) keyframe(avcc []byte) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.want == 0 || c.vcodec == nil || h265.NALUType(avcc) != h265.NALUTypeVPS {
+		return
+	}
+	next := h265.AVCCToCodec(avcc)
+	if _, sps, _ := h265.GetParameterSet(next.FmtpLine); len(sps) > 2 {
+		if v := h265.DecodeSPS(sps); v != nil && v.Height() == c.want {
+			c.vcodec.FmtpLine = next.FmtpLine
+			c.want = 0
+			close(c.done)
+		}
+	}
 }
 
 const codecXiaobaiPCMA = 1 // chuangmi.camera.xiaobai
@@ -60,6 +136,10 @@ func probe(client *Client) ([]*core.Media, error) {
 	_ = client.SetDeadline(time.Now().Add(15 * time.Second))
 
 	var vcodec, acodec *core.Codec
+	// The camera starts every session at 640x360 and only switches to the requested quality about a
+	// second later (verified on a Mi Home capture), so the first keyframe describes the wrong picture:
+	// the SDP would say 360p while 1080p frames follow. Wait for the keyframe of the wanted size.
+	settle := time.Now().Add(8 * time.Second)
 
 	for {
 		// 0   5000      codec
@@ -87,6 +167,11 @@ func probe(client *Client) ([]*core.Media, error) {
 				} else {
 					if h265.NALUType(avcc) == h265.NALUTypeVPS {
 						vcodec = h265.AVCCToCodec(avcc)
+						if _, sps, _ := h265.GetParameterSet(vcodec.FmtpLine); client.wantHeight != 0 && time.Now().Before(settle) && len(sps) > 2 {
+							if v := h265.DecodeSPS(sps); v != nil && v.Height() != client.wantHeight {
+								vcodec = nil
+							}
+						}
 					}
 				}
 			}
@@ -164,6 +249,7 @@ func (c *Producer) Start() error {
 				name = core.CodecH264
 			} else {
 				name = core.CodecH265
+				c.keyframe(pkt.Payload)
 			}
 
 		case tutk.CodecPCMA, tutk.CodecPCML, codecXiaobaiPCMA:
@@ -211,6 +297,9 @@ func (c *Producer) Start() error {
 }
 
 func (c *Producer) Stop() error {
+	if c.did != "" {
+		active.CompareAndDelete(c.did, c)
+	}
 	_ = c.client.StopMedia()
 	return c.Connection.Stop()
 }

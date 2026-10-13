@@ -16,6 +16,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/xiaomi"
 	"github.com/AlexxIT/go2rtc/pkg/xiaomi/crypto"
+	"github.com/AlexxIT/go2rtc/pkg/xiaomi/legacy"
 	"github.com/rs/zerolog"
 )
 
@@ -48,6 +49,7 @@ func Init() {
 	})
 
 	api.HandleFunc("api/xiaomi", apiXiaomi)
+	api.HandleFunc("api/xiaomi/quality", apiQuality)
 }
 
 var log zerolog.Logger
@@ -359,4 +361,15 @@ func GetBaseURL(region string) string {
 		return "https://" + region + ".api.io.mi.com/app"
 	}
 	return "https://api.io.mi.com/app"
+}
+
+// apiQuality switches a running Aqara G2 session: POST /api/xiaomi/quality?did=...&q=fhd|hd|sd
+func apiQuality(w http.ResponseWriter, r *http.Request) {
+	if err := legacy.SetQuality(r.URL.Query().Get("did"), r.URL.Query().Get("q")); err != nil {
+		code := http.StatusNotFound // no running session yet
+		if errors.Is(err, legacy.ErrQualityUnsupported) {
+			code = http.StatusNotImplemented
+		}
+		http.Error(w, err.Error(), code)
+	}
 }
