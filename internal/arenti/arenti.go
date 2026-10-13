@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -147,7 +148,7 @@ func checkAutoPreload(name string, item any) {
 			continue
 		}
 
-		accountEmail, _, _, _, _, battery, _, err := parseURL(rawURL)
+		accountEmail, _, _, _, _, battery, _, _, _, err := parseURL(rawURL)
 		if err != nil {
 			continue
 		}
@@ -215,10 +216,13 @@ func getClient(email string) (*arenti.Client, error) {
 	return client, nil
 }
 
-func parseURL(rawURL string) (accountEmail, password, country, region, server string, battery *bool, target string, err error) {
+func parseURL(rawURL string) (accountEmail, password, country, region, server string, battery *bool, channel, stream int, target string, err error) {
 	rawURL, _, _ = strings.Cut(rawURL, "#")
 	s := strings.TrimPrefix(rawURL, "arenti://")
 	s = strings.TrimPrefix(s, "arenti:")
+
+	channel = 1
+	stream = 0
 
 	// Check query string
 	if idx := strings.IndexByte(s, '?'); idx != -1 {
@@ -231,6 +235,27 @@ func parseURL(rawURL string) (accountEmail, password, country, region, server st
 		}
 		if acc := q.Get("account"); acc != "" {
 			accountEmail = acc
+		}
+		if chStr := q.Get("channel"); chStr != "" {
+			if ch, err := strconv.Atoi(chStr); err == nil && ch >= 0 {
+				channel = ch
+			}
+		}
+		if stStr := q.Get("stream"); stStr != "" {
+			switch strings.ToLower(strings.TrimSpace(stStr)) {
+			case "hd", "main":
+				stream = 0
+			case "sd", "sub":
+				stream = 1
+			default:
+				if st, err := strconv.Atoi(stStr); err == nil && st >= 0 {
+					stream = st
+				}
+			}
+		} else if subStr := q.Get("subtype"); subStr != "" {
+			if st, err := strconv.Atoi(subStr); err == nil && st >= 0 {
+				stream = st
+			}
 		}
 		s = s[:idx]
 	}
@@ -257,14 +282,14 @@ func parseURL(rawURL string) (accountEmail, password, country, region, server st
 	}
 	target = strings.TrimSpace(s)
 	if target == "" {
-		return "", "", "", "", "", nil, "", errors.New("arenti: missing camera name or serial in url")
+		return "", "", "", "", "", nil, 1, 0, "", errors.New("arenti: missing camera name or serial in url")
 	}
 
-	return accountEmail, password, country, region, server, battery, target, nil
+	return accountEmail, password, country, region, server, battery, channel, stream, target, nil
 }
 
 func dialProducer(rawURL string) (core.Producer, error) {
-	accountEmail, password, country, region, server, battery, target, err := parseURL(rawURL)
+	accountEmail, password, country, region, server, battery, _, _, target, err := parseURL(rawURL)
 	if err != nil {
 		return nil, err
 	}
@@ -612,7 +637,7 @@ func apiAuth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	api.ResponseJSON(w, &ArentiResponse{
-		Sources:    items,
+		Sources: items,
 		Account: &AccountSummary{
 			Username:    email,
 			CountryCode: countryCode,

@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -23,6 +25,8 @@ type Conn struct {
 	client    *Client
 	dev       *Device
 	isBattery bool
+	channel   int
+	stream    int
 	wsConn    *websocket.Conn
 	sessionID string
 	callerID  string
@@ -66,6 +70,48 @@ func newRtcAPI() (*pion.API, error) {
 		return nil, err
 	}
 	return pion.NewAPI(pion.WithMediaEngine(m)), nil
+}
+
+// ParseChannelStream extracts the MTS channel (default: 1) and stream id (default: 0) from an arenti URL query.
+func ParseChannelStream(rawURL string) (channel, stream int) {
+	channel = 1
+	stream = 0
+
+	rawURL, _, _ = strings.Cut(rawURL, "#")
+	idx := strings.IndexByte(rawURL, '?')
+	if idx == -1 {
+		return channel, stream
+	}
+
+	q, err := url.ParseQuery(rawURL[idx+1:])
+	if err != nil {
+		return channel, stream
+	}
+
+	if chStr := q.Get("channel"); chStr != "" {
+		if ch, err := strconv.Atoi(chStr); err == nil && ch >= 0 {
+			channel = ch
+		}
+	}
+
+	if stStr := q.Get("stream"); stStr != "" {
+		switch strings.ToLower(strings.TrimSpace(stStr)) {
+		case "hd", "main":
+			stream = 0
+		case "sd", "sub":
+			stream = 1
+		default:
+			if st, err := strconv.Atoi(stStr); err == nil && st >= 0 {
+				stream = st
+			}
+		}
+	} else if subStr := q.Get("subtype"); subStr != "" {
+		if st, err := strconv.Atoi(subStr); err == nil && st >= 0 {
+			stream = st
+		}
+	}
+
+	return channel, stream
 }
 
 // NewProducer connects to an Arenti camera via WebRTC (MTS protocol) on-demand.
@@ -216,11 +262,15 @@ func NewProducer(client *Client, dev *Device, rawURL string) (*Conn, error) {
 		isBattery = false
 	}
 
+	channel, stream := ParseChannelStream(rawURL)
+
 	conn := &Conn{
 		Conn:      webrtcConn,
 		client:    client,
 		dev:       dev,
 		isBattery: isBattery,
+		channel:   channel,
+		stream:    stream,
 		wsConn:    wsConn,
 		sessionID: sessionID,
 		callerID:  callerID,
@@ -294,7 +344,7 @@ func NewProducer(client *Client, dev *Device, rawURL string) (*Conn, error) {
 			"settings": map[string]interface{}{
 				"method": "preview",
 				"streams": []map[string]interface{}{
-					{"channel": 1, "stream": 0},
+					{"channel": channel, "stream": stream},
 				},
 			},
 		},
@@ -311,7 +361,7 @@ func NewProducer(client *Client, dev *Device, rawURL string) (*Conn, error) {
 	pc.OnConnectionStateChange(func(state pion.PeerConnectionState) {
 		Log("arenti: peer connection state: %s", state)
 		if state == pion.PeerConnectionStateConnected {
-			Log("arenti: connected! Sending preview play command...")
+			Log("arenti: connected! Sending preview play command (channel: %d, stream: %d)...", channel, stream)
 			playMsg := map[string]interface{}{
 				"action": "req",
 				"cmd":    "mts",
@@ -325,8 +375,8 @@ func NewProducer(client *Client, dev *Device, rawURL string) (*Conn, error) {
 						"method": "preview",
 						"streams": []map[string]interface{}{
 							{
-								"channel": 1,
-								"stream":  0,
+								"channel": channel,
+								"stream":  stream,
 								"stop":    0,
 							},
 						},
@@ -337,7 +387,7 @@ func NewProducer(client *Client, dev *Device, rawURL string) (*Conn, error) {
 		}
 	})
 
-	Log("arenti: offer sent (%d bytes), awaiting camera wake up...", len(filteredSDP))
+	Log("arenti: offer sent (%d bytes, channel: %d, stream: %d), awaiting camera wake up...", len(filteredSDP), channel, stream)
 
 	// 8. Wait for SDP Answer from camera (up to 30s to allow battery cameras to wake up)
 	_ = wsConn.SetReadDeadline(time.Now().Add(30 * time.Second))

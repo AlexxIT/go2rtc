@@ -197,3 +197,30 @@ func TestRetryOnCode1023(t *testing.T) {
 		t.Fatalf("expected updated token 'fresh-token-456', got %q", client.UserToken)
 	}
 }
+
+func TestParseChannelStream(t *testing.T) {
+	tests := []struct {
+		url     string
+		channel int
+		stream  int
+	}{
+		{"arenti://camera1", 1, 0},
+		{"arenti://camera1?stream=0", 1, 0},
+		{"arenti://camera1?stream=hd", 1, 0},
+		{"arenti://camera1?stream=main", 1, 0},
+		{"arenti://camera1?stream=1", 1, 1},
+		{"arenti://camera1?stream=sd", 1, 1},
+		{"arenti://camera1?stream=sub", 1, 1},
+		{"arenti://camera1?subtype=1", 1, 1},
+		{"arenti://camera1?channel=2", 2, 0},
+		{"arenti://camera1?channel=3&stream=sd", 3, 1},
+		{"arenti://camera1?stream=sd#comment", 1, 1},
+	}
+
+	for _, tt := range tests {
+		ch, st := ParseChannelStream(tt.url)
+		if ch != tt.channel || st != tt.stream {
+			t.Errorf("ParseChannelStream(%q) = (%d, %d), expected (%d, %d)", tt.url, ch, st, tt.channel, tt.stream)
+		}
+	}
+}
