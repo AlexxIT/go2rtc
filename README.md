@@ -184,6 +184,7 @@ A summary table of all modules and features can be found [here](internal/README.
 #### private protocols
 
 - [`bubble`](internal/bubble/README.md) - Some NVR from [dvr163.com](http://help.dvr163.com/) and [eseecloud.com](http://www.eseecloud.com/).
+- [`easy4ip`](internal/easy4ip/README.md) - [Dahua](https://www.dahuasecurity.com/) and compatible (KBVision, Imou...) cameras and recorders over the Easy4IP P2P cloud, no port forwarding needed.
 - [`doorbird`](internal/doorbird/README.md) - [Doorbird](https://www.doorbird.com/) devices with two-way audio.
 - [`dvrip`](internal/dvrip/README.md) - DVR-IP NVR, NetSurveillance, Sofia protocol (XMeye SDK).
 - [`eseecloud`](internal/eseecloud/README.md) - Some NVR from [dvr163.com](http://help.dvr163.com/) and [eseecloud.com](http://www.eseecloud.com/).

@@ -260,7 +260,7 @@ func (c dhConn) request(path, body string) error {
 		"X-WSSE: UsernameToken Username=\"%s\", PasswordDigest=\"%s\", Nonce=\"%d\", Created=\"%s\"\r\n\r\n%s",
 		method, path, *c.cseq, wsseUser, digest, nonce, created, body)
 
-	logf("dahua >>> %s %s", c.peer, path)
+	logf("easy4ip >>> %s %s", c.peer, path)
 	_, err := c.Write([]byte(req))
 	return err
 }
@@ -276,7 +276,7 @@ func (c dhConn) readRaw() (*response, error) {
 	if err != nil {
 		return nil, err
 	}
-	logf("dahua <<< %s %d %s", c.peer, r.code, r.status)
+	logf("easy4ip <<< %s %d %s", c.peer, r.code, r.status)
 
 	if d, err := time.Parse(time.RFC3339, r.headers["Date"]); err == nil {
 		clockOffset.Store(d.Unix() - time.Now().Unix())
