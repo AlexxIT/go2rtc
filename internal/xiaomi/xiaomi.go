@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -50,6 +51,8 @@ func Init() {
 
 	api.HandleFunc("api/xiaomi", apiXiaomi)
 	api.HandleFunc("api/xiaomi/quality", apiQuality)
+	api.HandleFunc("api/xiaomi/playback", apiPlayback)
+	api.HandleFunc("api/xiaomi/records", apiRecords)
 }
 
 var log zerolog.Logger
@@ -372,4 +375,36 @@ func apiQuality(w http.ResponseWriter, r *http.Request) {
 		}
 		http.Error(w, err.Error(), code)
 	}
+}
+
+// apiPlayback: POST /api/xiaomi/playback?did=...&start=<unix seconds>&speed=1|2|4; start=0 returns to the live picture.
+func apiPlayback(w http.ResponseWriter, r *http.Request) {
+	start, _ := strconv.ParseInt(r.URL.Query().Get("start"), 10, 64)
+	speed, _ := strconv.ParseFloat(r.URL.Query().Get("speed"), 64)
+	file, err := legacy.Playback(r.URL.Query().Get("did"), start, speed)
+	if err != nil {
+		code := http.StatusNotFound
+		if errors.Is(err, legacy.ErrQualityUnsupported) {
+			code = http.StatusNotImplemented
+		}
+		http.Error(w, err.Error(), code)
+		return
+	}
+	api.ResponseJSON(w, map[string]string{"file": file}) // the recording file the camera chose
+}
+
+// apiRecords: GET /api/xiaomi/records?did=...&start=<unix>&end=<unix> -> [{"start":..,"dur":..,"type":..}]
+func apiRecords(w http.ResponseWriter, r *http.Request) {
+	start, _ := strconv.ParseInt(r.URL.Query().Get("start"), 10, 64)
+	end, _ := strconv.ParseInt(r.URL.Query().Get("end"), 10, 64)
+	recs, err := legacy.Records(r.URL.Query().Get("did"), start, end)
+	if err != nil {
+		code := http.StatusNotFound
+		if errors.Is(err, legacy.ErrQualityUnsupported) {
+			code = http.StatusNotImplemented
+		}
+		http.Error(w, err.Error(), code)
+		return
+	}
+	api.ResponseJSON(w, recs)
 }

@@ -1,8 +1,11 @@
 package legacy
 
 import (
+	"encoding/binary"
 	"errors"
+	"fmt"
 	"net/url"
+	"regexp"
 	"sync"
 	"time"
 
@@ -68,6 +71,7 @@ type Producer struct {
 	did    string
 	vcodec *core.Codec
 
+	ch1     sync.Once // 0x0700 opens the reliable channel the record list comes on
 	mu      sync.Mutex
 	quality string        // current G2 quality name
 	want    uint16        // picture height SetQuality waits for
@@ -113,6 +117,124 @@ func SetQuality(did, quality string) error {
 	return nil
 }
 
+// Playback moves a running G2 session to the SD card recording at unix time start (what Mi Home does when
+// the timeline is dragged: one 0x0607 command (+ 0x0702 for the speed), the same video stream continues from there at 1x), or back
+// to the live picture when start is 0. Like SetQuality it returns once the first keyframe of the new
+// picture has updated the codec, so RTSP clients that connect afterwards get a matching SDP.
+func Playback(did string, start int64, speed float64) (file string, err error) {
+	v, ok := active.Load(did)
+	if !ok {
+		return "", errors.New("xiaomi: no running session for " + did)
+	}
+	c := v.(*Producer)
+	if c.client.model != ModelAqaraG2 {
+		return "", ErrQualityUnsupported
+	}
+
+	if start == 0 {
+		// Stop, then start again: a bare 0x01ff during playback leaves the camera at 640x360 and deaf to
+		// 0x0605 (verified live). Then ask for the quality this session had.
+		q, _ := g2Quality(c.quality)
+		done := c.expect(q.height)
+		err := errors.Join(c.client.WriteCommandJSON(cmdVideoStop, `{}`), c.client.WriteCommandJSON(cmdVideoStart, `{}`), c.client.WriteCommandJSON(0x0605, `{"channel":%d}`, q.channel), c.client.WriteCommandJSON(0x0704, `{}`))
+		return "", c.wait(done, err)
+	}
+
+	if err := c.client.WriteCommandJSON(0x0607, `{"keep_on":1,"start_time":"%d"}`, start); err != nil {
+		return "", err
+	}
+	if speed < 1 {
+		speed = 1
+	}
+	// Mi Home's speed menu (1x, 2x, 4x) is one more command; the same stream then runs that much faster.
+	if err := c.client.WriteCommandJSON(0x0702, `{"speed":%v}`, speed); err != nil {
+		return "", err
+	}
+	// 0x0609 {"result":"ok","filename":...} comes just before the recording's first frame. The camera
+	// plays the nearest file it has, so the name tells what a time before the oldest recording became.
+	replied := make(chan string, 1)
+	go func() {
+		for {
+			t, data, err := c.client.ReadCommand()
+			if err != nil || t == 0x0609 {
+				replied <- string(data)
+				return
+			}
+		}
+	}()
+	select {
+	case r := <-replied:
+		if m := regexp.MustCompile(`"filename":\s*"([^"]*)"`).FindStringSubmatch(r); m != nil {
+			file = m[1]
+		}
+	case <-time.After(5 * time.Second):
+		return "", errors.New("xiaomi: playback not acknowledged")
+	}
+	return file, c.wait(c.expect(anyHeight), nil)
+}
+
+const anyHeight = 0xFFFF
+
+// expect arms keyframe() to close the returned channel on the next keyframe of that height (anyHeight: any).
+func (c *Producer) expect(height uint16) chan struct{} {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.want, c.done = height, make(chan struct{})
+	return c.done
+}
+
+func (c *Producer) wait(done chan struct{}, err error) error {
+	if err == nil {
+		select {
+		case <-done:
+		case <-time.After(8 * time.Second):
+		}
+	}
+	return err
+}
+
+// Record is one SD card recording: Dur seconds starting at unix time Start.
+type Record struct {
+	Start int64 `json:"start"`
+	Dur   int   `json:"dur"`
+	Type  int   `json:"type"`
+}
+
+// Records asks the camera for its recording index over the reliable channel (see tutk/ch1.go).
+func Records(did string, start, end int64) ([]Record, error) {
+	v, ok := active.Load(did)
+	if !ok {
+		return nil, errors.New("xiaomi: no running session for " + did)
+	}
+	c := v.(*Producer)
+	if c.client.model != ModelAqaraG2 {
+		return nil, ErrQualityUnsupported
+	}
+	var err error
+	c.ch1.Do(func() { err = c.client.WriteCommandJSON(0x0700, `{"channel":1}`) })
+	if err != nil {
+		return nil, err
+	}
+	b, err := c.client.Ch1Request(fmt.Sprintf(`{"time_start":%d,"time_end":%d}`, start, end))
+	if err != nil {
+		return nil, err
+	}
+	return parseRecords(b), nil
+}
+
+// parseRecords reads the reply of Ch1Request: an optional 8-byte (kind, size) header, then one 8-byte
+// entry per recording: u32 start, u8 duration in seconds, 2 bytes unused, u8 type.
+func parseRecords(b []byte) []Record {
+	if len(b) >= 8 && binary.LittleEndian.Uint32(b) < 100 { // first reply carries a (kind, size) header
+		b = b[8:]
+	}
+	recs := make([]Record, 0, len(b)/8)
+	for ; len(b) >= 8; b = b[8:] {
+		recs = append(recs, Record{int64(binary.LittleEndian.Uint32(b)), int(b[4]), int(b[7])})
+	}
+	return recs
+}
+
 // keyframe: a VPS packet of the picture size SetQuality is waiting for updates the codec in place.
 func (c *Producer) keyframe(avcc []byte) {
 	c.mu.Lock()
@@ -122,7 +244,7 @@ func (c *Producer) keyframe(avcc []byte) {
 	}
 	next := h265.AVCCToCodec(avcc)
 	if _, sps, _ := h265.GetParameterSet(next.FmtpLine); len(sps) > 2 {
-		if v := h265.DecodeSPS(sps); v != nil && v.Height() == c.want {
+		if v := h265.DecodeSPS(sps); v != nil && (c.want == anyHeight || v.Height() == c.want) {
 			c.vcodec.FmtpLine = next.FmtpLine
 			c.want = 0
 			close(c.done)
@@ -184,11 +306,6 @@ func probe(client *Client) ([]*core.Media, error) {
 				acodec = &core.Codec{Name: core.CodecPCML, ClockRate: 8000}
 			}
 		case tutk.CodecAACLATM:
-			// The camera sends ADTS frames; RTP AAC (mode=AAC-hbr) carries raw AUs. Android's
-			// decoder rejects the ADTS header ("Invalid AAC stream") and Media3 never starts.
-			if aac.IsADTS(payload) {
-				payload = payload[aac.ADTSHeaderLen(payload):]
-			}
 			if acodec == nil {
 				acodec = aac.ADTSToCodec(payload)
 				if acodec != nil {
@@ -279,6 +396,11 @@ func (c *Producer) Start() error {
 			}
 
 		case tutk.CodecAACLATM:
+			// The camera sends ADTS frames; RTP AAC (mode=AAC-hbr) carries raw AUs. Android's
+			// decoder rejects the ADTS header ("Invalid AAC stream") and Media3 never starts.
+			if aac.IsADTS(payload) {
+				payload = payload[aac.ADTSHeaderLen(payload):]
+			}
 			pkt = &core.Packet{
 				Header: rtp.Header{
 					SequenceNumber: audioSeq,
