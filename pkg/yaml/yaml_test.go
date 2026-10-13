@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 func TestPatch(t *testing.T) {
@@ -97,6 +98,22 @@ func TestPatch(t *testing.T) {
 			path:   []string{"homekit", "camera1", "pairings"},
 			value:  []string{"val1"},
 			expect: "streams:\n  camera1: url1\nhomekit:\n  camera1:\n    name: dummy\n    pairings:\n      - val1\n",
+		},
+		{
+			name: "add with comment",
+			src:  "streams:\n  cam0: url0",
+			path: []string{"streams", "boatcam"},
+			value: &yaml.Node{
+				Kind: yaml.SequenceNode,
+				Content: []*yaml.Node{
+					{
+						Kind:        yaml.ScalarNode,
+						Value:       "arenti://122312321332",
+						HeadComment: "boat cam",
+					},
+				},
+			},
+			expect: "streams:\n  cam0: url0\n  boatcam:\n    # boat cam\n    - arenti://122312321332\n",
 		},
 	}
 	for _, tt := range tests {

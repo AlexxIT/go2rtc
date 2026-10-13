@@ -216,6 +216,7 @@ func getClient(email string) (*arenti.Client, error) {
 }
 
 func parseURL(rawURL string) (accountEmail, password, country, region, server string, battery *bool, target string, err error) {
+	rawURL, _, _ = strings.Cut(rawURL, "#")
 	s := strings.TrimPrefix(rawURL, "arenti://")
 	s = strings.TrimPrefix(s, "arenti:")
 
@@ -377,11 +378,18 @@ func apiDeviceList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	mu.RLock()
+	multiAccount := len(accounts) > 1
+	mu.RUnlock()
+
 	var items []*api.Source
 	for _, dev := range devices {
 		var infoParts []string
 		if dev.Model != "" {
 			infoParts = append(infoParts, dev.Model)
+		}
+		if dev.SnNum != "" {
+			infoParts = append(infoParts, dev.SnNum)
 		}
 		if dev.Battery > 0 {
 			infoParts = append(infoParts, fmt.Sprintf("battery: %d%%", dev.Battery))
@@ -390,10 +398,26 @@ func apiDeviceList(w http.ResponseWriter, r *http.Request) {
 			infoParts = append(infoParts, fmt.Sprintf("wifi: %d%%", dev.WifiStrength))
 		}
 
+		target := dev.SnNum
+		if strings.HasPrefix(strings.ToLower(dev.SnNum), "ppsl") {
+			target = dev.SnNum[4:]
+		} else if target == "" && dev.DeviceID > 0 {
+			target = fmt.Sprintf("%d", dev.DeviceID)
+		} else if target == "" {
+			target = url.PathEscape(dev.DeviceName)
+		}
+
+		var streamURL string
+		if multiAccount {
+			streamURL = fmt.Sprintf("arenti://%s?account=%s", target, url.QueryEscape(email))
+		} else {
+			streamURL = fmt.Sprintf("arenti://%s", target)
+		}
+
 		items = append(items, &api.Source{
 			Name: dev.DeviceName,
 			Info: strings.Join(infoParts, " | "),
-			URL:  fmt.Sprintf("arenti://%s", url.PathEscape(dev.DeviceName)),
+			URL:  streamURL,
 		})
 	}
 
@@ -544,11 +568,18 @@ func apiAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	mu.RLock()
+	multiAccount := len(accounts) > 1
+	mu.RUnlock()
+
 	var items []*api.Source
 	for _, dev := range devices {
 		var infoParts []string
 		if dev.Model != "" {
 			infoParts = append(infoParts, dev.Model)
+		}
+		if dev.SnNum != "" {
+			infoParts = append(infoParts, dev.SnNum)
 		}
 		if dev.Battery > 0 {
 			infoParts = append(infoParts, fmt.Sprintf("battery: %d%%", dev.Battery))
@@ -557,10 +588,26 @@ func apiAuth(w http.ResponseWriter, r *http.Request) {
 			infoParts = append(infoParts, fmt.Sprintf("wifi: %d%%", dev.WifiStrength))
 		}
 
+		target := dev.SnNum
+		if strings.HasPrefix(strings.ToLower(dev.SnNum), "ppsl") {
+			target = dev.SnNum[4:]
+		} else if target == "" && dev.DeviceID > 0 {
+			target = fmt.Sprintf("%d", dev.DeviceID)
+		} else if target == "" {
+			target = url.PathEscape(dev.DeviceName)
+		}
+
+		var streamURL string
+		if multiAccount {
+			streamURL = fmt.Sprintf("arenti://%s?account=%s", target, url.QueryEscape(email))
+		} else {
+			streamURL = fmt.Sprintf("arenti://%s", target)
+		}
+
 		items = append(items, &api.Source{
 			Name: dev.DeviceName,
 			Info: strings.Join(infoParts, " | "),
-			URL:  fmt.Sprintf("arenti://%s", url.PathEscape(dev.DeviceName)),
+			URL:  streamURL,
 		})
 	}
 
