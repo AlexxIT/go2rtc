@@ -398,6 +398,8 @@ func (c *Conn) Play() (err error) {
 }
 
 func (c *Conn) Teardown() (err error) {
+	// TEARDOWN ends the session even when the TCP connection stays open.
+	c.setupChannels = nil
 	// allow TEARDOWN from any state (ex. ANNOUNCE > SETUP)
 	req := &tcp.Request{Method: MethodTeardown, URL: c.URL}
 	return c.WriteRequest(req)
