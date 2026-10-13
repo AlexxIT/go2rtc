@@ -184,6 +184,11 @@ func probe(client *Client) ([]*core.Media, error) {
 				acodec = &core.Codec{Name: core.CodecPCML, ClockRate: 8000}
 			}
 		case tutk.CodecAACLATM:
+			// The camera sends ADTS frames; RTP AAC (mode=AAC-hbr) carries raw AUs. Android's
+			// decoder rejects the ADTS header ("Invalid AAC stream") and Media3 never starts.
+			if aac.IsADTS(payload) {
+				payload = payload[aac.ADTSHeaderLen(payload):]
+			}
 			if acodec == nil {
 				acodec = aac.ADTSToCodec(payload)
 				if acodec != nil {
