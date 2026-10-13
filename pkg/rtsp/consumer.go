@@ -25,17 +25,24 @@ func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiv
 		c.stateMu.Lock()
 		defer c.stateMu.Unlock()
 
-		if c.state == StatePlay {
-			if err = c.Reconnect(); err != nil {
+		var configured bool
+		if channel, configured = c.setupChannels[media]; !configured || c.state == StateNone {
+			if c.state == StatePlay {
+				if err = c.Reconnect(); err != nil {
+					return
+				}
+			}
+
+			if channel, err = c.SetupMedia(media); err != nil {
 				return
 			}
-		}
 
-		if channel, err = c.SetupMedia(media); err != nil {
-			return
+			c.state = StateSetup
 		}
-
-		c.state = StateSetup
+		// Reconnect restores transports but leaves the connection in StateConn.
+		if c.state == StateConn {
+			c.state = StateSetup
+		}
 
 	case core.ModePassiveConsumer:
 		channel = byte(len(c.Senders)) * 2
