@@ -29,15 +29,15 @@ type DeviceListResponse struct {
 
 // Device represents an Arenti/Meari camera device
 type Device struct {
-	DeviceID     int64  `json:"deviceID"`
-	DeviceName   string `json:"deviceName"`
-	SnNum        string `json:"snNum"`
-	HostKey      string `json:"hostKey"`
-	P2PID        string `json:"p2pID"`
-	Model        string `json:"model"`
-	Category     string `json:"category"`
-	Capability   string `json:"capability"`
-	IsOwner      int    `json:"isOwner"`
+	DeviceID       int64  `json:"deviceID"`
+	DeviceName     string `json:"deviceName"`
+	SnNum          string `json:"snNum"`
+	HostKey        string `json:"hostKey"`
+	P2PID          string `json:"p2pID"`
+	Model          string `json:"model"`
+	Category       string `json:"category"`
+	Capability     string `json:"capability"`
+	IsOwner        int    `json:"isOwner"`
 	IconURL        string `json:"iconUrl"`
 	DeviceTypeName string `json:"deviceTypeName"`
 	Version        string `json:"version"`

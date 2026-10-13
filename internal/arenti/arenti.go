@@ -323,6 +323,19 @@ func apiArenti(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+type AccountSummary struct {
+	Username    string `json:"username"`
+	CountryCode string `json:"country_code"`
+	Region      string `json:"region,omitempty"`
+	Server      string `json:"server,omitempty"`
+}
+
+type ArentiResponse struct {
+	Sources    []*api.Source   `json:"sources"`
+	Account    *AccountSummary `json:"account,omitempty"`
+	IsExisting bool            `json:"is_existing,omitempty"`
+}
+
 func apiDeviceList(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	email := query.Get("id")
@@ -384,7 +397,24 @@ func apiDeviceList(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	api.ResponseSources(w, items)
+	mu.RLock()
+	cfg, hasCfg := accounts[email]
+	mu.RUnlock()
+
+	var accSummary *AccountSummary
+	if hasCfg {
+		accSummary = &AccountSummary{
+			Username:    cfg.Username,
+			CountryCode: cfg.CountryCode,
+			Region:      cfg.Region,
+			Server:      cfg.Server,
+		}
+	}
+
+	api.ResponseJSON(w, &ArentiResponse{
+		Sources: items,
+		Account: accSummary,
+	})
 }
 
 func apiAuth(w http.ResponseWriter, r *http.Request) {
@@ -407,55 +437,106 @@ func apiAuth(w http.ResponseWriter, r *http.Request) {
 	batteryStr := r.Form.Get("battery")
 	battery := parseBattery(batteryStr)
 
+	mu.RLock()
+	existing, alreadyConfigured := accounts[email]
+	mu.RUnlock()
+
+	// If password wasn't entered (e.g. submitting prefilled form), reuse existing password
+	if password == "" && alreadyConfigured {
+		password = existing.Password
+	}
+
 	if email == "" || password == "" {
 		http.Error(w, "username and password required", http.StatusBadRequest)
 		return
 	}
 
-	client := arenti.NewClient(email, password, countryCode)
-	if server != "" {
-		client.SetBaseURL(server)
-	} else if region != "" {
-		client.SetRegion(region)
-	}
-	if battery != nil {
-		client.SetBattery(*battery)
-	}
-	if err := client.Login(); err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
-		return
+	// Check if this is an identical duplicate of what is already in config
+	isDuplicate := false
+	if alreadyConfigured {
+		if existing.Password == password &&
+			strings.EqualFold(existing.CountryCode, countryCode) &&
+			existing.Region == region &&
+			existing.Server == server {
+			isDuplicate = true
+		}
 	}
 
-	cfg := map[string]string{
-		"password":     password,
-		"country_code": countryCode,
-	}
-	if region != "" {
-		cfg["region"] = region
-	}
-	if server != "" {
-		cfg["server"] = server
-	}
-	if batteryStr != "" {
-		cfg["battery"] = batteryStr
+	var client *arenti.Client
+	var err error
+
+	if isDuplicate {
+		client, err = getClient(email)
 	}
 
-	if err := app.PatchConfig([]string{"arenti", email}, cfg); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+	if client == nil || err != nil {
+		client = arenti.NewClient(email, password, countryCode)
+		if server != "" {
+			client.SetBaseURL(server)
+		} else if region != "" {
+			client.SetRegion(region)
+		}
+		if battery != nil {
+			client.SetBattery(*battery)
+		}
+		if err := client.Login(); err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
 	}
 
-	mu.Lock()
-	accounts[email] = AccountConfig{
-		Username:    email,
-		Password:    password,
-		CountryCode: countryCode,
-		Region:      region,
-		Server:      server,
-		Battery:     battery,
+	if !isDuplicate {
+		var v struct {
+			Cfg map[string]any `yaml:"arenti"`
+		}
+		app.LoadConfig(&v)
+
+		// Check if config currently uses flat format (arenti.username == email)
+		if v.Cfg != nil && v.Cfg["username"] == email {
+			_ = app.PatchConfig([]string{"arenti", "password"}, password)
+			_ = app.PatchConfig([]string{"arenti", "country_code"}, countryCode)
+			if region != "" {
+				_ = app.PatchConfig([]string{"arenti", "region"}, region)
+			}
+			if server != "" {
+				_ = app.PatchConfig([]string{"arenti", "server"}, server)
+			}
+			if batteryStr != "" {
+				_ = app.PatchConfig([]string{"arenti", "battery"}, batteryStr)
+			}
+		} else {
+			cfg := map[string]string{
+				"password":     password,
+				"country_code": countryCode,
+			}
+			if region != "" {
+				cfg["region"] = region
+			}
+			if server != "" {
+				cfg["server"] = server
+			}
+			if batteryStr != "" {
+				cfg["battery"] = batteryStr
+			}
+
+			if err := app.PatchConfig([]string{"arenti", email}, cfg); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+
+		mu.Lock()
+		accounts[email] = AccountConfig{
+			Username:    email,
+			Password:    password,
+			CountryCode: countryCode,
+			Region:      region,
+			Server:      server,
+			Battery:     battery,
+		}
+		clients[email] = client
+		mu.Unlock()
 	}
-	clients[email] = client
-	mu.Unlock()
 
 	devices, err := client.GetDevices()
 	if err != nil {
@@ -483,5 +564,14 @@ func apiAuth(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	api.ResponseSources(w, items)
+	api.ResponseJSON(w, &ArentiResponse{
+		Sources:    items,
+		Account: &AccountSummary{
+			Username:    email,
+			CountryCode: countryCode,
+			Region:      region,
+			Server:      server,
+		},
+		IsExisting: isDuplicate,
+	})
 }

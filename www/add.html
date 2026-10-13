@@ -397,6 +397,29 @@
         <table id="arenti-table"></table>
     </div>
     <script>
+        function prefillArentiAccount(acc) {
+            if (!acc) return;
+            const form = document.getElementById('arenti-login-form');
+            if (!form) return;
+            if (acc.username) {
+                const emailInput = form.querySelector('input[name="email"]');
+                if (emailInput) emailInput.value = acc.username;
+                const passInput = form.querySelector('input[name="password"]');
+                if (passInput && !passInput.value) {
+                    passInput.placeholder = '(saved in config)';
+                    passInput.removeAttribute('required');
+                }
+            }
+            if (acc.country_code) {
+                const ccInput = form.querySelector('input[name="country_code"]');
+                if (ccInput) ccInput.value = acc.country_code;
+            }
+            if (acc.region !== undefined) {
+                const regionSelect = form.querySelector('select[name="region"]');
+                if (regionSelect) regionSelect.value = acc.region || '';
+            }
+        }
+
         async function arentiReload(ev) {
             if (ev) ev.target.nextElementSibling.style.display = 'grid';
 
@@ -408,6 +431,10 @@
             if (Array.isArray(data) && data.length > 0 && typeof data[0] === 'string') {
                 users.innerHTML = data.map(item => `<option value="${item}">${item}</option>`).join('');
             } else if (data && data.sources) {
+                if (data.account) {
+                    users.innerHTML = `<option value="${data.account.username}">${data.account.username}</option>`;
+                    prefillArentiAccount(data.account);
+                }
                 drawTable(document.getElementById('arenti-table'), data);
             }
         }
@@ -430,6 +457,7 @@
 
             const data = await r.json();
             table.innerText = '';
+            if (data.account) prefillArentiAccount(data.account);
             drawTable(table, data);
             arentiReload();
         });
