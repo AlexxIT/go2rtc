@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -217,12 +216,11 @@ func getClient(email string) (*arenti.Client, error) {
 }
 
 func parseURL(rawURL string) (accountEmail, password, country, region, server string, battery *bool, channel, stream int, target string, err error) {
+	channel, stream = arenti.ParseChannelStream(rawURL)
+
 	rawURL, _, _ = strings.Cut(rawURL, "#")
 	s := strings.TrimPrefix(rawURL, "arenti://")
 	s = strings.TrimPrefix(s, "arenti:")
-
-	channel = 0
-	stream = 1 // 1 = HD (default), 0 = SD
 
 	// Check query string
 	if idx := strings.IndexByte(s, '?'); idx != -1 {
@@ -235,30 +233,6 @@ func parseURL(rawURL string) (accountEmail, password, country, region, server st
 		}
 		if acc := q.Get("account"); acc != "" {
 			accountEmail = acc
-		}
-		if chStr := q.Get("channel"); chStr != "" {
-			if ch, err := strconv.Atoi(chStr); err == nil && ch >= 0 {
-				channel = ch
-			}
-		}
-		if stStr := q.Get("stream"); stStr != "" {
-			switch strings.ToLower(strings.TrimSpace(stStr)) {
-			case "hd", "main":
-				stream = 1
-			case "sd", "sub":
-				stream = 0
-			default:
-				if st, err := strconv.Atoi(stStr); err == nil && st >= 0 {
-					stream = st
-				}
-			}
-		} else if subStr := q.Get("subtype"); subStr != "" {
-			switch strings.ToLower(strings.TrimSpace(subStr)) {
-			case "0", "main", "hd":
-				stream = 1
-			case "1", "sub", "sd":
-				stream = 0
-			}
 		}
 		s = s[:idx]
 	}

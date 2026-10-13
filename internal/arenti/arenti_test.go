@@ -34,8 +34,15 @@ func TestExtractTarget(t *testing.T) {
 		{"arenti://camera1?stream=0", "camera1", "", "", nil, 0, 0},
 		{"arenti://camera1?subtype=1", "camera1", "", "", nil, 0, 0},
 		{"arenti://camera1?subtype=0", "camera1", "", "", nil, 0, 1},
+		{"arenti://camera1?subtype=hd", "camera1", "", "", nil, 0, 1},
+		{"arenti://camera1?subtype=sd", "camera1", "", "", nil, 0, 0},
+		{"arenti://camera1?resolution=hd", "camera1", "", "", nil, 0, 1},
+		{"arenti://camera1?resolution=sd", "camera1", "", "", nil, 0, 0},
+		{"arenti://camera1?resolution=1", "camera1", "", "", nil, 0, 1},
+		{"arenti://camera1?resolution=0", "camera1", "", "", nil, 0, 0},
 		{"arenti://camera1?channel=0&stream=1", "camera1", "", "", nil, 0, 1},
 		{"arenti://camera1?channel=1&stream=sd", "camera1", "", "", nil, 1, 0},
+		{"arenti://camera1?channel=2&resolution=sd", "camera1", "", "", nil, 2, 0},
 	}
 
 	for _, tc := range tests {

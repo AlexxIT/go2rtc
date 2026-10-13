@@ -96,9 +96,9 @@ func ParseChannelStream(rawURL string) (channel, stream int) {
 
 	if stStr := q.Get("stream"); stStr != "" {
 		switch strings.ToLower(strings.TrimSpace(stStr)) {
-		case "hd", "main":
+		case "hd", "main", "1":
 			stream = 1
-		case "sd", "sub":
+		case "sd", "sub", "0":
 			stream = 0
 		default:
 			if st, err := strconv.Atoi(stStr); err == nil && st >= 0 {
@@ -111,6 +111,21 @@ func ParseChannelStream(rawURL string) (channel, stream int) {
 			stream = 1
 		case "1", "sub", "sd":
 			stream = 0
+		default:
+			if st, err := strconv.Atoi(subStr); err == nil && st >= 0 {
+				stream = st
+			}
+		}
+	} else if resStr := q.Get("resolution"); resStr != "" {
+		switch strings.ToLower(strings.TrimSpace(resStr)) {
+		case "hd", "main", "1":
+			stream = 1
+		case "sd", "sub", "0":
+			stream = 0
+		default:
+			if st, err := strconv.Atoi(resStr); err == nil && st >= 0 {
+				stream = st
+			}
 		}
 	}
 
