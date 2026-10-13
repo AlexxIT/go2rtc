@@ -204,17 +204,19 @@ func TestParseChannelStream(t *testing.T) {
 		channel int
 		stream  int
 	}{
-		{"arenti://camera1", 1, 0},
-		{"arenti://camera1?stream=0", 1, 0},
-		{"arenti://camera1?stream=hd", 1, 0},
-		{"arenti://camera1?stream=main", 1, 0},
-		{"arenti://camera1?stream=1", 1, 1},
-		{"arenti://camera1?stream=sd", 1, 1},
-		{"arenti://camera1?stream=sub", 1, 1},
-		{"arenti://camera1?subtype=1", 1, 1},
-		{"arenti://camera1?channel=2", 2, 0},
-		{"arenti://camera1?channel=3&stream=sd", 3, 1},
-		{"arenti://camera1?stream=sd#comment", 1, 1},
+		{"arenti://camera1", 0, 1},
+		{"arenti://camera1?stream=1", 0, 1},
+		{"arenti://camera1?stream=0", 0, 0},
+		{"arenti://camera1?stream=hd", 0, 1},
+		{"arenti://camera1?stream=main", 0, 1},
+		{"arenti://camera1?stream=sd", 0, 0},
+		{"arenti://camera1?stream=sub", 0, 0},
+		{"arenti://camera1?subtype=0", 0, 1},
+		{"arenti://camera1?subtype=1", 0, 0},
+		{"arenti://camera1?channel=0&stream=1", 0, 1},
+		{"arenti://camera1?channel=1", 1, 1},
+		{"arenti://camera1?channel=2&stream=sd", 2, 0},
+		{"arenti://camera1?stream=sd#comment", 0, 0},
 	}
 
 	for _, tt := range tests {

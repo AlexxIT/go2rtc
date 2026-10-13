@@ -221,8 +221,8 @@ func parseURL(rawURL string) (accountEmail, password, country, region, server st
 	s := strings.TrimPrefix(rawURL, "arenti://")
 	s = strings.TrimPrefix(s, "arenti:")
 
-	channel = 1
-	stream = 0
+	channel = 0
+	stream = 1 // 1 = HD (default), 0 = SD
 
 	// Check query string
 	if idx := strings.IndexByte(s, '?'); idx != -1 {
@@ -244,17 +244,20 @@ func parseURL(rawURL string) (accountEmail, password, country, region, server st
 		if stStr := q.Get("stream"); stStr != "" {
 			switch strings.ToLower(strings.TrimSpace(stStr)) {
 			case "hd", "main":
-				stream = 0
-			case "sd", "sub":
 				stream = 1
+			case "sd", "sub":
+				stream = 0
 			default:
 				if st, err := strconv.Atoi(stStr); err == nil && st >= 0 {
 					stream = st
 				}
 			}
 		} else if subStr := q.Get("subtype"); subStr != "" {
-			if st, err := strconv.Atoi(subStr); err == nil && st >= 0 {
-				stream = st
+			switch strings.ToLower(strings.TrimSpace(subStr)) {
+			case "0", "main", "hd":
+				stream = 1
+			case "1", "sub", "sd":
+				stream = 0
 			}
 		}
 		s = s[:idx]

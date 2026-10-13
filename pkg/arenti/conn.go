@@ -72,10 +72,10 @@ func newRtcAPI() (*pion.API, error) {
 	return pion.NewAPI(pion.WithMediaEngine(m)), nil
 }
 
-// ParseChannelStream extracts the MTS channel (default: 1) and stream id (default: 0) from an arenti URL query.
+// ParseChannelStream extracts the MTS channel (default: 0) and stream id (default: 1 for HD) from an arenti URL query.
 func ParseChannelStream(rawURL string) (channel, stream int) {
-	channel = 1
-	stream = 0
+	channel = 0
+	stream = 1 // 1 = HD (default), 0 = SD
 
 	rawURL, _, _ = strings.Cut(rawURL, "#")
 	idx := strings.IndexByte(rawURL, '?')
@@ -97,17 +97,20 @@ func ParseChannelStream(rawURL string) (channel, stream int) {
 	if stStr := q.Get("stream"); stStr != "" {
 		switch strings.ToLower(strings.TrimSpace(stStr)) {
 		case "hd", "main":
-			stream = 0
-		case "sd", "sub":
 			stream = 1
+		case "sd", "sub":
+			stream = 0
 		default:
 			if st, err := strconv.Atoi(stStr); err == nil && st >= 0 {
 				stream = st
 			}
 		}
 	} else if subStr := q.Get("subtype"); subStr != "" {
-		if st, err := strconv.Atoi(subStr); err == nil && st >= 0 {
-			stream = st
+		switch strings.ToLower(strings.TrimSpace(subStr)) {
+		case "0", "main", "hd":
+			stream = 1
+		case "1", "sub", "sd":
+			stream = 0
 		}
 	}
 
