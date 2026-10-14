@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.14-tapo18
+
+- `backchannel_wake`: no talk session left open when the stream is stopped during the delay
+- docs: `backchannel_wake=6000`, only on battery
+
 ## 1.9.14-tapo17
 
 - `backchannel_wake` also waits if the camera was woken up by something else
