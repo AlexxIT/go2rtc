@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.9.14-tapo19
+
+- paced backchannel: a new talk session after a failed one, playbacks are no longer lost until a restart
+- stopping the playbacks mutes a live source (two way audio) only for one second, not forever
+- a playback that doesn't fit the running session returns an error instead of a second talk session
+
 ## 1.9.14-tapo18
 
 - `backchannel_wake`: no talk session left open when the stream is stopped during the delay

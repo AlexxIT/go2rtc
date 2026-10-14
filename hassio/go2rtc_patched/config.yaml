@@ -1,6 +1,6 @@
 name: go2rtc (Tapo patch)
 description: go2rtc 1.9.14 with fixes for battery powered Tapo cameras and doorbells - H265 video, Opus audio, stutter free playback and mixing of announcements
-version: "1.9.14-tapo18"
+version: "1.9.14-tapo19"
 slug: go2rtc_patched
 url: https://git.btaubmann.de/tux/go2rtc
 arch:
