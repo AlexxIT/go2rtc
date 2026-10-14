@@ -445,7 +445,16 @@ func (c *dataChannel) Push(b []byte) error {
 		select {
 		case c.popBuf <- c.waitData[:c.waitSize]:
 		default:
-			return fmt.Errorf("pop buffer is full")
+			// Buffer is full (e.g. unread messages on channel 0).
+			// Drop the oldest message instead of breaking the connection.
+			select {
+			case <-c.popBuf:
+			default:
+			}
+			select {
+			case c.popBuf <- c.waitData[:c.waitSize]:
+			default:
+			}
 		}
 
 		c.waitData = c.waitData[c.waitSize:]
