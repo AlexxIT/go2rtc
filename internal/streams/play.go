@@ -54,8 +54,8 @@ func (s *Stream) closePlaySession(ps *playSession) {
 }
 
 // stopPlayback stops all running playbacks and drops the audio that is
-// already queued for the camera. It returns the session that will be closed.
-func (s *Stream) stopPlayback() *playSession {
+// already queued for the camera.
+func (s *Stream) stopPlayback() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -71,12 +71,11 @@ func (s *Stream) stopPlayback() *playSession {
 	}
 
 	if s.play == nil {
-		return nil
+		return
 	}
 	if clearer, ok := s.play.cons.(playClearer); ok {
 		clearer.ClearPlayback()
 	}
-	return s.play
 }
 
 // Play starts a playback to the stream. An empty source stops all playbacks.
@@ -136,10 +135,14 @@ func (s *Stream) Play(urlOrProd any) error {
 			}
 		}
 
-		if matchMedia(src, ps.cons) {
-			s.addPlaySource(ps, src)
-			return nil
+		if !matchMedia(src, ps.cons) {
+			// a second connection would get no talk session and the running
+			// session would be lost for stopPlayback
+			return errors.New("streams: playback doesn't fit the running one")
 		}
+
+		s.addPlaySource(ps, src)
+		return nil
 	}
 
 	// 2. Active producer of the stream with backchannel
