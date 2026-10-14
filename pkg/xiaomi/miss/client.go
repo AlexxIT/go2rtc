@@ -119,6 +119,17 @@ func login(conn Conn, clientPublic, sign string) error {
 		return fmt.Errorf("miss: auth: %s", data)
 	}
 
+	// Cameras keep sending command replies and notifications while streaming.
+	// Consume them after authentication so the bounded command queue cannot fill
+	// and stop the shared command/media reader (including CS2 over TCP).
+	go func() {
+		for {
+			if _, _, err := conn.ReadCommand(); err != nil {
+				return
+			}
+		}
+	}()
+
 	return nil
 }
 
