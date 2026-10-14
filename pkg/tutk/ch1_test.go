@@ -77,7 +77,7 @@ func TestCh1Data(t *testing.T) {
 	require.Equal(t, []uint16{0x0546}, w.types(), "every data frame is acked")
 	ack := w.out[0][msgHhrSize:]
 	require.EqualValues(t, 7, binary.LittleEndian.Uint32(ack[8:]), "ack carries the frame's seq")
-	require.Equal(t, []byte("hello"), <-s.ch1.data)
+	require.Equal(t, []byte("hello"), (<-s.ch1.data).body)
 }
 
 func TestCh1TruncatedData(t *testing.T) {
@@ -85,4 +85,21 @@ func TestCh1TruncatedData(t *testing.T) {
 	f := camFrame(0x0502, 0, 0x100, []byte("hello"))
 	require.True(t, s.handleCh1RUDP(f[:len(f)-2])) // size says 5, only 3 bytes arrived
 	require.Empty(t, s.ch1.data)
+}
+
+func TestAssemble(t *testing.T) {
+	hdr := make([]byte, 8)
+	binary.LittleEndian.PutUint32(hdr, 1)
+	binary.LittleEndian.PutUint32(hdr[4:], 6) // 6 bytes follow
+	frames := map[uint32][]byte{7: append(hdr, "ab"...), 9: []byte("ef")}
+
+	reply, done := assemble(frames)
+	require.Equal(t, append(append([]byte{}, hdr...), "ab"...), reply, "stops at the missing seq 8")
+	require.False(t, done)
+
+	frames[8] = []byte("cd") // the lost frame arrives (and 7 is resent: same seq, no duplicate)
+	frames[7] = append(hdr, "ab"...)
+	reply, done = assemble(frames)
+	require.Equal(t, append(append([]byte{}, hdr...), "abcdef"...), reply)
+	require.True(t, done)
 }

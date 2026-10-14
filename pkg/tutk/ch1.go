@@ -21,9 +21,16 @@ import (
 
 const ch1Magic = "\x5a\x97\xc2\xf1"
 
+// ch1Data is the body of one data frame and its sequence number: the camera resends frames it thinks were not
+// acked, so the same seq can arrive several times.
+type ch1Data struct {
+	seq  uint32
+	body []byte
+}
+
 type ch1 struct {
 	ready  chan struct{} // closed once the camera acked our hello
-	data   chan []byte
+	data   chan ch1Data
 	out    uint32
 	hello  bool
 	open   bool
@@ -79,7 +86,7 @@ func (s *Session16) handleCh1RUDP(cmd []byte) bool {
 		_ = s.SessionWrite(1, s.ch1Frame(0x0546, binary.LittleEndian.Uint32(cmd[8:]), 0x500, nil))
 		if len(cmd) >= 20+n {
 			select {
-			case s.ch1.data <- append([]byte{}, cmd[20:20+n]...):
+			case s.ch1.data <- ch1Data{binary.LittleEndian.Uint32(cmd[8:]), append([]byte{}, cmd[20:20+n]...)}:
 			default:
 			}
 		}
@@ -122,18 +129,50 @@ func (c *Conn) Ch1Request(js string) ([]byte, error) {
 	}
 	s.ch1.out++
 
-	var reply []byte
+	// Frames are kept by seq: duplicates (resends) are dropped and the reply is read in seq order.
+	frames := map[uint32][]byte{}
 	idle := 5 * time.Second // the first frame can take a while, then they come in a burst
 	for {
 		select {
-		case b := <-s.ch1.data:
-			reply = append(reply, b...)
+		case f := <-s.ch1.data:
+			frames[f.seq] = f.body
 			idle = 600 * time.Millisecond
+			if reply, done := assemble(frames); done {
+				return reply, nil
+			} else if len(reply) >= 8 && binary.LittleEndian.Uint32(reply) < 100 {
+				idle = 5 * time.Second // the header promises more: a lost frame is resent, wait for it
+			}
 		case <-time.After(idle):
+			reply, _ := assemble(frames)
 			if len(reply) == 0 {
 				return nil, errors.New("tutk: no reply")
 			}
 			return reply, nil
 		}
 	}
+}
+
+// assemble joins the frames from the lowest seq on, up to the first missing one; done if that is the whole
+// reply its (kind, size) header announces.
+func assemble(frames map[uint32][]byte) (reply []byte, done bool) {
+	if len(frames) == 0 {
+		return nil, false
+	}
+	first := ^uint32(0)
+	for seq := range frames {
+		if seq < first {
+			first = seq
+		}
+	}
+	for seq := first; ; seq++ {
+		b, ok := frames[seq]
+		if !ok {
+			break
+		}
+		reply = append(reply, b...)
+	}
+	if len(reply) >= 8 && binary.LittleEndian.Uint32(reply) < 100 {
+		done = len(reply) >= 8+int(binary.LittleEndian.Uint32(reply[4:]))
+	}
+	return reply, done
 }

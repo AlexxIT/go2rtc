@@ -34,7 +34,7 @@ func NewSession16(conn net.Conn, sid8 []byte) *Session16 {
 		sid16:  sid16,
 		rawCmd: make(chan []byte, 10),
 		rawPkt: make(chan [2][]byte, 100),
-		ch1:    ch1{ready: make(chan struct{}), data: make(chan []byte, 256)},
+		ch1:    ch1{ready: make(chan struct{}), data: make(chan ch1Data, 256)},
 	}
 }
 
