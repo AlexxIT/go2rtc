@@ -21,6 +21,13 @@ func TestParseURL(t *testing.T) {
 	require.Equal(t, "rtsp://admin:p%40ss@127.0.0.1:41000/cam/realmonitor?channel=2&subtype=1#backchannel=0", tg.location(41000))
 }
 
+// The NVR needs the query of a playback URL as the client wrote it (channel, subtype, starttime, endtime).
+func TestParseURLKeepsQueryOrder(t *testing.T) {
+	tg, err := parseURL("easy4ip://admin:pw@SN1/cam/playback?channel=1&subtype=0&relay=1&starttime=2026_10_14_13_55_19&client_id=abc:37777&endtime=2026_10_14_23_59_59")
+	require.NoError(t, err)
+	require.Equal(t, "rtsp://admin:pw@127.0.0.1:41000/cam/playback?channel=1&subtype=0&starttime=2026_10_14_13_55_19&endtime=2026_10_14_23_59_59", tg.location(41000))
+}
+
 func TestParseURLDefaults(t *testing.T) {
 	tg, err := parseURL("easy4ip://admin:pw@SN1/cam/realmonitor?channel=1")
 	require.NoError(t, err)

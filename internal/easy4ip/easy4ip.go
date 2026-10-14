@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -116,7 +117,7 @@ func parseURL(rawURL string) (*target, error) {
 		clientID: take("client_id"),
 		relay:    take("relay") == "1",
 		path:     u.Path,
-		query:    q.Encode(),
+		query:    keepOrder(u.RawQuery),
 		fragment: u.Fragment,
 	}
 	t.pass, _ = u.User.Password()
@@ -124,6 +125,20 @@ func parseURL(rawURL string) (*target, error) {
 		t.clientID = defaultClientID(t.serial)
 	}
 	return t, nil
+}
+
+// keepOrder drops our own options from the raw query without reordering the rest: url.Values.Encode sorts the
+// keys, and a Dahua NVR answers 404 to /cam/playback when starttime comes before subtype.
+func keepOrder(rawQuery string) string {
+	var keep []string
+	for _, kv := range strings.Split(rawQuery, "&") {
+		switch key, _, _ := strings.Cut(kv, "="); key {
+		case "", "rtsp_port", "http_port", "client_id", "relay":
+		default:
+			keep = append(keep, kv)
+		}
+	}
+	return strings.Join(keep, "&")
 }
 
 // location is the RTSP URL of the device's RTSP server as seen through a loopback tunnel port.
