@@ -54,6 +54,11 @@ type Client struct {
 	conn1 net.Conn
 	conn2 net.Conn
 
+	// The talk session can be set up after a delay, by the mixer, while the
+	// client is closed. connMu guards conn2 and closed against Close.
+	connMu sync.Mutex
+	closed bool
+
 	decrypt func(b []byte) []byte
 
 	session1 string
@@ -412,8 +417,14 @@ func (c *Client) Close() (err error) {
 	if c.conn1 != nil {
 		err = c.conn1.Close()
 	}
-	if c.conn2 != nil {
-		_ = c.conn2.Close()
+
+	c.connMu.Lock()
+	c.closed = true
+	conn2 := c.conn2
+	c.connMu.Unlock()
+
+	if conn2 != nil {
+		_ = conn2.Close()
 	}
 	return
 }

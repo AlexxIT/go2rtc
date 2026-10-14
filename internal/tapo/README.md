@@ -43,7 +43,7 @@ streams:
   # video and two-way audio from a browser, lowest latency
   doorbell: tapo://cloud-password@192.168.1.123
   # playback only: POST /api/streams?dst=doorbell_playback&src=...
-  doorbell_playback: tapo://cloud-password@192.168.1.123?backchannel_pace=120&backchannel_prefill=400&backchannel_leadin=1500&backchannel_wake=7000
+  doorbell_playback: tapo://cloud-password@192.168.1.123?backchannel_pace=120&backchannel_prefill=400&backchannel_leadin=1500&backchannel_wake=6000
 ```
 
 | Param                 | Range   | Default | Description                                                                                                                                              |
@@ -54,10 +54,13 @@ streams:
 | `backchannel_wake`    | 0..15000 | 0      | Paced mode only: ms between the wake up of a battery camera and the start of the talk session, the audio waits. See below.                                |
 
 A D235 on battery freezes for 2-3 seconds about 4 seconds after it was woken up, if a talk session is active at this
-time: it sends no video and reads no audio, the playback stutters. A talk session that starts 7 seconds after the wake
-up is not affected. With `backchannel_wake=7000` the talk session is started only when go2rtc is connected to the
-camera for 7 seconds (other streams of the same camera count, also a few seconds after they were closed). Until then
+time: it sends no video and reads no audio, the playback stutters. A talk session that starts 5.5 seconds or later
+after the wake up is not affected. With `backchannel_wake=6000` the talk session is started only when go2rtc is
+connected to the camera for 6 seconds (other streams of the same camera count, also a few seconds after they were closed). Until then
 the audio is queued. A camera with a running stream gets the audio at once.
+
+Use it only while the camera runs on battery. go2rtc can't tell whether a camera on mains power is awake, so every
+playback that is not started within a few seconds after another connection is delayed for nothing.
 
 In the paced mode:
 

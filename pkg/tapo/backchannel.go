@@ -2,6 +2,8 @@ package tapo
 
 import (
 	"bytes"
+	"errors"
+	"net"
 	"net/url"
 	"strconv"
 	"strings"
@@ -290,16 +292,27 @@ func (c *Client) SetupBackchannel() (err error) {
 	}
 
 	for i := 0; ; i++ {
-		if c.conn2, err = c.newConn(); err != nil {
+		var conn net.Conn
+		if conn, err = c.newConn(); err != nil {
 			return
 		}
 
-		c.session2, err = c.Request(c.conn2, []byte(`{"params":{"talk":{"mode":"aec"},"method":"get"},"seq":3,"type":"request"}`))
+		// a delayed setup must not leave a talk session open after Close
+		c.connMu.Lock()
+		if c.closed {
+			c.connMu.Unlock()
+			_ = conn.Close()
+			return errors.New("tapo: client closed")
+		}
+		c.conn2 = conn
+		c.connMu.Unlock()
+
+		c.session2, err = c.Request(conn, []byte(`{"params":{"talk":{"mode":"aec"},"method":"get"},"seq":3,"type":"request"}`))
 		if err == nil {
 			return
 		}
 
-		_ = c.conn2.Close()
+		_ = conn.Close()
 
 		if i == talkBusyRetries || !strings.Contains(err.Error(), talkBusyError) {
 			return
