@@ -2,10 +2,15 @@ package tapo
 
 import (
 	"bytes"
+	"errors"
+	"io"
+	"net"
+	"net/url"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/pcm"
 	"github.com/pion/rtp"
 	"github.com/stretchr/testify/require"
@@ -44,7 +49,7 @@ func TestLimitPCM(t *testing.T) {
 	require.Equal(t, int16(-mixerKnee), limitPCM(-mixerKnee, 3))
 
 	// the largest sum fits and the curve is monotonic
-	for n := 2; n <= 4; n++ {
+	for _, n := range []int{2, 3, 4, 9, 16} {
 		peak := int32(n) * 32768
 		require.LessOrEqual(t, int(limitPCM(peak, n)), 32767)
 		require.GreaterOrEqual(t, int(limitPCM(-peak, n)), -32767)
@@ -92,9 +97,32 @@ func TestMixerClear(t *testing.T) {
 	require.Empty(t, src.queue)
 
 	// a new source is not muted
-	src = m.AddSource()
+	other := m.AddSource()
+	other.Push(&rtp.Packet{Payload: pcma(1000, mixerChunkSize)})
+	require.Len(t, other.queue, mixerChunkSize)
+
+	// a live source is heard again after the mute
+	src.muted = time.Now().Add(-time.Millisecond)
 	src.Push(&rtp.Packet{Payload: pcma(1000, mixerChunkSize)})
 	require.Len(t, src.queue, mixerChunkSize)
+}
+
+func TestMixerFinished(t *testing.T) {
+	m := newMixer(mixerOptions{}, func([]byte) error {
+		return errors.New("broken pipe")
+	}, nil)
+	m.start(0, func() error { return nil })
+	require.False(t, m.Finished())
+
+	// the first write fails, the sender loop returns
+	src := m.AddSource()
+	src.Push(&rtp.Packet{Payload: pcma(1000, mixerChunkSize)})
+	require.Eventually(t, m.Finished, 2*time.Second, 10*time.Millisecond)
+
+	// a setup error also ends the mixer
+	m = newMixer(mixerOptions{}, nil, nil)
+	m.start(0, func() error { return errors.New("busy") })
+	require.Eventually(t, m.Finished, time.Second, 10*time.Millisecond)
 }
 
 func TestMixerRun(t *testing.T) {
@@ -190,4 +218,41 @@ func TestMixerStartDelay(t *testing.T) {
 	m.Stop(5 * time.Second)
 	require.Less(t, time.Since(begin), time.Second)
 	require.False(t, called)
+}
+
+func TestAddTrackAfterFailedSession(t *testing.T) {
+	// a mixer that has finished after a write error
+	m := newMixer(mixerOptions{}, nil, nil)
+	m.start(0, func() error { return errors.New("broken pipe") })
+	require.Eventually(t, m.Finished, time.Second, 10*time.Millisecond)
+
+	conn2, peer := net.Pipe()
+	defer peer.Close()
+
+	media := &core.Media{Kind: core.KindAudio, Direction: core.DirectionSendonly}
+	codec := &core.Codec{Name: core.CodecPCMA, ClockRate: 8000}
+	old := core.NewSender(media, codec)
+
+	// nothing listens on the port, so the new talk session fails at once
+	u, _ := url.Parse("tapo://127.0.0.1:1?backchannel_pace=0")
+	c := &Client{
+		url:         u,
+		session1:    "1",
+		conn2:       conn2,
+		session2:    "2",
+		mixer:       m,
+		backSenders: []backchannelSender{{sender: old, source: m.AddSource()}},
+	}
+
+	err := c.AddTrack(media, codec, core.NewReceiver(media, codec))
+	require.Error(t, err)
+
+	// the old session is closed, the next source tries a new one
+	require.Nil(t, c.mixer)
+	require.Empty(t, c.backSenders)
+	require.Nil(t, c.conn2)
+	require.Empty(t, c.session2)
+	require.Equal(t, "closed", old.State())
+	_, err = conn2.Write([]byte{0})
+	require.ErrorIs(t, err, io.ErrClosedPipe)
 }

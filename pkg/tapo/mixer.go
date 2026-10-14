@@ -26,6 +26,11 @@ const (
 
 	// mixerKnee is the level where the limiter of the mixed signal starts.
 	mixerKnee = 24000
+
+	// mixerClearMute is how long Clear ignores the sources. The packets of a
+	// stopped playback that are still on the way arrive within this time, a
+	// live source (two way audio) is heard again after it.
+	mixerClearMute = time.Second
 )
 
 // pcmaSilence is the G.711 A-law code of zero amplitude.
@@ -54,8 +59,8 @@ type mixerSource struct {
 	mixer    *mixer
 	queue    []byte
 	lastRecv time.Time
-	dropped  bool // not in mixer.sources anymore
-	muted    bool // playback was cleared, ignore the rest of the source
+	dropped  bool      // not in mixer.sources anymore
+	muted    time.Time // playback was cleared, ignore the source until then
 }
 
 // mixer sends the audio of one or more sources to the camera in chunks of
@@ -110,7 +115,7 @@ func (s *mixerSource) Push(packet *rtp.Packet) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if s.muted {
+	if time.Now().Before(s.muted) {
 		return
 	}
 	if s.dropped {
@@ -131,15 +136,28 @@ func (s *mixerSource) Dropped() bool {
 	return s.dropped
 }
 
-// Clear drops the queued audio of all sources and ignores what they still
-// send. Sources added later are played as usual.
+// Clear drops the queued audio of all sources and ignores what they send
+// for mixerClearMute. Sources added later are played as usual.
 func (m *mixer) Clear() {
+	muted := time.Now().Add(mixerClearMute)
+
 	m.mu.Lock()
 	for _, src := range m.sources {
 		src.queue = nil
-		src.muted = true
+		src.muted = muted
 	}
 	m.mu.Unlock()
+}
+
+// Finished reports that the sender loop has returned: after Stop, a setup
+// error or a write error. The mixer can't be used anymore.
+func (m *mixer) Finished() bool {
+	select {
+	case <-m.finished:
+		return true
+	default:
+		return false
+	}
 }
 
 // Stop sends the rest of the queued audio and stops the mixer. It waits not
@@ -413,8 +431,9 @@ func limitPCM(v int32, n int) int16 {
 		v = -v
 	}
 	if v > mixerKnee {
-		peak := int32(n) * 32768
-		v = mixerKnee + (v-mixerKnee)*(32767-mixerKnee)/(peak-mixerKnee)
+		// int64, the product overflows int32 with many sources
+		peak := int64(n) * 32768
+		v = mixerKnee + int32(int64(v-mixerKnee)*(32767-mixerKnee)/(peak-mixerKnee))
 	}
 	if neg {
 		v = -v

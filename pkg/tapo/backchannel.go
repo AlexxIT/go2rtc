@@ -118,6 +118,11 @@ func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver
 	c.backMu.Lock()
 	defer c.backMu.Unlock()
 
+	if c.mixer != nil && c.mixer.Finished() {
+		// the talk session has failed, the next source starts a new one
+		c.resetBackchannel()
+	}
+
 	if c.sender == nil && c.mixer == nil {
 		opts := parseBackchannelOptions(c.url.Query())
 
@@ -262,6 +267,27 @@ func logMixer(event string, stats *mixerStats) {
 			Int64("max_write_ms", stats.MaxWrite.Milliseconds())
 	}
 	e.Msg("[tapo] backchannel: " + event)
+}
+
+// resetBackchannel forgets a finished mixer with its senders and closes the
+// talk session. The caller holds backMu.
+func (c *Client) resetBackchannel() {
+	for _, bs := range c.backSenders {
+		bs.sender.Close()
+	}
+	c.backSenders = nil
+	c.mixer = nil
+
+	c.connMu.Lock()
+	conn2 := c.conn2
+	c.conn2 = nil
+	c.connMu.Unlock()
+
+	if conn2 != nil {
+		_ = conn2.Close()
+	}
+	c.session2 = ""
+	Logger.Debug().Msg("[tapo] backchannel: talk session closed after an error")
 }
 
 // stopBackchannel closes the senders and lets the mixer send the rest of
