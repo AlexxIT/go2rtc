@@ -143,9 +143,13 @@ func (c *Conn) Ch1Request(js string) ([]byte, error) {
 				idle = 5 * time.Second // the header promises more: a lost frame is resent, wait for it
 			}
 		case <-time.After(idle):
-			reply, _ := assemble(frames)
+			reply, done := assemble(frames)
 			if len(reply) == 0 {
 				return nil, errors.New("tutk: no reply")
+			}
+			if len(reply) >= 8 && binary.LittleEndian.Uint32(reply) < 100 && !done {
+				// the header promised more than came: a cut-off index would look like a short SD card
+				return nil, errors.New("tutk: reply incomplete")
 			}
 			return reply, nil
 		}
