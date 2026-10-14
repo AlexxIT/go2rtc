@@ -133,7 +133,14 @@ func (p *Producer) AddTrack(media *core.Media, codec *core.Codec, track *core.Re
 
 func (p *Producer) MarshalJSON() ([]byte, error) {
 	if conn := p.conn; conn != nil {
-		return json.Marshal(conn)
+		b, err := json.Marshal(conn)
+		// The "type" key was removed from the connection info in v1.9.0, but
+		// the media_player of the WebRTC integration for Home Assistant still
+		// uses it to detect playback (POST /api/streams?dst=...&src=...).
+		if err == nil && p.state == stateInternal && len(b) > 2 && b[0] == '{' {
+			b = append([]byte(`{"type":"playback",`), b[1:]...)
+		}
+		return b, err
 	}
 	info := map[string]string{"url": p.url}
 	return json.Marshal(info)

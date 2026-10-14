@@ -13,6 +13,10 @@ type Stream struct {
 	consumers []core.Consumer
 	mu        sync.Mutex
 	pending   atomic.Int32
+
+	playMu    sync.Mutex            // only one Play() call at a time
+	play      *playSession          // connection to the camera opened for playback
+	playConns map[core.Producer]int // producers that carry a playback
 }
 
 func NewStream(source any) *Stream {
@@ -103,6 +107,12 @@ func (s *Stream) stopProducers() {
 	s.mu.Lock()
 producers:
 	for _, producer := range s.producers {
+		// Playback (Stream.Play) attaches its track directly to the connection
+		// of a producer, so it is not in producer.senders. The source of the
+		// playback and the producer that carries it are stopped by Play.
+		if producer.state == stateInternal || (producer.conn != nil && s.playConns[producer.conn] > 0) {
+			continue
+		}
 		for _, track := range producer.receivers {
 			if len(track.Senders()) > 0 {
 				continue producers

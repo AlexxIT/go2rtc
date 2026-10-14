@@ -17,6 +17,8 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/mpegts"
@@ -34,8 +36,28 @@ type Client struct {
 	receivers []*core.Receiver
 	sender    *core.Sender
 
+	rd        *multipart.Reader
+	demux     *mpegts.Demuxer
+	transcode func([]byte) []byte
+	videoType byte           // mpegts stream type of the camera video
+	audioType byte           // mpegts stream type of the camera audio
+	probed    []*core.Packet // packets read while probing the codecs
+
+	backMu      sync.Mutex
+	mixer       *mixer              // paced backchannel
+	backSenders []backchannelSender // senders of the paced backchannel
+	stopTimeout time.Duration       // how long Stop waits for the mixer
+
+	awake     *awakeState
+	awakeOnce sync.Once
+
 	conn1 net.Conn
 	conn2 net.Conn
+
+	// The talk session can be set up after a delay, by the mixer, while the
+	// client is closed. connMu guards conn2 and closed against Close.
+	connMu sync.Mutex
+	closed bool
 
 	decrypt func(b []byte) []byte
 
@@ -74,7 +96,57 @@ func Dial(rawURL string) (*Client, error) {
 	if c.conn1, err = c.newConn(); err != nil {
 		return nil, err
 	}
+	c.awake = awakeOpen(u.Host)
 	return c, nil
+}
+
+// awakeGap is how long a battery camera stays awake for sure after the last
+// connection was closed.
+const awakeGap = 5 * time.Second
+
+// awakeState tells since when a camera is known to be awake: as long as
+// there are connections to it without a longer gap.
+type awakeState struct {
+	since     time.Time
+	open      int
+	lastClose time.Time
+}
+
+var (
+	awakeMu     sync.Mutex
+	awakeStates = map[string]*awakeState{}
+)
+
+func awakeOpen(host string) *awakeState {
+	awakeMu.Lock()
+	defer awakeMu.Unlock()
+
+	now := time.Now()
+	st := awakeStates[host]
+	if st == nil {
+		st = &awakeState{}
+		awakeStates[host] = st
+	}
+	if st.open == 0 && now.Sub(st.lastClose) > awakeGap {
+		// It was asleep or was woken up by someone else a moment ago
+		st.since = now
+	}
+	st.open++
+	return st
+}
+
+func (st *awakeState) close() {
+	awakeMu.Lock()
+	st.open--
+	st.lastClose = time.Now()
+	awakeMu.Unlock()
+}
+
+// sinceWake returns for how long the camera is known to be awake.
+func (c *Client) sinceWake() time.Duration {
+	awakeMu.Lock()
+	defer awakeMu.Unlock()
+	return time.Since(c.awake.since)
 }
 
 func (c *Client) newConn() (net.Conn, error) {
@@ -161,12 +233,20 @@ func (c *Client) newDectypter(res *http.Response, brand, username, password stri
 		// restore IV
 		cbc.SetIV(iv[:])
 
+		// broken part (ex. incomplete read), CryptBlocks will panic on it
+		n := len(b)
+		if n == 0 || n%aes.BlockSize != 0 {
+			return nil
+		}
+
 		// decrypt
 		cbc.CryptBlocks(b, b)
 
 		// unpad
-		n := len(b)
 		padSize := int(b[n-1])
+		if padSize > n {
+			return nil
+		}
 		return b[:n-padSize]
 	}
 }
@@ -181,17 +261,17 @@ func (c *Client) SetupStream() (err error) {
 	return
 }
 
-// Handle - first run will be in probe state
-func (c *Client) Handle() error {
-	rd := multipart.NewReader(c.conn1, "--device-stream-boundary--")
-	demux := mpegts.NewDemuxer()
-
-	var transcode func([]byte) []byte
+// readPart reads one multipart part from the camera and returns its packets
+func (c *Client) readPart() ([]*core.Packet, error) {
+	if c.rd == nil {
+		c.rd = multipart.NewReader(c.conn1, "--device-stream-boundary--")
+		c.demux = mpegts.NewDemuxer()
+	}
 
 	for {
-		p, err := rd.NextRawPart()
+		p, err := c.rd.NextRawPart()
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		if ct := p.Header.Get("Content-Type"); ct != "video/mp2t" {
@@ -201,7 +281,7 @@ func (c *Client) Handle() error {
 		cl := p.Header.Get("Content-Length")
 		size, err := strconv.Atoi(cl)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		c.recv += size
@@ -220,13 +300,15 @@ func (c *Client) Handle() error {
 		body = c.decrypt(body)
 		bytesRd := bytes.NewReader(body)
 
+		var pkts []*core.Packet
+
 		for {
-			pkt, err2 := demux.ReadPacket(bytesRd)
+			pkt, err2 := c.demux.ReadPacket(bytesRd)
 			if pkt == nil || err2 == io.EOF {
 				break
 			}
 			if err2 != nil {
-				return err2
+				return nil, err2
 			}
 
 			if pkt.PayloadType == mpegts.StreamTypePCMUTapo {
@@ -236,16 +318,82 @@ func (c *Client) Handle() error {
 				// I don't know why Tapo considers this an improvement. The codec is no better than the previous one.
 				// Unfortunately, we don't know in advance what codec the camera will use.
 				// Therefore, it's easier to transcode to a standard codec that all Tapo cameras have.
-				if transcode == nil {
-					transcode = pcm.Transcode(
+				if c.transcode == nil {
+					c.transcode = pcm.Transcode(
 						&core.Codec{Name: core.CodecPCMA, ClockRate: 8000},
 						&core.Codec{Name: core.CodecPCMU, ClockRate: 16000},
 					)
 				}
 				pkt.PayloadType = mpegts.StreamTypePCMATapo
-				pkt.Payload = transcode(pkt.Payload)
+				pkt.Payload = c.transcode(pkt.Payload)
 			}
 
+			pkts = append(pkts, pkt)
+		}
+
+		return pkts, nil
+	}
+}
+
+// probeAudioPackets is how many packets after the first video packet the
+// probe waits for audio. A camera with a disabled microphone sends none.
+const probeAudioPackets = 50
+
+// probe starts the stream and reads it until the codecs are known. Battery
+// powered cameras (ex. D235) send H265 and Opus instead of H264 and PCMA and
+// there is no way to know it in advance. The packets are kept and replayed
+// by Handle.
+func (c *Client) probe() {
+	if c.videoType != 0 {
+		return
+	}
+
+	c.videoType = mpegts.StreamTypeH264
+	c.audioType = mpegts.StreamTypePCMATapo
+
+	if err := c.SetupStream(); err != nil {
+		return
+	}
+
+	_ = c.conn1.SetReadDeadline(time.Now().Add(5 * time.Second))
+	defer c.conn1.SetReadDeadline(time.Time{})
+
+	var video, audio bool
+	var afterVideo int
+
+	for len(c.probed) < 500 {
+		pkts, err := c.readPart()
+		if err != nil {
+			return
+		}
+		c.probed = append(c.probed, pkts...)
+
+		for _, pkt := range pkts {
+			switch pkt.PayloadType {
+			case mpegts.StreamTypeH264, mpegts.StreamTypeH265:
+				c.videoType = pkt.PayloadType
+				video = true
+			case mpegts.StreamTypePCMATapo, mpegts.StreamTypePrivateOPUS:
+				c.audioType = pkt.PayloadType
+				audio = true
+			}
+			if video {
+				afterVideo++
+			}
+		}
+
+		if video && (audio || afterVideo > probeAudioPackets) {
+			return
+		}
+	}
+}
+
+func (c *Client) Handle() error {
+	pkts := c.probed
+	c.probed = nil
+
+	for {
+		for _, pkt := range pkts {
 			for _, receiver := range c.receivers {
 				if receiver.ID == pkt.PayloadType {
 					mpegts.TimestampToRTP(pkt, receiver.Codec)
@@ -254,15 +402,29 @@ func (c *Client) Handle() error {
 				}
 			}
 		}
+
+		var err error
+		if pkts, err = c.readPart(); err != nil {
+			return err
+		}
 	}
 }
 
 func (c *Client) Close() (err error) {
+	if c.awake != nil {
+		c.awakeOnce.Do(c.awake.close)
+	}
 	if c.conn1 != nil {
 		err = c.conn1.Close()
 	}
-	if c.conn2 != nil {
-		_ = c.conn2.Close()
+
+	c.connMu.Lock()
+	c.closed = true
+	conn2 := c.conn2
+	c.connMu.Unlock()
+
+	if conn2 != nil {
+		_ = conn2.Close()
 	}
 	return
 }
@@ -291,11 +453,16 @@ func (c *Client) Request(conn net.Conn, body []byte) (string, error) {
 		var v struct {
 			Params struct {
 				SessionID string `json:"session_id"`
+				ErrorCode int    `json:"error_code"`
 			} `json:"params"`
 		}
 
 		if err = json.NewDecoder(p).Decode(&v); err != nil {
 			return "", err
+		}
+
+		if v.Params.ErrorCode != 0 {
+			return "", fmt.Errorf("tapo: session rejected (error_code=%d)", v.Params.ErrorCode)
 		}
 
 		return v.Params.SessionID, nil
