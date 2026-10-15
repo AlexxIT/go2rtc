@@ -2,6 +2,9 @@ package reolink
 
 import (
 	"testing"
+	"time"
+
+	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
 func TestRTPTimestampGuardMonotonic(t *testing.T) {
@@ -70,3 +73,48 @@ func TestSetupBackchannelDisabled(t *testing.T) {
 		t.Fatalf("expected 'reolink: talkback is disabled', got %v", err)
 	}
 }
+
+func TestSetupBackchannelClosed(t *testing.T) {
+	c := &Client{
+		backchannelEnabled: true,
+		closed:             true,
+	}
+	err := c.SetupBackchannel()
+	if err == nil || err.Error() != "reolink: client is closed" {
+		t.Fatalf("expected 'reolink: client is closed', got %v", err)
+	}
+}
+
+func TestTalkbackNonBlockingDrop(t *testing.T) {
+	c := &Client{
+		backchannelEnabled: true,
+	}
+	// Emulate talkMu being locked during background setup
+	c.talkMu.Lock()
+
+	media := &core.Media{Kind: core.KindAudio}
+	codec := &core.Codec{Name: core.CodecPCMU}
+	track := core.NewReceiver(media, codec)
+
+	if err := c.AddTrack(media, codec, track); err != nil {
+		t.Fatalf("AddTrack failed: %v", err)
+	}
+
+	// Calling Handler while talkMu is locked should return immediately (dropping the packet)
+	// and NOT block on the lock.
+	done := make(chan struct{})
+	go func() {
+		c.sender.Handler(&core.Packet{Payload: []byte{0, 1, 2, 3}})
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// success: handler returned immediately without blocking
+	case <-time.After(500 * time.Millisecond):
+		t.Fatalf("c.sender.Handler blocked while talkMu was locked!")
+	}
+
+	c.talkMu.Unlock()
+}
+

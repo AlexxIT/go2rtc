@@ -60,6 +60,8 @@ type Client struct {
 
 	talkMu    sync.Mutex
 	talkTimer *time.Timer
+	talkSetup bool
+	closed    bool
 
 	lastWriteTime time.Time
 }
@@ -153,6 +155,7 @@ func (c *Client) Close() error {
 		c.reader.Close()
 	}
 	c.talkMu.Lock()
+	c.closed = true
 	if c.talkTimer != nil {
 		c.talkTimer.Stop()
 	}
@@ -174,14 +177,31 @@ func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Rece
 
 		c.sender = core.NewSender(media, codec)
 		c.sender.Handler = func(packet *core.Packet) {
-			c.talkMu.Lock()
+			// opening the talk session takes 1-2s: don't block (and queue
+			// audio) here, open it in background and drop audio until ready
+			if !c.talkMu.TryLock() {
+				return
+			}
 			defer c.talkMu.Unlock()
 
 			if c.talkSession == nil {
-				if err := c.SetupBackchannel(); err != nil {
-					c.logDebugErr(err, "lazy talkback initialization failed")
-					return
+				if !c.talkSetup {
+					c.talkSetup = true
+					go func() {
+						c.talkMu.Lock()
+						defer c.talkMu.Unlock()
+						c.talkSetup = false
+						if c.closed {
+							return
+						}
+						if err := c.SetupBackchannel(); err != nil {
+							c.logDebugErr(err, "lazy talkback initialization failed")
+							return
+						}
+						c.pcmBuf = c.pcmBuf[:0]
+					}()
 				}
+				return
 			}
 
 			if c.talkTimer != nil {
@@ -235,6 +255,9 @@ func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Rece
 func (c *Client) SetupBackchannel() error {
 	if !c.backchannelEnabled {
 		return errors.New("reolink: talkback is disabled")
+	}
+	if c.closed {
+		return errors.New("reolink: client is closed")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), core.ConnDialTimeout)

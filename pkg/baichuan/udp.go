@@ -244,6 +244,10 @@ func ackWindow(store map[uint32][]byte, consumed uint32, hasConsumed bool) (uint
 
 	keys := make([]uint32, 0, len(store))
 	for k := range store {
+		if k <= start {
+			delete(store, k)
+			continue
+		}
 		keys = append(keys, k)
 	}
 	if len(keys) == 0 {
@@ -251,6 +255,11 @@ func ackWindow(store map[uint32][]byte, consumed uint32, hasConsumed bool) (uint
 	}
 	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
 	end := keys[len(keys)-1]
+
+	// end-start would underflow to ~4G and make() would OOM
+	if end <= start {
+		return start, nil, true
+	}
 
 	payload := make([]byte, 0, end-start)
 	for id := start + 1; id <= end; id++ {

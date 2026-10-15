@@ -1,6 +1,6 @@
 # Reolink Native Baichuan Protocol
 
-[`new in v1.10.0`](https://github.com/AlexxIT/go2rtc/releases/latest)
+[`new in v1.9.15`](https://github.com/AlexxIT/go2rtc/releases/latest) by [@fzurita](https://github.com/fzurita)
 
 Reolink proprietary camera protocol (Baichuan XML/ONVIF) with native **two-way audio (talkback)** and high-performance video streaming.
 

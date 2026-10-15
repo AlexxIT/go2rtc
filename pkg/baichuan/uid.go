@@ -304,6 +304,12 @@ func (s *uidSession) readLoop() {
 			}
 
 			s.recvMu.Lock()
+			// ignore retransmits of packets already consumed, otherwise
+			// they stay in recvPackets forever and break ackWindow (uint32 underflow)
+			if s.hasConsumed && pkt.PacketID <= s.consumedID {
+				s.recvMu.Unlock()
+				continue
+			}
 			if _, ok := s.recvPackets[pkt.PacketID]; !ok {
 				s.recvPackets[pkt.PacketID] = append([]byte(nil), pkt.Payload...)
 			}
