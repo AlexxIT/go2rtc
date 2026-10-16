@@ -17,9 +17,11 @@ var bindTimeout = 10 * time.Second
 
 const (
 	backoffStart = 2 * time.Second
-	backoffMax   = 30 * time.Second
-	heartbeat    = 5 * time.Second
-	chunk        = 4096 // one Write is split into payloads of at most this size
+	// The device drops off the Easy4IP cloud for a few minutes at a time (handshake 404 until it registers
+	// again); a short cap picks it up within seconds of its return instead of up to 30 s later.
+	backoffMax = 8 * time.Second
+	heartbeat  = 5 * time.Second
+	chunk      = 4096 // one Write is split into payloads of at most this size
 )
 
 // ErrClosed is returned by Dial after Close.
