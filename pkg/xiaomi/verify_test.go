@@ -206,3 +206,33 @@ func TestFinishVerifyFollowsSkipURLOnce(t *testing.T) {
 		t.Fatalf("skipUrl requested %d times", n)
 	}
 }
+
+// The ticket is posted as a form that carries _flag, like hass-xiaomi-miot does.
+func TestLoginWithVerifySendsTicketAsForm(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/identity/auth/verifyPhone", func(w http.ResponseWriter, r *http.Request) {
+		cookie, _ := r.Cookie("identity_session")
+		if err := r.ParseForm(); err != nil || r.Method != "POST" ||
+			r.PostForm.Get("_flag") != "4" || r.PostForm.Get("ticket") != "123456" ||
+			r.PostForm.Get("trust") != "false" || r.PostForm.Get("_json") != "true" ||
+			r.URL.Query().Get("_dc") == "" || cookie == nil || cookie.Value != "sess" {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		_, _ = w.Write([]byte(`&&&START&&&{"location":"https://account.xiaomi.com/done"}`))
+	})
+	mux.HandleFunc("/done", func(w http.ResponseWriter, r *http.Request) {
+		http.SetCookie(w, &http.Cookie{Name: "passToken", Value: "V1:pt"})
+		http.SetCookie(w, &http.Cookie{Name: "userId", Value: "42"})
+		http.SetCookie(w, &http.Cookie{Name: "serviceToken", Value: "st"})
+	})
+
+	c := newTestCloud(t, mux)
+	c.auth = map[string]string{"flag": "4", "identity_session": "sess"}
+	if err := c.LoginWithVerify("123456"); err != nil {
+		t.Fatal(err)
+	}
+	if userID, passToken := c.UserToken(); userID != "42" || passToken != "V1:pt" {
+		t.Fatalf("user=%q pass=%q", userID, passToken)
+	}
+}
