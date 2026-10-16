@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"strconv"
 	"strings"
@@ -36,8 +37,11 @@ type Cloud struct {
 }
 
 func NewCloud(sid string) *Cloud {
+	// Keep the cookies Xiaomi sets during the login steps, like a browser session.
+	// The phone/email verification flow depends on them.
+	jar, _ := cookiejar.New(nil)
 	return &Cloud{
-		client: &http.Client{Timeout: 15 * time.Second},
+		client: &http.Client{Timeout: 15 * time.Second, Jar: jar},
 		sid:    sid,
 	}
 }
@@ -170,7 +174,58 @@ func (c *Cloud) LoginWithVerify(ticket string) error {
 		return fmt.Errorf("xiaomi: %s", body)
 	}
 
-	return c.finishAuth(v1.Location)
+	return c.finishVerify(v1.Location)
+}
+
+// finishVerify completes a login after phone or email verification the way
+// hass-xiaomi-miot does: follow the returned location, then the skipUrl of the
+// /fe/ page Xiaomi may stop on (see AlexxIT/go2rtc#2450), and finally log in again
+// with the passToken that the verification left in the cookie jar.
+func (c *Cloud) finishVerify(location string) error {
+	final, serviceToken, err := c.followAuth(location)
+	if err != nil {
+		return err
+	}
+	stops := final.Path
+
+	if serviceToken == "" && strings.HasPrefix(final.Path, "/fe/") {
+		if skipURL := final.Query().Get("skipUrl"); skipURL != "" {
+			if !strings.HasPrefix(skipURL, "http") {
+				skipURL = "https://account.xiaomi.com" + skipURL
+			}
+			if final, serviceToken, err = c.followAuth(skipURL); err != nil {
+				return err
+			}
+			stops += " -> " + final.Path
+		}
+	}
+
+	if account, err := url.Parse("https://account.xiaomi.com/"); err == nil {
+		for _, cookie := range c.client.Jar.Cookies(account) {
+			switch {
+			case cookie.Name == "userId" && c.userID == "":
+				c.userID = cookie.Value
+			case cookie.Name == "passToken" && c.passToken == "":
+				c.passToken = cookie.Value
+			}
+		}
+	}
+
+	if c.userID == "" || c.passToken == "" {
+		return fmt.Errorf("xiaomi: verification did not return a pass token (stopped at %s)", stops)
+	}
+
+	if serviceToken == "" {
+		passToken := c.passToken
+		if err = c.LoginWithToken(c.userID, passToken); err != nil {
+			return err
+		}
+		if c.passToken == "" {
+			c.passToken = passToken
+		}
+	}
+
+	return nil
 }
 
 func (c *Cloud) getCaptcha(captchaURL string) error {
@@ -314,11 +369,20 @@ func (l *LoginError) Error() string {
 }
 
 func (c *Cloud) finishAuth(location string) error {
+	_, _, err := c.followAuth(location)
+	return err
+}
+
+// followAuth requests location, follows its redirects and collects the session
+// cookies. It returns the final URL and the serviceToken, if one was set.
+func (c *Cloud) followAuth(location string) (*url.URL, string, error) {
 	res, err := c.client.Get(location)
 	if err != nil {
-		return err
+		return nil, "", err
 	}
 	defer res.Body.Close()
+
+	final := res.Request.URL
 
 	// LoginWithVerify
 	//   - userId, cUserId, serviceToken from cookies
@@ -347,7 +411,7 @@ func (c *Cloud) finishAuth(location string) error {
 				Ssecurity []byte `json:"ssecurity"`
 			}
 			if err = json.Unmarshal([]byte(s), &v1); err != nil {
-				return err
+				return nil, "", err
 			}
 			c.ssecurity = v1.Ssecurity
 		}
@@ -357,7 +421,7 @@ func (c *Cloud) finishAuth(location string) error {
 
 	c.cookies = fmt.Sprintf("userId=%s; cUserId=%s; serviceToken=%s", c.userID, cUserId, serviceToken)
 
-	return nil
+	return final, serviceToken, nil
 }
 
 func (c *Cloud) LoginWithToken(userID, passToken string) error {
