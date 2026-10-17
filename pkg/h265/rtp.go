@@ -92,6 +92,31 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 				buf = append(buf, (data[0]&0x81)|(nuType<<1), data[1])
 				buf = append(buf, data[3:]...)
 			}
+		} else if nuType == NALUTypeAP {
+			// RFC 7798 4.4.2. Aggregation Packets (APs)
+			// PayloadHdr, then NALU size (16 bit) + NALU for each aggregated NAL unit.
+			// ffmpeg and go2rtc itself send VPS, SPS and PPS in one AP before IDR.
+			// DONL/DOND fields are not supported, same as for FU.
+			for i := 2; i < len(data); {
+				if i+2 > len(data) {
+					//log.Printf("broken H265 aggregation")
+					buf = buf[:0] // drop data
+					return
+				}
+
+				size := int(binary.BigEndian.Uint16(data[i:]))
+				i += 2
+
+				if size < 2 || i+size > len(data) {
+					//log.Printf("broken H265 aggregation")
+					buf = buf[:0] // drop data
+					return
+				}
+
+				buf = binary.BigEndian.AppendUint32(buf, uint32(size)) // NAL unit size
+				buf = append(buf, data[i:i+size]...)
+				i += size
+			}
 		} else {
 			buf = binary.BigEndian.AppendUint32(buf, uint32(len(data))) // NAL unit size
 			buf = append(buf, data...)
