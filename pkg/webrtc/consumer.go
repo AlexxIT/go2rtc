@@ -48,7 +48,11 @@ func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiv
 
 	switch track.Codec.Name {
 	case core.CodecH264:
-		sender.Handler = h264.RTPPay(1200, sender.Handler)
+		if c.Pacing > 0 {
+			sender.Handler = h264.RTPPayPaced(1200, c.Pacing, sender.Handler)
+		} else {
+			sender.Handler = h264.RTPPay(1200, sender.Handler)
+		}
 		if track.Codec.IsRTP() {
 			sender.Handler = h264.RTPDepay(track.Codec, sender.Handler)
 		} else {
@@ -56,7 +60,11 @@ func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiv
 		}
 
 	case core.CodecH265:
-		sender.Handler = h265.RTPPay(1200, sender.Handler)
+		if c.Pacing > 0 {
+			sender.Handler = h265.RTPPayPaced(1200, c.Pacing, sender.Handler)
+		} else {
+			sender.Handler = h265.RTPPay(1200, sender.Handler)
+		}
 		if track.Codec.IsRTP() {
 			sender.Handler = h265.RTPDepay(track.Codec, sender.Handler)
 		} else {
