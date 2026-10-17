@@ -148,12 +148,6 @@ func Dial(rawURL string) (*Client, error) {
 }
 
 func (c *Client) Close() error {
-	if c.cancel != nil {
-		c.cancel()
-	}
-	if c.reader != nil {
-		c.reader.Close()
-	}
 	c.talkMu.Lock()
 	c.closed = true
 	if c.talkTimer != nil {
@@ -165,6 +159,13 @@ func (c *Client) Close() error {
 		cancel()
 	}
 	c.talkMu.Unlock()
+
+	if c.cancel != nil {
+		c.cancel()
+	}
+	if c.reader != nil {
+		c.reader.Close()
+	}
 	if c.bc != nil {
 		return c.bc.Close()
 	}
@@ -272,14 +273,21 @@ func (c *Client) SetupBackchannel() error {
 	return nil
 }
 
+func (c *Client) host() string {
+	if c.url == nil {
+		return ""
+	}
+	return c.url.Hostname()
+}
+
 func (c *Client) logDebug(msg string, args ...any) {
-	Log.Debug().Msgf("[reolink] [%s:%d:%s] "+msg, append([]any{c.url.Hostname(), c.channel, c.stream}, args...)...)
+	Log.Debug().Msgf("[reolink] [%s:%d:%s] "+msg, append([]any{c.host(), c.channel, c.stream}, args...)...)
 }
 
 func (c *Client) logDebugErr(err error, msg string, args ...any) {
-	Log.Debug().Err(err).Msgf("[reolink] [%s:%d:%s] "+msg, append([]any{c.url.Hostname(), c.channel, c.stream}, args...)...)
+	Log.Debug().Err(err).Msgf("[reolink] [%s:%d:%s] "+msg, append([]any{c.host(), c.channel, c.stream}, args...)...)
 }
 
 func (c *Client) logWarn(msg string, args ...any) {
-	Log.Warn().Msgf("[reolink] [%s:%d:%s] "+msg, append([]any{c.url.Hostname(), c.channel, c.stream}, args...)...)
+	Log.Warn().Msgf("[reolink] [%s:%d:%s] "+msg, append([]any{c.host(), c.channel, c.stream}, args...)...)
 }

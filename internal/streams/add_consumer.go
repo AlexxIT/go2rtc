@@ -20,6 +20,8 @@ func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
 	for _, consMedia := range consMedias {
 		log.Trace().Msgf("[streams] check cons=%d media=%s", consN, consMedia)
 
+		matched := false
+
 	producers:
 		for prodN, prod := range s.producers {
 			// check for loop request, ex. `camera1: ffmpeg:camera1`
@@ -28,7 +30,12 @@ func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
 				continue
 			}
 
-			if prodErrors[prodN] != nil {
+			if prodErrors[prodN] != nil && !prod.isDialed() {
+				log.Trace().Msgf("[streams] skip cons=%d prod=%d", consN, prodN)
+				continue
+			}
+
+			if !prod.isDialed() && !canProducerMatch(prod.url, consMedia) {
 				log.Trace().Msgf("[streams] skip cons=%d prod=%d", consN, prodN)
 				continue
 			}
@@ -38,6 +45,7 @@ func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
 				prodErrors[prodN] = err
 				continue
 			}
+			prodErrors[prodN] = nil
 
 			// Step 2. Get producer medias (not tracks yet)
 			for _, prodMedia := range prod.GetMedias() {
@@ -85,11 +93,20 @@ func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
 				}
 
 				prodStarts = append(prodStarts, prod)
+				matched = true
 
 				if !consMedia.MatchAll() {
 					break producers
 				}
 			}
+		}
+
+		// If the consumer requested video, but no producer could provide it
+		// because a producer failed to dial, do not continue and serve a
+		// degraded audio-only stream.
+		if !matched && consMedia.Kind == core.KindVideo && consMedia.Direction == core.DirectionSendonly && hasErrors(prodErrors) {
+			prodStarts = nil
+			break
 		}
 	}
 
@@ -112,6 +129,42 @@ func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
 	}
 
 	return nil
+}
+
+func hasErrors(errs []error) bool {
+	for _, err := range errs {
+		if err != nil {
+			return true
+		}
+	}
+	return false
+}
+
+func canProducerMatch(rawURL string, consMedia *core.Media) bool {
+	if !strings.HasPrefix(rawURL, "ffmpeg:") {
+		return true
+	}
+	// ffmpeg producers only output recvonly tracks (matching sendonly consumer media), never backchannel.
+	if consMedia.Direction != core.DirectionSendonly {
+		return false
+	}
+	i := strings.IndexByte(rawURL, '#')
+	if i < 0 {
+		return true
+	}
+	q := ParseQuery(rawURL[i+1:])
+	if len(q["raw"]) > 0 {
+		return true
+	}
+	hasVideo := len(q["video"]) > 0
+	hasAudio := len(q["audio"]) > 0
+	if hasAudio && !hasVideo && consMedia.Kind != core.KindAudio {
+		return false
+	}
+	if hasVideo && !hasAudio && consMedia.Kind != core.KindVideo {
+		return false
+	}
+	return true
 }
 
 func formatError(consMedias, prodMedias []*core.Media, prodErrors []error) error {

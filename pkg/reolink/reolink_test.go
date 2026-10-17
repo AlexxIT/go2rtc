@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/AlexxIT/go2rtc/pkg/baichuan"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
@@ -117,4 +118,34 @@ func TestTalkbackNonBlockingDrop(t *testing.T) {
 
 	c.talkMu.Unlock()
 }
+
+func TestStartReturnsNilWhenClosed(t *testing.T) {
+	ch := make(chan baichuan.MediaPacket)
+	c := &Client{
+		receivers: []*core.Receiver{
+			core.NewReceiver(&core.Media{Kind: core.KindVideo}, &core.Codec{Name: core.CodecH264}),
+		},
+		reader: &baichuan.MediaReader{
+			Packets: ch,
+		},
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- c.Start()
+	}()
+
+	_ = c.Close()
+	close(ch)
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("expected nil error on intentional close, got %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatalf("Start() did not return after Close()")
+	}
+}
+
 

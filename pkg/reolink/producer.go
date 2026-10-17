@@ -49,7 +49,10 @@ ProbeLoop:
 			break ProbeLoop
 		case packet, ok := <-reader.Packets:
 			if !ok {
-				return c.bc.Err()
+				if err := c.bc.Err(); err != nil {
+					return err
+				}
+				return fmt.Errorf("reolink: stream closed during probe")
 			}
 
 			if packet.Kind == baichuan.MediaPacketIFrame && vcodec == nil {
@@ -203,7 +206,16 @@ func (c *Client) Start() error {
 	for {
 		packet, ok := <-c.reader.Packets
 		if !ok {
+			c.talkMu.Lock()
+			closed := c.closed
+			c.talkMu.Unlock()
+			if closed {
+				return nil
+			}
 			err := c.bc.Err()
+			if err == nil {
+				err = fmt.Errorf("reolink: media stream closed")
+			}
 			c.logWarn("camera disconnected: %v, attempting to reconnect", err)
 			return err
 		}
