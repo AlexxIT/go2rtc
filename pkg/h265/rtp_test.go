@@ -59,6 +59,56 @@ func TestRTPDepayAggregationPacketBroken(t *testing.T) {
 	require.Equal(t, h264.JoinNALU(vps, sps, pps, idr), aus[1])
 }
 
+func TestRTPDepayMarkedSEI(t *testing.T) {
+	// Haima camera ends Access Units with a small SEI that has the marker
+	vps, sps, pps := GetParameterSet(testFmtpLine)
+	idr := testNALU(NALUTypeIFrame, 300)
+	pFrame1 := testNALU(NALUTypePFrame, 300)
+	pFrame2 := testNALU(NALUTypePFrame, 100)
+	prefixSEI := testNALU(NALUTypePrefixSEI, 70)
+	suffixSEI := testNALU(NALUTypeSuffixSEI, 20)
+
+	fuI := testFU(idr, 120)
+	fuP := testFU(pFrame1, 120)
+
+	aus := testDepay(&core.Codec{Name: core.CodecH265},
+		testAU(vps, sps, pps, fuI[0], fuI[1], fuI[2], prefixSEI),
+		testAU(fuP[0], fuP[1], fuP[2], prefixSEI),
+		testAU(pFrame2, suffixSEI),
+	)
+	require.Len(t, aus, 3)
+
+	require.Equal(t, []byte{NALUTypeVPS, NALUTypeSPS, NALUTypePPS, NALUTypeIFrame, NALUTypePrefixSEI}, Types(aus[0]))
+	require.Equal(t, h264.JoinNALU(vps, sps, pps, idr, prefixSEI), aus[0])
+	require.True(t, IsKeyframe(aus[0]))
+
+	require.Equal(t, []byte{NALUTypePFrame, NALUTypePrefixSEI}, Types(aus[1]))
+	require.Equal(t, h264.JoinNALU(pFrame1, prefixSEI), aus[1])
+
+	require.Equal(t, []byte{NALUTypePFrame, NALUTypeSuffixSEI}, Types(aus[2]))
+	require.Equal(t, h264.JoinNALU(pFrame2, suffixSEI), aus[2])
+}
+
+func TestRTPDepayMarkedNALUnits(t *testing.T) {
+	// RtspServer https://github.com/AlexxIT/go2rtc/issues/244
+	// sends marked VPS, marked SPS, marked PPS, marked SEI, marked IFrame
+	vps, sps, pps := GetParameterSet(testFmtpLine)
+	idr := testNALU(NALUTypeIFrame, 300)
+	sei := testNALU(NALUTypePrefixSEI, 30)
+
+	fu := testFU(idr, 120)
+
+	aus := testDepay(&core.Codec{Name: core.CodecH265},
+		testAU(vps), testAU(sps), testAU(pps), testAU(sei),
+		testAU(fu[0], fu[1], fu[2]),
+	)
+	require.Len(t, aus, 1)
+
+	// SEI before picture data is skipped
+	require.Equal(t, []byte{NALUTypeVPS, NALUTypeSPS, NALUTypePPS, NALUTypeIFrame}, Types(aus[0]))
+	require.Equal(t, h264.JoinNALU(vps, sps, pps, idr), aus[0])
+}
+
 // testNALU returns NAL unit with header and payload of the given size
 func testNALU(nuType byte, size int) []byte {
 	b := make([]byte, 2+size)
