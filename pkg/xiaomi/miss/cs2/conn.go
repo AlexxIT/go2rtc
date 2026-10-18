@@ -23,6 +23,7 @@ func Dial(host, transport string) (*Conn, error) {
 	c := &Conn{
 		Conn:  conn,
 		isTCP: isTCP,
+		done:  make(chan struct{}),
 		channels: [4]*dataChannel{
 			newDataChannel(0, 10), nil, newDataChannel(250, 100), nil,
 		},
@@ -43,6 +44,18 @@ type Conn struct {
 
 	cmdMu  sync.Mutex
 	cmdAck func()
+
+	done      chan struct{}
+	closeOnce sync.Once
+}
+
+func (c *Conn) Close() error {
+	var err error
+	c.closeOnce.Do(func() {
+		close(c.done)
+		err = c.Conn.Close()
+	})
+	return err
 }
 
 const (
@@ -141,7 +154,11 @@ func (c *Conn) worker() {
 					keepaliveTS = now.Add(time.Second)
 				}
 
-				err = channel.Push(buf[8:n])
+				if ch == 2 {
+					err = channel.push(buf[8:n], c.done)
+				} else {
+					err = channel.Push(buf[8:n])
+				}
 			} else {
 				var pushed int
 
@@ -430,6 +447,10 @@ type dataChannel struct {
 }
 
 func (c *dataChannel) Push(b []byte) error {
+	return c.push(b, nil)
+}
+
+func (c *dataChannel) push(b []byte, done <-chan struct{}) error {
 	c.waitData = append(c.waitData, b...)
 
 	for len(c.waitData) > 4 {
@@ -445,7 +466,19 @@ func (c *dataChannel) Push(b []byte) error {
 		select {
 		case c.popBuf <- c.waitData[:c.waitSize]:
 		default:
-			return fmt.Errorf("pop buffer is full")
+			if done == nil {
+				return fmt.Errorf("pop buffer is full")
+			}
+			timer := time.NewTimer(10 * time.Second)
+			select {
+			case c.popBuf <- c.waitData[:c.waitSize]:
+				timer.Stop()
+			case <-done:
+				timer.Stop()
+				return net.ErrClosed
+			case <-timer.C:
+				return fmt.Errorf("media consumer stalled")
+			}
 		}
 
 		c.waitData = c.waitData[c.waitSize:]
