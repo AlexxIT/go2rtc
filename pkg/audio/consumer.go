@@ -25,7 +25,7 @@ func WithTranscoding(medias []*core.Media) []*core.Media {
 		clone := *media
 		clone.Codecs = slices.Clone(media.Codecs)
 		for _, alias := range inputAliases {
-			if alias.Name == core.CodecAAC || alias.Name == core.CodecELD || target.Name == core.CodecOpus && alias.Name != core.CodecOpus || target.Name != core.CodecOpus && alias.Name == core.CodecOpus {
+			if alias.Name == core.CodecAAC || alias.Name == core.CodecELD || target.Name == core.CodecOpus || alias.Name == core.CodecOpus {
 				appendCodec(&clone, alias)
 			}
 		}

@@ -14,7 +14,7 @@ func CanTranscode(src, dst *core.Codec) bool {
 	if src == nil || dst == nil || src.Channels > 2 || dst.Channels > 2 {
 		return false
 	}
-	return src.Name == core.CodecOpus && isLinearOrG711(dst.Name) || dst.Name == core.CodecOpus && isLinearOrG711(src.Name) && src.ClockRate != 0
+	return src.Name == core.CodecOpus && (isLinearOrG711(dst.Name) || dst.Name == core.CodecOpus) || dst.Name == core.CodecOpus && isLinearOrG711(src.Name) && src.ClockRate != 0
 }
 
 func isLinearOrG711(name string) bool {
@@ -41,13 +41,28 @@ func outputCodec(dst, src *core.Codec) *core.Codec {
 	return dst
 }
 
-// TranscodeHandler converts PCM/G.711 ↔ Opus. Each handler owns an independent
-// Go codec instance. go-opus reclaims its native resources automatically.
+// TranscodeHandler converts PCM/G.711 ↔ Opus and adapts Opus RTP clocks.
+// Each codec handler owns an independent Go codec instance. go-opus reclaims
+// its native resources automatically.
 func TranscodeHandler(dst, src *core.Codec, handler core.HandlerFunc) (core.HandlerFunc, error) {
 	if !CanTranscode(src, dst) {
 		return nil, fmt.Errorf("opus: unsupported conversion %v => %v", src, dst)
 	}
 	dst = outputCodec(dst, src)
+	if src.Name == core.CodecOpus && dst.Name == core.CodecOpus {
+		// WebRTC advertises Opus/48000/2 even for mono packets. HomeKit
+		// sources may use a 16 kHz RTP clock; the encoded payload is compatible.
+		rate := src.ClockRate
+		if rate == 0 {
+			rate = 48000
+		}
+		return func(packet *core.Packet) {
+			out := *packet
+			out.Timestamp = uint32(uint64(packet.Timestamp) * 48000 / uint64(rate))
+			out.PayloadType = dst.PayloadType
+			handler(&out)
+		}, nil
+	}
 	if src.Name == core.CodecOpus {
 		return decodeHandler(dst, src, handler)
 	}
