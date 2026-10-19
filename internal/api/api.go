@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/app"
+	"github.com/AlexxIT/go2rtc/pkg/xnet"
 	"github.com/rs/zerolog"
 )
 
@@ -91,10 +92,9 @@ func Init() {
 }
 
 func listen(network, address string) {
-	ln, err := net.Listen(network, address)
+	ln, err := xnet.Listen(network, address)
 	if err != nil {
-		log.Error().Err(err).Msg("[api] listen")
-		return
+		log.Fatal().Err(err).Msg("[api] listen")
 	}
 
 	log.Info().Str("addr", address).Msg("[api] listen")
@@ -123,10 +123,9 @@ func tlsListen(network, address, certFile, keyFile string) {
 		return
 	}
 
-	ln, err := net.Listen(network, address)
+	ln, err := xnet.Listen(network, address)
 	if err != nil {
-		log.Error().Err(err).Msg("[api] tls listen")
-		return
+		log.Fatal().Err(err).Msg("[api] tls listen")
 	}
 
 	log.Info().Str("addr", address).Msg("[api] tls listen")
