@@ -208,13 +208,8 @@ func (c *Client) Handle() error {
 
 		body := make([]byte, size)
 
-		b := body
-		for {
-			if n, err2 := p.Read(b); err2 == nil {
-				b = b[n:]
-			} else {
-				break
-			}
+		if _, err = io.ReadFull(p, body); err != nil {
+			return err
 		}
 
 		body = c.decrypt(body)
