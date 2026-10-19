@@ -16,8 +16,8 @@ go2rtc_win*
 
 .DS_Store
 
-website/.vitepress/cache
-website/.vitepress/dist
+.vitepress/cache
+.vitepress/dist
 
 node_modules
 package-lock.json
