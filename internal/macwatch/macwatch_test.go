@@ -296,6 +296,29 @@ func TestDiscoverCameras(t *testing.T) {
 	require.Equal(t, map[string]string{"macwatch_d1": "aa:bb:cc:dd:ee:ff"}, cameras)
 }
 
+func TestMissingCameras(t *testing.T) {
+	targetsMu.Lock()
+	targets = []*target{{Stream: "tracked1", MAC: "aa:bb:cc:dd:ee:ff"}}
+	targetsMu.Unlock()
+
+	t.Cleanup(func() {
+		targetsMu.Lock()
+		targets = nil
+		targetsMu.Unlock()
+	})
+
+	cameras := map[string]string{
+		"tracked1": "aa:bb:cc:dd:ee:ff",
+		"new1":     "11:22:33:44:55:66",
+		"new2":     "aa:bb:cc:dd:ee:00",
+	}
+
+	require.Equal(t, map[string]string{
+		"new1": "11:22:33:44:55:66",
+		"new2": "aa:bb:cc:dd:ee:00",
+	}, missingCameras(cameras))
+}
+
 func TestSubnetHosts(t *testing.T) {
 	_, n, err := net.ParseCIDR("192.168.1.0/24")
 	require.NoError(t, err)

@@ -1225,6 +1225,14 @@
             const updated = cameras.filter((cam) => cam.status === 'updated');
             const others = cameras.filter((cam) => cam.status !== 'ok' && cam.status !== 'updated');
 
+            // streams with a known MAC address, that are not tracked yet
+            let missing = [];
+            const rd = await fetch('api/macwatch/discover', {method: 'POST'});
+            if (rd.ok) {
+                const found = await rd.json();
+                missing = Object.keys(found.missing || {}).sort();
+            }
+
             const describe = (cam) => {
                 switch (cam.status) {
                     case 'dry_run':
@@ -1249,6 +1257,10 @@
             if (others.length) {
                 if (text) text += '\n\n';
                 text += 'Needs attention:\n' + others.map(describe).join('\n');
+            }
+            if (missing.length) {
+                if (text) text += '\n\n';
+                text += 'Not tracked by macwatch yet (add to macwatch.cameras):\n' + missing.join('\n');
             }
             if (!text) {
                 text = 'All ' + cameras.length + ' camera IP addresses are up to date';
