@@ -83,11 +83,23 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// WriteTo below blocks until a keyframe arrives, and the in-memory OnceBuffer
+	// sink never errors on client disconnect to unblock it. Reap the consumer when
+	// the request context ends so a stuck WriteTo can't leak it.
+	ctx := r.Context()
+	go func() {
+		<-ctx.Done()
+		_ = cons.Stop()
+		stream.RemoveConsumer(cons)
+	}()
+
 	once := &core.OnceBuffer{} // init and first frame
 	_, _ = cons.WriteTo(once)
 	b = once.Buffer()
 
-	stream.RemoveConsumer(cons)
+	if ctx.Err() != nil {
+		return // client gone before a keyframe arrived
+	}
 
 	switch cons.CodecName() {
 	case core.CodecH264, core.CodecH265:
