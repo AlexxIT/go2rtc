@@ -122,6 +122,17 @@ will be found only for streams with an IP address in the source URL. Use the
 result to create the `macwatch` section without searching MAC addresses
 manually.
 
+The `missing` map lists the streams that have a known MAC address, but are
+not in the `macwatch` config yet - add them to `cameras` to track them:
+
+```json
+{
+  "cameras": { "dahua1": "aa:bb:cc:dd:ee:ff" },
+  "missing": { "reolink1": "11:22:33:44:55:66" },
+  "yaml": "..."
+}
+```
+
 Possible statuses:
 
 | Status        | Description                                            |

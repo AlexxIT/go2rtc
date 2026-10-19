@@ -63,27 +63,33 @@ func Init() {
 	sweepInterval = time.Duration(cfg.Mod.SweepInterval) * time.Second
 	interval = time.Duration(cfg.Mod.Interval) * time.Second
 
+	var list []*target
+
 	for name, raw := range cfg.Mod.Cameras {
 		mac := NormalizeMAC(raw)
 		if mac == "" {
 			log.Warn().Str("stream", name).Str("mac", raw).Msg("[macwatch] invalid MAC address")
 			continue
 		}
-		targets = append(targets, &target{Stream: name, MAC: mac})
+		list = append(list, &target{Stream: name, MAC: mac})
 	}
 
-	if len(targets) == 0 {
+	if len(list) == 0 {
 		log.Debug().Msg("[macwatch] no cameras in the config")
 		return
 	}
 
-	sort.Slice(targets, func(i, j int) bool {
-		return targets[i].Stream < targets[j].Stream
+	sort.Slice(list, func(i, j int) bool {
+		return list[i].Stream < list[j].Stream
 	})
+
+	targetsMu.Lock()
+	targets = list
+	targetsMu.Unlock()
 
 	go worker()
 
-	log.Info().Int("cameras", len(targets)).Msg("[macwatch] init")
+	log.Info().Int("cameras", len(list)).Msg("[macwatch] init")
 }
 
 // target is a camera from the config file.
@@ -135,7 +141,9 @@ const probeTimeout = time.Second * 2
 var (
 	log zerolog.Logger
 
-	targets []*target
+	targets   []*target
+	targetsMu sync.RWMutex // guards targets (filled in Init, read by the API)
+
 	cameras []*Camera
 
 	checkMu sync.Mutex // serialize checks
@@ -175,10 +183,14 @@ func check(force bool) {
 
 	table := newTable(neighbors)
 
-	results := make([]*Camera, 0, len(targets))
+	targetsMu.RLock()
+	list := targets
+	targetsMu.RUnlock()
+
+	results := make([]*Camera, 0, len(list))
 	var pending []*Camera
 
-	for _, t := range targets {
+	for _, t := range list {
 		cam := &Camera{Stream: t.Stream, MAC: t.MAC}
 
 		info, ok := sourceOf(t.Stream)
@@ -582,6 +594,10 @@ func findCamera(cameras []*Camera, name string) *Camera {
 }
 
 func snapshot() *response {
+	targetsMu.RLock()
+	enabled := len(targets) > 0
+	targetsMu.RUnlock()
+
 	stateMu.Lock()
 	items := make([]*Camera, len(cameras))
 	copy(items, cameras)
@@ -589,7 +605,7 @@ func snapshot() *response {
 	stateMu.Unlock()
 
 	return &response{
-		Enabled:       len(targets) > 0,
+		Enabled:       enabled,
 		ConfigPath:    app.ConfigPath,
 		Interval:      int(interval / time.Second),
 		Sweep:         sweepEnabled,
@@ -643,11 +659,35 @@ func apiDiscover(w http.ResponseWriter, r *http.Request) {
 
 	api.ResponseJSON(w, struct {
 		Cameras map[string]string `json:"cameras"`
+		Missing map[string]string `json:"missing,omitempty"`
 		YAML    string            `json:"yaml"`
 	}{
 		Cameras: cameras,
+		Missing: missingCameras(cameras),
 		YAML:    string(section),
 	})
+}
+
+// missingCameras returns streams with a known MAC address, that are not listed
+// in the config yet.
+func missingCameras(cameras map[string]string) map[string]string {
+	targetsMu.RLock()
+	defer targetsMu.RUnlock()
+
+	missing := make(map[string]string)
+
+streams:
+	for name, mac := range cameras {
+		for _, target := range targets {
+			if target.Stream == name {
+				continue streams
+			}
+		}
+
+		missing[name] = mac
+	}
+
+	return missing
 }
 
 // discoverCameras returns MAC address for every stream that has an IP address
