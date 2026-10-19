@@ -73,6 +73,10 @@ github.com/sigurn/crc16 v0.0.0-20240131213347-83fcde1e29d1 h1:NVK+OqnavpyFmUiKfU
 github.com/sigurn/crc16 v0.0.0-20240131213347-83fcde1e29d1/go.mod h1:9/etS5gpQq9BJsJMWg1wpLbfuSnkm8dPF6FdW2JXVhA=
 github.com/sigurn/crc8 v0.0.0-20220107193325-2243fe600f9f h1:1R9KdKjCNSd7F8iGTxIpoID9prlYH8nuNYKt0XvweHA=
 github.com/sigurn/crc8 v0.0.0-20220107193325-2243fe600f9f/go.mod h1:vQhwQ4meQEDfahT5kd61wLAF5AAeh5ZPLVI4JJ/tYo8=
+github.com/skrashevich/go-aac v0.1.1-0.20261014194818-3dddac11a2e9 h1:MrTLR73q3BQBXshRlOOlSuFU0LXYtlcNJUTswq4SSJU=
+github.com/skrashevich/go-aac v0.1.1-0.20261014194818-3dddac11a2e9/go.mod h1:Mj7r//4LDL4FC0ezORj+MnmQ+nDEkJhTOy2aMC8dzww=
+github.com/skrashevich/go-opus v0.1.1 h1:ZUY93HyX3jXEYNzimcQbGjg9ujy91ZaRhGikaV3DwGU=
+github.com/skrashevich/go-opus v0.1.1/go.mod h1:i+iY/zdmge97oxiFkw2dtk3CUnNheH5zhtPkpsvzJHw=
 github.com/skrashevich/go-webp v0.1.0 h1:C+dtldBorS5ISATYR5mvG9HFj8GRLDGRywT0xs/ZLUQ=
 github.com/skrashevich/go-webp v0.1.0/go.mod h1:9QtuNP/H9q/qzqgaZeYalNIk7n5lfyqVs1WTaPtC/Ao=
 github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
