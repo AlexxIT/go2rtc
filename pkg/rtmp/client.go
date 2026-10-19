@@ -147,6 +147,10 @@ func (c *Conn) publish() error {
 		return err
 	}
 
+	c.mu.Lock()
+	c.publishing = true // Close should now gracefully unpublish
+	c.mu.Unlock()
+
 	go func() {
 		for {
 			_, _, _, err := c.readMessage()

@@ -7,7 +7,9 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/flv/amf"
 )
 
@@ -40,9 +42,22 @@ type Conn struct {
 	rdBuf []byte
 	wrBuf []byte
 	mu    sync.Mutex
+
+	publishing bool // guards graceful unpublish on Close (under mu)
 }
 
 func (c *Conn) Close() error {
+	c.mu.Lock()
+	publishing := c.publishing
+	c.mu.Unlock()
+
+	if publishing {
+		// best-effort: release the stream name now instead of at the idle timeout.
+		// The socket is often already dead, so cap the write and ignore errors.
+		_ = c.conn.SetWriteDeadline(time.Now().Add(core.ConnDeadline))
+		_ = c.writeUnpublish()
+	}
+
 	return c.conn.Close()
 }
 
@@ -275,6 +290,17 @@ func (c *Conn) writeReleaseStream() error {
 		return err
 	}
 	return nil
+}
+
+// writeUnpublish sends the FCUnpublish + deleteStream pair so the server frees the
+// stream name and fires its publish-done hooks. Transaction id 0: no reply expected.
+func (c *Conn) writeUnpublish() error {
+	b := amf.EncodeItems("FCUnpublish", 0, nil, c.Stream)
+	if err := c.writeMessage(3, TypeCommand, 0, b); err != nil {
+		return err
+	}
+	b = amf.EncodeItems("deleteStream", 0, nil, int(c.streamID))
+	return c.writeMessage(3, TypeCommand, 0, b)
 }
 func (c *Conn) writeCreateStream() error {
 	b := amf.EncodeItems("createStream", 4, nil)
