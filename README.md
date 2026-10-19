@@ -79,6 +79,7 @@ Ultimate camera streaming application with support for dozens formats and protoc
 > - [#2174](https://github.com/AlexxIT/go2rtc/pull/2174) - Socket leaks in go2rtc - creality k2plus issue
 > - [#2223](https://github.com/AlexxIT/go2rtc/pull/2223) — Fix CORS preflight requests support
 > - [#2328](https://github.com/AlexxIT/go2rtc/pull/2328) — Fix bracket unbracketed IPv6 (@zephleggett)
+> - [#2328](https://github.com/AlexxIT/go2rtc/pull/2590) — Fix HomeKit stream slots leaking after disconnect
 ---
 
 ## Screenshots
