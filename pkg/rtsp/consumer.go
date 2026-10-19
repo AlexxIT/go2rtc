@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/aac"
+	"github.com/AlexxIT/go2rtc/pkg/audio"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
@@ -14,10 +15,14 @@ import (
 
 func (c *Conn) GetMedias() []*core.Media {
 	//core.Assert(c.Medias != nil)
-	return c.Medias
+	return audio.WithTranscoding(c.Medias)
 }
 
-func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) (err error) {
+func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
+	return audio.AddTrack(c.Medias, media, codec, track, c.addTrack)
+}
+
+func (c *Conn) addTrack(media *core.Media, codec *core.Codec, track *core.Receiver) (err error) {
 	var channel byte
 
 	switch c.mode {

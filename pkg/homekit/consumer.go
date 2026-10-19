@@ -7,6 +7,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/AlexxIT/go2rtc/pkg/audio"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/hap/camera"
@@ -147,7 +148,11 @@ func (c *Consumer) GetTrack(media *core.Media, codec *core.Codec) (*core.Receive
 	c.backTrack = core.NewReceiver(media, codec)
 
 	c.audioSession.OnReadRTP = func(packet *rtp.Packet) {
-		c.backTrack.WriteRTP(packet)
+		// HAP uses a 16 kHz audio clock; other Opus paths use RFC 7587's
+		// 48 kHz clock. Normalize before forwarding the talker's packets.
+		clone := *packet
+		clone.Timestamp *= 3
+		c.backTrack.WriteRTP(&clone)
 		c.Recv += len(packet.Payload)
 	}
 
@@ -160,6 +165,10 @@ func (c *Consumer) Start() error {
 }
 
 func (c *Consumer) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
+	return audio.AddTrack(c.Medias, media, codec, track, c.addTrack)
+}
+
+func (c *Consumer) addTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
 	var session *srtp.Session
 	if codec.Kind() == core.KindVideo {
 		session = c.videoSession
@@ -230,4 +239,8 @@ func (c *Consumer) srtpEndpoint() *srtp.Endpoint {
 
 func toDuration(seconds float32) time.Duration {
 	return time.Duration(seconds * float32(time.Second))
+}
+
+func (c *Consumer) GetMedias() []*core.Media {
+	return audio.WithTranscoding(c.Medias)
 }

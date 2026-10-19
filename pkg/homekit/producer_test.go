@@ -24,13 +24,15 @@ import (
 
 // Model a camera that keeps its stream reserved after the HAP connection closes.
 func TestProducerReleasesHomeKitStream(t *testing.T) {
-	for _, failStart := range []bool{false, true} {
-		t.Run(fmt.Sprint("failStart=", failStart), func(t *testing.T) {
+	for _, mode := range []string{"normal", "failStart", "lateAudio"} {
+		failStart := mode == "failStart"
+		t.Run(mode, func(t *testing.T) {
 			acc := camera.NewAccessory("test", "camera", "test", "1", "1")
 			service := acc.GetService("110")
 			status := service.GetCharacter(camera.TypeStreamingStatus)
 			setup := service.GetCharacter(camera.TypeSetupEndpoints)
 			selected := service.GetCharacter(camera.TypeSelectedStreamConfiguration)
+			started := make(chan struct{}, 1)
 			var ends atomic.Int32
 			var reserved atomic.Bool
 			_, deviceKey, _ := ed25519.GenerateKey(nil)
@@ -112,6 +114,8 @@ func TestProducerReleasesHomeKitStream(t *testing.T) {
 										status.Write(camera.StreamingStatus{Status: camera.StreamingStatusAvailable})
 									} else if failStart {
 										code = http.StatusInternalServerError
+									} else {
+										started <- struct{}{}
 									}
 								}
 							}
@@ -135,6 +139,42 @@ func TestProducerReleasesHomeKitStream(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer h.Close()
+
+			if mode == "lateAudio" {
+				c := &Client{Connection: core.Connection{Transport: h}, hap: h, srtp: srtp.NewServer("127.0.0.1:0")}
+				defer c.Stop()
+				medias := c.GetMedias()
+				if _, err = c.GetTrack(medias[0], medias[0].Codecs[0]); err != nil {
+					t.Fatal(err)
+				}
+				go c.Start()
+				select {
+				case <-started:
+				case <-time.After(5 * time.Second):
+					t.Fatal("stream did not start")
+				}
+				c.mu.Lock()
+				session := c.audioSession
+				c.mu.Unlock()
+				track, err := c.GetTrack(medias[1], medias[1].Codecs[0])
+				if err != nil {
+					t.Fatal(err)
+				}
+				if session.OnReadRTP == nil {
+					t.Fatal("audio added after video startup has no RTP handler")
+				}
+				session.OnReadRTP(&core.Packet{Payload: []byte{1}})
+				if track.Packets != 1 {
+					t.Fatal("late audio track received no packets")
+				}
+				if err = c.Stop(); err != nil {
+					t.Fatal(err)
+				}
+				if reserved.Load() || ends.Load() != 1 {
+					t.Fatal("late audio stream slot leaked")
+				}
+				return
+			}
 			video := &srtp.Session{Local: &srtp.Endpoint{Addr: "127.0.0.1", Port: 1234}}
 			audio := &srtp.Session{Local: &srtp.Endpoint{Addr: "127.0.0.1", Port: 1234}}
 			stream, err := camera.NewStream(h, &camera.VideoCodecConfiguration{}, &camera.AudioCodecConfiguration{}, video, audio, 0)
