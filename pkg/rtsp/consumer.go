@@ -84,6 +84,11 @@ func (c *Conn) packetWriter(codec *core.Codec, channel, payloadType uint8) core.
 		buf = make([]byte, startAudioBuf)
 	}
 
+	var sr *senderReport
+	if codec.ClockRate > 0 {
+		sr = &senderReport{clockRate: codec.ClockRate}
+	}
+
 	flushBuf := func() {
 		//log.Printf("[rtsp] channel:%2d write_size:%6d buffer_size:%6d", channel, n, len(buf))
 		if err := c.writeInterleavedData(buf[:n]); err != nil {
@@ -138,6 +143,10 @@ func (c *Conn) packetWriter(codec *core.Codec, channel, payloadType uint8) core.
 
 		n += 4 + size
 
+		if sr != nil {
+			sr.count(packet)
+		}
+
 		if !packet.Marker || !c.playOK {
 			// collect continious video packets to buffer
 			// or wait OK for PLAY command for backchannel
@@ -146,6 +155,17 @@ func (c *Conn) packetWriter(codec *core.Codec, channel, payloadType uint8) core.
 		}
 
 		flushBuf()
+
+		if sr != nil {
+			// send on the RTCP channel of this track: interleaved data
+			// channels are even, control channels odd (for UDP transport
+			// writeInterleavedData routes it to the RTCP socket pair)
+			if b := sr.marshal(channel+1, clone.SSRC, clone.Timestamp, time.Now()); b != nil {
+				if err := c.writeInterleavedData(b); err == nil {
+					c.Send += len(b)
+				}
+			}
+		}
 	}
 
 	if !codec.IsRTP() {
