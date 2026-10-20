@@ -225,3 +225,10 @@ func TestGetCapabilities(t *testing.T) {
 		})
 	}
 }
+
+func TestGetPath(t *testing.T) {
+	require.Equal(t, "/onvif/device_service", GetPath("", PathDevice))
+	require.Equal(t, "/onvif/Media", GetPath("/onvif/Media", "/onvif/media_service"))
+	require.Equal(t, "/onvif/Media", GetPath("http://10.0.0.16:80/onvif/Media", "/onvif/media_service"))
+	require.Equal(t, "/onvif/media_service", GetPath("http://10.0.0.16:80", "/onvif/media_service"))
+}
