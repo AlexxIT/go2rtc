@@ -2,6 +2,7 @@ package streams
 
 import (
 	"errors"
+	"slices"
 	"strings"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -11,7 +12,12 @@ func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
 	// support for multiple simultaneous pending from different consumers
 	consN := s.pending.Add(1) - 1
 
-	var prodErrors = make([]error, len(s.producers))
+	// producers can be added or removed while we are matching medias
+	s.mu.Lock()
+	prods := slices.Clone(s.producers)
+	s.mu.Unlock()
+
+	var prodErrors = make([]error, len(prods))
 	var prodMedias []*core.Media
 	var prodStarts []*Producer
 
@@ -21,7 +27,7 @@ func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
 		log.Trace().Msgf("[streams] check cons=%d media=%s", consN, consMedia)
 
 	producers:
-		for prodN, prod := range s.producers {
+		for prodN, prod := range prods {
 			// check for loop request, ex. `camera1: ffmpeg:camera1`
 			if info, ok := cons.(core.Info); ok && prod.url == info.GetSource() {
 				log.Trace().Msgf("[streams] skip cons=%d prod=%d", consN, prodN)
