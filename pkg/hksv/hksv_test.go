@@ -301,7 +301,7 @@ func TestNewServer_AccessoryMetadataDefaults(t *testing.T) {
 	require.NotNil(t, info)
 	require.Equal(t, "AlexxIT", info.GetCharacter("20").Value)
 	require.Equal(t, "go2rtc", info.GetCharacter("21").Value)
-	require.Equal(t, "-", info.GetCharacter("30").Value)
+	require.Equal(t, "--", info.GetCharacter("30").Value)
 	require.Equal(t, "1.2.3", info.GetCharacter("52").Value)
 	require.Nil(t, info.GetCharacter("53"))
 }
@@ -366,7 +366,7 @@ func TestNewServer_AccessoryMetadataValidation(t *testing.T) {
 
 func TestValidateMetadata_RequiredMinimums(t *testing.T) {
 	require.ErrorContains(t, validateMetadata(&Config{SerialNumber: "AB", Firmware: "1"}), "model is 0 bytes")
-	require.NoError(t, validateMetadata(&Config{Model: "m", SerialNumber: "-", Firmware: "1"}), "legacy default serial")
+	require.ErrorContains(t, validateMetadata(&Config{Model: "m", SerialNumber: "-", Firmware: "1"}), "serial_number is 1 bytes")
 }
 
 func TestNewServer_ProxySkipsMetadataValidation(t *testing.T) {

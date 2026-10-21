@@ -97,7 +97,7 @@ type Config struct {
 	Name             string   // mDNS display name (auto-generated if empty)
 	Manufacturer     string   // accessory manufacturer (default "AlexxIT")
 	Model            string   // accessory model (default "go2rtc")
-	SerialNumber     string   // accessory serial number (default "-")
+	SerialNumber     string   // accessory serial number (default "--")
 	Firmware         string   // accessory firmware revision x[.y[.z]] (defaults to Version)
 	HardwareRevision string   // optional accessory hardware revision x[.y[.z]] (omitted if empty)
 	DeviceID         string   // MAC-like device ID (auto-generated if empty)
@@ -175,7 +175,7 @@ func NewServer(cfg Config) (*Server, error) {
 		cfg.Model = "go2rtc"
 	}
 	if cfg.SerialNumber == "" {
-		cfg.SerialNumber = "-"
+		cfg.SerialNumber = "--"
 	}
 	if cfg.Firmware == "" {
 		cfg.Firmware = cfg.Version
@@ -263,18 +263,13 @@ func NewServer(cfg Config) (*Server, error) {
 
 // validateMetadata checks Accessory Information limits from HAP R2 §9 (lengths are UTF-8 bytes).
 func validateMetadata(cfg *Config) error {
-	// shortcut: upstream default serial "-" is below HAP's 2-byte minimum, kept so existing pairings don't change identity
-	serialMin := 2
-	if cfg.SerialNumber == "-" {
-		serialMin = 1
-	}
 	fields := []struct {
 		name, value string
 		min         int
 	}{
 		{"manufacturer", cfg.Manufacturer, 0},
 		{"model", cfg.Model, 1},
-		{"serial_number", cfg.SerialNumber, serialMin},
+		{"serial_number", cfg.SerialNumber, 2},
 		{"firmware", cfg.Firmware, 0},
 		{"hardware_revision", cfg.HardwareRevision, 0},
 	}

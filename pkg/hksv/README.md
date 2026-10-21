@@ -406,7 +406,7 @@ type Config struct {
     // Optional - metadata
     Manufacturer string // accessory manufacturer (default "AlexxIT")
     Model        string // accessory model (default "go2rtc")
-    SerialNumber string // accessory serial number (default "-")
+    SerialNumber string // accessory serial number (default "--")
     Firmware     string // accessory firmware revision x[.y[.z]] (defaults to Version)
     HardwareRevision string // optional hardware revision x[.y[.z]] (omitted if empty)
     UserAgent    string // for mDNS TXTModel field
@@ -419,7 +419,7 @@ type Config struct {
 }
 ```
 
-Unless `ProxyURL` is set, `NewServer` returns an error for invalid accessory metadata instead of truncating it: `Manufacturer`, `Model`, `SerialNumber` max 64 UTF-8 bytes (`Model` ≥ 1, `SerialNumber` ≥ 2 except the legacy `"-"` default); `Firmware` (required, via `Firmware` or `Version`) and `HardwareRevision` must be `x[.y[.z]]` with decimal `uint32` components, max 64 bytes.
+Unless `ProxyURL` is set, `NewServer` returns an error for invalid accessory metadata instead of truncating it: `Manufacturer`, `Model`, `SerialNumber` max 64 UTF-8 bytes (`Model` ≥ 1, `SerialNumber` ≥ 2); `Firmware` (required, via `Firmware` or `Version`) and `HardwareRevision` must be `x[.y[.z]]` with decimal `uint32` components, max 64 bytes.
 
 ## Motion Detection
 
