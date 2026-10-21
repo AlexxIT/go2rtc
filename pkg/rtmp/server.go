@@ -20,7 +20,7 @@ func NewServer(conn net.Conn) (*Conn, error) {
 		rd:   bufio.NewReaderSize(conn, core.BufferSize),
 		wr:   conn,
 
-		chunks: map[uint8]*chunk{},
+		chunks: map[uint32]*chunk{},
 
 		rdPacketSize: 128,
 		wrPacketSize: 4096,
@@ -176,6 +176,11 @@ func (c *Conn) acceptCommand(b []byte) error {
 	case CommandPublish, CommandPlay: // response later
 		c.Intent = cmd
 		c.streamID = 1
+		if len(items) >= 4 {
+			if s, ok := items[3].(string); ok && s != "" {
+				c.Stream = s
+			}
+		}
 
 	default:
 		println("rtmp: unknown command: " + cmd)
