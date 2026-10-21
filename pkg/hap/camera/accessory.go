@@ -5,11 +5,11 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/hap/tlv8"
 )
 
-func NewAccessory(manuf, model, name, serial, firmware string) *hap.Accessory {
+func NewAccessory(manuf, model, name, serial, firmware, hardware string) *hap.Accessory {
 	acc := &hap.Accessory{
 		AID: hap.DeviceAID,
 		Services: []*hap.Service{
-			hap.ServiceAccessoryInformation(manuf, model, name, serial, firmware),
+			hap.ServiceAccessoryInformation(manuf, model, name, serial, firmware, hardware),
 			ServiceCameraRTPStreamManagement(),
 			//hap.ServiceHAPProtocolInformation(),
 			ServiceMicrophone(),
@@ -20,7 +20,7 @@ func NewAccessory(manuf, model, name, serial, firmware string) *hap.Accessory {
 	return acc
 }
 
-func NewHKSVAccessory(manuf, model, name, serial, firmware string) *hap.Accessory {
+func NewHKSVAccessory(manuf, model, name, serial, firmware, hardware string) *hap.Accessory {
 	rtpStream := ServiceCameraRTPStreamManagement()
 	motionSensor := ServiceMotionSensor()
 	operatingMode := ServiceCameraOperatingMode()
@@ -30,7 +30,7 @@ func NewHKSVAccessory(manuf, model, name, serial, firmware string) *hap.Accessor
 	acc := &hap.Accessory{
 		AID: hap.DeviceAID,
 		Services: []*hap.Service{
-			hap.ServiceAccessoryInformation(manuf, model, name, serial, firmware),
+			hap.ServiceAccessoryInformation(manuf, model, name, serial, firmware, hardware),
 			rtpStream,
 			ServiceMicrophone(),
 			ServiceSpeaker(),
@@ -48,7 +48,7 @@ func NewHKSVAccessory(manuf, model, name, serial, firmware string) *hap.Accessor
 	return acc
 }
 
-func NewHKSVDoorbellAccessory(manuf, model, name, serial, firmware string) *hap.Accessory {
+func NewHKSVDoorbellAccessory(manuf, model, name, serial, firmware, hardware string) *hap.Accessory {
 	rtpStream := ServiceCameraRTPStreamManagement()
 	motionSensor := ServiceMotionSensor()
 	operatingMode := ServiceCameraOperatingMode()
@@ -59,7 +59,7 @@ func NewHKSVDoorbellAccessory(manuf, model, name, serial, firmware string) *hap.
 	acc := &hap.Accessory{
 		AID: hap.DeviceAID,
 		Services: []*hap.Service{
-			hap.ServiceAccessoryInformation(manuf, model, name, serial, firmware),
+			hap.ServiceAccessoryInformation(manuf, model, name, serial, firmware, hardware),
 			rtpStream,
 			ServiceMicrophone(),
 			ServiceSpeaker(),

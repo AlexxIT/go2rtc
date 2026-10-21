@@ -544,6 +544,7 @@ func BenchmarkServer_AddDelConn(b *testing.B) {
 		HKSV:       true,
 		Streams:    streams,
 		Logger:     zerolog.Nop(),
+		Version:    "1.0.0",
 	})
 
 	b.ResetTimer()
@@ -562,6 +563,7 @@ func BenchmarkServer_AddDelPair(b *testing.B) {
 		HKSV:       true,
 		Streams:    streams,
 		Logger:     zerolog.Nop(),
+		Version:    "1.0.0",
 	})
 
 	pub := []byte{1, 2, 3, 4}
@@ -581,6 +583,7 @@ func BenchmarkServer_SetMotionDetected(b *testing.B) {
 		HKSV:       true,
 		Streams:    streams,
 		Logger:     zerolog.Nop(),
+		Version:    "1.0.0",
 	})
 
 	b.ResetTimer()
@@ -597,6 +600,7 @@ func BenchmarkServer_MarshalJSON(b *testing.B) {
 		HKSV:       true,
 		Streams:    streams,
 		Logger:     zerolog.Nop(),
+		Version:    "1.0.0",
 	})
 
 	b.ResetTimer()

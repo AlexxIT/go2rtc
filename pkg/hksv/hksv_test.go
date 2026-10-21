@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -141,6 +142,7 @@ func newTestServer(t *testing.T, opts ...func(*Config)) *Server {
 		Streams:    streams,
 		Logger:     zerolog.Nop(),
 		Port:       0,
+		Version:    "1.0.0",
 	}
 	for _, opt := range opts {
 		opt(&cfg)
@@ -162,6 +164,7 @@ func TestNewServer_MinimalHKSV(t *testing.T) {
 		HKSV:       true,
 		Streams:    streams,
 		Logger:     zerolog.Nop(),
+		Version:    "1.0.0",
 	})
 	require.NoError(t, err)
 	require.NotNil(t, srv)
@@ -183,6 +186,7 @@ func TestNewServer_DefaultPin(t *testing.T) {
 		HKSV:       true,
 		Streams:    newMockStreamProvider(),
 		Logger:     zerolog.Nop(),
+		Version:    "1.0.0",
 	})
 	require.NoError(t, err)
 	require.NotNil(t, srv)
@@ -273,6 +277,7 @@ func TestNewServer_AccessoryMetadata(t *testing.T) {
 				c.Model = "Camera X"
 				c.SerialNumber = "CAM-001"
 				c.Firmware = "2.3.4"
+				c.HardwareRevision = "1.0.0"
 			})
 
 			info := srv.Accessory().GetService("3E")
@@ -282,6 +287,7 @@ func TestNewServer_AccessoryMetadata(t *testing.T) {
 			require.Equal(t, "Front Door", info.GetCharacter("23").Value)
 			require.Equal(t, "CAM-001", info.GetCharacter("30").Value)
 			require.Equal(t, "2.3.4", info.GetCharacter("52").Value)
+			require.Equal(t, "1.0.0", info.GetCharacter("53").Value)
 		})
 	}
 }
@@ -297,6 +303,75 @@ func TestNewServer_AccessoryMetadataDefaults(t *testing.T) {
 	require.Equal(t, "go2rtc", info.GetCharacter("21").Value)
 	require.Equal(t, "-", info.GetCharacter("30").Value)
 	require.Equal(t, "1.2.3", info.GetCharacter("52").Value)
+	require.Nil(t, info.GetCharacter("53"))
+}
+
+func TestNewServer_AccessoryMetadataValidation(t *testing.T) {
+	s64 := strings.Repeat("a", 64)
+	s65 := strings.Repeat("a", 65)
+	multibyte := strings.Repeat("é", 33) // 33 runes, 66 bytes
+	v64 := strings.Repeat("1", 64)       // overflows uint32, but length is checked first
+	v65 := "1." + strings.Repeat("0", 63)
+
+	type tc struct {
+		name string
+		set  func(*Config)
+		err  string // empty = valid
+	}
+	tests := []tc{
+		{"manufacturer 64", func(c *Config) { c.Manufacturer = s64 }, ""},
+		{"manufacturer 65", func(c *Config) { c.Manufacturer = s65 }, "manufacturer is 65 bytes"},
+		{"manufacturer multibyte", func(c *Config) { c.Manufacturer = multibyte }, "manufacturer is 66 bytes"},
+		{"model 64", func(c *Config) { c.Model = s64 }, ""},
+		{"model 65", func(c *Config) { c.Model = s65 }, "model is 65 bytes"},
+		{"serial 1", func(c *Config) { c.SerialNumber = "A" }, "serial_number is 1 bytes, must be at least 2"},
+		{"serial 2", func(c *Config) { c.SerialNumber = "AB" }, ""},
+		{"serial 64", func(c *Config) { c.SerialNumber = s64 }, ""},
+		{"serial 65", func(c *Config) { c.SerialNumber = s65 }, "serial_number is 65 bytes"},
+		{"firmware 64", func(c *Config) { c.Firmware = "1." + strings.Repeat("0", 62) }, ""},
+		{"firmware 65", func(c *Config) { c.Firmware = v65 }, "firmware is 65 bytes"},
+		{"firmware 64 overflow", func(c *Config) { c.Firmware = v64 }, "exceeds 4294967295"},
+		{"hardware 64", func(c *Config) { c.HardwareRevision = "1." + strings.Repeat("0", 62) }, ""},
+		{"hardware 65", func(c *Config) { c.HardwareRevision = v65 }, "hardware_revision is 65 bytes"},
+		{"firmware empty", func(c *Config) { c.Version = "" }, "firmware is required"},
+	}
+
+	for _, v := range []string{"0", "1.2", "1.2.3", "4294967295.0.1", "01.002"} {
+		tests = append(tests,
+			tc{"firmware " + v, func(c *Config) { c.Firmware = v }, ""},
+			tc{"hardware " + v, func(c *Config) { c.HardwareRevision = v }, ""},
+		)
+	}
+	for _, v := range []string{"1.", ".1", "1..2", "1.2.3.4", "v1", "1.0-beta", "+1", " 1", "１", "4294967296"} {
+		tests = append(tests,
+			tc{"firmware " + v, func(c *Config) { c.Firmware = v }, "invalid firmware"},
+			tc{"hardware " + v, func(c *Config) { c.HardwareRevision = v }, "invalid hardware_revision"},
+		)
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := Config{StreamName: "cam1", HKSV: true, Version: "1.0.0", Streams: newMockStreamProvider(), Logger: zerolog.Nop()}
+			test.set(&cfg)
+			srv, err := NewServer(cfg)
+			if test.err == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, err, test.err)
+			require.Nil(t, srv)
+		})
+	}
+}
+
+func TestValidateMetadata_RequiredMinimums(t *testing.T) {
+	require.ErrorContains(t, validateMetadata(&Config{SerialNumber: "AB", Firmware: "1"}), "model is 0 bytes")
+	require.NoError(t, validateMetadata(&Config{Model: "m", SerialNumber: "-", Firmware: "1"}), "legacy default serial")
+}
+
+func TestNewServer_ProxySkipsMetadataValidation(t *testing.T) {
+	_, err := NewServer(Config{StreamName: "cam1", ProxyURL: "http://127.0.0.1:1", Logger: zerolog.Nop()})
+	require.NoError(t, err)
 }
 
 func TestNewServer_CustomDeviceID(t *testing.T) {
@@ -328,6 +403,7 @@ func TestNewServer_NonHKSV(t *testing.T) {
 		HKSV:       false,
 		Streams:    newMockStreamProvider(),
 		Logger:     zerolog.Nop(),
+		Version:    "1.0.0",
 	})
 	require.NoError(t, err)
 	require.NotNil(t, srv.Accessory())
@@ -435,6 +511,7 @@ func TestPairing_PreExisting(t *testing.T) {
 		Pairings:   []string{"client_id=pre-existing&client_public=0102&permissions=1"},
 		Streams:    newMockStreamProvider(),
 		Logger:     zerolog.Nop(),
+		Version:    "1.0.0",
 	})
 	require.NoError(t, err)
 

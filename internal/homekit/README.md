@@ -81,10 +81,18 @@ homekit:
     model: IPC-HDW1230T     # custom model, default: go2rtc
     serial_number: CAM-001  # custom serial number, default: -
     firmware: "2.800"       # custom firmware revision, default: go2rtc version
+    hardware_revision: "1.0" # optional hardware revision, default: not published
     device_id: dahua1       # custom ID, default: generated from stream ID
     device_private: dahua1  # custom key, default: generated from stream ID
     speaker: true           # enable 2-way audio (default: false, enable only if camera has a speaker)
 ```
+
+Accessory metadata limits (invalid values stop the HomeKit server for that stream with an error; nothing is truncated):
+
+- `manufacturer`, `model`, `serial_number`: at most 64 bytes (UTF-8); `model` at least 1 byte, `serial_number` at least 2 bytes
+- `firmware`, `hardware_revision`: `x`, `x.y` or `x.y.z`, decimal numbers `0`–`4294967295`, at most 64 bytes; quote them in YAML (`"2.800"`, not `2.800`)
+
+Apple Home caches manufacturer, model, name and serial number. After changing them, remove and re-pair the accessory to see the new values.
 
 ### HKSV (HomeKit Secure Video)
 
