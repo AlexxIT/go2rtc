@@ -85,7 +85,7 @@ func (c *Producer) Start() error {
 
 		switch pkt.PayloadType {
 		case TagAudio:
-			if c.audio == nil || pkt.Payload[1] == 0 {
+			if c.audio == nil || len(pkt.Payload) < 2 || pkt.Payload[1] == 0 {
 				continue
 			}
 
@@ -94,16 +94,22 @@ func (c *Producer) Start() error {
 			c.audio.WriteRTP(pkt)
 
 		case TagVideo:
-			if c.video == nil {
+			if c.video == nil || len(pkt.Payload) < 2 {
 				continue
 			}
 
 			if isExHeader(pkt.Payload) {
 				switch packetType := pkt.Payload[0] & 0b1111; packetType {
 				case PacketTypeCodedFrames:
+					if len(pkt.Payload) < 8 {
+						continue
+					}
 					// frame type 4b, packet type 4b, fourCC 32b, composition time 24b
 					pkt.Payload = pkt.Payload[8:]
 				case PacketTypeCodedFramesX:
+					if len(pkt.Payload) < 5 {
+						continue
+					}
 					// frame type 4b, packet type 4b, fourCC 32b
 					pkt.Payload = pkt.Payload[5:]
 				default:
@@ -112,6 +118,9 @@ func (c *Producer) Start() error {
 			} else {
 				switch pkt.Payload[1] {
 				case PacketTypeAVCNALU:
+					if len(pkt.Payload) < 5 {
+						continue
+					}
 					// frame type 4b, codecID 4b, avc packet type 8b, composition time 24b
 					pkt.Payload = pkt.Payload[5:]
 				default:

@@ -29,7 +29,7 @@ type Conn struct {
 	rdPacketSize uint32
 	wrPacketSize uint32
 
-	chunks   map[byte]*chunk
+	chunks   map[uint32]*chunk
 	streamID byte
 	url      string
 
@@ -67,12 +67,14 @@ func (c *Conn) readResponse(wait func(items []any) bool) ([]any, error) {
 }
 
 type chunk struct {
-	conn     *Conn
-	rawTime  uint32
-	dataSize uint32
-	tagType  byte
-	streamID uint32
-	timeMS   uint32
+	conn            *Conn
+	rawTime         uint32
+	dataSize        uint32
+	tagType         byte
+	streamID        uint32
+	timeMS          uint32
+	hasExtendedTime bool
+	buf             []byte
 }
 
 func (c *chunk) readHeader(typ byte) error {
@@ -86,7 +88,18 @@ func (c *chunk) readHeader(typ byte) error {
 		c.dataSize = Uint24(b[3:])
 		c.tagType = b[6]
 		c.streamID = binary.LittleEndian.Uint32(b[7:])
-		c.timeMS = c.readExtendedTime()
+		c.buf = nil
+		if c.rawTime == 0xFFFFFF {
+			timeMS, err := c.readExtendedTime()
+			if err != nil {
+				return err
+			}
+			c.timeMS = timeMS
+			c.hasExtendedTime = true
+		} else {
+			c.timeMS = c.rawTime
+			c.hasExtendedTime = false
+		}
 
 	case 1: // 8 bytes - like type b00, not including message ID (4 last bytes)
 		b, err := c.conn.readSize(7)
@@ -96,95 +109,128 @@ func (c *chunk) readHeader(typ byte) error {
 		c.rawTime = Uint24(b)
 		c.dataSize = Uint24(b[3:]) // msgdatalen
 		c.tagType = b[6]           // msgtypeid
-		c.timeMS += c.readExtendedTime()
+		c.buf = nil
+		if c.rawTime == 0xFFFFFF {
+			ext, err := c.readExtendedTime()
+			if err != nil {
+				return err
+			}
+			c.timeMS += ext
+			c.hasExtendedTime = true
+		} else {
+			c.timeMS += c.rawTime
+			c.hasExtendedTime = false
+		}
 
-	case 2: // 4 bytes - Basic Header and timestamp (3 bytes) are included
+	case 2: // 4 bytes - Basic Header and timestamp delta (3 bytes)
 		b, err := c.conn.readSize(3)
 		if err != nil {
 			return err
 		}
-		c.rawTime = Uint24(b) // timestamp
-		c.timeMS += c.readExtendedTime()
+		c.rawTime = Uint24(b) // timestamp delta
+		c.buf = nil
+		if c.rawTime == 0xFFFFFF {
+			ext, err := c.readExtendedTime()
+			if err != nil {
+				return err
+			}
+			c.timeMS += ext
+			c.hasExtendedTime = true
+		} else {
+			c.timeMS += c.rawTime
+			c.hasExtendedTime = false
+		}
 
 	case 3: // 1 byte - only the Basic Header is included
-		// use here hdr from previous msg with same session ID (sid)
+		if c.hasExtendedTime {
+			_, err := c.readExtendedTime()
+			if err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
 
-func (c *chunk) readExtendedTime() uint32 {
-	if c.rawTime == 0xFFFFFF {
-		if b, err := c.conn.readSize(4); err == nil {
-			return binary.BigEndian.Uint32(b)
-		}
+func (c *chunk) readExtendedTime() (uint32, error) {
+	b, err := c.conn.readSize(4)
+	if err != nil {
+		return 0, err
 	}
-	return c.rawTime
+	return binary.BigEndian.Uint32(b), nil
 }
 
 //var ErrNotImplemented = errors.New("rtmp: not implemented")
 
 func (c *Conn) readMessage() (byte, uint32, []byte, error) {
-	b, err := c.readSize(1) // doesn't support big chunkID!!!
-	if err != nil {
-		return 0, 0, nil, err
-	}
-
-	hdrType := b[0] >> 6
-	chunkID := b[0] & 0b111111
-
-	// storing header information for support header type 3
-	ch, ok := c.chunks[chunkID]
-	if !ok {
-		ch = &chunk{conn: c}
-		c.chunks[chunkID] = ch
-	}
-
-	if err = ch.readHeader(hdrType); err != nil {
-		return 0, 0, nil, err
-	}
-
-	//log.Printf("[rtmp] hdr=%d chunkID=%d timeMS=%d size=%d tagType=%d streamID=%d", hdrType, chunkID, ch.timeMS, ch.dataSize, ch.tagType, ch.streamID)
-
-	// 1. Response zero size
-	if ch.dataSize == 0 {
-		return ch.tagType, ch.timeMS, nil, nil
-	}
-
-	data := make([]byte, ch.dataSize)
-
-	// 2. Response small packet
-	if ch.dataSize <= c.rdPacketSize {
-		if _, err = io.ReadFull(c.rd, data); err != nil {
-			return 0, 0, nil, err
-		}
-		if ch.tagType == TypeSetPacketSize && len(data) == 4 {
-			c.rdPacketSize = binary.BigEndian.Uint32(data)
-		}
-		return ch.tagType, ch.timeMS, data, nil
-	}
-
-	// 3. Response big packet
-	var i0 uint32
-	for i1 := c.rdPacketSize; i1 < ch.dataSize; i1 += c.rdPacketSize {
-		if _, err = io.ReadFull(c.rd, data[i0:i1]); err != nil {
+	for {
+		b, err := c.readSize(1)
+		if err != nil {
 			return 0, 0, nil, err
 		}
 
-		// hopefully this will be hdrType=3 with same chunkID
-		if _, err = c.readSize(1); err != nil {
+		hdrType := b[0] >> 6
+		chunkID := uint32(b[0] & 0b111111)
+
+		switch chunkID {
+		case 0:
+			b2, err := c.readSize(1)
+			if err != nil {
+				return 0, 0, nil, err
+			}
+			chunkID = 64 + uint32(b2[0])
+		case 1:
+			b2, err := c.readSize(2)
+			if err != nil {
+				return 0, 0, nil, err
+			}
+			chunkID = 64 + uint32(b2[0]) + uint32(b2[1])<<8
+		}
+
+		ch, ok := c.chunks[chunkID]
+		if !ok {
+			ch = &chunk{conn: c}
+			c.chunks[chunkID] = ch
+		}
+
+		if err = ch.readHeader(hdrType); err != nil {
 			return 0, 0, nil, err
 		}
 
-		_ = ch.readExtendedTime()
+		// 1. Response zero size
+		if ch.dataSize == 0 {
+			return ch.tagType, ch.timeMS, nil, nil
+		}
 
-		i0 = i1
+		packetSize := c.rdPacketSize
+		if packetSize == 0 {
+			packetSize = 128
+		}
+
+		remaining := ch.dataSize - uint32(len(ch.buf))
+		chunkBytes := packetSize
+		if chunkBytes > remaining {
+			chunkBytes = remaining
+		}
+
+		part := make([]byte, chunkBytes)
+		if _, err = io.ReadFull(c.rd, part); err != nil {
+			return 0, 0, nil, err
+		}
+
+		ch.buf = append(ch.buf, part...)
+
+		if uint32(len(ch.buf)) >= ch.dataSize {
+			data := ch.buf
+			ch.buf = nil
+
+			if ch.tagType == TypeSetPacketSize && len(data) == 4 {
+				c.rdPacketSize = binary.BigEndian.Uint32(data)
+			}
+
+			return ch.tagType, ch.timeMS, data, nil
+		}
 	}
-
-	if _, err = io.ReadFull(c.rd, data[i0:]); err != nil {
-		return 0, 0, nil, err
-	}
-
-	return ch.tagType, ch.timeMS, data, nil
 }
 
 func (c *Conn) writeMessage(chunkID, tagType byte, timeMS uint32, payload []byte) error {
