@@ -306,6 +306,13 @@ func TestNewServer_AccessoryMetadataDefaults(t *testing.T) {
 	require.Nil(t, info.GetCharacter("53"))
 }
 
+func TestNewServer_FirmwareFromDevVersion(t *testing.T) {
+	for _, v := range []string{"1.9.14+dev.02190bb", "1.9.14+dev.02190bb.dirty", "1.9.14-rc1"} {
+		srv := newTestServer(t, func(c *Config) { c.Version = v })
+		require.Equal(t, "1.9.14", srv.Accessory().GetService("3E").GetCharacter("52").Value, v)
+	}
+}
+
 func TestNewServer_AccessoryMetadataValidation(t *testing.T) {
 	s64 := strings.Repeat("a", 64)
 	s65 := strings.Repeat("a", 65)

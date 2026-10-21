@@ -407,7 +407,7 @@ type Config struct {
     Manufacturer string // accessory manufacturer (default "AlexxIT")
     Model        string // accessory model (default "go2rtc")
     SerialNumber string // accessory serial number (default "--")
-    Firmware     string // accessory firmware revision x[.y[.z]] (defaults to Version)
+    Firmware     string // accessory firmware revision x[.y[.z]] (defaults to Version without -/+ suffix)
     HardwareRevision string // optional hardware revision x[.y[.z]] (omitted if empty)
     UserAgent    string // for mDNS TXTModel field
     Version      string // host version and default accessory firmware revision

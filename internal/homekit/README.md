@@ -80,7 +80,7 @@ homekit:
     manufacturer: Dahua     # custom manufacturer, default: AlexxIT
     model: IPC-HDW1230T     # custom model, default: go2rtc
     serial_number: CAM-001  # custom serial number, default: --
-    firmware: "2.800"       # custom firmware revision, default: go2rtc version
+    firmware: "2.800"       # custom firmware revision, default: go2rtc version (e.g. 1.9.14)
     hardware_revision: "1.0" # optional hardware revision, default: not published
     device_id: dahua1       # custom ID, default: generated from stream ID
     device_private: dahua1  # custom key, default: generated from stream ID

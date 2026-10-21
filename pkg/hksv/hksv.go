@@ -98,7 +98,7 @@ type Config struct {
 	Manufacturer     string   // accessory manufacturer (default "AlexxIT")
 	Model            string   // accessory model (default "go2rtc")
 	SerialNumber     string   // accessory serial number (default "--")
-	Firmware         string   // accessory firmware revision x[.y[.z]] (defaults to Version)
+	Firmware         string   // accessory firmware revision x[.y[.z]] (defaults to Version without -/+ suffix)
 	HardwareRevision string   // optional accessory hardware revision x[.y[.z]] (omitted if empty)
 	DeviceID         string   // MAC-like device ID (auto-generated if empty)
 	DevicePrivate    string   // ed25519 private key hex (auto-generated if empty)
@@ -178,7 +178,9 @@ func NewServer(cfg Config) (*Server, error) {
 		cfg.SerialNumber = "--"
 	}
 	if cfg.Firmware == "" {
-		cfg.Firmware = cfg.Version
+		// HAP firmware is numeric only, so drop SemVer prerelease/build suffix (1.9.14+dev.abc -> 1.9.14)
+		cfg.Firmware, _, _ = strings.Cut(cfg.Version, "+")
+		cfg.Firmware, _, _ = strings.Cut(cfg.Firmware, "-")
 	}
 	// proxy mode publishes the remote accessory, so local metadata is unused
 	if cfg.ProxyURL == "" {
