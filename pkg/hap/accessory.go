@@ -111,8 +111,8 @@ func (s *Service) GetCharacter(charType string) *Character {
 	return nil
 }
 
-func ServiceAccessoryInformation(manuf, model, name, serial, firmware string) *Service {
-	return &Service{
+func ServiceAccessoryInformation(manuf, model, name, serial, firmware, hardware string) *Service {
+	service := &Service{
 		Type: "3E", // AccessoryInformation
 		Characters: []*Character{
 			{
@@ -157,6 +157,16 @@ func ServiceAccessoryInformation(manuf, model, name, serial, firmware string) *S
 			},
 		},
 	}
+	if hardware != "" {
+		service.Characters = append(service.Characters, &Character{
+			Type:   "53",
+			Format: FormatString,
+			Value:  hardware,
+			Perms:  PR,
+			//Descr:  "Hardware Revision",
+		})
+	}
+	return service
 }
 
 func ServiceHAPProtocolInformation() *Service {
