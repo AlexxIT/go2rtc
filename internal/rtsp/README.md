@@ -42,6 +42,7 @@ Format: `rtsp...#{param1}#{param2}#{param3}`
 - Ignore audio - `#media=video` or ignore video - `#media=audio`
 - Ignore two-way audio API `#backchannel=0` - important for some glitchy cameras
 - Use WebSocket transport `#transport=ws...`
+- Play recorded footage from an ONVIF Profile G device (Replay service) `#range=clock=20261024T090000.000Z-` - the value is sent as the `Range` header on PLAY together with `Require: onvif-replay`. The RTSP URL comes from the device's `GetReplayUri`; an end time may follow the dash (`clock=...Z-...Z`)
 
 ### RTSP over WebSocket
 

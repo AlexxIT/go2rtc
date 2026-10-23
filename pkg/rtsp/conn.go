@@ -24,6 +24,9 @@ type Conn struct {
 	// public
 
 	Backchannel bool
+	// Range, when set, is sent as the RTSP Range header on PLAY (ONVIF Replay:
+	// "clock=20261024T090000.000Z-"), together with "Require: onvif-replay".
+	Range       string
 	Media       string
 	OnClose     func() error
 	PacketSize  uint16

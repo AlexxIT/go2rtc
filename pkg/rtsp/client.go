@@ -385,6 +385,14 @@ func (c *Conn) SetupMedia(media *core.Media) (byte, error) {
 
 func (c *Conn) Play() (err error) {
 	req := &tcp.Request{Method: MethodPlay, URL: c.URL}
+	if c.Range != "" {
+		// ONVIF Streaming Spec §6.3 (Replay): absolute time via Range: clock=…,
+		// and Require: onvif-replay so the device applies replay semantics.
+		req.Header = map[string][]string{
+			"Range":   {c.Range},
+			"Require": {"onvif-replay"},
+		}
+	}
 	return c.WriteRequest(req)
 }
 
