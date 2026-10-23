@@ -48,10 +48,11 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 
 	if s := query.Get("cache"); s != "" {
 		if timeout, err := time.ParseDuration(s); err == nil {
-			src := query.Get("src")
+			query.Del("cache")
+			key := query.Encode()
 
 			cacheMu.Lock()
-			entry, found := cache[src]
+			entry, found := cache[key]
 			cacheMu.Unlock()
 
 			if found && time.Since(entry.timestamp) < timeout {
@@ -66,9 +67,9 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 				entry = cacheEntry{payload: b, timestamp: time.Now()}
 				cacheMu.Lock()
 				if cache == nil {
-					cache = map[string]cacheEntry{src: entry}
+					cache = map[string]cacheEntry{key: entry}
 				} else {
-					cache[src] = entry
+					cache[key] = entry
 				}
 				cacheMu.Unlock()
 			}()
