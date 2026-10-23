@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -49,7 +50,13 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 	if s := query.Get("cache"); s != "" {
 		if timeout, err := time.ParseDuration(s); err == nil {
 			query.Del("cache")
-			key := query.Encode()
+			params := make(url.Values, 8)
+			for _, name := range []string{"src", "width", "w", "height", "h", "rotate", "hardware", "hw"} {
+				if values := query[name]; len(values) > 0 {
+					params[name] = values
+				}
+			}
+			key := params.Encode()
 
 			cacheMu.Lock()
 			entry, found := cache[key]
