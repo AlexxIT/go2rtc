@@ -44,4 +44,6 @@ streams:
   custom_header: "https://mjpeg.sanford.io/count.mjpeg#header=Authorization: Bearer XXX"
 ```
 
+When a source is added through the API (`PATCH /api/streams?src=...`), options cannot contain spaces - percent-encode the header value instead: `#header=Authorization:Bearer%20XXX`.
+
 **PS.** Dahua camera has a bug: if you select MJPEG codec for RTSP second stream, snapshot won't work.
