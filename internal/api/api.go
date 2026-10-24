@@ -107,7 +107,7 @@ func listen(network, address string) {
 		Handler:           Handler,
 		ReadHeaderTimeout: 5 * time.Second, // Example: Set to 5 seconds
 	}
-	if err = server.Serve(ln); err != nil {
+	if err = server.Serve(hostEscapeListener{ln}); err != nil {
 		log.Fatal().Err(err).Msg("[api] serve")
 	}
 }
