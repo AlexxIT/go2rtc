@@ -807,6 +807,7 @@ func (s *Server) prepareHKSVConsumer() {
 		s.log.Debug().Err(err).Str("stream", s.stream).Msg("[hksv] prepare consumer failed")
 		return
 	}
+	consumer.TracksAdded()
 
 	s.log.Debug().Str("stream", s.stream).Msg("[hksv] consumer prepared")
 
