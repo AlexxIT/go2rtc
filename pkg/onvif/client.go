@@ -144,6 +144,14 @@ func (c *Client) GetStreamUri(token string) ([]byte, error) {
 </trt:GetStreamUri>`)
 }
 
+// SetSynchronizationPoint - ask the camera to send a keyframe for this profile as soon as possible
+func (c *Client) SetSynchronizationPoint(token string) error {
+	_, err := c.Request(
+		c.mediaURL, `<trt:SetSynchronizationPoint><trt:ProfileToken>`+token+`</trt:ProfileToken></trt:SetSynchronizationPoint>`,
+	)
+	return err
+}
+
 func (c *Client) GetSnapshotUri(token string) ([]byte, error) {
 	return c.Request(
 		c.imaginURL, `<trt:GetSnapshotUri><trt:ProfileToken>`+token+`</trt:ProfileToken></trt:GetSnapshotUri>`,
