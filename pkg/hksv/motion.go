@@ -104,6 +104,9 @@ func (m *MotionDetector) AddTrack(media *core.Media, _ *core.Codec, track *core.
 		sender.Handler = h264.RepairAVCC(track.Codec, sender.Handler)
 	}
 
+	// The detector holds the stream open, so it is the one that makes the
+	// keyframe cache exist before any live view or recording joins.
+	track.KeepGOP(h264.KeyframeTest(track.Codec))
 	sender.HandleRTP(track)
 	m.Senders = append(m.Senders, sender)
 	return nil
