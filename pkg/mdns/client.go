@@ -54,6 +54,14 @@ func (e *ServiceEntry) Host(service string) string {
 	return e.name() + "." + strings.TrimRight(service, ".")
 }
 
+// instance is the DNS-SD service instance name in presentation format: any
+// UTF-8 text, with the characters that delimit a DNS name escaped (RFC 6763
+// 4.3). A paired HomeKit controller asks for the exact instance it paired
+// with, so it must not be rewritten the way a host name is (name).
+func (e *ServiceEntry) instance() string {
+	return strings.NewReplacer(`\`, `\\`, `.`, `\.`, ` `, `\ `).Replace(e.Name)
+}
+
 func (e *ServiceEntry) name() string {
 	b := []byte(e.Name)
 	for i, c := range b {
