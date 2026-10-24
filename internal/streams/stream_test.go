@@ -40,3 +40,32 @@ func TestTempate(t *testing.T) {
 	require.Equal(t, stream1, stream2)
 	require.Equal(t, "ffmpeg:rtsp://example.com#video=copy", stream1.producers[0].url)
 }
+
+type testProducer struct {
+	core.Connection
+}
+
+func (p *testProducer) Start() error { return nil }
+
+func TestHasAudio(t *testing.T) {
+	video := &core.Media{Kind: core.KindVideo, Direction: core.DirectionRecvonly}
+	audio := &core.Media{Kind: core.KindAudio, Direction: core.DirectionRecvonly}
+	backchannel := &core.Media{Kind: core.KindAudio, Direction: core.DirectionSendonly}
+
+	newStream := func(medias ...*core.Media) *Stream {
+		prod := &testProducer{}
+		prod.Medias = medias
+		return &Stream{producers: []*Producer{
+			{url: "rtsp://example.com", conn: prod, state: stateMedias},
+			{url: "ffmpeg:camera1#audio=opus"},
+		}}
+	}
+
+	require.True(t, newStream(video, audio).HasAudio("ffmpeg:camera1#audio=opus"))
+	require.False(t, newStream(video).HasAudio("ffmpeg:camera1#audio=opus"))
+	require.False(t, newStream(video, backchannel).HasAudio("ffmpeg:camera1#audio=opus"))
+	// producer with skip source is not checked
+	require.False(t, newStream(video, audio).HasAudio("rtsp://example.com"))
+	// producer is not dialed yet
+	require.False(t, (&Stream{producers: []*Producer{{url: "rtsp://example.com"}}}).HasAudio(""))
+}
