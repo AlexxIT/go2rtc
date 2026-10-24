@@ -61,6 +61,22 @@ func (s *Stream) SetSource(source string) {
 	}
 }
 
+// HasAudio - check if any already dialed producer has audio. Skip the producer with this source,
+// because it may be in the middle of the Dial and holding the lock.
+func (s *Stream) HasAudio(skipSource string) bool {
+	for _, prod := range s.producers {
+		if prod.url == skipSource {
+			continue
+		}
+		for _, media := range prod.GetMedias() {
+			if media.Kind == core.KindAudio && media.Direction == core.DirectionRecvonly {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (s *Stream) RemoveConsumer(cons core.Consumer) {
 	_ = cons.Stop()
 

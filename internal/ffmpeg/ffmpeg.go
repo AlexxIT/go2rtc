@@ -43,7 +43,7 @@ func Init() {
 			return "", err
 		}
 		args := parseArgs(url[7:])
-		if core.Contains(args.Codecs, "auto") {
+		if core.Contains(args.Codecs, "auto") || isLazyAudio(url) {
 			return "", nil // force call streams.HandleFunc("ffmpeg")
 		}
 		return "exec:" + args.String(), nil
