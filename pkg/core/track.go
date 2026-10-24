@@ -3,6 +3,7 @@ package core
 import (
 	"encoding/json"
 	"errors"
+	"sync/atomic"
 
 	"github.com/pion/rtp"
 )
@@ -19,6 +20,8 @@ type Receiver struct {
 
 	Bytes   int `json:"bytes,omitempty"`
 	Packets int `json:"packets,omitempty"`
+
+	gop atomic.Pointer[gop] // packets since the last keyframe, once KeepGOP is called
 }
 
 func NewReceiver(media *Media, codec *Codec) *Receiver {
@@ -29,11 +32,22 @@ func NewReceiver(media *Media, codec *Codec) *Receiver {
 	r.Input = func(packet *Packet) {
 		r.Bytes += len(packet.Payload)
 		r.Packets++
-		for _, child := range r.childs {
-			child.Input(packet)
+		if g := r.gop.Load(); g != nil {
+			g.mu.Lock()
+			g.add(packet)
+			r.dispatch(packet)
+			g.mu.Unlock()
+			return
 		}
+		r.dispatch(packet)
 	}
 	return r
+}
+
+func (r *Receiver) dispatch(packet *Packet) {
+	for _, child := range r.childs {
+		child.Input(packet)
+	}
 }
 
 // Deprecated: should be removed
@@ -53,6 +67,10 @@ func (r *Receiver) Senders() []*Sender {
 // Deprecated: should be removed
 func (r *Receiver) Replace(target *Receiver) {
 	MoveNode(&target.Node, &r.Node)
+	// A reconnected source keeps caching for the consumers that asked for it.
+	if g := r.gop.Load(); g != nil {
+		target.KeepGOP(g.isKeyframe)
+	}
 }
 
 func (r *Receiver) Close() {

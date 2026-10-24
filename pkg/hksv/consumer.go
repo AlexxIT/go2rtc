@@ -143,7 +143,13 @@ func (c *HKSVConsumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Re
 	}
 
 	c.muxer.AddTrack(codec)
-	handler.HandleRTP(track)
+	if track.Codec.Name == core.CodecH264 {
+		track.KeepGOP(h264.KeyframeTest(track.Codec))
+		handler.WithParentFromKeyframe(track)
+		handler.Start()
+	} else {
+		handler.HandleRTP(track)
+	}
 	c.Senders = append(c.Senders, handler)
 
 	// Build init segment when all expected tracks are ready
