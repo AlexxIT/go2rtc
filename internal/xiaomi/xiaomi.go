@@ -93,10 +93,10 @@ func cloudUserRequest(user *url.Userinfo, apiURL, params string) ([]byte, error)
 func getCameraURL(url *url.URL) (string, error) {
 	model := url.Query().Get("model")
 
-	// It is not known which models need to be awakened.
-	// Probably all the doorbells and all the battery cameras.
-	if strings.Contains(model, ".cateye.") {
-		_ = wakeUpCamera(url)
+	// Battery-powered models sleep and must be woken via a cloud RPC before
+	// the P2P connection can be established.
+	if method, params, ok := wakeParams(model); ok {
+		_ = wakeUpCamera(url, method, params)
 	}
 
 	// The getMissURL request has a fallback to getP2PURL.
@@ -211,10 +211,27 @@ func getVendorName(i byte) string {
 	return fmt.Sprintf("%d", i)
 }
 
-func wakeUpCamera(url *url.URL) error {
-	const params = `{"id":1,"method":"wakeup","params":{"video":"1"}}`
+// wakeParams returns the miIO cloud RPC method and params used to wake a
+// sleeping battery-powered model, and ok=false for always-on models that don't
+// need it. Firmware families use different method names and payloads.
+//
+// Verified on midr.cateye.sd400 (Xiaomi Smart Doorbell 4 Pro), which does not
+// respond to the generic "wakeup" call. Other doorbells keep the previous
+// best-effort "wakeup" to avoid regressions.
+func wakeParams(model string) (method, params string, ok bool) {
+	switch {
+	case strings.HasPrefix(model, "midr."):
+		return "wakeup_host", "{}", true
+	case strings.Contains(model, ".cateye."):
+		return "wakeup", `{"video":"1"}`, true
+	}
+	return "", "", false
+}
+
+func wakeUpCamera(url *url.URL, method, params string) error {
 	did := url.Query().Get("did")
-	_, err := cloudUserRequest(url.User, "/home/rpc/"+did, params)
+	body := fmt.Sprintf(`{"id":1,"method":%q,"params":%s}`, method, params)
+	_, err := cloudUserRequest(url.User, "/home/rpc/"+did, body)
 	return err
 }
 
