@@ -34,6 +34,8 @@ type Producer struct {
 	state    state
 	mu       sync.Mutex
 	workerID int
+	// Add channel to signal worker to stop
+	stopChan chan struct{}
 }
 
 const SourceTemplate = "{input}"
@@ -154,22 +156,50 @@ func (p *Producer) start() {
 	p.state = stateStart
 	p.workerID++
 
-	go p.worker(p.conn, p.workerID)
+	// Create stop channel for this worker
+	p.stopChan = make(chan struct{})
+
+	go p.worker(p.conn, p.workerID, p.stopChan)
 }
 
-func (p *Producer) worker(conn core.Producer, workerID int) {
-	if err := conn.Start(); err != nil {
-		p.mu.Lock()
-		closed := p.workerID != workerID
-		p.mu.Unlock()
+func (p *Producer) worker(conn core.Producer, workerID int, stopChan chan struct{}) {
+	// Create done channel to track Start() completion
+	done := make(chan error, 1)
 
-		if closed {
-			return
-		}
+	// Run Start() in a goroutine so we can monitor stopChan
+	go func() {
+		done <- conn.Start()
+	}()
 
+	// Wait for either completion or stop signal
+	var err error
+	select {
+	case err = <-done:
+		// Start() completed (either success or error)
+	case <-stopChan:
+		// Stop was called - force stop the connection
+		_ = conn.Stop()
+		// Wait for Start() to finish after Stop()
+		err = <-done
+		log.Debug().Msgf("[streams] worker stopped by signal url=%s", p.url)
+		return
+	}
+
+	// Check if this worker was cancelled during Start()
+	p.mu.Lock()
+	closed := p.workerID != workerID
+	p.mu.Unlock()
+
+	if closed {
+		return
+	}
+
+	// Log error if any
+	if err != nil {
 		log.Warn().Err(err).Str("url", p.url).Caller().Send()
 	}
 
+	// Attempt reconnection
 	p.reconnect(workerID, 0)
 }
 
@@ -239,7 +269,7 @@ func (p *Producer) reconnect(workerID, retry int) {
 	// swap connections
 	p.conn = conn
 
-	go p.worker(conn, workerID)
+	go p.worker(conn, workerID, p.stopChan)
 }
 
 func (p *Producer) stop() {
@@ -254,6 +284,11 @@ func (p *Producer) stop() {
 		log.Trace().Msgf("[streams] skip stop none producer")
 		return
 	case stateStart:
+		// Signal the worker to stop before incrementing workerID
+		if p.stopChan != nil {
+			close(p.stopChan)
+			p.stopChan = nil
+		}
 		p.workerID++
 	}
 

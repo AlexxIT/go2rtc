@@ -29,7 +29,15 @@ func NewReceiver(media *Media, codec *Codec) *Receiver {
 	r.Input = func(packet *Packet) {
 		r.Bytes += len(packet.Payload)
 		r.Packets++
-		for _, child := range r.childs {
+
+		// Lock and copy children to prevent race condition
+		r.mu.Lock()
+		children := make([]*Node, len(r.childs))
+		copy(children, r.childs)
+		r.mu.Unlock()
+
+		// Now iterate safely without holding the lock
+		for _, child := range children {
 			child.Input(packet)
 		}
 	}
@@ -41,7 +49,17 @@ func (r *Receiver) WriteRTP(packet *rtp.Packet) {
 	r.Input(packet)
 }
 
-// Deprecated: should be removed
+// Thread-safe check for senders with ghost children cleanup
+func (r *Receiver) HasSenders() bool {
+	// Clean up any ghost children first
+	r.cleanGhostChildren()
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.childs) > 0
+}
+
+// Deprecated: should be removed, use HasSenders instead
 func (r *Receiver) Senders() []*Sender {
 	if len(r.childs) > 0 {
 		return []*Sender{{}}
@@ -73,6 +91,7 @@ type Sender struct {
 
 	buf  chan *Packet
 	done chan struct{}
+	closed bool // Track closed state
 }
 
 func NewSender(media *Media, codec *Codec) *Sender {
@@ -98,12 +117,17 @@ func NewSender(media *Media, codec *Codec) *Sender {
 	}
 	s.Input = func(packet *Packet) {
 		s.mu.Lock()
-		// unblock write to nil chan - OK, write to closed chan - panic
-		select {
-		case s.buf <- packet:
-			s.Bytes += len(packet.Payload)
-			s.Packets++
-		default:
+		// Check closed state before writing
+		if !s.closed && s.buf != nil {
+			// unblock write to nil chan - OK, write to closed chan - panic
+			select {
+			case s.buf <- packet:
+				s.Bytes += len(packet.Payload)
+				s.Packets++
+			default:
+				s.Drops++
+			}
+		} else {
 			s.Drops++
 		}
 		s.mu.Unlock()
@@ -167,12 +191,18 @@ func (s *Sender) State() string {
 func (s *Sender) Close() {
 	// close buffer if exists
 	s.mu.Lock()
-	if s.buf != nil {
-		close(s.buf) // exit from for range loop
-		s.buf = nil  // prevent writing to closed chan
+	if !s.closed {
+		// Mark as closed first, then close channel
+		s.closed = true
+		if s.buf != nil {
+			close(s.buf)
+			s.buf = nil
+		}
 	}
 	s.mu.Unlock()
 
+	// Always call Node.Close() to ensure proper cleanup
+	// even if the sender-specific cleanup already happened
 	s.Node.Close()
 }
 
