@@ -55,7 +55,14 @@ func NewClient(rawURL string) (*Client, error) {
 	var conn Conn
 	switch s := query.Get("vendor"); s {
 	case "cs2":
-		conn, err = cs2.Dial(u.Host, query.Get("transport"))
+		// If a p2p_id is present, the camera only reachable via the
+		// Mi-Cloud relay (typical for MJA1-secure-element cameras such
+		// as the c302n). Otherwise fall back to the direct LAN handshake.
+		if p2pID := query.Get("p2p_id"); p2pID != "" {
+			conn, err = cs2.DialCloud(p2pID, u.Host)
+		} else {
+			conn, err = cs2.Dial(u.Host, query.Get("transport"))
+		}
 	case "tutk":
 		conn, err = tutk.Dial(u.Host, query.Get("uid"), "Miss", "client")
 	default:
