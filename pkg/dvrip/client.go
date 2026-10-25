@@ -223,7 +223,7 @@ func (c *Client) ReadJSON() (res Response, err error) {
 	}
 
 	res = Response{}
-	if err = json.Unmarshal(b[:len(b)-2], &res); err != nil {
+	if err = json.Unmarshal(bytes.TrimRight(b, "\x00\n"), &res); err != nil {
 		return
 	}
 
