@@ -5,8 +5,9 @@ on:
   push:
     branches:
       - 'master'
+      - 'j*'
     tags:
-      - 'v*'
+      - 'b*'
 
 jobs:
   build-binaries:
