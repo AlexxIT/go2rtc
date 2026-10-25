@@ -18,6 +18,7 @@ func ParseQuery(query map[string][]string) []*core.Media {
 				Codecs: []*core.Codec{
 					{Name: core.CodecH264},
 					{Name: core.CodecH265},
+					{Name: core.CodecAV1},
 				},
 			},
 			{
@@ -59,13 +60,28 @@ func ParseCodecs(codecs string, parseAudio bool) (medias []*core.Media) {
 	var videos []*core.Codec
 	var audios []*core.Codec
 
+	var hasAV1 bool
+
 	for _, name := range strings.Split(codecs, ",") {
+		// browsers ask for several concrete AV1 profile/level/depth combos,
+		// and go2rtc serves whatever the stream has, so one codec is enough
+		if strings.HasPrefix(name, "av01.") {
+			if hasAV1 {
+				continue
+			}
+			hasAV1 = true
+			name = MimeAV1
+		}
+
 		switch name {
 		case MimeH264:
 			codec := &core.Codec{Name: core.CodecH264}
 			videos = append(videos, codec)
 		case MimeH265:
 			codec := &core.Codec{Name: core.CodecH265}
+			videos = append(videos, codec)
+		case MimeAV1:
+			codec := &core.Codec{Name: core.CodecAV1}
 			videos = append(videos, codec)
 		case MimeAAC:
 			codec := &core.Codec{Name: core.CodecAAC}
