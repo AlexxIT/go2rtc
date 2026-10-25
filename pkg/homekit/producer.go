@@ -70,19 +70,38 @@ func (c *Client) GetMedias() []*core.Media {
 		return nil
 	}
 
-	char := acc.GetCharacter(camera.TypeSupportedVideoStreamConfiguration)
-	if char == nil {
-		return nil
-	}
-	if err = char.ReadTLV8(&c.videoConfig); err != nil {
-		return nil
-	}
+	// Some cameras (ex. Logitech Circle 2) expose several RTP stream
+	// services and the first one is a stub: streaming status "unavailable"
+	// and a video config carrying no VideoAttrs. acc.GetCharacter() scans
+	// the whole accessory and returns that one. Pick the richest service
+	// that actually parses, like GetFreeStream() does on the stream side.
+	found := false
+	for _, srv := range acc.Services {
+		charVideo := srv.GetCharacter(camera.TypeSupportedVideoStreamConfiguration)
+		charAudio := srv.GetCharacter(camera.TypeSupportedAudioStreamConfiguration)
+		if charVideo == nil || charAudio == nil {
+			continue
+		}
 
-	char = acc.GetCharacter(camera.TypeSupportedAudioStreamConfiguration)
-	if char == nil {
-		return nil
+		var videoConfig camera.SupportedVideoStreamConfiguration
+		if charVideo.ReadTLV8(&videoConfig) != nil || len(videoConfig.Codecs) == 0 ||
+			len(videoConfig.Codecs[0].CodecParams) == 0 {
+			continue
+		}
+
+		var audioConfig camera.SupportedAudioStreamConfiguration
+		if charAudio.ReadTLV8(&audioConfig) != nil || len(audioConfig.Codecs) == 0 ||
+			len(audioConfig.Codecs[0].CodecParams) == 0 {
+			continue
+		}
+
+		if !found || len(videoConfig.Codecs[0].VideoAttrs) > len(c.videoConfig.Codecs[0].VideoAttrs) {
+			c.videoConfig = videoConfig
+			c.audioConfig = audioConfig
+			found = true
+		}
 	}
-	if err = char.ReadTLV8(&c.audioConfig); err != nil {
+	if !found {
 		return nil
 	}
 

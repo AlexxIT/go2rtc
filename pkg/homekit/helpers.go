@@ -93,7 +93,10 @@ func trackToVideo(track *core.Receiver, video0 *camera.VideoCodecConfiguration, 
 			if (maxWidth > 0 && int(s.Width) > maxWidth) || (maxHeight > 0 && int(s.Height) > maxHeight) {
 				continue
 			}
-			if s.Width > attrs.Width || s.Height > attrs.Height {
+			// compare by area: with `Width > || Height >` a 1024x768 entry
+			// would beat 1280x720, and some cameras (Logi Circle 2) reject
+			// a 4:3 mode in SelectedStreamConfiguration with -70410
+			if int(s.Width)*int(s.Height) > int(attrs.Width)*int(attrs.Height) {
 				attrs = s
 			}
 		}
