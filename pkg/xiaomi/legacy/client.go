@@ -106,6 +106,8 @@ func (c *Client) ReadPacket() (hdr, payload []byte, err error) {
 	if c.key != nil {
 		if c.model == ModelAqaraG2 && hdr[0] == tutk.CodecH265 {
 			payload, err = DecodeVideo(payload, c.key)
+		} else if c.model == ModelMijiaV1 && (hdr[0] == tutk.CodecH264 || hdr[0] == tutk.CodecH265) {
+			payload, err = DecodeVideo(payload, c.key)
 		} else {
 			// ModelAqaraG2: audio AAC
 			// ModelIMILABA1: video HEVC, audio PCMA
@@ -149,7 +151,7 @@ func (c *Client) StartMedia(video, audio string) error {
 			c.WriteCommandJSON(0x0704, `{}`), // don't know why
 		)
 
-	case ModelIMILABA1, ModelMijia:
+	case ModelIMILABA1, ModelMijia, ModelMijiaV1:
 		// 0 - auto, 1 - low, 3 - hd
 		switch video {
 		case "", "hd":
@@ -256,6 +258,9 @@ const (
 	ModelLoockV1  = "loock.cateye.v01"
 	ModelXiaobai  = "chuangmi.camera.xiaobai"
 	ModelXiaofang = "isa.camera.isc5"
+	// ModelMijiaV1 (MJSXJ01CM) only speaks the legacy protocol with partial
+	// per-frame video encryption (handled by DecodeVideo).
+	ModelMijiaV1 = "mijia.camera.v1"
 	// ModelMijia support miss format for new fw and legacy format for old fw
 	ModelMijia = "chuangmi.camera.v2"
 	// ModelDafang support miss format for new fw and legacy format for old fw
@@ -264,7 +269,7 @@ const (
 
 func Supported(model string) bool {
 	switch model {
-	case ModelAqaraG2, ModelIMILABA1, ModelLoockV1, ModelXiaobai, ModelXiaofang:
+	case ModelAqaraG2, ModelIMILABA1, ModelLoockV1, ModelXiaobai, ModelXiaofang, ModelMijiaV1:
 		return true
 	}
 	return false
