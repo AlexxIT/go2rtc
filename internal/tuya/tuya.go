@@ -19,6 +19,9 @@ func Init() {
 	streams.HandleFunc("tuya", func(source string) (core.Producer, error) {
 		return tuya.Dial(source)
 	})
+	streams.HandleFunc("tuya-lan", func(source string) (core.Producer, error) {
+		return tuya.Dial(source)
+	})
 
 	api.HandleFunc("api/tuya", apiTuya)
 }
