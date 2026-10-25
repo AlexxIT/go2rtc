@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/app"
@@ -166,7 +167,24 @@ func getMissURL(url *url.URL) (string, error) {
 		if strings.Contains(err.Error(), "no available vendor support") {
 			return getLegacyURL(url)
 		}
-		return "", err
+		// Battery cameras (e.g. midr.camera.bw300/bw400) power off their media
+		// subsystem when idle, and the cloud answers with a device rpc error.
+		// Wake the device up and retry the request until it answers.
+		if strings.Contains(err.Error(), "rpc response") && strings.Contains(query.Get("model"), "midr.camera.") {
+			if werr := wakeUpBanya(url); werr == nil {
+				for i := 0; i < 15; i++ {
+					time.Sleep(time.Second)
+					if res, err = cloudUserRequest(url.User, "/v2/device/miss_get_vendor", params); err == nil {
+						// Give the media subsystem a moment to start listening.
+						time.Sleep(3 * time.Second)
+						break
+					}
+				}
+			}
+		}
+		if err != nil {
+			return "", err
+		}
 	}
 
 	var v struct {
@@ -214,6 +232,28 @@ func getVendorName(i byte) string {
 func wakeUpCamera(url *url.URL) error {
 	const params = `{"id":1,"method":"wakeup","params":{"video":"1"}}`
 	did := url.Query().Get("did")
+	_, err := cloudUserRequest(url.User, "/home/rpc/"+did, params)
+	return err
+}
+
+// wakeUpBanya wake up battery cameras with banya-ipc service (midr.camera.*).
+// Writing the night-shot property (siid=12, piid=1) boots the media subsystem.
+// The device stays awake for about a minute after the last request.
+func wakeUpBanya(url *url.URL) error {
+	did := url.Query().Get("did")
+
+	// Read the current value to write it back without changing the setting.
+	value := byte(0)
+	if res, err := cloudUserRequest(url.User, "/home/rpc/"+did, fmt.Sprintf(`{"id":1,"method":"get_properties","params":[{"did":"%s","siid":12,"piid":1}]}`, did)); err == nil {
+		var v []struct {
+			Value byte `json:"value"`
+		}
+		if json.Unmarshal(res, &v) == nil && len(v) > 0 {
+			value = v[0].Value
+		}
+	}
+
+	params := fmt.Sprintf(`{"id":2,"method":"set_properties","params":[{"did":"%s","siid":12,"piid":1,"value":%d}]}`, did, value)
 	_, err := cloudUserRequest(url.User, "/home/rpc/"+did, params)
 	return err
 }
