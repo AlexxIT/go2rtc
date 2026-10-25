@@ -4,13 +4,17 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/stretchr/testify/require"
 )
 
 func TestApiSchemes(t *testing.T) {
+	SetReady()
+
 	// Setup: Register some test handlers and redirects
 	HandleFunc("rtsp", func(url string) (core.Producer, error) { return nil, nil })
 	HandleFunc("rtmp", func(url string) (core.Producer, error) { return nil, nil })
@@ -38,6 +42,8 @@ func TestApiSchemes(t *testing.T) {
 }
 
 func TestApiSchemesNoDuplicates(t *testing.T) {
+	SetReady()
+
 	// Setup: Register a scheme in both handlers and redirects
 	HandleFunc("duplicate", func(url string) (core.Producer, error) { return nil, nil })
 	RedirectFunc("duplicate", func(url string) (string, error) { return "", nil })
@@ -63,4 +69,47 @@ func TestApiSchemesNoDuplicates(t *testing.T) {
 
 	// Should only appear once
 	require.Equal(t, 1, count, "scheme 'duplicate' should appear exactly once")
+}
+
+func TestApiSchemesWaitsForReady(t *testing.T) {
+	oldReady := ready
+	oldReadyOnce := readyOnce
+	ready = make(chan struct{})
+	readyOnce = sync.Once{}
+	t.Cleanup(func() {
+		ready = oldReady
+		readyOnce = oldReadyOnce
+	})
+
+	HandleFunc("waittest", func(url string) (core.Producer, error) { return nil, nil })
+
+	req := httptest.NewRequest("GET", "/api/schemes", nil)
+	w := httptest.NewRecorder()
+	done := make(chan struct{})
+
+	go func() {
+		apiSchemes(w, req)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		t.Fatal("apiSchemes returned before streams became ready")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	SetReady()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("apiSchemes did not return after streams became ready")
+	}
+
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var schemes []string
+	err := json.Unmarshal(w.Body.Bytes(), &schemes)
+	require.NoError(t, err)
+	require.Contains(t, schemes, "waittest")
 }

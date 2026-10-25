@@ -177,5 +177,7 @@ func apiPreload(w http.ResponseWriter, r *http.Request) {
 }
 
 func apiSchemes(w http.ResponseWriter, r *http.Request) {
+	// Wait until all module Init() calls finish in main.
+	WaitReady()
 	api.ResponseJSON(w, SupportedSchemes())
 }
