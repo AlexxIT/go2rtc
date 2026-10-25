@@ -4,7 +4,7 @@
 # only debian 13 (trixie) has latest ffmpeg
 # https://packages.debian.org/trixie/ffmpeg
 ARG DEBIAN_VERSION="trixie-slim"
-ARG GO_VERSION="1.25-bookworm"
+ARG GO_VERSION="1.27-trixie"
 
 
 # 1. Build go2rtc binary
