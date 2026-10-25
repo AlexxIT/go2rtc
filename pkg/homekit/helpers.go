@@ -39,6 +39,9 @@ func videoToMedia(codecs []camera.VideoCodecConfiguration) *core.Media {
 var audioCodecs = [...]string{core.CodecPCMU, core.CodecPCMA, core.CodecELD, core.CodecOpus}
 var audioSampleRates = [...]uint32{8000, 16000, 24000}
 
+// audioRTPTime - requested audio packet time, ms
+const audioRTPTime = 20
+
 func audioToMedia(codecs []camera.AudioCodecConfiguration) *core.Media {
 	media := &core.Media{
 		Kind: core.KindAudio, Direction: core.DirectionRecvonly,
@@ -140,7 +143,7 @@ func trackToAudio(track *core.Receiver, audio0 *camera.AudioCodecConfiguration) 
 			{
 				Channels:   channels,
 				SampleRate: []byte{sampleRate},
-				RTPTime:    []uint8{20},
+				RTPTime:    []uint8{audioRTPTime},
 			},
 		},
 	}

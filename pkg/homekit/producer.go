@@ -10,6 +10,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/hap"
 	"github.com/AlexxIT/go2rtc/pkg/hap/camera"
+	"github.com/AlexxIT/go2rtc/pkg/opus"
 	"github.com/AlexxIT/go2rtc/pkg/srtp"
 	"github.com/pion/rtp"
 )
@@ -158,7 +159,11 @@ func (c *Client) Start() error {
 	}
 
 	if c.audioSession.OnReadRTP != nil {
-		c.audioSession.OnReadRTP = timekeeper(c.audioSession.OnReadRTP)
+		if audioTrack != nil && audioTrack.Codec.Name == core.CodecOpus && audioTrack.Codec.ClockRate != 0 {
+			c.audioSession.OnReadRTP = timekeeperOpus(c.audioSession.OnReadRTP, audioTrack.Codec.ClockRate, time.Now)
+		} else {
+			c.audioSession.OnReadRTP = timekeeper(c.audioSession.OnReadRTP)
+		}
 	}
 
 	<-deadline.C
@@ -240,4 +245,93 @@ func timekeeper(handler core.HandlerFunc) core.HandlerFunc {
 
 		handler(packet)
 	}
+}
+
+const (
+	// accepted burst of the camera audio before dropping packets
+	timekeeperMaxAhead = 250 * time.Millisecond
+	// gap in the camera audio after which timestamps jump to real time
+	timekeeperMaxBehind = time.Second
+	// longer sequence gaps are not counted as lost packets (reordering, restart)
+	timekeeperMaxLost = 50
+)
+
+// timekeeperOpus rewrites the timestamps of the camera Opus audio and drops overflow packets.
+// Unlike timekeeper (fixed 480 samples @ 16 kHz per packet), the duration of each packet
+// comes from its TOC (RFC 6716), lost packets are counted and timestamps use the track clock rate.
+func timekeeperOpus(handler core.HandlerFunc, clockRate uint32, now func() time.Time) core.HandlerFunc {
+	rate := uint64(clockRate)
+
+	var start time.Time
+	var send time.Duration // duration of the audio already sent
+	var ts uint32
+	var seq uint16
+
+	return func(packet *rtp.Packet) {
+		if len(packet.Payload) == 0 {
+			return
+		}
+
+		dur := opusDuration(packet.Payload)
+		if dur == 0 {
+			dur = audioRTPTime * time.Millisecond // invalid TOC: requested packet time
+		}
+
+		t := now()
+
+		lost := packet.SequenceNumber - seq - 1
+		seq = packet.SequenceNumber
+
+		if start.IsZero() {
+			start = t
+		} else {
+			// lost packets: their time passes, as if they had been sent
+			if lost > 0 && lost <= timekeeperMaxLost {
+				send += time.Duration(lost) * dur
+				ts += uint32(uint64(lost) * uint64(dur) * rate / uint64(time.Second))
+			}
+
+			elapsed := t.Sub(start)
+			if send > elapsed+timekeeperMaxAhead {
+				return // drop overflow packet
+			}
+			if gap := elapsed - send; gap > timekeeperMaxBehind {
+				send += gap
+				ts += uint32(uint64(gap/time.Millisecond) * rate / 1000)
+			}
+		}
+
+		packet.Timestamp = ts
+
+		send += dur
+		ts += uint32(uint64(dur) * rate / uint64(time.Second))
+
+		handler(packet)
+	}
+}
+
+// opusDuration returns the audio duration of an Opus packet from its TOC (RFC 6716, 3.1),
+// or zero for an invalid packet
+func opusDuration(payload []byte) time.Duration {
+	if len(payload) == 0 {
+		return 0
+	}
+
+	header := opus.UnmarshalHeader(payload)
+
+	frames := time.Duration(header.Frames)
+	if header.Frames == 0xFF {
+		// code 3: the number of frames is in the second byte (1..48)
+		if len(payload) < 2 {
+			return 0
+		}
+		if frames = time.Duration(payload[1] & 0b111111); frames == 0 || frames > 48 {
+			return 0
+		}
+	}
+
+	if dur := header.FrameSize * frames; dur <= 120*time.Millisecond {
+		return dur
+	}
+	return 0
 }
