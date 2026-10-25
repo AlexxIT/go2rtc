@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strconv"
 
 	"github.com/AlexxIT/go2rtc/pkg/tutk"
 	"github.com/AlexxIT/go2rtc/pkg/xiaomi/crypto"
@@ -92,6 +93,8 @@ type Client struct {
 	*tutk.Conn
 	key   []byte
 	model string
+	// wantHeight: picture height the requested quality should give (0 = unknown).
+	wantHeight uint16
 }
 
 func (c *Client) Version() string {
@@ -134,13 +137,8 @@ func (c *Client) StartMedia(video, audio string) error {
 	switch c.model {
 	case ModelAqaraG2:
 		// 0 - 1920x1080, 1 - 1280x720, 2 - ?
-		switch video {
-		case "", "fhd":
-			video = "0"
-		case "hd":
-			video = "1"
-		case "sd":
-			video = "2"
+		if q, ok := g2Quality(video); ok {
+			video, c.wantHeight = strconv.Itoa(q.channel), q.height
 		}
 
 		return errors.Join(
@@ -268,4 +266,23 @@ func Supported(model string) bool {
 		return true
 	}
 	return false
+}
+
+type g2Level struct {
+	name    string
+	channel int
+	height  uint16
+}
+
+// g2Quality maps fhd/hd/sd (or the channel number) to the camera's channel and its picture height.
+func g2Quality(s string) (g2Level, bool) {
+	switch s {
+	case "", "fhd", "0":
+		return g2Level{"fhd", 0, 1080}, true
+	case "hd", "1":
+		return g2Level{"hd", 1, 720}, true
+	case "sd", "2":
+		return g2Level{"sd", 2, 360}, true
+	}
+	return g2Level{}, false
 }
