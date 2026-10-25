@@ -55,7 +55,7 @@ func (c *Conn) Read(p []byte) (n int, err error) {
 }
 
 func encodeFLV(b []byte, msgType byte, time uint32, payload []byte) {
-	_ = b[4+11]
+	_ = b[4+10] // bounds check hint to compiler; see golang.org/issue/14808
 
 	b[0] = 0
 	b[1] = 0
