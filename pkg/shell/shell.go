@@ -37,7 +37,11 @@ func QuoteSplit(s string) []string {
 }
 
 func RunUntilSignal() {
+	println("exit with signal:", WaitSignal().String())
+}
+
+func WaitSignal() os.Signal {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-	println("exit with signal:", (<-sigs).String())
+	return <-sigs
 }
