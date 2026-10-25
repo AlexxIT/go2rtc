@@ -55,9 +55,10 @@ func Marshal(v any) ([]byte, error) {
 	return nil, errors.New("tlv8: not implemented: " + kind.String())
 }
 
-// separator the most confusing meaning in the documentation.
-// It can have a value of 0x00 or 0xFF or even 0x05.
-const separator = 0xFF
+// separator between repeated TLV items. Real HomeKit accessories (and the
+// golden dumps in accessory_test) use type 0x00 with length 0. Unmarshal still
+// accepts 0x00, 0xFF and other values for interoperability.
+const separator = 0x00
 
 func appendSlice(b []byte, value reflect.Value) ([]byte, error) {
 	for i := 0; i < value.Len(); i++ {
@@ -100,6 +101,12 @@ func appendValue(b []byte, tag byte, value reflect.Value) ([]byte, error) {
 	var err error
 
 	switch value.Kind() {
+	case reflect.Bool:
+		if value.Bool() {
+			return append(b, tag, 1, 1), nil
+		}
+		return append(b, tag, 1, 0), nil
+
 	case reflect.Uint8:
 		v := value.Uint()
 		return append(b, tag, 1, byte(v)), nil
@@ -122,6 +129,11 @@ func appendValue(b []byte, tag byte, value reflect.Value) ([]byte, error) {
 
 	case reflect.String:
 		v := value.String()
+		if len(v) == 0 {
+			// Skip empty strings so we never emit a zero-length TLV
+			// (length 0 is reserved as an item separator)
+			return b, nil
+		}
 		l := len(v) // support "big" string
 		for ; l > 255; l -= 255 {
 			b = append(b, tag, 255)
@@ -192,8 +204,9 @@ func UnmarshalReader(r io.Reader, n int64, v any) error {
 }
 
 func Unmarshal(data []byte, v any) error {
+	// Empty TLV is valid (e.g. write-response with no fields / empty event list)
 	if len(data) == 0 {
-		return errors.New("tlv8: unmarshal zero data")
+		return nil
 	}
 
 	value := reflect.ValueOf(v)
@@ -296,6 +309,12 @@ func unmarshalStruct(b []byte, value reflect.Value) error {
 
 func unmarshalValue(v []byte, value reflect.Value) error {
 	switch value.Kind() {
+	case reflect.Bool:
+		if len(v) != 1 {
+			return errors.New("tlv8: wrong size: " + value.Type().Name())
+		}
+		value.SetBool(v[0] != 0)
+
 	case reflect.Uint8:
 		if len(v) != 1 {
 			return errors.New("tlv8: wrong size: " + value.Type().Name())

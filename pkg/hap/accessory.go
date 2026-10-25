@@ -25,38 +25,70 @@ var PW = []string{"pw"}
 var PRPW = []string{"pr", "pw"}
 var EVPRPW = []string{"ev", "pr", "pw"}
 var EVPR = []string{"ev", "pr"}
+// PRPWWR is paired-read/write with write-response (HAP "wr")
+var PRPWWR = []string{"pr", "pw", "wr"}
+// PWWR is paired-write with write-response
+var PWWR = []string{"pw", "wr"}
+// EVPRPWWR is event + paired-read/write + write-response
+var EVPRPWWR = []string{"ev", "pr", "pw", "wr"}
+// TWPRPW is timed-write + paired-read/write (admin-only traits handled by controller)
+var TWPRPW = []string{"pr", "pw", "tw"}
+// EVTWPRPW is event + timed-write + paired-read/write
+var EVTWPRPW = []string{"ev", "pr", "pw", "tw"}
 
 type Accessory struct {
 	AID      uint8      `json:"aid"` // 150 unique accessories per bridge
 	Services []*Service `json:"services"`
 }
 
+// nextLongIID starts high enough to never collide with packed 3-char IIDs
+// (packed form is ANSSSCCC, e.g. 0x11110000 for CameraRTPStreamManagement)
+const nextLongIIDBase uint64 = 0x80000000
+
 func (a *Accessory) InitIID() {
 	serviceN := map[string]byte{}
+	nextLong := nextLongIIDBase
+
 	for _, service := range a.Services {
-		if len(service.Type) > 3 {
+		// Short HAP types (legacy, max 3 hex chars) keep packed IIDs so existing
+		// pairings stay valid. Longer types from the HKSV open-source guide
+		// (4 hex chars, e.g. 8033) use sequential IIDs in a high range.
+		if len(service.Type) <= 3 {
+			n := serviceN[service.Type] + 1
+			serviceN[service.Type] = n
+
+			if n > 15 {
+				panic(n)
+			}
+
+			// ServiceID   = ANSSS000
+			s := fmt.Sprintf("%x%x%03s000", a.AID, n, service.Type)
+			service.IID, _ = strconv.ParseUint(s, 16, 64)
+
+			for _, character := range service.Characters {
+				if len(character.Type) > 3 {
+					// Mix of short service + long character: sequential under service
+					character.IID = nextLong
+					nextLong++
+					continue
+				}
+
+				// CharacterID = ANSSSCCC
+				character.IID, _ = strconv.ParseUint(character.Type, 16, 64)
+				character.IID += service.IID
+			}
+			continue
+		}
+
+		if len(service.Type) > 8 {
 			panic(service.Type)
 		}
 
-		n := serviceN[service.Type] + 1
-		serviceN[service.Type] = n
-
-		if n > 15 {
-			panic(n)
-		}
-
-		// ServiceID   = ANSSS000
-		s := fmt.Sprintf("%x%x%03s000", a.AID, n, service.Type)
-		service.IID, _ = strconv.ParseUint(s, 16, 64)
-
+		service.IID = nextLong
+		nextLong++
 		for _, character := range service.Characters {
-			if len(character.Type) > 3 {
-				panic(character.Type)
-			}
-
-			// CharacterID = ANSSSCCC
-			character.IID, _ = strconv.ParseUint(character.Type, 16, 64)
-			character.IID += service.IID
+			character.IID = nextLong
+			nextLong++
 		}
 	}
 }
