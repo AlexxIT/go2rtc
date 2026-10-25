@@ -24,12 +24,15 @@ type Conn struct {
 	// public
 
 	Backchannel bool
-	Media       string
-	OnClose     func() error
-	PacketSize  uint16
-	SessionName string
-	Timeout     int
-	Transport   string // custom transport support, ex. RTSP over WebSocket
+	// KeepaliveMethod is the RTSP method used to refresh the session,
+	// not to be confused with the unexported keepalive interval below.
+	KeepaliveMethod KeepaliveMethod
+	Media           string
+	OnClose         func() error
+	PacketSize      uint16
+	SessionName     string
+	Timeout         int
+	Transport       string // custom transport support, ex. RTSP over WebSocket
 
 	URL *url.URL
 
@@ -54,16 +57,38 @@ type Conn struct {
 }
 
 const (
-	ProtoRTSP      = "RTSP/1.0"
-	MethodOptions  = "OPTIONS"
-	MethodSetup    = "SETUP"
-	MethodTeardown = "TEARDOWN"
-	MethodDescribe = "DESCRIBE"
-	MethodPlay     = "PLAY"
-	MethodPause    = "PAUSE"
-	MethodAnnounce = "ANNOUNCE"
-	MethodRecord   = "RECORD"
+	ProtoRTSP          = "RTSP/1.0"
+	MethodOptions      = "OPTIONS"
+	MethodGetParameter = "GET_PARAMETER"
+	MethodSetup        = "SETUP"
+	MethodTeardown     = "TEARDOWN"
+	MethodDescribe     = "DESCRIBE"
+	MethodPlay         = "PLAY"
+	MethodPause        = "PAUSE"
+	MethodAnnounce     = "ANNOUNCE"
+	MethodRecord       = "RECORD"
 )
+
+// KeepaliveMethod selects the RTSP method used to refresh the session.
+// RFC 2326 permits either OPTIONS or GET_PARAMETER, and some servers answer
+// 200 OK to OPTIONS without treating it as a refresh, letting the session
+// expire while the client believes it is alive.
+type KeepaliveMethod byte
+
+const (
+	// KeepaliveOptions refreshes the session with OPTIONS. This is the default.
+	KeepaliveOptions KeepaliveMethod = iota
+	// KeepaliveGetParameter refreshes the session with GET_PARAMETER.
+	KeepaliveGetParameter
+)
+
+// String returns the RTSP method name.
+func (m KeepaliveMethod) String() string {
+	if m == KeepaliveGetParameter {
+		return MethodGetParameter
+	}
+	return MethodOptions
+}
 
 type State byte
 
@@ -156,7 +181,7 @@ func (c *Conn) handleKeepalive(ctx context.Context, d time.Duration) {
 	for {
 		select {
 		case <-ticker.C:
-			req := &tcp.Request{Method: MethodOptions, URL: c.URL}
+			req := &tcp.Request{Method: c.KeepaliveMethod.String(), URL: c.URL}
 			if err := c.WriteRequest(req); err != nil {
 				return
 			}
