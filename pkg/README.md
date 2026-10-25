@@ -28,6 +28,7 @@ Some formats and protocols go2rtc supports exclusively. They have no equivalent 
 | Net (pub)  | rtsp         | rtsp, ws        | rtsp    | h264, hevc, aac, pcm*, opus     | pcm*, opus          | `rtsp:`       |
 | Net (pub)  | webrtc*      | webrtc          | webrtc  | h264, pcm_alaw, pcm_mulaw, opus | pcm_alaw, pcm_mulaw | `webrtc:`     |
 | Net (pub)  | yuv4mpegpipe | http, tcp, pipe | http    | rawvideo                        |                     | `http:`       |
+| Net (priv) | baichuan     | tcp, udp        |         | h264, hevc, aac, pcm_alaw       | pcm*                | `reolink:`    |
 | Net (priv) | bubble       | http            |         | h264, hevc, pcm_alaw            |                     | `bubble:`     |
 | Net (priv) | doorbird     | http            |         |                                 |                     | `doorbird:`   |
 | Net (priv) | dvrip        | tcp             |         | h264, hevc, pcm_alaw, pcm_mulaw | pcm_alaw            | `dvrip:`      |
