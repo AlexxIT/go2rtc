@@ -40,6 +40,19 @@ RTSP link with "normal" audio for any player: `rtsp://192.168.1.123:8554/aqara_g
 
 **This source is in active development!** Tested only with [Aqara Camera Hub G3](https://www.aqara.com/eu/product/camera-hub-g3) (both EU and CN versions).
 
+### Two-way audio
+
+If the camera supports **Opus** audio, the HomeKit source accepts two-way audio: any consumer that sends Opus audio to the stream (RTSP `?backchannel=1`, WebRTC with a microphone, or the [stream to camera](../streams/README.md#stream-to-camera) API) is played on the camera speaker. Cameras without Opus support are not affected.
+
+Two-way audio is enabled by default. Disable it with `#backchannel=0`:
+
+```yaml
+streams:
+  circleview: homekit://...#backchannel=0
+```
+
+Tested with Logitech Circle View (RTSP backchannel and stream to camera).
+
 ## HomeKit Server
 
 [`new in v1.7.0`](https://github.com/AlexxIT/go2rtc/releases/tag/v1.7.0)
