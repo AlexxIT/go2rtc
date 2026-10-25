@@ -13,10 +13,83 @@ func NewAccessory(manuf, model, name, serial, firmware string) *hap.Accessory {
 			ServiceCameraRTPStreamManagement(),
 			//hap.ServiceHAPProtocolInformation(),
 			ServiceMicrophone(),
+			ServiceSpeaker(),
 		},
 	}
 	acc.InitIID()
 	return acc
+}
+
+func NewHKSVAccessory(manuf, model, name, serial, firmware string) *hap.Accessory {
+	rtpStream := ServiceCameraRTPStreamManagement()
+	motionSensor := ServiceMotionSensor()
+	operatingMode := ServiceCameraOperatingMode()
+	recordingMgmt := ServiceCameraEventRecordingManagement()
+	dataStreamMgmt := ServiceDataStreamManagement()
+
+	acc := &hap.Accessory{
+		AID: hap.DeviceAID,
+		Services: []*hap.Service{
+			hap.ServiceAccessoryInformation(manuf, model, name, serial, firmware),
+			rtpStream,
+			ServiceMicrophone(),
+			ServiceSpeaker(),
+			motionSensor,
+			operatingMode,
+			recordingMgmt,
+			dataStreamMgmt,
+		},
+	}
+	acc.InitIID()
+
+	// HAP-NodeJS: only RecordingManagement links to DataStreamManagement
+	recordingMgmt.Linked = []int{int(dataStreamMgmt.IID)}
+
+	return acc
+}
+
+func NewHKSVDoorbellAccessory(manuf, model, name, serial, firmware string) *hap.Accessory {
+	rtpStream := ServiceCameraRTPStreamManagement()
+	motionSensor := ServiceMotionSensor()
+	operatingMode := ServiceCameraOperatingMode()
+	recordingMgmt := ServiceCameraEventRecordingManagement()
+	dataStreamMgmt := ServiceDataStreamManagement()
+	doorbell := ServiceDoorbell()
+
+	acc := &hap.Accessory{
+		AID: hap.DeviceAID,
+		Services: []*hap.Service{
+			hap.ServiceAccessoryInformation(manuf, model, name, serial, firmware),
+			rtpStream,
+			ServiceMicrophone(),
+			ServiceSpeaker(),
+			motionSensor,
+			operatingMode,
+			recordingMgmt,
+			dataStreamMgmt,
+			doorbell,
+		},
+	}
+	acc.InitIID()
+
+	// HAP-NodeJS: only RecordingManagement links to DataStreamManagement
+	recordingMgmt.Linked = []int{int(dataStreamMgmt.IID)}
+
+	return acc
+}
+
+func ServiceSpeaker() *hap.Service {
+	return &hap.Service{
+		Type: "113", // 'Speaker'
+		Characters: []*hap.Character{
+			{
+				Type:   "11A",
+				Format: hap.FormatBool,
+				Value:  0,
+				Perms:  hap.EVPRPW,
+			},
+		},
+	}
 }
 
 func ServiceMicrophone() *hap.Service {
