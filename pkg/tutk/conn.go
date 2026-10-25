@@ -10,6 +10,21 @@ import (
 )
 
 func Dial(host, uid, username, password string) (*Conn, error) {
+	return DialWithConfig(host, uid, username, password, nil)
+}
+
+func DialWithLocalAddr(host, uid, username, password string, localAddr *net.UDPAddr) (*Conn, error) {
+	return DialWithConfig(host, uid, username, password, &DialConfig{LocalAddr: localAddr})
+}
+
+type PreConnectFunc func(conn *net.UDPConn, addr *net.UDPAddr) error
+
+type DialConfig struct {
+	LocalAddr  *net.UDPAddr
+	PreConnect PreConnectFunc
+}
+
+func DialWithConfig(host, uid, username, password string, cfg *DialConfig) (*Conn, error) {
 	addr, err := net.ResolveUDPAddr("udp", host)
 	if err != nil {
 		// Default port for listening incoming LAN connections.
@@ -17,12 +32,24 @@ func Dial(host, uid, username, password string) (*Conn, error) {
 		addr = &net.UDPAddr{IP: net.ParseIP(host), Port: 32761}
 	}
 
-	udpConn, err := net.ListenUDP("udp", nil)
+	var localAddr *net.UDPAddr
+	if cfg != nil {
+		localAddr = cfg.LocalAddr
+	}
+
+	udpConn, err := net.ListenUDP("udp", localAddr)
 	if err != nil {
 		return nil, err
 	}
 
 	c := &Conn{UDPConn: udpConn, addr: addr}
+
+	if cfg != nil && cfg.PreConnect != nil {
+		if err = cfg.PreConnect(udpConn, addr); err != nil {
+			_ = c.Close()
+			return nil, err
+		}
+	}
 
 	sid := GenSessionID()
 
