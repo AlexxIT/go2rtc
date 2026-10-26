@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-func Dial(host, transport string) (*Conn, error) {
+func Dial(host, transport string, popSize int) (*Conn, error) {
 	conn, err := handshake(host, transport)
 	if err != nil {
 		return nil, err
@@ -20,11 +20,15 @@ func Dial(host, transport string) (*Conn, error) {
 
 	_, isTCP := conn.(*tcpConn)
 
+	if popSize <= 0 {
+		popSize = 256
+	}
+
 	c := &Conn{
 		Conn:  conn,
 		isTCP: isTCP,
 		channels: [4]*dataChannel{
-			newDataChannel(0, 10), nil, newDataChannel(250, 100), nil,
+			newDataChannel(0, 10), nil, newDataChannel(250, popSize), nil,
 		},
 	}
 	go c.worker()
@@ -445,7 +449,16 @@ func (c *dataChannel) Push(b []byte) error {
 		select {
 		case c.popBuf <- c.waitData[:c.waitSize]:
 		default:
-			return fmt.Errorf("pop buffer is full")
+			// Slow consumer or retransmit burst. Drop the oldest packet
+			// instead of killing the whole connection (stream restart).
+			select {
+			case <-c.popBuf:
+			default:
+			}
+			select {
+			case c.popBuf <- c.waitData[:c.waitSize]:
+			default: // consumer raced us, drop the new packet
+			}
 		}
 
 		c.waitData = c.waitData[c.waitSize:]
