@@ -54,9 +54,17 @@ func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiv
 	// important to send original codec for valid IsRTP check
 	sender.Handler = c.packetWriter(track.Codec, channel, codec.PayloadType)
 
-	if c.mode == core.ModeActiveProducer && track.Codec.Name == core.CodecPCMA {
+	if c.mode == core.ModeActiveProducer {
 		// Fix Reolink Doorbell https://github.com/AlexxIT/go2rtc/issues/331
-		sender.Handler = pcm.RepackG711(true, sender.Handler)
+		switch track.Codec.Name {
+		case core.CodecPCMA:
+			sender.Handler = pcm.RepackG711(true, sender.Handler)
+		case core.CodecPCMU:
+			// Newer Reolink doorbell firmware negotiates PCMU instead of PCMA.
+			// It needs the same repack, but with monotonic timestamps: with
+			// zeroTS the camera replays frames and the audio doubles.
+			sender.Handler = pcm.RepackG711(false, sender.Handler)
+		}
 	}
 
 	sender.HandleRTP(track)
