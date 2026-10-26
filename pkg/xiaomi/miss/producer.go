@@ -3,6 +3,7 @@ package miss
 import (
 	"fmt"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -14,7 +15,8 @@ import (
 
 type Producer struct {
 	core.Connection
-	client *Client
+	client      *Client
+	videoPacing time.Duration
 }
 
 func Dial(rawURL string) (core.Producer, error) {
@@ -38,6 +40,11 @@ func Dial(rawURL string) (core.Producer, error) {
 		return nil, err
 	}
 
+	pacingMS, _ := strconv.Atoi(query.Get("pacing"))
+	if pacingMS < 0 || pacingMS > 5000 {
+		pacingMS = 0
+	}
+
 	return &Producer{
 		Connection: core.Connection{
 			ID:         core.NewID(),
@@ -48,7 +55,8 @@ func Dial(rawURL string) (core.Producer, error) {
 			Medias:     medias,
 			Transport:  client,
 		},
-		client: client,
+		client:      client,
+		videoPacing: time.Duration(pacingMS) * time.Millisecond,
 	}, nil
 }
 
@@ -129,6 +137,11 @@ const timestamp40ms = 48000 * 0.040
 
 func (p *Producer) Start() error {
 	var audioTS uint32
+	var pacer *videoPacer
+	if p.videoPacing > 0 {
+		pacer = newVideoPacer(p.videoPacing)
+		defer pacer.Close()
+	}
 
 	for {
 		_ = p.client.SetDeadline(time.Now().Add(10 * time.Second))
@@ -186,7 +199,11 @@ func (p *Producer) Start() error {
 
 		for _, recv := range p.Receivers {
 			if recv.Codec.Name == name {
-				recv.WriteRTP(pkt2)
+				if pacer != nil && (name == core.CodecH264 || name == core.CodecH265) {
+					pacer.Write(recv, pkt2)
+				} else {
+					recv.WriteRTP(pkt2)
+				}
 				break
 			}
 		}
