@@ -192,6 +192,12 @@ func milestoneClient(rawURL string, query url.Values) (core.Producer, error) {
 		return nil, err
 	}
 
+	defer func() {
+		if err != nil {
+			_ = pc.Close()
+		}
+	}()
+
 	prod := webrtc.NewConn(pc)
 	prod.FormatName = "webrtc/milestone"
 	prod.Mode = core.ModeActiveProducer
