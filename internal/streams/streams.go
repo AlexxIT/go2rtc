@@ -61,9 +61,13 @@ func New(name string, sources ...string) (*Stream, error) {
 		}
 	}
 
-	stream := NewStream(sources)
-
+	// stop active publishes on the old stream before replacing it
 	streamsMu.Lock()
+	if old, ok := streams[name]; ok {
+		old.StopAllPublish()
+	}
+
+	stream := NewStream(sources)
 	streams[name] = stream
 	streamsMu.Unlock()
 
@@ -152,6 +156,9 @@ func Get(name string) *Stream {
 func Delete(name string) {
 	streamsMu.Lock()
 	defer streamsMu.Unlock()
+	if s, ok := streams[name]; ok {
+		s.StopAllPublish()
+	}
 	delete(streams, name)
 }
 
