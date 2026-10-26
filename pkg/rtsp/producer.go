@@ -7,6 +7,13 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
+// ErrStartFromConn means Start() was called while the connection is still in
+// CONN state: dialed, but with no track set up. This usually happens when
+// DESCRIBE succeeded but the medias no longer match the existing receivers,
+// so SetupMedia was never called. internal/streams counts consecutive
+// occurrences and force-resets the producer.
+var ErrStartFromConn = errors.New("start from CONN state")
+
 func (c *Conn) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
 	core.Assert(media.Direction == core.DirectionRecvonly)
 
@@ -61,7 +68,7 @@ func (c *Conn) Start() (err error) {
 		case StateNone:
 			err = nil
 		case StateConn:
-			err = errors.New("start from CONN state")
+			err = ErrStartFromConn
 		case StateSetup:
 			switch c.mode {
 			case core.ModeActiveProducer:
