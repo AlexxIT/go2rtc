@@ -150,6 +150,13 @@ func asyncHandler(tr *ws.Transport, msg *ws.Message) (err error) {
 		offer.SDP = msg.String()
 	}
 
+	// new offer from the same remote peer - renegotiation of existing PeerConnection
+	if mode == core.ModePassiveConsumer {
+		if conn := getConn(tr); conn != nil && conn.IsReOffer(offer.SDP) {
+			return renegotiate(tr, stream, conn, offer.SDP, apiV2)
+		}
+	}
+
 	// create new PeerConnection instance
 	var pc *pion.PeerConnection
 	if offer.ICEServers == nil {
@@ -235,6 +242,56 @@ func asyncHandler(tr *ws.Transport, msg *ws.Message) (err error) {
 	sendAnswer.Done(nil)
 
 	asyncCandidates(tr, conn)
+
+	return nil
+}
+
+// getConn - get existing PeerConnection for this WebSocket transport
+func getConn(tr *ws.Transport) (conn *webrtc.Conn) {
+	tr.WithContext(func(ctx map[any]any) {
+		conn, _ = ctx["webrtc"].(*webrtc.Conn)
+	})
+	return
+}
+
+// renegotiate - process new offer for existing PeerConnection.
+// For example, browser changes audio direction from recvonly to sendrecv for two-way audio.
+func renegotiate(tr *ws.Transport, stream *streams.Stream, conn *webrtc.Conn, offer string, apiV2 bool) error {
+	log.Trace().Msgf("[webrtc] renegotiation offer:\n%s", offer)
+
+	medias, err := conn.SetReOffer(offer)
+	if err != nil {
+		log.Warn().Err(err).Caller().Send()
+		return err
+	}
+
+	// match only new medias, already matched medias continue to work
+	if len(medias) > 0 {
+		if err = stream.AddConsumerMedias(conn, webrtc.WithResampling(medias)); err != nil {
+			// not fatal, answer anyway, so remote peer can continue with old medias
+			log.Debug().Err(err).Msg("[webrtc] renegotiation add medias")
+		}
+	}
+
+	answer, err := conn.GetAnswer()
+	log.Trace().Msgf("[webrtc] renegotiation answer\n%s", answer)
+
+	if err != nil {
+		log.Error().Err(err).Caller().Send()
+		return err
+	}
+
+	if apiV2 {
+		desc := pion.SessionDescription{Type: pion.SDPTypeAnswer, SDP: answer}
+		tr.Write(&ws.Message{Type: "webrtc", Value: desc})
+	} else {
+		tr.Write(&ws.Message{Type: "webrtc/answer", Value: answer})
+	}
+
+	// resend candidates from config in case of ICE restart
+	for _, candidate := range GetCandidates() {
+		tr.Write(&ws.Message{Type: "webrtc/candidate", Value: candidate})
+	}
 
 	return nil
 }

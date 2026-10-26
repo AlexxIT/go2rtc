@@ -204,6 +204,11 @@ func (c *Conn) getMediaCodec(remote *webrtc.TrackRemote) (*core.Media, *core.Cod
 		}
 	}
 
+	// consumer can get unknown track after renegotiation, skip it instead of crashing
+	if c.Mode == core.ModePassiveConsumer {
+		return nil, nil
+	}
+
 	// fix moment when core.ModePassiveProducer or core.ModeActiveProducer
 	// sends new codec with new payload type to same media
 	// check GetTrack

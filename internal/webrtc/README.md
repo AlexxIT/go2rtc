@@ -98,6 +98,12 @@ If an external connection via STUN is used:
   - https://habr.com/ru/companies/flashphoner/articles/480006/
   - https://www.youtube.com/watch?v=FXVg2ckuKfs
 
+### Renegotiation
+
+The WebSocket API (`/api/ws?src=camera1`) supports renegotiation of an established connection. Send a new `webrtc` or `webrtc/offer` message from the same `RTCPeerConnection` over the same WebSocket, and go2rtc will answer it for the existing connection instead of creating a new one (detected by the same DTLS fingerprint).
+
+This allows, for example, starting with receive-only audio and enabling two-way audio later (change the audio transceiver direction from `recvonly` to `sendrecv`, or add a microphone track) without restarting the video. Existing media keeps working; only new media is matched with the stream sources.
+
 ### Configuration suggestions
 
 - by default, WebRTC uses both TCP and UDP on port 8555 for connections
