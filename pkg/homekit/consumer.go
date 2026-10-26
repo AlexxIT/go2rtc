@@ -198,7 +198,15 @@ func (c *Consumer) AddTrack(media *core.Media, codec *core.Codec, track *core.Re
 		sender.Handler = opus.RepackToHAP(c.audioRTPTime, sender.Handler)
 	}
 
-	sender.HandleRTP(track)
+	// Video starts at the last keyframe: a controller cannot show anything
+	// before one, and otherwise waits up to a whole GOP for the next.
+	if codec.Name == core.CodecH264 {
+		track.KeepGOP(h264.KeyframeTest(track.Codec))
+		sender.WithParentFromKeyframe(track)
+		sender.Start()
+	} else {
+		sender.HandleRTP(track)
+	}
 	c.Senders = append(c.Senders, sender)
 	return nil
 }
