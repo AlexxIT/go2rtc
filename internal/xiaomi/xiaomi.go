@@ -81,7 +81,20 @@ func cloudRequest(userID, region, apiURL, params string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return cloud.Request(GetBaseURL(region), apiURL, params, nil)
+	res, err := cloud.Request(GetBaseURL(region), apiURL, params, nil)
+	if err != nil && strings.Contains(err.Error(), "401") {
+		// serviceToken expired: drop the cached Cloud and force a re-login
+		// via passToken before retrying the request once.
+		cloudsMu.Lock()
+		delete(clouds, userID)
+		cloudsMu.Unlock()
+		cloud, err = getCloud(userID)
+		if err != nil {
+			return nil, err
+		}
+		return cloud.Request(GetBaseURL(region), apiURL, params, nil)
+	}
+	return res, err
 }
 
 func cloudUserRequest(user *url.Userinfo, apiURL, params string) ([]byte, error) {
