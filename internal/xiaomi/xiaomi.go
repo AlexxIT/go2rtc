@@ -95,7 +95,7 @@ func getCameraURL(url *url.URL) (string, error) {
 
 	// It is not known which models need to be awakened.
 	// Probably all the doorbells and all the battery cameras.
-	if strings.Contains(model, ".cateye.") {
+	if strings.Contains(model, ".cateye.") || strings.Contains(model, ".gateway.") {
 		_ = wakeUpCamera(url)
 	}
 
