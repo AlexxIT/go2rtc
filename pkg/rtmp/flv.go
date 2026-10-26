@@ -29,23 +29,31 @@ func (c *Conn) Producer() (*flv.Producer, error) {
 func (c *Conn) Read(p []byte) (n int, err error) {
 	// 1. Check temporary tempbuffer
 	if len(c.rdBuf) == 0 {
-		msgType, timeMS, payload, err2 := c.readMessage()
-		if err2 != nil {
-			return 0, err2
+		for {
+			msgType, timeMS, payload, err2 := c.readMessage()
+			if err2 != nil {
+				return 0, err2
+			}
+
+			// Ignore RTMP control messages (Type 1..6) which are not FLV tags
+			if msgType < 8 {
+				continue
+			}
+
+			// previous tag size (4 byte) + header (11 byte) + payload
+			n = 4 + 11 + len(payload)
+
+			// 2. Check if the message fits in the buffer
+			if n <= len(p) {
+				encodeFLV(p, msgType, timeMS, payload)
+				return
+			}
+
+			// 3. Put the message into a temporary buffer
+			c.rdBuf = make([]byte, n)
+			encodeFLV(c.rdBuf, msgType, timeMS, payload)
+			break
 		}
-
-		// previous tag size (4 byte) + header (11 byte) + payload
-		n = 4 + 11 + len(payload)
-
-		// 2. Check if the message fits in the buffer
-		if n <= len(p) {
-			encodeFLV(p, msgType, timeMS, payload)
-			return
-		}
-
-		// 3. Put the message into a temporary buffer
-		c.rdBuf = make([]byte, n)
-		encodeFLV(c.rdBuf, msgType, timeMS, payload)
 	}
 
 	// 4. Send temporary buffer
@@ -55,7 +63,7 @@ func (c *Conn) Read(p []byte) (n int, err error) {
 }
 
 func encodeFLV(b []byte, msgType byte, time uint32, payload []byte) {
-	_ = b[4+11]
+	_ = b[4+10]
 
 	b[0] = 0
 	b[1] = 0

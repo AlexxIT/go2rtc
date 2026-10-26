@@ -78,8 +78,15 @@ func tcpHandle(netConn net.Conn) error {
 	switch rtmpConn.Intent {
 	case rtmp.CommandPlay:
 		stream := streams.Get(rtmpConn.App)
+		if stream == nil && rtmpConn.Stream != "" {
+			stream = streams.Get(rtmpConn.Stream)
+		}
 		if stream == nil {
-			return errors.New("stream not found: " + rtmpConn.App)
+			target := rtmpConn.App
+			if rtmpConn.Stream != "" {
+				target += "/" + rtmpConn.Stream
+			}
+			return errors.New("stream not found: " + target)
 		}
 
 		cons := flv.NewConsumer()
@@ -99,8 +106,15 @@ func tcpHandle(netConn net.Conn) error {
 
 	case rtmp.CommandPublish:
 		stream := streams.Get(rtmpConn.App)
+		if stream == nil && rtmpConn.Stream != "" {
+			stream = streams.Get(rtmpConn.Stream)
+		}
 		if stream == nil {
-			return errors.New("stream not found: " + rtmpConn.App)
+			target := rtmpConn.App
+			if rtmpConn.Stream != "" {
+				target += "/" + rtmpConn.Stream
+			}
+			return errors.New("stream not found: " + target)
 		}
 
 		if err = rtmpConn.WriteStart(); err != nil {
