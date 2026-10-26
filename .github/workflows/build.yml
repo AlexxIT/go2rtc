@@ -20,7 +20,7 @@ jobs:
 
       - name: Setup Go
         uses: actions/setup-go@v5
-        with: { go-version: '1.26' }
+        with: { go-version: '1.27' }
 
       - name: Build go2rtc_win64
         env: { GOOS: windows, GOARCH: amd64 }
