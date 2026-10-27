@@ -3,6 +3,7 @@ package miss
 import (
 	"fmt"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -18,13 +19,33 @@ type Producer struct {
 }
 
 func Dial(rawURL string) (core.Producer, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, err
+	}
+	query := u.Query()
+
+	var lastErr error
+	attempts := dialAttempts(query)
+	for i := 0; i < attempts; i++ {
+		producer, err := dial(rawURL, query)
+		if err == nil {
+			return producer, nil
+		}
+		lastErr = err
+		if i+1 < attempts {
+			time.Sleep(time.Duration(i+1) * time.Second)
+		}
+	}
+
+	return nil, lastErr
+}
+
+func dial(rawURL string, query url.Values) (core.Producer, error) {
 	client, err := NewClient(rawURL)
 	if err != nil {
 		return nil, err
 	}
-
-	u, _ := url.Parse(rawURL)
-	query := u.Query()
 
 	err = client.StartMedia(query.Get("channel"), query.Get("subtype"), query.Get("audio"))
 	if err != nil {
@@ -50,6 +71,25 @@ func Dial(rawURL string) (core.Producer, error) {
 		},
 		client: client,
 	}, nil
+}
+
+func dialAttempts(query url.Values) int {
+	s := query.Get("retries")
+	if s == "" {
+		s = query.Get("retry")
+	}
+	if s == "" {
+		return 1
+	}
+
+	n, err := strconv.Atoi(s)
+	if err != nil || n < 1 {
+		return 1
+	}
+	if n > 5 {
+		return 5
+	}
+	return n
 }
 
 func probe(client *Client, audio bool) ([]*core.Media, error) {
