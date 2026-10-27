@@ -17,6 +17,7 @@ const (
 	NALUTypePPS       = 34
 	NALUTypePrefixSEI = 39
 	NALUTypeSuffixSEI = 40
+	NALUTypeAP        = 48
 	NALUTypeFU        = 49
 )
 
