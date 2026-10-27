@@ -13,6 +13,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/ffmpeg"
+	"github.com/AlexxIT/go2rtc/pkg/homekit"
 	"github.com/rs/zerolog"
 )
 
@@ -55,6 +56,7 @@ func Init() {
 
 	device.Init(defaults["bin"])
 	hardware.Init(defaults["bin"])
+	homekit.SetFFmpegBin(defaults["bin"])
 }
 
 var defaults = map[string]string{
@@ -150,6 +152,8 @@ var defaults = map[string]string{
 }
 
 var log zerolog.Logger
+
+func Bin() string { return defaults["bin"] }
 
 // configTemplate - return template from config (defaults) if exist or return raw template
 func configTemplate(template string) string {
