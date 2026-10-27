@@ -534,7 +534,9 @@ func (c *Client) useDoorbellResolution() bool {
 }
 
 func (c *Client) hdFrameSize() uint8 {
-	if c.isFloodlight() {
+	// HL_BC uses the same wire resolution value (5) as the floodlight
+	// for its 2304x1296 stream; the usual 2K value (4) leaves it at 360p.
+	if c.isFloodlight() || c.model == "HL_BC" {
 		return FrameSizeFloodlight
 	}
 	if c.is2K() {
