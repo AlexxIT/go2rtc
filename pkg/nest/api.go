@@ -26,8 +26,26 @@ type API struct {
 	StreamToken          string
 	StreamExtensionToken string
 
+	key string // credentials cache key, used to refresh the OAuth token
+
+	// OnSessionLost is called (nil-safe) from the extend loop when the stream
+	// session could not be extended before it expired. The loop exits after
+	// calling it, so the owner should close the producer to trigger a re-dial.
+	OnSessionLost func(err error)
+
 	extendTimer *time.Timer
+	extendStop  chan struct{}
 }
+
+// Endpoints are variables so tests can point them at an httptest server.
+var (
+	tokenURL = "https://www.googleapis.com/oauth2/v4/token"
+	sdmURL   = "https://smartdevicemanagement.googleapis.com/v1/enterprises/"
+
+	// extendRetryDelays is the backoff used when extending the stream fails.
+	// The last value is reused for further attempts.
+	extendRetryDelays = []time.Duration{10 * time.Second, 20 * time.Second, 40 * time.Second}
+)
 
 type Auth struct {
 	AccessToken string
@@ -49,8 +67,12 @@ func NewAPI(clientID, clientSecret, refreshToken string) (*API, error) {
 	key := clientID + ":" + clientSecret + ":" + refreshToken
 	now := time.Now()
 
+	// The cache only stores the OAuth token. Each caller gets its own API
+	// instance, because the Stream* fields hold per-stream session state -
+	// multiple cameras sharing one instance overwrite each other's session
+	// and only the last one gets extended.
 	if api := cache[key]; api != nil && now.Before(api.ExpiresAt) {
-		return api, nil
+		return &API{Token: api.Token, ExpiresAt: api.ExpiresAt, key: key}, nil
 	}
 
 	data := url.Values{
@@ -61,7 +83,7 @@ func NewAPI(clientID, clientSecret, refreshToken string) (*API, error) {
 	}
 
 	client := &http.Client{Timeout: time.Second * 5000}
-	res, err := client.PostForm("https://www.googleapis.com/oauth2/v4/token", data)
+	res, err := client.PostForm(tokenURL, data)
 	if err != nil {
 		return nil, err
 	}
@@ -89,11 +111,11 @@ func NewAPI(clientID, clientSecret, refreshToken string) (*API, error) {
 
 	cache[key] = api
 
-	return api, nil
+	return &API{Token: api.Token, ExpiresAt: api.ExpiresAt, key: key}, nil
 }
 
 func (a *API) GetDevices(projectID string) ([]DeviceInfo, error) {
-	uri := "https://smartdevicemanagement.googleapis.com/v1/enterprises/" + projectID + "/devices"
+	uri := sdmURL + projectID + "/devices"
 	req, err := http.NewRequest("GET", uri, nil)
 	if err != nil {
 		return nil, err
@@ -164,8 +186,7 @@ func (a *API) ExchangeSDP(projectID, deviceID, offer string) (string, error) {
 		return "", err
 	}
 
-	uri := "https://smartdevicemanagement.googleapis.com/v1/enterprises/" +
-		projectID + "/devices/" + deviceID + ":executeCommand"
+	uri := sdmURL + projectID + "/devices/" + deviceID + ":executeCommand"
 
 	maxRetries := 3
 	retryDelay := time.Second * 30
@@ -228,23 +249,12 @@ func (a *API) ExchangeSDP(projectID, deviceID, offer string) (string, error) {
 }
 
 func (a *API) refreshToken() error {
-	// Get the cached API with matching token to get credentials
-	var refreshKey string
-	cacheMu.Lock()
-	for key, api := range cache {
-		if api.Token == a.Token {
-			refreshKey = key
-			break
-		}
-	}
-	cacheMu.Unlock()
-
-	if refreshKey == "" {
+	if a.key == "" {
 		return errors.New("nest: unable to find cached credentials")
 	}
 
-	// Parse credentials from cache key
-	parts := strings.Split(refreshKey, ":")
+	// Parse credentials from the cache key
+	parts := strings.SplitN(a.key, ":", 3)
 	if len(parts) != 3 {
 		return errors.New("nest: invalid cache key format")
 	}
@@ -286,8 +296,7 @@ func (a *API) ExtendStream() error {
 		return err
 	}
 
-	uri := "https://smartdevicemanagement.googleapis.com/v1/enterprises/" +
-		a.StreamProjectID + "/devices/" + a.StreamDeviceID + ":executeCommand"
+	uri := sdmURL + a.StreamProjectID + "/devices/" + a.StreamDeviceID + ":executeCommand"
 	req, err := http.NewRequest("POST", uri, bytes.NewReader(b))
 	if err != nil {
 		return err
@@ -339,8 +348,7 @@ func (a *API) GenerateRtspStream(projectID, deviceID string) (string, error) {
 		return "", err
 	}
 
-	uri := "https://smartdevicemanagement.googleapis.com/v1/enterprises/" +
-		projectID + "/devices/" + deviceID + ":executeCommand"
+	uri := sdmURL + projectID + "/devices/" + deviceID + ":executeCommand"
 	req, err := http.NewRequest("POST", uri, bytes.NewReader(b))
 	if err != nil {
 		return "", err
@@ -403,8 +411,7 @@ func (a *API) StopRTSPStream() error {
 		return err
 	}
 
-	uri := "https://smartdevicemanagement.googleapis.com/v1/enterprises/" +
-		a.StreamProjectID + "/devices/" + a.StreamDeviceID + ":executeCommand"
+	uri := sdmURL + a.StreamProjectID + "/devices/" + a.StreamDeviceID + ":executeCommand"
 	req, err := http.NewRequest("POST", uri, bytes.NewReader(b))
 	if err != nil {
 		return err
@@ -469,18 +476,70 @@ func (a *API) StartExtendStreamTimer() {
 		return
 	}
 
-	a.extendTimer = time.NewTimer(time.Until(a.StreamExpiresAt) - time.Minute)
+	// Google expires sessions after ~5 minutes; each successful extension
+	// returns a new expiresAt, so keep extending until the stream stops.
+	timer := time.NewTimer(a.extendDelay())
+	stop := make(chan struct{})
+	a.extendTimer = timer
+	a.extendStop = stop
+
 	go func() {
-		<-a.extendTimer.C
-		if err := a.ExtendStream(); err != nil {
-			return
+		attempt := 0
+		for {
+			select {
+			case <-timer.C:
+				err := a.extendOnce()
+				if err == nil {
+					attempt = 0
+					timer.Reset(a.extendDelay())
+					continue
+				}
+
+				attempt++
+				// Retry with backoff while the session is still alive. Once it
+				// has expired the stream is dead for sure: report it and exit,
+				// the owner closes the producer and go2rtc re-dials.
+				if !time.Now().Before(a.StreamExpiresAt) {
+					if f := a.OnSessionLost; f != nil {
+						f(err)
+					}
+					return
+				}
+
+				delay := extendRetryDelays[min(attempt, len(extendRetryDelays))-1]
+				timer.Reset(delay)
+			case <-stop:
+				return
+			}
 		}
 	}()
+}
+
+// extendDelay returns how long to wait before the next extend: one minute
+// before the session expires.
+func (a *API) extendDelay() time.Duration {
+	return time.Until(a.StreamExpiresAt) - time.Minute
+}
+
+// extendOnce refreshes the OAuth token when it is about to expire and then
+// extends the stream session.
+func (a *API) extendOnce() error {
+	// The OAuth token lives ~1 hour, sessions can live longer
+	if time.Now().After(a.ExpiresAt.Add(-30 * time.Second)) {
+		if err := a.refreshToken(); err != nil {
+			return errors.New("nest: token refresh: " + err.Error())
+		}
+	}
+	return a.ExtendStream()
 }
 
 func (a *API) StopExtendStreamTimer() {
 	if a.extendTimer != nil {
 		a.extendTimer.Stop()
 		a.extendTimer = nil
+	}
+	if a.extendStop != nil {
+		close(a.extendStop)
+		a.extendStop = nil
 	}
 }

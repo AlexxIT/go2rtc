@@ -2,6 +2,7 @@ package webrtc
 
 import (
 	"testing"
+	"time"
 
 	"github.com/pion/webrtc/v4"
 	"github.com/stretchr/testify/require"
@@ -68,4 +69,69 @@ a=fingerprint:sha-256 A2:93:53:50:E4:2F:C5:4E:DF:7C:70:99:5A:A7:39:50:1A:63:E5:B
 
 	_, err = conn.GetAnswer()
 	require.Nil(t, err)
+}
+
+func TestConnStateClose(t *testing.T) {
+	newConn := func(t *testing.T) (*Conn, <-chan error) {
+		pc, err := webrtc.NewPeerConnection(webrtc.Configuration{})
+		require.Nil(t, err)
+
+		conn := NewConn(pc)
+
+		// Start blocks until connection closed
+		started := make(chan error, 1)
+		go func() { started <- conn.Start() }()
+
+		return conn, started
+	}
+
+	closed := func(started <-chan error) bool {
+		select {
+		case <-started:
+			return true
+		case <-time.After(100 * time.Millisecond):
+			return false
+		}
+	}
+
+	t.Run("default close on disconnected", func(t *testing.T) {
+		conn, started := newConn(t)
+		conn.onConnectionStateChange(webrtc.PeerConnectionStateDisconnected)
+		require.True(t, closed(started))
+		require.Equal(t, webrtc.PeerConnectionStateClosed, conn.pc.ConnectionState())
+	})
+
+	t.Run("ignore disconnected wait failed", func(t *testing.T) {
+		conn, started := newConn(t)
+		conn.IgnoreDisconnected = true
+
+		var states []webrtc.PeerConnectionState
+		conn.Listen(func(msg any) {
+			if state, ok := msg.(webrtc.PeerConnectionState); ok {
+				states = append(states, state)
+			}
+		})
+
+		conn.onConnectionStateChange(webrtc.PeerConnectionStateDisconnected)
+		require.False(t, closed(started))
+		require.NotEqual(t, webrtc.PeerConnectionStateClosed, conn.pc.ConnectionState())
+
+		// listeners still get the state
+		require.Equal(t, []webrtc.PeerConnectionState{webrtc.PeerConnectionStateDisconnected}, states)
+
+		// connection can recover
+		conn.onConnectionStateChange(webrtc.PeerConnectionStateConnected)
+		require.False(t, closed(started))
+
+		conn.onConnectionStateChange(webrtc.PeerConnectionStateFailed)
+		require.True(t, closed(started))
+		require.Equal(t, webrtc.PeerConnectionStateClosed, conn.pc.ConnectionState())
+	})
+
+	t.Run("ignore disconnected close on closed", func(t *testing.T) {
+		conn, started := newConn(t)
+		conn.IgnoreDisconnected = true
+		conn.onConnectionStateChange(webrtc.PeerConnectionStateClosed)
+		require.True(t, closed(started))
+	})
 }
