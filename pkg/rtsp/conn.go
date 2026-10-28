@@ -24,6 +24,7 @@ type Conn struct {
 	// public
 
 	Backchannel bool
+	DenyPublish bool // server: answer ANNOUNCE with 403
 	Media       string
 	OnClose     func() error
 	PacketSize  uint16

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"net/netip"
 	"net/url"
 	"strings"
 
@@ -18,11 +19,12 @@ import (
 func Init() {
 	var conf struct {
 		Mod struct {
-			Listen       string `yaml:"listen" json:"listen"`
-			Username     string `yaml:"username" json:"-"`
-			Password     string `yaml:"password" json:"-"`
-			DefaultQuery string `yaml:"default_query" json:"default_query"`
-			PacketSize   uint16 `yaml:"pkt_size" json:"pkt_size,omitempty"`
+			Listen       string   `yaml:"listen" json:"listen"`
+			Username     string   `yaml:"username" json:"-"`
+			Password     string   `yaml:"password" json:"-"`
+			DefaultQuery string   `yaml:"default_query" json:"default_query"`
+			PacketSize   uint16   `yaml:"pkt_size" json:"pkt_size,omitempty"`
+			AllowPublish []string `yaml:"allow_publish" json:"allow_publish,omitempty"`
 		} `yaml:"rtsp"`
 	}
 
@@ -60,6 +62,10 @@ func Init() {
 		defaultMedias = ParseQuery(query)
 	}
 
+	if conf.Mod.AllowPublish != nil {
+		allowPublish = parseNetworks(conf.Mod.AllowPublish)
+	}
+
 	go func() {
 		for {
 			conn, err := ln.Accept()
@@ -73,6 +79,7 @@ func Init() {
 			if conf.Mod.Username != "" && !conn.RemoteAddr().(*net.TCPAddr).IP.IsLoopback() {
 				c.Auth(conf.Mod.Username, conf.Mod.Password)
 			}
+			c.DenyPublish = !publishAllowed(conn.RemoteAddr())
 			go tcpHandler(c)
 		}
 	}()
@@ -91,6 +98,39 @@ var Port string
 var log zerolog.Logger
 var handlers []Handler
 var defaultMedias []*core.Media
+var allowPublish []netip.Prefix // nil - anyone can publish
+
+// parseNetworks accepts IPs and CIDR networks, invalid items are skipped
+func parseNetworks(items []string) []netip.Prefix {
+	networks := []netip.Prefix{}
+	for _, item := range items {
+		network, err := netip.ParsePrefix(item)
+		if err != nil {
+			var ip netip.Addr
+			if ip, err = netip.ParseAddr(item); err != nil {
+				log.Error().Err(err).Msg("[rtsp] allow_publish")
+				continue
+			}
+			network = netip.PrefixFrom(ip, ip.BitLen())
+		}
+		networks = append(networks, network)
+	}
+	return networks
+}
+
+// publishAllowed - localhost is always allowed, it is used by exec and ffmpeg sources
+func publishAllowed(addr net.Addr) bool {
+	ip := addr.(*net.TCPAddr).AddrPort().Addr().Unmap()
+	if allowPublish == nil || ip.IsLoopback() {
+		return true
+	}
+	for _, network := range allowPublish {
+		if network.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
 
 func rtspHandler(rawURL string) (core.Producer, error) {
 	rawURL, rawQuery, _ := strings.Cut(rawURL, "#")
@@ -258,6 +298,8 @@ func tcpHandler(conn *rtsp.Conn) {
 	if err := conn.Accept(); err != nil {
 		if errors.Is(err, rtsp.FailedAuth) {
 			log.Warn().Str("remote_addr", conn.Connection.RemoteAddr).Msg("[rtsp] failed authentication")
+		} else if errors.Is(err, rtsp.FailedPublish) {
+			log.Warn().Str("remote_addr", conn.Connection.RemoteAddr).Msg("[rtsp] publish not allowed")
 		} else if err != io.EOF {
 			log.WithLevel(level).Err(err).Caller().Send()
 		}
