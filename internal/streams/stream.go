@@ -128,3 +128,13 @@ func (s *Stream) MarshalJSON() ([]byte, error) {
 	}
 	return json.Marshal(info)
 }
+
+// Producers returns the list of producers for this stream.
+// Used by external packages (e.g. SIP) for codec discovery.
+func (s *Stream) Producers() []*Producer {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.producers
+}
+
+
