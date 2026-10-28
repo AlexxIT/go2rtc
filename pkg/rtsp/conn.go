@@ -48,6 +48,7 @@ type Conn struct {
 
 	state   State
 	stateMu sync.Mutex
+	writeMu sync.Mutex
 
 	udpConn []*net.UDPConn
 	udpAddr []*net.UDPAddr
@@ -345,11 +346,7 @@ func (c *Conn) WriteRequest(req *tcp.Request) error {
 
 	c.Fire(req)
 
-	if err := c.conn.SetWriteDeadline(time.Now().Add(Timeout)); err != nil {
-		return err
-	}
-
-	return req.Write(c.conn)
+	return c.write([]byte(req.String()))
 }
 
 func (c *Conn) ReadRequest() (*tcp.Request, error) {
@@ -394,11 +391,7 @@ func (c *Conn) WriteResponse(res *tcp.Response) error {
 
 	c.Fire(res)
 
-	if err := c.conn.SetWriteDeadline(time.Now().Add(Timeout)); err != nil {
-		return err
-	}
-
-	return res.Write(c.conn)
+	return c.write([]byte(res.String()))
 }
 
 func (c *Conn) ReadResponse() (*tcp.Response, error) {
@@ -406,4 +399,26 @@ func (c *Conn) ReadResponse() (*tcp.Response, error) {
 		return nil, err
 	}
 	return tcp.ReadResponse(c.reader)
+}
+
+// write sends one whole RTSP message or interleaved RTP batch.
+// A failed or short write leaves part of a message on the wire. Anything sent
+// after it would be read by the peer as the missing tail and break its framing,
+// so the connection is closed instead.
+func (c *Conn) write(b []byte) error {
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+
+	if err := c.conn.SetWriteDeadline(time.Now().Add(Timeout)); err != nil {
+		return err
+	}
+
+	n, err := c.conn.Write(b)
+	if err == nil && n < len(b) {
+		err = io.ErrShortWrite
+	}
+	if err != nil {
+		_ = c.conn.Close()
+	}
+	return err
 }
