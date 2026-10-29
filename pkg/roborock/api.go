@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -29,32 +30,63 @@ type UserInfo struct {
 	} `json:"rriot"`
 }
 
+var baseURLs = []string{
+	"https://usiot.roborock.com",
+	"https://euiot.roborock.com",
+	"https://cniot.roborock.com",
+	"https://ruiot.roborock.com",
+}
+
 func GetBaseURL(username string) (string, error) {
-	u := "https://euiot.roborock.com/api/v1/getUrlByEmail?email=" + url.QueryEscape(username)
-	req, err := http.NewRequest("POST", u, nil)
-	if err != nil {
-		return "", err
+	// each regional endpoint returns country=null for accounts registered
+	// in another region (together with a default URL that won't accept the
+	// account's credentials), so query regions until one recognizes the account
+	var fallback string
+
+	for _, base := range baseURLs {
+		u := base + "/api/v1/getUrlByEmail?email=" + url.QueryEscape(username)
+		req, err := http.NewRequest("POST", u, nil)
+		if err != nil {
+			return "", err
+		}
+
+		client := http.Client{Timeout: time.Second * 5000}
+		res, err := client.Do(req)
+		if err != nil {
+			continue
+		}
+
+		var v struct {
+			Msg  string `json:"msg"`
+			Code int    `json:"code"`
+			Data struct {
+				URL         string `json:"url"`
+				Country     string `json:"country"`
+				CountryCode string `json:"countrycode"`
+			} `json:"data"`
+		}
+		if err = json.NewDecoder(res.Body).Decode(&v); err != nil {
+			return "", err
+		}
+
+		if v.Code != 200 {
+			return "", fmt.Errorf("%d: %s", v.Code, v.Msg)
+		}
+
+		if v.Data.Country != "" || v.Data.CountryCode != "" {
+			return v.Data.URL, nil
+		}
+
+		if fallback == "" {
+			fallback = v.Data.URL
+		}
 	}
 
-	client := http.Client{Timeout: time.Second * 5000}
-	res, err := client.Do(req)
-
-	var v struct {
-		Msg  string `json:"msg"`
-		Code int    `json:"code"`
-		Data struct {
-			URL string `json:"url"`
-		} `json:"data"`
-	}
-	if err = json.NewDecoder(res.Body).Decode(&v); err != nil {
-		return "", err
+	if fallback == "" {
+		return "", errors.New("roborock: can't get base url")
 	}
 
-	if v.Code != 200 {
-		return "", fmt.Errorf("%d: %s", v.Code, v.Msg)
-	}
-
-	return v.Data.URL, nil
+	return fallback, nil
 }
 
 func Login(baseURL, username, password string) (*UserInfo, error) {
