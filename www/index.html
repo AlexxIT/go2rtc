@@ -14,6 +14,8 @@
 
         .info {
             color: #888;
+            white-space: pre;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
         }
     </style>
 </head>
@@ -144,10 +146,149 @@
     // Auto-reload
     setInterval(reload, 1000);
 
-    const url = new URL('api', location.href);
-    fetch(url, {cache: 'no-cache'}).then(r => r.json()).then(data => {
-        const info = document.querySelector('.info');
-        info.innerText = `version: ${data.version} / config: ${data.config_path}`;
+    const info = document.querySelector('.info');
+    const infoURL = new URL('api', location.href);
+    const cpuHistory = [];
+    const memHistory = [];
+    const timeHistory = [];
+    const graphWidth = 36;
+    const graphHeight = 8;
+    const infoUpdateInterval = window.SYSTEM_INFO_UPDATE_INTERVAL_MS ?? 2000;
+    let infoUpdateTimer = null;
+
+    function toNumber(value) {
+        const number = Number(value);
+        return Number.isFinite(number) ? number : 0;
+    }
+
+    function clampPercent(value) {
+        return Math.max(0, Math.min(100, toNumber(value)));
+    }
+
+    function pushHistory(history, value) {
+        history.push(value);
+        while (history.length > graphWidth) history.shift();
+    }
+
+    function formatBytes(bytes) {
+        const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        let value = Math.max(0, toNumber(bytes));
+        let index = 0;
+        while (value >= 1024 && index < units.length - 1) {
+            value /= 1024;
+            index++;
+        }
+        return `${value.toFixed(value >= 100 || index === 0 ? 0 : 1)} ${units[index]}`;
+    }
+
+    function formatClock(timeMs) {
+        return new Date(timeMs).toLocaleTimeString(undefined, {
+            hour: '2-digit', minute: '2-digit', second: '2-digit'
+        });
+    }
+
+    function renderXAxisLabels(width) {
+        if (!timeHistory.length) return ' '.repeat(width);
+
+        const start = formatClock(timeHistory[0]);
+        const end = formatClock(timeHistory[timeHistory.length - 1]);
+        if (start.length + end.length >= width) return `${start} ${end}`;
+
+        return `${start}${' '.repeat(width - start.length - end.length)}${end}`;
+    }
+
+    function renderAsciiGraphLines(history) {
+        const bars = Array.from({length: graphWidth}, (_, index) => {
+            const value = history[index] ?? 0;
+            return Math.round((value / 100) * graphHeight);
+        });
+        const lines = [];
+        for (let row = graphHeight; row >= 1; row--) {
+            let line = '|';
+            for (const bar of bars) {
+                line += bar >= row ? '█' : ' ';
+            }
+            line += '|';
+            lines.push(line);
+        }
+        lines.push('+' + '-'.repeat(graphWidth) + '+');
+        return lines;
+    }
+
+    function padRight(text, width) {
+        return text + ' '.repeat(Math.max(0, width - text.length));
+    }
+
+    function renderInfo(data, cpuUsage, memUsage, memUsed, memTotal, isUsageUnsupported) {
+        const detailsLines = [];
+        if (isUsageUnsupported) {
+            detailsLines.push('System metrics are not supported on this platform (CPU and MEM usage are 0).');
+        } else {
+            const cpuLines = renderAsciiGraphLines(cpuHistory);
+            const memLines = renderAsciiGraphLines(memHistory);
+            const graphBlockWidth = graphWidth + 2; // borders
+            const cpuTitle = `CPU ${cpuUsage.toFixed(1)}%`;
+            const memTitle = `MEM ${memUsage.toFixed(1)}% (${formatBytes(memUsed)} / ${formatBytes(memTotal)})`;
+
+            detailsLines.push(
+                `${padRight(cpuTitle, graphBlockWidth)}   ${padRight(memTitle, graphBlockWidth)}`
+            );
+            for (let i = 0; i < cpuLines.length; i++) {
+                detailsLines.push(`${cpuLines[i]}   ${memLines[i]}`);
+            }
+            const timeLabels = renderXAxisLabels(graphBlockWidth);
+            detailsLines.push(`${timeLabels}   ${timeLabels}`);
+        }
+
+        const lines = [
+            `version: ${data.version ?? '-'}`,
+            `pid: ${data.pid ?? '-'}`,
+            `config: ${data.config_path ?? '-'}`,
+            '',
+            ...detailsLines,
+        ];
+        info.textContent = lines.join('\n');
+    }
+
+    function startInfoUpdates() {
+        if (infoUpdateTimer !== null) return;
+        infoUpdateTimer = setInterval(updateInfo, infoUpdateInterval);
+    }
+
+    function stopInfoUpdates() {
+        if (infoUpdateTimer === null) return;
+        clearInterval(infoUpdateTimer);
+        infoUpdateTimer = null;
+    }
+
+    function updateInfo() {
+        return fetch(infoURL, {cache: 'no-cache'}).then(r => r.json()).then(data => {
+            const cpuUsage = clampPercent(data.system?.cpu_usage);
+            const memUsed = toNumber(data.system?.mem_used);
+            const memTotal = toNumber(data.system?.mem_total);
+            const memUsage = memTotal > 0 ? clampPercent((memUsed * 100) / memTotal) : 0;
+            const isUsageUnsupported = cpuUsage === 0 && memUsage === 0;
+
+            if (!isUsageUnsupported) {
+                const now = Date.now();
+                pushHistory(cpuHistory, cpuUsage);
+                pushHistory(memHistory, memUsage);
+                pushHistory(timeHistory, now);
+            } else {
+                stopInfoUpdates();
+            }
+            renderInfo(data, cpuUsage, memUsage, memUsed, memTotal, isUsageUnsupported);
+            return !isUsageUnsupported;
+        }).catch(error => {
+            if (!info.textContent) {
+                info.textContent = `Can't load system info: ${error.message}`;
+            }
+            return true;
+        });
+    }
+
+    updateInfo().then(isSupported => {
+        if (isSupported) startInfoUpdates();
     });
 
     reload();
