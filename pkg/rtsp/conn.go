@@ -23,13 +23,14 @@ type Conn struct {
 
 	// public
 
-	Backchannel bool
-	Media       string
-	OnClose     func() error
-	PacketSize  uint16
-	SessionName string
-	Timeout     int
-	Transport   string // custom transport support, ex. RTSP over WebSocket
+	Backchannel      bool
+	Media            string
+	OnClose          func() error
+	PacketSize       uint16
+	SessionName      string
+	Timeout          int
+	HandshakeTimeout int
+	Transport        string // custom transport support, ex. RTSP over WebSocket
 
 	URL *url.URL
 
@@ -51,6 +52,13 @@ type Conn struct {
 
 	udpConn []*net.UDPConn
 	udpAddr []*net.UDPAddr
+}
+
+func (c *Conn) handshakeTimeout() time.Duration {
+	if c.HandshakeTimeout > 0 {
+		return time.Second * time.Duration(c.HandshakeTimeout)
+	}
+	return Timeout
 }
 
 const (
@@ -345,7 +353,7 @@ func (c *Conn) WriteRequest(req *tcp.Request) error {
 
 	c.Fire(req)
 
-	if err := c.conn.SetWriteDeadline(time.Now().Add(Timeout)); err != nil {
+	if err := c.conn.SetWriteDeadline(time.Now().Add(c.handshakeTimeout())); err != nil {
 		return err
 	}
 
@@ -353,7 +361,7 @@ func (c *Conn) WriteRequest(req *tcp.Request) error {
 }
 
 func (c *Conn) ReadRequest() (*tcp.Request, error) {
-	if err := c.conn.SetReadDeadline(time.Now().Add(Timeout)); err != nil {
+	if err := c.conn.SetReadDeadline(time.Now().Add(c.handshakeTimeout())); err != nil {
 		return nil, err
 	}
 	return tcp.ReadRequest(c.reader)
@@ -394,7 +402,7 @@ func (c *Conn) WriteResponse(res *tcp.Response) error {
 
 	c.Fire(res)
 
-	if err := c.conn.SetWriteDeadline(time.Now().Add(Timeout)); err != nil {
+	if err := c.conn.SetWriteDeadline(time.Now().Add(c.handshakeTimeout())); err != nil {
 		return err
 	}
 
@@ -402,7 +410,7 @@ func (c *Conn) WriteResponse(res *tcp.Response) error {
 }
 
 func (c *Conn) ReadResponse() (*tcp.Response, error) {
-	if err := c.conn.SetReadDeadline(time.Now().Add(Timeout)); err != nil {
+	if err := c.conn.SetReadDeadline(time.Now().Add(c.handshakeTimeout())); err != nil {
 		return nil, err
 	}
 	return tcp.ReadResponse(c.reader)
