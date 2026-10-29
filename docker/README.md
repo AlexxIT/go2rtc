@@ -26,6 +26,21 @@ services:
       - "~/go2rtc:/config"   # folder for go2rtc.yaml file (edit from WebUI)
 ```
 
+## Extra UI
+
+Mount a local directory with static HTML/JS files to `/ui` (read-only). go2rtc serves those files at `http://<host>:1984/ui/`.
+
+```yaml
+services:
+  go2rtc:
+    image: alexxit/go2rtc
+    volumes:
+      - "~/go2rtc:/config"
+      - "./my-ui:/ui:ro"
+```
+
+No extra configuration is required. To use a different host path than `./my-ui`, change the left side of the bind mount; to use a different path inside the container than `/ui`, set `ui.dir` in `go2rtc.yaml` to match.
+
 ## Basic Deployment
 
 ```bash
