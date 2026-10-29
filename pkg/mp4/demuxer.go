@@ -42,7 +42,7 @@ func (d *Demuxer) Probe(init []byte) (medias []*core.Media) {
 			}
 		}
 
-		if codec != nil {
+		if codec != nil && timeScale > 0 {
 			d.codecs[trackID] = codec
 			d.timeScales[trackID] = float32(codec.ClockRate) / float32(timeScale)
 
