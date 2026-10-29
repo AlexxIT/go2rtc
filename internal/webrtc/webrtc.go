@@ -134,9 +134,10 @@ func asyncHandler(tr *ws.Transport, msg *ws.Message) (err error) {
 	}
 
 	var offer struct {
-		Type       string           `json:"type"`
-		SDP        string           `json:"sdp"`
-		ICEServers []pion.ICEServer `json:"ice_servers"`
+		Type               string           `json:"type"`
+		SDP                string           `json:"sdp"`
+		ICEServers         []pion.ICEServer `json:"ice_servers"`
+		ICETransportPolicy string           `json:"ice_transport_policy,omitempty"`
 	}
 
 	// V2 - json/object exchange, V1 - raw SDP exchange
@@ -155,7 +156,17 @@ func asyncHandler(tr *ws.Transport, msg *ws.Message) (err error) {
 	if offer.ICEServers == nil {
 		pc, err = PeerConnection(false)
 	} else {
-		pc, err = serverAPI.NewPeerConnection(pion.Configuration{ICEServers: offer.ICEServers})
+		var transportPolicy pion.ICETransportPolicy
+		switch offer.ICETransportPolicy {
+		case "", "all":
+			transportPolicy = pion.ICETransportPolicyAll
+		case "relay":
+			transportPolicy = pion.ICETransportPolicyRelay
+		default:
+			log.Error().Str("iceTransportPolicy", offer.ICETransportPolicy).Msg("unknown ICE transport policy")
+			return errors.New("unknown ICE transport policy: " + offer.ICETransportPolicy)
+		}
+		pc, err = serverAPI.NewPeerConnection(pion.Configuration{ICEServers: offer.ICEServers, ICETransportPolicy: transportPolicy})
 	}
 	if err != nil {
 		log.Error().Err(err).Caller().Send()
