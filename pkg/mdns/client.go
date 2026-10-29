@@ -192,6 +192,9 @@ func (b *Browser) ListenMulticastUDP() error {
 	for _, ipn := range nets {
 		conn, err := lc1.ListenPacket(ctx, "udp4", ipn.IP.String()+":5353") // same port important
 		if err != nil {
+			if strings.Contains(err.Error(), "address already in use") {
+				continue
+			}
 			continue
 		}
 		b.Nets = append(b.Nets, ipn)
@@ -199,7 +202,12 @@ func (b *Browser) ListenMulticastUDP() error {
 	}
 
 	if b.Sends == nil {
-		return errors.New("no interfaces for listen")
+		// Fall back to the system's default interface if no specific interfaces are available
+		conn, err := net.ListenMulticastUDP("udp4", nil, MulticastAddr)
+		if err != nil {
+			return errors.New("no interfaces for listen and fallback failed: " + err.Error())
+		}
+		b.Sends = append(b.Sends, conn)
 	}
 
 	// 3. Create receiver
@@ -371,4 +379,44 @@ func NewServiceEntries(msg *dns.Msg, ip net.IP) (entries []*ServiceEntry) {
 	}
 
 	return
+}
+
+func InterfacesIP4() ([]net.IP, error) {
+	intfs, err := net.Interfaces()
+	if err != nil {
+		return nil, err
+	}
+
+	var ips []net.IP
+
+loop:
+	for _, intf := range intfs {
+		if intf.Flags&net.FlagUp == 0 || intf.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+
+		addrs, err := intf.Addrs()
+		if err != nil {
+			continue
+		}
+
+		for _, addr := range addrs {
+			switch v := addr.(type) {
+			case *net.IPNet:
+				if ip := v.IP.To4(); ip != nil {
+					if ip.IsLinkLocalUnicast() {
+						continue
+					}
+					ips = append(ips, ip)
+					continue loop
+				}
+			}
+		}
+	}
+
+	if len(ips) == 0 {
+		return nil, errors.New("no IPv4 addresses found")
+	}
+
+	return ips, nil
 }
