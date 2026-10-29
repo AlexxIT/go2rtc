@@ -186,6 +186,13 @@ func TestNewServer_DefaultPin(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NotNil(t, srv)
+
+	data, err := srv.MarshalJSON()
+	require.NoError(t, err)
+
+	var v map[string]any
+	require.NoError(t, json.Unmarshal(data, &v))
+	require.Equal(t, "195-50-224", v["setup_code"])
 }
 
 func TestNewServer_InvalidPin(t *testing.T) {
