@@ -1,6 +1,7 @@
 package wyze
 
 import (
+	"encoding/binary"
 	"fmt"
 	"net/url"
 	"time"
@@ -162,9 +163,20 @@ func (p *Producer) Start() error {
 	}
 }
 
+// Frames already on their way when SetResolution is sent still have the old (SD) frame size.
+// Their SPS is skipped for this long, so the advertised codec (RTSP sprop-parameter-sets, MP4
+// avcC) is the one the stream actually uses. Hardware decoders configured with the SD SPS
+// decode nothing (Safari, Android MediaCodec).
+const staleSPSTimeout = 3 * time.Second
+
 func probe(client *Client, quality byte) ([]*core.Media, error) {
 	client.SetResolution(quality)
 	client.SetDeadline(time.Now().Add(core.ProbeTimeout))
+
+	skipSDUntil := time.Now().Add(staleSPSTimeout)
+	if quality == FrameSize360P {
+		skipSDUntil = time.Time{}
+	}
 
 	var vcodec, acodec *core.Codec
 	var tutkAudioCodec byte
@@ -187,6 +199,12 @@ func probe(client *Client, quality byte) ([]*core.Media, error) {
 			if vcodec == nil {
 				buf := annexb.EncodeToAVCC(pkt.Payload)
 				if len(buf) >= 5 && h264.NALUType(buf) == h264.NALUTypeSPS {
+					if sps := firstNALU(buf); time.Now().Before(skipSDUntil) && isSD(h264.DecodeSPS(sps)) {
+						if client.verbose {
+							fmt.Println("[Wyze] Skipping SPS from before the resolution change")
+						}
+						continue
+					}
 					vcodec = h264.AVCCToCodec(buf)
 				}
 			}
@@ -274,4 +292,19 @@ func probe(client *Client, quality byte) ([]*core.Media, error) {
 	}
 
 	return medias, nil
+}
+
+func firstNALU(avcc []byte) []byte {
+	if len(avcc) < 4 {
+		return nil
+	}
+	size := int(binary.BigEndian.Uint32(avcc))
+	if size > len(avcc)-4 {
+		return nil
+	}
+	return avcc[4 : 4+size]
+}
+
+func isSD(sps *h264.SPS) bool {
+	return sps != nil && sps.Height() <= 360
 }
