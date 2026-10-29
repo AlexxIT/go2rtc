@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
@@ -27,6 +28,9 @@ func Init() {
 }
 
 var log zerolog.Logger
+
+// defaultKeyframeTimeout caps how long a snapshot request waits for a keyframe.
+const defaultKeyframeTimeout = 10 * time.Second
 
 func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 	// Chrome 105 does two requests: without Range and with `Range: bytes=0-`
@@ -55,10 +59,35 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// handle client disconnect and cameras that never send a keyframe,
+	// otherwise WriteTo below waits forever and the producer can't be stopped
+	timeout := defaultKeyframeTimeout
+	if i := core.Atoi(query.Get("timeout")); i > 0 {
+		timeout = time.Duration(i) * time.Second
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), timeout)
+	defer cancel()
+
+	var removeOnce sync.Once
+	remove := func() { removeOnce.Do(func() { stream.RemoveConsumer(cons) }) }
+	defer remove()
+
+	go func() {
+		<-ctx.Done()
+		remove()
+	}()
+
 	once := &core.OnceBuffer{} // init and first frame
 	_, _ = cons.WriteTo(once)
 
-	stream.RemoveConsumer(cons)
+	remove()
+
+	if once.Len() == 0 {
+		log.Warn().Str("src", src).Msgf("[mp4] no keyframe: %s", ctx.Err())
+		http.Error(w, "timeout waiting for keyframe", http.StatusGatewayTimeout)
+		return
+	}
 
 	// Apple Safari won't show frame without length
 	header := w.Header()

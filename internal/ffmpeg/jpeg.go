@@ -2,9 +2,11 @@ package ffmpeg
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net/url"
 	"os/exec"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg/hardware"
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -23,11 +25,22 @@ func JPEGWithScale(b []byte, width, height int) ([]byte, error) {
 	return transcode(b, args.String())
 }
 
+// transcodeTimeout kills a wedged ffmpeg instead of blocking the HTTP handler forever.
+const transcodeTimeout = 15 * time.Second
+
 func transcode(b []byte, args string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), transcodeTimeout)
+	defer cancel()
+
 	cmdArgs := shell.QuoteSplit(args)
-	cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
+	cmd := exec.CommandContext(ctx, cmdArgs[0], cmdArgs[1:]...)
 	cmd.Stdin = bytes.NewBuffer(b)
-	return cmd.Output()
+
+	out, err := cmd.Output()
+	if ctx.Err() != nil {
+		return nil, fmt.Errorf("ffmpeg: timeout after %s", transcodeTimeout)
+	}
+	return out, err
 }
 
 func defaultArgs() *ffmpeg.Args {
