@@ -76,6 +76,7 @@ func main() {
         Store:      &myPairingStore{},
         Snapshots:  &mySnapshotProvider{},
         Logger:     logger,
+        Version:    "1.0.0", // accessory firmware revision (required unless ProxyURL)
         Port:       8080,
     })
     if err != nil {
@@ -115,6 +116,7 @@ srv, err := hksv.NewServer(hksv.Config{
     Snapshots:  &mySnapshotProvider{},
     LiveStream: &myLiveStreamHandler{}, // enables live view in Home app
     Logger:     logger,
+    Version:    "1.0.0", // accessory firmware revision (required unless ProxyURL)
     Port:       8080,
 })
 ```
@@ -130,6 +132,7 @@ srv, err := hksv.NewServer(hksv.Config{
     Streams:    &myStreamProvider{},
     LiveStream: &myLiveStreamHandler{},
     Logger:     logger,
+    Version:    "1.0.0", // accessory firmware revision (required unless ProxyURL)
     Port:       8080,
 })
 ```
@@ -161,6 +164,7 @@ srv, err := hksv.NewServer(hksv.Config{
     Store:     &myPairingStore{},
     Snapshots: &mySnapshotProvider{},
     Logger:    logger,
+    Version:   "1.0.0", // accessory firmware revision (required unless ProxyURL)
     Port:      8080,
 })
 
@@ -400,8 +404,13 @@ type Config struct {
     Speaker *bool // include Speaker service for 2-way audio (default false)
 
     // Optional - metadata
-    UserAgent string // for mDNS TXTModel field
-    Version   string // for accessory firmware version
+    Manufacturer string // accessory manufacturer (default "AlexxIT")
+    Model        string // accessory model (default "go2rtc")
+    SerialNumber string // accessory serial number (default "--")
+    Firmware     string // accessory firmware revision x[.y[.z]] (defaults to Version without -/+ suffix)
+    HardwareRevision string // optional hardware revision x[.y[.z]] (omitted if empty)
+    UserAgent    string // for mDNS TXTModel field
+    Version      string // host version and default accessory firmware revision
 
     // Optional - persistence and features
     Store      PairingStore     // nil = pairings not persisted
@@ -409,6 +418,8 @@ type Config struct {
     LiveStream LiveStreamHandler // nil = no live streaming (HKSV recording only)
 }
 ```
+
+Unless `ProxyURL` is set, `NewServer` returns an error for invalid accessory metadata instead of truncating it: `Manufacturer`, `Model`, `SerialNumber` max 64 UTF-8 bytes (`Model` ≥ 1, `SerialNumber` ≥ 2); `Firmware` (required, via `Firmware` or `Version`) and `HardwareRevision` must be `x[.y[.z]]` with decimal `uint32` components, max 64 bytes.
 
 ## Motion Detection
 
@@ -567,6 +578,7 @@ for _, name := range cameras {
         MotionMode: "detect",
         Streams:    provider,
         Logger:     logger,
+        Version:    "1.0.0", // accessory firmware revision (required unless ProxyURL)
         Port:       8080,
     })
 
