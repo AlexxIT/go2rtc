@@ -61,10 +61,10 @@ func (b *Browser) Serve(entries []*ServiceEntry) error {
 				AppendDNSSD(&res, b.Service)
 			} else if q.Name == b.Service {
 				for _, entry := range entries {
-					AppendEntry(&res, entry, b.Service, localIP)
+					AppendEntry(&res, entry, b.Service, b.entryIP(entry, remoteIP))
 				}
 			} else if entry, ok := names[q.Name]; ok {
-				AppendEntry(&res, entry, b.Service, localIP)
+				AppendEntry(&res, entry, b.Service, b.entryIP(entry, remoteIP))
 			}
 		}
 
@@ -97,6 +97,20 @@ func (b *Browser) MatchLocalIP(remote net.IP) net.IP {
 	return nil
 }
 
+func (b *Browser) entryIP(entry *ServiceEntry, remote net.IP) net.IP {
+	if entry.IP == nil || entry.IP.IsUnspecified() {
+		return b.MatchLocalIP(remote)
+	}
+	// Multiple interface addresses can share a subnet. Prefer the bound address
+	// rather than dropping it because MatchLocalIP selected a different alias.
+	for _, ipn := range b.Nets {
+		if ipn.IP.Equal(entry.IP) && ipn.Contains(remote) {
+			return entry.IP
+		}
+	}
+	return nil
+}
+
 func AppendDNSSD(msg *dns.Msg, service string) {
 	msg.Answer = append(
 		msg.Answer,
@@ -113,6 +127,11 @@ func AppendDNSSD(msg *dns.Msg, service string) {
 }
 
 func AppendEntry(msg *dns.Msg, entry *ServiceEntry, service string, ip net.IP) {
+	// A server entry with an explicit address is only reachable on that address.
+	// Entries without one retain discovery on every matching local interface.
+	if ip == nil || (entry.IP != nil && !entry.IP.IsUnspecified() && !entry.IP.Equal(ip)) {
+		return
+	}
 	ptrName := entry.name() + "." + service
 	srvName := entry.name() + ".local."
 
