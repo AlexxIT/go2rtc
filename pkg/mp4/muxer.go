@@ -1,7 +1,9 @@
 package mp4
 
 import (
+	"encoding/binary"
 	"encoding/hex"
+	"unicode/utf8"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
@@ -145,6 +147,16 @@ func (m *Muxer) GetPayload(trackID byte, packet *rtp.Packet) []byte {
 	case core.CodecAAC:
 		duration = 1024         // important for Apple Finder and QuickTime
 		flags = iso.SampleAudio // not important?
+	case core.CodecFLAC:
+		// Our PCM encoder writes an explicit 16-bit block size. RTP
+		// timestamps mark packet starts and cannot give the first duration.
+		if len(packet.Payload) >= 8 && packet.Payload[2]>>4 == 7 {
+			_, size := utf8.DecodeRune(packet.Payload[4:])
+			if offset := 4 + size; offset+2 <= len(packet.Payload) {
+				duration = uint32(binary.BigEndian.Uint16(packet.Payload[offset:])) + 1
+			}
+		}
+		flags = iso.SampleAudio
 	default:
 		flags = iso.SampleAudio // important for FLAC on Android Telegram
 	}

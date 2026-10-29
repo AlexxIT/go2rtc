@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/AlexxIT/go2rtc/pkg/aac"
+	"github.com/AlexxIT/go2rtc/pkg/audio"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
@@ -60,7 +61,11 @@ func NewConsumer(medias []*core.Media) *Consumer {
 	}
 }
 
-func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver) error {
+func (c *Consumer) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
+	return audio.AddTrack(c.Medias, media, codec, track, c.addTrack)
+}
+
+func (c *Consumer) addTrack(media *core.Media, _ *core.Codec, track *core.Receiver) error {
 	trackID := byte(len(c.Senders))
 
 	codec := track.Codec.Clone()
@@ -138,12 +143,21 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 		case core.CodecOpus, core.CodecMP3: // no changes
 		case core.CodecPCMA, core.CodecPCMU, core.CodecPCM, core.CodecPCML:
 			codec.Name = core.CodecFLAC
-			if codec.Channels == 2 {
-				// hacky way for support two channels audio
-				codec.Channels = 1
-				codec.ClockRate *= 2
-			}
 			handler.Handler = pcm.FLACEncoder(track.Codec.Name, codec.ClockRate, handler.Handler)
+			if codec.Channels == 2 {
+				// The verbatim FLAC writer is mono. Downmix samples while
+				// preserving the RTP clock, rather than doubling the rate.
+				codec.Channels = 1
+				mono := track.Codec.Clone()
+				mono.Channels = 1
+				convert := pcm.Transcode(mono, track.Codec)
+				forward := handler.Handler
+				handler.Handler = func(packet *rtp.Packet) {
+					clone := *packet
+					clone.Payload = convert(packet.Payload)
+					forward(&clone)
+				}
+			}
 
 		default:
 			handler.Handler = nil
@@ -186,4 +200,8 @@ func (c *Consumer) WriteTo(wr io.Writer) (int64, error) {
 	}
 
 	return c.wr.WriteTo(wr)
+}
+
+func (c *Consumer) GetMedias() []*core.Media {
+	return audio.WithTranscoding(c.Medias)
 }
