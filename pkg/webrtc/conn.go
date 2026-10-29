@@ -20,8 +20,9 @@ type Conn struct {
 
 	pc *webrtc.PeerConnection
 
-	offer  string
-	closed core.Waiter
+	offer           string
+	closed          core.Waiter
+	transportClosed bool
 }
 
 func NewConn(pc *webrtc.PeerConnection) *Conn {
@@ -154,6 +155,20 @@ func (c *Conn) MarshalJSON() ([]byte, error) {
 func (c *Conn) Close() error {
 	c.closed.Done(nil)
 	return c.pc.Close()
+}
+
+func (c *Conn) IsClosed() bool {
+	if c.transportClosed {
+		return true
+	}
+	state := c.pc.ConnectionState()
+	return state == webrtc.PeerConnectionStateDisconnected ||
+		state == webrtc.PeerConnectionStateFailed ||
+		state == webrtc.PeerConnectionStateClosed
+}
+
+func (c *Conn) CloseTransport() {
+	c.transportClosed = true
 }
 
 func (c *Conn) AddCandidate(candidate string) error {

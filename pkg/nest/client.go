@@ -92,6 +92,10 @@ func (c *WebRTCClient) Stop() error {
 	return c.conn.Stop()
 }
 
+func (c *WebRTCClient) IsClosed() bool {
+	return c.conn.IsClosed()
+}
+
 func (c *WebRTCClient) MarshalJSON() ([]byte, error) {
 	return c.conn.MarshalJSON()
 }
