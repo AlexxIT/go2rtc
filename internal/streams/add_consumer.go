@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/probe"
 )
 
 func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
@@ -70,6 +71,12 @@ func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
 
 				case core.DirectionSendonly:
 					log.Trace().Msgf("[streams] match cons=%d => prod=%d", consN, prodN)
+
+					// A probe asks what the stream can do and never talks. Binding its microphone re-dials an RTSP
+					// camera with the backchannel set up, and the camera's talkback stays taken after the probe is gone.
+					if _, ok := cons.(*probe.Probe); ok {
+						break
+					}
 
 					// Step 4. Get recvonly track from consumer (backchannel)
 					if track, err = cons.(core.Producer).GetTrack(consMedia, consCodec); err != nil {
