@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/AlexxIT/go2rtc/internal/api/server"
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"gopkg.in/yaml.v3"
 )
@@ -23,7 +24,7 @@ func configHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// https://www.ietf.org/archive/id/draft-ietf-httpapi-yaml-mediatypes-00.html
-		Response(w, data, "application/yaml")
+		server.Response(w, data, "application/yaml")
 
 	case "POST", "PATCH":
 		data, err := io.ReadAll(r.Body)

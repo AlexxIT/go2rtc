@@ -95,7 +95,7 @@ func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
 
 	// stop producers if they don't have readers
 	if s.pending.Add(-1) == 0 {
-		s.stopProducers()
+		s.StopProducers()
 	}
 
 	if len(prodStarts) == 0 {

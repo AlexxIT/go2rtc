@@ -4,7 +4,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/mp4"
@@ -13,7 +12,7 @@ import (
 func handlerWSHLS(tr *ws.Transport, msg *ws.Message) error {
 	stream, _ := streams.GetOrPatch(tr.Request.URL.Query())
 	if stream == nil {
-		return errors.New(api.StreamNotFound)
+		return errors.New(streams.StreamNotFound)
 	}
 
 	codecs := msg.String()

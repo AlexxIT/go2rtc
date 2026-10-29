@@ -31,6 +31,10 @@ func NewProducer(url string) (core.Producer, error) {
 		return nil, errors.New("ffmpeg: unsupported params: " + url[i:])
 	}
 
+	// Append quitstdin param to ensure ffmpeg process is terminated when the producer is stopped.
+	// This is necessary as it lets ffmpeg exit gracefully.
+	p.query.Add("quitstdin", "q")
+
 	p.ID = core.NewID()
 	p.FormatName = "ffmpeg"
 	p.Medias = []*core.Media{

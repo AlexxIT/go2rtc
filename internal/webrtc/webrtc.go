@@ -5,7 +5,7 @@ import (
 	"net"
 	"strings"
 
-	"github.com/AlexxIT/go2rtc/internal/api"
+	api "github.com/AlexxIT/go2rtc/internal/api/server"
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/streams"
@@ -130,7 +130,7 @@ func asyncHandler(tr *ws.Transport, msg *ws.Message) (err error) {
 	}
 
 	if stream == nil {
-		return errors.New(api.StreamNotFound)
+		return errors.New(streams.StreamNotFound)
 	}
 
 	var offer struct {

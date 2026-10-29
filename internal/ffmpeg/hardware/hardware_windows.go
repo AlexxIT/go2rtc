@@ -2,7 +2,7 @@
 
 package hardware
 
-import "github.com/AlexxIT/go2rtc/internal/api"
+import api "github.com/AlexxIT/go2rtc/internal/api/server"
 
 const ProbeDXVA2H264 = "-init_hw_device dxva2 -f lavfi -i testsrc2 -t 1 -c h264_qsv -f null -"
 const ProbeDXVA2H265 = "-init_hw_device dxva2 -f lavfi -i testsrc2 -t 1 -c hevc_qsv -f null -"

@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
@@ -66,7 +65,7 @@ func outputWebRTC(w http.ResponseWriter, r *http.Request) {
 	u := r.URL.Query().Get("src")
 	stream := streams.Get(u)
 	if stream == nil {
-		http.Error(w, api.StreamNotFound, http.StatusNotFound)
+		http.Error(w, streams.StreamNotFound, http.StatusNotFound)
 		return
 	}
 
@@ -167,7 +166,7 @@ func inputWebRTC(w http.ResponseWriter, r *http.Request) {
 	dst := r.URL.Query().Get("dst")
 	stream := streams.Get(dst)
 	if stream == nil {
-		http.Error(w, api.StreamNotFound, http.StatusNotFound)
+		http.Error(w, streams.StreamNotFound, http.StatusNotFound)
 		return
 	}
 

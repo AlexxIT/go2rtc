@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/AlexxIT/go2rtc/internal/api"
+	api "github.com/AlexxIT/go2rtc/internal/api/server"
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/rs/zerolog"
 )
@@ -173,4 +173,12 @@ func GetAllSources() map[string][]string {
 	}
 	streamsMu.Unlock()
 	return sources
+}
+
+func StopAll() {
+	streamsMu.Lock()
+	for _, stream := range streams {
+		stream.StopProducers(true)
+	}
+	streamsMu.Unlock()
 }
