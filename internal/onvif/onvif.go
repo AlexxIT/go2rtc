@@ -29,6 +29,36 @@ func Init() {
 
 	// ONVIF client autodiscovery
 	api.HandleFunc("api/onvif", apiOnvif)
+
+	var enableWSD bool
+	if api.Port > 0 {
+		var cfg struct {
+			Mod struct {
+				MaxConcurrentProbes int  `yaml:"maxConcurrentProbes"`
+				SendHelloMessage    bool `yaml:"sendHelloMessage"`
+				DisableWSDiscovery  bool `yaml:"disableWSDiscovery"`
+			} `yaml:"onvif"`
+		}
+		cfg.Mod.MaxConcurrentProbes = maxConcurrentProbes
+		cfg.Mod.SendHelloMessage = sendHelloMessage
+
+		// load config from YAML
+		app.LoadConfig(&cfg)
+		maxConcurrentProbes = cfg.Mod.MaxConcurrentProbes
+		sendHelloMessage = cfg.Mod.SendHelloMessage
+
+		servicePort = strconv.Itoa(api.Port)
+
+		if !cfg.Mod.DisableWSDiscovery && maxConcurrentProbes > 0 {
+			enableWSD = true
+		}
+	}
+
+	if enableWSD {
+		go HandleProbe()
+	} else {
+		log.Info().Msg("WS-Discovery disabled")
+	}
 }
 
 var log zerolog.Logger
