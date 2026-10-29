@@ -130,6 +130,9 @@ func GetFmtpLine(avc []byte) string {
 
 		switch NALUType(avc) {
 		case NALUTypeSPS:
+			if len(avc) < 8 || size > len(avc) {
+				return s
+			}
 			s += ";profile-level-id=" + hex.EncodeToString(avc[5:8])
 			s += ";sprop-parameter-sets=" + base64.StdEncoding.EncodeToString(avc[4:size])
 		case NALUTypePPS:
