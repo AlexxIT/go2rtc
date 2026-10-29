@@ -257,20 +257,20 @@ func (s *server) GetCharacteristic(conn net.Conn, aid uint8, iid uint64) any {
 	return char.Value
 }
 
-func (s *server) SetCharacteristic(conn net.Conn, aid uint8, iid uint64, value any) {
+func (s *server) SetCharacteristic(conn net.Conn, aid uint8, iid uint64, value any) (any, int) {
 	log.Trace().Str("stream", s.stream).Msgf("[homekit] set char aid=%d iid=0x%x value=%v", aid, iid, value)
 
 	char := s.accessory.GetCharacterByID(iid)
 	if char == nil {
 		log.Warn().Msgf("[homekit] set unknown characteristic: %d", iid)
-		return
+		return nil, hap.StatusResourceNotExist
 	}
 
 	switch char.Type {
 	case camera.TypeSetupEndpoints:
 		var offer camera.SetupEndpointsRequest
 		if err := tlv8.UnmarshalBase64(value, &offer); err != nil {
-			return
+			return nil, hap.StatusInvalidValue
 		}
 
 		consumer := homekit.NewConsumer(conn, srtp2.Server)
@@ -280,18 +280,20 @@ func (s *server) SetCharacteristic(conn net.Conn, aid uint8, iid uint64, value a
 	case camera.TypeSelectedStreamConfiguration:
 		var conf camera.SelectedStreamConfiguration
 		if err := tlv8.UnmarshalBase64(value, &conf); err != nil {
-			return
+			return nil, hap.StatusInvalidValue
 		}
 
 		log.Trace().Str("stream", s.stream).Msgf("[homekit] stream id=%x cmd=%d", conf.Control.SessionID, conf.Control.Command)
 
 		switch conf.Control.Command {
 		case camera.SessionCommandEnd:
+			// ending an unknown session stays a success so a repeated
+			// teardown is idempotent
 			for _, consumer := range s.conns {
 				if consumer, ok := consumer.(*homekit.Consumer); ok {
 					if consumer.SessionID() == conf.Control.SessionID {
 						_ = consumer.Stop()
-						return
+						return nil, hap.StatusSuccess
 					}
 				}
 			}
@@ -299,19 +301,20 @@ func (s *server) SetCharacteristic(conn net.Conn, aid uint8, iid uint64, value a
 		case camera.SessionCommandStart:
 			consumer := s.consumer
 			if consumer == nil {
-				return
+				// start without a preceding Setup Endpoints write
+				return nil, hap.StatusInvalidValue
 			}
 
 			if !consumer.SetConfig(&conf) {
 				log.Warn().Msgf("[homekit] wrong config")
-				return
+				return nil, hap.StatusInvalidValue
 			}
 
 			s.AddConn(consumer)
 
 			stream := streams.Get(s.stream)
 			if err := stream.AddConsumer(consumer); err != nil {
-				return
+				return nil, hap.StatusResourceBusy
 			}
 
 			go func() {
@@ -322,6 +325,8 @@ func (s *server) SetCharacteristic(conn net.Conn, aid uint8, iid uint64, value a
 			}()
 		}
 	}
+
+	return nil, hap.StatusSuccess
 }
 
 func (s *server) GetImage(conn net.Conn, width, height int) []byte {

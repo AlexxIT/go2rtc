@@ -31,7 +31,10 @@ type ServerPair interface {
 type ServerAccessory interface {
 	GetAccessories(conn net.Conn) []*hap.Accessory
 	GetCharacteristic(conn net.Conn, aid uint8, iid uint64) any
-	SetCharacteristic(conn net.Conn, aid uint8, iid uint64, value any)
+	// SetCharacteristic returns the write response value, used only for
+	// characteristics with the write response permission, and a HAP status
+	// code (hap.StatusSuccess when the write succeeded).
+	SetCharacteristic(conn net.Conn, aid uint8, iid uint64, value any) (any, int)
 	GetImage(conn net.Conn, width, height int) []byte
 }
 
@@ -65,25 +68,69 @@ func ServerHandler(server Server) HandlerFunc {
 			case "PUT":
 				var v struct {
 					Value []struct {
-						AID   uint8  `json:"aid"`
-						IID   uint64 `json:"iid"`
-						Value any    `json:"value"`
+						AID      uint8  `json:"aid"`
+						IID      uint64 `json:"iid"`
+						Value    any    `json:"value"`
+						Response bool   `json:"r"`
 					} `json:"characteristics"`
 				}
 				if err := json.NewDecoder(req.Body).Decode(&v); err != nil {
 					return nil, err
 				}
 
-				for _, char := range v.Value {
-					server.SetCharacteristic(conn, char.AID, char.IID, char.Value)
+				type result struct {
+					aid    uint8
+					iid    uint64
+					value  any
+					status int
+					wanted bool
 				}
 
-				res := &http.Response{
-					StatusCode: http.StatusNoContent,
-					Proto:      "HTTP",
-					ProtoMajor: 1,
-					ProtoMinor: 1,
+				results := make([]result, 0, len(v.Value))
+				var withResponse, withError bool
+
+				for _, char := range v.Value {
+					value, status := server.SetCharacteristic(conn, char.AID, char.IID, char.Value)
+
+					results = append(results, result{
+						aid: char.AID, iid: char.IID, value: value, status: status, wanted: char.Response,
+					})
+
+					if status != hap.StatusSuccess {
+						withError = true
+					} else if char.Response {
+						withResponse = true
+					}
 				}
+
+				// a plain successful write has no body at all
+				if !withResponse && !withError {
+					res := &http.Response{
+						StatusCode: http.StatusNoContent,
+						Proto:      "HTTP",
+						ProtoMajor: 1,
+						ProtoMinor: 1,
+					}
+					return res, nil
+				}
+
+				// anything other than a plain success is reported per
+				// characteristic, so every entry carries a status - including
+				// the ones that succeeded
+				var body hap.JSONCharacters
+				for _, r := range results {
+					char := hap.JSONCharacter{AID: r.aid, IID: r.iid, Status: r.status}
+					if r.status == hap.StatusSuccess && r.wanted {
+						char.Value = r.value
+					}
+					body.Value = append(body.Value, char)
+				}
+
+				res, err := makeResponse(hap.MimeJSON, body)
+				if err != nil {
+					return nil, err
+				}
+				res.StatusCode = http.StatusMultiStatus
 				return res, nil
 			}
 

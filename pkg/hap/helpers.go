@@ -53,6 +53,15 @@ const (
 
 	PermissionUser  = 0
 	PermissionAdmin = 1
+
+	// HAP status codes for characteristic reads and writes
+	StatusSuccess               = 0
+	StatusInsufficientPrivilege = -70401
+	StatusResourceBusy          = -70403
+	StatusReadOnly              = -70404
+	StatusWriteOnly             = -70405
+	StatusResourceNotExist      = -70409
+	StatusInvalidValue          = -70410
 )
 
 const DeviceAID = 1 // TODO: fix someday
