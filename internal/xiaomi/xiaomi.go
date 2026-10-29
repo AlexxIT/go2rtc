@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/app"
@@ -44,7 +45,12 @@ func Init() {
 
 		log.Debug().Msgf("xiaomi: dial %s", rawURL)
 
-		return xiaomi.Dial(rawURL)
+		prod, err := xiaomi.Dial(rawURL)
+		if err != nil {
+			return nil, err
+		}
+
+		return prod, nil
 	})
 
 	api.HandleFunc("api/xiaomi", apiXiaomi)
@@ -97,6 +103,8 @@ func getCameraURL(url *url.URL) (string, error) {
 	// Probably all the doorbells and all the battery cameras.
 	if strings.Contains(model, ".cateye.") {
 		_ = wakeUpCamera(url)
+		log.Debug().Msg("[xiaomi] cateye wakeup sent, waiting 3s for device to wake up...")
+		time.Sleep(3 * time.Second)
 	}
 
 	// The getMissURL request has a fallback to getP2PURL.
