@@ -19,7 +19,7 @@ streams:
 
 A regular camera has a single video source (`GetVideoSources`) and two profiles (`GetProfiles`).
 
-Go2rtc has one video source and one profile per stream.
+Go2rtc has one video source and one profile per stream. Profiles report the stream's codec (H264 or H265) and resolution, probed like `/api/streams?src=`. Values that can't be probed keep the previous defaults (H264, 1920x1080).
 
 ## Tested clients
 
