@@ -2,12 +2,18 @@ package mdns
 
 import (
 	"net"
+	"strings"
+	"time"
 
 	"github.com/miekg/dns"
 )
 
 // ClassCacheFlush https://datatracker.ietf.org/doc/html/rfc6762#section-10.2
 const ClassCacheFlush = 0x8001
+
+// ClassUnicastResponse is the QU bit a question sets in its class field
+// https://datatracker.ietf.org/doc/html/rfc6762#section-5.4
+const ClassUnicastResponse = 0x8000
 
 func Serve(service string, entries []*ServiceEntry) error {
 	b := Browser{Service: service}
@@ -22,9 +28,15 @@ func Serve(service string, entries []*ServiceEntry) error {
 func (b *Browser) Serve(entries []*ServiceEntry) error {
 	names := make(map[string]*ServiceEntry, len(entries))
 	for _, entry := range entries {
-		name := entry.name() + "." + b.Service
-		names[name] = entry
+		name := entry.instance() + "." + b.Service
+		names[strings.ToLower(name)] = entry
+		// The host name too: a controller asks for its AAAA before connecting.
+		names[strings.ToLower(entry.name()+".local.")] = entry
 	}
+
+	// A controller that cached an instance at another address only asks again
+	// on its backoff schedule (up to an hour); an announcement reaches it now.
+	go b.announce(entries)
 
 	buf := make([]byte, 1500)
 	for {
@@ -53,18 +65,23 @@ func (b *Browser) Serve(entries []*ServiceEntry) error {
 
 		var res dns.Msg // response
 		for _, q := range req.Question {
-			if q.Qtype != dns.TypePTR || q.Qclass != dns.ClassINET {
+			if q.Qclass&^ClassUnicastResponse != dns.ClassINET {
 				continue
 			}
 
-			if q.Name == ServiceDNSSD {
+			// Any question about one of our instances is answered, not only a
+			// browse: a paired controller resolves the instance it knows (SRV,
+			// TXT) and does not browse again.
+			if entry, ok := names[strings.ToLower(q.Name)]; ok {
+				AppendEntry(&res, entry, b.Service, localIP)
+			} else if q.Qtype != dns.TypePTR {
+				continue
+			} else if q.Name == ServiceDNSSD {
 				AppendDNSSD(&res, b.Service)
 			} else if q.Name == b.Service {
 				for _, entry := range entries {
 					AppendEntry(&res, entry, b.Service, localIP)
 				}
-			} else if entry, ok := names[q.Name]; ok {
-				AppendEntry(&res, entry, b.Service, localIP)
 			}
 		}
 
@@ -112,8 +129,27 @@ func AppendDNSSD(msg *dns.Msg, service string) {
 	)
 }
 
+// announce sends every entry unsolicited, twice one second apart, out of each
+// interface with that interface's own address (RFC 6762 8.3).
+func (b *Browser) announce(entries []*ServiceEntry) {
+	for i := 0; i < 2; i++ {
+		for j, send := range b.Sends {
+			var res dns.Msg
+			for _, entry := range entries {
+				AppendEntry(&res, entry, b.Service, b.Nets[j].IP)
+			}
+			res.MsgHdr.Response = true
+			res.MsgHdr.Authoritative = true
+			if data, err := res.Pack(); err == nil {
+				_, _ = send.WriteTo(data, MulticastAddr)
+			}
+		}
+		time.Sleep(time.Second)
+	}
+}
+
 func AppendEntry(msg *dns.Msg, entry *ServiceEntry, service string, ip net.IP) {
-	ptrName := entry.name() + "." + service
+	ptrName := entry.instance() + "." + service
 	srvName := entry.name() + ".local."
 
 	msg.Answer = append(
@@ -157,6 +193,29 @@ func AppendEntry(msg *dns.Msg, entry *ServiceEntry, service string, ip net.IP) {
 				Ttl:    120,
 			},
 			A: ip,
+		},
+		// Negative answers (RFC 6762 6.1): the instance has only TXT and SRV,
+		// the host only an A record. Without them a controller waits for the
+		// AAAA nobody will send before it dials the A.
+		&dns.NSEC{
+			Hdr: dns.RR_Header{
+				Name:   ptrName,
+				Rrtype: dns.TypeNSEC,
+				Class:  ClassCacheFlush,
+				Ttl:    4500,
+			},
+			NextDomain: ptrName,
+			TypeBitMap: []uint16{dns.TypeTXT, dns.TypeSRV},
+		},
+		&dns.NSEC{
+			Hdr: dns.RR_Header{
+				Name:   srvName,
+				Rrtype: dns.TypeNSEC,
+				Class:  ClassCacheFlush,
+				Ttl:    120,
+			},
+			NextDomain: srvName,
+			TypeBitMap: []uint16{dns.TypeA},
 		},
 	)
 }
