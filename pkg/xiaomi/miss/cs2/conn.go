@@ -157,7 +157,7 @@ func (c *Conn) worker() {
 			}
 
 			if err != nil {
-				c.err = fmt.Errorf("%s: %w", "cs2", err)
+				c.err = fmt.Errorf("%s: ch%d (queue %d/%d): %w", "cs2", ch, len(channel.popBuf), cap(channel.popBuf), err)
 				return
 			}
 
