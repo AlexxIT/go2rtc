@@ -55,7 +55,12 @@ func NewClient(rawURL string) (*Client, error) {
 	var conn Conn
 	switch s := query.Get("vendor"); s {
 	case "cs2":
-		conn, err = cs2.Dial(u.Host, query.Get("transport"))
+		// Some cameras don't answer LAN search, connect via CS2 P2P servers
+		if servers := cs2.DefaultServers(query.Get("p2p_id")); servers != nil {
+			conn, err = cs2.DialServers(query.Get("p2p_id"), servers, query.Get("transport"))
+		} else {
+			conn, err = cs2.Dial(u.Host, query.Get("transport"))
+		}
 	case "tutk":
 		conn, err = tutk.Dial(u.Host, query.Get("uid"), "Miss", "client")
 	default:

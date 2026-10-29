@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/app"
@@ -96,7 +97,9 @@ func getCameraURL(url *url.URL) (string, error) {
 	// It is not known which models need to be awakened.
 	// Probably all the doorbells and all the battery cameras.
 	if strings.Contains(model, ".cateye.") {
-		_ = wakeUpCamera(url)
+		if err := wakeUpCamera(url, model); err != nil {
+			log.Debug().Err(err).Msgf("xiaomi: wakeup %s", model)
+		}
 	}
 
 	// The getMissURL request has a fallback to getP2PURL.
@@ -162,6 +165,13 @@ func getMissURL(url *url.URL) (string, error) {
 	)
 
 	res, err := cloudUserRequest(url.User, "/v2/device/miss_get_vendor", params)
+	// sleeping midr doorbells answer with "rpc response code error" until they wake up
+	for i := 1; err != nil && i < 4 && strings.HasPrefix(query.Get("model"), "midr."); i++ {
+		log.Debug().Err(err).Msgf("xiaomi: miss_get_vendor attempt %d", i)
+		_ = wakeUpCamera(url, query.Get("model"))
+		time.Sleep(2 * time.Second)
+		res, err = cloudUserRequest(url.User, "/v2/device/miss_get_vendor", params)
+	}
 	if err != nil {
 		if strings.Contains(err.Error(), "no available vendor support") {
 			return getLegacyURL(url)
@@ -193,6 +203,11 @@ func getMissURL(url *url.URL) (string, error) {
 		query.Set("uid", v.Vendor.Params.UID)
 	}
 
+	// midr cateye don't answer LAN search, they are reachable only via CS2 P2P servers
+	if v.Vendor.ID == 4 && strings.HasPrefix(query.Get("model"), "midr.") {
+		query.Set("p2p_id", v.Vendor.Params.UID)
+	}
+
 	url.RawQuery = query.Encode()
 	return url.String(), nil
 }
@@ -211,9 +226,23 @@ func getVendorName(i byte) string {
 	return fmt.Sprintf("%d", i)
 }
 
-func wakeUpCamera(url *url.URL) error {
-	const params = `{"id":1,"method":"wakeup","params":{"video":"1"}}`
+func wakeUpCamera(url *url.URL, model string) error {
 	did := url.Query().Get("did")
+
+	// midr doorbells don't respond to "wakeup" (go2rtc #2373)
+	// and need MIoT action "Wake Up" before miss_get_vendor (go2rtc #2488)
+	if strings.HasPrefix(model, "midr.") {
+		res, err := cloudUserRequest(url.User, "/home/rpc/"+did, `{"id":1,"method":"wakeup_host","params":{}}`)
+		log.Debug().Err(err).Msgf("xiaomi: wakeup_host %s", res)
+		params := fmt.Sprintf(`{"params":{"did":"%s","siid":2,"aiid":3,"in":[]}}`, did)
+		res, err = cloudUserRequest(url.User, "/miotspec/action", params)
+		log.Debug().Err(err).Msgf("xiaomi: miot action 2.3 %s", res)
+		// without a pause miss_get_vendor hangs ~10s on the sleeping camera and fails
+		time.Sleep(3 * time.Second)
+		return err
+	}
+
+	const params = `{"id":1,"method":"wakeup","params":{"video":"1"}}`
 	_, err := cloudUserRequest(url.User, "/home/rpc/"+did, params)
 	return err
 }
