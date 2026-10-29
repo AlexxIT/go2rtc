@@ -18,6 +18,13 @@ import (
 
 const MimeSDP = "application/sdp"
 
+type jsonWebRTCOffer struct {
+	Type               string                   `json:"type"`
+	SDP                string                   `json:"sdp"`
+	ICEServers         []pion.ICEServer         `json:"ice_servers"`
+	ICETransportPolicy *pion.ICETransportPolicy `json:"ice_transport_policy"`
+}
+
 var sessions = map[string]*webrtc.Conn{}
 
 func syncHandler(w http.ResponseWriter, r *http.Request) {
@@ -77,16 +84,18 @@ func outputWebRTC(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var offer string
+	var peerConf *pion.Configuration
 
 	switch mediaType {
 	case "application/json":
-		var desc pion.SessionDescription
-		if err := json.NewDecoder(r.Body).Decode(&desc); err != nil {
+		var req jsonWebRTCOffer
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			log.Error().Err(err).Caller().Send()
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		offer = desc.SDP
+		offer = req.SDP
+		peerConf = PeerConfigFromOptions(req.ICEServers, req.ICETransportPolicy)
 
 	case "application/x-www-form-urlencoded":
 		if err := r.ParseForm(); err != nil {
@@ -124,7 +133,7 @@ func outputWebRTC(w http.ResponseWriter, r *http.Request) {
 		desc = "webrtc/post"
 	}
 
-	answer, err := ExchangeSDP(stream, offer, desc, r.UserAgent())
+	answer, err := ExchangeSDP(stream, offer, desc, r.UserAgent(), peerConf)
 	if err != nil {
 		log.Error().Err(err).Caller().Send()
 		http.Error(w, err.Error(), http.StatusInternalServerError)
