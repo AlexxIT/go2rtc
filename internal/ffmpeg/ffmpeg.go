@@ -304,7 +304,7 @@ func parseArgs(s string) *ffmpeg.Args {
 			drawtext = configTemplate(drawtext)
 
 			// support default timestamp format
-			if !strings.Contains(drawtext, "text=") {
+			if !(strings.Contains(drawtext, "text=") || strings.Contains(drawtext, "textfile=")) {
 				drawtext += `:text='%{localtime\:%Y-%m-%d %X}'`
 			}
 
