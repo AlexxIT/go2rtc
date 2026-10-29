@@ -28,7 +28,6 @@ func dialDTLS(ctx context.Context, channel uint8, addr net.Addr, writeFn func([]
 
 	var conn *dtls.Conn
 	var err error
-
 	if isServer {
 		conn, err = dtls.Server(adapter, addr, buildDTLSConfig(psk, true))
 	} else {
@@ -68,6 +67,7 @@ func buildDTLSConfig(psk []byte, isServer bool) *dtls.Config {
 	if isServer {
 		config.CipherSuites = []dtls.CipherSuiteID{dtls.TLS_PSK_WITH_AES_128_CBC_SHA256}
 	} else {
+		config.CipherSuites = []dtls.CipherSuiteID{dtls.TLS_PSK_WITH_AES_128_CBC_SHA256}
 		config.CustomCipherSuites = CustomCipherSuites
 	}
 

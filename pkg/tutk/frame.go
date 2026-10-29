@@ -78,11 +78,18 @@ func (fi *FrameInfo) Channels() uint8 {
 }
 
 func ParseFrameInfo(data []byte) *FrameInfo {
-	if len(data) < frameInfoSize {
+	return parseFrameInfo(data, frameInfoSize)
+}
+
+func parseFrameInfo(data []byte, fiSize int) *FrameInfo {
+	if fiSize < frameInfoSize {
+		fiSize = frameInfoSize
+	}
+	if len(data) < fiSize {
 		return nil
 	}
 
-	offset := len(data) - frameInfoSize
+	offset := len(data) - fiSize
 	fi := data[offset:]
 
 	return &FrameInfo{
@@ -112,14 +119,15 @@ type Packet struct {
 }
 
 type PacketHeader struct {
-	Channel      byte
-	FrameType    byte
-	HeaderSize   int
-	FrameNo      uint32
-	PktIdx       uint16
-	PktTotal     uint16
-	PayloadSize  uint16
-	HasFrameInfo bool
+	Channel       byte
+	FrameType     byte
+	HeaderSize    int
+	FrameNo       uint32
+	PktIdx        uint16
+	PktTotal      uint16
+	PayloadSize   uint16
+	HasFrameInfo  bool
+	FrameInfoSize int // actual FrameInfo size in bytes (may differ from standard 40)
 }
 
 func ParsePacketHeader(data []byte) *PacketHeader {
@@ -150,8 +158,9 @@ func ParsePacketHeader(data []byte) *PacketHeader {
 		hdr.PayloadSize = binary.LittleEndian.Uint16(data[16:])
 		hdr.FrameNo = binary.LittleEndian.Uint32(data[24:])
 
-		if pktIdxOrMarker == 0x0028 && (IsEndFrame(frameType) || hdr.PktTotal == 1) {
+		if isFrameInfoMarker(pktIdxOrMarker, hdr.PktTotal, frameType) {
 			hdr.HasFrameInfo = true
+			hdr.FrameInfoSize = int(pktIdxOrMarker)
 			if hdr.PktTotal > 0 {
 				hdr.PktIdx = hdr.PktTotal - 1
 			}
@@ -164,8 +173,9 @@ func ParsePacketHeader(data []byte) *PacketHeader {
 		hdr.PayloadSize = binary.LittleEndian.Uint16(data[24:])
 		hdr.FrameNo = binary.LittleEndian.Uint32(data[32:])
 
-		if pktIdxOrMarker == 0x0028 && (IsEndFrame(frameType) || hdr.PktTotal == 1) {
+		if isFrameInfoMarker(pktIdxOrMarker, hdr.PktTotal, frameType) {
 			hdr.HasFrameInfo = true
+			hdr.FrameInfoSize = int(pktIdxOrMarker)
 			if hdr.PktTotal > 0 {
 				hdr.PktIdx = hdr.PktTotal - 1
 			}
@@ -189,6 +199,18 @@ func IsEndFrame(frameType uint8) bool {
 
 func IsContinuationFrame(frameType uint8) bool {
 	return frameType == FrameTypeCont || frameType == FrameTypeContAlt
+}
+
+// isFrameInfoMarker returns true when the field at [14:16] (or [22:24] for 36-byte
+// headers) is a FrameInfo size marker rather than a packet index.
+// Standard devices use 0x0028 (40 bytes); some devices (e.g. doorbells) use
+// 0x0030 (48 bytes). Any value >= PktTotal is also impossible as a packet index
+// and is treated as a size marker.
+func isFrameInfoMarker(val, pktTotal uint16, frameType uint8) bool {
+	if !IsEndFrame(frameType) && pktTotal != 1 {
+		return false
+	}
+	return val == 0x0028 || (pktTotal > 0 && val >= pktTotal)
 }
 
 type channelState struct {
@@ -279,7 +301,7 @@ func (h *FrameHandler) Handle(data []byte) {
 		return
 	}
 
-	payload, fi := h.extractPayload(data, hdr.Channel)
+	payload, fi := h.extractPayload(data, hdr.Channel, hdr.FrameInfoSize)
 	if payload == nil {
 		return
 	}
@@ -302,7 +324,7 @@ func (h *FrameHandler) Handle(data []byte) {
 	}
 }
 
-func (h *FrameHandler) extractPayload(data []byte, channel byte) ([]byte, *FrameInfo) {
+func (h *FrameHandler) extractPayload(data []byte, channel byte, fiSizeHint int) ([]byte, *FrameInfo) {
 	if len(data) < 2 {
 		return nil, nil
 	}
@@ -328,9 +350,15 @@ func (h *FrameHandler) extractPayload(data []byte, channel byte) ([]byte, *Frame
 	case FrameTypeEndSingle, FrameTypeEndMulti:
 		headerSize = 28
 		fiSize = frameInfoSize
+		if fiSizeHint > fiSize {
+			fiSize = fiSizeHint
+		}
 	case FrameTypeEndExt:
 		headerSize = 36
 		fiSize = frameInfoSize
+		if fiSizeHint > fiSize {
+			fiSize = fiSizeHint
+		}
 	default:
 		headerSize = 28
 	}
@@ -347,7 +375,7 @@ func (h *FrameHandler) extractPayload(data []byte, channel byte) ([]byte, *Frame
 		return data[headerSize:], nil
 	}
 
-	fi := ParseFrameInfo(data)
+	fi := parseFrameInfo(data, fiSize)
 
 	validCodec := false
 	switch channel {
