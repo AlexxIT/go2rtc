@@ -7,9 +7,16 @@ import (
 
 func (c *Conn) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
 	core.Assert(media.Direction == core.DirectionRecvonly)
+	if c.Mode == core.ModeActiveProducer {
+		c.receiverMu.Lock()
+		defer c.receiverMu.Unlock()
+	}
 
 	for _, track := range c.Receivers {
 		if track.Codec == codec {
+			return track, nil
+		}
+		if c.Mode == core.ModeActiveProducer && track.Media == media && sameCodec(track.Codec, codec) {
 			return track, nil
 		}
 	}
@@ -41,6 +48,13 @@ func (c *Conn) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, e
 	track := core.NewReceiver(media, codec)
 	c.Receivers = append(c.Receivers, track)
 	return track, nil
+}
+
+func sameCodec(a, b *core.Codec) bool {
+	ac, bc := *a, *b
+	ac.PayloadType = 0
+	bc.PayloadType = 0
+	return ac == bc
 }
 
 func (c *Conn) Start() error {
