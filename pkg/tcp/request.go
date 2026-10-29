@@ -153,6 +153,11 @@ var insecureConfig = &tls.Config{
 		// but cameras can't work without them https://github.com/AlexxIT/go2rtc/issues/1172
 		tls.TLS_RSA_WITH_AES_128_GCM_SHA256, // insecure
 		tls.TLS_RSA_WITH_AES_256_GCM_SHA384, // insecure
+
+		// older Axis firmware (e.g. M5054 on 6.53.4) supports neither ECDHE
+		// nor the GCM suites above, only RSA-key-exchange or DHE CBC suites
+		tls.TLS_RSA_WITH_AES_128_CBC_SHA, // insecure
+		tls.TLS_RSA_WITH_AES_256_CBC_SHA, // insecure
 	},
 }
 
