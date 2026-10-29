@@ -31,3 +31,47 @@ func TestBuggy_RTSP_AAC(t *testing.T) {
 
 	require.Equal(t, len(payload), size+ADTSHeaderSize)
 }
+
+func TestRTPToADTSIgnoresMalformedAUHeaders(t *testing.T) {
+	codec := &core.Codec{FmtpLine: "config=1408"}
+
+	tests := []struct {
+		name    string
+		payload []byte
+	}{
+		{
+			name:    "short payload",
+			payload: []byte{0},
+		},
+		{
+			name:    "truncated AU header",
+			payload: []byte{0, 8, 0},
+		},
+		{
+			name:    "AU headers exceed payload",
+			payload: []byte{0, 24, 0, 0},
+		},
+		{
+			name: "AU size exceeds payload",
+			payload: func() []byte {
+				payload := make([]byte, 220)
+				payload[1] = 16 // one 16-bit AU header
+				payload[2] = 0xFF
+				payload[3] = 0xF8 // AU size: 8191 bytes
+				return payload
+			}(),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var calls int
+			handler := RTPToADTS(codec, func(*core.Packet) { calls++ })
+
+			require.NotPanics(t, func() {
+				handler(&rtp.Packet{Payload: tt.payload})
+			})
+			require.Zero(t, calls)
+		})
+	}
+}
