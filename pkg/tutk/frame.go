@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/aac"
 )
@@ -27,35 +28,40 @@ const (
 
 const frameInfoSize = 40
 
-// FrameInfo - Wyze extended FRAMEINFO (40 bytes at end of packet)
-// Video: 40 bytes, Audio: 16 bytes (uses same struct, fields 16+ are zero)
+// FrameInfo - Wyze extended FRAMEINFO (40 bytes at end of packet),
+// matching wyzecam's FrameInfoStruct. Some devices (e.g. the WYZEDB3
+// doorbell) send the 48-byte FrameInfo3Struct variant instead (marker
+// 0x0030), which appends a face-detection box; bytes 0-23 are identical,
+// so both are parsed front-aligned here and the extension is ignored.
+// Video: 40/48 bytes, Audio: 16 bytes (same struct, fields 16+ are zero)
 //
 // Offset  Size  Field
-// 0-1     2     CodecID     - 0x4E=H264, 0x7B=H265, 0x90=AAC_WYZE
-// 2       1     Flags       - Video: 1=Keyframe, 0=P-frame | Audio: sample rate/bits/channels
-// 3       1     CamIndex    - Camera index
-// 4       1     OnlineNum   - Online number
-// 5       1     FPS         - Framerate (e.g. 20)
-// 6       1     ResTier     - Video: 1=Low(360P), 4=High(HD/2K) | Audio: 0
-// 7       1     Bitrate     - Video: 30=360P, 100=HD, 200=2K | Audio: 1
-// 8-11    4     Timestamp   - Timestamp (increases ~50000/frame for 20fps video)
-// 12-15   4     SessionID   - Session marker (constant per stream)
-// 16-19   4     PayloadSize - Frame payload size in bytes
-// 20-23   4     FrameNo     - Global frame number
-// 24-35   12    DeviceID    - MAC address (ASCII) - video only
-// 36-39   4     Padding     - Always 0 - video only
+// 0-1     2     CodecID       - 0x4E=H264, 0x7B=H265, 0x90=AAC_WYZE
+// 2       1     Flags         - Video: 1=Keyframe, 0=P-frame | Audio: sample rate/bits/channels
+// 3       1     CamIndex      - Camera index
+// 4       1     OnlineNum     - Online number
+// 5       1     FPS           - Framerate (e.g. 20)
+// 6       1     ResTier       - Video: 1=Low(360P), 4=High(HD/2K) | Audio: 0
+// 7       1     Bitrate       - Video: 30=360P, 100=HD, 200=2K | Audio: 1
+// 8-11    4     TimestampFrac - Sub-second time component in device units (~us; increases ~50000/frame at 20fps). Some firmware (e.g. WYZEDB3 4.25.1.333) leaves it 0 - see tsTracker's wall-clock fallback.
+// 12-15   4     TimestampSec  - Unix epoch seconds (ticks 1/s; previously mislabeled SessionID)
+// 16-19   4     PayloadSize   - Frame payload size in bytes
+// 20-23   4     FrameNo       - Global frame number
+// 24-35   12    DeviceID      - MAC address (ASCII) - video only
+// 36-39   4     PlayToken     - n_play_token - video only
+// 40-47   8     FaceBox       - FrameInfo3Struct only: face_pos_x/y, face_width/height (4x u16)
 type FrameInfo struct {
-	CodecID     byte   // 0 (only low byte used)
-	Flags       uint8  // 2
-	CamIndex    uint8  // 3
-	OnlineNum   uint8  // 4
-	FPS         uint8  // 5: Framerate
-	ResTier     uint8  // 6: Resolution tier (1=Low, 4=High)
-	Bitrate     uint8  // 7: Bitrate index (30=360P, 100=HD, 200=2K)
-	Timestamp   uint32 // 8-11: Timestamp
-	SessionID   uint32 // 12-15: Session marker (constant)
-	PayloadSize uint32 // 16-19: Payload size
-	FrameNo     uint32 // 20-23: Frame number
+	CodecID       byte   // 0 (only low byte used)
+	Flags         uint8  // 2
+	CamIndex      uint8  // 3
+	OnlineNum     uint8  // 4
+	FPS           uint8  // 5: Framerate
+	ResTier       uint8  // 6: Resolution tier (1=Low, 4=High)
+	Bitrate       uint8  // 7: Bitrate index (30=360P, 100=HD, 200=2K)
+	TimestampFrac uint32 // 8-11: sub-second time component (0 on some firmware)
+	TimestampSec  uint32 // 12-15: Unix epoch seconds
+	PayloadSize   uint32 // 16-19: Payload size
+	FrameNo       uint32 // 20-23: Frame number
 }
 
 func (fi *FrameInfo) IsKeyframe() bool {
@@ -78,25 +84,32 @@ func (fi *FrameInfo) Channels() uint8 {
 }
 
 func ParseFrameInfo(data []byte) *FrameInfo {
-	if len(data) < frameInfoSize {
+	return parseFrameInfo(data, frameInfoSize)
+}
+
+func parseFrameInfo(data []byte, fiSize int) *FrameInfo {
+	if fiSize < frameInfoSize {
+		fiSize = frameInfoSize
+	}
+	if len(data) < fiSize {
 		return nil
 	}
 
-	offset := len(data) - frameInfoSize
+	offset := len(data) - fiSize
 	fi := data[offset:]
 
 	return &FrameInfo{
-		CodecID:     fi[0],
-		Flags:       fi[2],
-		CamIndex:    fi[3],
-		OnlineNum:   fi[4],
-		FPS:         fi[5],
-		ResTier:     fi[6],
-		Bitrate:     fi[7],
-		Timestamp:   binary.LittleEndian.Uint32(fi[8:]),
-		SessionID:   binary.LittleEndian.Uint32(fi[12:]),
-		PayloadSize: binary.LittleEndian.Uint32(fi[16:]),
-		FrameNo:     binary.LittleEndian.Uint32(fi[20:]),
+		CodecID:       fi[0],
+		Flags:         fi[2],
+		CamIndex:      fi[3],
+		OnlineNum:     fi[4],
+		FPS:           fi[5],
+		ResTier:       fi[6],
+		Bitrate:       fi[7],
+		TimestampFrac: binary.LittleEndian.Uint32(fi[8:]),
+		TimestampSec:  binary.LittleEndian.Uint32(fi[12:]),
+		PayloadSize:   binary.LittleEndian.Uint32(fi[16:]),
+		FrameNo:       binary.LittleEndian.Uint32(fi[20:]),
 	}
 }
 
@@ -112,14 +125,15 @@ type Packet struct {
 }
 
 type PacketHeader struct {
-	Channel      byte
-	FrameType    byte
-	HeaderSize   int
-	FrameNo      uint32
-	PktIdx       uint16
-	PktTotal     uint16
-	PayloadSize  uint16
-	HasFrameInfo bool
+	Channel       byte
+	FrameType     byte
+	HeaderSize    int
+	FrameNo       uint32
+	PktIdx        uint16
+	PktTotal      uint16
+	PayloadSize   uint16
+	HasFrameInfo  bool
+	FrameInfoSize int // actual FrameInfo size in bytes (may differ from standard 40)
 }
 
 func ParsePacketHeader(data []byte) *PacketHeader {
@@ -150,8 +164,9 @@ func ParsePacketHeader(data []byte) *PacketHeader {
 		hdr.PayloadSize = binary.LittleEndian.Uint16(data[16:])
 		hdr.FrameNo = binary.LittleEndian.Uint32(data[24:])
 
-		if pktIdxOrMarker == 0x0028 && (IsEndFrame(frameType) || hdr.PktTotal == 1) {
+		if isFrameInfoMarker(pktIdxOrMarker, hdr.PktTotal, frameType) {
 			hdr.HasFrameInfo = true
+			hdr.FrameInfoSize = int(pktIdxOrMarker)
 			if hdr.PktTotal > 0 {
 				hdr.PktIdx = hdr.PktTotal - 1
 			}
@@ -164,8 +179,9 @@ func ParsePacketHeader(data []byte) *PacketHeader {
 		hdr.PayloadSize = binary.LittleEndian.Uint16(data[24:])
 		hdr.FrameNo = binary.LittleEndian.Uint32(data[32:])
 
-		if pktIdxOrMarker == 0x0028 && (IsEndFrame(frameType) || hdr.PktTotal == 1) {
+		if isFrameInfoMarker(pktIdxOrMarker, hdr.PktTotal, frameType) {
 			hdr.HasFrameInfo = true
+			hdr.FrameInfoSize = int(pktIdxOrMarker)
 			if hdr.PktTotal > 0 {
 				hdr.PktIdx = hdr.PktTotal - 1
 			}
@@ -191,6 +207,19 @@ func IsContinuationFrame(frameType uint8) bool {
 	return frameType == FrameTypeCont || frameType == FrameTypeContAlt
 }
 
+// isFrameInfoMarker returns true when the field at [14:16] (or [22:24] for 36-byte
+// headers) is a FrameInfo size marker rather than a packet index.
+// Known marker values are matched explicitly: 0x0028 (40 bytes, standard) and
+// 0x0030 (48 bytes, e.g. doorbells). As a backstop, any value >= PktTotal is
+// impossible as a packet index and is also treated as a size marker (this
+// heuristic alone is insufficient for frames larger than the marker value).
+func isFrameInfoMarker(val, pktTotal uint16, frameType uint8) bool {
+	if !IsEndFrame(frameType) && pktTotal != 1 {
+		return false
+	}
+	return val == 0x0028 || val == 0x0030 || (pktTotal > 0 && val >= pktTotal)
+}
+
 type channelState struct {
 	frameNo    uint32     // current frame being assembled
 	pktTotal   uint16     // expected total packets
@@ -213,16 +242,27 @@ func (cs *channelState) reset() {
 
 const tsWrapPeriod uint32 = 1000000
 
+// tsDeadThreshold - consecutive zero deltas of the device timestamp before
+// concluding the firmware never populates it (e.g. WYZEDB3 4.25.1.333 sends
+// TimestampFrac as 0 on every frame) and pacing from the wall clock instead.
+const tsDeadThreshold = 3
+
 type tsTracker struct {
 	lastRawTS uint32
 	accumUS   uint64
 	firstTS   bool
+	lastWall  time.Time
+	zeroRun   uint8
+	synth     bool
 }
 
 func (t *tsTracker) update(rawTS uint32) uint64 {
+	now := time.Now()
+
 	if !t.firstTS {
 		t.firstTS = true
 		t.lastRawTS = rawTS
+		t.lastWall = now
 		return 0
 	}
 
@@ -234,8 +274,34 @@ func (t *tsTracker) update(rawTS uint32) uint64 {
 		delta = (tsWrapPeriod - t.lastRawTS) + rawTS
 	}
 
+	// Dead-source detection: a camera that never advances its timestamp
+	// would freeze the whole timeline at 0, stalling MSE/WebRTC/HLS
+	// consumers that pace by RTP timestamps (video still decodes, so
+	// RTSP/ffmpeg users never notice). Latch to wall-clock pacing.
+	if !t.synth {
+		if delta == 0 {
+			if t.zeroRun++; t.zeroRun >= tsDeadThreshold {
+				t.synth = true
+				fmt.Printf("[TS] device timestamps dead (raw=%d), pacing from wall clock\n", rawTS)
+			}
+		} else {
+			t.zeroRun = 0
+		}
+	}
+
+	if t.synth {
+		// time.Now() carries a monotonic reading, so Sub is immune to
+		// NTP steps; the guard keeps the timeline monotonic regardless.
+		if us := now.Sub(t.lastWall).Microseconds(); us > 0 {
+			delta = uint32(us)
+		} else {
+			delta = 0
+		}
+	}
+
 	t.accumUS += uint64(delta)
 	t.lastRawTS = rawTS
+	t.lastWall = now
 
 	return t.accumUS
 }
@@ -279,7 +345,7 @@ func (h *FrameHandler) Handle(data []byte) {
 		return
 	}
 
-	payload, fi := h.extractPayload(data, hdr.Channel)
+	payload, fi := h.extractPayload(data, hdr.Channel, hdr.FrameInfoSize)
 	if payload == nil {
 		return
 	}
@@ -302,7 +368,7 @@ func (h *FrameHandler) Handle(data []byte) {
 	}
 }
 
-func (h *FrameHandler) extractPayload(data []byte, channel byte) ([]byte, *FrameInfo) {
+func (h *FrameHandler) extractPayload(data []byte, channel byte, fiSizeHint int) ([]byte, *FrameInfo) {
 	if len(data) < 2 {
 		return nil, nil
 	}
@@ -328,9 +394,15 @@ func (h *FrameHandler) extractPayload(data []byte, channel byte) ([]byte, *Frame
 	case FrameTypeEndSingle, FrameTypeEndMulti:
 		headerSize = 28
 		fiSize = frameInfoSize
+		if fiSizeHint > fiSize {
+			fiSize = fiSizeHint
+		}
 	case FrameTypeEndExt:
 		headerSize = 36
 		fiSize = frameInfoSize
+		if fiSizeHint > fiSize {
+			fiSize = fiSizeHint
+		}
 	default:
 		headerSize = 28
 	}
@@ -347,7 +419,7 @@ func (h *FrameHandler) extractPayload(data []byte, channel byte) ([]byte, *Frame
 		return data[headerSize:], nil
 	}
 
-	fi := ParseFrameInfo(data)
+	fi := parseFrameInfo(data, fiSize)
 
 	validCodec := false
 	switch channel {
@@ -423,7 +495,7 @@ func (h *FrameHandler) handleVideo(channel byte, hdr *PacketHeader, payload []by
 		return
 	}
 
-	accumUS := h.videoTS.update(fi.Timestamp)
+	accumUS := h.videoTS.update(fi.TimestampFrac)
 	rtpTS := uint32(accumUS * 90000 / 1000000)
 
 	pkt := &Packet{
@@ -445,9 +517,9 @@ func (h *FrameHandler) handleVideo(channel byte, hdr *PacketHeader, payload []by
 		fmt.Printf("  [0-1]codec=0x%02x [2]flags=0x%x [3]=%d [4]=%d\n",
 			fi.CodecID, fi.Flags, fi.CamIndex, fi.OnlineNum)
 		fmt.Printf("  [5]=%d [6]=%d [7]=%d [8-11]ts=%d\n",
-			fi.FPS, fi.ResTier, fi.Bitrate, fi.Timestamp)
-		fmt.Printf("  [12-15]=0x%x [16-19]payload=%d [20-23]frameNo=%d\n",
-			fi.SessionID, fi.PayloadSize, fi.FrameNo)
+			fi.FPS, fi.ResTier, fi.Bitrate, fi.TimestampFrac)
+		fmt.Printf("  [12-15]sec=%d [16-19]payload=%d [20-23]frameNo=%d\n",
+			fi.TimestampSec, fi.PayloadSize, fi.FrameNo)
 		fmt.Printf("  rtp_ts=%d accum_us=%d\n", rtpTS, accumUS)
 		fmt.Printf("  hex: %s\n", dumpHex(fi))
 	}
@@ -471,7 +543,7 @@ func (h *FrameHandler) handleAudio(payload []byte, fi *FrameInfo) {
 		channels = fi.Channels()
 	}
 
-	accumUS := h.audioTS.update(fi.Timestamp)
+	accumUS := h.audioTS.update(fi.TimestampFrac)
 	rtpTS := uint32(accumUS * uint64(sampleRate) / 1000000)
 
 	payloadCopy := make([]byte, len(payload))
@@ -497,7 +569,7 @@ func (h *FrameHandler) handleAudio(payload []byte, fi *FrameInfo) {
 		fmt.Printf("  [0-1]codec=0x%02x [2]flags=0x%x(%dHz/%dbit/%dch)\n",
 			fi.CodecID, fi.Flags, sampleRate, bits, channels)
 		fmt.Printf("  [8-11]ts=%d [12-15]=0x%x rtp_ts=%d\n",
-			fi.Timestamp, fi.SessionID, rtpTS)
+			fi.TimestampFrac, fi.TimestampSec, rtpTS)
 		fmt.Printf("  hex: %s\n", dumpHex(fi))
 	}
 
@@ -553,8 +625,8 @@ func dumpHex(fi *FrameInfo) string {
 	b[5] = fi.FPS
 	b[6] = fi.ResTier
 	b[7] = fi.Bitrate
-	binary.LittleEndian.PutUint32(b[8:], fi.Timestamp)
-	binary.LittleEndian.PutUint32(b[12:], fi.SessionID)
+	binary.LittleEndian.PutUint32(b[8:], fi.TimestampFrac)
+	binary.LittleEndian.PutUint32(b[12:], fi.TimestampSec)
 	binary.LittleEndian.PutUint32(b[16:], fi.PayloadSize)
 	binary.LittleEndian.PutUint32(b[20:], fi.FrameNo)
 	// Bytes 24-39 are DeviceID and Padding (not stored in struct)
