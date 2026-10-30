@@ -2,15 +2,69 @@ package h265
 
 import (
 	"encoding/binary"
+	"strconv"
+	"strings"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/pion/rtp"
 )
 
+func hasDON(fmtp string) bool {
+	for _, param := range strings.Split(fmtp, ";") {
+		key, value, ok := strings.Cut(strings.TrimSpace(param), "=")
+		if ok && strings.EqualFold(strings.TrimSpace(key), "sprop-max-don-diff") {
+			value, err := strconv.Atoi(strings.TrimSpace(value))
+			return err == nil && value > 0
+		}
+	}
+	return false
+}
+
+// appendAggregationPacket expands an HEVC aggregation packet into length-prefixed NAL units.
+func appendAggregationPacket(dst, data []byte, donEnabled bool) ([]byte, bool) {
+	if len(data) < 4 {
+		return dst, false
+	}
+
+	offset, count := 2, 0 // skip the two-byte payload header
+	for offset < len(data) {
+		if donEnabled {
+			if count == 0 {
+				if len(data)-offset < 2 { // first unit carries DONL
+					return dst, false
+				}
+				offset += 2
+			} else {
+				if len(data)-offset < 1 { // later units carry DOND
+					return dst, false
+				}
+				offset++
+			}
+		}
+
+		if len(data)-offset < 2 {
+			return dst, false
+		}
+		nalSize := int(binary.BigEndian.Uint16(data[offset:]))
+		offset += 2
+		if nalSize < 2 || nalSize > len(data)-offset {
+			return dst, false
+		}
+
+		dst = binary.BigEndian.AppendUint32(dst, uint32(nalSize))
+		dst = append(dst, data[offset:offset+nalSize]...)
+		offset += nalSize
+		count++
+	}
+
+	return dst, count > 0
+}
+
 func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 	vps, sps, pps := GetParameterSet(codec.FmtpLine)
 	ps := h264.JoinNALU(vps, sps, pps)
+	donEnabled := hasDON(codec.FmtpLine)
 
 	buf := make([]byte, 0, 512*1024) // 512K
 	var nuStart int
@@ -45,7 +99,14 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 
 		seqNum = packet.SequenceNumber
 
-		if nuType == NALUTypeFU {
+		if nuType == NALUTypeAP {
+			var ok bool
+			buf, ok = appendAggregationPacket(buf, data, donEnabled)
+			if !ok {
+				buf = buf[:0] // drop the incomplete access unit
+				return
+			}
+		} else if nuType == NALUTypeFU {
 			switch data[2] >> 6 {
 			case 0b10: // begin
 				nuType = data[2] & 0x3F
