@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/binary"
 	"io"
+	"math"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -140,8 +141,17 @@ func addTrack(t *testing.T, c *Client) *core.Receiver {
 	return track
 }
 
-// packet is 20 ms of 16 kHz PCM
+// packet is 20 ms of a 440 Hz tone, 16 kHz PCM
 func packet() *rtp.Packet {
+	b := make([]byte, 640)
+	for i := 0; i < 320; i++ {
+		binary.LittleEndian.PutUint16(b[i*2:], uint16(int16(5000*math.Sin(2*math.Pi*440*float64(i)/16000))))
+	}
+	return &rtp.Packet{Payload: b}
+}
+
+// silence is 20 ms of digital silence, as a muted browser microphone sends it
+func silence() *rtp.Packet {
 	return &rtp.Packet{Payload: make([]byte, 640)}
 }
 
@@ -258,8 +268,12 @@ func TestPacing(t *testing.T) {
 	c, err := Dial(startCamera(t, cam))
 	require.NoError(t, err)
 
+	samples := make([]int16, 16000) // one second of a tone at once
+	for i := range samples {
+		samples[i] = int16(5000 * math.Sin(2*math.Pi*440*float64(i)/16000))
+	}
 	start := time.Now()
-	require.NoError(t, c.push(make([]int16, 16000), 0)) // one second at once
+	require.NoError(t, c.push(samples, 0))
 	require.Greater(t, time.Since(start), 350*time.Millisecond)
 	require.NoError(t, c.Stop())
 }
@@ -317,4 +331,32 @@ func TestWrongChannel(t *testing.T) {
 		_, err := Dial("reolink://admin:secret@127.0.0.1:1?channel=" + s)
 		require.ErrorContains(t, err, "wrong channel")
 	}
+}
+
+// a muted microphone sends silence: that must not open a session, and it ends an open one
+func TestSilence(t *testing.T) {
+	setTimings(t, time.Second, 300*time.Millisecond, time.Second)
+	cam := &fakeCamera{}
+	c, err := Dial(startCamera(t, cam))
+	require.NoError(t, err)
+	track := addTrack(t, c)
+	go func() { _ = c.Start() }()
+
+	for i := 0; i < 20; i++ {
+		track.Input(silence())
+	}
+	time.Sleep(100 * time.Millisecond)
+	require.Equal(t, 0, cam.count(cmdTalkConfig))
+
+	track.Input(packet())
+	time.Sleep(100 * time.Millisecond)
+	require.Equal(t, 1, cam.count(cmdTalkConfig))
+
+	// silence keeps coming, the session still closes after the idle timeout
+	for i := 0; i < 50; i++ {
+		track.Input(silence())
+		time.Sleep(20 * time.Millisecond)
+	}
+	require.Equal(t, 1, cam.count(cmdTalkReset))
+	require.NoError(t, c.Stop())
 }

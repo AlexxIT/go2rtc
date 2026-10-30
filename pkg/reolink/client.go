@@ -29,6 +29,10 @@ var (
 // blocksPerTalk is the number of ADPCM blocks per Talk message (256 ms at 16 kHz)
 const blocksPerTalk = 4
 
+// silenceLevel is the loudest sample that still counts as digital silence. A muted browser
+// microphone keeps sending silence, and A-law has no exact zero (its quietest step decodes to 8).
+const silenceLevel = 16
+
 // Client is a talk-only producer, to be used as a second source next to the camera's video stream
 type Client struct {
 	core.Connection
@@ -243,16 +247,26 @@ func (c *Client) push(samples []int16, size int) error {
 		return nil
 	}
 	c.Send += size
-	c.lastPush = time.Now()
+	now := time.Now()
+	quiet := silent(samples)
+	if !quiet {
+		c.lastPush = now
+	}
 
 	if !c.talking {
-		if c.lastPush.Before(c.retryAt) {
+		// silence opens no session, so a muted microphone leaves the camera free
+		if quiet || now.Before(c.retryAt) {
 			return nil
 		}
 		if err := c.openTalk(); err != nil {
-			c.retryAt = c.lastPush.Add(retryDelay)
+			c.retryAt = now.Add(retryDelay)
 			return err
 		}
+	}
+
+	// pauses in speech are sent, but after idleTimeout of silence the idle timer ends the session
+	if quiet && now.Sub(c.lastPush) >= c.idleTimeout {
+		return nil
 	}
 
 	c.samples = append(c.samples, samples...)
@@ -330,7 +344,16 @@ func (c *Client) sendTalk(samples []int16) error {
 	return nil
 }
 
-// onIdle ends the session once no audio arrived for idleTimeout and the camera played everything
+func silent(samples []int16) bool {
+	for _, s := range samples {
+		if s > silenceLevel || s < -silenceLevel {
+			return false
+		}
+	}
+	return true
+}
+
+// onIdle ends the session once no sound arrived for idleTimeout and the camera played everything
 func (c *Client) onIdle() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
