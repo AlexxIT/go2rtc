@@ -33,6 +33,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/ngrok"
 	"github.com/AlexxIT/go2rtc/internal/onvif"
 	"github.com/AlexxIT/go2rtc/internal/pinggy"
+	"github.com/AlexxIT/go2rtc/internal/reolink"
 	"github.com/AlexxIT/go2rtc/internal/ring"
 	"github.com/AlexxIT/go2rtc/internal/roborock"
 	"github.com/AlexxIT/go2rtc/internal/rtmp"
@@ -101,6 +102,7 @@ func main() {
 		{"mpegts", mpeg.Init},
 		{"multitrans", multitrans.Init},
 		{"nest", nest.Init},
+		{"reolink", reolink.Init},
 		{"ring", ring.Init},
 		{"roborock", roborock.Init},
 		{"tapo", tapo.Init},
