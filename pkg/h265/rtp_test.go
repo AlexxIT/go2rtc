@@ -1,7 +1,6 @@
 package h265
 
 import (
-	"encoding/binary"
 	"testing"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -63,5 +62,4 @@ func TestRTPDepayMalformedAggregationPacketIsDropped(t *testing.T) {
 	})
 
 	require.False(t, called)
-	_ = binary.BigEndian // keep the import available for packet fixture length checks
 }
