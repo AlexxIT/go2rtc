@@ -22,13 +22,40 @@ const (
 	msgPunchTo   = 0x40
 )
 
-// DefaultServers returns known P2P servers for the p2p_id prefix.
-func DefaultServers(p2pID string) []string {
-	if strings.HasPrefix(p2pID, "XMCN") {
-		// observed from midr.cateye.ph300 registrations
-		return []string{"110.43.39.45", "110.43.68.105", "42.157.163.61"}
+// initKey is the fixed CS2 table for decoding the P2P init string
+var initKey = []byte{
+	0x49, 0x59, 0x43, 0x3d, 0xb5, 0xbf, 0x6d, 0xa3, 0x47, 0x53, 0x4f, 0x61, 0x65, 0xe3,
+	0x71, 0xe9, 0x67, 0x7f, 0x02, 0x03, 0x0b, 0xad, 0xb3, 0x89, 0x2b, 0x2f, 0x35, 0xc1,
+	0x6b, 0x8b, 0x95, 0x97, 0x11, 0xe5, 0xa7, 0x0d, 0xef, 0xf1, 0x05, 0x07, 0x83, 0xfb,
+	0x9d, 0x3b, 0xc5, 0xc7, 0x13, 0x17, 0x1d, 0x1f, 0x25, 0x29, 0xd3, 0xdf,
+}
+
+// DecodeInitString returns P2P server addresses from the init_string
+// of miss_get_vendor response, e.g. "EEGGFCBN..." => "42.157.163.61,..."
+func DecodeInitString(s string) ([]string, error) {
+	if len(s)%2 != 0 {
+		return nil, fmt.Errorf("cs2: wrong init string")
 	}
-	return nil
+
+	b := make([]byte, 0, len(s)/2)
+	z := byte(0x39)
+	for i := 0; i < len(s); i += 2 {
+		hi, lo := s[i]-'A', s[i+1]-'A'
+		if hi > 0xF || lo > 0xF {
+			return nil, fmt.Errorf("cs2: wrong init string")
+		}
+		c := (hi<<4 | lo) ^ initKey[len(b)%len(initKey)] ^ z
+		b = append(b, c)
+		z ^= c
+	}
+
+	var servers []string
+	for _, host := range strings.Split(string(b), ",") {
+		if host != "" {
+			servers = append(servers, host)
+		}
+	}
+	return servers, nil
 }
 
 func DialServers(p2pID string, servers []string, transport string) (*Conn, error) {

@@ -17,6 +17,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/xiaomi"
 	"github.com/AlexxIT/go2rtc/pkg/xiaomi/crypto"
+	"github.com/AlexxIT/go2rtc/pkg/xiaomi/miss/cs2"
 	"github.com/rs/zerolog"
 )
 
@@ -183,7 +184,8 @@ func getMissURL(url *url.URL) (string, error) {
 		Vendor struct {
 			ID     byte `json:"vendor"`
 			Params struct {
-				UID string `json:"p2p_id"`
+				UID        string `json:"p2p_id"`
+				InitString string `json:"init_string"`
 			} `json:"vendor_params"`
 		} `json:"vendor"`
 		PublicKey string `json:"public_key"`
@@ -205,7 +207,12 @@ func getMissURL(url *url.URL) (string, error) {
 
 	// midr cateye don't answer LAN search, they are reachable only via CS2 P2P servers
 	if v.Vendor.ID == 4 && strings.HasPrefix(query.Get("model"), "midr.") {
+		servers, err := cs2.DecodeInitString(v.Vendor.Params.InitString)
+		if err != nil {
+			return "", err
+		}
 		query.Set("p2p_id", v.Vendor.Params.UID)
+		query.Set("p2p_servers", strings.Join(servers, ","))
 	}
 
 	url.RawQuery = query.Encode()

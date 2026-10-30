@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/tutk"
@@ -56,8 +57,8 @@ func NewClient(rawURL string) (*Client, error) {
 	switch s := query.Get("vendor"); s {
 	case "cs2":
 		// Some cameras don't answer LAN search, connect via CS2 P2P servers
-		if servers := cs2.DefaultServers(query.Get("p2p_id")); servers != nil {
-			conn, err = cs2.DialServers(query.Get("p2p_id"), servers, query.Get("transport"))
+		if servers := query.Get("p2p_servers"); servers != "" {
+			conn, err = cs2.DialServers(query.Get("p2p_id"), strings.Split(servers, ","), query.Get("transport"))
 		} else {
 			conn, err = cs2.Dial(u.Host, query.Get("transport"))
 		}
