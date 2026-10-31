@@ -158,7 +158,8 @@ func getSegment(src []byte) []byte {
 	}
 
 	if i := bytes.IndexByte(src, '\n'); i > 0 {
-		return src[:i]
+		// some servers end lines with CRLF
+		return bytes.TrimSuffix(src[:i], []byte{'\r'})
 	}
 
 	return src
