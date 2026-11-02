@@ -349,6 +349,18 @@ func (s *Server) Handle(w http.ResponseWriter, r *http.Request) {
 
 	switch r.RequestURI {
 	case hap.PathPairSetup:
+		// HAP: an accessory that is already paired must refuse pair-setup,
+		// new controllers are added by an admin via /pairings. Important
+		// because pairing paths are exempt from the API auth.
+		s.mu.Lock()
+		paired := len(s.pairings) > 0
+		s.mu.Unlock()
+		if paired {
+			s.log.Warn().Str("stream", s.stream).Msgf("[hksv] reject pair-setup from %s: already paired", conn.RemoteAddr())
+			_ = hap.WritePairSetupUnavailable(rw.Writer)
+			return
+		}
+
 		id, key, err := s.hap.PairSetup(r, rw)
 		if err != nil {
 			s.log.Error().Err(err).Caller().Send()
