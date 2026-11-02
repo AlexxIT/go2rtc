@@ -216,13 +216,16 @@ func apiRecording(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	defer func() {
+	cons.TracksAdded() // don't wait init timeout for streams without audio
+
+	stop := func() {
 		stream.RemoveConsumer(cons)
 		_ = cons.Stop()
-	}()
+	}
 
 	buf := &bytes.Buffer{}
 	if err := cons.ActivateTap(buf); err != nil {
+		stop()
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -231,6 +234,9 @@ func apiRecording(w http.ResponseWriter, r *http.Request) {
 	case <-time.After(time.Duration(wait) * time.Second):
 	case <-r.Context().Done():
 	}
+
+	// Stop takes the consumer lock, so no fragment is written to buf after it
+	stop()
 
 	w.Header().Set("Content-Type", "video/mp4")
 	w.Header().Set("Content-Disposition", `attachment; filename="`+src+`.mp4"`)
