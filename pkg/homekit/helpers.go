@@ -19,6 +19,9 @@ func videoToMedia(codecs []camera.VideoCodecConfiguration) *core.Media {
 	}
 
 	for _, codec := range codecs {
+		if int(codec.CodecType) >= len(videoCodecs) {
+			continue // unsupported codec (ex. H265)
+		}
 		for _, param := range codec.CodecParams {
 			// get best profile and level; clamp to table bounds
 			profileID := core.Max(param.ProfileID)
@@ -51,8 +54,14 @@ func audioToMedia(codecs []camera.AudioCodecConfiguration) *core.Media {
 	}
 
 	for _, codec := range codecs {
+		if int(codec.CodecType) >= len(audioCodecs) {
+			continue // unsupported codec (ex. MSBC, AMR)
+		}
 		for _, param := range codec.CodecParams {
 			for _, sampleRate := range param.SampleRate {
+				if int(sampleRate) >= len(audioSampleRates) {
+					continue
+				}
 				mediaCodec := &core.Codec{
 					Name:      audioCodecs[codec.CodecType],
 					ClockRate: audioSampleRates[sampleRate],

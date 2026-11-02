@@ -125,12 +125,15 @@ func GetParameterSet(fmtp string) (sps, pps []byte) {
 func GetFmtpLine(avc []byte) string {
 	s := "packetization-mode=1"
 
-	for {
+	for len(avc) > 4 {
 		size := 4 + int(binary.BigEndian.Uint32(avc))
+		if size > len(avc) {
+			return s // malformed AVCC
+		}
 
 		switch NALUType(avc) {
 		case NALUTypeSPS:
-			if len(avc) < 8 || size > len(avc) {
+			if size < 8 {
 				return s
 			}
 			s += ";profile-level-id=" + hex.EncodeToString(avc[5:8])
@@ -139,10 +142,7 @@ func GetFmtpLine(avc []byte) string {
 			s += "," + base64.StdEncoding.EncodeToString(avc[4:size])
 		}
 
-		if size < len(avc) {
-			avc = avc[size:]
-		} else {
-			return s
-		}
+		avc = avc[size:]
 	}
+	return s
 }
