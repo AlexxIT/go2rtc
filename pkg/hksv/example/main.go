@@ -9,7 +9,7 @@
 //	go run ./pkg/hksv/example -url rtsp://admin:pass@192.168.1.100:554/h264
 //
 // Then open the Home app on your iPhone/iPad, tap "+" → "Add Accessory",
-// and scan the QR code or enter the PIN manually (default: 270-41-991).
+// and scan the QR code or enter the PIN manually (default: 1955-0224).
 package main
 
 import (
@@ -33,7 +33,7 @@ import (
 
 func main() {
 	streamURL := flag.String("url", "", "RTSP stream URL (required)")
-	pin := flag.String("pin", "27041991", "HomeKit pairing PIN")
+	pin := flag.String("pin", hap.DefaultPIN, "HomeKit pairing PIN")
 	port := flag.Int("port", 0, "HAP HTTP port (0 = auto)")
 	motion := flag.String("motion", "detect", "Motion mode: detect, continuous, api")
 	threshold := flag.Float64("threshold", 2.0, "Motion detection threshold (lower = more sensitive)")
@@ -207,4 +207,8 @@ func (s *filePairingStore) SavePairings(_ string, pairings []string) error {
 		return err
 	}
 	return os.WriteFile(s.path, data, 0644)
+}
+
+func (s *filePairingStore) SaveCharacteristic(_, _ string, _ bool) error {
+	return nil
 }

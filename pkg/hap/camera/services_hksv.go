@@ -25,33 +25,82 @@ func ServiceMotionSensor() *hap.Service {
 	}
 }
 
-func ServiceCameraOperatingMode() *hap.Service {
+// OperatingState holds the controller-writable toggle values that must
+// survive a restart: Home's per-camera "Record Audio", "Show As Camera",
+// "Capture Snapshots" and "Periodic Snapshots" switches. HAP gives the
+// controller no way to resend its last value, so whatever the accessory
+// advertises at boot is what Home displays - these need to come from
+// persisted state, not a hardcoded default, or every restart silently
+// reverts them.
+type OperatingState struct {
+	RecordingAudioActive    bool
+	HomeKitCameraActive     bool
+	EventSnapshotsActive    bool
+	PeriodicSnapshotsActive bool
+}
+
+// DefaultOperatingState matches HAP's spec-recommended defaults for an
+// accessory with no persisted state yet: audio recording off, everything
+// else on.
+var DefaultOperatingState = OperatingState{
+	HomeKitCameraActive:     true,
+	EventSnapshotsActive:    true,
+	PeriodicSnapshotsActive: true,
+}
+
+func ServiceCameraOperatingMode(state OperatingState) *hap.Service {
 	return &hap.Service{
 		Type: "21A",
 		Characters: []*hap.Character{
 			{
 				Type:   "21B",
 				Format: hap.FormatBool,
-				Value:  true,
+				Value:  state.HomeKitCameraActive,
 				Perms:  hap.EVPRPW,
 			},
 			{
 				Type:   "223",
 				Format: hap.FormatBool,
-				Value:  true,
+				Value:  state.EventSnapshotsActive,
 				Perms:  hap.EVPRPW,
 			},
 			{
 				Type:   "225",
 				Format: hap.FormatBool,
-				Value:  true,
+				Value:  state.PeriodicSnapshotsActive,
 				Perms:  hap.EVPRPW,
 			},
 		},
 	}
 }
 
+func boolToUint8(b bool) uint8 {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+// DefaultRecordingAttrs is what HKSV advertises when a camera does not
+// override it: the standard 16:9 sizes.
+var DefaultRecordingAttrs = []VideoCodecAttributes{
+	{Width: 1920, Height: 1080, Framerate: 30},
+	{Width: 1280, Height: 720, Framerate: 30},
+}
+
 func ServiceCameraEventRecordingManagement() *hap.Service {
+	return ServiceCameraEventRecordingManagementAttrs(DefaultRecordingAttrs, false)
+}
+
+// ServiceCameraEventRecordingManagementAttrs advertises specific resolutions.
+// A camera whose sensor is not 16:9 - a doorbell in portrait, say - cannot be
+// recorded at any of the default sizes without cropping away the part of the
+// frame that matters, so it needs to advertise its own.
+func ServiceCameraEventRecordingManagementAttrs(attrs []VideoCodecAttributes, recordingAudioActive bool) *hap.Service {
+	if len(attrs) == 0 {
+		attrs = DefaultRecordingAttrs
+	}
+
 	val205, _ := tlv8.MarshalBase64(SupportedCameraRecordingConfiguration{
 		PrebufferLength:     4000,
 		EventTriggerOptions: 0x01, // motion
@@ -63,83 +112,49 @@ func ServiceCameraEventRecordingManagement() *hap.Service {
 		},
 	})
 
+	// Bitrate and IFrameInterval are deliberately absent: they belong only in
+	// the controller's Selected write. Including them here makes the
+	// controller reject the whole characteristic (see ch206.go).
+	//
+	// ProfileID and Level are advertised as lists of what the accessory
+	// accepts. Offering Main and High up to Level 4.0 lets a camera whose
+	// native stream already conforms be recorded without transcoding.
+	// Bitrate and IFrameInterval are deliberately absent: they belong only in
+	// the controller's Selected write. Including them here makes the
+	// controller reject the whole characteristic (see ch206.go).
+	//
+	// ProfileID and Level are advertised as lists of what the accessory
+	// accepts. Offering Main and High up to Level 4.0 lets a camera whose
+	// native stream already conforms be recorded without transcoding.
+	var codecConfigs []VideoRecordingCodecConfiguration
+	for _, a := range attrs {
+		codecConfigs = append(codecConfigs, VideoRecordingCodecConfiguration{
+			CodecType: VideoCodecTypeH264,
+			CodecParams: VideoRecordingCodecParameters{
+				ProfileID: []byte{VideoCodecProfileMain, VideoCodecProfileHigh},
+				Level:     []byte{VideoCodecLevel31, VideoCodecLevel32, VideoCodecLevel40},
+			},
+			CodecAttrs: []VideoCodecAttributes{a},
+		})
+	}
+
 	val206, _ := tlv8.MarshalBase64(SupportedVideoRecordingConfiguration{
-		CodecConfigs: []VideoRecordingCodecConfiguration{
-			{
-				CodecType: VideoCodecTypeH264,
-				CodecParams: VideoRecordingCodecParameters{
-					ProfileID:      VideoCodecProfileHigh,
-					Level:          VideoCodecLevel40,
-					Bitrate:        2000,
-					IFrameInterval: 4000,
-				},
-				CodecAttrs: VideoCodecAttributes{Width: 1920, Height: 1080, Framerate: 30},
-			},
-			{
-				CodecType: VideoCodecTypeH264,
-				CodecParams: VideoRecordingCodecParameters{
-					ProfileID:      VideoCodecProfileMain,
-					Level:          VideoCodecLevel31,
-					Bitrate:        1000,
-					IFrameInterval: 4000,
-				},
-				CodecAttrs: VideoCodecAttributes{Width: 1280, Height: 720, Framerate: 30},
-			},
-		},
+		CodecConfigs: codecConfigs,
 	})
 
+	// MaxAudioBitrate omitted for the same reason as the video Bitrate.
 	val207, _ := tlv8.MarshalBase64(SupportedAudioRecordingConfiguration{
 		CodecConfigs: []AudioRecordingCodecConfiguration{
 			{
 				CodecType: AudioRecordingCodecTypeAACLC,
 				CodecParams: []AudioRecordingCodecParameters{
 					{
-						Channels:        1,
-						BitrateMode:     []byte{AudioCodecBitrateVariable},
-						SampleRate:      []byte{AudioRecordingSampleRate24Khz, AudioRecordingSampleRate32Khz, AudioRecordingSampleRate48Khz},
-						MaxAudioBitrate: []uint32{64},
-					},
-				},
-			},
-		},
-	})
-
-	// Default selected recording configuration (Home Hub expects this to persist)
-	val209, _ := tlv8.MarshalBase64(SelectedCameraRecordingConfiguration{
-		GeneralConfig: SupportedCameraRecordingConfiguration{
-			PrebufferLength:     4000,
-			EventTriggerOptions: 0x01, // motion
-			MediaContainerConfigurations: MediaContainerConfigurations{
-				MediaContainerType: 0,
-				MediaContainerParameters: MediaContainerParameters{
-					FragmentLength: 4000,
-				},
-			},
-		},
-		VideoConfig: SupportedVideoRecordingConfiguration{
-			CodecConfigs: []VideoRecordingCodecConfiguration{
-				{
-					CodecType: VideoCodecTypeH264,
-					CodecParams: VideoRecordingCodecParameters{
-						ProfileID:      VideoCodecProfileHigh,
-						Level:          VideoCodecLevel40,
-						Bitrate:        2000,
-						IFrameInterval: 4000,
-					},
-					CodecAttrs: VideoCodecAttributes{Width: 1920, Height: 1080, Framerate: 30},
-				},
-			},
-		},
-		AudioConfig: SupportedAudioRecordingConfiguration{
-			CodecConfigs: []AudioRecordingCodecConfiguration{
-				{
-					CodecType: AudioRecordingCodecTypeAACLC,
-					CodecParams: []AudioRecordingCodecParameters{
-						{
-							Channels:        1,
-							BitrateMode:     []byte{AudioCodecBitrateVariable},
-							SampleRate:      []byte{AudioRecordingSampleRate24Khz},
-							MaxAudioBitrate: []uint32{64},
+						Channels:    1,
+						BitrateMode: []byte{AudioCodecBitrateVariable},
+						SampleRate: []byte{
+							AudioRecordingSampleRate24Khz,
+							AudioRecordingSampleRate32Khz,
+							AudioRecordingSampleRate48Khz,
 						},
 					},
 				},
@@ -177,13 +192,16 @@ func ServiceCameraEventRecordingManagement() *hap.Service {
 			{
 				Type:   TypeSelectedCameraRecordingConfiguration,
 				Format: hap.FormatTLV8,
-				Value:  val209,
-				Perms:  hap.EVPRPW,
+				// Must start empty: the controller writes it. Advertising a
+				// pre-selected configuration tells the controller the
+				// accessory is already configured.
+				Value: "",
+				Perms: hap.EVPRPW,
 			},
 			{
 				Type:   "226",
 				Format: hap.FormatUInt8,
-				Value:  0,
+				Value:  boolToUint8(recordingAudioActive),
 				Perms:  hap.EVPRPW,
 			},
 		},

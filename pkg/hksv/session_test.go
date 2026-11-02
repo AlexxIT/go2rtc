@@ -86,7 +86,7 @@ func TestSession_HandleOpen_UsesPreparedConsumer(t *testing.T) {
 	hs, ctrl, srv := newTestHKSVSession(t, streams)
 
 	// Pre-prepare a consumer
-	prepared := NewHKSVConsumer(zerolog.Nop())
+	prepared := NewHKSVConsumer(zerolog.Nop(), "test")
 	prepared.initData = []byte("fake-init")
 	close(prepared.initDone)
 	srv.preparedConsumer = prepared

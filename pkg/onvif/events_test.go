@@ -261,3 +261,16 @@ func TestResolveEventAddress_DockerInternalIP(t *testing.T) {
 		t.Fatalf("unexpected resolved address: got %q want %q", got, want)
 	}
 }
+
+func TestResolveEventAddress_SubscriptionPort(t *testing.T) {
+	// Tapo returns a separate port for every subscription
+	u, _ := url.Parse("onvif://user:pass@192.168.1.123:2020")
+	client := &Client{url: u}
+
+	got := client.resolveEventAddress("http://192.168.1.123:1025/event-1025_1025")
+	want := "http://192.168.1.123:1025/event-1025_1025"
+
+	if got != want {
+		t.Fatalf("unexpected resolved address: got %q want %q", got, want)
+	}
+}

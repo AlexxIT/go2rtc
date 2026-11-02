@@ -368,6 +368,22 @@ func (s *Server) PairVerify(req *http.Request, rw *bufio.ReadWriter) (id string,
 	return
 }
 
+// WritePairSetupUnavailable - M2 response with kTLVError_Unavailable,
+// accessory is already paired and can't accept a new pair-setup.
+func WritePairSetupUnavailable(w *bufio.Writer) error {
+	body, err := tlv8.Marshal(struct {
+		State byte `tlv8:"6"`
+		Error byte `tlv8:"7"`
+	}{
+		State: StateM2,
+		Error: 6, // kTLVError_Unavailable
+	})
+	if err != nil {
+		return err
+	}
+	return WriteResponse(w, http.StatusOK, MimeTLV8, body)
+}
+
 func WriteResponse(w *bufio.Writer, statusCode int, contentType string, body []byte) error {
 	header := fmt.Sprintf(
 		"HTTP/1.1 %d %s\r\nContent-Type: %s\r\nContent-Length: %d\r\n\r\n",

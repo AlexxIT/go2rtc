@@ -7,7 +7,7 @@
 //
 //	srv, err := hksv.NewServer(hksv.Config{
 //	    StreamName: "camera1",
-//	    Pin:        "27041991",
+//	    Pin:        "19550224",
 //	    HKSV:       true,
 //	    MotionMode: "detect",
 //	    Streams:    myStreamProvider,
@@ -21,6 +21,8 @@
 package hksv
 
 import (
+	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -30,6 +32,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -54,9 +57,14 @@ type StreamProvider interface {
 	RemoveConsumer(streamName string, consumer core.Consumer)
 }
 
-// PairingStore persists HAP pairing data.
+// PairingStore persists HAP pairing data and controller-set characteristic
+// state that must survive a restart - e.g. Home's per-camera "Record Audio"
+// toggle. HAP gives the controller no way to resend its last value, so
+// whatever the accessory advertises at boot is what Home displays; without
+// this, every restart silently reverts these toggles to their defaults.
 type PairingStore interface {
 	SavePairings(streamName string, pairings []string) error
+	SaveCharacteristic(streamName, charType string, value bool) error
 }
 
 // SnapshotProvider generates JPEG snapshots for HomeKit /resource requests.
@@ -90,20 +98,33 @@ type ConnTracker interface {
 
 // Config for creating an HKSV server.
 type Config struct {
-	StreamName      string
-	Pin             string   // HomeKit pairing PIN (e.g., "27041991")
-	Name            string   // mDNS display name (auto-generated if empty)
-	DeviceID        string   // MAC-like device ID (auto-generated if empty)
-	DevicePrivate   string   // ed25519 private key hex (auto-generated if empty)
-	CategoryID      string   // "camera" or "doorbell"
-	Pairings        []string // pre-existing pairings
-	ProxyURL        string   // if set, acts as transparent proxy (no local accessory)
-	HKSV            bool
-	MotionMode      string  // "api", "continuous", "detect"
+	StreamName    string
+	Pin           string   // HomeKit pairing PIN (e.g., "19550224")
+	Name          string   // mDNS display name (auto-generated if empty)
+	DeviceID      string   // MAC-like device ID (auto-generated if empty)
+	DevicePrivate string   // ed25519 private key hex (auto-generated if empty)
+	CategoryID    string   // "camera" or "doorbell"
+	Pairings      []string // pre-existing pairings
+	ProxyURL      string   // if set, acts as transparent proxy (no local accessory)
+	HKSV          bool
+	MotionMode    string // "api", "continuous", "detect"
+	// RecordingResolution overrides what the accessory advertises for
+	// recording, as "WIDTHxHEIGHT". Needed for cameras whose sensor is not
+	// 16:9, which cannot use the default sizes without cropping.
+	RecordingResolution string
+
 	MotionThreshold float64 // ratio threshold for "detect" mode (default 2.0)
 	Speaker         *bool   // include Speaker service for 2-way audio (default false)
 	UserAgent       string  // for mDNS TXTModel field
 	Version         string  // for accessory firmware version
+
+	// Persisted controller-set toggles, loaded from prior state. nil means
+	// "no controller has written this yet" - use the HAP-spec default
+	// rather than false, since e.g. HomeKitCameraActive defaults to true.
+	RecordingAudioActive    *bool
+	HomeKitCameraActive     *bool
+	EventSnapshotsActive    *bool
+	PeriodicSnapshotsActive *bool
 
 	// Dependencies (injected by host)
 	Streams    StreamProvider
@@ -150,7 +171,7 @@ type Server struct {
 // NewServer creates a new HKSV server with the given configuration.
 func NewServer(cfg Config) (*Server, error) {
 	if cfg.Pin == "" {
-		cfg.Pin = "27041991"
+		cfg.Pin = hap.DefaultPIN
 	}
 
 	pin, err := hap.SanitizePin(cfg.Pin)
@@ -212,10 +233,24 @@ func NewServer(cfg Config) (*Server, error) {
 		srv.log.Debug().Str("stream", cfg.StreamName).Str("motion", cfg.MotionMode).
 			Float64("threshold", srv.motionThreshold).Msg("[hksv] HKSV mode")
 
+		state := camera.DefaultOperatingState
+		if cfg.RecordingAudioActive != nil {
+			state.RecordingAudioActive = *cfg.RecordingAudioActive
+		}
+		if cfg.HomeKitCameraActive != nil {
+			state.HomeKitCameraActive = *cfg.HomeKitCameraActive
+		}
+		if cfg.EventSnapshotsActive != nil {
+			state.EventSnapshotsActive = *cfg.EventSnapshotsActive
+		}
+		if cfg.PeriodicSnapshotsActive != nil {
+			state.PeriodicSnapshotsActive = *cfg.PeriodicSnapshotsActive
+		}
+
 		if cfg.CategoryID == "doorbell" {
-			srv.accessory = camera.NewHKSVDoorbellAccessory("AlexxIT", "go2rtc", name, "-", cfg.Version)
+			srv.accessory = camera.NewHKSVDoorbellAccessory("AlexxIT", "go2rtc", name, "-", cfg.Version, state, recordingAttrs(cfg.RecordingResolution)...)
 		} else {
-			srv.accessory = camera.NewHKSVAccessory("AlexxIT", "go2rtc", name, "-", cfg.Version)
+			srv.accessory = camera.NewHKSVAccessory("AlexxIT", "go2rtc", name, "-", cfg.Version, state, recordingAttrs(cfg.RecordingResolution)...)
 		}
 	} else {
 		srv.accessory = camera.NewAccessory("AlexxIT", "go2rtc", name, "-", cfg.Version)
@@ -233,7 +268,33 @@ func NewServer(cfg Config) (*Server, error) {
 		srv.accessory.InitIID() // recalculate IIDs
 	}
 
+	// A paired controller only re-reads /accessories when the mDNS config
+	// number changes. Advertising a constant "1" means any change to the
+	// service list - enabling HKSV, adding the Speaker, switching to
+	// doorbell - stays invisible to an already-paired Home Hub, which is
+	// why users otherwise have to re-pair the camera. Derive it from the
+	// accessory database so the change is actually picked up.
+	if srv.accessory != nil {
+		srv.mdns.Info[hap.TXTConfigNumber] = configNumber(srv.accessory)
+	}
+
 	return srv, nil
+}
+
+// configNumber derives the HAP c# TXT value from the accessory database, so
+// it changes if and only if the database does.
+//
+// HAP strictly wants a persisted counter that increments on every change;
+// a hash gives the same "did it change" signal without any state to store,
+// at the cost of not being monotonic.
+func configNumber(acc *hap.Accessory) string {
+	b, err := json.Marshal(acc)
+	if err != nil {
+		return "1"
+	}
+	sum := sha256.Sum256(b)
+	// c# is a uint16 and must be >= 1
+	return strconv.Itoa(int(binary.BigEndian.Uint16(sum[:2]))%65535 + 1)
 }
 
 // MDNSEntry returns the mDNS service entry for advertisement.
@@ -288,6 +349,18 @@ func (s *Server) Handle(w http.ResponseWriter, r *http.Request) {
 
 	switch r.RequestURI {
 	case hap.PathPairSetup:
+		// HAP: an accessory that is already paired must refuse pair-setup,
+		// new controllers are added by an admin via /pairings. Important
+		// because pairing paths are exempt from the API auth.
+		s.mu.Lock()
+		paired := len(s.pairings) > 0
+		s.mu.Unlock()
+		if paired {
+			s.log.Warn().Str("stream", s.stream).Msgf("[hksv] reject pair-setup from %s: already paired", conn.RemoteAddr())
+			_ = hap.WritePairSetupUnavailable(rw.Writer)
+			return
+		}
+
 		id, key, err := s.hap.PairSetup(r, rw)
 		if err != nil {
 			s.log.Error().Err(err).Caller().Send()
@@ -567,7 +640,27 @@ func (s *Server) SetCharacteristic(conn net.Conn, aid uint8, iid uint64, value a
 		go s.acceptHDS(hapConn, ln, combinedSalt)
 
 	case camera.TypeSelectedCameraRecordingConfiguration:
-		s.log.Debug().Str("stream", s.stream).Str("motion", s.motionMode).Msg("[hksv] selected recording config")
+		// Log what the controller actually selected. It picks one of the
+		// advertised configurations per camera, and a clip that does not
+		// match the selection is discarded without any error.
+		var sel camera.SelectedCameraRecordingConfiguration
+		if str, ok := value.(string); ok {
+			if err := tlv8.UnmarshalBase64(str, &sel); err != nil {
+				s.log.Warn().Err(err).Str("stream", s.stream).Msg("[hksv] selected recording config: decode")
+			} else {
+				e := s.log.Info().Str("stream", s.stream).Str("motion", s.motionMode).
+					Uint32("prebuffer_ms", sel.GeneralConfig.PrebufferLength).
+					Uint64("trigger", sel.GeneralConfig.EventTriggerOptions).
+					Uint32("fragment_ms", sel.GeneralConfig.MediaContainerConfigurations.MediaContainerParameters.FragmentLength)
+				e = e.Interface("video", map[string]any{
+					"profile": sel.VideoConfig.CodecParams.ProfileID, "level": sel.VideoConfig.CodecParams.Level,
+					"bitrate": sel.VideoConfig.CodecParams.Bitrate, "iframe_ms": sel.VideoConfig.CodecParams.IFrameInterval,
+					"attrs": sel.VideoConfig.CodecAttrs,
+				})
+				e = e.Interface("audio", map[string]any{"codec": sel.AudioConfig.CodecType, "params": sel.AudioConfig.CodecParams})
+				e.Msg("[hksv] selected recording config")
+			}
+		}
 		char.Value = value
 
 		switch s.motionMode {
@@ -577,8 +670,38 @@ func (s *Server) SetCharacteristic(conn net.Conn, aid uint8, iid uint64, value a
 			go s.startMotionDetector()
 		}
 
+	case "226", "21B", "223", "225":
+		char.Value = value
+		s.saveCharacteristic(char.Type, value)
+
 	default:
 		char.Value = value
+	}
+}
+
+// saveCharacteristic persists a controller-writable toggle so it survives a
+// restart. HAP delivers bool-formatted characteristics as JSON bool and
+// uint8-formatted ones (like "226") as JSON number, decoded to float64 - so
+// both representations need handling here.
+func (s *Server) saveCharacteristic(charType string, value any) {
+	if s.store == nil {
+		return
+	}
+
+	var b bool
+	switch v := value.(type) {
+	case bool:
+		b = v
+	case float64:
+		b = v != 0
+	default:
+		s.log.Warn().Str("stream", s.stream).Str("char", charType).
+			Msgf("[hksv] save characteristic: unexpected value type %T", value)
+		return
+	}
+
+	if err := s.store.SaveCharacteristic(s.stream, charType, b); err != nil {
+		s.log.Error().Err(err).Str("stream", s.stream).Str("char", charType).Msg("[hksv] save characteristic failed")
 	}
 }
 
@@ -690,12 +813,13 @@ func (s *Server) acceptHDS(hapConn *hap.Conn, ln net.Listener, salt string) {
 
 // prepareHKSVConsumer pre-starts a consumer and adds it to the stream.
 func (s *Server) prepareHKSVConsumer() {
-	consumer := NewHKSVConsumer(s.log)
+	consumer := NewHKSVConsumer(s.log, s.stream)
 
 	if err := s.streams.AddConsumer(s.stream, consumer); err != nil {
 		s.log.Debug().Err(err).Str("stream", s.stream).Msg("[hksv] prepare consumer failed")
 		return
 	}
+	consumer.TracksAdded()
 
 	s.log.Debug().Str("stream", s.stream).Msg("[hksv] consumer prepared")
 
@@ -743,7 +867,9 @@ func (s *Server) startMotionDetector() {
 		s.mu.Unlock()
 		return
 	}
-	det := NewMotionDetector(s.motionThreshold, s.SetMotionDetected, s.log)
+	// motion: ON/OFF and the ratio log lines otherwise carry no stream field,
+	// which makes them unattributable with more than one camera running.
+	det := NewMotionDetector(s.motionThreshold, s.SetMotionDetected, s.log.With().Str("stream", s.stream).Logger())
 	s.motionDetector = det
 	s.mu.Unlock()
 
@@ -817,4 +943,23 @@ func isClosedConnErr(err error) bool {
 		return false
 	}
 	return strings.Contains(err.Error(), "use of closed network connection")
+}
+
+// recordingAttrs parses a "WIDTHxHEIGHT" override into what the accessory
+// should advertise. An empty or malformed value keeps the defaults.
+func recordingAttrs(res string) []camera.VideoCodecAttributes {
+	if res == "" {
+		return nil
+	}
+
+	w, h, ok := strings.Cut(res, "x")
+	width, err1 := strconv.Atoi(w)
+	height, err2 := strconv.Atoi(h)
+	if !ok || err1 != nil || err2 != nil || width <= 0 || height <= 0 {
+		return nil
+	}
+
+	return []camera.VideoCodecAttributes{
+		{Width: uint16(width), Height: uint16(height), Framerate: 30},
+	}
 }

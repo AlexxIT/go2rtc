@@ -116,7 +116,18 @@ func ServerHandler(server Server) HandlerFunc {
 				}
 
 				if len(writeResponses) > 0 {
-					return makeResponse(hap.MimeJSON, hap.JSONCharacters{Value: writeResponses})
+					// HAP requires 207 Multi-Status for a write response, not
+					// 200, with an explicit status on every entry (HAP R2
+					// 6.7.2.4). SetupDataStreamTransport depends on this: it
+					// is how the controller learns the accessory's HDS
+					// listening port and key salt, and unlike SetupEndpoints
+					// it does not follow up with a GET.
+					res, err := makeResponse(hap.MimeJSON, hap.JSONCharacters{Value: writeResponses})
+					if err != nil {
+						return nil, err
+					}
+					res.StatusCode = http.StatusMultiStatus
+					return res, nil
 				}
 
 				res := &http.Response{
