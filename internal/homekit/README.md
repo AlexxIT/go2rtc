@@ -82,6 +82,24 @@ homekit:
     speaker: true           # enable 2-way audio (default: false, enable only if camera has a speaker)
 ```
 
+**Two-way audio**
+
+With `speaker: true` the Home app shows the talk button. The audio goes to a stream source with a backchannel, for example `tapo://` or an RTSP/ONVIF camera with backchannel support. HomeKit sends Opus. A backchannel that accepts Opus gets it as is, and a PCMA/PCMU (G.711) backchannel gets it transcoded with FFmpeg, so FFmpeg must be installed (it is in the Docker images).
+
+```yaml
+streams:
+  tapo1:
+    - rtsp://user:password@192.168.1.123:554/stream1  # video and audio
+    - ffmpeg:tapo1#audio=aac/24000#audio=opus         # AAC for HKSV, Opus for live view
+    - tapo://admin:UPPERCASE-SHA256@192.168.1.123     # backchannel for talk
+
+homekit:
+  tapo1:
+    hksv: true
+    motion: detect
+    speaker: true
+```
+
 ### HKSV (HomeKit Secure Video)
 
 go2rtc can expose any camera as a HomeKit Secure Video (HKSV) camera. This allows Apple Home to record video clips to iCloud when motion is detected.
@@ -119,7 +137,7 @@ streams:
   outdoor:
     - rtsp://admin:password@192.168.1.123/stream1
     - ffmpeg:outdoor#video=h264#hardware  # transcode to H264 if needed
-    - ffmpeg:outdoor#audio=aac            # AAC-LC audio for HKSV recording
+    - ffmpeg:outdoor#audio=aac/24000      # AAC-LC audio for HKSV recording
 
 homekit:
   outdoor:
@@ -128,6 +146,8 @@ homekit:
     hksv: true
     motion: api          # motion triggered via API
 ```
+
+HKSV only accepts AAC-LC at 24, 32 or 48 kHz. `#audio=aac` keeps the source sample rate, so a camera with 8 kHz G.711 audio would produce AAC the Home Hub can't record. `#audio=aac/24000` resamples it.
 
 **Non-16:9 sensors (portrait doorbells, unusual aspect ratios)**
 
