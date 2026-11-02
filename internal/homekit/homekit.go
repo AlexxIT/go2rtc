@@ -126,14 +126,14 @@ func Init() {
 			HomeKitCameraActive:     conf.HomeKitCameraActive,
 			EventSnapshotsActive:    conf.EventSnapshotsActive,
 			PeriodicSnapshotsActive: conf.PeriodicSnapshotsActive,
-			UserAgent:           app.UserAgent,
-			Version:             app.Version,
-			Streams:             &go2rtcStreamProvider{},
-			Store:               &go2rtcPairingStore{},
-			Snapshots:           &go2rtcSnapshotProvider{},
-			LiveStream:          &go2rtcLiveStreamHandler{},
-			Logger:              log,
-			Port:                uint16(api.Port),
+			UserAgent:               app.UserAgent,
+			Version:                 app.Version,
+			Streams:                 &go2rtcStreamProvider{},
+			Store:                   &go2rtcPairingStore{},
+			Snapshots:               &go2rtcSnapshotProvider{},
+			LiveStream:              &go2rtcLiveStreamHandler{},
+			Logger:                  log,
+			Port:                    uint16(api.Port),
 		})
 		if err != nil {
 			log.Error().Err(err).Str("stream", id).Msg("[homekit] create server failed")
