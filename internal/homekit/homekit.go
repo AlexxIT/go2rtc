@@ -61,6 +61,8 @@ func Init() {
 
 	log = app.GetLogger("homekit")
 
+	homekit.FFmpegBin = ffmpeg.Bin
+
 	streams.HandleFunc("homekit", streamHandler)
 
 	// Mask pairing keys for sources already present in the config. streamHandler

@@ -156,6 +156,11 @@ var defaults = map[string]string{
 
 var log zerolog.Logger
 
+// Bin returns the configured FFmpeg binary
+func Bin() string {
+	return defaults["bin"]
+}
+
 // configTemplate - return template from config (defaults) if exist or return raw template
 func configTemplate(template string) string {
 	if s := defaults[template]; s != "" {
