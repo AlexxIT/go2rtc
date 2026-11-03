@@ -69,6 +69,10 @@ func buildDTLSConfig(psk []byte, isServer bool) *dtls.Config {
 		config.CipherSuites = []dtls.CipherSuiteID{dtls.TLS_PSK_WITH_AES_128_CBC_SHA256}
 	} else {
 		config.CustomCipherSuites = CustomCipherSuites
+		// Older firmware (e.g. Wyze Video Doorbell v1, WYZEDB3 4.25.x) does not
+		// support the ChaCha20 suite and aborts with HandshakeFailure. Custom
+		// suites are offered first, so newer cameras keep negotiating ChaCha20.
+		config.CipherSuites = []dtls.CipherSuiteID{dtls.TLS_PSK_WITH_AES_128_CBC_SHA256}
 	}
 
 	return config
