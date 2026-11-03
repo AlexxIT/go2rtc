@@ -22,14 +22,28 @@ func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver
 		}
 
 		c.sender = core.NewSender(media, track.Codec)
-		c.sender.Handler = func(packet *rtp.Packet) {
-			b := muxer.GetPayload(pid, packet.Timestamp, packet.Payload)
+		c.sender.Handler = backchannelHandler(muxer, pid, track.Codec, func(b []byte) {
 			_ = c.WriteBackchannel(b)
-		}
+		})
 	}
 
 	c.sender.HandleRTP(track)
 	return nil
+}
+
+// backchannelHandler converts RTP packets to MPEG-TS parts. The muxer adds the
+// timestamp delta straight to the PTS, which always runs at 90 kHz, but audio
+// RTP timestamps run at the codec clock rate (8 kHz for PCMA).
+func backchannelHandler(
+	muxer *mpegts.Muxer, pid uint16, codec *core.Codec, write func([]byte),
+) func(packet *rtp.Packet) {
+	// convert timestamp to 90000Hz clock
+	clock := mpegts.NewClock(codec.ClockRate)
+
+	return func(packet *rtp.Packet) {
+		pts := clock.Convert(packet.Timestamp)
+		write(muxer.GetPayload(pid, pts, packet.Payload))
+	}
 }
 
 func (c *Client) SetupBackchannel() (err error) {

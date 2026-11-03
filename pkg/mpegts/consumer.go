@@ -85,10 +85,10 @@ func (c *Consumer) AddTrack(media *core.Media, codec *core.Codec, track *core.Re
 		pid := c.muxer.AddTrack(StreamTypeAAC)
 
 		// convert timestamp to 90000Hz clock
-		dt := 90000 / float64(track.Codec.ClockRate)
+		clock := NewClock(track.Codec.ClockRate)
 
 		sender.Handler = func(pkt *rtp.Packet) {
-			pts := uint32(float64(pkt.Timestamp) * dt)
+			pts := clock.Convert(pkt.Timestamp)
 			b := c.muxer.GetPayload(pid, pts, pkt.Payload)
 			if n, err := c.wr.Write(b); err == nil {
 				c.Send += n
