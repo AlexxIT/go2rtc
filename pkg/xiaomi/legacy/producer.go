@@ -79,16 +79,7 @@ func probe(client *Client) ([]*core.Media, error) {
 		switch codec := hdr[0]; codec {
 		case tutk.CodecH264, tutk.CodecH265:
 			if vcodec == nil {
-				avcc := annexb.EncodeToAVCC(payload)
-				if codec == tutk.CodecH264 {
-					if h264.NALUType(avcc) == h264.NALUTypeSPS {
-						vcodec = h264.AVCCToCodec(avcc)
-					}
-				} else {
-					if h265.NALUType(avcc) == h265.NALUTypeVPS {
-						vcodec = h265.AVCCToCodec(avcc)
-					}
-				}
+				vcodec = videoCodec(codec, payload)
 			}
 		case tutk.CodecPCMA, codecXiaobaiPCMA:
 			if acodec == nil {
@@ -127,6 +118,24 @@ func probe(client *Client) ([]*core.Media, error) {
 	return medias, nil
 }
 
+// videoCodec returns the codec if the frame starts with SPS (H264) or VPS (H265).
+// A frame that is not valid Annex B (some cameras send those at the start of a
+// session) gives an empty AVCC, so it is skipped instead of read out of range.
+func videoCodec(codec byte, payload []byte) *core.Codec {
+	avcc := annexb.EncodeToAVCC(payload)
+	if len(avcc) < 5 {
+		return nil
+	}
+	if codec == tutk.CodecH264 {
+		if h264.NALUType(avcc) == h264.NALUTypeSPS {
+			return h264.AVCCToCodec(avcc)
+		}
+	} else if h265.NALUType(avcc) == h265.NALUTypeVPS {
+		return h265.AVCCToCodec(avcc)
+	}
+	return nil
+}
+
 func (c *Producer) Protocol() string {
 	return "tutk+udp"
 }
@@ -151,12 +160,17 @@ func (c *Producer) Start() error {
 
 		switch codec := hdr[0]; codec {
 		case tutk.CodecH264, tutk.CodecH265:
+			avcc := annexb.EncodeToAVCC(payload)
+			if len(avcc) == 0 {
+				continue // not valid Annex B, skip the frame
+			}
+
 			pkt = &core.Packet{
 				Header: rtp.Header{
 					SequenceNumber: videoSeq,
 					Timestamp:      core.Now90000(),
 				},
-				Payload: annexb.EncodeToAVCC(payload),
+				Payload: avcc,
 			}
 			videoSeq++
 
