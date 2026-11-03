@@ -56,10 +56,21 @@ type Producer struct {
 
 const codecXiaobaiPCMA = 1 // chuangmi.camera.xiaobai
 
-func probe(client *Client) ([]*core.Media, error) {
+// packetReader is the part of Client that probe needs (so it can be tested).
+type packetReader interface {
+	SetDeadline(t time.Time) error
+	ReadPacket() (hdr, payload []byte, err error)
+}
+
+// probeAfterVideo is how many packets to wait for audio after the video codec
+// is found. Cameras without audio never send it, so we can't wait for the deadline.
+const probeAfterVideo = 5
+
+func probe(client packetReader) ([]*core.Media, error) {
 	_ = client.SetDeadline(time.Now().Add(15 * time.Second))
 
 	var vcodec, acodec *core.Codec
+	var afterVideo int
 
 	for {
 		// 0   5000      codec
@@ -101,6 +112,13 @@ func probe(client *Client) ([]*core.Media, error) {
 		if vcodec != nil && acodec != nil {
 			break
 		}
+
+		// camera without audio: don't wait for it until the deadline
+		if vcodec != nil {
+			if afterVideo++; afterVideo > probeAfterVideo {
+				break
+			}
+		}
 	}
 
 	medias := []*core.Media{
@@ -109,11 +127,13 @@ func probe(client *Client) ([]*core.Media, error) {
 			Direction: core.DirectionRecvonly,
 			Codecs:    []*core.Codec{vcodec},
 		},
-		{
+	}
+	if acodec != nil {
+		medias = append(medias, &core.Media{
 			Kind:      core.KindAudio,
 			Direction: core.DirectionRecvonly,
 			Codecs:    []*core.Codec{acodec},
-		},
+		})
 	}
 	return medias, nil
 }
