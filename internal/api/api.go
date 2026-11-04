@@ -60,6 +60,11 @@ func Init() {
 	HandleFunc("api/log", logHandler)
 
 	Handler = http.DefaultServeMux // 4th
+	// Wait before route lookup: streams.Init may not have registered this path yet.
+	schemesPath := basePath + "/api/schemes"
+	if allowPaths == nil || slices.Contains(allowPaths, schemesPath) {
+		Handler = middlewareReady(schemesPath, readyCh, Handler)
+	}
 
 	if cfg.Mod.Origin == "*" {
 		Handler = middlewareCORS(Handler) // 3rd
