@@ -245,23 +245,14 @@ func apiDeviceList(w http.ResponseWriter, r *http.Request) {
 
 	err := func() error {
 		region := query.Get("region")
-		res, err := cloudRequest(user, region, "/v2/home/device_list_page", "{}")
+		devices, err := getDevices(user, region)
 		if err != nil {
-			return err
-		}
-		var v struct {
-			List []*Device `json:"list"`
-		}
-
-		log.Trace().Str("user", user).Msgf("[xiaomi] devices list: %s", res)
-
-		if err = json.Unmarshal(res, &v); err != nil {
 			return err
 		}
 
 		var items []*api.Source
 
-		for _, device := range v.List {
+		for _, device := range devices {
 			if !device.HasCamera() {
 				continue
 			}
@@ -279,6 +270,94 @@ func apiDeviceList(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+// getDevices returns own devices and devices from homes shared with the user.
+func getDevices(user, region string) ([]*Device, error) {
+	res, err := cloudRequest(user, region, "/v2/home/device_list_page", "{}")
+	if err != nil {
+		return nil, err
+	}
+
+	log.Trace().Str("user", user).Msgf("[xiaomi] devices list: %s", res)
+
+	var v struct {
+		List []*Device `json:"list"`
+	}
+	if err = json.Unmarshal(res, &v); err != nil {
+		return nil, err
+	}
+
+	// shared devices are not returned by device_list_page, so request them per shared home
+	shared, err := getSharedDevices(user, region)
+	if err != nil {
+		log.Warn().Err(err).Str("user", user).Msg("[xiaomi] can't get shared devices")
+		return v.List, nil
+	}
+
+	devices := v.List
+	for _, device := range shared {
+		if !containsDevice(devices, device.Did) {
+			devices = append(devices, device)
+		}
+	}
+	return devices, nil
+}
+
+func getSharedDevices(user, region string) ([]*Device, error) {
+	res, err := cloudRequest(user, region, "/v2/user/get_device_cnt", `{"fetch_own":false,"fetch_share":true}`)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Trace().Str("user", user).Msgf("[xiaomi] devices count: %s", res)
+
+	var cnt struct {
+		Share struct {
+			ShareFamily []struct {
+				HomeID    json.Number `json:"home_id"`
+				HomeOwner json.Number `json:"home_owner"`
+			} `json:"share_family"`
+		} `json:"share"`
+	}
+	if err = json.Unmarshal(res, &cnt); err != nil {
+		return nil, err
+	}
+
+	var devices []*Device
+
+	for _, home := range cnt.Share.ShareFamily {
+		params := fmt.Sprintf(
+			`{"home_owner":%s,"home_id":%s,"limit":200,"get_split_device":true,"support_smart_home":true}`,
+			home.HomeOwner, home.HomeID,
+		)
+		res, err = cloudRequest(user, region, "/v2/home/home_device_list", params)
+		if err != nil {
+			return nil, err
+		}
+
+		log.Trace().Str("user", user).Msgf("[xiaomi] shared home %s devices: %s", home.HomeID, res)
+
+		var v struct {
+			DeviceInfo []*Device `json:"device_info"`
+		}
+		if err = json.Unmarshal(res, &v); err != nil {
+			return nil, err
+		}
+
+		devices = append(devices, v.DeviceInfo...)
+	}
+
+	return devices, nil
+}
+
+func containsDevice(devices []*Device, did string) bool {
+	for _, device := range devices {
+		if device.Did == did {
+			return true
+		}
+	}
+	return false
 }
 
 type Device struct {
