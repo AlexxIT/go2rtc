@@ -41,6 +41,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/internal/tapo"
 	"github.com/AlexxIT/go2rtc/internal/tuya"
+	"github.com/AlexxIT/go2rtc/internal/unifiprotect"
 	"github.com/AlexxIT/go2rtc/internal/v4l2"
 	"github.com/AlexxIT/go2rtc/internal/webrtc"
 	"github.com/AlexxIT/go2rtc/internal/webtorrent"
@@ -105,6 +106,7 @@ func main() {
 		{"roborock", roborock.Init},
 		{"tapo", tapo.Init},
 		{"tuya", tuya.Init},
+		{"unifi_protect", unifiprotect.Init},
 		{"wyze", wyze.Init},
 		{"xiaomi", xiaomi.Init},
 		{"yandex", yandex.Init},
