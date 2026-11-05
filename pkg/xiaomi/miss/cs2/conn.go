@@ -13,7 +13,15 @@ import (
 )
 
 func Dial(host, transport string) (*Conn, error) {
-	conn, err := handshake(host, transport)
+	return dial(host, transport, false)
+}
+
+func DialBroadcast(host, transport string) (*Conn, error) {
+	return dial(host, transport, true)
+}
+
+func dial(host, transport string, broadcast bool) (*Conn, error) {
+	conn, err := handshake(host, transport, broadcast)
 	if err != nil {
 		return nil, err
 	}
@@ -43,6 +51,8 @@ type Conn struct {
 
 	cmdMu  sync.Mutex
 	cmdAck func()
+
+	cmdResponseAck atomic.Bool
 }
 
 const (
@@ -61,18 +71,28 @@ const (
 	msgCloseAck  = 0xF1
 )
 
-func handshake(host, transport string) (net.Conn, error) {
+func handshake(host, transport string, broadcast bool) (net.Conn, error) {
 	conn, err := newUDPConn(host, 32108)
 	if err != nil {
 		return nil, err
 	}
 
-	_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
+	timeout := 5 * time.Second
+	if broadcast {
+		timeout = 20 * time.Second
+	}
+	_ = conn.SetDeadline(time.Now().Add(timeout))
 
 	req := []byte{magic, msgLanSearch, 0, 0}
-	res, err := conn.(*udpConn).WriteUntil(req, func(res []byte) bool {
+	ok := func(res []byte) bool {
 		return res[1] == msgPunchPkt
-	})
+	}
+	var res []byte
+	if broadcast {
+		res, err = conn.(*udpConn).searchUntil(req, ok)
+	} else {
+		res, err = conn.(*udpConn).WriteUntil(req, ok)
+	}
 	if err != nil {
 		_ = conn.Close()
 		return nil, err
@@ -153,6 +173,9 @@ func (c *Conn) worker() {
 					// For UDP we should send ACK.
 					ack := []byte{magic, msgDrwAck, 0, 6, magicDrw, ch, 0, 1, seqHI, seqLO}
 					_, _ = c.Conn.Write(ack)
+					if ch == 0 && c.cmdResponseAck.Load() && c.cmdAck != nil {
+						c.cmdAck()
+					}
 				}
 			}
 
@@ -172,6 +195,10 @@ func (c *Conn) worker() {
 			fmt.Printf("%s: unknown msg: %x\n", "cs2", buf[:n])
 		}
 	}
+}
+
+func (c *Conn) AcceptCommandResponseAsAck() {
+	c.cmdResponseAck.Store(true)
 }
 
 func (c *Conn) Protocol() string {
@@ -367,6 +394,86 @@ func (c *udpConn) WriteUntil(req []byte, ok func(res []byte) bool) ([]byte, erro
 			return buf[:n], nil
 		}
 	}
+}
+
+func (c *udpConn) searchUntil(req []byte, ok func(res []byte) bool) ([]byte, error) {
+	addrs := []*net.UDPAddr{
+		{IP: net.IPv4bcast, Port: c.addr.Port},
+		c.addr,
+	}
+	if addr := subnetBroadcast(c.addr.IP, c.addr.Port); addr != nil {
+		addrs = append([]*net.UDPAddr{addr}, addrs...)
+	}
+
+	write := func() error {
+		var firstErr error
+		sent := false
+		for _, addr := range addrs {
+			if _, err := c.UDPConn.WriteToUDP(req, addr); err != nil {
+				if firstErr == nil {
+					firstErr = err
+				}
+			} else {
+				sent = true
+			}
+		}
+		if sent {
+			return nil
+		}
+		return firstErr
+	}
+
+	var t *time.Timer
+	t = time.AfterFunc(1, func() {
+		if err := write(); err == nil && t != nil {
+			t.Reset(time.Second)
+		}
+	})
+	defer t.Stop()
+
+	buf := make([]byte, 1200)
+
+	for {
+		n, addr, err := c.UDPConn.ReadFromUDP(buf)
+		if err != nil {
+			return nil, err
+		}
+
+		if !addr.IP.Equal(c.addr.IP) || n < 16 {
+			continue // skip messages from another IP
+		}
+
+		if ok(buf[:n]) {
+			c.addr.IP = bytes.Clone(addr.IP)
+			c.addr.Port = addr.Port
+			return buf[:n], nil
+		}
+	}
+}
+
+func subnetBroadcast(target net.IP, port int) *net.UDPAddr {
+	target = target.To4()
+	if target == nil {
+		return nil
+	}
+
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return nil
+	}
+	for _, addr := range addrs {
+		ipNet, ok := addr.(*net.IPNet)
+		if !ok || len(ipNet.Mask) != net.IPv4len || !ipNet.Contains(target) {
+			continue
+		}
+
+		ip := make(net.IP, net.IPv4len)
+		for i := range ip {
+			ip[i] = target[i] | ^ipNet.Mask[i]
+		}
+		return &net.UDPAddr{IP: ip, Port: port}
+	}
+	return nil
 }
 
 func newTCPConn(addr string) (net.Conn, error) {
