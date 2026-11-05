@@ -158,6 +158,10 @@ webrtc:
   # fix local TCP or UDP or both ports for WebRTC media
   listen: ":8555"            # address of your local server
 
+  # pacing duration between consecutive RTP packets of a frame (e.g. 100us, 1ms, or 100 for microseconds)
+  # helps prevent packet loss on some networks when sending bursts of UDP packets. disabled by default.
+  pacing: 100us
+
   # add additional host candidates manually
   # order is important, the first will have a higher priority
   candidates:
@@ -206,6 +210,13 @@ By default, go2rtc uses a **fixed TCP** port and **fixed UDP** ports for each **
 You can set a **fixed TCP** port and a **random UDP** port for all connections: `listen: ":8555/tcp"`.
 
 You can also disable the TCP port and leave only random UDP ports: `listen: ""`.
+
+### WebRTC Pacing
+
+You can configure a pacing delay between consecutive RTP packets of a large video frame (like an H.264/H.265 I-frame). This helps prevent packet loss on routers/networks that struggle with sudden large bursts of UDP packets.
+
+* Supports duration strings (e.g. `100us`, `1ms`, `50µs`) as well as integers representing microseconds (e.g. `100`).
+* Pacing is **disabled by default** (`pacing: ""`).
 
 ### Configuration filters
 

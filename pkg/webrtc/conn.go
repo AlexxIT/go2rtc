@@ -22,7 +22,11 @@ type Conn struct {
 
 	offer  string
 	closed core.Waiter
+
+	Pacing time.Duration `json:"-"`
 }
+
+var DefaultPacing time.Duration
 
 func NewConn(pc *webrtc.PeerConnection) *Conn {
 	c := &Conn{
@@ -31,7 +35,8 @@ func NewConn(pc *webrtc.PeerConnection) *Conn {
 			FormatName: "webrtc",
 			Transport:  pc,
 		},
-		pc: pc,
+		pc:     pc,
+		Pacing: DefaultPacing,
 	}
 
 	pc.OnICECandidate(func(candidate *webrtc.ICECandidate) {
