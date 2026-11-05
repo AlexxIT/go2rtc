@@ -7,6 +7,7 @@ This source type supports Roborock vacuums with cameras. Known working models:
 - **Roborock S6 MaxV** - only video (the vacuum has no microphone)
 - **Roborock S7 MaxV** - video and two-way audio
 - **Roborock Qrevo MaxV** - video and two-way audio
+- **Roborock P20 Pro** - video (tested with a China region account)
 
 ## Configuration
 
