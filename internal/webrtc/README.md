@@ -249,9 +249,26 @@ You can turn the browser of any PC or mobile into an IP camera with support for 
 
 [`new in v1.3.0`](https://github.com/AlexxIT/go2rtc/releases/tag/v1.3.0)
 
-You can use **OBS Studio** or any other broadcast software with [WHIP](https://www.ietf.org/archive/id/draft-ietf-wish-whip-01.html) protocol support. This standard has not yet been approved. But you can download OBS Studio [dev version](https://github.com/obsproject/obs-studio/actions/runs/3969201209):
+You can use **OBS Studio** or any other broadcast software with [WHIP](https://www.rfc-editor.org/rfc/rfc9725.html) protocol support:
 
 - Settings > Stream > Service: WHIP > `http://192.168.1.123:1984/api/webrtc?dst=camera1`
+
+The WHIP response waits for ICE candidate gathering to finish. If the configured
+STUN servers are unreachable, their timeouts can delay the SDP answer even when
+the publisher can reach go2rtc directly over the local network. Adding static
+`candidates` does not disable this gathering step.
+
+For an installation where all WebRTC peers can reach go2rtc directly, you can
+disable the default STUN servers:
+
+```yaml
+webrtc:
+  ice_servers: []
+```
+
+This is a global WebRTC setting and also affects playback connections. Keep the
+STUN/TURN servers needed by peers that connect through NAT; disabling them can
+prevent those connections from working.
 
 ## Useful links
 
