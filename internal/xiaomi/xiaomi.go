@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/app"
@@ -56,6 +57,31 @@ var tokens map[string]string
 var clouds map[string]*xiaomi.Cloud
 var cloudsMu sync.Mutex
 
+// loginRetries is the number of additional login attempts. The Xiaomi account
+// server sometimes fails the TLS handshake, and a single blip should not fail
+// the stream.
+const loginRetries = 1
+
+func login(userID string) (*xiaomi.Cloud, error) {
+	for i := 0; ; i++ {
+		cloud := xiaomi.NewCloud(AppXiaomiHome)
+		err := cloud.LoginWithToken(userID, tokens[userID])
+		if err == nil {
+			return cloud, nil
+		}
+
+		// only a network error is worth a retry, a rejected token is not
+		var netErr *url.Error
+		if i == loginRetries || !errors.As(err, &netErr) {
+			return nil, err
+		}
+
+		log.Debug().Err(err).Msg("xiaomi: login failed, retrying")
+
+		time.Sleep(time.Second)
+	}
+}
+
 func getCloud(userID string) (*xiaomi.Cloud, error) {
 	cloudsMu.Lock()
 	defer cloudsMu.Unlock()
@@ -64,8 +90,8 @@ func getCloud(userID string) (*xiaomi.Cloud, error) {
 		return cloud, nil
 	}
 
-	cloud := xiaomi.NewCloud(AppXiaomiHome)
-	if err := cloud.LoginWithToken(userID, tokens[userID]); err != nil {
+	cloud, err := login(userID)
+	if err != nil {
 		return nil, err
 	}
 	if clouds == nil {
@@ -76,9 +102,36 @@ func getCloud(userID string) (*xiaomi.Cloud, error) {
 	return cloud, nil
 }
 
+// resetCloud drops the cached session, so the next getCloud logs in again.
+func resetCloud(userID string, stale *xiaomi.Cloud) {
+	cloudsMu.Lock()
+	defer cloudsMu.Unlock()
+
+	// only drop the session we have used ourselves, another goroutine may
+	// have replaced it with a fresh one already
+	if clouds[userID] == stale {
+		delete(clouds, userID)
+	}
+}
+
 func cloudRequest(userID, region, apiURL, params string) ([]byte, error) {
 	cloud, err := getCloud(userID)
 	if err != nil {
+		return nil, err
+	}
+
+	res, err := cloud.Request(GetBaseURL(region), apiURL, params, nil)
+	if err == nil || !errors.Is(err, xiaomi.ErrUnauthorized) {
+		return res, err
+	}
+
+	// The serviceToken from the login has expired. Without this the cached
+	// session would keep failing with 401 until go2rtc is restarted.
+	log.Debug().Msg("xiaomi: session expired, logging in again")
+
+	resetCloud(userID, cloud)
+
+	if cloud, err = getCloud(userID); err != nil {
 		return nil, err
 	}
 	return cloud.Request(GetBaseURL(region), apiURL, params, nil)
