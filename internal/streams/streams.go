@@ -43,9 +43,7 @@ func Init() {
 			}
 		}
 		for name, rawQuery := range cfg.Preload {
-			if err := AddPreload(name, rawQuery); err != nil {
-				log.Error().Err(err).Caller().Send()
-			}
+			PreloadWithRetry(name, rawQuery)
 		}
 	})
 }
