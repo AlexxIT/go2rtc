@@ -99,6 +99,7 @@ func Init() {
 	// async WebRTC server (two API versions)
 	ws.HandleFunc("webrtc", asyncHandler)
 	ws.HandleFunc("webrtc/offer", asyncHandler)
+	ws.HandleFunc("webrtc/session", sessionHandler)
 	ws.HandleFunc("webrtc/candidate", candidateHandler)
 
 	// sync WebRTC server (two API versions)
@@ -214,6 +215,14 @@ func asyncHandler(tr *ws.Transport, msg *ws.Message) (err error) {
 		}
 	case core.ModePassiveProducer:
 		stream.AddProducer(conn)
+	}
+
+	var sessionBound bool
+	tr.WithContext(func(ctx map[any]any) {
+		sessionBound, _ = ctx["webrtc_lifetime"].(bool)
+	})
+	if sessionBound {
+		tr.OnClose(func() { _ = conn.Close() })
 	}
 
 	// 3. Exchange SDP without waiting all candidates
