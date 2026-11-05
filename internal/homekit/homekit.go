@@ -26,6 +26,9 @@ func Init() {
 			DevicePrivate string   `yaml:"device_private"`
 			CategoryID    string   `yaml:"category_id"`
 			Pairings      []string `yaml:"pairings"`
+			// HKSV enables experimental HomeKit Secure Video open-source services
+			// (WebRTC live view, multi-tier HEVC, CMAF recording ingest). Spec version 17.99
+			HKSV bool `yaml:"hksv"`
 		} `yaml:"homekit"`
 	}
 	app.LoadConfig(&cfg)
@@ -71,6 +74,7 @@ func Init() {
 			stream:   id,
 			pairings: conf.Pairings,
 			setupID:  setupID,
+			hksv:     conf.HKSV,
 		}
 
 		srv.hap = &hap.Server{
@@ -102,8 +106,16 @@ func Init() {
 		if url := findHomeKitURL(stream.Sources()); url != "" {
 			// 1. Act as transparent proxy for HomeKit camera
 			srv.proxyURL = url
+		} else if conf.HKSV {
+			// 2. Experimental HKSV open-source camera (WebRTC + HEVC + CMAF recording)
+			srv.accessory = camera.NewHKSVAccessory("AlexxIT", "go2rtc", name, "-", app.Version, id)
+			srv.webrtc = homekit.NewWebRTCManager(newHomeKitPeerConnection)
+			srv.recording = homekit.NewRecordingManager()
+			srv.recording.OnEventSeq = srv.notifyEventSequence
+			go srv.startRecordingBuffer()
+			log.Info().Str("stream", id).Msg("[homekit] HKSV open-source enabled (experimental, capabilities 17.99)")
 		} else {
-			// 2. Act as basic HomeKit camera
+			// 3. Act as basic HomeKit camera
 			srv.accessory = camera.NewAccessory("AlexxIT", "go2rtc", name, "-", app.Version)
 		}
 

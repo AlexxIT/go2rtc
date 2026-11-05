@@ -74,8 +74,20 @@ func ServerHandler(server Server) HandlerFunc {
 					return nil, err
 				}
 
+				var wr hap.JSONCharacters
 				for _, char := range v.Value {
 					server.SetCharacteristic(conn, char.AID, char.IID, char.Value)
+					// HAP write-response: return the post-write value for "wr" characteristics
+					if val := server.GetCharacteristic(conn, char.AID, char.IID); val != nil {
+						// Only include if the characteristic has wr permission
+						if acc := findAccessoryCharacter(server, conn, char.AID, char.IID); acc != nil && hasPerm(acc.Perms, "wr") {
+							wr.Value = append(wr.Value, hap.JSONCharacter{AID: char.AID, IID: char.IID, Value: val})
+						}
+					}
+				}
+
+				if len(wr.Value) > 0 {
+					return makeResponse(hap.MimeJSON, wr)
 				}
 
 				res := &http.Response{
@@ -159,6 +171,27 @@ func handlePairings(req *http.Request, srv ServerPair) (*http.Response, error) {
 	}
 
 	return makeResponse(hap.MimeTLV8, body)
+}
+
+func findAccessoryCharacter(server ServerAccessory, conn net.Conn, aid uint8, iid uint64) *hap.Character {
+	for _, acc := range server.GetAccessories(conn) {
+		if acc.AID != aid && aid != 0 {
+			// still search all; AID is usually 1
+		}
+		if char := acc.GetCharacterByID(iid); char != nil {
+			return char
+		}
+	}
+	return nil
+}
+
+func hasPerm(perms []string, p string) bool {
+	for _, x := range perms {
+		if x == p {
+			return true
+		}
+	}
+	return false
 }
 
 func makeResponse(mime string, v any) (*http.Response, error) {

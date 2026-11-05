@@ -9,6 +9,7 @@ import (
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
+	"github.com/AlexxIT/go2rtc/pkg/h265"
 	"github.com/AlexxIT/go2rtc/pkg/hap/camera"
 	"github.com/AlexxIT/go2rtc/pkg/opus"
 	"github.com/AlexxIT/go2rtc/pkg/srtp"
@@ -35,6 +36,7 @@ func NewConsumer(conn net.Conn, server *srtp.Server) *Consumer {
 			Direction: core.DirectionSendonly,
 			Codecs: []*core.Codec{
 				{Name: core.CodecH264},
+				{Name: core.CodecH265},
 			},
 		},
 		{
@@ -164,6 +166,13 @@ func (c *Consumer) AddTrack(media *core.Media, codec *core.Codec, track *core.Re
 			sender.Handler = h264.RTPDepay(track.Codec, sender.Handler)
 		} else {
 			sender.Handler = h264.RepairAVCC(track.Codec, sender.Handler)
+		}
+	case core.CodecH265:
+		sender.Handler = h265.RTPPay(1378, sender.Handler)
+		if track.Codec.IsRTP() {
+			sender.Handler = h265.RTPDepay(track.Codec, sender.Handler)
+		} else {
+			sender.Handler = h265.RepairAVCC(track.Codec, sender.Handler)
 		}
 	case core.CodecOpus:
 		sender.Handler = opus.RepackToHAP(c.audioRTPTime, sender.Handler)
