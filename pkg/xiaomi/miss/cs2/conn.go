@@ -20,11 +20,18 @@ func Dial(host, transport string) (*Conn, error) {
 
 	_, isTCP := conn.(*tcpConn)
 
+	commandChannel := newDataChannel(0, 10)
+	// Some cameras keep sending unsolicited control notifications after login.
+	// There is no long-running command reader, so retaining every notification
+	// eventually fills the queue and used to tear down the media connection.
+	// Keep the newest notifications while leaving the media channel strict.
+	commandChannel.dropOldest = true
+
 	c := &Conn{
 		Conn:  conn,
 		isTCP: isTCP,
 		channels: [4]*dataChannel{
-			newDataChannel(0, 10), nil, newDataChannel(250, 100), nil,
+			commandChannel, nil, newDataChannel(250, 100), nil,
 		},
 	}
 	go c.worker()
@@ -427,6 +434,9 @@ type dataChannel struct {
 	waitData []byte
 	waitSize int
 	popBuf   chan []byte
+	// dropOldest is only enabled for the control channel. Media channels must
+	// remain strict because silently dropping media corrupts the stream.
+	dropOldest bool
 }
 
 func (c *dataChannel) Push(b []byte) error {
@@ -442,10 +452,24 @@ func (c *dataChannel) Push(b []byte) error {
 			break
 		}
 
+		data := c.waitData[:c.waitSize]
 		select {
-		case c.popBuf <- c.waitData[:c.waitSize]:
+		case c.popBuf <- data:
 		default:
-			return fmt.Errorf("pop buffer is full")
+			if !c.dropOldest {
+				return fmt.Errorf("pop buffer is full")
+			}
+
+			// Preserve recent control responses/notifications without allowing an
+			// unread notification queue to terminate the video connection.
+			select {
+			case <-c.popBuf:
+			default:
+			}
+			select {
+			case c.popBuf <- data:
+			default:
+			}
 		}
 
 		c.waitData = c.waitData[c.waitSize:]
