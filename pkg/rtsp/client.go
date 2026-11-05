@@ -31,6 +31,7 @@ func NewClient(uri string) *Conn {
 }
 
 func (c *Conn) Dial() (err error) {
+	c.setupChannels = nil
 	if c.URL, err = url.Parse(c.uri); err != nil {
 		return
 	}
@@ -364,6 +365,10 @@ func (c *Conn) SetupMedia(media *core.Media) (byte, error) {
 			}
 		}
 
+		if c.setupChannels == nil {
+			c.setupChannels = make(map[*core.Media]byte)
+		}
+		c.setupChannels[media] = channel
 		return channel, nil
 	} else {
 		// we send our `interleaved`, but camera can answer with another
@@ -379,6 +384,10 @@ func (c *Conn) SetupMedia(media *core.Media) (byte, error) {
 			return 0, fmt.Errorf("wrong transport: %s", transport)
 		}
 
+		if c.setupChannels == nil {
+			c.setupChannels = make(map[*core.Media]byte)
+		}
+		c.setupChannels[media] = byte(i)
 		return byte(i), nil
 	}
 }
@@ -389,12 +398,15 @@ func (c *Conn) Play() (err error) {
 }
 
 func (c *Conn) Teardown() (err error) {
+	// TEARDOWN ends the session even when the TCP connection stays open.
+	c.setupChannels = nil
 	// allow TEARDOWN from any state (ex. ANNOUNCE > SETUP)
 	req := &tcp.Request{Method: MethodTeardown, URL: c.URL}
 	return c.WriteRequest(req)
 }
 
 func (c *Conn) Close() error {
+	c.setupChannels = nil
 	if c.mode == core.ModeActiveProducer {
 		_ = c.Teardown()
 	}
