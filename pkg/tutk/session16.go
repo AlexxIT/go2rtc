@@ -34,6 +34,7 @@ func NewSession16(conn net.Conn, sid8 []byte) *Session16 {
 		sid16:  sid16,
 		rawCmd: make(chan []byte, 10),
 		rawPkt: make(chan [2][]byte, 100),
+		ch1:    ch1{ready: make(chan struct{}), data: make(chan ch1Data, 256)},
 	}
 }
 
@@ -43,6 +44,7 @@ type Session16 struct {
 
 	rawCmd chan []byte
 	rawPkt chan [2][]byte
+	ch1    ch1
 
 	seqSendCh0 uint16
 	seqSendCh1 uint16
@@ -296,6 +298,9 @@ func (s *Session16) handleCh1(cmd []byte) int {
 	// - answer on 0000 command with exact config response (can't set simple proto)
 	// - send 0012 command at start
 	// - respond on every 0008 command for smooth playback
+	if s.handleCh1RUDP(cmd) {
+		return msgUnknown0013
+	}
 	switch cid := string(cmd[:2]); cid {
 	case "\x00\x00": // client start
 		_ = s.SessionWrite(1, s.msgAck0000(cmd))
