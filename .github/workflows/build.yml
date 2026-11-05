@@ -7,6 +7,10 @@ on:
       - 'master'
     tags:
       - 'v*'
+  schedule:
+    # Weekly Sunday 04:00 UTC — rebuild master container images with fresh
+    # alpine base to pick up libssl/libxml2/etc fixes between tagged releases.
+    - cron: '0 4 * * 0'
 
 jobs:
   build-binaries:
