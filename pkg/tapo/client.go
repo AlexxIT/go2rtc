@@ -28,6 +28,9 @@ import (
 type Client struct {
 	core.Listener
 
+	Backchannel bool
+	Media       string
+
 	url *url.URL
 
 	medias    []*core.Media
@@ -70,7 +73,7 @@ func Dial(rawURL string) (*Client, error) {
 		u.Host += ":8800"
 	}
 
-	c := &Client{url: u}
+	c := &Client{url: u, Backchannel: true}
 	if c.conn1, err = c.newConn(); err != nil {
 		return nil, err
 	}
