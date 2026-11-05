@@ -26,7 +26,11 @@ func NewClient(uri string) *Conn {
 			ID:         core.NewID(),
 			FormatName: "rtsp",
 		},
-		uri: uri,
+		uri:             uri,
+		lastTimestamp:   make(map[byte]uint32), // channel -> last timestamp
+		timestampOffset: make(map[byte]uint32), // channel -> constant timestamp offset after reconnect
+		lastSeq:         make(map[byte]uint16), // channel -> last sequence number
+		seqOffset:       make(map[byte]uint16), // channel -> constant seq offset after reconnect
 	}
 }
 
