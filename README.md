@@ -194,6 +194,7 @@ A summary table of all modules and features can be found [here](internal/README.
 - [`kasa`](internal/kasa/README.md) - [TP-Link Kasa](https://www.kasasmart.com/) cameras.
 - [`multitrans`](internal/multitrans/README.md) - Two-way audio for Chinese version of [TP-Link](https://www.tp-link.com.cn/) cameras.
 - [`nest`](internal/nest/README.md) - [Google Nest](https://developers.google.com/nest/device-access/supported-devices) cameras through user-unfriendly and paid APIs.
+- [`reolink`](internal/reolink/README.md) - Experimental native Baichuan LAN TCP/UID streaming and two-way audio for Reolink cameras.
 - [`ring`](internal/ring/README.md) - Ring cameras with two-way audio support.
 - [`roborock`](internal/roborock/README.md) - [Roborock](https://roborock.com/) vacuums with cameras with two-way audio support. 
 - [`tapo`](internal/tapo/README.md) - [TP-Link Tapo](https://www.tapo.com/) cameras with two-way audio support.

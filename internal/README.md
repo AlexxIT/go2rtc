@@ -52,6 +52,7 @@ Some formats and protocols go2rtc supports exclusively. They have no equivalent 
 | [`multitrans`] | `rtp`           | `tcp`            |       |        |        | yes     |
 | [`nest`]       | `srtp`          | `rtsp`, `webrtc` | yes   |        |        | no      |
 | [`onvif`]      | `rtp`           | *                | yes   | yes    |        |         |
+| [`reolink`]    | `baichuan`      | `tcp`, `udp`     | yes   |        |        | yes     |
 | [`ring`]       | `srtp`          | `webrtc`         | yes   |        |        | yes     |
 | [`roborock`]   | `srtp`          | `webrtc`         | yes   |        |        | yes     |
 | [`rtmp`]       | `flv`           | `rtmp`           | yes   | yes    | yes    |         |
@@ -96,6 +97,7 @@ Some formats and protocols go2rtc supports exclusively. They have no equivalent 
 [`ngrok`]: ngrok/README.md
 [`onvif`]: onvif/README.md
 [`pinggy`]: pinggy/README.md
+[`reolink`]: reolink/README.md
 [`ring`]: ring/README.md
 [`roborock`]: roborock/README.md
 [`rtmp`]: rtmp/README.md
