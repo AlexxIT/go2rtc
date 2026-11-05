@@ -115,10 +115,16 @@ func probe(client *Client, audio bool) ([]*core.Media, error) {
 			Codecs:    []*core.Codec{acodec},
 		})
 
+		backchannel := []*core.Codec{acodec.Clone()}
+		if acodec.Name == core.CodecPCMA && acodec.ClockRate != 8000 {
+			// browsers can send only PCMA/8000, it will be resampled in AddTrack
+			backchannel = append(backchannel, &core.Codec{Name: core.CodecPCMA, ClockRate: 8000})
+		}
+
 		medias = append(medias, &core.Media{
 			Kind:      core.KindAudio,
 			Direction: core.DirectionSendonly,
-			Codecs:    []*core.Codec{acodec.Clone()},
+			Codecs:    backchannel,
 		})
 	}
 
