@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/tutk"
@@ -55,7 +56,8 @@ func NewClient(rawURL string) (*Client, error) {
 	var conn Conn
 	switch s := query.Get("vendor"); s {
 	case "cs2":
-		conn, err = cs2.Dial(u.Host, query.Get("transport"))
+		popSize, _ := strconv.Atoi(query.Get("buffer"))
+		conn, err = cs2.Dial(u.Host, query.Get("transport"), popSize)
 	case "tutk":
 		conn, err = tutk.Dial(u.Host, query.Get("uid"), "Miss", "client")
 	default:
