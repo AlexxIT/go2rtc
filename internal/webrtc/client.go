@@ -190,6 +190,12 @@ func whepClient(url string) (core.Producer, error) {
 		return nil, err
 	}
 
+	defer func() {
+		if err != nil {
+			_ = pc.Close()
+		}
+	}()
+
 	prod := webrtc.NewConn(pc)
 	prod.Mode = core.ModeActiveProducer
 	prod.Protocol = "http"
