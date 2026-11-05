@@ -35,16 +35,17 @@ type Conn struct {
 
 	// internal
 
-	auth      *tcp.Auth
-	conn      net.Conn
-	keepalive int
-	mode      core.Mode
-	playOK    bool
-	playErr   error
-	reader    *bufio.Reader
-	sequence  int
-	session   string
-	uri       string
+	auth        *tcp.Auth
+	backchannel *Conn // separate session for backchannel, added while playing
+	conn        net.Conn
+	keepalive   int
+	mode        core.Mode
+	playOK      bool
+	playErr     error
+	reader      *bufio.Reader
+	sequence    int
+	session     string
+	uri         string
 
 	state   State
 	stateMu sync.Mutex

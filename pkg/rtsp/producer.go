@@ -104,6 +104,10 @@ func (c *Conn) Stop() (err error) {
 		c.state = StateNone
 		err = c.Close()
 	}
+	if c.backchannel != nil {
+		_ = c.backchannel.Stop()
+		c.backchannel = nil
+	}
 	c.stateMu.Unlock()
 
 	return
