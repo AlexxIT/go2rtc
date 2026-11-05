@@ -265,7 +265,7 @@ func (c *Conn) WritePacket(hdr, payload []byte) error {
 	c.seqCh3++
 	binary.BigEndian.PutUint32(req[8:], n)
 	copy(req[offset:], hdr)
-	copy(req[offset+hdrSize:], hdr)
+	copy(req[offset+hdrSize:], payload)
 
 	_, err := c.Conn.Write(req)
 	return err
