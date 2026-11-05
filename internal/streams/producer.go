@@ -131,6 +131,33 @@ func (p *Producer) AddTrack(media *core.Media, codec *core.Codec, track *core.Re
 	return nil
 }
 
+// dropClosedSenders forgets backchannel tracks whose consumer has gone (closed: nothing reads them any more). Kept, they
+// were set up again on every reconnect, so a camera's single talkback stayed taken long after the last client left.
+// When the last one goes while the producer runs, the regular reconnect path is taken with a new worker id: it dials
+// a new connection without them (the backchannel is released at the camera), moves every receiver's readers across
+// before the old connection is stopped, and the old worker sees it was superseded and leaves quietly.
+func (p *Producer) dropClosedSenders() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	live := p.senders[:0]
+	dropped := false
+	for _, track := range p.senders {
+		if len(track.Senders()) > 0 {
+			live = append(live, track)
+		} else {
+			dropped = true
+		}
+	}
+	p.senders = live
+
+	if dropped && len(p.senders) == 0 && p.state == stateStart && p.conn != nil {
+		log.Debug().Msgf("[streams] release backchannel url=%s", p.url)
+		p.workerID++
+		go p.reconnect(p.workerID, 0)
+	}
+}
+
 func (p *Producer) MarshalJSON() ([]byte, error) {
 	if conn := p.conn; conn != nil {
 		return json.Marshal(conn)
