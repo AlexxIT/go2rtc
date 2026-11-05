@@ -34,6 +34,16 @@ type TuyaMqttClient struct {
 	handleError      func(err error)
 }
 
+type TuyaSignalClient interface {
+	SetHandlers(func(AnswerFrame), func(CandidateFrame), func(), func(error))
+	SendOffer(string, string, int, bool) error
+	SendCandidate(string) error
+	SendResolution(int) error
+	SendSpeaker(int) error
+	SendDisconnect() error
+	Stop()
+}
+
 type MqttFrameHeader struct {
 	Type          string `json:"type"`
 	From          string `json:"from"`
@@ -42,6 +52,7 @@ type MqttFrameHeader struct {
 	SessionID     string `json:"sessionid"`
 	MotoID        string `json:"moto_id"`
 	TransactionID string `json:"tid"`
+	Path          string `json:"path,omitempty"`
 }
 
 type MqttFrame struct {
@@ -111,6 +122,13 @@ func NewTuyaMqttClient(deviceId string) *TuyaMqttClient {
 		waiter:       core.Waiter{},
 		wakeupWaiter: core.Waiter{},
 	}
+}
+
+func (c *TuyaMqttClient) SetHandlers(answer func(AnswerFrame), candidate func(CandidateFrame), disconnect func(), handleError func(error)) {
+	c.handleAnswer = answer
+	c.handleCandidate = candidate
+	c.handleDisconnect = disconnect
+	c.handleError = handleError
 }
 
 func (c *TuyaMqttClient) Start(hubConfig *MQTTConfig, webrtcConfig *WebRTCConfig, webrtcVersion int) error {
