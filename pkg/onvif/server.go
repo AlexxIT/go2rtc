@@ -69,9 +69,16 @@ func GetCapabilitiesResponse(host string) []byte {
 				<tt:RTP_TCP>false</tt:RTP_TCP>
 				<tt:RTP_RTSP_TCP>true</tt:RTP_RTSP_TCP>
 			</tt:StreamingCapabilities>
-		</tt:Media>
+		</tt:Media>`, host, host)
+	if hasAnyPTZ() {
+		e.Appendf(`
+		<tt:PTZ>
+			<tt:XAddr>http://%s%s</tt:XAddr>
+		</tt:PTZ>`, host, PathPTZ)
+	}
+	e.Append(`
 	</tds:Capabilities>
-</tds:GetCapabilitiesResponse>`, host, host)
+</tds:GetCapabilitiesResponse>`)
 	return e.Bytes()
 }
 
@@ -87,8 +94,17 @@ func GetServicesResponse(host string) []byte {
 		<tds:Namespace>http://www.onvif.org/ver10/media/wsdl</tds:Namespace>
 		<tds:XAddr>http://%s/onvif/media_service</tds:XAddr>
 		<tds:Version><tt:Major>2</tt:Major><tt:Minor>5</tt:Minor></tds:Version>
-	</tds:Service>
-</tds:GetServicesResponse>`, host, host)
+	</tds:Service>`, host, host)
+	if hasAnyPTZ() {
+		e.Appendf(`
+	<tds:Service>
+		<tds:Namespace>http://www.onvif.org/ver20/ptz/wsdl</tds:Namespace>
+		<tds:XAddr>http://%s%s</tds:XAddr>
+		<tds:Version><tt:Major>2</tt:Major><tt:Minor>5</tt:Minor></tds:Version>
+	</tds:Service>`, host, PathPTZ)
+	}
+	e.Append(`
+</tds:GetServicesResponse>`)
 	return e.Bytes()
 }
 
@@ -157,6 +173,9 @@ func appendProfile(e *Envelope, tag, name string) {
 	e.Appendf(`<tt:Name>%s</tt:Name>`, name)
 	appendVideoSourceConfiguration(e, "VideoSourceConfiguration", name)
 	appendVideoEncoderConfiguration(e, "VideoEncoderConfiguration")
+	if hasPTZ(name) {
+		appendPTZConfiguration(e, "PTZConfiguration", name)
+	}
 	e.Appendf(`</trt:%s>`, tag)
 }
 
