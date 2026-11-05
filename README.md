@@ -275,6 +275,7 @@ Supported for:
 [`doorbird`](internal/doorbird/README.md), 
 [`dvrip`](internal/dvrip/README.md), 
 [`exec`](internal/exec/README.md), 
+[`homekit`](internal/homekit/README.md#two-way-audio), 
 [`isapi`](internal/isapi/README.md), 
 [`multitrans`](internal/multitrans/README.md), 
 [`ring`](internal/ring/README.md), 

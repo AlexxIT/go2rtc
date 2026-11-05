@@ -2,6 +2,7 @@ package srtp
 
 import (
 	"net"
+	"sync"
 	"time"
 
 	"github.com/pion/rtcp"
@@ -25,6 +26,10 @@ type Session struct {
 
 	senderRTCP rtcp.SenderReport
 	senderTime time.Time
+
+	// protects the local SRTP context (pion Context has no concurrency protection),
+	// used by WriteRTP (sender goroutine) and WriteRTCP (server goroutine, receiver reports)
+	mu sync.Mutex
 }
 
 type Endpoint struct {
@@ -69,14 +74,17 @@ func (s *Session) init() error {
 }
 
 func (s *Session) WriteRTP(packet *rtp.Packet) (int, error) {
-	if s.Local.srtp == nil {
-		return 0, nil // before init call
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.Local.srtp == nil || s.conn == nil {
+		return 0, nil // before init call or session not added to the server
 	}
 
 	if now := time.Now(); now.After(s.senderTime) {
 		s.senderRTCP.NTPTime = uint64(now.UnixNano())
 		s.senderTime = now.Add(s.RTCPInterval)
-		_, _ = s.WriteRTCP(&s.senderRTCP)
+		_, _ = s.writeRTCP(&s.senderRTCP)
 	}
 
 	clone := rtp.Packet{
@@ -108,6 +116,17 @@ func (s *Session) WriteRTP(packet *rtp.Packet) (int, error) {
 }
 
 func (s *Session) WriteRTCP(packet rtcp.Packet) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.writeRTCP(packet)
+}
+
+func (s *Session) writeRTCP(packet rtcp.Packet) (int, error) {
+	if s.Local.srtp == nil || s.conn == nil {
+		return 0, nil // before init call or session not added to the server
+	}
+
 	b, err := packet.Marshal()
 	if err != nil {
 		return 0, err

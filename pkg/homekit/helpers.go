@@ -88,14 +88,16 @@ func trackToVideo(track *core.Receiver, video0 *camera.VideoCodecConfiguration, 
 				break
 			}
 		}
+	}
 
-		for _, s := range video0.VideoAttrs {
-			if (maxWidth > 0 && int(s.Width) > maxWidth) || (maxHeight > 0 && int(s.Height) > maxHeight) {
-				continue
-			}
-			if s.Width > attrs.Width || s.Height > attrs.Height {
-				attrs = s
-			}
+	// the camera sends nothing (no video and no audio) without a resolution,
+	// so select one even if no consumer requested the video
+	for _, s := range video0.VideoAttrs {
+		if (maxWidth > 0 && int(s.Width) > maxWidth) || (maxHeight > 0 && int(s.Height) > maxHeight) {
+			continue
+		}
+		if s.Width > attrs.Width || s.Height > attrs.Height {
+			attrs = s
 		}
 	}
 
