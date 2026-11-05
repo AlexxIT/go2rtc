@@ -66,7 +66,7 @@ func GetCapabilitiesResponse(host string) []byte {
 			<tt:XAddr>http://%s/onvif/media_service</tt:XAddr>
 			<tt:StreamingCapabilities>
 				<tt:RTPMulticast>false</tt:RTPMulticast>
-				<tt:RTP_TCP>false</tt:RTP_TCP>
+				<tt:RTP_TCP>true</tt:RTP_TCP>
 				<tt:RTP_RTSP_TCP>true</tt:RTP_RTSP_TCP>
 			</tt:StreamingCapabilities>
 		</tt:Media>
@@ -261,7 +261,7 @@ func StaticResponse(operation string) []byte {
 var responses = map[string]string{
 	ServiceGetServiceCapabilities: `<trt:GetServiceCapabilitiesResponse>
 	<trt:Capabilities SnapshotUri="true" Rotation="false" VideoSourceMode="false" OSD="false" TemporaryOSDText="false" EXICompression="false">
-		<trt:StreamingCapabilities RTPMulticast="false" RTP_TCP="false" RTP_RTSP_TCP="true" NonAggregateControl="false" NoRTSPStreaming="false" />
+		<trt:StreamingCapabilities RTPMulticast="false" RTP_TCP="true" RTP_RTSP_TCP="true" NonAggregateControl="false" NoRTSPStreaming="false" />
 	</trt:Capabilities>
 </trt:GetServiceCapabilitiesResponse>`,
 
