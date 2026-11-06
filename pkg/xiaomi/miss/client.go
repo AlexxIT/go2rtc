@@ -72,13 +72,25 @@ func NewClient(rawURL string) (*Client, error) {
 		return nil, err
 	}
 
-	return &Client{Conn: conn, key: key, model: model}, nil
+	client := &Client{Conn: conn, key: key, model: model}
+	client.startCommandLoop()
+	return client, nil
 }
 
 type Client struct {
 	Conn
 	key   []byte
 	model string
+}
+
+func (c *Client) startCommandLoop() {
+	go func() {
+		for {
+			if _, _, err := c.Conn.ReadCommand(); err != nil {
+				return
+			}
+		}
+	}()
 }
 
 const (
