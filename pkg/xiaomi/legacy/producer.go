@@ -57,9 +57,10 @@ type Producer struct {
 const codecXiaobaiPCMA = 1 // chuangmi.camera.xiaobai
 
 func probe(client *Client) ([]*core.Media, error) {
-	_ = client.SetDeadline(time.Now().Add(15 * time.Second))
+	_ = client.SetDeadline(time.Now().Add(30 * time.Second))
 
 	var vcodec, acodec *core.Codec
+	var videoAt time.Time
 
 	for {
 		// 0   5000      codec
@@ -80,6 +81,9 @@ func probe(client *Client) ([]*core.Media, error) {
 		case tutk.CodecH264, tutk.CodecH265:
 			if vcodec == nil {
 				avcc := annexb.EncodeToAVCC(payload)
+				if len(avcc) < 5 {
+					continue
+				}
 				if codec == tutk.CodecH264 {
 					if h264.NALUType(avcc) == h264.NALUTypeSPS {
 						vcodec = h264.AVCCToCodec(avcc)
@@ -107,8 +111,17 @@ func probe(client *Client) ([]*core.Media, error) {
 			}
 		}
 
-		if vcodec != nil && acodec != nil {
-			break
+		if vcodec != nil {
+			if acodec != nil {
+				break
+			}
+			// Some cameras (IMILAB EC2) send audio only on demand. Don't fail
+			// the whole probe just because no audio arrived.
+			if videoAt.IsZero() {
+				videoAt = time.Now()
+			} else if time.Since(videoAt) > 3*time.Second {
+				break
+			}
 		}
 	}
 
@@ -118,11 +131,13 @@ func probe(client *Client) ([]*core.Media, error) {
 			Direction: core.DirectionRecvonly,
 			Codecs:    []*core.Codec{vcodec},
 		},
-		{
+	}
+	if acodec != nil {
+		medias = append(medias, &core.Media{
 			Kind:      core.KindAudio,
 			Direction: core.DirectionRecvonly,
 			Codecs:    []*core.Codec{acodec},
-		},
+		})
 	}
 	return medias, nil
 }
