@@ -20,11 +20,17 @@ func Dial(host, transport string) (*Conn, error) {
 
 	_, isTCP := conn.(*tcpConn)
 
+	// Channel 2 - media. Some devices (hub mxiang.camera.mwc10) send audio
+	// on channel 3, so it shares the output queue with channel 2.
+	media := newDataChannel(250, 100)
+	audio := newDataChannel(250, -1)
+	audio.popBuf = media.popBuf
+
 	c := &Conn{
 		Conn:  conn,
 		isTCP: isTCP,
 		channels: [4]*dataChannel{
-			newDataChannel(0, 10), nil, newDataChannel(250, 100), nil,
+			newDataChannel(0, 10), nil, media, audio,
 		},
 	}
 	go c.worker()
@@ -131,6 +137,9 @@ func (c *Conn) worker() {
 		switch buf[1] {
 		case msgDrw:
 			ch := buf[5]
+			if ch >= 4 || c.channels[ch] == nil {
+				continue // unsupported channel
+			}
 			channel := c.channels[ch]
 
 			if c.isTCP {

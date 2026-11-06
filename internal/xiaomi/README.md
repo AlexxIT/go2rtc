@@ -62,3 +62,12 @@ You can use a second channel for dual cameras: `channel=2`.
 streams:
   xiaomi1: xiaomi://***&channel=2
 ```
+
+Battery cameras that connect through a hub (e.g. `mxiang.camera.mwc11` cameras with the `mxiang.camera.mwc10` hub) have no IP of their own. Use the hub's IP, DID and model, and select the camera with `subdid=<camera DID>`:
+
+```yaml
+streams:
+  xiaomi1: xiaomi://1234567890:de@192.168.1.123?did=1111111111&model=mxiang.camera.mwc10&subdid=2222222222
+```
+
+These cameras sleep most of the time; the hub wakes them on request, so the first frame can take a few seconds.
