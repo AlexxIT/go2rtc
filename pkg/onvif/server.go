@@ -258,6 +258,22 @@ func StaticResponse(operation string) []byte {
 	return e.Bytes()
 }
 
+func NotAuthorizedResponse() []byte {
+	e := NewEnvelope()
+	e.Append(`<s:Fault>
+	<s:Code>
+		<s:Value>s:Sender</s:Value>
+		<s:Subcode>
+			<s:Value xmlns:ter="http://www.onvif.org/ver10/error">ter:NotAuthorized</s:Value>
+		</s:Subcode>
+	</s:Code>
+	<s:Reason>
+		<s:Text xml:lang="en">NotAuthorized</s:Text>
+	</s:Reason>
+</s:Fault>`)
+	return e.Bytes()
+}
+
 var responses = map[string]string{
 	ServiceGetServiceCapabilities: `<trt:GetServiceCapabilitiesResponse>
 	<trt:Capabilities SnapshotUri="true" Rotation="false" VideoSourceMode="false" OSD="false" TemporaryOSDText="false" EXICompression="false">

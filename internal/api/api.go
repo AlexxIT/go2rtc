@@ -211,6 +211,11 @@ func isLoopback(remoteAddr string) bool {
 
 func middlewareAuth(username, password string, localAuth bool, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/onvif/") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		if localAuth || !isLoopback(r.RemoteAddr) {
 			user, pass, ok := r.BasicAuth()
 			if !ok || user != username || pass != password {
