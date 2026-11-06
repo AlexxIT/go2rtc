@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/ffmpeg"
@@ -33,13 +34,16 @@ type server struct {
 	hap  *hap.Server // server for HAP connection and encryption
 	mdns *mdns.ServiceEntry
 
-	pairings []string // pairings list
-	conns    []any
-	mu       sync.Mutex
+	pairings           []string // pairings list
+	conns              []any
+	mu                 sync.Mutex
+	pairingInProgress  bool // protected by mu
+	privatePINRequired bool
 
 	accessory *hap.Accessory // HAP accessory
 	consumer  *homekit.Consumer
 	proxyURL  string
+	dialProxy func(string) (*hap.Client, error)
 	setupID   string
 	stream    string // stream name from YAML
 }
@@ -67,19 +71,35 @@ func (s *server) MarshalJSON() ([]byte, error) {
 	return json.Marshal(v)
 }
 
-func (s *server) Handle(w http.ResponseWriter, r *http.Request) {
+func (s *server) Handle(w http.ResponseWriter, r *http.Request, handshakeTimeout time.Duration) {
 	conn, rw, err := w.(http.Hijacker).Hijack()
 	if err != nil {
 		return
 	}
 
 	defer conn.Close()
+	if err = conn.SetDeadline(time.Now().Add(handshakeTimeout)); err != nil {
+		return
+	}
 
 	// Fix reading from Body after Hijack.
 	r.Body = io.NopCloser(rw)
 
 	switch r.RequestURI {
 	case hap.PathPairSetup:
+		if code := s.beginPairing(); code != 0 {
+			body, _ := tlv8.Marshal(struct {
+				State byte `tlv8:"6"`
+				Error byte `tlv8:"7"`
+			}{hap.StateM2, code})
+			_ = hap.WriteResponse(rw.Writer, http.StatusOK, hap.MimeTLV8, body)
+			return
+		}
+		defer func() {
+			s.mu.Lock()
+			s.pairingInProgress = false
+			s.mu.Unlock()
+		}()
 		id, key, err := s.hap.PairSetup(r, rw)
 		if err != nil {
 			log.Error().Err(err).Caller().Send()
@@ -92,6 +112,10 @@ func (s *server) Handle(w http.ResponseWriter, r *http.Request) {
 		id, key, err := s.hap.PairVerify(r, rw)
 		if err != nil {
 			log.Debug().Err(err).Caller().Send()
+			return
+		}
+		// Verification is bounded; authenticated control connections are long-lived.
+		if err = conn.SetDeadline(time.Time{}); err != nil {
 			return
 		}
 
@@ -112,11 +136,16 @@ func (s *server) Handle(w http.ResponseWriter, r *http.Request) {
 		case s.accessory != nil:
 			handler = homekit.ServerHandler(s)
 		case s.proxyURL != "":
-			client, err := hap.Dial(s.proxyURL)
+			dial := s.dialProxy
+			if dial == nil {
+				dial = hap.Dial
+			}
+			client, err := dial(s.proxyURL)
 			if err != nil {
 				log.Error().Err(err).Caller().Send()
 				return
 			}
+			defer client.Close()
 			handler = homekit.ProxyHandler(s, client.Conn)
 		}
 
@@ -126,6 +155,24 @@ func (s *server) Handle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+
+// Reserve commissioning atomically so simultaneous PIN handshakes cannot both
+// add an administrator. Additional controllers use authenticated /pairings.
+func (s *server) beginPairing() byte {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.pairings) > 0 {
+		return 6 // HAP unavailable: already paired
+	}
+	if _, err := pairingPIN(s.hap.Pin, s.privatePINRequired, false); err != nil {
+		return 6 // migrated default PIN cannot reopen commissioning after unpairing
+	}
+	if s.pairingInProgress {
+		return 7 // HAP busy: another setup is in progress
+	}
+	s.pairingInProgress = true
+	return 0
 }
 
 type logger struct {
