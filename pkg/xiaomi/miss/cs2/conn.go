@@ -8,7 +8,6 @@ import (
 	"io"
 	"net"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -41,8 +40,10 @@ type Conn struct {
 
 	channels [4]*dataChannel
 
-	cmdMu  sync.Mutex
-	cmdAck func()
+	cmdMu       sync.Mutex
+	cmdAck      func()
+	ackMu       sync.Mutex
+	pendingAuth bool
 }
 
 const (
@@ -77,6 +78,9 @@ func handshake(host, transport string) (net.Conn, error) {
 		_ = conn.Close()
 		return nil, err
 	}
+	// A sleeping device can consume most of the discovery deadline before it
+	// first responds. Give readiness negotiation its own bounded deadline.
+	_ = conn.SetDeadline(time.Now().Add(3 * time.Second))
 
 	var msgUDP, msgTCP byte
 
@@ -100,7 +104,8 @@ func handshake(host, transport string) (net.Conn, error) {
 	if res[1] == msgTCP {
 		_ = conn.Close()
 		//host := fmt.Sprintf("%d.%d.%d.%d:%d", b[31], b[30], b[29], b[28], uint16(b[27])<<8|uint16(b[26]))
-		return newTCPConn(conn.RemoteAddr().String())
+		tcp, err := newTCPConn(conn.RemoteAddr().String())
+		return tcp, err
 	}
 
 	return conn, nil
@@ -132,6 +137,10 @@ func (c *Conn) worker() {
 		case msgDrw:
 			ch := buf[5]
 			channel := c.channels[ch]
+			if ch == 0 && n >= 16 && binary.LittleEndian.Uint32(buf[12:16]) == 0x101 {
+				// An authentication response also proves the request arrived.
+				c.signalCmdAck(true)
+			}
 
 			if c.isTCP {
 				// For TCP we should send ping every second to keep connection alive.
@@ -165,9 +174,7 @@ func (c *Conn) worker() {
 			_, _ = c.Conn.Write([]byte{magic, msgPong, 0, 0})
 		case msgPong, msgP2PRdyUDP, msgP2PRdyTCP, msgClose, msgCloseAck: // skip it
 		case msgDrwAck: // only for UDP
-			if c.cmdAck != nil {
-				c.cmdAck()
-			}
+			c.signalCmdAck(false)
 		default:
 			fmt.Printf("%s: unknown msg: %x\n", "cs2", buf[:n])
 		}
@@ -214,29 +221,41 @@ func (c *Conn) WriteCommand(cmd uint32, data []byte) error {
 		return err
 	}
 
-	var repeat atomic.Int32
-	repeat.Store(5)
-
-	timeout := time.NewTicker(time.Second)
-	defer timeout.Stop()
-
+	ack := make(chan struct{}, 1)
+	c.ackMu.Lock()
+	c.pendingAuth = cmd == 0x100
 	c.cmdAck = func() {
-		repeat.Store(0)
-		timeout.Reset(1)
+		select {
+		case ack <- struct{}{}:
+		default:
+		}
 	}
-
-	for {
+	c.ackMu.Unlock()
+	defer func() { c.ackMu.Lock(); c.cmdAck = nil; c.pendingAuth = false; c.ackMu.Unlock() }()
+	for attempt := 0; attempt < 5; attempt++ {
 		if _, err := c.Conn.Write(req); err != nil {
 			return err
 		}
-		<-timeout.C
-		r := repeat.Add(-1)
-		if r < 0 {
+		timer := time.NewTimer(time.Second)
+		select {
+		case <-ack:
+			timer.Stop()
 			return nil
+		case <-timer.C:
 		}
-		if r == 0 {
-			return fmt.Errorf("%s: can't send command %d", "cs2", cmd)
-		}
+	}
+	return fmt.Errorf("%s: can't send command %d", "cs2", cmd)
+}
+
+func (c *Conn) signalCmdAck(authResponse bool) {
+	c.ackMu.Lock()
+	callback := c.cmdAck
+	if authResponse && !c.pendingAuth {
+		callback = nil
+	}
+	c.ackMu.Unlock()
+	if callback != nil {
+		callback()
 	}
 }
 
