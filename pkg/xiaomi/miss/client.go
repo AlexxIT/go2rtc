@@ -243,16 +243,24 @@ func (c *Client) ReadPacket() (*Packet, error) {
 		Payload:  payload,
 	}
 
+	if c.CameraClock() {
+		pkt.Timestamp = binary.LittleEndian.Uint64(hdr[16:])
+	} else {
+		pkt.Timestamp = uint64(time.Now().UnixMilli())
+	}
+
+	return pkt, nil
+}
+
+// CameraClock reports whether packet timestamps come from the camera (msec) rather than from the arrival time.
+func (c *Client) CameraClock() bool {
 	switch c.model {
 	case ModelDafang, ModelXiaofang, ModelLoockV2:
 		// Dafang has ts in sec
 		// LoockV2 has ts in msec for video, but zero ts for audio
-		pkt.Timestamp = uint64(time.Now().UnixMilli())
-	default:
-		pkt.Timestamp = binary.LittleEndian.Uint64(hdr[16:])
+		return false
 	}
-
-	return pkt, nil
+	return true
 }
 
 func (c *Client) WriteAudio(codecID uint32, payload []byte) error {
