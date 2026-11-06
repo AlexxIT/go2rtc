@@ -25,16 +25,6 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 		nuType := (data[0] >> 1) & 0x3F
 		//log.Printf("[RTP] codec: %s, nalu: %2d, size: %6d, ts: %10d, pt: %2d, ssrc: %d, seq: %d, %v", track.Codec.Name, nuType, len(packet.Payload), packet.Timestamp, packet.PayloadType, packet.SSRC, packet.SequenceNumber, packet.Marker)
 
-		// Fix for RtspServer https://github.com/AlexxIT/go2rtc/issues/244
-		if packet.Marker && len(data) < h264.PSMaxSize {
-			switch nuType {
-			case NALUTypeVPS, NALUTypeSPS, NALUTypePPS:
-				packet.Marker = false
-			case NALUTypePrefixSEI, NALUTypeSuffixSEI:
-				return
-			}
-		}
-
 		// when we collect data into one buffer, we need to make sure
 		// that all of it falls into the same sequence
 		if len(buf) > 0 && packet.SequenceNumber-seqNum != 1 {
@@ -44,6 +34,20 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 		}
 
 		seqNum = packet.SequenceNumber
+
+		// Fix for RtspServer https://github.com/AlexxIT/go2rtc/issues/244
+		if packet.Marker && len(data) < h264.PSMaxSize {
+			switch nuType {
+			case NALUTypeVPS, NALUTypeSPS, NALUTypePPS:
+				packet.Marker = false
+			case NALUTypePrefixSEI, NALUTypeSuffixSEI:
+				// skip SEI before picture data, but keep SEI that ends
+				// the Access Unit (Haima cameras send it after the slices)
+				if !hasVCL(buf) {
+					return
+				}
+			}
+		}
 
 		if nuType == NALUTypeFU {
 			switch data[2] >> 6 {
@@ -92,6 +96,31 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 				buf = append(buf, (data[0]&0x81)|(nuType<<1), data[1])
 				buf = append(buf, data[3:]...)
 			}
+		} else if nuType == NALUTypeAP {
+			// RFC 7798 4.4.2. Aggregation Packets (APs)
+			// PayloadHdr, then NALU size (16 bit) + NALU for each aggregated NAL unit.
+			// ffmpeg and go2rtc itself send VPS, SPS and PPS in one AP before IDR.
+			// DONL/DOND fields are not supported, same as for FU.
+			for i := 2; i < len(data); {
+				if i+2 > len(data) {
+					//log.Printf("broken H265 aggregation")
+					buf = buf[:0] // drop data
+					return
+				}
+
+				size := int(binary.BigEndian.Uint16(data[i:]))
+				i += 2
+
+				if size < 2 || i+size > len(data) {
+					//log.Printf("broken H265 aggregation")
+					buf = buf[:0] // drop data
+					return
+				}
+
+				buf = binary.BigEndian.AppendUint32(buf, uint32(size)) // NAL unit size
+				buf = append(buf, data[i:i+size]...)
+				i += size
+			}
 		} else {
 			buf = binary.BigEndian.AppendUint32(buf, uint32(len(data))) // NAL unit size
 			buf = append(buf, data...)
@@ -112,6 +141,23 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 
 		handler(&clone)
 	}
+}
+
+// hasVCL checks if AVCC buffer has picture data
+func hasVCL(avcc []byte) bool {
+	for len(avcc) > 4 {
+		// VCL NAL unit types are 0..31
+		if NALUType(avcc) < 32 {
+			return true
+		}
+
+		size := 4 + int(binary.BigEndian.Uint32(avcc))
+		if size >= len(avcc) {
+			break
+		}
+		avcc = avcc[size:]
+	}
+	return false
 }
 
 func RTPPay(mtu uint16, handler core.HandlerFunc) core.HandlerFunc {
