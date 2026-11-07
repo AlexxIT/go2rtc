@@ -40,7 +40,7 @@ func EncodeToAVCC(annexb []byte) (avc []byte) {
 			i = len(annexb) // move i to data end
 		}
 
-		if start != 0 {
+		if start != 0 && !isAUD(annexb[start:i]) {
 			size := uint32(i - start)
 			avc = binary.BigEndian.AppendUint32(avc, size)
 			avc = append(avc, annexb[start:i]...)
@@ -51,20 +51,31 @@ func EncodeToAVCC(annexb []byte) (avc []byte) {
 			break
 		}
 
-		if isAUD(annexb[i]) {
-			start = 0 // skip this NALU
-		} else {
-			start = i // save this position
-		}
+		// the NALU is checked once its size is known
+		start = i
 	}
 
 	return
 }
 
-func isAUD(b byte) bool {
+// isAUD reports whether a NAL unit is an access unit delimiter, in H.264 or in
+// HEVC. Both codecs share some header values: 0x47 is an HEVC AUD but also an
+// H.264 SPS with nal_ref_idc = 2, and 0x46 is also an H.264 SEI with that same
+// nal_ref_idc. A HEVC AUD is always three bytes long (two header bytes plus the
+// picture type) and has a non zero nuh_temporal_id_plus1, which is what tells it
+// apart from an H.264 parameter set or SEI. Dropping an SPS breaks the whole
+// stream, while keeping an AUD is harmless, so the check has to be strict.
+func isAUD(nalu []byte) bool {
 	const h264 = 9
 	const h265 = 35 << 1
-	return b&0b0001_1111 == h264 || b&0b0111_1110 == h265
+
+	if len(nalu) == 0 {
+		return false
+	}
+	if nalu[0]&0b0001_1111 == h264 {
+		return true
+	}
+	return len(nalu) == 3 && nalu[0]&0b0111_1110 == h265 && nalu[1]&0b0000_0111 != 0
 }
 
 func DecodeAVCC(b []byte, safeClone bool) []byte {
