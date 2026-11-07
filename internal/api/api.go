@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -17,6 +18,25 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/rs/zerolog"
 )
+
+// readyCh is closed once all modules have finished initializing.
+var readyCh = make(chan struct{})
+
+// SetReady marks the server as fully initialized. Call this once all modules
+// have registered their handlers and schemes.
+func SetReady() {
+	close(readyCh)
+}
+
+// WaitReady blocks until SetReady has been called or the context is cancelled.
+func WaitReady(ctx context.Context) error {
+	select {
+	case <-readyCh:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
 
 func Init() {
 	var cfg struct {
@@ -236,6 +256,11 @@ func middlewareCORS(next http.Handler) http.Handler {
 var mu sync.Mutex
 
 func apiHandler(w http.ResponseWriter, r *http.Request) {
+	if err := WaitReady(r.Context()); err != nil {
+		http.Error(w, "starting", http.StatusServiceUnavailable)
+		return
+	}
+
 	mu.Lock()
 	app.Info["host"] = r.Host
 	mu.Unlock()
