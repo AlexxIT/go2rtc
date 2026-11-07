@@ -138,6 +138,14 @@ func (c *Conn) Handle() (err error) {
 		go c.handleUDPData(byte(i))
 	}
 
+	// some cameras (ex. Aqara G100) may stop sending video on an established
+	// session while audio keeps flowing, so the read deadline never fires
+	var videoTS time.Time
+	var videoPackets int
+	if c.mode == core.ModeActiveProducer && c.Transport != "udp" {
+		videoTS = time.Now()
+	}
+
 	for c.state != StateNone {
 		ts := time.Now()
 
@@ -146,8 +154,28 @@ func (c *Conn) Handle() (err error) {
 		if err = c.handleTCPData(); err != nil {
 			return
 		}
+
+		if !videoTS.IsZero() {
+			if n, ok := c.videoPackets(); !ok || n != videoPackets {
+				videoPackets = n
+				videoTS = time.Now()
+			} else if time.Since(videoTS) > timeout {
+				return fmt.Errorf("rtsp: no video packets for %s", timeout)
+			}
+		}
 	}
 
+	return
+}
+
+// videoPackets returns the number of received video packets and false if there are no video tracks
+func (c *Conn) videoPackets() (n int, ok bool) {
+	for _, receiver := range c.Receivers {
+		if receiver.Codec.Kind() == core.KindVideo {
+			n += receiver.Packets
+			ok = true
+		}
+	}
 	return
 }
 
