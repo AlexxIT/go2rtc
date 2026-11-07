@@ -2,12 +2,14 @@ package streams
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/creds"
 	"github.com/AlexxIT/go2rtc/pkg/probe"
+	"gopkg.in/yaml.v3"
 )
 
 func apiStreams(w http.ResponseWriter, r *http.Request) {
@@ -57,7 +59,25 @@ func apiStreams(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if err := app.PatchConfig([]string{"streams", name}, query["src"]); err != nil {
+		var val any = query["src"]
+		if comment := strings.TrimSpace(query.Get("comment")); comment != "" {
+			comment = strings.TrimPrefix(comment, "#")
+			comment = strings.TrimSpace(comment)
+			seq := &yaml.Node{Kind: yaml.SequenceNode}
+			for i, s := range query["src"] {
+				item := &yaml.Node{
+					Kind:  yaml.ScalarNode,
+					Value: s,
+				}
+				if i == 0 {
+					item.HeadComment = comment
+				}
+				seq.Content = append(seq.Content, item)
+			}
+			val = seq
+		}
+
+		if err := app.PatchConfig([]string{"streams", name}, val); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		}
 

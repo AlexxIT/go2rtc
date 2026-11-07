@@ -7,6 +7,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"github.com/AlexxIT/go2rtc/internal/app"
+	"github.com/AlexxIT/go2rtc/internal/arenti"
 	"github.com/AlexxIT/go2rtc/internal/bubble"
 	"github.com/AlexxIT/go2rtc/internal/debug"
 	"github.com/AlexxIT/go2rtc/internal/doorbird"
@@ -89,6 +90,7 @@ func main() {
 		{"alsa", alsa.Init},
 		{"v4l2", v4l2.Init},
 		// Other sources
+		{"arenti", arenti.Init},
 		{"bubble", bubble.Init},
 		{"doorbird", doorbird.Init},
 		{"dvrip", dvrip.Init},
