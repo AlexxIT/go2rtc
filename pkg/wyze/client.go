@@ -99,7 +99,7 @@ func Dial(rawURL string) (*Client, error) {
 	}
 
 	c.authKey = string(dtls.CalculateAuthKey(c.enr, c.mac))
-
+	
 	if c.verbose {
 		fmt.Printf("[Wyze] Connecting to %s (UID: %s)\n", c.host, c.uid)
 	}
@@ -118,7 +118,7 @@ func Dial(rawURL string) (*Client, error) {
 		c.Close()
 		return nil, err
 	}
-
+	
 	if c.verbose {
 		fmt.Printf("[Wyze] Connection established\n")
 	}
@@ -176,9 +176,15 @@ func (c *Client) SetResolution(quality byte) error {
 	if c.verbose {
 		fmt.Printf("[Wyze] SetResolution: quality=%d frameSize=%d bitrate=%d model=%s\n", quality, frameSize, bitrate, c.model)
 	}
-
 	// Use K10052 (doorbell format) for certain models
 	if c.useDoorbellResolution() {
+		switch c.model {
+			case "WYZEDB3":
+				frameSize = 3
+				bitrate = 0xB4 // 0x78 works too
+				fmt.Printf("[Wyze] Set Doorbell Resolution: quality=%d frameSize=%d bitrate=%d model=%s\n", quality, frameSize, bitrate, c.model)
+		}
+		
 		k10052 := c.buildK10052(frameSize, bitrate)
 		_, err := c.conn.WriteAndWaitIOCtrl(k10052, c.matchHL(KCmdSetResolutionDBRes), 5*time.Second)
 		return err
@@ -303,12 +309,11 @@ func (c *Client) connect() error {
 		}
 		host = host[:idx]
 	}
-
+	
 	conn, err := dtls.DialDTLS(host, port, c.uid, c.authKey, c.enr, c.verbose)
 	if err != nil {
 		return fmt.Errorf("wyze: connect failed: %w", err)
 	}
-
 	c.conn = conn
 	if c.verbose {
 		fmt.Printf("[Wyze] Connected to %s (IOTC + DTLS)\n", conn.RemoteAddr())
