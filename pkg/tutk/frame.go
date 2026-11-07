@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/aac"
 )
@@ -26,6 +27,10 @@ const (
 )
 
 const frameInfoSize = 40
+
+// legacyFrameInfoSize is the FRAMEINFO size used by older firmware
+// (Wyze Video Doorbell v1, WYZEDB3 4.25.x), signalled with marker 0x30.
+const legacyFrameInfoSize = 48
 
 // FrameInfo - Wyze extended FRAMEINFO (40 bytes at end of packet)
 // Video: 40 bytes, Audio: 16 bytes (uses same struct, fields 16+ are zero)
@@ -78,12 +83,24 @@ func (fi *FrameInfo) Channels() uint8 {
 }
 
 func ParseFrameInfo(data []byte) *FrameInfo {
-	if len(data) < frameInfoSize {
+	return ParseFrameInfoSized(data, frameInfoSize)
+}
+
+// ParseFrameInfoSized parses a trailing FRAMEINFO of the given size. The
+// 48-byte legacy struct shares the layout of the first 24 bytes, but its
+// bytes 8-11 are not a running timestamp, so arrival time is used instead.
+func ParseFrameInfoSized(data []byte, size int) *FrameInfo {
+	if len(data) < size {
 		return nil
 	}
 
-	offset := len(data) - frameInfoSize
+	offset := len(data) - size
 	fi := data[offset:]
+
+	ts := binary.LittleEndian.Uint32(fi[8:])
+	if size == legacyFrameInfoSize {
+		ts = uint32(time.Now().UnixMicro() % int64(tsWrapPeriod))
+	}
 
 	return &FrameInfo{
 		CodecID:     fi[0],
@@ -93,7 +110,7 @@ func ParseFrameInfo(data []byte) *FrameInfo {
 		FPS:         fi[5],
 		ResTier:     fi[6],
 		Bitrate:     fi[7],
-		Timestamp:   binary.LittleEndian.Uint32(fi[8:]),
+		Timestamp:   ts,
 		SessionID:   binary.LittleEndian.Uint32(fi[12:]),
 		PayloadSize: binary.LittleEndian.Uint32(fi[16:]),
 		FrameNo:     binary.LittleEndian.Uint32(fi[20:]),
@@ -120,6 +137,7 @@ type PacketHeader struct {
 	PktTotal     uint16
 	PayloadSize  uint16
 	HasFrameInfo bool
+	FISize       int // size of the trailing FRAMEINFO when HasFrameInfo
 }
 
 func ParsePacketHeader(data []byte) *PacketHeader {
@@ -150,8 +168,9 @@ func ParsePacketHeader(data []byte) *PacketHeader {
 		hdr.PayloadSize = binary.LittleEndian.Uint16(data[16:])
 		hdr.FrameNo = binary.LittleEndian.Uint32(data[24:])
 
-		if pktIdxOrMarker == 0x0028 && (IsEndFrame(frameType) || hdr.PktTotal == 1) {
+		if fiSize := frameInfoMarker(frameType, pktIdxOrMarker, hdr.PktTotal); fiSize > 0 {
 			hdr.HasFrameInfo = true
+			hdr.FISize = fiSize
 			if hdr.PktTotal > 0 {
 				hdr.PktIdx = hdr.PktTotal - 1
 			}
@@ -164,8 +183,9 @@ func ParsePacketHeader(data []byte) *PacketHeader {
 		hdr.PayloadSize = binary.LittleEndian.Uint16(data[24:])
 		hdr.FrameNo = binary.LittleEndian.Uint32(data[32:])
 
-		if pktIdxOrMarker == 0x0028 && (IsEndFrame(frameType) || hdr.PktTotal == 1) {
+		if fiSize := frameInfoMarker(frameType, pktIdxOrMarker, hdr.PktTotal); fiSize > 0 {
 			hdr.HasFrameInfo = true
+			hdr.FISize = fiSize
 			if hdr.PktTotal > 0 {
 				hdr.PktIdx = hdr.PktTotal - 1
 			}
@@ -175,6 +195,56 @@ func ParsePacketHeader(data []byte) *PacketHeader {
 	}
 
 	return hdr
+}
+
+// frameInfoMarker returns the FRAMEINFO size signalled in the packet-index
+// field of a frame's last packet, or 0 if the field holds a packet index.
+func frameInfoMarker(frameType uint8, v uint16, pktTotal uint16) int {
+	// Older firmware (Wyze Video Doorbell v1, WYZEDB3 4.25.x) signals a 48-byte
+	// FRAMEINFO (marker 0x30) and can put it on a StartAlt (0x09) packet too.
+	// A real packet index is always < pktTotal, so a marker value >= pktTotal
+	// cannot be mistaken for one.
+	if v >= pktTotal {
+		if size := markerSize(v); size > 0 {
+			return size
+		}
+	}
+	if v == frameInfoSize && (IsEndFrame(frameType) || pktTotal == 1) {
+		return frameInfoSize
+	}
+	return 0
+}
+
+func markerSize(v uint16) int {
+	switch v {
+	case frameInfoSize, legacyFrameInfoSize:
+		return int(v)
+	}
+	return 0
+}
+
+// reinterpretLastPacket handles frames with more packets than the marker
+// value (e.g. 72-packet keyframes ending with marker 48): there the marker is
+// indistinguishable from a packet index by the header alone. If we are
+// waiting for exactly the last packet and get a marker value instead, it is
+// the frame's end.
+func (h *FrameHandler) reinterpretLastPacket(hdr *PacketHeader) {
+	if hdr.HasFrameInfo || hdr.PktTotal == 0 {
+		return
+	}
+	if !IsEndFrame(hdr.FrameType) && hdr.FrameType != FrameTypeStartAlt {
+		return
+	}
+	cs := h.channels[hdr.Channel]
+	if cs == nil || !cs.hasStarted || cs.frameNo != hdr.FrameNo ||
+		cs.waitSeq != hdr.PktTotal-1 || hdr.PktIdx == cs.waitSeq {
+		return
+	}
+	if size := markerSize(hdr.PktIdx); size > 0 {
+		hdr.HasFrameInfo = true
+		hdr.FISize = size
+		hdr.PktIdx = cs.waitSeq
+	}
 }
 
 func IsStartFrame(frameType uint8) bool {
@@ -279,7 +349,11 @@ func (h *FrameHandler) Handle(data []byte) {
 		return
 	}
 
-	payload, fi := h.extractPayload(data, hdr.Channel)
+	if hdr.Channel == ChannelIVideo || hdr.Channel == ChannelPVideo {
+		h.reinterpretLastPacket(hdr)
+	}
+
+	payload, fi := h.extractPayload(data, hdr)
 	if payload == nil {
 		return
 	}
@@ -302,7 +376,8 @@ func (h *FrameHandler) Handle(data []byte) {
 	}
 }
 
-func (h *FrameHandler) extractPayload(data []byte, channel byte) ([]byte, *FrameInfo) {
+func (h *FrameHandler) extractPayload(data []byte, hdr *PacketHeader) ([]byte, *FrameInfo) {
+	channel := hdr.Channel
 	if len(data) < 2 {
 		return nil, nil
 	}
@@ -335,6 +410,10 @@ func (h *FrameHandler) extractPayload(data []byte, channel byte) ([]byte, *Frame
 		headerSize = 28
 	}
 
+	if hdr.HasFrameInfo && hdr.FISize > 0 {
+		fiSize = hdr.FISize
+	}
+
 	if len(data) < headerSize {
 		return nil, nil
 	}
@@ -347,7 +426,7 @@ func (h *FrameHandler) extractPayload(data []byte, channel byte) ([]byte, *Frame
 		return data[headerSize:], nil
 	}
 
-	fi := ParseFrameInfo(data)
+	fi := ParseFrameInfoSized(data, fiSize)
 
 	validCodec := false
 	switch channel {
