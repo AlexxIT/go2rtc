@@ -128,6 +128,10 @@ func (c *Connection) GetSource() string {
 	return c.Source
 }
 
+func (c *Connection) IsClosed() bool {
+	return false
+}
+
 // Create like os.Create, init Consumer with existing Transport
 func Create(w io.Writer) (*Connection, error) {
 	return &Connection{Transport: w}, nil

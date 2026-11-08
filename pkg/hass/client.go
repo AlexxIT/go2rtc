@@ -113,6 +113,10 @@ func (c *Client) Stop() error {
 	return c.conn.Stop()
 }
 
+func (c *Client) IsClosed() bool {
+	return c.conn.IsClosed()
+}
+
 func (c *Client) MarshalJSON() ([]byte, error) {
 	return c.conn.MarshalJSON()
 }
