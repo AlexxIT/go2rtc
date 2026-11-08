@@ -322,7 +322,8 @@ func (c *Client) doAVLogin() error {
 		fmt.Printf("[Wyze] Sending AV Login\n")
 	}
 
-	if err := c.conn.AVClientStart(5 * time.Second); err != nil {
+	// HL_BC keyframes span hundreds of fragments and need retransmission.
+	if err := c.conn.AVClientStart(5*time.Second, c.model == "HL_BC"); err != nil {
 		return fmt.Errorf("wyze: av login failed: %w", err)
 	}
 
