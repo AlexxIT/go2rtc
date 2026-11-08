@@ -274,13 +274,17 @@ func (c *Producer) readHeader() error {
 func (c *Producer) readPacket() (*rtp.Packet, error) {
 	// https://rtmp.veriskope.com/pdf/video_file_format_spec_v10.pdf
 	b := make([]byte, 4+11)
-	if _, err := io.ReadFull(c.rd, b); err != nil {
-		return nil, err
+	var size uint32
+	// skip tags with zero data size, some RTMP servers send an empty audio
+	// message before the codec headers, and probe and Start read the payload
+	for size == 0 {
+		if _, err := io.ReadFull(c.rd, b); err != nil {
+			return nil, err
+		}
+		size = uint32(b[4+1])<<16 | uint32(b[4+2])<<8 | uint32(b[4+3])
 	}
 
 	b = b[4 : 4+11] // skip previous tag size
-
-	size := uint32(b[1])<<16 | uint32(b[2])<<8 | uint32(b[3])
 
 	pkt := &rtp.Packet{
 		Header: rtp.Header{
