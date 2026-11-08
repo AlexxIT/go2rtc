@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -27,7 +28,9 @@ type Client struct {
 	videoSession *srtp.Session
 	audioSession *srtp.Session
 
-	stream *camera.Stream
+	stream  *camera.Stream
+	mu      sync.Mutex
+	stopped bool
 
 	MaxWidth  int `json:"-"`
 	MaxHeight int `json:"-"`
@@ -116,6 +119,12 @@ func (c *Client) Start() error {
 		return c.startMJPEG()
 	}
 
+	c.mu.Lock()
+	if c.stopped {
+		c.mu.Unlock()
+		return net.ErrClosed
+	}
+
 	videoTrack := c.trackByKind(core.KindVideo)
 	videoCodec := trackToVideo(videoTrack, &c.videoConfig.Codecs[0], c.MaxWidth, c.MaxHeight)
 
@@ -126,8 +135,11 @@ func (c *Client) Start() error {
 	c.audioSession = &srtp.Session{Local: c.srtpEndpoint()}
 
 	var err error
+	_ = c.hap.Conn.SetDeadline(time.Now().Add(hap.ConnDeadline))
 	c.stream, err = camera.NewStream(c.hap, videoCodec, audioCodec, c.videoSession, c.audioSession, c.Bitrate)
+	_ = c.hap.Conn.SetDeadline(time.Time{})
 	if err != nil {
+		c.mu.Unlock()
 		return err
 	}
 
@@ -161,12 +173,27 @@ func (c *Client) Start() error {
 		c.audioSession.OnReadRTP = timekeeper(c.audioSession.OnReadRTP)
 	}
 
+	c.mu.Unlock()
+
 	<-deadline.C
 
 	return nil
 }
 
 func (c *Client) Stop() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.stopped {
+		return nil
+	}
+	c.stopped = true
+
+	var err error
+	if c.stream != nil {
+		// End the camera session before closing HAP; some cameras keep it reserved otherwise.
+		err = c.stream.Close()
+	}
+
 	if c.videoSession != nil && c.videoSession.Remote != nil {
 		c.srtp.DelSession(c.videoSession)
 	}
@@ -174,7 +201,7 @@ func (c *Client) Stop() error {
 		c.srtp.DelSession(c.audioSession)
 	}
 
-	return c.Connection.Stop()
+	return errors.Join(err, c.Connection.Stop())
 }
 
 func (c *Client) trackByKind(kind string) *core.Receiver {
