@@ -581,6 +581,39 @@ func TestTriggerDoorbell(t *testing.T) {
 	require.Equal(t, 0, char.Value) // SINGLE_PRESS
 }
 
+func TestDoorbellAccessoryJSON(t *testing.T) {
+	srv := newTestServer(t, func(c *Config) {
+		c.CategoryID = "doorbell"
+	})
+
+	b, err := json.Marshal(srv.accessory)
+	require.NoError(t, err)
+
+	var acc struct {
+		Services []struct {
+			Type            string                       `json:"type"`
+			Primary         bool                         `json:"primary"`
+			Characteristics []map[string]json.RawMessage `json:"characteristics"`
+		} `json:"services"`
+	}
+	require.NoError(t, json.Unmarshal(b, &acc))
+
+	var found bool
+	for _, svc := range acc.Services {
+		if svc.Type != "121" { // Doorbell
+			require.False(t, svc.Primary, "only the Doorbell service may be primary")
+			continue
+		}
+		found = true
+		require.True(t, svc.Primary)
+		require.Len(t, svc.Characteristics, 1)
+		value, ok := svc.Characteristics[0]["value"]
+		require.True(t, ok, "ProgrammableSwitchEvent must have a value key")
+		require.Equal(t, "null", string(value))
+	}
+	require.True(t, found)
+}
+
 func TestTriggerDoorbell_CameraAccessory(t *testing.T) {
 	srv := newTestServer(t) // camera, not doorbell
 	// Should not panic (GetCharacter returns nil, function returns early)

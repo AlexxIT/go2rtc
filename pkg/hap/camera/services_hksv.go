@@ -1,6 +1,8 @@
 package camera
 
 import (
+	"encoding/json"
+
 	"github.com/AlexxIT/go2rtc/pkg/hap"
 	"github.com/AlexxIT/go2rtc/pkg/hap/tlv8"
 )
@@ -240,14 +242,18 @@ func ServiceDataStreamManagement() *hap.Service {
 	}
 }
 
+// ServiceDoorbell is the primary service of a video doorbell, and reads of its
+// ProgrammableSwitchEvent return an explicit null, as on certified doorbells. Without
+// this the Home app rejects the accessory as "Accessory out of compliance" (#2560).
 func ServiceDoorbell() *hap.Service {
 	return &hap.Service{
-		Type: "121",
+		Type:    "121",
+		Primary: true,
 		Characters: []*hap.Character{
 			{
 				Type:   "73",
 				Format: hap.FormatUInt8,
-				Value:  nil,
+				Value:  json.RawMessage("null"), // nil would drop the "value" key (omitempty)
 				Perms:  hap.EVPR,
 			},
 		},
