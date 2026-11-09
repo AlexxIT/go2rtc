@@ -43,6 +43,15 @@ Format: `rtsp...#{param1}#{param2}#{param3}`
 - Ignore two-way audio API `#backchannel=0` - important for some glitchy cameras
 - Use WebSocket transport `#transport=ws...`
 
+### Keyframe request
+
+Many cameras start a new RTSP session only from their next keyframe, so the stream starts with a delay up to the keyframe interval. If the camera supports ONVIF with the same login and password, go2rtc can ask it for a keyframe right after PLAY. Set the ONVIF ports to try:
+
+```yaml
+rtsp:
+  onvif_keyframe: [80, 8000]
+```
+
 ### RTSP over WebSocket
 
 ```yaml

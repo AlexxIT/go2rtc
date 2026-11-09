@@ -23,6 +23,8 @@ func Init() {
 			Password     string `yaml:"password" json:"-"`
 			DefaultQuery string `yaml:"default_query" json:"default_query"`
 			PacketSize   uint16 `yaml:"pkt_size" json:"pkt_size,omitempty"`
+			// ONVIF ports for keyframe request after PLAY, ex. [80, 8000]
+			OnvifKeyframe []int `yaml:"onvif_keyframe" json:"onvif_keyframe,omitempty"`
 		} `yaml:"rtsp"`
 	}
 
@@ -34,6 +36,8 @@ func Init() {
 	app.Info["rtsp"] = conf.Mod
 
 	log = app.GetLogger("rtsp")
+
+	keyframePorts = conf.Mod.OnvifKeyframe
 
 	// RTSP client support
 	streams.HandleFunc("rtsp", rtspHandler)
@@ -105,6 +109,10 @@ func rtspHandler(rawURL string) (core.Producer, error) {
 		conn.Media = query.Get("media")
 		conn.Timeout = core.Atoi(query.Get("timeout"))
 		conn.Transport = query.Get("transport")
+	}
+
+	if keyframePorts != nil {
+		listenKeyframe(conn, rawURL)
 	}
 
 	if log.Trace().Enabled() {
