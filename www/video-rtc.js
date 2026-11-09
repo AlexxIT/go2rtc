@@ -458,9 +458,11 @@ export class VideoRTC extends HTMLElement {
                     try {
                         const data = buf.slice(0, bufLen);
                         sb.appendBuffer(data);
-                        bufLen = 0;
                     } catch (e) {
                         // console.debug(e);
+                    } finally {
+                        // drop the staged data even if the append failed, or bufLen never resets
+                        bufLen = 0;
                     }
                 }
 
@@ -487,6 +489,11 @@ export class VideoRTC extends HTMLElement {
             this.ondata = data => {
                 if (sb.updating || bufLen > 0) {
                     const b = new Uint8Array(data);
+                    // after a failed MediaSource nothing fires updateend again, don't overflow the buffer
+                    if (bufLen + b.byteLength > buf.byteLength) {
+                        bufLen = 0;
+                        return;
+                    }
                     buf.set(b, bufLen);
                     bufLen += b.byteLength;
                     // console.debug('VideoRTC.buffer', b.byteLength, bufLen);
