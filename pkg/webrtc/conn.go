@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -17,6 +18,20 @@ type Conn struct {
 	core.Listener
 
 	Mode core.Mode `json:"mode"`
+
+	// IgnoreDisconnected - don't close connection on transient `disconnected` state,
+	// wait for `failed` or `closed` instead. Pion fires `disconnected` after 5 seconds
+	// without incoming packets and can return to `connected` when packets resume,
+	// or fires `failed` after 25 more seconds.
+	// Useful for producers with expensive reconnect (ex. Nest with API rate limits).
+	IgnoreDisconnected bool
+
+	// KeyframeInterval - for active producers with H264 video: send RTCP PLI
+	// (keyframe request) when no keyframe was received for this long.
+	// Some remote senders (ex. Nest) send the first keyframe late or rarely,
+	// so consumers like ffmpeg give up before they can start decoding.
+	// Zero disables keyframe requests (default).
+	KeyframeInterval time.Duration
 
 	pc *webrtc.PeerConnection
 
@@ -98,6 +113,27 @@ func NewConn(pc *webrtc.PeerConnection) *Conn {
 			}()
 		}
 
+		// keyframe requests for active producers (ex. Nest), H264 only
+		var lastKeyframe atomic.Int64 // unix nanos, 0 = never
+		requestKeyframes := c.Mode == core.ModeActiveProducer && c.KeyframeInterval > 0 &&
+			remote.Kind() == webrtc.RTPCodecTypeVideo && codec.Name == core.CodecH264
+		if requestKeyframes {
+			interval := c.KeyframeInterval
+			go func() {
+				pkts := []rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: uint32(remote.SSRC())}}
+				ticker := time.NewTicker(time.Second * 2)
+				defer ticker.Stop()
+				for range ticker.C {
+					if time.Since(time.Unix(0, lastKeyframe.Load())) < interval {
+						continue
+					}
+					if err := pc.WriteRTCP(pkts); err != nil {
+						return
+					}
+				}
+			}()
+		}
+
 		for {
 			b := make([]byte, ReceiveMTU)
 			n, _, err := remote.Read(b)
@@ -116,6 +152,10 @@ func NewConn(pc *webrtc.PeerConnection) *Conn {
 				continue
 			}
 
+			if requestKeyframes && isH264KeyframeRTP(packet.Payload) {
+				lastKeyframe.Store(time.Now().UnixNano())
+			}
+
 			track.WriteRTP(packet)
 		}
 	})
@@ -129,22 +169,29 @@ func NewConn(pc *webrtc.PeerConnection) *Conn {
 	// Fail connection:
 	// 14:53:08 ICE connection state changed: checking
 	// 14:53:39 peer connection state changed: failed
-	pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
-		c.Fire(state)
-
-		switch state {
-		case webrtc.PeerConnectionStateConnected:
-			for _, sender := range c.Senders {
-				sender.Start()
-			}
-		case webrtc.PeerConnectionStateDisconnected, webrtc.PeerConnectionStateFailed, webrtc.PeerConnectionStateClosed:
-			// disconnect event comes earlier, than failed
-			// but it comes only for success connections
-			_ = c.Close()
-		}
-	})
+	pc.OnConnectionStateChange(c.onConnectionStateChange)
 
 	return c
+}
+
+func (c *Conn) onConnectionStateChange(state webrtc.PeerConnectionState) {
+	c.Fire(state)
+
+	switch state {
+	case webrtc.PeerConnectionStateConnected:
+		for _, sender := range c.Senders {
+			sender.Start()
+		}
+	case webrtc.PeerConnectionStateDisconnected:
+		// disconnect event comes earlier, than failed
+		// but it comes only for success connections
+		if c.IgnoreDisconnected {
+			return
+		}
+		_ = c.Close()
+	case webrtc.PeerConnectionStateFailed, webrtc.PeerConnectionStateClosed:
+		_ = c.Close()
+	}
 }
 
 func (c *Conn) MarshalJSON() ([]byte, error) {
@@ -217,4 +264,31 @@ func sanitizeIP6(host string) string {
 		return "[" + host + "]"
 	}
 	return host
+}
+
+// isH264KeyframeRTP reports whether an H264 RTP payload starts a keyframe:
+// a single IDR or SPS NALU, a STAP-A aggregate containing one, or the first
+// fragment (FU-A) of an IDR.
+func isH264KeyframeRTP(payload []byte) bool {
+	if len(payload) < 2 {
+		return false
+	}
+	switch naluType := payload[0] & 0x1F; naluType {
+	case 5, 7: // IDR, SPS
+		return true
+	case 24: // STAP-A
+		for b := payload[1:]; len(b) >= 3; {
+			size := int(b[0])<<8 | int(b[1])
+			if t := b[2] & 0x1F; t == 5 || t == 7 {
+				return true
+			}
+			if 2+size > len(b) {
+				return false
+			}
+			b = b[2+size:]
+		}
+	case 28: // FU-A, start bit set and original type IDR
+		return payload[1]&0x80 != 0 && payload[1]&0x1F == 5
+	}
+	return false
 }

@@ -70,6 +70,14 @@ func Dial(rawURL string) (core.Producer, error) {
 	return rtcConn(nestAPI, rawURL, projectID, deviceID)
 }
 
+// Media inactivity watchdog: Google can stop sending RTP while the
+// PeerConnection never reaches `failed` (observed: 27 minutes of dead stream
+// with IgnoreDisconnected set). Close the conn so go2rtc re-dials.
+const (
+	inactivityCheck   = 5 * time.Second
+	inactivityTimeout = 30 * time.Second
+)
+
 func (c *WebRTCClient) GetMedias() []*core.Media {
 	return c.conn.GetMedias()
 }
@@ -84,7 +92,39 @@ func (c *WebRTCClient) AddTrack(media *core.Media, codec *core.Codec, track *cor
 
 func (c *WebRTCClient) Start() error {
 	c.api.StartExtendStreamTimer()
-	return c.conn.Start()
+
+	// conn.Start blocks until the conn is closed, so the watchdog lives
+	// exactly as long as the producer is running.
+	stop := make(chan struct{})
+	go c.watchdog(stop)
+	err := c.conn.Start()
+	close(stop)
+	return err
+}
+
+func (c *WebRTCClient) watchdog(stop <-chan struct{}) {
+	ticker := time.NewTicker(inactivityCheck)
+	defer ticker.Stop()
+
+	lastRecv := c.conn.Recv
+	lastChange := time.Now()
+
+	for {
+		select {
+		case <-ticker.C:
+			if recv := c.conn.Recv; recv != lastRecv {
+				lastRecv = recv
+				lastChange = time.Now()
+				continue
+			}
+			if idle := time.Since(lastChange); idle >= inactivityTimeout {
+				_ = c.conn.Close()
+				return
+			}
+		case <-stop:
+			return
+		}
+	}
 }
 
 func (c *WebRTCClient) Stop() error {
@@ -118,6 +158,13 @@ func rtcConn(nestAPI *API, rawURL, projectID, deviceID string) (*WebRTCClient, e
 		conn.Mode = core.ModeActiveProducer
 		conn.Protocol = "http"
 		conn.URL = rawURL
+		// Nest stream can pause for several seconds and continue, so `disconnected` state
+		// is not a reason to reconnect - each reconnect is a new stream session on Google API
+		// https://github.com/AlexxIT/go2rtc/issues/723
+		conn.IgnoreDisconnected = true
+		// Google sends the first keyframe late (observed: >20 s) and consumers like
+		// Frigate's ffmpeg give up before that, so ask for one when none arrived.
+		conn.KeyframeInterval = 5 * time.Second
 
 		// https://developers.google.com/nest/device-access/traits/device/camera-live-stream#generatewebrtcstream-request-fields
 		medias := []*core.Media{
@@ -136,6 +183,7 @@ func rtcConn(nestAPI *API, rawURL, projectID, deviceID string) (*WebRTCClient, e
 		answer, err := nestAPI.ExchangeSDP(projectID, deviceID, offer)
 		if err != nil {
 			lastErr = err
+			_ = pc.Close()
 			if attempt < maxRetries-1 {
 				time.Sleep(retryDelay)
 				retryDelay *= 2
@@ -147,6 +195,12 @@ func rtcConn(nestAPI *API, rawURL, projectID, deviceID string) (*WebRTCClient, e
 		// 5. Set answer with remote medias
 		if err = conn.SetAnswer(answer); err != nil {
 			return nil, err
+		}
+
+		// Session could not be extended and has expired: close the conn so
+		// the streams layer sees the producer die and re-dials.
+		nestAPI.OnSessionLost = func(err error) {
+			_ = conn.Close()
 		}
 
 		return &WebRTCClient{conn: conn, api: nestAPI}, nil
@@ -167,6 +221,10 @@ func rtspConn(nestAPI *API, rawURL, projectID, deviceID string) (*RTSPClient, er
 	}
 	if err := rtspClient.Describe(); err != nil {
 		return nil, err
+	}
+
+	nestAPI.OnSessionLost = func(err error) {
+		_ = rtspClient.Close()
 	}
 
 	return &RTSPClient{conn: rtspClient, api: nestAPI}, nil
