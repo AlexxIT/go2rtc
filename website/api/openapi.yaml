@@ -316,6 +316,35 @@ paths:
             text/vnd.graphviz:
               example: "digraph { ... }"
 
+  /api/streams/connection:
+    delete:
+      summary: Close stream connection by ID
+      description: |
+        Closes a single consumer or external producer of the stream.
+        Producers from the config are not affected.
+        Connection IDs can be found in the `GET /api/streams?src=...` response.
+      tags: [ Streams list ]
+      parameters:
+        - name: src
+          in: query
+          description: Stream name
+          required: true
+          schema: { type: string }
+          example: camera1
+        - name: id
+          in: query
+          description: Connection ID
+          required: true
+          schema: { type: integer }
+          example: 123
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Missing or invalid parameters
+        "404":
+          description: Stream or connection not found
+
   /api/preload:
     get:
       summary: Get all preloaded streams

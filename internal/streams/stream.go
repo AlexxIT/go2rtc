@@ -94,6 +94,51 @@ func (s *Stream) RemoveProducer(prod core.Producer) {
 	s.mu.Unlock()
 }
 
+// StopConnection stops consumer or external/internal producer by connection ID.
+// Producers from config are skipped, because other consumers depend on them.
+func (s *Stream) StopConnection(id uint32) bool {
+	var cons core.Consumer
+	var prod core.Producer
+
+	s.mu.Lock()
+	for _, consumer := range s.consumers {
+		if connID(consumer) == id {
+			cons = consumer
+			break
+		}
+	}
+	if cons == nil {
+		for _, producer := range s.producers {
+			if producer.state != stateExternal && producer.state != stateInternal {
+				continue
+			}
+			if producer.conn != nil && connID(producer.conn) == id {
+				prod = producer.conn
+				break
+			}
+		}
+	}
+	s.mu.Unlock()
+
+	switch {
+	case cons != nil:
+		s.RemoveConsumer(cons)
+	case prod != nil:
+		_ = prod.Stop()
+		s.RemoveProducer(prod)
+	default:
+		return false
+	}
+	return true
+}
+
+func connID(v any) uint32 {
+	if c, err := marshalConn(v); err == nil {
+		return c.ID
+	}
+	return 0
+}
+
 func (s *Stream) stopProducers() {
 	if s.pending.Load() > 0 {
 		log.Trace().Msg("[streams] skip stop pending producer")
