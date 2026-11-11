@@ -10,6 +10,10 @@ import (
 )
 
 func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver) error {
+	// Check if client is already closed/cancelled
+	if c.ctx.Err() != nil {
+		return c.ctx.Err()
+	}
 	if c.sender == nil {
 		if err := c.SetupBackchannel(); err != nil {
 			return err
@@ -23,6 +27,11 @@ func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver
 
 		c.sender = core.NewSender(media, track.Codec)
 		c.sender.Handler = func(packet *rtp.Packet) {
+			// Check context before writing
+			if c.ctx.Err() != nil {
+				return
+			}
+
 			b := muxer.GetPayload(pid, packet.Timestamp, packet.Payload)
 			_ = c.WriteBackchannel(b)
 		}
@@ -33,6 +42,11 @@ func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver
 }
 
 func (c *Client) SetupBackchannel() (err error) {
+	// Check context
+	if c.ctx.Err() != nil {
+		return c.ctx.Err()
+	}
+
 	// if conn1 is not used - we will use it for backchannel
 	// or we need to start another conn for session2
 	if c.session1 != "" {
@@ -48,6 +62,20 @@ func (c *Client) SetupBackchannel() (err error) {
 }
 
 func (c *Client) WriteBackchannel(body []byte) (err error) {
+	// Check if closed before writing
+	c.closeMutex.Lock()
+	closed := c.closed
+	conn := c.conn2
+	c.closeMutex.Unlock()
+
+	if closed || c.ctx.Err() != nil {
+		return c.ctx.Err()
+	}
+
+	if conn == nil {
+		return nil
+	}
+
 	// TODO: fixme (size)
 	buf := bytes.NewBuffer(nil)
 	buf.WriteString("----client-stream-boundary--\r\n")
