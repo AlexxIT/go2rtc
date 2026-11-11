@@ -304,9 +304,9 @@ func newUDPConn(host string, port int) (net.Conn, error) {
 		return nil, err
 	}
 
-	addr, err := net.ResolveUDPAddr("udp", host)
+	addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", host, port))
 	if err != nil {
-		addr = &net.UDPAddr{IP: net.ParseIP(host), Port: port}
+		return nil, err
 	}
 
 	return &udpConn{UDPConn: conn, addr: addr}, nil
@@ -325,7 +325,7 @@ func (c *udpConn) Read(b []byte) (n int, err error) {
 			return 0, err
 		}
 
-		if string(addr.IP) == string(c.addr.IP) || n >= 8 {
+		if n >= 8 || addr.IP.Equal(c.addr.IP) {
 			//log.Printf("<- %x", b[:n])
 			return
 		}
@@ -358,7 +358,7 @@ func (c *udpConn) WriteUntil(req []byte, ok func(res []byte) bool) ([]byte, erro
 			return nil, err
 		}
 
-		if string(addr.IP) != string(c.addr.IP) || n < 16 {
+		if n < 16 || !addr.IP.Equal(c.addr.IP) {
 			continue // skip messages from another IP
 		}
 
