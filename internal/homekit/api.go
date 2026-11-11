@@ -1,17 +1,21 @@
 package homekit
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/streams"
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/hap"
+	"github.com/AlexxIT/go2rtc/pkg/hksv"
 	"github.com/AlexxIT/go2rtc/pkg/mdns"
 )
 
@@ -182,4 +186,59 @@ func findHomeKitURLs() map[string]*url.URL {
 		}
 	}
 	return urls
+}
+
+// apiRecording dumps the exact fMP4 the HKSV consumer would send over the
+// DataStream - init segment followed by fragments - so a clip the controller
+// discards can be probed directly instead of inferred from logs.
+//
+//	GET /api/homekit/recording.mp4?src=<stream>&wait=<seconds>
+func apiRecording(w http.ResponseWriter, r *http.Request) {
+	src := r.URL.Query().Get("src")
+	if src == "" {
+		http.Error(w, "src required", http.StatusBadRequest)
+		return
+	}
+
+	wait := core.Atoi(r.URL.Query().Get("wait"))
+	if wait <= 0 || wait > 120 {
+		wait = 15
+	}
+
+	stream := streams.Get(src)
+	if stream == nil {
+		http.Error(w, "stream not found: "+src, http.StatusNotFound)
+		return
+	}
+
+	cons := hksv.NewHKSVConsumer(log, src+"/dump")
+	if err := stream.AddConsumer(cons); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	cons.TracksAdded() // don't wait init timeout for streams without audio
+
+	stop := func() {
+		stream.RemoveConsumer(cons)
+		_ = cons.Stop()
+	}
+
+	buf := &bytes.Buffer{}
+	if err := cons.ActivateTap(buf); err != nil {
+		stop()
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	select {
+	case <-time.After(time.Duration(wait) * time.Second):
+	case <-r.Context().Done():
+	}
+
+	// Stop takes the consumer lock, so no fragment is written to buf after it
+	stop()
+
+	w.Header().Set("Content-Type", "video/mp4")
+	w.Header().Set("Content-Disposition", `attachment; filename="`+src+`.mp4"`)
+	_, _ = w.Write(buf.Bytes())
 }

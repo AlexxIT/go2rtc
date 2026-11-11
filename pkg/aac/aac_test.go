@@ -17,7 +17,7 @@ func TestConfigToCodec(t *testing.T) {
 	codec := ConfigToCodec(src)
 	require.Equal(t, core.CodecAAC, codec.Name)
 	require.Equal(t, uint32(24000), codec.ClockRate)
-	require.Equal(t, uint16(1), codec.Channels)
+	require.Equal(t, uint8(1), codec.Channels)
 
 	dst := EncodeConfig(TypeAACELD, 24000, 1, true)
 	require.Equal(t, src, dst)
@@ -31,7 +31,7 @@ func TestADTS(t *testing.T) {
 
 	codec := ADTSToCodec(src)
 	require.Equal(t, uint32(44100), codec.ClockRate)
-	require.Equal(t, uint16(2), codec.Channels)
+	require.Equal(t, uint8(2), codec.Channels)
 
 	size := ReadADTSSize(src)
 	require.Equal(t, uint16(16), size)

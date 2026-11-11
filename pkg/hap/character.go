@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 
 	"github.com/AlexxIT/go2rtc/pkg/hap/tlv8"
 )
@@ -29,11 +30,17 @@ type Character struct {
 	//MinStep  any    `json:"minStep,omitempty"`
 	//ValidVal []any  `json:"valid-values,omitempty"`
 
+	// mu guards listeners: subscriptions arrive on one HAP connection's
+	// goroutine while notifications are pushed from another (motion events,
+	// HKSV state changes), so the map is genuinely shared.
+	mu        sync.RWMutex
 	listeners map[io.Writer]bool
 }
 
 func (c *Character) AddListener(w io.Writer) {
-	// TODO: sync.Mutex
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	if c.listeners == nil {
 		c.listeners = map[io.Writer]bool{}
 	}
@@ -41,6 +48,14 @@ func (c *Character) AddListener(w io.Writer) {
 }
 
 func (c *Character) RemoveListener(w io.Writer) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.removeListener(w)
+}
+
+// removeListener requires c.mu held.
+func (c *Character) removeListener(w io.Writer) {
 	delete(c.listeners, w)
 
 	if len(c.listeners) == 0 {
@@ -49,10 +64,16 @@ func (c *Character) RemoveListener(w io.Writer) {
 }
 
 func (c *Character) ListenerCount() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
 	return len(c.listeners)
 }
 
 func (c *Character) NotifyListeners(ignore io.Writer) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	if c.listeners == nil {
 		return nil
 	}
@@ -68,7 +89,7 @@ func (c *Character) NotifyListeners(ignore io.Writer) error {
 		}
 		if _, err = w.Write(data); err != nil {
 			// error not a problem - just remove listener
-			c.RemoveListener(w)
+			c.removeListener(w)
 		}
 	}
 

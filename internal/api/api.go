@@ -166,6 +166,41 @@ func ReadOnlyError(w http.ResponseWriter) {
 // HandleFunc handle pattern with relative path:
 // - "api/streams" => "{basepath}/api/streams"
 // - "/streams"    => "/streams"
+// noAuthPaths are exempt from middlewareAuth. HAP is served on the API
+// listener, and a HomeKit controller cannot send HTTP Basic credentials, so
+// with api.username set the Home app cannot pair at all - /pair-setup and
+// /pair-verify both answer 401 and nothing in the logs points at auth.
+//
+// Exempting them does not leave anything unprotected: /pair-setup is guarded
+// by the setup PIN via SRP, /pair-verify by the long-term keys established
+// during pairing, and every request after that (/accessories,
+// /characteristics, events) runs inside the encrypted HAP connection, which
+// is hijacked from the ResponseWriter and so never reaches this middleware
+// again.
+var (
+	noAuthMu    sync.RWMutex
+	noAuthPaths = map[string]bool{}
+)
+
+// HandleFuncNoAuth registers a path that bypasses HTTP Basic auth.
+func HandleFuncNoAuth(pattern string, handler http.HandlerFunc) {
+	if len(pattern) == 0 || pattern[0] != '/' {
+		pattern = basePath + "/" + pattern
+	}
+
+	noAuthMu.Lock()
+	noAuthPaths[pattern] = true
+	noAuthMu.Unlock()
+
+	HandleFunc(pattern, handler)
+}
+
+func skipAuth(path string) bool {
+	noAuthMu.RLock()
+	defer noAuthMu.RUnlock()
+	return noAuthPaths[path]
+}
+
 func HandleFunc(pattern string, handler http.HandlerFunc) {
 	if len(pattern) == 0 || pattern[0] != '/' {
 		pattern = basePath + "/" + pattern
@@ -224,7 +259,7 @@ func isLoopback(remoteAddr string) bool {
 
 func middlewareAuth(username, password string, localAuth bool, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "OPTIONS" {
+		if r.Method == "OPTIONS" || skipAuth(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
 		}

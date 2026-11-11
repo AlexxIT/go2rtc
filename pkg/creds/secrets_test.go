@@ -11,5 +11,6 @@ func TestString(t *testing.T) {
 	AddSecret("pa$$word")
 
 	s := SecretString("rtsp://admin:pa$$word@192.168.1.123/stream1")
-	require.Equal(t, "rtsp://***:***@192.168.1.123/stream1", s)
+	// userinfo is stripped as a whole (#2051)
+	require.Equal(t, "rtsp://***@192.168.1.123/stream1", s)
 }
