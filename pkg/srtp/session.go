@@ -44,6 +44,23 @@ func (e *Endpoint) init() (err error) {
 	return
 }
 
+// SetZone copies the zone of the local socket onto the remote endpoint
+// when the remote IP is IPv6 link-local. Without it, WriteTo to fe80::
+// fails because the kernel cannot pick an outgoing interface.
+func (s *Session) SetZone(zone string) {
+	if zone == "" || s.Remote == nil {
+		return
+	}
+	addr, ok := s.Remote.addr.(*net.UDPAddr)
+	if !ok || addr == nil || addr.IP == nil {
+		return
+	}
+	if addr.IP.To4() != nil || !addr.IP.IsLinkLocalUnicast() {
+		return
+	}
+	addr.Zone = zone
+}
+
 func profile(key []byte) srtp.ProtectionProfile {
 	switch len(key) {
 	case 16:
