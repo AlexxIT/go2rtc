@@ -64,9 +64,9 @@ func SecretString(s string) string {
 }
 
 func SecretWrite(w io.Writer, s string) (n int, err error) {
-	re := getReplacer()
-	s = userinfoRegexp.ReplaceAllString(s, `://***@`)
-	return re.WriteString(w, s)
+	// Replacer.WriteString issues several partial writes on each replacement,
+	// but consumers (zerolog, HTTP) expect the whole masked output at once.
+	return io.WriteString(w, SecretString(s))
 }
 
 func SecretWriter(w io.Writer) io.Writer {
@@ -78,7 +78,10 @@ type secretWriter struct {
 }
 
 func (s *secretWriter) Write(b []byte) (int, error) {
-	return SecretWrite(s.w, string(b))
+	if _, err := SecretWrite(s.w, string(b)); err != nil {
+		return 0, err
+	}
+	return len(b), nil
 }
 
 func SecretResponse(w http.ResponseWriter) http.ResponseWriter {
@@ -90,5 +93,8 @@ type secretResponse struct {
 }
 
 func (s *secretResponse) Write(b []byte) (int, error) {
-	return SecretWrite(s.ResponseWriter, string(b))
+	if _, err := SecretWrite(s.ResponseWriter, string(b)); err != nil {
+		return 0, err
+	}
+	return len(b), nil
 }
