@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/aac"
+	"github.com/AlexxIT/go2rtc/pkg/av1"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
@@ -47,6 +48,12 @@ const (
 
 	CodecH264 = 7
 	CodecHEVC = 12
+
+	// enhanced-RTMP video fourCC
+	FourCCAV1  = "av01"
+	FourCCAVC  = "avc1"
+	FourCCHEVC = "hvc1"
+	FourCCVVC  = "vvc1"
 )
 
 const (
@@ -72,6 +79,19 @@ func (c *Producer) GetTrack(media *core.Media, codec *core.Codec) (*core.Receive
 		c.audio = receiver
 	}
 	return receiver, nil
+}
+
+// codedFramesOffset returns where the coded data starts in an enhanced-RTMP
+// PacketTypeCodedFrames body. All of them carry a 4 bit frame type, a 4 bit
+// packet type and a 32 bit fourCC, and the codecs that reorder frames add a
+// 24 bit composition time offset on top. AV1 and VP9 never reorder.
+func codedFramesOffset(fourCC string) int {
+	switch fourCC {
+	case FourCCAVC, FourCCHEVC, FourCCVVC:
+		return 8
+	default:
+		return 5
+	}
 }
 
 func (c *Producer) Start() error {
@@ -101,8 +121,7 @@ func (c *Producer) Start() error {
 			if isExHeader(pkt.Payload) {
 				switch packetType := pkt.Payload[0] & 0b1111; packetType {
 				case PacketTypeCodedFrames:
-					// frame type 4b, packet type 4b, fourCC 32b, composition time 24b
-					pkt.Payload = pkt.Payload[8:]
+					pkt.Payload = pkt.Payload[codedFramesOffset(string(pkt.Payload[1:5])):]
 				case PacketTypeCodedFramesX:
 					// frame type 4b, packet type 4b, fourCC 32b
 					pkt.Payload = pkt.Payload[5:]
@@ -197,15 +216,18 @@ func (c *Producer) probe() error {
 			var codec *core.Codec
 
 			if isExHeader(pkt.Payload) {
-				if string(pkt.Payload[1:5]) != "hvc1" {
-					continue
-				}
-
 				if packetType := pkt.Payload[0] & 0b1111; packetType != PacketTypeSequenceStart {
 					continue
 				}
 
-				codec = h265.ConfigToCodec(pkt.Payload[5:])
+				switch string(pkt.Payload[1:5]) {
+				case FourCCHEVC:
+					codec = h265.ConfigToCodec(pkt.Payload[5:])
+				case FourCCAV1:
+					codec = av1.ConfigToCodec(pkt.Payload[5:])
+				default:
+					continue
+				}
 			} else {
 				_ = pkt.Payload[0] >> 4 // FrameType
 

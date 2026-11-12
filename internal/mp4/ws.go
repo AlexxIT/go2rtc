@@ -31,7 +31,11 @@ func handlerWSMSE(tr *ws.Transport, msg *ws.Message) error {
 		return err
 	}
 
-	tr.Write(&ws.Message{Type: "mse", Value: mp4.ContentType(cons.Codecs())})
+	// sent from WriteTo right before the init segment, because an AV1 content
+	// type is only complete once the first keyframe has been seen
+	cons.OnInit = func(contentType string) {
+		tr.Write(&ws.Message{Type: "mse", Value: contentType})
+	}
 
 	go cons.WriteTo(tr.Writer())
 

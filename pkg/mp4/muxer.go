@@ -3,6 +3,7 @@ package mp4
 import (
 	"encoding/hex"
 
+	"github.com/AlexxIT/go2rtc/pkg/av1"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
@@ -81,6 +82,20 @@ func (m *Muxer) GetInit() ([]byte, error) {
 				uint32(i+1), codec.Name, codec.ClockRate, width, height, h265.EncodeConfig(vps, sps, pps),
 			)
 
+		case core.CodecAV1:
+			// sequence header from the first keyframe, see Consumer.AddTrack
+			seqHdr := av1.GetSequenceHeader(codec.FmtpLine)
+
+			width, height := av1.DecodeSequenceHeader(seqHdr)
+			if width == 0 {
+				width = 1920
+				height = 1080
+			}
+
+			mv.WriteVideoTrack(
+				uint32(i+1), codec.Name, codec.ClockRate, width, height, av1.EncodeConfig(seqHdr),
+			)
+
 		case core.CodecAAC:
 			s := core.Between(codec.FmtpLine, "config=", ";")
 			b, err := hex.DecodeString(s)
@@ -138,6 +153,12 @@ func (m *Muxer) GetPayload(trackID byte, packet *rtp.Packet) []byte {
 		}
 	case core.CodecH265:
 		if h265.IsKeyframe(packet.Payload) {
+			flags = iso.SampleVideoIFrame
+		} else {
+			flags = iso.SampleVideoNonIFrame
+		}
+	case core.CodecAV1:
+		if av1.IsKeyframe(packet.Payload) {
 			flags = iso.SampleVideoIFrame
 		} else {
 			flags = iso.SampleVideoNonIFrame

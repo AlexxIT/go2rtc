@@ -4,8 +4,10 @@ import (
 	"errors"
 	"io"
 	"sync"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/aac"
+	"github.com/AlexxIT/go2rtc/pkg/av1"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
@@ -19,6 +21,21 @@ type Consumer struct {
 	muxer *Muxer
 	mu    sync.Mutex
 	start bool
+
+	// AV1 carries its codec params in the sequence header, so the init
+	// segment can only be built once every AV1 track has seen one. pending
+	// counts them, initCh is closed when the last one arrives.
+	waitInit bool
+	pending  int
+	initCh   chan struct{}
+	initOnce sync.Once
+	stopCh   chan struct{}
+	stopOnce sync.Once
+
+	// OnInit is called from WriteTo after the init segment is generated,
+	// just before writing data. Use this to send the correct content-type
+	// to consumers (e.g. MSE) with actual codec parameters.
+	OnInit func(contentType string) `json:"-"`
 
 	Rotate int `json:"-"`
 	ScaleX int `json:"-"`
@@ -35,6 +52,7 @@ func NewConsumer(medias []*core.Media) *Consumer {
 				Codecs: []*core.Codec{
 					{Name: core.CodecH264},
 					{Name: core.CodecH265},
+					{Name: core.CodecAV1},
 				},
 			},
 			{
@@ -55,8 +73,10 @@ func NewConsumer(medias []*core.Media) *Consumer {
 			Medias:     medias,
 			Transport:  wr,
 		},
-		muxer: &Muxer{},
-		wr:    wr,
+		muxer:  &Muxer{},
+		wr:     wr,
+		initCh: make(chan struct{}),
+		stopCh: make(chan struct{}),
 	}
 }
 
@@ -115,6 +135,60 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 			handler.Handler = h265.RepairAVCC(track.Codec, handler.Handler)
 		}
 
+	case core.CodecAV1:
+		// AV1 has no codec params in the SDP. They come with the sequence
+		// header, which encoders repeat in front of every keyframe, so the
+		// init segment (av1C box) can only be built once one has arrived.
+		seqHdrOK := av1.GetSequenceHeader(codec.FmtpLine) != nil
+		if !seqHdrOK {
+			// under Mutex because an earlier track's handler may already be
+			// decrementing pending from its own goroutine
+			c.mu.Lock()
+			c.waitInit = true
+			c.pending++
+			c.mu.Unlock()
+		}
+
+		// own flag, because another video track may set c.start first
+		var started bool
+
+		handler.Handler = func(packet *rtp.Packet) {
+			if !started {
+				if !seqHdrOK {
+					if seqHdr := av1.SequenceHeader(packet.Payload); seqHdr != nil {
+						// under Mutex because Codecs reads it from other goroutines
+						c.mu.Lock()
+						codec.FmtpLine = av1.EncodeFmtpLine(seqHdr)
+						c.pending--
+						last := c.pending == 0
+						c.mu.Unlock()
+
+						seqHdrOK = true
+						if last {
+							c.initOnce.Do(func() { close(c.initCh) })
+						}
+					}
+				}
+				if !seqHdrOK || !av1.IsKeyframe(packet.Payload) {
+					return
+				}
+				started = true
+				c.start = true
+			}
+
+			// important to use Mutex because right fragment order
+			c.mu.Lock()
+			b := c.muxer.GetPayload(trackID, packet)
+			if n, err := c.wr.Write(b); err == nil {
+				c.Send += n
+			}
+			c.mu.Unlock()
+		}
+
+		if track.Codec.IsRTP() {
+			handler.Handler = av1.RTPDepay(handler.Handler)
+		}
+
 	default:
 		handler.Handler = func(packet *rtp.Packet) {
 			if !c.start {
@@ -164,9 +238,64 @@ func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 	return nil
 }
 
+// WaitInit blocks until the codec parameters for the init segment are known,
+// the consumer is stopped, or the timeout expires. A zero timeout waits
+// indefinitely. Returns false if the parameters are still unknown.
+func (c *Consumer) WaitInit(timeout time.Duration) bool {
+	if !c.waitInit {
+		return true
+	}
+
+	var expired <-chan time.Time
+	if timeout > 0 {
+		timer := time.NewTimer(timeout)
+		defer timer.Stop()
+		expired = timer.C
+	}
+
+	select {
+	case <-c.initCh:
+		// select picks at random when both are ready, and continuing after a
+		// Stop parks WriteTo in a write buffer nothing will release
+		select {
+		case <-c.stopCh:
+			return false
+		default:
+			return true
+		}
+	case <-c.stopCh:
+	case <-expired:
+	}
+
+	return false
+}
+
+func (c *Consumer) Stop() error {
+	c.stopOnce.Do(func() { close(c.stopCh) })
+	return c.Connection.Stop()
+}
+
+// Codecs returns a snapshot, because an AV1 track fills in its sequence header
+// from a track handler while the stream is already running.
+func (c *Consumer) Codecs() []*core.Codec {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	codecs := c.Connection.Codecs()
+	for i, codec := range codecs {
+		codecs[i] = codec.Clone()
+	}
+	return codecs
+}
+
 func (c *Consumer) WriteTo(wr io.Writer) (int64, error) {
 	if len(c.Senders) == 1 && c.Senders[0].Codec.IsAudio() {
 		c.start = true
+	}
+
+	// AV1 has no codec params in the SDP, they come with the first keyframe
+	if !c.WaitInit(0) {
+		return 0, nil
 	}
 
 	init, err := c.muxer.GetInit()
@@ -179,6 +308,11 @@ func (c *Consumer) WriteTo(wr io.Writer) (int64, error) {
 	}
 	if c.ScaleX != 0 && c.ScaleY != 0 {
 		PatchVideoScale(init, c.ScaleX, c.ScaleY)
+	}
+
+	// the caller can only know the final content type now
+	if c.OnInit != nil {
+		c.OnInit(ContentType(c.Codecs()))
 	}
 
 	if _, err = wr.Write(init); err != nil {
