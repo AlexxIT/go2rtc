@@ -66,34 +66,54 @@ func Dial(rawURL string) (core.Producer, error) {
 	return c, nil
 }
 
+// frameSize: some TP-Link firmware (e.g. TL-IPC45AW 7.0) plays every talk packet as one fixed 512-sample
+// (64 ms) frame, so WebRTC's 20 ms packets come out choppy. Regroup the A-law stream into 512-byte packets.
+const frameSize = 512
+
 func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver) error {
 	sender := core.NewSender(media, track.Codec)
-	sender.Handler = func(packet *rtp.Packet) {
-		clone := rtp.Packet{
-			Header: rtp.Header{
-				Version:        2,
-				Marker:         packet.Marker,
-				PayloadType:    8,
-				SequenceNumber: packet.SequenceNumber,
-				Timestamp:      packet.Timestamp,
-				SSRC:           packet.SSRC,
-			},
-			Payload: packet.Payload,
-		}
 
-		// Encapsulate in RTSP Interleaved Frame (Channel 1)
-		// $ + Channel(1 byte) + Length(2 bytes) + Packet
-		size := 12 + len(clone.Payload)
-		b := make([]byte, 4+size)
-		b[0] = '$'
-		b[1] = 1 // Channel 1 for audio
-		b[2] = byte(size >> 8)
-		b[3] = byte(size)
-		if _, err := clone.MarshalTo(b[4:]); err != nil {
-			return
+	var buf []byte
+	var seq uint16
+	var ts uint32
+	var started bool
+
+	sender.Handler = func(packet *rtp.Packet) {
+		if !started {
+			ts = packet.Timestamp
+			started = true
 		}
-		if _, err := c.conn.Write(b); err != nil {
-			return
+		buf = append(buf, packet.Payload...)
+
+		for len(buf) >= frameSize {
+			clone := rtp.Packet{
+				Header: rtp.Header{
+					Version:        2,
+					PayloadType:    8,
+					SequenceNumber: seq,
+					Timestamp:      ts,
+					SSRC:           packet.SSRC,
+				},
+				Payload: buf[:frameSize],
+			}
+			seq++
+			ts += frameSize
+
+			// Encapsulate in RTSP Interleaved Frame (Channel 1)
+			// $ + Channel(1 byte) + Length(2 bytes) + Packet
+			size := 12 + len(clone.Payload)
+			b := make([]byte, 4+size)
+			b[0] = '$'
+			b[1] = 1 // Channel 1 for audio
+			b[2] = byte(size >> 8)
+			b[3] = byte(size)
+			if _, err := clone.MarshalTo(b[4:]); err != nil {
+				return
+			}
+			buf = buf[frameSize:]
+			if _, err := c.conn.Write(b); err != nil {
+				return
+			}
 		}
 	}
 	sender.HandleRTP(track)
