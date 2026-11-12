@@ -1,12 +1,15 @@
 package webrtc
 
 import (
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v4"
@@ -87,16 +90,48 @@ func NewConn(pc *webrtc.PeerConnection) *Conn {
 			}
 		}
 
-		if c.Mode == core.ModePassiveProducer && remote.Kind() == webrtc.RTPCodecTypeVideo {
+		// Request periodic keyframes from passive producers (WHIP, browser push)
+		// and from the Nest source. Nest is an active-pull producer whose keyframe
+		// interval drifts long when idle, so a consumer joining mid-GOP would wait
+		// up to a whole interval to start. Gate on the format name rather than the
+		// mode: other active-pull WebRTC sources (battery cameras) should not be
+		// forced into a 2 s IDR cadence.
+		if (c.Mode == core.ModePassiveProducer || c.FormatName == "nest/webrtc") && remote.Kind() == webrtc.RTPCodecTypeVideo {
 			go func() {
-				pkts := []rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: uint32(remote.SSRC())}}
-				for range time.NewTicker(time.Second * 2).C {
+				mediaSSRC := uint32(remote.SSRC())
+				pkts := []rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: mediaSSRC}}
+				// Google reportedly ignores bare PLI but honors FIR (#2365); both are
+				// negotiated in the offer. FIR needs an incrementing sequence number
+				// (RFC 5104) or repeated requests are deduplicated.
+				var fir *rtcp.FullIntraRequest
+				if c.FormatName == "nest/webrtc" {
+					fir = &rtcp.FullIntraRequest{
+						MediaSSRC: mediaSSRC,
+						FIR:       []rtcp.FIREntry{{SSRC: mediaSSRC}},
+					}
+					pkts = append(pkts, fir)
+				}
+				t := time.NewTicker(time.Second * 2)
+				defer t.Stop()
+				for range t.C {
+					if fir != nil {
+						fir.FIR[0].SequenceNumber++
+					}
 					if err := pc.WriteRTCP(pkts); err != nil {
 						return
 					}
 				}
 			}()
 		}
+
+		// Google's SDP answer carries profile-level-id but no sprop-parameter-sets;
+		// SPS/PPS arrive in-band, usually bundled in a STAP-A. Capture them once and
+		// append them to the codec's fmtp line so RTSP consumers learn the video
+		// dimensions from the DESCRIBE SDP instead of waiting for an in-band
+		// keyframe and a probe. pkg/dvrip does the equivalent for H265.
+		captureSprop := c.FormatName == "nest/webrtc" && codec.Name == core.CodecH264 &&
+			!strings.Contains(codec.FmtpLine, "sprop-parameter-sets=")
+		var spropSPS, spropPPS []byte
 
 		for {
 			b := make([]byte, ReceiveMTU)
@@ -114,6 +149,42 @@ func NewConn(pc *webrtc.PeerConnection) *Conn {
 
 			if len(packet.Payload) == 0 {
 				continue
+			}
+
+			if captureSprop {
+				save := func(nal []byte) {
+					if len(nal) == 0 {
+						return
+					}
+					switch nal[0] & 0x1F {
+					case h264.NALUTypeSPS:
+						spropSPS = append([]byte(nil), nal...)
+					case h264.NALUTypePPS:
+						spropPPS = append([]byte(nil), nal...)
+					}
+				}
+				if pl := packet.Payload; pl[0]&0x1F == 24 { // STAP-A: bundled NALs
+					for bb := pl[1:]; len(bb) >= 2; {
+						sz := int(binary.BigEndian.Uint16(bb))
+						bb = bb[2:]
+						if sz < 1 || sz > len(bb) {
+							break
+						}
+						save(bb[:sz])
+						bb = bb[sz:]
+					}
+				} else {
+					save(pl)
+				}
+				if spropSPS != nil && spropPPS != nil {
+					if codec.FmtpLine != "" {
+						codec.FmtpLine += ";"
+					}
+					codec.FmtpLine += "sprop-parameter-sets=" +
+						base64.StdEncoding.EncodeToString(spropSPS) + "," +
+						base64.StdEncoding.EncodeToString(spropPPS)
+					captureSprop = false
+				}
 			}
 
 			track.WriteRTP(packet)
