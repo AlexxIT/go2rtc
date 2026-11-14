@@ -197,3 +197,14 @@ func TestNackResendsPerSequenceAreLimited(t *testing.T) {
 		require.GreaterOrEqual(t, resends, 1, "seq %d was never repaired", seq)
 	}
 }
+
+// The window budget must not overflow on 32-bit platforms (386, arm/v6,
+// arm/v7, mipsle): 2 MiB/s * 500 ms computed in nanoseconds exceeds int32.
+// A negative budget would drop every NACK. Run with GOARCH=386 to cover it.
+func TestNackLimiterWindowBudgetFitsAllArchs(t *testing.T) {
+	f := newNackLimiter(nackMaxResendBytesPerSec, nackMaxResendsPerSeq)
+	i, err := f.NewInterceptor("")
+	require.NoError(t, err)
+	l := i.(*nackLimiter)
+	require.EqualValues(t, nackMaxResendBytesPerSec/2, l.maxWindowBytes)
+}

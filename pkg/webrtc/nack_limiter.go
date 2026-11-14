@@ -42,7 +42,7 @@ const nackBucketCount = 10
 
 // windowCounter sums bytes over the last nackWindow in fixed buckets.
 type windowCounter struct {
-	bytes [nackBucketCount]int
+	bytes [nackBucketCount]int64
 	stamp [nackBucketCount]int64
 }
 
@@ -50,7 +50,7 @@ func (w *windowCounter) bucket(now time.Time) int64 {
 	return now.UnixNano() / int64(nackWindow/nackBucketCount)
 }
 
-func (w *windowCounter) add(now time.Time, n int) {
+func (w *windowCounter) add(now time.Time, n int64) {
 	idx := w.bucket(now)
 	slot := idx % nackBucketCount
 	if w.stamp[slot] != idx {
@@ -60,7 +60,7 @@ func (w *windowCounter) add(now time.Time, n int) {
 	w.bytes[slot] += n
 }
 
-func (w *windowCounter) sum(now time.Time) (total int) {
+func (w *windowCounter) sum(now time.Time) (total int64) {
 	idx := w.bucket(now)
 	for i := range w.bytes {
 		if idx-w.stamp[i] < nackBucketCount {
@@ -72,7 +72,7 @@ func (w *windowCounter) sum(now time.Time) (total int) {
 
 type nackHistoryEntry struct {
 	seq     uint16
-	size    int
+	size    int64
 	resends int
 	valid   bool
 }
@@ -103,7 +103,8 @@ func newNackLimiter(maxResendBytesPerSec, maxResendsPerSeq int) interceptor.Fact
 
 func (f *nackLimiterFactory) NewInterceptor(string) (interceptor.Interceptor, error) {
 	return &nackLimiter{
-		maxWindowBytes:   f.maxResendBytesPerSec * int(nackWindow) / int(time.Second),
+		// int64: on 32-bit platforms bytes * nanoseconds overflows int.
+		maxWindowBytes:   int64(f.maxResendBytesPerSec) * int64(nackWindow) / int64(time.Second),
 		maxResendsPerSeq: f.maxResendsPerSeq,
 		streams:          map[uint32]*nackLimiterStream{},
 		now:              time.Now,
@@ -113,7 +114,7 @@ func (f *nackLimiterFactory) NewInterceptor(string) (interceptor.Interceptor, er
 type nackLimiter struct {
 	interceptor.NoOp
 
-	maxWindowBytes   int
+	maxWindowBytes   int64
 	maxResendsPerSeq int
 	now              func() time.Time
 
@@ -131,7 +132,7 @@ func (l *nackLimiter) BindLocalStream(info *interceptor.StreamInfo, writer inter
 	l.mu.Unlock()
 
 	return interceptor.RTPWriterFunc(func(header *rtp.Header, payload []byte, attr interceptor.Attributes) (int, error) {
-		size := header.MarshalSize() + len(payload)
+		size := int64(header.MarshalSize() + len(payload))
 		l.mu.Lock()
 		entry := &stream.history[header.SequenceNumber%nackBufferSize]
 		if !entry.valid || entry.seq != header.SequenceNumber {
