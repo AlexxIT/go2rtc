@@ -92,6 +92,8 @@ func (c *Conn) Start() (err error) {
 }
 
 func (c *Conn) Stop() (err error) {
+	c.stopKeyframe()
+
 	for _, receiver := range c.Receivers {
 		receiver.Close()
 	}

@@ -68,6 +68,15 @@ func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
 						continue
 					}
 
+					// Forward viewer keyframe requests (PLI/FIR) to the producer.
+					// Errors are not logged: throttled and busy cases would be noise.
+					if prodMedia.Kind == core.KindVideo {
+						if src, ok := cons.(core.KeyframeRequestSource); ok {
+							prod := prod
+							src.OnKeyframeRequest(consMedia, func() { _ = prod.RequestKeyframe() })
+						}
+					}
+
 				case core.DirectionSendonly:
 					log.Trace().Msgf("[streams] match cons=%d => prod=%d", consN, prodN)
 

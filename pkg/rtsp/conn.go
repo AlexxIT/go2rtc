@@ -33,6 +33,11 @@ type Conn struct {
 
 	URL *url.URL
 
+	// Keyframe enables RequestKeyframe; the only supported value is KeyframeResetup
+	Keyframe string
+	// OnKeyframe is called after each helper session of RequestKeyframe
+	OnKeyframe func(err error, took time.Duration)
+
 	// internal
 
 	auth      *tcp.Auth
@@ -51,6 +56,19 @@ type Conn struct {
 
 	udpConn []*net.UDPConn
 	udpAddr []*net.UDPAddr
+
+	// noRedirect makes Do fail on 301/302 instead of dialing the new location
+	noRedirect bool
+
+	// keyframe helper session (RequestKeyframe)
+	kfMu     sync.Mutex
+	kfBusy   bool
+	kfClosed bool
+	kfLast   time.Time
+	kfRaw    net.Conn           // raw connection of the running helper session
+	kfCancel context.CancelFunc // aborts the dial of the running helper session
+	kfWG     sync.WaitGroup
+	kfNow    func() time.Time // nil = time.Now
 }
 
 const (

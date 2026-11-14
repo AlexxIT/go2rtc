@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/streams"
@@ -105,6 +106,8 @@ func rtspHandler(rawURL string) (core.Producer, error) {
 		conn.Media = query.Get("media")
 		conn.Timeout = core.Atoi(query.Get("timeout"))
 		conn.Transport = query.Get("transport")
+
+		applyKeyframe(conn, query, log)
 	}
 
 	if log.Trace().Enabled() {
@@ -141,6 +144,43 @@ func rtspHandler(rawURL string) (core.Producer, error) {
 	}
 
 	return conn, nil
+}
+
+// parseKeyframe reads the #keyframe=... source option. A missing option is
+// valid and means off. Any value other than rtsp.KeyframeResetup is reported
+// as not ok, so the caller can warn and keep the feature off. For a repeated
+// parameter the first value counts.
+func parseKeyframe(query url.Values) (mode string, ok bool) {
+	vals, found := query["keyframe"]
+	if !found || len(vals) == 0 {
+		return "", true
+	}
+	if vals[0] == rtsp.KeyframeResetup {
+		return rtsp.KeyframeResetup, true
+	}
+	return "", false
+}
+
+// applyKeyframe configures the keyframe option of conn from the source query.
+// An unknown value logs a warning (without URL) and leaves the feature off.
+func applyKeyframe(conn *rtsp.Conn, query url.Values, l zerolog.Logger) {
+	mode, ok := parseKeyframe(query)
+	if !ok {
+		l.Warn().Msg("[rtsp] unknown keyframe mode, keyframe requests disabled")
+	}
+	conn.Keyframe = mode
+	if mode != "" {
+		conn.OnKeyframe = keyframeLogger(l)
+	}
+}
+
+// keyframeLogger reports the result of each keyframe helper session on debug
+// level only. The error texts of the helper contain only stage and class, and
+// the source URL is deliberately never logged here.
+func keyframeLogger(l zerolog.Logger) func(err error, took time.Duration) {
+	return func(err error, took time.Duration) {
+		l.Debug().Err(err).Dur("took", took).Msg("[rtsp] keyframe helper session")
+	}
 }
 
 func tcpHandler(conn *rtsp.Conn) {
