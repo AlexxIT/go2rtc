@@ -9,6 +9,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/xnet"
 	"github.com/pion/ice/v4"
 	"github.com/pion/interceptor"
+	"github.com/pion/interceptor/pkg/nack"
 	"github.com/pion/webrtc/v4"
 )
 
@@ -92,6 +93,29 @@ func (f *Filters) IPFilter(ip net.IP) bool {
 	return f == nil || f.IPs == nil || core.Contains(f.IPs, ip.String())
 }
 
+// registerInterceptors is webrtc.RegisterDefaultInterceptors (pion/webrtc/v4@v4.2.25
+// interceptor.go:33-74: NACK, RTCP reports, simulcast header extensions, stats,
+// TWCC sender) with a NACK limiter in front of the NACK responder. The limiter
+// must be added first: the chain hands incoming RTCP to interceptors in
+// registry order, so a filter added after the responder would not protect it.
+func registerInterceptors(m *webrtc.MediaEngine, i *interceptor.Registry) error {
+	i.Add(newNackLimiter(nackMaxResendBytesPerSec, nackMaxResendsPerSeq))
+
+	if err := webrtc.ConfigureNackWithOptions(m, i, nil, nack.ResponderSize(nackBufferSize)); err != nil {
+		return err
+	}
+	if err := webrtc.ConfigureRTCPReports(i); err != nil {
+		return err
+	}
+	if err := webrtc.ConfigureSimulcastExtensionHeaders(m); err != nil {
+		return err
+	}
+	if err := webrtc.ConfigureStatsInterceptor(i); err != nil {
+		return err
+	}
+	return webrtc.ConfigureTWCCSender(m, i)
+}
+
 func NewServerAPI(network, address string, filters *Filters) (*webrtc.API, error) {
 	// for debug logs add to env: `PION_LOG_DEBUG=all`
 	m := &webrtc.MediaEngine{}
@@ -103,7 +127,7 @@ func NewServerAPI(network, address string, filters *Filters) (*webrtc.API, error
 	}
 
 	i := &interceptor.Registry{}
-	if err := webrtc.RegisterDefaultInterceptors(m, i); err != nil {
+	if err := registerInterceptors(m, i); err != nil {
 		return nil, err
 	}
 
