@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pion/interceptor"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	pion "github.com/pion/webrtc/v4"
@@ -207,4 +208,70 @@ func TestNackLimiterWindowBudgetFitsAllArchs(t *testing.T) {
 	require.NoError(t, err)
 	l := i.(*nackLimiter)
 	require.EqualValues(t, nackMaxResendBytesPerSec/2, l.maxWindowBytes)
+}
+
+// A NACK the limiter empties completely (here: foreign SSRC) must not be
+// re-marshalled as a header without FCI. rtcp.Unmarshal rejects such a packet,
+// so any consumer of the raw bytes would lose the whole compound, including a
+// PLI next to it. The cached packets keep the emptied NACK for the responder.
+func TestNackLimiterRawBytesStayParsable(t *testing.T) {
+	compound, err := rtcp.Marshal([]rtcp.Packet{
+		&rtcp.TransportLayerNack{SenderSSRC: 1, MediaSSRC: 0xdeadbeef, Nacks: []rtcp.NackPair{{PacketID: 7}}},
+		&rtcp.PictureLossIndication{SenderSSRC: 1, MediaSSRC: 0x1234},
+	})
+	require.NoError(t, err)
+
+	f := newNackLimiter(nackMaxResendBytesPerSec, nackMaxResendsPerSeq)
+	i, err := f.NewInterceptor("")
+	require.NoError(t, err)
+	reader := i.BindRTCPReader(interceptor.RTCPReaderFunc(
+		func(b []byte, a interceptor.Attributes) (int, interceptor.Attributes, error) {
+			return copy(b, compound), a, nil
+		},
+	))
+
+	buf := make([]byte, 1500)
+	n, attr, err := reader.Read(buf, nil)
+	require.NoError(t, err)
+
+	raw, err := rtcp.Unmarshal(buf[:n])
+	require.NoError(t, err, "re-marshalled RTCP must stay parsable")
+	require.Len(t, raw, 1)
+	pli, ok := raw[0].(*rtcp.PictureLossIndication)
+	require.True(t, ok, "raw bytes must carry the PLI, got %T", raw[0])
+	require.EqualValues(t, 0x1234, pli.MediaSSRC)
+
+	cached, err := attr.GetRTCPPackets(buf[:n])
+	require.NoError(t, err)
+	require.Len(t, cached, 2, "the responder still sees the emptied NACK")
+	nack, ok := cached[0].(*rtcp.TransportLayerNack)
+	require.True(t, ok)
+	require.Empty(t, nack.Nacks)
+}
+
+// If the limiter empties every packet of a read, no raw bytes are left; the
+// cache still carries the emptied NACK.
+func TestNackLimiterRawBytesEmptyWhenAllNacksEmptied(t *testing.T) {
+	compound, err := rtcp.Marshal([]rtcp.Packet{
+		&rtcp.TransportLayerNack{SenderSSRC: 1, MediaSSRC: 0xdeadbeef, Nacks: []rtcp.NackPair{{PacketID: 7}}},
+	})
+	require.NoError(t, err)
+
+	f := newNackLimiter(nackMaxResendBytesPerSec, nackMaxResendsPerSeq)
+	i, err := f.NewInterceptor("")
+	require.NoError(t, err)
+	reader := i.BindRTCPReader(interceptor.RTCPReaderFunc(
+		func(b []byte, a interceptor.Attributes) (int, interceptor.Attributes, error) {
+			return copy(b, compound), a, nil
+		},
+	))
+
+	buf := make([]byte, 1500)
+	n, attr, err := reader.Read(buf, nil)
+	require.NoError(t, err)
+	require.Zero(t, n)
+
+	cached, err := attr.GetRTCPPackets(buf[:n])
+	require.NoError(t, err)
+	require.Len(t, cached, 1)
 }

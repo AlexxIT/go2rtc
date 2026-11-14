@@ -42,6 +42,24 @@ Format: `rtsp...#{param1}#{param2}#{param3}`
 - Ignore audio - `#media=video` or ignore video - `#media=audio`
 - Ignore two-way audio API `#backchannel=0` - important for some glitchy cameras
 - Use WebSocket transport `#transport=ws...`
+- Request a keyframe from the source when a WebRTC viewer asks for one `#keyframe=resetup` - for sources that ignore PLI/FIR, e.g. UniFi Protect (see below)
+
+### Keyframe on viewer request
+
+Some sources (for example UniFi Protect) ignore RTCP PLI/FIR and send a keyframe only once per GOP, so a WebRTC viewer that joins or loses a frame waits for the next GOP. They do send a keyframe when a new RTSP session sets up the video track. With `#keyframe=resetup` go2rtc uses this on demand:
+
+```yaml
+streams:
+  doorbell: rtspx://192.0.2.10:7441/camera-token#keyframe=resetup
+```
+
+When a WebRTC viewer sends PLI or FIR for a video track, go2rtc opens a short helper session to the same URL (OPTIONS, DESCRIBE, SETUP, TEARDOWN; no PLAY, always TCP-interleaved, no redirects).
+
+- At most one helper session per second per source connection, shared by all viewers. Requests inside that window are dropped.
+- Never two helper sessions at the same time on one connection. The RTSP exchange after the dial is limited to 2 s.
+- Failures never affect the main stream and are logged at debug level without URL or credentials.
+- Only `rtsp://`, `rtsps://` and `rtspx://` sources are supported; WebSocket transports are refused. Any other option value logs a warning and leaves the feature off.
+- The keyframe comes from the source's shared encoder, so it also reaches other sessions (e.g. recordings). A viewer that keeps sending PLI raises the keyframe rate to at most one per second.
 
 ### RTSP over WebSocket
 

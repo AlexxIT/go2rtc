@@ -1,6 +1,7 @@
 package tcp
 
 import (
+	"context"
 	"crypto/tls"
 	"errors"
 	"net"
@@ -11,6 +12,12 @@ import (
 
 // Dial - for RTSP(S|X) and RTMP(S|X)
 func Dial(u *url.URL, timeout time.Duration) (net.Conn, error) {
+	return DialContext(context.Background(), u, timeout)
+}
+
+// DialContext is Dial with a context: cancelling ctx aborts the TCP connect
+// and the TLS handshake at once, the timeout still applies to both.
+func DialContext(ctx context.Context, u *url.URL, timeout time.Duration) (net.Conn, error) {
 	var address string
 	var hostname string // without port
 	if i := strings.IndexByte(u.Host, ':'); i > 0 {
@@ -42,7 +49,8 @@ func Dial(u *url.URL, timeout time.Duration) (net.Conn, error) {
 		return nil, errors.New("unsupported scheme: " + u.Scheme)
 	}
 
-	conn, err := net.DialTimeout("tcp", address, timeout)
+	dialer := net.Dialer{Timeout: timeout}
+	conn, err := dialer.DialContext(ctx, "tcp", address)
 	if err != nil {
 		return nil, err
 	}
@@ -51,10 +59,19 @@ func Dial(u *url.URL, timeout time.Duration) (net.Conn, error) {
 		return conn, nil
 	}
 
+	// bound the handshake by the same timeout as the TCP connect,
+	// otherwise a peer that accepts but never speaks TLS blocks forever
+	if timeout > 0 {
+		_ = conn.SetDeadline(time.Now().Add(timeout))
+	}
+
 	tlsConn := tls.Client(conn, secure)
-	if err = tlsConn.Handshake(); err != nil {
+	if err = tlsConn.HandshakeContext(ctx); err != nil {
+		_ = conn.Close()
 		return nil, err
 	}
+
+	_ = conn.SetDeadline(time.Time{})
 
 	if u.Scheme[4] == 'x' {
 		u.Scheme = u.Scheme[:4] + "s"

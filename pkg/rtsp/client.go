@@ -2,6 +2,7 @@ package rtsp
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -31,6 +32,12 @@ func NewClient(uri string) *Conn {
 }
 
 func (c *Conn) Dial() (err error) {
+	return c.dial(context.Background())
+}
+
+// dial is Dial with a context that aborts the TCP connect and TLS handshake.
+// The WebSocket transport ignores ctx.
+func (c *Conn) dial(ctx context.Context) (err error) {
 	if c.URL, err = url.Parse(c.uri); err != nil {
 		return
 	}
@@ -45,7 +52,7 @@ func (c *Conn) Dial() (err error) {
 		} else {
 			timeout = core.ConnDialTimeout
 		}
-		conn, err = tcp.Dial(c.URL, timeout)
+		conn, err = tcp.DialContext(ctx, c.URL, timeout)
 
 		if c.Transport != "udp" {
 			c.Protocol = "rtsp+tcp"
@@ -98,6 +105,10 @@ func (c *Conn) Do(req *tcp.Request) (*tcp.Response, error) {
 		return res, nil
 
 	case http.StatusMovedPermanently, http.StatusFound:
+		if c.noRedirect {
+			return nil, errRedirectRefused
+		}
+
 		rawURL := res.Header.Get("Location")
 
 		var u *url.URL
@@ -127,17 +138,33 @@ func (c *Conn) Do(req *tcp.Request) (*tcp.Response, error) {
 			if c.auth.ReadNone(res) {
 				return c.Do(req)
 			}
-			return nil, errors.New("user/pass not provided")
+			return nil, errAuthMissing
 		case tcp.AuthUnknown:
 			if c.auth.Read(res) {
 				return c.Do(req)
 			}
 		default:
-			return nil, errors.New("wrong user/pass")
+			return nil, errAuthWrong
 		}
 	}
 
-	return res, fmt.Errorf("wrong response on %s", req.Method)
+	return res, &responseError{method: req.Method, code: res.StatusCode}
+}
+
+var (
+	errAuthMissing     = errors.New("user/pass not provided")
+	errAuthWrong       = errors.New("wrong user/pass")
+	errRedirectRefused = errors.New("rtsp: redirect not allowed")
+)
+
+// responseError is a non-200 response that Do could not handle.
+type responseError struct {
+	method string
+	code   int
+}
+
+func (e *responseError) Error() string {
+	return "wrong response on " + e.method
 }
 
 func (c *Conn) Options() error {

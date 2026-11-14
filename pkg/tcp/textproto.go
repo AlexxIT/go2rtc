@@ -73,7 +73,9 @@ func ReadResponse(r *bufio.Reader) (*Response, error) {
 
 	if val := res.Header.Get("Content-Length"); val != "" {
 		var i int
-		i, err = strconv.Atoi(val)
+		if i, err = parseContentLength(val); err != nil {
+			return nil, err
+		}
 		res.Body = make([]byte, i)
 		if _, err = io.ReadAtLeast(r, res.Body, i); err != nil {
 			return nil, err
@@ -139,7 +141,9 @@ func ReadRequest(r *bufio.Reader) (*Request, error) {
 
 	if val := req.Header.Get("Content-Length"); val != "" {
 		var i int
-		i, err = strconv.Atoi(val)
+		if i, err = parseContentLength(val); err != nil {
+			return nil, err
+		}
 		req.Body = make([]byte, i)
 		if _, err = io.ReadAtLeast(r, req.Body, i); err != nil {
 			return nil, err
@@ -147,4 +151,20 @@ func ReadRequest(r *bufio.Reader) (*Request, error) {
 	}
 
 	return req, nil
+}
+
+// maxContentLength caps the body of one RTSP message. The largest bodies
+// here are SDP descriptions and parameter replies of a few KiB; 16 MiB leaves
+// plenty of room for unusual cameras while a peer can no longer make the
+// process allocate gigabytes (or panic on a negative length) with one header.
+const maxContentLength = 16 << 20
+
+var errContentLength = errors.New("tcp: invalid Content-Length")
+
+func parseContentLength(val string) (int, error) {
+	i, err := strconv.Atoi(val)
+	if err != nil || i < 0 || i > maxContentLength {
+		return 0, errContentLength
+	}
+	return i, nil
 }
