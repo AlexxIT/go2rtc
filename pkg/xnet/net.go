@@ -3,7 +3,29 @@ package xnet
 import (
 	"net"
 	"strconv"
+	"time"
 )
+
+// Listen is like net.Listen, but it retries for a while.
+//
+// A port can stay busy for a few seconds after a restart of the program, even
+// when the previous instance is already gone (sockets in TIME_WAIT state,
+// port forwarder that is still shutting down, and so on). Without the retry
+// the program would keep running without this listener.
+func Listen(network, address string) (net.Listener, error) {
+	var err error
+
+	for i := 0; i < 10; i++ {
+		var ln net.Listener
+		if ln, err = net.Listen(network, address); err == nil {
+			return ln, nil
+		}
+
+		time.Sleep(time.Millisecond * 500)
+	}
+
+	return nil, err
+}
 
 // Docker has common docker addresses (class B):
 // https://en.wikipedia.org/wiki/Private_network
