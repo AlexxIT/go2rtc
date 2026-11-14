@@ -54,6 +54,33 @@ func (p *Producer) SetSource(s string) {
 	}
 }
 
+// ReplaceURL replaces the producer URL if it is exactly the old one.
+// The active connection will be closed, so the producer will reconnect
+// using the new URL.
+func (p *Producer) ReplaceURL(old, new string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.url == "" || p.url != old || old == new {
+		return false
+	}
+
+	p.url = new
+
+	if p.state == stateStart && p.conn != nil {
+		_ = p.conn.Stop()
+	}
+
+	return true
+}
+
+// Source returns the current producer URL.
+func (p *Producer) Source() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.url
+}
+
 func (p *Producer) Dial() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()

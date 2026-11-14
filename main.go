@@ -25,6 +25,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/isapi"
 	"github.com/AlexxIT/go2rtc/internal/ivideon"
 	"github.com/AlexxIT/go2rtc/internal/kasa"
+	"github.com/AlexxIT/go2rtc/internal/macwatch"
 	"github.com/AlexxIT/go2rtc/internal/mjpeg"
 	"github.com/AlexxIT/go2rtc/internal/mp4"
 	"github.com/AlexxIT/go2rtc/internal/mpeg"
@@ -110,6 +111,7 @@ func main() {
 		{"yandex", yandex.Init},
 		// Helper modules
 		{"debug", debug.Init},
+		{"macwatch", macwatch.Init},
 		{"ngrok", ngrok.Init},
 		{"pinggy", pinggy.Init},
 		{"srtp", srtp.Init},
