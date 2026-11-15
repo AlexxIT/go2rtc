@@ -298,15 +298,26 @@ func marshalCmd(channel byte, seq uint16, cmd uint32, payload []byte) []byte {
 }
 
 func newUDPConn(host string, port int) (net.Conn, error) {
-	// We using raw net.UDPConn, because RemoteAddr should be changed during handshake.
-	conn, err := net.ListenUDP("udp", nil)
-	if err != nil {
-		return nil, err
-	}
-
 	addr, err := net.ResolveUDPAddr("udp", host)
 	if err != nil {
 		addr = &net.UDPAddr{IP: net.ParseIP(host), Port: port}
+	}
+
+	// A dual-stack ("udp") socket can't send to an IPv4 host on some
+	// systems (macOS: "sendto: no route to host"), so use an IPv4 socket
+	// for IPv4 hosts. Also normalize the address to 4-byte form: packets
+	// received on an IPv4 socket have 4-byte source IPs, and WriteUntil
+	// compares them with this address as strings.
+	network := "udp"
+	if ip4 := addr.IP.To4(); ip4 != nil {
+		network = "udp4"
+		addr.IP = ip4
+	}
+
+	// We using raw net.UDPConn, because RemoteAddr should be changed during handshake.
+	conn, err := net.ListenUDP(network, nil)
+	if err != nil {
+		return nil, err
 	}
 
 	return &udpConn{UDPConn: conn, addr: addr}, nil
@@ -344,7 +355,12 @@ func (c *udpConn) RemoteAddr() net.Addr {
 func (c *udpConn) WriteUntil(req []byte, ok func(res []byte) bool) ([]byte, error) {
 	var t *time.Timer
 	t = time.AfterFunc(1, func() {
-		if _, err := c.Write(req); err == nil && t != nil {
+		// Keep retransmitting even when a write fails: a single transient
+		// error (e.g. "sendto: no route to host" while the neighbour entry
+		// for a quiet LAN device is still being resolved) must not stop
+		// the retries, or the handshake can never recover.
+		_, _ = c.Write(req)
+		if t != nil {
 			t.Reset(time.Second)
 		}
 	})
