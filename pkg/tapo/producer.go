@@ -61,6 +61,10 @@ func (c *Client) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver,
 }
 
 func (c *Client) Start() error {
+	c.stateMu.Lock()
+	c.started = true
+	c.stateMu.Unlock()
+
 	return c.Handle()
 }
 
