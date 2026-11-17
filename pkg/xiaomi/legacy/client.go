@@ -103,12 +103,14 @@ func (c *Client) ReadPacket() (hdr, payload []byte, err error) {
 	if err != nil {
 		return
 	}
+	if len(payload) >= 16 {
+		tutk.DebugLog("RAW TUTK: hdr=%x len=%d first16=%x", hdr[:min(4, len(hdr))], len(payload), payload[:16])
+	}
 	if c.key != nil {
-		if c.model == ModelAqaraG2 && hdr[0] == tutk.CodecH265 {
-			payload, err = DecodeVideo(payload, c.key)
-		} else {
-			// ModelAqaraG2: audio AAC
-			// ModelIMILABA1: video HEVC, audio PCMA
+		switch hdr[0] {
+		case tutk.CodecH264, tutk.CodecH265:
+			payload, err = c.decodeVideoPayload(payload)
+		default:
 			payload, err = crypto.Decode(payload, c.key)
 		}
 	}
@@ -149,7 +151,26 @@ func (c *Client) StartMedia(video, audio string) error {
 			c.WriteCommandJSON(0x0704, `{}`), // don't know why
 		)
 
-	case ModelIMILABA1, ModelMijia:
+	case ModelIMILABA1:
+		var b byte
+		switch video {
+		case "", "fhd", "hd":
+			b = 1
+		case "sd":
+			b = 4
+		case "auto":
+			b = 0xff
+		}
+
+		tutk.DebugLog("StartMedia for ModelIMILABA1: video=%s b=%d", video, b)
+		return errors.Join(
+			c.WriteCommandJSON(cmdAudioStart, `{}`),
+			c.WriteCommand(cmdStreamCtrlReq, []byte{0, 0, 0, 0, b, 0, 0, 0}),
+			c.WriteCommandJSON(cmdVideoStart, `{}`),
+			c.WriteCommandJSON(0x0704, `{}`),
+		)
+
+	case ModelMijia:
 		// 0 - auto, 1 - low, 3 - hd
 		switch video {
 		case "", "hd":
@@ -223,29 +244,70 @@ func (c *Client) StopMedia() error {
 	)
 }
 
+func (c *Client) decodeVideoPayload(data []byte) ([]byte, error) {
+	if len(data) < 17 {
+		return data, nil
+	}
+	if string(data[:4]) == "\x00\x00\x00\x01" {
+		return data, nil
+	}
+	if data[8] == 0 || data[8] == 1 {
+		return DecodeVideo(data, c.key)
+	}
+	// Full ChaCha20 encryption
+	dst, err := crypto.Decode(data, c.key)
+	if err != nil {
+		return nil, err
+	}
+	first16 := dst
+	if len(first16) > 16 {
+		first16 = first16[:16]
+	}
+	tutk.DebugLog("Video full ChaCha20 decrypted: len=%d first16=%x", len(dst), first16)
+	return dst, nil
+}
+
 func DecodeVideo(data, key []byte) ([]byte, error) {
-	if string(data[:4]) == "\x00\x00\x00\x01" || data[8] == 0 {
+	if len(data) < 17 {
+		return data, nil
+	}
+	if string(data[:4]) == "\x00\x00\x00\x01" {
 		return data, nil
 	}
 
+	if data[8] == 0 {
+		tutk.DebugLog("DecodeVideo: data[8]==0 unencrypted, len=%d", len(data))
+		return data[17:], nil
+	}
+
 	if data[8] != 1 {
-		// Support could be added, but I haven't seen such cameras.
-		return nil, fmt.Errorf("xiaomi: unsupported encryption")
+		tutk.DebugLog("DecodeVideo: unsupported encryption data[8]=%d", data[8])
+		return nil, fmt.Errorf("xiaomi: unsupported encryption flag: %d", data[8])
 	}
 
 	nonce8 := data[:8]
 	i1 := binary.LittleEndian.Uint32(data[9:])
 	i2 := binary.LittleEndian.Uint32(data[13:])
 	data = data[17:]
+	if int(i1+i2) > len(data) {
+		tutk.DebugLog("DecodeVideo: i1+i2 exceeds len(data)")
+		return data, nil
+	}
 	src := data[i1 : i1+i2]
 
-	for i := 32; i+16 < len(src); i += 160 {
+	for i := 32; i+16 <= len(src); i += 160 {
 		dst, err := crypto.DecodeNonce(src[i:i+16], nonce8, key)
 		if err != nil {
 			return nil, err
 		}
-		copy(src[i:], dst) // copy result in same place
+		copy(src[i:], dst)
 	}
+
+	first16 := data
+	if len(first16) > 16 {
+		first16 = first16[:16]
+	}
+	tutk.DebugLog("DecodeVideo decrypted: len=%d first16=%x", len(data), first16)
 
 	return data, nil
 }
