@@ -1,6 +1,7 @@
 package api
 
 import (
+	"crypto/subtle"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -213,7 +214,7 @@ func middlewareAuth(username, password string, localAuth bool, next http.Handler
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if localAuth || !isLoopback(r.RemoteAddr) {
 			user, pass, ok := r.BasicAuth()
-			if !ok || user != username || pass != password {
+			if !ok || !secureEqual(user, username) || !secureEqual(pass, password) {
 				w.Header().Set("Www-Authenticate", `Basic realm="go2rtc"`)
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
@@ -222,6 +223,12 @@ func middlewareAuth(username, password string, localAuth bool, next http.Handler
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+// secureEqual compares credentials in constant time, so response timing
+// does not reveal how many leading characters of a guess were correct.
+func secureEqual(a, b string) bool {
+	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }
 
 func middlewareCORS(next http.Handler) http.Handler {
