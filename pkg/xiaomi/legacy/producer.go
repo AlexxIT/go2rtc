@@ -177,6 +177,12 @@ func probe(client *Client) ([]*core.Media, error) {
 			Direction: core.DirectionRecvonly,
 			Codecs:    []*core.Codec{acodec},
 		})
+
+		medias = append(medias, &core.Media{
+			Kind:      core.KindAudio,
+			Direction: core.DirectionSendonly,
+			Codecs:    []*core.Codec{acodec.Clone()},
+		})
 	}
 	return medias, nil
 }

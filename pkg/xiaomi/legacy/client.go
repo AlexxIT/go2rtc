@@ -122,8 +122,26 @@ const (
 	cmdVideoStop     = 0x02ff
 	cmdAudioStart    = 0x0300
 	cmdAudioStop     = 0x0301
+	cmdSpeakerStart  = 0x0350
+	cmdSpeakerStop   = 0x0351
 	cmdStreamCtrlReq = 0x0320
 )
+
+func (c *Client) StartSpeaker() error {
+	tutk.DebugLog("xiaomi/legacy: StartSpeaker (0x0350)")
+	return c.WriteCommand(cmdSpeakerStart, []byte{0, 0, 0, 0, 0, 0, 0, 0})
+}
+
+func (c *Client) StopSpeaker() error {
+	tutk.DebugLog("xiaomi/legacy: StopSpeaker (0x0351)")
+	return c.WriteCommand(cmdSpeakerStop, []byte{0, 0, 0, 0, 0, 0, 0, 0})
+}
+
+func (c *Client) WriteAudio(codec byte, payload []byte) error {
+	hdr := make([]byte, 32)
+	hdr[0] = codec
+	return c.WritePacket(hdr, payload)
+}
 
 func (c *Client) WriteCommandJSON(ctrlType uint32, format string, a ...any) error {
 	if len(a) > 0 {
