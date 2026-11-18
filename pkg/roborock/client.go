@@ -8,15 +8,19 @@ import (
 	"fmt"
 	"net/rpc"
 	"net/url"
+	"regexp"
 	"strconv"
 	"sync"
 	"time"
+
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/roborock/iot"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	pion "github.com/pion/webrtc/v4"
 )
+
+var preHashedPin = regexp.MustCompile(`^[0-9a-f]{32}$`)
 
 // Deprecated: should be rewritten to core.Connection
 type Client struct {
@@ -57,8 +61,13 @@ func (c *Client) Dial() error {
 	}
 
 	c.pin = u.Query().Get("pin")
-	if c.pin != "" {
-		c.pin = fmt.Sprintf("%x", md5.Sum([]byte(c.pin)))
+	if c.pin != "" {		
+		// A 32-char lowercase hex pin is already the MD5 homesec
+		// password (pre-hashed credential); pass it through instead
+		// of hashing it a second time.
+		if !preHashedPin.MatchString(c.pin) {
+			c.pin = fmt.Sprintf("%x", md5.Sum([]byte(c.pin)))
+		}
 		return c.CheckHomesecPassword()
 	}
 
