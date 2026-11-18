@@ -41,6 +41,10 @@ type Camera struct {
 	DTLS         int    `json:"dtls"`
 	FirmwareVer  string `json:"firmware_ver"`
 	IsOnline     bool   `json:"is_online"`
+
+	// Set for cameras behind a base station (e.g. Wyze Cam Outdoor). IP is then the base station's.
+	ParentMAC string `json:"parent_mac,omitempty"`
+	ParentENR string `json:"parent_enr,omitempty"`
 }
 
 type deviceListResponse struct {
@@ -60,13 +64,17 @@ type deviceInfo struct {
 	FirmwareVer  string       `json:"firmware_ver"`
 	ConnState    int          `json:"conn_state"`
 	DeviceParams deviceParams `json:"device_params"`
+
+	ParentDeviceMAC string `json:"parent_device_mac"`
+	ParentDeviceENR string `json:"parent_device_enr"`
 }
 
 type deviceParams struct {
-	P2PID   string `json:"p2p_id"`
-	P2PType int    `json:"p2p_type"`
-	IP      string `json:"ip"`
-	DTLS    int    `json:"dtls"`
+	P2PID          string `json:"p2p_id"`
+	P2PType        int    `json:"p2p_type"`
+	IP             string `json:"ip"`
+	DTLS           int    `json:"dtls"`
+	MainDeviceDTLS int    `json:"main_device_dtls"`
 }
 
 type p2pInfoResponse struct {
@@ -191,8 +199,19 @@ func (c *Cloud) GetCameraList() ([]*Camera, error) {
 		return nil, fmt.Errorf("wyze: API error: %s - %s", result.Code, result.Msg)
 	}
 
-	c.cameras = nil
-	for _, dev := range result.Data.DeviceList {
+	c.cameras = camerasFromDevices(result.Data.DeviceList)
+
+	return c.cameras, nil
+}
+
+func camerasFromDevices(devices []deviceInfo) []*Camera {
+	byMAC := make(map[string]*deviceInfo, len(devices))
+	for i := range devices {
+		byMAC[strings.ToUpper(devices[i].MAC)] = &devices[i]
+	}
+
+	var cameras []*Camera
+	for _, dev := range devices {
 		if dev.ProductType != "Camera" {
 			continue
 		}
@@ -200,7 +219,7 @@ func (c *Cloud) GetCameraList() ([]*Camera, error) {
 			continue // skip cameras without IP (gwell protocol)
 		}
 
-		c.cameras = append(c.cameras, &Camera{
+		cam := &Camera{
 			MAC:          dev.MAC,
 			P2PID:        dev.DeviceParams.P2PID,
 			ENR:          dev.ENR,
@@ -211,10 +230,24 @@ func (c *Cloud) GetCameraList() ([]*Camera, error) {
 			DTLS:         dev.DeviceParams.DTLS,
 			FirmwareVer:  dev.FirmwareVer,
 			IsOnline:     dev.ConnState == 1,
-		})
+		}
+
+		// A camera behind a base station (e.g. Wyze Cam Outdoor) is on the base's own Wi-Fi.
+		// Connect to the base station: it shares the camera's UID and terminates DTLS.
+		if parent := byMAC[strings.ToUpper(dev.ParentDeviceMAC)]; dev.ParentDeviceMAC != "" && parent != nil && parent.DeviceParams.IP != "" {
+			cam.IP = parent.DeviceParams.IP
+			cam.DTLS = dev.DeviceParams.MainDeviceDTLS
+			cam.ParentMAC = parent.MAC
+			cam.ParentENR = dev.ParentDeviceENR
+			if cam.ParentENR == "" {
+				cam.ParentENR = parent.ENR
+			}
+		}
+
+		cameras = append(cameras, cam)
 	}
 
-	return c.cameras, nil
+	return cameras
 }
 
 func (c *Cloud) GetCamera(id string) (*Camera, error) {

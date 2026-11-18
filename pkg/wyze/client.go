@@ -58,6 +58,11 @@ type Client struct {
 	mac   string
 	model string
 
+	// Cameras behind a base station (e.g. WVOD1 behind WVODB1) share the base's UID.
+	// The DTLS session uses the base's ENR/MAC; the camera is then selected (and woken) by MAC.
+	parentEnr string
+	parentMac string
+
 	authKey string
 	verbose bool
 
@@ -96,9 +101,12 @@ func Dial(rawURL string) (*Client, error) {
 		mac:     query.Get("mac"),
 		model:   query.Get("model"),
 		verbose: query.Get("verbose") == "true",
+
+		parentEnr: query.Get("parent_enr"),
+		parentMac: query.Get("parent_mac"),
 	}
 
-	c.authKey = string(dtls.CalculateAuthKey(c.enr, c.mac))
+	c.authKey = string(dtls.CalculateAuthKey(c.dtlsEnr(), c.dtlsMac()))
 
 	if c.verbose {
 		fmt.Printf("[Wyze] Connecting to %s (UID: %s)\n", c.host, c.uid)
@@ -124,6 +132,25 @@ func Dial(rawURL string) (*Client, error) {
 	}
 
 	return c, nil
+}
+
+func (c *Client) hasParent() bool {
+	return c.parentEnr != "" && c.parentMac != ""
+}
+
+// dtlsEnr / dtlsMac are the credentials of the device that terminates the DTLS session.
+func (c *Client) dtlsEnr() string {
+	if c.hasParent() {
+		return c.parentEnr
+	}
+	return c.enr
+}
+
+func (c *Client) dtlsMac() string {
+	if c.hasParent() {
+		return c.parentMac
+	}
+	return c.mac
 }
 
 func (c *Client) SupportsAudio() bool {
@@ -304,7 +331,7 @@ func (c *Client) connect() error {
 		host = host[:idx]
 	}
 
-	conn, err := dtls.DialDTLS(host, port, c.uid, c.authKey, c.enr, c.verbose)
+	conn, err := dtls.DialDTLS(host, port, c.uid, c.authKey, c.dtlsEnr(), c.verbose)
 	if err != nil {
 		return fmt.Errorf("wyze: connect failed: %w", err)
 	}
@@ -334,7 +361,17 @@ func (c *Client) doAVLogin() error {
 
 func (c *Client) doKAuth() error {
 	// Step 1: K10000 -> K10001 (Challenge)
-	data, err := c.conn.WriteAndWaitIOCtrl(c.buildK10000(), c.matchHL(KCmdChallenge), 5*time.Second)
+	match, timeout := c.matchHL(KCmdChallenge), 5*time.Second
+	if c.hasParent() {
+		// The base station answers with an empty challenge (status 0) until the battery camera has woken up.
+		base := match
+		match = func(b []byte) bool {
+			hl := c.extractHL(b)
+			return base(b) && len(hl) >= 33 && hl[16] != 0
+		}
+		timeout = 20 * time.Second
+	}
+	data, err := c.conn.WriteAndWaitIOCtrl(c.buildK10000(), match, timeout)
 	if err != nil {
 		return fmt.Errorf("wyze: K10001 failed: %w", err)
 	}
@@ -398,6 +435,10 @@ func (c *Client) doKAuth() error {
 
 func (c *Client) buildK10000() []byte {
 	json := []byte(`{"cameraInfo":{"audioEncoderList":[137,138,140]}}`) // 137=PCMU, 138=PCMA, 140=PCM
+	if c.hasParent() {
+		// select the camera behind the base station and wake it
+		json = []byte(`{"cameraInfo":{"mac":"` + strings.ToUpper(c.mac) + `","encFlag":0,"wakeupFlag":1,"audioEncoderList":[137,138,140]}}`)
+	}
 	b := make([]byte, 16+len(json))
 	copy(b, "HL")                                           // magic
 	b[2] = 5                                                // version
@@ -408,7 +449,11 @@ func (c *Client) buildK10000() []byte {
 }
 
 func (c *Client) buildK10002(challenge []byte, status byte) []byte {
-	resp := generateChallengeResponse(challenge, c.enr, status)
+	enr := c.enr
+	if c.hasParent() {
+		enr += c.parentEnr // status 6 (double XXTEA) uses camera ENR + base ENR
+	}
+	resp := generateChallengeResponse(challenge, enr, status)
 	sessionID := make([]byte, 4)
 	rand.Read(sessionID)
 	b := make([]byte, 38)
