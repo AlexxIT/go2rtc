@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -48,10 +49,17 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 
 	if s := query.Get("cache"); s != "" {
 		if timeout, err := time.ParseDuration(s); err == nil {
-			src := query.Get("src")
+			query.Del("cache")
+			params := make(url.Values, 8)
+			for _, name := range []string{"src", "width", "w", "height", "h", "rotate", "hardware", "hw"} {
+				if values := query[name]; len(values) > 0 {
+					params[name] = values
+				}
+			}
+			key := params.Encode()
 
 			cacheMu.Lock()
-			entry, found := cache[src]
+			entry, found := cache[key]
 			cacheMu.Unlock()
 
 			if found && time.Since(entry.timestamp) < timeout {
@@ -66,9 +74,9 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 				entry = cacheEntry{payload: b, timestamp: time.Now()}
 				cacheMu.Lock()
 				if cache == nil {
-					cache = map[string]cacheEntry{src: entry}
+					cache = map[string]cacheEntry{key: entry}
 				} else {
-					cache[src] = entry
+					cache[key] = entry
 				}
 				cacheMu.Unlock()
 			}()
