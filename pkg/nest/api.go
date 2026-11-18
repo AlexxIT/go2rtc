@@ -467,7 +467,7 @@ func (a *API) StartExtendStreamTimer() {
 
 	// Google expires sessions after ~5 minutes; each successful extension
 	// returns a new expiresAt, so keep extending until the stream stops.
-	timer := time.NewTimer(time.Until(a.StreamExpiresAt) - time.Minute)
+	timer := time.NewTimer(extendDelay(a.StreamExpiresAt, time.Now()))
 	stop := make(chan struct{})
 	a.extendTimer = timer
 	a.extendStop = stop
@@ -485,12 +485,22 @@ func (a *API) StartExtendStreamTimer() {
 				if err := a.ExtendStream(); err != nil {
 					return
 				}
-				timer.Reset(time.Until(a.StreamExpiresAt) - time.Minute)
+				timer.Reset(extendDelay(a.StreamExpiresAt, time.Now()))
 			case <-stop:
 				return
 			}
 		}
 	}()
+}
+
+// extendDelay is how long to wait before extending a session that expires at
+// expiresAt: a minute early, but never less than 30 seconds, so a response
+// with a near expiresAt cannot make the loop extend with no wait. The minute
+// comes off the time, not the duration: for a missing (zero) expiresAt, Sub
+// saturates at the minimum Duration and subtracting from that wraps around
+// to ~292 years, which would stop extending altogether.
+func extendDelay(expiresAt, now time.Time) time.Duration {
+	return max(expiresAt.Add(-time.Minute).Sub(now), 30*time.Second)
 }
 
 func (a *API) StopExtendStreamTimer() {
