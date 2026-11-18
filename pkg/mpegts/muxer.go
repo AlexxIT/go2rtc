@@ -2,6 +2,7 @@ package mpegts
 
 import (
 	"encoding/binary"
+	"sync"
 
 	"github.com/AlexxIT/go2rtc/pkg/bits"
 	"github.com/AlexxIT/go2rtc/pkg/h264/annexb"
@@ -9,6 +10,7 @@ import (
 
 type Muxer struct {
 	pes map[uint16]*PES
+	mu  sync.RWMutex // tracks can be added while other tracks are written
 }
 
 func NewMuxer() *Muxer {
@@ -28,8 +30,10 @@ func (m *Muxer) AddTrack(streamType byte) (pid uint16) {
 		pes.StreamID = 0xC0
 	}
 
+	m.mu.Lock()
 	pid = pes0PID + uint16(len(m.pes))
 	m.pes[pid] = pes
+	m.mu.Unlock()
 
 	return
 }
@@ -37,13 +41,17 @@ func (m *Muxer) AddTrack(streamType byte) (pid uint16) {
 func (m *Muxer) GetHeader() []byte {
 	bw := bits.NewWriter(nil)
 	m.writePAT(bw)
+	m.mu.RLock()
 	m.writePMT(bw)
+	m.mu.RUnlock()
 	return bw.Bytes()
 }
 
-// GetPayload - safe to run concurently with different pid
+// GetPayload - safe to run concurrently with different pid and with AddTrack
 func (m *Muxer) GetPayload(pid uint16, timestamp uint32, payload []byte) []byte {
+	m.mu.RLock()
 	pes := m.pes[pid]
+	m.mu.RUnlock()
 
 	switch pes.StreamType {
 	case StreamTypeH264, StreamTypeH265:
