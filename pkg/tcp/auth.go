@@ -2,6 +2,8 @@ package tcp
 
 import (
 	"crypto/md5"
+	"crypto/sha256"
+	"crypto/sha512"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
@@ -15,6 +17,13 @@ type Auth struct {
 	pass    string
 	header  string
 	h1nonce string
+	// hexFn is the hash used for this Digest session (MD5 by default; SHA-256 /
+	// SHA-512-256 per RFC 7616 when the server's challenge asks for them — e.g.
+	// Hikvision-OEM firmware that offers only algorithm="SHA-256" for RTSP).
+	hexFn func(...string) string
+	// algo is the algorithm token echoed back in the Authorization header.
+	// Empty for plain MD5 to preserve the original wire behaviour.
+	algo string
 }
 
 const (
@@ -50,7 +59,10 @@ func (a *Auth) Read(res *Response) bool {
 		realm := Between(auth, `realm="`, `"`)
 		nonce := Between(auth, `nonce="`, `"`)
 
-		a.h1nonce = HexMD5(a.user, realm, a.pass) + ":" + nonce
+		// Pick the hash from the challenge's algorithm token. Default MD5.
+		a.hexFn, a.algo = digestHash(Between(auth, `algorithm="`, `"`))
+
+		a.h1nonce = a.hexFn(a.user, realm, a.pass) + ":" + nonce
 		a.header = fmt.Sprintf(
 			`Digest username="%s", realm="%s", nonce="%s"`,
 			a.user, realm, nonce,
@@ -74,11 +86,20 @@ func (a *Auth) Write(req *Request) {
 		// important to use String except RequestURL for RtspServer:
 		// https://github.com/AlexxIT/go2rtc/issues/244
 		uri := req.URL.String()
-		h2 := HexMD5(req.Method, uri)
-		response := HexMD5(a.h1nonce, h2)
+		hexFn := a.hexFn
+		if hexFn == nil {
+			hexFn = HexMD5
+		}
+		h2 := hexFn(req.Method, uri)
+		response := hexFn(a.h1nonce, h2)
 		header := a.header + fmt.Sprintf(
 			`, uri="%s", response="%s"`, uri, response,
 		)
+		// Echo algorithm for non-MD5 digests (some firmware validates it);
+		// omitted for MD5 to keep the original wire format byte-for-byte.
+		if a.algo != "" {
+			header += fmt.Sprintf(`, algorithm="%s"`, a.algo)
+		}
 		req.Header.Set("Authorization", header)
 	case AuthTPLink:
 		req.URL.Host = "127.0.0.1"
@@ -129,8 +150,32 @@ func Between(s, sub1, sub2 string) string {
 	return s[:i]
 }
 
+// digestHash maps an RFC 7616 algorithm token to its hash function and the
+// token to echo back in the Authorization header. Unknown/empty tokens fall
+// back to MD5 with no echoed algorithm (original go2rtc behaviour).
+func digestHash(algorithm string) (func(...string) string, string) {
+	switch strings.TrimSuffix(strings.ToUpper(algorithm), "-SESS") {
+	case "SHA-256":
+		return HexSHA256, "SHA-256"
+	case "SHA-512-256":
+		return HexSHA512_256, "SHA-512-256"
+	default:
+		return HexMD5, ""
+	}
+}
+
 func HexMD5(s ...string) string {
 	b := md5.Sum([]byte(strings.Join(s, ":")))
+	return hex.EncodeToString(b[:])
+}
+
+func HexSHA256(s ...string) string {
+	b := sha256.Sum256([]byte(strings.Join(s, ":")))
+	return hex.EncodeToString(b[:])
+}
+
+func HexSHA512_256(s ...string) string {
+	b := sha512.Sum512_256([]byte(strings.Join(s, ":")))
 	return hex.EncodeToString(b[:])
 }
 
