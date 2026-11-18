@@ -46,6 +46,8 @@ type Conn struct {
 	session   string
 	uri       string
 
+	setupChannels map[*core.Media]byte
+
 	state   State
 	stateMu sync.Mutex
 
