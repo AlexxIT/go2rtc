@@ -12,6 +12,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/rtsp"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
+	"github.com/AlexxIT/go2rtc/pkg/xnet"
 	"github.com/rs/zerolog"
 )
 
@@ -46,10 +47,9 @@ func Init() {
 		return
 	}
 
-	ln, err := net.Listen("tcp", address)
+	ln, err := xnet.Listen("tcp", address)
 	if err != nil {
-		log.Error().Err(err).Msg("[rtsp] listen")
-		return
+		log.Fatal().Err(err).Msg("[rtsp] listen")
 	}
 
 	_, Port, _ = net.SplitHostPort(address)
