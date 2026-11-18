@@ -128,7 +128,14 @@ func probe(client *Client, audio bool) ([]*core.Media, error) {
 const timestamp40ms = 48000 * 0.040
 
 func (p *Producer) Start() error {
-	var audioTS uint32
+	var audio audioClock
+	var audioRate uint32
+	cameraClock := p.client.CameraClock()
+	for _, media := range p.Medias {
+		if media.Kind == core.KindAudio {
+			audioRate = media.Codecs[0].ClockRate
+		}
+	}
 
 	for {
 		_ = p.client.SetDeadline(time.Now().Add(10 * time.Second))
@@ -164,11 +171,10 @@ func (p *Producer) Start() error {
 					Version:        2,
 					Marker:         true,
 					SequenceNumber: uint16(pkt.Sequence),
-					Timestamp:      audioTS,
+					Timestamp:      audio.Next(cameraMS(pkt, cameraClock), audioRate, uint32(len(pkt.Payload))),
 				},
 				Payload: pkt.Payload,
 			}
-			audioTS += uint32(len(pkt.Payload))
 		case codecOPUS:
 			name = core.CodecOpus
 			pkt2 = &core.Packet{
@@ -176,12 +182,11 @@ func (p *Producer) Start() error {
 					Version:        2,
 					Marker:         true,
 					SequenceNumber: uint16(pkt.Sequence),
-					Timestamp:      audioTS,
+					// known cameras sends packets with 40ms long
+					Timestamp: audio.Next(cameraMS(pkt, cameraClock), audioRate, timestamp40ms),
 				},
 				Payload: pkt.Payload,
 			}
-			// known cameras sends packets with 40ms long
-			audioTS += timestamp40ms
 		}
 
 		for _, recv := range p.Receivers {
@@ -199,6 +204,15 @@ func (p *Producer) Stop() error {
 }
 
 // TimeToRTP convert time in milliseconds to RTP time
+// cameraMS returns the camera's timestamp, or 0 when it is only the arrival time: a burst of late packets
+// was not lost and must not move the audio clock.
+func cameraMS(pkt *Packet, cameraClock bool) uint64 {
+	if cameraClock {
+		return pkt.Timestamp
+	}
+	return 0
+}
+
 func TimeToRTP(timeMS, clockRate uint64) uint32 {
 	return uint32(timeMS * clockRate / 1000)
 }
