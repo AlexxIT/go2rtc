@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>webrtc mic - go2rtc</title>
+    <style>
+        body { background: black; margin: 0; }
+        video { height: 100%; width: 100%; }
+        #microphone { position: fixed; top: 10px; left: 10px; z-index: 1; }
+    </style>
+</head>
+<body>
+<button id="microphone" disabled>Enable microphone</button>
+<video id="video" autoplay controls playsinline muted></video>
+<script>
+    const pc = new RTCPeerConnection({
+        iceServers: [{urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.l.google.com:19302']}],
+    });
+
+    const audio = pc.addTransceiver('audio', {direction: 'recvonly'});
+    const video = pc.addTransceiver('video', {direction: 'recvonly'});
+    document.getElementById('video').srcObject = new MediaStream([
+        video.receiver.track,
+        audio.receiver.track,
+    ]);
+
+    const url = new URL('api/ws' + location.search, location.href);
+    const ws = new WebSocket('ws' + url.toString().substring(4));
+    const button = document.getElementById('microphone');
+    let microphone = null;
+
+    async function sendOffer() {
+        button.disabled = true;
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        ws.send(JSON.stringify({type: 'webrtc/offer', value: pc.localDescription.sdp}));
+    }
+
+    ws.addEventListener('open', () => {
+        pc.addEventListener('icecandidate', ev => {
+            if (ev.candidate) {
+                ws.send(JSON.stringify({type: 'webrtc/candidate', value: ev.candidate.candidate}));
+            }
+        });
+        sendOffer().catch(err => button.title = err.message);
+    });
+
+    ws.addEventListener('message', async ev => {
+        const msg = JSON.parse(ev.data);
+        if (msg.type === 'webrtc/candidate') {
+            await pc.addIceCandidate({candidate: msg.value, sdpMid: '0'});
+        } else if (msg.type === 'webrtc/answer') {
+            await pc.setRemoteDescription({type: 'answer', sdp: msg.value});
+            button.disabled = false;
+            button.textContent = microphone ? 'Disable microphone' : 'Enable microphone';
+        } else if (msg.type === 'error') {
+            button.title = msg.value;
+        }
+    });
+
+    button.addEventListener('click', async () => {
+        if (button.disabled) return;
+        button.disabled = true;
+        try {
+            if (microphone) {
+                await audio.sender.replaceTrack(null);
+                audio.direction = 'recvonly';
+                microphone.stop();
+                microphone = null;
+            } else {
+                const track = (await navigator.mediaDevices.getUserMedia({audio: true})).getAudioTracks()[0];
+                await audio.sender.replaceTrack(track);
+                audio.direction = 'sendrecv';
+                microphone = track;
+            }
+            button.textContent = microphone ? 'Disable microphone' : 'Enable microphone';
+            await sendOffer();
+        } catch (err) {
+            button.title = err.message;
+            button.disabled = false;
+        }
+    });
+</script>
+</body>
+</html>

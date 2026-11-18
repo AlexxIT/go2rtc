@@ -26,6 +26,12 @@ func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiv
 		defer c.stateMu.Unlock()
 
 		if c.state == StatePlay {
+			// try a separate session first, so the running session is not interrupted
+			if err = c.addBackchannel(media, codec, track); err == nil {
+				return
+			}
+			c.Fire("RTSP backchannel session failed: " + err.Error())
+
 			if err = c.Reconnect(); err != nil {
 				return
 			}
