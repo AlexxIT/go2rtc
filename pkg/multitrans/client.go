@@ -117,39 +117,43 @@ func (c *Client) handshake(u *url.URL) error {
 		return err
 	}
 
-	if res.StatusCode != http.StatusUnauthorized {
-		return errors.New("multitrans: expected 401, got " + res.Status)
-	}
+	switch res.StatusCode {
+	case http.StatusUnauthorized:
+		auth := res.Header.Get("WWW-Authenticate")
+		realm := tcp.Between(auth, `realm="`, `"`)
+		nonce := tcp.Between(auth, `nonce="`, `"`)
 
-	auth := res.Header.Get("WWW-Authenticate")
-	realm := tcp.Between(auth, `realm="`, `"`)
-	nonce := tcp.Between(auth, `nonce="`, `"`)
+		// Step 2: Send Auth
+		user := u.User.Username()
+		pass, _ := u.User.Password()
 
-	// Step 2: Send Auth
-	user := u.User.Username()
-	pass, _ := u.User.Password()
+		ha1 := tcp.HexMD5(user, realm, pass)
+		ha2 := tcp.HexMD5("MULTITRANS", uri)
+		response := tcp.HexMD5(ha1, nonce, ha2)
 
-	ha1 := tcp.HexMD5(user, realm, pass)
-	ha2 := tcp.HexMD5("MULTITRANS", uri)
-	response := tcp.HexMD5(ha1, nonce, ha2)
+		authHeader := fmt.Sprintf(`Digest username="%s", realm="%s", nonce="%s", uri="%s", response="%s"`,
+			user, realm, nonce, uri, response)
 
-	authHeader := fmt.Sprintf(`Digest username="%s", realm="%s", nonce="%s", uri="%s", response="%s"`,
-		user, realm, nonce, uri, response)
+		data = fmt.Sprintf("MULTITRANS %s RTSP/1.0\r\nCSeq: 1\r\nAuthorization: %s\r\nX-Client-UUID: %s\r\n\r\n",
+			uri, authHeader, uid)
 
-	data = fmt.Sprintf("MULTITRANS %s RTSP/1.0\r\nCSeq: 1\r\nAuthorization: %s\r\nX-Client-UUID: %s\r\n\r\n",
-		uri, authHeader, uid)
+		if _, err = c.conn.Write([]byte(data)); err != nil {
+			return err
+		}
 
-	if _, err = c.conn.Write([]byte(data)); err != nil {
-		return err
-	}
+		res, err = tcp.ReadResponse(c.rd)
+		if err != nil {
+			return err
+		}
 
-	res, err = tcp.ReadResponse(c.rd)
-	if err != nil {
-		return err
-	}
-
-	if res.StatusCode != http.StatusOK {
-		return errors.New("multitrans: auth failed: " + res.Status)
+		if res.StatusCode != http.StatusOK {
+			return errors.New("multitrans: auth failed: " + res.Status)
+		}
+	case http.StatusOK:
+		// Some TP-Link CN firmware skips the Digest challenge and
+		// immediately returns 200 plus Session on the first MULTITRANS.
+	default:
+		return errors.New("multitrans: expected 401 or 200, got " + res.Status)
 	}
 
 	// Session: 7116520596809429228
