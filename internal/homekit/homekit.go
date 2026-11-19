@@ -135,11 +135,16 @@ func streamHandler(rawURL string) (core.Producer, error) {
 
 	rawURL, rawQuery, _ := strings.Cut(rawURL, "#")
 	client, err := homekit.Dial(rawURL, srtp.Server)
-	if client != nil && rawQuery != "" {
-		query := streams.ParseQuery(rawQuery)
-		client.MaxWidth = core.Atoi(query.Get("maxwidth"))
-		client.MaxHeight = core.Atoi(query.Get("maxheight"))
-		client.Bitrate = parseBitrate(query.Get("bitrate"))
+	if client != nil {
+		client.Backchannel = true
+
+		if rawQuery != "" {
+			query := streams.ParseQuery(rawQuery)
+			client.MaxWidth = core.Atoi(query.Get("maxwidth"))
+			client.MaxHeight = core.Atoi(query.Get("maxheight"))
+			client.Bitrate = parseBitrate(query.Get("bitrate"))
+			client.Backchannel = query.Get("backchannel") != "0"
+		}
 	}
 
 	return client, err

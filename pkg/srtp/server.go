@@ -35,6 +35,9 @@ func (s *Server) AddSession(session *Session) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	session.mu.Lock() // init and conn are used by WriteRTP and WriteRTCP
+	defer session.mu.Unlock()
+
 	if err := session.init(); err != nil {
 		return
 	}
