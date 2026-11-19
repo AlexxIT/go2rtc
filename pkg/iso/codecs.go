@@ -11,7 +11,7 @@ func (m *Movie) WriteVideo(codec string, width, height uint16, conf []byte) {
 	case core.CodecH264:
 		m.StartAtom("avc1")
 	case core.CodecH265:
-		m.StartAtom("hev1")
+		m.StartAtom("hvc1")
 	default:
 		panic("unsupported iso video: " + codec)
 	}
