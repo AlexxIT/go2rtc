@@ -222,6 +222,13 @@ func newUDPMux(address string, filters *Filters) ice.UDPMux {
 	var muxes []ice.UDPMux
 	for _, addr := range addrs {
 		if ln, _ := net.ListenPacket(networkUDP, addr); ln != nil {
+			// large keyframes (4K H265/AV1) are written in bursts of hundreds
+			// of packets; the default socket buffer (net.core.wmem_default,
+			// often ~208KB) drops much of such a burst
+			if udpConn, ok := ln.(*net.UDPConn); ok {
+				_ = udpConn.SetWriteBuffer(4 << 20)
+				_ = udpConn.SetReadBuffer(1 << 20)
+			}
 			OnNewListener(ln)
 			mux := ice.NewUDPMuxDefault(ice.UDPMuxParams{UDPConn: ln})
 			muxes = append(muxes, mux)
@@ -305,6 +312,15 @@ func RegisterDefaultCodecs(m *webrtc.MediaEngine) error {
 				RTCPFeedback: videoRTCPFeedback,
 			},
 			PayloadType: 100,
+		},
+		// Chrome 113+, Firefox 136+, Safari 18.4+
+		{
+			RTPCodecCapability: webrtc.RTPCodecCapability{
+				MimeType:     webrtc.MimeTypeAV1,
+				ClockRate:    90000,
+				RTCPFeedback: videoRTCPFeedback,
+			},
+			PayloadType: 105,
 		},
 	} {
 		if err := m.RegisterCodec(codec, webrtc.RTPCodecTypeVideo); err != nil {
