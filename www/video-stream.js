@@ -79,6 +79,8 @@ class VideoStream extends VideoRTC {
                 case 'mjpeg':
                     this.divMode = msg.type.toUpperCase();
                     break;
+                case 'webcodecs':
+                    break;
             }
         };
 
@@ -97,6 +99,14 @@ class VideoStream extends VideoRTC {
         if (this.pcState !== WebSocket.CLOSED) {
             this.divMode = 'RTC';
         }
+    }
+
+    onwebcodecsready() {
+        this.divMode = 'WEBCODECS';
+    }
+
+    onwebcodecserror(error) {
+        this.divError = error;
     }
 }
 
