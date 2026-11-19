@@ -70,6 +70,12 @@ var MulticastAddr = &net.UDPAddr{
 	Port: 5353,
 }
 
+// MulticastAddrV6 is the IPv6 link-local mDNS group (RFC 6762 §3).
+var MulticastAddrV6 = &net.UDPAddr{
+	IP:   net.ParseIP("ff02::fb"),
+	Port: 5353,
+}
+
 const sendTimeout = time.Millisecond * 505
 const respTimeout = time.Second * 3
 
@@ -161,6 +167,12 @@ type Browser struct {
 	Recv  net.PacketConn
 	Sends []net.PacketConn
 
+	// IPv6 senders and receiver run alongside the IPv4 path. NetsV6 keeps
+	// only the addresses (IPv6 mDNS group is per-link, no subnet match).
+	SendsV6 []net.PacketConn
+	NetsV6  []net.IP
+	RecvV6  net.PacketConn
+
 	RecvTimeout time.Duration
 	SendTimeout time.Duration
 }
@@ -198,39 +210,195 @@ func (b *Browser) ListenMulticastUDP() error {
 		b.Sends = append(b.Sends, conn)
 	}
 
-	if b.Sends == nil {
-		return errors.New("no interfaces for listen")
+	// V4 receiver is best-effort: if no senders bound or :5353 is busy, fall
+	// through to the IPv6 path. Only abort when neither family came up.
+	var v4err error
+	if b.Sends != nil {
+		// 3. Create receiver
+		lc2 := net.ListenConfig{
+			Control: func(network, address string, c syscall.RawConn) error {
+				return c.Control(func(fd uintptr) {
+					// 1. Allow multicast UDP to listen concurrently across multiple listeners
+					_ = SetsockoptInt(fd, syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
+
+					// 2. Disable loop responses
+					_ = SetsockoptInt(fd, syscall.IPPROTO_IP, syscall.IP_MULTICAST_LOOP, 0)
+
+					// 3. Allow receive multicast responses on all this addresses
+					mreq := &syscall.IPMreq{
+						Multiaddr: [4]byte{224, 0, 0, 251},
+					}
+					_ = SetsockoptIPMreq(fd, syscall.IPPROTO_IP, syscall.IP_ADD_MEMBERSHIP, mreq)
+
+					for _, send := range b.Sends {
+						addr := send.LocalAddr().(*net.UDPAddr)
+						mreq.Interface = [4]byte(addr.IP.To4())
+						_ = SetsockoptIPMreq(fd, syscall.IPPROTO_IP, syscall.IP_ADD_MEMBERSHIP, mreq)
+					}
+				})
+			},
+		}
+		b.Recv, v4err = lc2.ListenPacket(ctx, "udp4", ":5353")
+	} else {
+		v4err = errors.New("no ipv4 interfaces for listen")
 	}
 
-	// 3. Create receiver
+	v6err := b.listenMulticastUDPv6(ctx)
+
+	// If the v4 receiver bind failed but v4 senders did open, those FDs
+	// are now orphaned — close them so we don't leak sockets just because
+	// the receive side lost a race with another responder.
+	if b.Recv == nil && len(b.Sends) > 0 {
+		for _, send := range b.Sends {
+			_ = send.Close()
+		}
+		b.Sends = nil
+		b.Nets = nil
+	}
+	// Same for v6: senders without a receiver are useless.
+	if b.RecvV6 == nil && len(b.SendsV6) > 0 {
+		for _, send := range b.SendsV6 {
+			_ = send.Close()
+		}
+		b.SendsV6 = nil
+		b.NetsV6 = nil
+	}
+
+	// At least one family must work.
+	if b.Recv == nil && b.RecvV6 == nil {
+		if v4err != nil && v6err != nil {
+			return fmt.Errorf("no interfaces for listen: %w", errors.Join(v4err, v6err))
+		}
+		if v4err != nil {
+			return v4err
+		}
+		return v6err
+	}
+
+	return nil
+}
+
+// listenMulticastUDPv6 binds an IPv6 sender on every multicast-capable
+// up interface and one [::]:5353 receiver with IPV6_JOIN_GROUP for
+// ff02::fb on each sender's interface. Returns an error only when no
+// sender opened; in that case b.RecvV6 stays nil and the v4 path is
+// unaffected.
+func (b *Browser) listenMulticastUDPv6(ctx context.Context) error {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return err
+	}
+
+	lc1 := net.ListenConfig{
+		Control: func(network, address string, c syscall.RawConn) error {
+			return c.Control(func(fd uintptr) {
+				_ = SetsockoptInt(fd, syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
+			})
+		},
+	}
+
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		if iface.Flags&net.FlagMulticast == 0 {
+			continue
+		}
+		if isDockerOrVirtualIface(iface.Name) {
+			continue
+		}
+
+		ip := pickIPv6(iface)
+		if ip == nil {
+			continue
+		}
+
+		// Bind to the specific link-local IP with the interface zone index
+		// so the kernel routes outgoing packets via that NIC.
+		addr := &net.UDPAddr{IP: ip, Port: 5353, Zone: iface.Name}
+		conn, err := lc1.ListenPacket(ctx, "udp6", addr.String())
+		if err != nil {
+			continue
+		}
+		b.SendsV6 = append(b.SendsV6, conn)
+		b.NetsV6 = append(b.NetsV6, ip)
+	}
+
+	if len(b.SendsV6) == 0 {
+		return errors.New("no ipv6 interfaces for listen")
+	}
+
 	lc2 := net.ListenConfig{
 		Control: func(network, address string, c syscall.RawConn) error {
 			return c.Control(func(fd uintptr) {
-				// 1. Allow multicast UDP to listen concurrently across multiple listeners
 				_ = SetsockoptInt(fd, syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
-
-				// 2. Disable loop responses
-				_ = SetsockoptInt(fd, syscall.IPPROTO_IP, syscall.IP_MULTICAST_LOOP, 0)
-
-				// 3. Allow receive multicast responses on all this addresses
-				mreq := &syscall.IPMreq{
-					Multiaddr: [4]byte{224, 0, 0, 251},
-				}
-				_ = SetsockoptIPMreq(fd, syscall.IPPROTO_IP, syscall.IP_ADD_MEMBERSHIP, mreq)
-
-				for _, send := range b.Sends {
-					addr := send.LocalAddr().(*net.UDPAddr)
-					mreq.Interface = [4]byte(addr.IP.To4())
-					_ = SetsockoptIPMreq(fd, syscall.IPPROTO_IP, syscall.IP_ADD_MEMBERSHIP, mreq)
+				_ = SetsockoptInt(fd, syscall.IPPROTO_IPV6, ipv6MulticastLoop, 0)
+				for _, conn := range b.SendsV6 {
+					addr := conn.LocalAddr().(*net.UDPAddr)
+					iface, err := net.InterfaceByName(addr.Zone)
+					if err != nil {
+						continue
+					}
+					mreq := &syscall.IPv6Mreq{}
+					copy(mreq.Multiaddr[:], MulticastAddrV6.IP.To16())
+					mreq.Interface = uint32(iface.Index)
+					_ = SetsockoptIPv6Mreq(fd, syscall.IPPROTO_IPV6, ipv6JoinGroup, mreq)
 				}
 			})
 		},
 	}
 
-	b.Recv, err = lc2.ListenPacket(ctx, "udp4", ":5353")
-
+	b.RecvV6, err = lc2.ListenPacket(ctx, "udp6", "[::]:5353")
 	return err
 }
+
+// isDockerOrVirtualIface returns true for interface names container
+// runtimes and VPNs typically create. mDNS responses on those advertise
+// addresses LAN clients cannot reach, so the IPv6 path skips them.
+func isDockerOrVirtualIface(name string) bool {
+	prefixes := []string{"docker", "br-", "veth", "vmbr", "kube", "cni", "flannel", "tun", "tap", "wg"}
+	for _, p := range prefixes {
+		if len(name) >= len(p) && name[:len(p)] == p {
+			return true
+		}
+	}
+	return false
+}
+
+// pickIPv6 returns one usable IPv6 address from the interface, preferring
+// a global address (for AAAA records iOS can reach across subnets) over a
+// link-local one. ULA (fd00::/8) counts as global for our purposes.
+func pickIPv6(iface net.Interface) net.IP {
+	addrs, _ := iface.Addrs()
+	var linkLocal net.IP
+	for _, addr := range addrs {
+		ipn, ok := addr.(*net.IPNet)
+		if !ok {
+			continue
+		}
+		if ip4 := ipn.IP.To4(); ip4 != nil {
+			continue // skip v4
+		}
+		ip := ipn.IP.To16()
+		if ip == nil || ip.IsLoopback() {
+			continue
+		}
+		if ip.IsLinkLocalUnicast() {
+			if linkLocal == nil {
+				linkLocal = ip
+			}
+			continue
+		}
+		// global / ULA / GUA — prefer this
+		return ip
+	}
+	return linkLocal
+}
+
+// IPV6_MULTICAST_LOOP and IPV6_JOIN_GROUP option constants — Linux uses 19
+// and 20, the BSD/Darwin family uses 11 and 12. The actual constants live
+// in the OS-specific syscall_*.go files; the package re-exports them here
+// so client.go stays portable.
 
 func (b *Browser) Browse(onentry func(*ServiceEntry) bool) error {
 	msg := &dns.Msg{
@@ -242,6 +410,13 @@ func (b *Browser) Browse(onentry func(*ServiceEntry) bool) error {
 	query, err := msg.Pack()
 	if err != nil {
 		return err
+	}
+
+	// Discovery-style consumers always need the IPv4 receiver. The IPv6
+	// path is only wired into Server today; if a future caller wants v6
+	// browsing it would need to drive RecvV6 in parallel here.
+	if b.Recv == nil {
+		return errors.New("mdns: ipv4 listener required for browse")
 	}
 
 	if err = b.Recv.SetDeadline(time.Now().Add(b.RecvTimeout)); err != nil {
@@ -297,7 +472,13 @@ func (b *Browser) Close() error {
 	if b.Recv != nil {
 		_ = b.Recv.Close()
 	}
+	if b.RecvV6 != nil {
+		_ = b.RecvV6.Close()
+	}
 	for _, send := range b.Sends {
+		_ = send.Close()
+	}
+	for _, send := range b.SendsV6 {
 		_ = send.Close()
 	}
 	return nil
