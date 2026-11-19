@@ -23,6 +23,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/pcm"
 	pkg "github.com/AlexxIT/go2rtc/pkg/rtsp"
 	"github.com/AlexxIT/go2rtc/pkg/shell"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 )
 
@@ -76,7 +77,10 @@ func execHandle(rawURL string) (prod core.Producer, err error) {
 			return nil, errors.New("exec: rtsp module disabled")
 		}
 
-		sum := md5.Sum([]byte(rawURL))
+		// Insert a UUID into the sum to make it unique for this exec instance.
+		// This allows for multiple exec instances referring to the same RTSP
+		// stream to work without interfering with each other.
+		sum := md5.Sum([]byte(rawURL + uuid.NewString()))
 		path = "/" + hex.EncodeToString(sum[:])
 		rawURL = rawURL[:i] + "rtsp://127.0.0.1:" + rtsp.Port + path + rawURL[i+8:]
 	}
