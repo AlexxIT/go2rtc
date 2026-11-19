@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"sync/atomic"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -28,6 +29,10 @@ type Client struct {
 	audioSession *srtp.Session
 
 	stream *camera.Stream
+
+	talkback *talkback
+	// audio session for talk-back, set once the stream has started
+	talkbackSession atomic.Pointer[srtp.Session]
 
 	MaxWidth  int `json:"-"`
 	MaxHeight int `json:"-"`
@@ -123,6 +128,10 @@ func (c *Client) GetMedias() []*core.Media {
 		},
 	}
 
+	if media := talkbackMedia(acc, &c.audioConfig); media != nil {
+		c.Medias = append(c.Medias, media)
+	}
+
 	return c.Medias
 }
 
@@ -142,7 +151,9 @@ func (c *Client) Start() error {
 	audioCodec := trackToAudio(audioTrack, &c.audioConfig.Codecs[0])
 
 	c.videoSession = &srtp.Session{Local: c.srtpEndpoint()}
-	c.audioSession = &srtp.Session{Local: c.srtpEndpoint()}
+	// Matches the RTCP interval and payload type requested in camera.NewStream,
+	// used when sending talk-back audio
+	c.audioSession = &srtp.Session{Local: c.srtpEndpoint(), PayloadType: 110, RTCPInterval: 5 * time.Second}
 
 	var err error
 	c.stream, err = camera.NewStream(c.hap, videoCodec, audioCodec, c.videoSession, c.audioSession, c.Bitrate)
@@ -152,6 +163,7 @@ func (c *Client) Start() error {
 
 	c.srtp.AddSession(c.videoSession)
 	c.srtp.AddSession(c.audioSession)
+	c.talkbackSession.Store(c.audioSession)
 
 	deadline := time.NewTimer(core.ConnDeadline)
 
@@ -186,6 +198,9 @@ func (c *Client) Start() error {
 }
 
 func (c *Client) Stop() error {
+	if c.talkback != nil {
+		_ = c.talkback.Close()
+	}
 	if c.videoSession != nil && c.videoSession.Remote != nil {
 		c.srtp.DelSession(c.videoSession)
 	}

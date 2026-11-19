@@ -33,6 +33,7 @@ func Init() {
 	log = app.GetLogger("homekit")
 
 	streams.HandleFunc("homekit", streamHandler)
+	initTalkback()
 
 	api.HandleFunc("api/homekit", apiHomekit)
 	api.HandleFunc("api/homekit/accessories", apiHomekitAccessories)
