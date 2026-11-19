@@ -56,10 +56,16 @@ func (c *Client) Dial() error {
 		return err
 	}
 
-	c.pin = u.Query().Get("pin")
-	if c.pin != "" {
-		c.pin = fmt.Sprintf("%x", md5.Sum([]byte(c.pin)))
-		return c.CheckHomesecPassword()
+	if pin := u.Query().Get("pin"); pin != "" {
+		c.pin = fmt.Sprintf("%x", md5.Sum([]byte(pin)))
+		if err = c.CheckHomesecPassword(); err != nil {
+			// some app versions use another password, so try the pin as is
+			c.pin = pin
+			if c.CheckHomesecPassword() == nil {
+				return nil
+			}
+		}
+		return err
 	}
 
 	return nil
