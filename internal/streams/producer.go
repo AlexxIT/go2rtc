@@ -21,6 +21,17 @@ const (
 	stateInternal
 )
 
+// minHealthyRun is how long a producer connection needs to stay up before
+// we treat the next disconnect as a *new* problem (and reset the reconnect
+// backoff) rather than a continuation of an existing one.
+//
+// Without this, a producer whose Start() fails almost immediately every
+// time (ex: a camera that answers DESCRIBE but resets the connection on
+// PLAY) was calling reconnect(workerID, 0) on every single failure, which
+// skipped the backoff entirely and caused a zero-delay reconnect loop.
+// https://github.com/AlexxIT/go2rtc/issues/2468
+const minHealthyRun = 10 * time.Second
+
 type Producer struct {
 	core.Listener
 
@@ -154,10 +165,32 @@ func (p *Producer) start() {
 	p.state = stateStart
 	p.workerID++
 
-	go p.worker(p.conn, p.workerID)
+	go p.worker(p.conn, p.workerID, 0)
 }
 
-func (p *Producer) worker(conn core.Producer, workerID int) {
+// reconnectDelay returns how long to wait before the next reconnect
+// attempt, given how many consecutive quick failures have happened.
+// Shared by worker() (Start() fails after a successful dial) and
+// reconnect() (GetProducer itself fails to dial) so both failure points
+// back off consistently instead of only one of them.
+func reconnectDelay(retry int) time.Duration {
+	switch {
+	case retry <= 0:
+		return 0
+	case retry < 5:
+		return time.Second
+	case retry < 10:
+		return time.Second * 5
+	case retry < 20:
+		return time.Second * 10
+	default:
+		return time.Minute
+	}
+}
+
+func (p *Producer) worker(conn core.Producer, workerID, retry int) {
+	started := time.Now()
+
 	if err := conn.Start(); err != nil {
 		p.mu.Lock()
 		closed := p.workerID != workerID
@@ -170,7 +203,30 @@ func (p *Producer) worker(conn core.Producer, workerID int) {
 		log.Warn().Err(err).Str("url", p.url).Caller().Send()
 	}
 
-	p.reconnect(workerID, 0)
+	if time.Since(started) >= minHealthyRun {
+		// this connection ran long enough to be considered healthy, so
+		// treat whatever comes next as a fresh reconnect attempt
+		retry = 0
+	} else {
+		// connection died almost immediately - keep backing off instead
+		// of hammering the source at full speed
+		retry++
+	}
+
+	// this is the path a flaky source hits repeatedly (DESCRIBE succeeds,
+	// PLAY resets every time) - GetProducer() below never errors, so the
+	// backoff previously only reachable via reconnect()'s error branch
+	// never applied here. Without this, retry escalated correctly but
+	// nothing ever slowed the loop down.
+	// https://github.com/AlexxIT/go2rtc/issues/2468
+	if delay := reconnectDelay(retry); delay > 0 {
+		time.AfterFunc(delay, func() {
+			p.reconnect(workerID, retry)
+		})
+		return
+	}
+
+	p.reconnect(workerID, retry)
 }
 
 func (p *Producer) reconnect(workerID, retry int) {
@@ -188,13 +244,9 @@ func (p *Producer) reconnect(workerID, retry int) {
 	if err != nil {
 		log.Debug().Msgf("[streams] producer=%s", err)
 
-		timeout := time.Minute
-		if retry < 5 {
+		timeout := reconnectDelay(retry)
+		if timeout == 0 {
 			timeout = time.Second
-		} else if retry < 10 {
-			timeout = time.Second * 5
-		} else if retry < 20 {
-			timeout = time.Second * 10
 		}
 
 		time.AfterFunc(timeout, func() {
@@ -239,7 +291,11 @@ func (p *Producer) reconnect(workerID, retry int) {
 	// swap connections
 	p.conn = conn
 
-	go p.worker(conn, workerID)
+	// retry is threaded through unchanged: if this fresh connection also
+	// dies immediately, worker() will keep backing off instead of
+	// resetting to a zero-delay loop
+	// https://github.com/AlexxIT/go2rtc/issues/2468
+	go p.worker(conn, workerID, retry)
 }
 
 func (p *Producer) stop() {
