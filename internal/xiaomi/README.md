@@ -10,6 +10,20 @@ go2rtc supports two formats: `xiaomi/mess` and `xiaomi/legacy`.
 And multiple P2P protocols: `cs2+udp`, `cs2+tcp`, several versions of `tutk+udp`.
 
 Almost all cameras in the `xiaomi/mess` format and the `cs2` protocol work well.
+
+Some CS2 cameras deliver video frames in short bursts even though their media
+timestamps are stable. An optional bounded pacing buffer can smooth those
+bursts for strict real-time consumers such as HomeKit:
+
+```yaml
+streams:
+  camera: xiaomi://...&pacing=400
+```
+
+The value is the initial video jitter buffer in milliseconds (maximum 5000).
+It is disabled by default. When the queue grows beyond the configured buffer,
+frames are released at a gently accelerated cadence instead of being dumped or
+dropped, preventing latency from growing without bound.
 Older `xiaomi/legacy` format cameras may have support issues.
 The `tutk` protocol is the worst thing that's ever happened to the P2P world. It works terribly.
 
