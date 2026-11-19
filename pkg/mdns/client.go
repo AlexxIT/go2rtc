@@ -189,9 +189,11 @@ func (b *Browser) ListenMulticastUDP() error {
 
 	ctx := context.Background()
 
+	var bindErrs []error
 	for _, ipn := range nets {
 		conn, err := lc1.ListenPacket(ctx, "udp4", ipn.IP.String()+":5353") // same port important
 		if err != nil {
+			bindErrs = append(bindErrs, fmt.Errorf("%s: %w", ipn.IP, err))
 			continue
 		}
 		b.Nets = append(b.Nets, ipn)
@@ -199,6 +201,9 @@ func (b *Browser) ListenMulticastUDP() error {
 	}
 
 	if b.Sends == nil {
+		if len(bindErrs) > 0 {
+			return fmt.Errorf("no interfaces for listen: %w", errors.Join(bindErrs...))
+		}
 		return errors.New("no interfaces for listen")
 	}
 
