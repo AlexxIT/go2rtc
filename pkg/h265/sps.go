@@ -29,14 +29,48 @@ type SPS struct {
 
 	pic_width_in_luma_samples  uint32
 	pic_height_in_luma_samples uint32
+
+	conformance_window_flag byte
+	conf_win_left_offset    uint32
+	conf_win_right_offset   uint32
+	conf_win_top_offset     uint32
+	conf_win_bottom_offset  uint32
 }
 
+// Width returns the picture width after cropping by the conformance window:
+// the displayed width rather than the coded width.
 func (s *SPS) Width() uint16 {
-	return uint16(s.pic_width_in_luma_samples)
+	// Encoders code pictures in whole blocks (1080 lines are often coded as 1088)
+	// and declare the excess as the conformance window (H.265 7.4.3.2.1).
+	// Its offsets count in units of SubWidthC and SubHeightC luma samples, which
+	// depend on the chroma format (H.265 Table 6-1):
+	//
+	//	chroma_format_idc  format      SubWidthC  SubHeightC
+	//	0                  monochrome  1          1
+	//	1                  4:2:0       2          2
+	//	2                  4:2:2       2          1
+	//	3                  4:4:4       1          1
+	crop := s.conf_win_left_offset + s.conf_win_right_offset
+	if s.chroma_format_idc == 1 || s.chroma_format_idc == 2 {
+		crop *= 2 // SubWidthC
+	}
+	if crop >= s.pic_width_in_luma_samples {
+		return uint16(s.pic_width_in_luma_samples) // invalid window (7.4.3.2.1), ignore it
+	}
+	return uint16(s.pic_width_in_luma_samples - crop)
 }
 
+// Height returns the picture height after cropping by the conformance window:
+// the displayed height rather than the coded height.
 func (s *SPS) Height() uint16 {
-	return uint16(s.pic_height_in_luma_samples)
+	crop := s.conf_win_top_offset + s.conf_win_bottom_offset
+	if s.chroma_format_idc == 1 {
+		crop *= 2 // SubHeightC (see Width)
+	}
+	if crop >= s.pic_height_in_luma_samples {
+		return uint16(s.pic_height_in_luma_samples) // invalid window (7.4.3.2.1), ignore it
+	}
+	return uint16(s.pic_height_in_luma_samples - crop)
 }
 
 func DecodeSPS(nalu []byte) *SPS {
@@ -61,6 +95,14 @@ func DecodeSPS(nalu []byte) *SPS {
 
 	s.pic_width_in_luma_samples = r.ReadUEGolomb()
 	s.pic_height_in_luma_samples = r.ReadUEGolomb()
+
+	s.conformance_window_flag = r.ReadBit()
+	if s.conformance_window_flag != 0 {
+		s.conf_win_left_offset = r.ReadUEGolomb()
+		s.conf_win_right_offset = r.ReadUEGolomb()
+		s.conf_win_top_offset = r.ReadUEGolomb()
+		s.conf_win_bottom_offset = r.ReadUEGolomb()
+	}
 
 	//...
 
