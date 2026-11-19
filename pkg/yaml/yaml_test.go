@@ -98,6 +98,22 @@ func TestPatch(t *testing.T) {
 			value:  []string{"val1"},
 			expect: "streams:\n  camera1: url1\nhomekit:\n  camera1:\n    name: dummy\n    pairings:\n      - val1\n",
 		},
+		{
+			// yaml.Marshal of an empty streams map emits the explicit token "streams: null";
+			// adding the first stream back must not produce "streams: null\n  camera1: ...".
+			name:   "explicit null scalar parent",
+			src:    "streams: null\nwebrtc:\n  listen: \":8555\"\n",
+			path:   []string{"streams", "camera1"},
+			value:  "val1",
+			expect: "streams:\n  camera1: val1\nwebrtc:\n  listen: \":8555\"\n",
+		},
+		{
+			name:   "explicit null scalar only",
+			src:    "streams: null\n",
+			path:   []string{"streams", "camera1"},
+			value:  "val1",
+			expect: "streams:\n  camera1: val1\n",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -106,4 +122,12 @@ func TestPatch(t *testing.T) {
 			require.Equal(t, tt.expect, string(b))
 		})
 	}
+}
+
+func TestPatchDeleteMissing(t *testing.T) {
+	// Deleting a path whose parent does not exist routes through addToEnd and
+	// must return the ErrPathNotExist sentinel so callers can treat a missing
+	// delete target as a no-op via errors.Is.
+	_, err := Patch([]byte("streams:\n  camera1: url1\n"), []string{"homekit", "camera1"}, nil)
+	require.ErrorIs(t, err, ErrPathNotExist)
 }

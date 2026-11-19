@@ -34,6 +34,10 @@ func PatchConfig(path []string, value any) error {
 
 	b, err := yaml.Patch(b, path, value)
 	if err != nil {
+		// deleting a path that doesn't exist is a no-op, not an error
+		if value == nil && errors.Is(err, yaml.ErrPathNotExist) {
+			return nil
+		}
 		return err
 	}
 
