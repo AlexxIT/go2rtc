@@ -325,7 +325,7 @@ func (c *udpConn) Read(b []byte) (n int, err error) {
 			return 0, err
 		}
 
-		if string(addr.IP) == string(c.addr.IP) || n >= 8 {
+		if addr.IP.Equal(c.addr.IP) || n >= 8 {
 			//log.Printf("<- %x", b[:n])
 			return
 		}
@@ -358,7 +358,7 @@ func (c *udpConn) WriteUntil(req []byte, ok func(res []byte) bool) ([]byte, erro
 			return nil, err
 		}
 
-		if string(addr.IP) != string(c.addr.IP) || n < 16 {
+		if !addr.IP.Equal(c.addr.IP) || n < 16 {
 			continue // skip messages from another IP
 		}
 
