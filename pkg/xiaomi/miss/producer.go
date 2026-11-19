@@ -68,6 +68,16 @@ func probe(client *Client, audio bool) ([]*core.Media, error) {
 			return nil, fmt.Errorf("xiaomi: probe: %w", err)
 		}
 
+		// Debug: log every packet's codec ID and payload info
+		fmt.Printf("[xiaomi-debug] pkt: codecID=%d seq=%d flags=%d payloadLen=%d\n", pkt.CodecID, pkt.Sequence, pkt.Flags, len(pkt.Payload))
+		if len(pkt.Payload) > 0 {
+			showLen := 16
+			if len(pkt.Payload) < showLen {
+				showLen = len(pkt.Payload)
+			}
+			fmt.Printf("[xiaomi-debug] payload first bytes: %x\n", pkt.Payload[:showLen])
+		}
+
 		switch pkt.CodecID {
 		case codecH264:
 			if vcodec == nil {

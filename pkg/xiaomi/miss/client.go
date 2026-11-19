@@ -2,6 +2,7 @@ package miss
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -29,6 +30,7 @@ type Conn interface {
 	Version() string
 	ReadCommand() (cmd uint32, data []byte, err error)
 	WriteCommand(cmd uint32, data []byte) error
+	WriteCommandTo(channel byte, cmd uint32, data []byte) error
 	ReadPacket() (hdr, payload []byte, err error)
 	WritePacket(hdr, payload []byte) error
 	RemoteAddr() net.Addr
@@ -105,7 +107,9 @@ const (
 )
 
 func login(conn Conn, clientPublic, sign string) error {
-	s := fmt.Sprintf(`{"public_key":"%s","sign":"%s","uuid":"","support_encrypt":0}`, clientPublic, sign)
+	uuid := generateUUID()
+	s := fmt.Sprintf(`{"public_key":"%s","sign":"%s","uuid":"%s","support_encrypt":15}`, clientPublic, sign, uuid)
+	fmt.Printf("[xiaomi-debug] login auth: %s\n", s)
 	if err := conn.WriteCommand(cmdAuthReq, []byte(s)); err != nil {
 		return err
 	}
@@ -122,6 +126,15 @@ func login(conn Conn, clientPublic, sign string) error {
 	return nil
 }
 
+func generateUUID() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	// Set version 4 and variant bits per RFC 4122
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
+}
+
 func (c *Client) Version() string {
 	return fmt.Sprintf("%s (%s)", c.Conn.Version(), c.model)
 }
@@ -134,11 +147,20 @@ func (c *Client) WriteCommand(data []byte) error {
 	return c.Conn.WriteCommand(cmdEncoded, data)
 }
 
+func (c *Client) WriteCommandTo(channel byte, data []byte) error {
+	data, err := crypto.Encode(data, c.key)
+	if err != nil {
+		return err
+	}
+	return c.Conn.WriteCommandTo(channel, cmdEncoded, data)
+}
+
 const (
-	ModelDafang  = "isa.camera.df3"
-	ModelLoockV2 = "loock.cateye.v02"
-	ModelC200    = "chuangmi.camera.046c04"
-	ModelC300    = "chuangmi.camera.72ac1"
+	ModelDafang    = "isa.camera.df3"
+	ModelLoockV2   = "loock.cateye.v02"
+	ModelC200      = "chuangmi.camera.046c04"
+	ModelC300      = "chuangmi.camera.72ac1"
+	ModelDoorbell2 = "madv.cateye.miowlv2"
 	// ModelXiaofang looks like it has the same firmware as the ModelDafang.
 	// There is also an older model "isa.camera.isc5" that only works with the legacy protocol.
 	ModelXiaofang = "isa.camera.isc5c1"
@@ -183,6 +205,24 @@ func (c *Client) StartMedia(channel, quality, audio string) error {
 		audio = "1"
 	}
 
+	// Doorbell hack: keep audio enabled (doorbell refuses without it),
+	// force quality=1 (SD) since doorbell 2 only sends video in SD mode.
+	// Send on CS2 channel 0 (matching Mi Home app behavior from pcap).
+	if c.model == ModelDoorbell2 {
+		fmt.Printf("[xiaomi-debug] StartMedia for doorbell: channel=%s quality=%s audio=%s -> adjusting quality, forcing audio=1, cs2ch=0\n", channel, quality, audio)
+		if quality == "1" || quality == "sd" {
+			quality = "1"
+		} else {
+			quality = "3" // FHD 1080P 高清
+		}
+		audio = "1"
+
+		data := binary.BigEndian.AppendUint32(nil, cmdVideoStart)
+		data = fmt.Appendf(data, `{"videoquality":%s,"enableaudio":%s}`, quality, audio)
+		fmt.Printf("[xiaomi-debug] StartMedia command (doorbell ch0): %s\n", string(data[4:]))
+		return c.WriteCommandTo(0, data)
+	}
+
 	data := binary.BigEndian.AppendUint32(nil, cmdVideoStart)
 	switch channel {
 	case "", "0":
@@ -190,6 +230,7 @@ func (c *Client) StartMedia(channel, quality, audio string) error {
 	default:
 		data = fmt.Appendf(data, `{"videoquality":-1,"videoquality2":%s,"enableaudio":%s}`, quality, audio)
 	}
+	fmt.Printf("[xiaomi-debug] StartMedia command: %s\n", string(data[4:]))
 	return c.WriteCommand(data)
 }
 
