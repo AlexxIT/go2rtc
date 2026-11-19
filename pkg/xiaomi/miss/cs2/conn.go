@@ -298,15 +298,24 @@ func marshalCmd(channel byte, seq uint16, cmd uint32, payload []byte) []byte {
 }
 
 func newUDPConn(host string, port int) (net.Conn, error) {
-	// We using raw net.UDPConn, because RemoteAddr should be changed during handshake.
-	conn, err := net.ListenUDP("udp", nil)
-	if err != nil {
-		return nil, err
-	}
-
 	addr, err := net.ResolveUDPAddr("udp", host)
 	if err != nil {
 		addr = &net.UDPAddr{IP: net.ParseIP(host), Port: port}
+	}
+
+	// Use an IPv4 socket for IPv4 destinations to avoid relying on
+	// dual-stack socket behavior. Normalize the address to 4 bytes
+	// to ensure consistent IP comparisons.
+	network := "udp"
+	if ip4 := addr.IP.To4(); ip4 != nil {
+		network = "udp4"
+		addr.IP = ip4
+	}
+
+	// We using raw net.UDPConn, because RemoteAddr should be changed during handshake.
+	conn, err := net.ListenUDP(network, nil)
+	if err != nil {
+		return nil, err
 	}
 
 	return &udpConn{UDPConn: conn, addr: addr}, nil
@@ -342,13 +351,22 @@ func (c *udpConn) RemoteAddr() net.Addr {
 }
 
 func (c *udpConn) WriteUntil(req []byte, ok func(res []byte) bool) ([]byte, error) {
-	var t *time.Timer
-	t = time.AfterFunc(1, func() {
-		if _, err := c.Write(req); err == nil && t != nil {
-			t.Reset(time.Second)
+	done := make(chan struct{})
+	defer close(done)
+
+	go func() {
+		for {
+			// Continue retransmitting regardless of send errors until the
+			// expected response arrives or the deadline expires.
+			_, _ = c.Write(req)
+
+			select {
+			case <-done:
+				return
+			case <-time.After(time.Second):
+			}
 		}
-	})
-	defer t.Stop()
+	}()
 
 	buf := make([]byte, 1200)
 
