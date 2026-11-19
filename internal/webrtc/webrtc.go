@@ -3,7 +3,9 @@ package webrtc
 import (
 	"errors"
 	"net"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
@@ -22,6 +24,7 @@ func Init() {
 			Candidates []string         `yaml:"candidates"`
 			IceServers []pion.ICEServer `yaml:"ice_servers"`
 			Filters    webrtc.Filters   `yaml:"filters"`
+			Pacing     string           `yaml:"pacing"`
 		} `yaml:"webrtc"`
 	}
 
@@ -31,6 +34,14 @@ func Init() {
 	}
 
 	app.LoadConfig(&cfg)
+
+	if cfg.Mod.Pacing != "" {
+		if d, err := time.ParseDuration(cfg.Mod.Pacing); err == nil {
+			webrtc.DefaultPacing = d
+		} else if pacingUs, err := strconv.Atoi(cfg.Mod.Pacing); err == nil {
+			webrtc.DefaultPacing = time.Duration(pacingUs) * time.Microsecond
+		}
+	}
 
 	log = app.GetLogger("webrtc")
 

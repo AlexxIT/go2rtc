@@ -71,6 +71,13 @@ func (p *Producer) Dial() error {
 	return nil
 }
 
+func (p *Producer) isDialed() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	return p.state != stateNone
+}
+
 func (p *Producer) GetMedias() []*core.Media {
 	p.mu.Lock()
 	defer p.mu.Unlock()
