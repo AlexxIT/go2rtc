@@ -65,6 +65,8 @@ type Consumer interface {
 
 	AddTrack(media *Media, codec *Codec, track *Receiver) error
 
+	IsClosed() bool
+
 	// Deprecated: rename to Close()
 	Stop() error
 }
