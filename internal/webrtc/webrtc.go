@@ -41,6 +41,8 @@ func Init() {
 			log.Debug().Msgf("[webrtc] interface %+v addrs %v", itf, addrs)
 		}
 	}
+    
+    filters = cfg.Mod.Filters
 
 	address, network, _ := strings.Cut(cfg.Mod.Listen, "/")
 	for _, candidate := range cfg.Mod.Candidates {
