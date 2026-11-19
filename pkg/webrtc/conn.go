@@ -139,16 +139,11 @@ func NewConn(pc *webrtc.PeerConnection) *Conn {
 			// Pion's NACK responder runs while RTCP is read. Without this,
 			// receivers request missing RTP packets but never receive repairs.
 			// Start only once; an ICE transition must not add competing readers.
+			// The same reader passes PLI/FIR to the source of the track.
 			c.rtcpOnce.Do(func() {
 				for _, sender := range pc.GetSenders() {
-					go func(sender *webrtc.RTPSender) {
-						buf := make([]byte, 1500)
-						for {
-							if _, _, err := sender.Read(buf); err != nil {
-								return
-							}
-						}
-					}(sender)
+					track, _ := sender.Track().(*Track)
+					go readRTCP(sender.Read, track)
 				}
 			})
 			for _, sender := range c.Senders {
