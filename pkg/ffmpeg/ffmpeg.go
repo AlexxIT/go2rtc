@@ -54,7 +54,15 @@ func (a *Args) HasFilters(filters ...string) bool {
 func (a *Args) String() string {
 	b := bytes.NewBuffer(make([]byte, 0, 512))
 
-	b.WriteString(a.Bin)
+	// quote binary path with spaces (ex. C:\Program Files\ffmpeg.exe),
+	// so shell.QuoteSplit keeps it as a single argument
+	if strings.Contains(a.Bin, " ") {
+		b.WriteByte('"')
+		b.WriteString(a.Bin)
+		b.WriteByte('"')
+	} else {
+		b.WriteString(a.Bin)
+	}
 
 	if a.Global != "" {
 		b.WriteByte(' ')
