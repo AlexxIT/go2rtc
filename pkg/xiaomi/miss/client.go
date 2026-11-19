@@ -137,8 +137,11 @@ func (c *Client) WriteCommand(data []byte) error {
 const (
 	ModelDafang  = "isa.camera.df3"
 	ModelLoockV2 = "loock.cateye.v02"
-	ModelC200    = "chuangmi.camera.046c04"
-	ModelC300    = "chuangmi.camera.72ac1"
+	// ModelYunluP50 is a smart door with a peephole camera.
+	// It reports media timestamps in microseconds instead of milliseconds.
+	ModelYunluP50 = "yunlu.door.sd2106"
+	ModelC200     = "chuangmi.camera.046c04"
+	ModelC300     = "chuangmi.camera.72ac1"
 	// ModelXiaofang looks like it has the same firmware as the ModelDafang.
 	// There is also an older model "isa.camera.isc5" that only works with the legacy protocol.
 	ModelXiaofang = "isa.camera.isc5c1"
@@ -248,6 +251,9 @@ func (c *Client) ReadPacket() (*Packet, error) {
 		// Dafang has ts in sec
 		// LoockV2 has ts in msec for video, but zero ts for audio
 		pkt.Timestamp = uint64(time.Now().UnixMilli())
+	case ModelYunluP50:
+		// YunluP50 has ts in usec
+		pkt.Timestamp = binary.LittleEndian.Uint64(hdr[16:]) / 1000
 	default:
 		pkt.Timestamp = binary.LittleEndian.Uint64(hdr[16:])
 	}
