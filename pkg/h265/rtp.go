@@ -76,12 +76,6 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 
 				buf = append(buf, data[3:]...)
 
-				if nuStart > len(buf)+4 {
-					//log.Printf("broken H265 fragment")
-					buf = buf[:0] // drop data
-					return
-				}
-
 				binary.BigEndian.PutUint32(buf[nuStart:], uint32(len(buf)-nuStart-4))
 			case 0b11: // wrong RFC 7798 realisation from OpenIPC project
 				// A non-fragmented NAL unit MUST NOT be transmitted in one FU; i.e.,
