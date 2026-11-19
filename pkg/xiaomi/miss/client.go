@@ -55,7 +55,16 @@ func NewClient(rawURL string) (*Client, error) {
 	var conn Conn
 	switch s := query.Get("vendor"); s {
 	case "cs2":
-		conn, err = cs2.Dial(u.Host, query.Get("transport"))
+		if model == ModelLoockV6 {
+			var cs2Conn *cs2.Conn
+			cs2Conn, err = cs2.DialBroadcast(u.Host, query.Get("transport"))
+			if err == nil {
+				cs2Conn.AcceptCommandResponseAsAck()
+			}
+			conn = cs2Conn
+		} else {
+			conn, err = cs2.Dial(u.Host, query.Get("transport"))
+		}
 	case "tutk":
 		conn, err = tutk.Dial(u.Host, query.Get("uid"), "Miss", "client")
 	default:
@@ -137,6 +146,7 @@ func (c *Client) WriteCommand(data []byte) error {
 const (
 	ModelDafang  = "isa.camera.df3"
 	ModelLoockV2 = "loock.cateye.v02"
+	ModelLoockV6 = "loock.cateye.v06"
 	ModelC200    = "chuangmi.camera.046c04"
 	ModelC300    = "chuangmi.camera.72ac1"
 	// ModelXiaofang looks like it has the same firmware as the ModelDafang.
@@ -244,9 +254,10 @@ func (c *Client) ReadPacket() (*Packet, error) {
 	}
 
 	switch c.model {
-	case ModelDafang, ModelXiaofang, ModelLoockV2:
+	case ModelDafang, ModelXiaofang, ModelLoockV2, ModelLoockV6:
 		// Dafang has ts in sec
 		// LoockV2 has ts in msec for video, but zero ts for audio
+		// LoockV6 has zero ts for video and audio
 		pkt.Timestamp = uint64(time.Now().UnixMilli())
 	default:
 		pkt.Timestamp = binary.LittleEndian.Uint64(hdr[16:])
