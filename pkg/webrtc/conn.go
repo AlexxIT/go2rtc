@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -20,8 +21,9 @@ type Conn struct {
 
 	pc *webrtc.PeerConnection
 
-	offer  string
-	closed core.Waiter
+	offer      string
+	receiverMu sync.Mutex
+	closed     core.Waiter
 }
 
 func NewConn(pc *webrtc.PeerConnection) *Conn {
