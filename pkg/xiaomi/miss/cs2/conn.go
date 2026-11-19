@@ -123,6 +123,10 @@ func (c *Conn) worker() {
 			return
 		}
 
+		if n < 2 {
+			continue // too short to have msg type
+		}
+
 		// 0  f1d0  magic
 		// 2  005d  size = total size + 4
 		// 4  d1    magic
@@ -130,7 +134,13 @@ func (c *Conn) worker() {
 		// 6  0000  seq
 		switch buf[1] {
 		case msgDrw:
-			ch := buf[5]
+			if n < 8 {
+				continue // DRW needs at least 8 bytes
+			}
+			ch := int(buf[5])
+			if ch < 0 || ch >= len(c.channels) || c.channels[ch] == nil {
+				continue // skip invalid channel
+			}
 			channel := c.channels[ch]
 
 			if c.isTCP {
@@ -141,7 +151,10 @@ func (c *Conn) worker() {
 					keepaliveTS = now.Add(time.Second)
 				}
 
-				err = channel.Push(buf[8:n])
+				if err = channel.Push(buf[8:n]); err != nil {
+					c.err = fmt.Errorf("cs2: push channel %d: %w", ch, err)
+					return
+				}
 			} else {
 				var pushed int
 
@@ -151,7 +164,7 @@ func (c *Conn) worker() {
 
 				if pushed >= 0 {
 					// For UDP we should send ACK.
-					ack := []byte{magic, msgDrwAck, 0, 6, magicDrw, ch, 0, 1, seqHI, seqLO}
+					ack := []byte{magic, msgDrwAck, 0, 6, magicDrw, byte(ch), 0, 1, seqHI, seqLO}
 					_, _ = c.Conn.Write(ack)
 				}
 			}
@@ -429,17 +442,33 @@ type dataChannel struct {
 	popBuf   chan []byte
 }
 
+// Guards a corrupt length header: unbounded, Push buffers up to 4 GiB, and on 32-bit builds int(uint32) turns negative and panics the reslice below.
+const maxFrameSize = 16 << 20
+
 func (c *dataChannel) Push(b []byte) error {
 	c.waitData = append(c.waitData, b...)
 
-	for len(c.waitData) > 4 {
-		// Every new data starts with size. There can be several data inside one packet.
+	for {
 		if c.waitSize == 0 {
-			c.waitSize = int(binary.BigEndian.Uint32(c.waitData))
+			if len(c.waitData) < 4 {
+				return nil
+			}
+			size := binary.BigEndian.Uint32(c.waitData[:4])
 			c.waitData = c.waitData[4:]
+
+			// Size 0 is valid protocol padding, skip silently (original behavior)
+			if size == 0 {
+				continue
+			}
+			// Compared as uint32: int(size) is negative on 32-bit builds and would slip past the bound
+			if size > maxFrameSize {
+				c.waitData = nil
+				return fmt.Errorf("cs2: invalid frame size %d", size)
+			}
+			c.waitSize = int(size)
 		}
 		if c.waitSize > len(c.waitData) {
-			break
+			return nil
 		}
 
 		select {
@@ -450,8 +479,12 @@ func (c *dataChannel) Push(b []byte) error {
 
 		c.waitData = c.waitData[c.waitSize:]
 		c.waitSize = 0
+
+		// Release backing array when fully consumed to avoid unbounded retention
+		if len(c.waitData) == 0 {
+			c.waitData = nil
+		}
 	}
-	return nil
 }
 
 func (c *dataChannel) Pop() ([]byte, bool) {
