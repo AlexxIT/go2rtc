@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/aac"
@@ -216,6 +217,11 @@ func (c *Producer) probe() error {
 				switch codecID := pkt.Payload[0] & 0b1111; codecID {
 				case CodecH264:
 					codec = h264.ConfigToCodec(pkt.Payload[5:])
+					// Some encoders send an empty AVC header before the real one.
+					// Keep probing until SPS/PPS arrive. See https://github.com/AlexxIT/go2rtc/issues/2687
+					if !strings.Contains(codec.FmtpLine, "sprop-parameter-sets") {
+						continue
+					}
 				case CodecHEVC:
 					codec = h265.ConfigToCodec(pkt.Payload[5:])
 				default:
