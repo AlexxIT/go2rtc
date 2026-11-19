@@ -116,7 +116,7 @@ func execHandle(rawURL string) (prod core.Producer, err error) {
 	}
 
 	if path == "" {
-		prod, err = handlePipe(rawURL, cmd)
+		prod, err = handlePipe(rawURL, cmd, timeout)
 	} else {
 		prod, err = handleRTSP(rawURL, cmd, path, timeout)
 	}
@@ -128,7 +128,7 @@ func execHandle(rawURL string) (prod core.Producer, err error) {
 	return
 }
 
-func handlePipe(source string, cmd *shell.Command) (core.Producer, error) {
+func handlePipe(source string, cmd *shell.Command, timeout time.Duration) (core.Producer, error) {
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
@@ -152,19 +152,50 @@ func handlePipe(source string, cmd *shell.Command) (core.Producer, error) {
 		return nil, err
 	}
 
-	prod, err := magic.Open(rd)
-	if err != nil {
-		return nil, fmt.Errorf("exec/pipe: %w\n%s", err, cmd.Stderr)
+	// Probe in a goroutine so a child that produces no output cannot block
+	// the dial forever. handleRTSP has always bounded startup with
+	// starttimeout; handlePipe did not, so an exec child that hangs before
+	// its first byte leaves magic.Open blocked indefinitely inside
+	// streams.Producer, and the producer never recovers. Use the same
+	// starttimeout parameter and the same 30s default as handleRTSP.
+	type probeResult struct {
+		prod core.Producer
+		err  error
 	}
+	probe := make(chan probeResult, 1)
 
-	if info, ok := prod.(core.Info); ok {
-		info.SetProtocol("pipe")
-		setRemoteInfo(info, source, cmd.Args)
+	go func() {
+		prod, err := magic.Open(rd)
+		if err != nil {
+			err = fmt.Errorf("exec/pipe: %w\n%s", err, cmd.Stderr)
+		}
+		probe <- probeResult{prod, err}
+	}()
+
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	select {
+	case <-timer.C:
+		// No data from the app within starttimeout. Close kills the child,
+		// which closes stdout and unblocks the probe goroutine.
+		log.Error().Str("source", source).Msg("[exec] pipe timeout")
+		_ = cmd.Close()
+		return nil, errors.New("exec: timeout")
+	case res := <-probe:
+		if res.err != nil {
+			return nil, res.err
+		}
+
+		if info, ok := res.prod.(core.Info); ok {
+			info.SetProtocol("pipe")
+			setRemoteInfo(info, source, cmd.Args)
+		}
+
+		log.Debug().Stringer("launch", time.Since(ts)).Msg("[exec] run pipe")
+
+		return res.prod, nil
 	}
-
-	log.Debug().Stringer("launch", time.Since(ts)).Msg("[exec] run pipe")
-
-	return prod, nil
 }
 
 func handleRTSP(source string, cmd *shell.Command, path string, timeout time.Duration) (core.Producer, error) {
