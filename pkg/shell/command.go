@@ -2,7 +2,10 @@ package shell
 
 import (
 	"context"
+	"errors"
 	"os/exec"
+	"sync"
+	"time"
 )
 
 // Command like exec.Cmd, but with support:
@@ -13,6 +16,8 @@ type Command struct {
 	*exec.Cmd
 	ctx    context.Context
 	cancel context.CancelFunc
+	done   chan struct{}
+	mu     sync.Mutex
 	err    error
 }
 
@@ -21,7 +26,15 @@ func NewCommand(s string) *Command {
 	args := QuoteSplit(s)
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 	cmd.SysProcAttr = procAttr
-	return &Command{cmd, ctx, cancel, nil}
+	cmd.Cancel = func() error {
+		return terminateCommand(cmd)
+	}
+	return &Command{
+		Cmd:    cmd,
+		ctx:    ctx,
+		cancel: cancel,
+		done:   make(chan struct{}),
+	}
 }
 
 func (c *Command) Start() error {
@@ -30,7 +43,11 @@ func (c *Command) Start() error {
 	}
 
 	go func() {
-		c.err = c.Cmd.Wait()
+		err := c.Cmd.Wait()
+		c.mu.Lock()
+		c.err = err
+		c.mu.Unlock()
+		close(c.done)
 		c.cancel() // release context resources
 	}()
 
@@ -38,7 +55,9 @@ func (c *Command) Start() error {
 }
 
 func (c *Command) Wait() error {
-	<-c.ctx.Done()
+	<-c.done
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.err
 }
 
@@ -50,10 +69,31 @@ func (c *Command) Run() error {
 }
 
 func (c *Command) Done() <-chan struct{} {
-	return c.ctx.Done()
+	return c.done
 }
 
 func (c *Command) Close() error {
 	c.cancel()
-	return nil
+
+	select {
+	case <-c.done:
+		return c.Wait()
+	case <-time.After(5 * time.Second):
+	}
+
+	_ = killCommand(c.Cmd)
+
+	select {
+	case <-c.done:
+	case <-time.After(time.Second):
+		c.mu.Lock()
+		err := c.err
+		c.mu.Unlock()
+		if err != nil {
+			return err
+		}
+		return errors.New("shell: close timeout")
+	}
+
+	return c.Wait()
 }
