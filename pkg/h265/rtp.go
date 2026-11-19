@@ -15,10 +15,23 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 	buf := make([]byte, 0, 512*1024) // 512K
 	var nuStart int
 	var seqNum uint16
+	var timestamp uint32
+	var seen, fragmented, waitKeyframe bool
+	reset := func() {
+		buf = buf[:0]
+		fragmented = false
+		waitKeyframe = true
+	}
 
 	return func(packet *rtp.Packet) {
+		if seen && (packet.SequenceNumber-seqNum != 1 || (fragmented && packet.Timestamp != timestamp)) {
+			// Lost fragments invalidate dependent pictures until a complete keyframe arrives.
+			reset()
+		}
+		seen, seqNum, timestamp = true, packet.SequenceNumber, packet.Timestamp
 		data := packet.Payload
 		if len(data) < 3 {
+			reset()
 			return
 		}
 
@@ -35,19 +48,13 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 			}
 		}
 
-		// when we collect data into one buffer, we need to make sure
-		// that all of it falls into the same sequence
-		if len(buf) > 0 && packet.SequenceNumber-seqNum != 1 {
-			//log.Printf("broken H265 sequence")
-			buf = buf[:0] // drop data
-			return
-		}
-
-		seqNum = packet.SequenceNumber
-
 		if nuType == NALUTypeFU {
 			switch data[2] >> 6 {
 			case 0b10: // begin
+				if fragmented {
+					reset()
+				}
+				fragmented = true
 				nuType = data[2] & 0x3F
 
 				// push PS data before keyframe
@@ -61,29 +68,25 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 				buf = append(buf, data[3:]...)
 				return
 			case 0b00: // continue
-				if len(buf) == 0 {
-					//log.Printf("broken H265 fragment")
+				if !fragmented {
+					reset()
 					return
 				}
 
 				buf = append(buf, data[3:]...)
 				return
 			case 0b01: // end
-				if len(buf) == 0 {
-					//log.Printf("broken H265 fragment")
+				if !fragmented {
+					reset()
 					return
 				}
-
+				fragmented = false
 				buf = append(buf, data[3:]...)
-
-				if nuStart > len(buf)+4 {
-					//log.Printf("broken H265 fragment")
-					buf = buf[:0] // drop data
-					return
-				}
-
 				binary.BigEndian.PutUint32(buf[nuStart:], uint32(len(buf)-nuStart-4))
 			case 0b11: // wrong RFC 7798 realisation from OpenIPC project
+				if fragmented {
+					reset()
+				}
 				// A non-fragmented NAL unit MUST NOT be transmitted in one FU; i.e.,
 				// the Start bit and End bit must not both be set to 1 in the same FU
 				// header.
@@ -93,6 +96,9 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 				buf = append(buf, data[3:]...)
 			}
 		} else {
+			if fragmented {
+				reset()
+			}
 			buf = binary.BigEndian.AppendUint32(buf, uint32(len(data))) // NAL unit size
 			buf = append(buf, data...)
 		}
@@ -100,6 +106,14 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 		// collect all NAL Units for Access Unit
 		if !packet.Marker {
 			return
+		}
+
+		if waitKeyframe {
+			if !IsKeyframe(buf) {
+				buf = buf[:0]
+				return
+			}
+			waitKeyframe = false
 		}
 
 		//log.Printf("[HEVC] %v, len: %d", Types(buf), len(buf))
