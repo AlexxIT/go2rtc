@@ -20,6 +20,10 @@ import (
 
 var Timeout = time.Second * 5
 
+// maxRedirects is the number of 301/302 redirects followed in a row,
+// the same limit as net/http uses
+const maxRedirects = 10
+
 func NewClient(uri string) *Conn {
 	return &Conn{
 		Connection: core.Connection{
@@ -95,9 +99,16 @@ func (c *Conn) Do(req *tcp.Request) (*tcp.Response, error) {
 
 	switch res.StatusCode {
 	case http.StatusOK:
+		c.redirects = 0
 		return res, nil
 
 	case http.StatusMovedPermanently, http.StatusFound:
+		if c.redirects >= maxRedirects {
+			c.redirects = 0
+			return nil, errors.New("rtsp: too many redirects")
+		}
+		c.redirects++
+
 		rawURL := res.Header.Get("Location")
 
 		var u *url.URL
