@@ -26,6 +26,8 @@ type Consumer struct {
 	videoSession *srtp.Session
 	audioSession *srtp.Session
 	audioRTPTime byte
+
+	backTrack *core.Receiver // backchannel audio (HomeKit viewer → camera)
 }
 
 func NewConsumer(conn net.Conn, server *srtp.Server) *Consumer {
@@ -40,6 +42,13 @@ func NewConsumer(conn net.Conn, server *srtp.Server) *Consumer {
 		{
 			Kind:      core.KindAudio,
 			Direction: core.DirectionSendonly,
+			Codecs: []*core.Codec{
+				{Name: core.CodecOpus},
+			},
+		},
+		{
+			Kind:      core.KindAudio,
+			Direction: core.DirectionRecvonly,
 			Codecs: []*core.Codec{
 				{Name: core.CodecOpus},
 			},
@@ -128,6 +137,26 @@ func (c *Consumer) SetConfig(conf *camera.SelectedStreamConfiguration) bool {
 	c.srtp.AddSession(c.audioSession)
 
 	return true
+}
+
+func (c *Consumer) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
+	if codec.Kind() != core.KindAudio {
+		return nil, core.ErrCantGetTrack
+	}
+
+	c.backTrack = core.NewReceiver(media, codec)
+
+	c.audioSession.OnReadRTP = func(packet *rtp.Packet) {
+		c.backTrack.WriteRTP(packet)
+		c.Recv += len(packet.Payload)
+	}
+
+	c.Receivers = append(c.Receivers, c.backTrack)
+	return c.backTrack, nil
+}
+
+func (c *Consumer) Start() error {
+	return nil
 }
 
 func (c *Consumer) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {

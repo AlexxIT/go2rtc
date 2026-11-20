@@ -79,6 +79,109 @@ homekit:
     name: Dahua camera      # custom camera name, default: generated from stream ID
     device_id: dahua1       # custom ID, default: generated from stream ID
     device_private: dahua1  # custom key, default: generated from stream ID
+    speaker: true           # enable 2-way audio (default: false, enable only if camera has a speaker)
+```
+
+### HKSV (HomeKit Secure Video)
+
+go2rtc can expose any camera as a HomeKit Secure Video (HKSV) camera. This allows Apple Home to record video clips to iCloud when motion is detected.
+
+**Requirements:**
+- Apple Home Hub (Apple TV, HomePod or iPad) on the same network
+- iCloud storage plan with HomeKit Secure Video support
+- Camera source with H264 video (AAC audio recommended)
+
+**Minimal HKSV config**
+
+```yaml
+streams:
+  outdoor: rtsp://admin:password@192.168.1.123/stream1
+
+homekit:
+  outdoor:
+    hksv: true           # enable HomeKit Secure Video
+    motion: continuous   # always report motion, Home Hub decides what to record
+```
+
+**Full HKSV config**
+
+```yaml
+streams:
+  outdoor:
+    - rtsp://admin:password@192.168.1.123/stream1
+    - ffmpeg:outdoor#video=h264#hardware  # transcode to H264 if needed
+    - ffmpeg:outdoor#audio=aac            # AAC-LC audio for HKSV recording
+
+homekit:
+  outdoor:
+    pin: 12345678
+    name: Outdoor Camera
+    hksv: true
+    motion: api          # motion triggered via API
+```
+
+**HKSV Doorbell config**
+
+```yaml
+homekit:
+  front_door:
+    category_id: doorbell
+    hksv: true
+    motion: api
+```
+
+**Motion modes:**
+
+- `continuous` — MotionDetected is always true; Home Hub continuously receives video and decides what to save. Simplest setup, recommended for most cameras.
+- `detect` — automatic motion detection by analyzing H264 P-frame sizes. No external dependencies or CPU-heavy decoding. Works with any H264 source and resolution. Compares each P-frame size against an adaptive baseline using EMA (exponential moving average). When a P-frame exceeds the threshold ratio, motion is triggered with a 30s hold time and 5s cooldown.
+- `api` — motion is triggered externally via HTTP API. Use this with Frigate, ONVIF events, or any other motion detection system.
+
+**Motion detect config:**
+
+```yaml
+homekit:
+  outdoor:
+    hksv: true
+    motion: detect
+    motion_threshold: 1.0  # P-frame size / baseline ratio to trigger motion (default: 2.0)
+```
+
+The `motion_threshold` controls sensitivity — it's the ratio of P-frame size to the adaptive baseline. When a P-frame exceeds `baseline × threshold`, motion is triggered.
+
+| Scenario | threshold | Notes |
+|---|---|---|
+| Quiet indoor scene | 1.3–1.5 | Low noise, stable baseline, even small motion is visible |
+| Standard camera (yard, hallway) | 2.0 (default) | Good balance between sensitivity and false positives |
+| Outdoor with trees/shadows/wind | 2.5–3.0 | Wind and shadows produce medium P-frames, need margin |
+| Busy street / complex scene | 3.0–5.0 | Lots of background motion, react only to large events |
+
+Values below 1.0 are meaningless (triggers on every frame). Values above 5.0 require very large motion (person filling half the frame).
+
+**How to tune:** set `log.level: trace` and watch `motion: status` lines — they show current `ratio`. Walk in front of the camera and note the ratio values:
+
+```
+motion: status baseline=5000 ratio=0.95  ← quiet
+motion: status baseline=5000 ratio=3.21  ← person walked by
+motion: status baseline=5000 ratio=1.40  ← shadow/wind
+```
+
+Set threshold between "noise" and "real motion". In this example, 2.0 is a good choice (ignores 1.4, catches 3.2).
+
+**Motion API:**
+
+```bash
+# Get motion status
+curl "http://localhost:1984/api/homekit/motion?id=outdoor"
+# → {"id":"outdoor","motion":false}
+
+# Trigger motion start
+curl -X POST "http://localhost:1984/api/homekit/motion?id=outdoor"
+
+# Clear motion
+curl -X DELETE "http://localhost:1984/api/homekit/motion?id=outdoor"
+
+# Trigger doorbell ring
+curl -X POST "http://localhost:1984/api/homekit/doorbell?id=front_door"
 ```
 
 **Proxy HomeKit camera**

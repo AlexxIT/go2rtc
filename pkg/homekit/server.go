@@ -68,14 +68,55 @@ func ServerHandler(server Server) HandlerFunc {
 						AID   uint8  `json:"aid"`
 						IID   uint64 `json:"iid"`
 						Value any    `json:"value"`
+						Event any    `json:"ev"`
+						R     *bool  `json:"r,omitempty"`
 					} `json:"characteristics"`
 				}
 				if err := json.NewDecoder(req.Body).Decode(&v); err != nil {
 					return nil, err
 				}
 
-				for _, char := range v.Value {
-					server.SetCharacteristic(conn, char.AID, char.IID, char.Value)
+				var writeResponses []hap.JSONCharacter
+				findChar := func(aid uint8, iid uint64) *hap.Character {
+					accs := server.GetAccessories(conn)
+					for _, acc := range accs {
+						if acc.AID != aid {
+							continue
+						}
+						return acc.GetCharacterByID(iid)
+					}
+					return nil
+				}
+
+				for _, c := range v.Value {
+					if c.Value != nil {
+						server.SetCharacteristic(conn, c.AID, c.IID, c.Value)
+					}
+					if c.Event != nil {
+						// subscribe/unsubscribe to events
+						if char := findChar(c.AID, c.IID); char != nil {
+							if ev, ok := c.Event.(bool); ok && ev {
+								char.AddListener(conn)
+							} else {
+								char.RemoveListener(conn)
+							}
+						}
+					}
+					if c.R != nil && *c.R {
+						// write-response: return updated value
+						if char := findChar(c.AID, c.IID); char != nil {
+							writeResponses = append(writeResponses, hap.JSONCharacter{
+								AID:    c.AID,
+								IID:    c.IID,
+								Status: 0,
+								Value:  char.Value,
+							})
+						}
+					}
+				}
+
+				if len(writeResponses) > 0 {
+					return makeResponse(hap.MimeJSON, hap.JSONCharacters{Value: writeResponses})
 				}
 
 				res := &http.Response{

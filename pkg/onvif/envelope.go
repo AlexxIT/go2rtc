@@ -18,6 +18,14 @@ const (
 	prefix1 = `<?xml version="1.0" encoding="utf-8"?><s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope" xmlns:tt="http://www.onvif.org/ver10/schema" xmlns:tds="http://www.onvif.org/ver10/device/wsdl" xmlns:trt="http://www.onvif.org/ver10/media/wsdl">`
 	prefix2 = `<s:Body>`
 	suffix  = `</s:Body></s:Envelope>`
+
+	eventPrefix = `<?xml version="1.0" encoding="utf-8"?>` +
+		`<s:Envelope` +
+		` xmlns:s="http://www.w3.org/2003/05/soap-envelope"` +
+		` xmlns:tev="http://www.onvif.org/ver10/events/wsdl"` +
+		` xmlns:wsnt="http://docs.oasis-open.org/wsn/b-2"` +
+		` xmlns:wsa="http://www.w3.org/2005/08/addressing"` +
+		`>`
 )
 
 func NewEnvelope() *Envelope {
@@ -70,4 +78,42 @@ func (e *Envelope) Appendf(format string, args ...any) {
 
 func (e *Envelope) Bytes() []byte {
 	return append(e.buf, suffix...)
+}
+
+func NewEventEnvelope() *Envelope {
+	e := &Envelope{buf: make([]byte, 0, 1024)}
+	e.Append(eventPrefix, prefix2)
+	return e
+}
+
+func NewEventEnvelopeWithUser(user *url.Userinfo) *Envelope {
+	if user == nil {
+		return NewEventEnvelope()
+	}
+
+	nonce := core.RandString(16, 36)
+	created := time.Now().UTC().Format(time.RFC3339Nano)
+	pass, _ := user.Password()
+
+	h := sha1.New()
+	h.Write([]byte(nonce + created + pass))
+
+	e := &Envelope{buf: make([]byte, 0, 1024)}
+	e.Append(eventPrefix)
+	e.Appendf(`<s:Header>
+	<wsse:Security xmlns:wsse="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd">
+		<wsse:UsernameToken>
+			<wsse:Username>%s</wsse:Username>
+			<wsse:Password Type="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordDigest">%s</wsse:Password>
+			<wsse:Nonce EncodingType="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-soap-message-security-1.0#Base64Binary">%s</wsse:Nonce>
+			<wsu:Created xmlns:wsu="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd">%s</wsu:Created>
+		</wsse:UsernameToken>
+	</wsse:Security>
+</s:Header>`,
+		user.Username(),
+		base64.StdEncoding.EncodeToString(h.Sum(nil)),
+		base64.StdEncoding.EncodeToString([]byte(nonce)),
+		created)
+	e.Append(prefix2)
+	return e
 }
