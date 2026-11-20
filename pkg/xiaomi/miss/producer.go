@@ -1,8 +1,10 @@
 package miss
 
 import (
+	"encoding/binary"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -14,7 +16,8 @@ import (
 
 type Producer struct {
 	core.Connection
-	client *Client
+	client  *Client
+	initial []*Packet
 }
 
 func Dial(rawURL string) (core.Producer, error) {
@@ -32,7 +35,7 @@ func Dial(rawURL string) (core.Producer, error) {
 		return nil, err
 	}
 
-	medias, err := probe(client, query.Get("audio") != "0")
+	medias, initial, err := probe(client, query.Get("audio") != "0")
 	if err != nil {
 		_ = client.Close()
 		return nil, err
@@ -48,40 +51,54 @@ func Dial(rawURL string) (core.Producer, error) {
 			Medias:     medias,
 			Transport:  client,
 		},
-		client: client,
+		client:  client,
+		initial: initial,
 	}, nil
 }
 
-func probe(client *Client, audio bool) ([]*core.Media, error) {
+func probe(client *Client, audio bool) ([]*core.Media, []*Packet, error) {
+	firstPacket := true
+	firstVideo := true
+	seenVideo := false
 	_ = client.SetDeadline(time.Now().Add(15 * time.Second))
 
 	var vcodec, acodec *core.Codec
+	var sets parameterSets
+	var initial []*Packet
+	var initialBytes int
 
 	for {
 		pkt, err := client.ReadPacket()
 		if err != nil {
-			if vcodec != nil {
-				err = fmt.Errorf("no audio")
-			} else if acodec != nil {
+			if vcodec == nil {
 				err = fmt.Errorf("no video")
 			}
-			return nil, fmt.Errorf("xiaomi: probe: %w", err)
+			return nil, nil, fmt.Errorf("xiaomi: probe: %w", err)
+		}
+		if firstPacket {
+			firstPacket = false
 		}
 
 		switch pkt.CodecID {
 		case codecH264:
-			if vcodec == nil {
-				buf := annexb.EncodeToAVCC(pkt.Payload)
-				if h264.NALUType(buf) == h264.NALUTypeSPS {
-					vcodec = h264.AVCCToCodec(buf)
-				}
+			buf := annexb.EncodeToAVCC(pkt.Payload)
+			if firstVideo {
+				firstVideo = false
+			}
+			sets.absorb(buf, false)
+			seenVideo = true
+			if vcodec == nil && sets.ready() {
+				vcodec = h264.AVCCToCodec(sets.avcc)
 			}
 		case codecH265:
-			if vcodec == nil {
-				buf := annexb.EncodeToAVCC(pkt.Payload)
-				if h265.NALUType(buf) == h265.NALUTypeVPS {
-					vcodec = h265.AVCCToCodec(buf)
-				}
+			buf := annexb.EncodeToAVCC(pkt.Payload)
+			if firstVideo {
+				firstVideo = false
+			}
+			sets.absorb(buf, true)
+			seenVideo = true
+			if vcodec == nil && sets.ready() {
+				vcodec = h265.AVCCToCodec(sets.avcc)
 			}
 		case codecPCMA:
 			if acodec == nil {
@@ -93,7 +110,16 @@ func probe(client *Client, audio bool) ([]*core.Media, error) {
 			}
 		}
 
-		if vcodec != nil && (acodec != nil || !audio) {
+		if seenVideo {
+			initialBytes += len(pkt.Payload)
+			if initialBytes > 4*1024*1024 {
+				return nil, nil, fmt.Errorf("xiaomi: probe: initial media exceeds limit")
+			}
+			initial = append(initial, pkt)
+		}
+		// Parameter sets are enough to open the picture. The door card is muted,
+		// so an absent audio packet must not hold this header or the following keyframe.
+		if vcodec != nil {
 			break
 		}
 	}
@@ -122,19 +148,114 @@ func probe(client *Client, audio bool) ([]*core.Media, error) {
 		})
 	}
 
-	return medias, nil
+	return medias, initial, nil
+}
+
+// parameterSets collects HEVC VPS+SPS+PPS, or H264 SPS+PPS, across access units.
+// HEVC is ready at VPS+SPS. A PPS already in those units is kept; a later one is not a reason to wait.
+type parameterSets struct {
+	hevc bool
+	vps  bool
+	sps  bool
+	pps  bool
+	avcc []byte
+}
+
+func (p *parameterSets) absorb(buf []byte, hevc bool) {
+	p.hevc = hevc
+	for len(buf) >= 5 {
+		size := int(binary.BigEndian.Uint32(buf))
+		if size < 1 || size > len(buf)-4 {
+			return
+		}
+		typ := buf[4] & 0x1F
+		if hevc {
+			typ = buf[4] >> 1 & 0x3F
+		}
+		keep := false
+		switch {
+		case hevc && typ == h265.NALUTypeVPS:
+			p.vps = true
+			keep = true
+		case hevc && typ == h265.NALUTypeSPS:
+			p.sps = true
+			keep = true
+		case hevc && typ == h265.NALUTypePPS:
+			p.pps = true
+			keep = true
+		case !hevc && typ == h264.NALUTypeSPS:
+			p.sps = true
+			keep = true
+		case !hevc && typ == h264.NALUTypePPS:
+			p.pps = true
+			keep = true
+		}
+		if keep {
+			p.avcc = append(p.avcc, buf[:4+size]...)
+		}
+		buf = buf[4+size:]
+	}
+}
+
+func (p *parameterSets) ready() bool {
+	if p.hevc {
+		return p.vps && p.sps
+	}
+	return p.sps && p.pps
+}
+
+func (p *parameterSets) label() string {
+	var parts []string
+	if p.vps {
+		parts = append(parts, "vps")
+	}
+	if p.sps {
+		parts = append(parts, "sps")
+	}
+	if p.pps {
+		parts = append(parts, "pps")
+	}
+	if len(parts) == 0 {
+		return "none"
+	}
+	return strings.Join(parts, "+")
 }
 
 const timestamp40ms = 48000 * 0.040
+
+// Access units may begin with AUD/SEI before the codec parameter sets.
+func containsNALU(data []byte, want byte, hevc bool) bool {
+	for len(data) >= 5 {
+		size := int(binary.BigEndian.Uint32(data))
+		if size < 1 || size > len(data)-4 {
+			return false
+		}
+		typ := data[4] & 0x1F
+		if hevc {
+			typ = data[4] >> 1 & 0x3F
+		}
+		if typ == want {
+			return true
+		}
+		data = data[4+size:]
+	}
+	return false
+}
 
 func (p *Producer) Start() error {
 	var audioTS uint32
 
 	for {
-		_ = p.client.SetDeadline(time.Now().Add(10 * time.Second))
-		pkt, err := p.client.ReadPacket()
-		if err != nil {
-			return err
+		var pkt *Packet
+		if len(p.initial) > 0 {
+			pkt, p.initial = p.initial[0], p.initial[1:]
+		} else {
+			_ = p.client.SetDeadline(time.Now().Add(10 * time.Second))
+			var err error
+			pkt, err = p.client.ReadPacket()
+			if err != nil {
+				return err
+			}
 		}
 
 		p.Recv += len(pkt.Payload)
