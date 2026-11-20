@@ -3,7 +3,6 @@ package ivideon
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -78,7 +77,7 @@ func GetLiveStream(id string) (string, error) {
 	}
 
 	if !v.Success {
-		return "", fmt.Errorf("ivideon: can't get live_stream: " + v.Message)
+		return "", errors.New("ivideon: can't get live_stream: " + v.Message)
 	}
 
 	return v.Result.URL, nil
