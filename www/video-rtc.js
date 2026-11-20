@@ -521,6 +521,10 @@ export class VideoRTC extends HTMLElement {
                 video2.addEventListener('loadeddata', () => this.onpcvideo(video2), {once: true});
                 video2.srcObject = new MediaStream(tracks);
             } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+                // release the microphone, a new one is requested on reconnect
+                pc.getSenders().forEach(sender => {
+                    if (sender.track) sender.track.stop();
+                });
                 pc.close(); // stop next events
 
                 this.pcState = WebSocket.CLOSED;
@@ -620,6 +624,9 @@ export class VideoRTC extends HTMLElement {
             } else {
                 this.pcState = WebSocket.CLOSED;
                 if (this.pc) {
+                    this.pc.getSenders().forEach(sender => {
+                        if (sender.track) sender.track.stop();
+                    });
                     this.pc.close();
                     this.pc = null;
                 }
