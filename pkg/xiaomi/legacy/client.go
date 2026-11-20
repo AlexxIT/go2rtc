@@ -59,6 +59,7 @@ func NewClient(rawURL string) (*Client, error) {
 		Conn:  conn,
 		key:   key,
 		model: model,
+		mac:   query.Get("mac"),
 	}
 
 	return c, nil
@@ -92,6 +93,7 @@ type Client struct {
 	*tutk.Conn
 	key   []byte
 	model string
+	mac   string
 }
 
 func (c *Client) Version() string {
@@ -104,7 +106,8 @@ func (c *Client) ReadPacket() (hdr, payload []byte, err error) {
 		return
 	}
 	if c.key != nil {
-		if c.model == ModelAqaraG2 && hdr[0] == tutk.CodecH265 {
+		if (c.model == ModelAqaraG2 && hdr[0] == tutk.CodecH265) ||
+			(c.model == ModelIMILABEC2 && tutk.IsVideoCodec(hdr[0])) {
 			payload, err = DecodeVideo(payload, c.key)
 		} else {
 			// ModelAqaraG2: audio AAC
@@ -147,6 +150,35 @@ func (c *Client) StartMedia(video, audio string) error {
 			c.WriteCommandJSON(cmdVideoStart, `{}`),
 			c.WriteCommandJSON(0x0605, `{"channel":%s}`, video),
 			c.WriteCommandJSON(0x0704, `{}`), // don't know why
+		)
+
+	case ModelIMILABEC2:
+		// Measured against the official app's own traffic:
+		//   0 = "HD"     1920x1080, ~865 kbit/s  (best, the default here)
+		//   1 = "Speed"  1280x720,  ~538 kbit/s
+		//   2 = "Fluent" 1920x1080, ~739 kbit/s
+		// The app never exceeds ~865 kbit/s, so 0 really is the camera's cap.
+		// Quality is NOT monotonic in this number.
+		switch video {
+		case "", "hd":
+			video = "0"
+		case "sd":
+			video = "1"
+		case "auto":
+			video = "2"
+		}
+
+		// The gateway ignores commands without "mac" - it can't tell which
+		// of its cameras is meant, so it stays silent and the session dies.
+		// Audio must be started AFTER the video stream is running. The app
+		// sends cmdAudioStart long after cmdVideoStart; sending it earlier
+		// leaves the audio track filled with silence (measured -72 dB).
+		return errors.Join(
+			c.WriteCommandJSON(cmdVideoStop, `{"mac":"%s"}`, c.mac),
+			c.WriteCommandJSON(cmdStreamCtrlReq, `{"mac":"%s","videoquality":%s}`, c.mac, video),
+			c.WriteCommandJSON(cmdVideoStart, `{"mac":"%s","videoquality":%s}`, c.mac, video),
+			c.WriteCommandJSON(cmdVideoStart, `{"mac":"%s","videoquality":%s}`, c.mac, video),
+			c.WriteCommandJSON(cmdAudioStart, `{"mac":"%s"}`, c.mac),
 		)
 
 	case ModelIMILABA1, ModelMijia:
@@ -224,6 +256,9 @@ func (c *Client) StopMedia() error {
 }
 
 func DecodeVideo(data, key []byte) ([]byte, error) {
+	if len(data) < 17 {
+		return data, nil
+	}
 	if string(data[:4]) == "\x00\x00\x00\x01" || data[8] == 0 {
 		return data, nil
 	}
@@ -260,11 +295,15 @@ const (
 	ModelMijia = "chuangmi.camera.v2"
 	// ModelDafang support miss format for new fw and legacy format for old fw
 	ModelDafang = "isa.camera.df3"
+	// ModelIMILABEC2 is a gateway for battery cameras (CMSXJ11A).
+	// Every media command must carry the camera MAC, because one gateway
+	// can serve several cameras. Quality range is 0..2.
+	ModelIMILABEC2 = "chuangmi.gateway.ipc011"
 )
 
 func Supported(model string) bool {
 	switch model {
-	case ModelAqaraG2, ModelIMILABA1, ModelLoockV1, ModelXiaobai, ModelXiaofang:
+	case ModelAqaraG2, ModelIMILABA1, ModelLoockV1, ModelXiaobai, ModelXiaofang, ModelIMILABEC2:
 		return true
 	}
 	return false
