@@ -9,8 +9,11 @@ import (
 )
 
 func TestRecursion(t *testing.T) {
+	streams = map[string]*Stream{}
+	HandleFunc("rtsp", func(url string) (core.Producer, error) { return nil, nil }) // bypass HasProducer
+
 	// create stream with some source
-	stream1, err := New("from_yaml", "does_not_matter")
+	stream1, err := New("from_yaml", "rtsp://example.com/does_not_matter")
 	require.NoError(t, err)
 	require.Len(t, streams, 1)
 
@@ -28,7 +31,9 @@ func TestRecursion(t *testing.T) {
 }
 
 func TestTempate(t *testing.T) {
-	HandleFunc("rtsp", func(url string) (core.Producer, error) { return nil, nil }) // bypass HasProducer
+	streams = map[string]*Stream{}
+	HandleFunc("rtsp", func(url string) (core.Producer, error) { return nil, nil })   // bypass HasProducer
+	HandleFunc("ffmpeg", func(url string) (core.Producer, error) { return nil, nil }) // bypass HasProducer
 
 	// config from yaml
 	stream1, err := New("camera.from_hass", "ffmpeg:{input}#video=copy")
