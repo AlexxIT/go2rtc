@@ -26,19 +26,27 @@ func TestTimeout(t *testing.T) {
 }
 
 func TestMissedControl(t *testing.T) {
-	Timeout = time.Millisecond
+	setTimeout(t, 5*time.Second)
 
 	ln, err := net.Listen("tcp", "localhost:0")
 	require.Nil(t, err)
+	defer ln.Close()
 
 	go func() {
 		conn, err := ln.Accept()
-		require.Nil(t, err)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
 
 		b := make([]byte, 8192)
 		for {
 			n, err := conn.Read(b)
-			require.Nil(t, err)
+			if err != nil {
+				// the client conn is closed after the test ended (ex. by GC),
+				// failing here would panic in a later test
+				return
+			}
 
 			req := string(b[:n])
 
@@ -73,6 +81,9 @@ Session: 1
 
 `))
 
+			case "TEAR":
+				return // client.Close()
+
 			default:
 				t.Fail()
 			}
@@ -84,6 +95,7 @@ Session: 1
 
 	err = client.Dial()
 	require.Nil(t, err)
+	defer client.Close()
 
 	err = client.Describe()
 	require.Nil(t, err)
