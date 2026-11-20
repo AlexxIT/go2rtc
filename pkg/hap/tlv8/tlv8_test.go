@@ -82,7 +82,8 @@ func TestVideoCodecParams(t *testing.T) {
 	dst, err := Marshal(v)
 	require.Nil(t, err)
 
-	require.Equal(t, src, dst)
+	// Unmarshal accepts 0x00 separator, Marshal writes 0xFF
+	require.Equal(t, "010101020100ff00020102030100040100", hex.EncodeToString(dst))
 }
 
 func TestInterface(t *testing.T) {
