@@ -43,7 +43,8 @@
         "ffmpeg:virtual?video=testsrc&size=4K#video=h264#hardware#bitrate=50M",
         "exec:ffmpeg -re -i media.mp4 -c copy -rtsp_transport tcp -f rtsp {output}",
         "onvif://username:password@192.168.1.123:80?subtype=0",
-        "tapo://password@192.168.1.123:8800?channel=0&subtype=0"
+        "tapo://password@192.168.1.123:8800?channel=0&subtype=0",
+        "unifi-protect://02AABBCCDDEE?channel=video1"
       ]
     }
   },
@@ -178,6 +179,7 @@
               "roborock",
               "tapo",
               "tuya",
+              "unifi_protect",
               "xiaomi",
               "yandex",
               "debug",
@@ -445,6 +447,9 @@
         "streams": {
           "$ref": "#/definitions/log_level"
         },
+        "unifi_protect": {
+          "$ref": "#/definitions/log_level"
+        },
         "webrtc": {
           "$ref": "#/definitions/log_level"
         },
@@ -575,6 +580,43 @@
             "type": "null"
           }
         ]
+      }
+    },
+    "unifi_protect": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "listen": {
+          "type": "string",
+          "default": ":7442"
+        },
+        "media_listen": {
+          "type": "string",
+          "default": ":7550"
+        },
+        "media_host": {
+          "description": "Address advertised to cameras for pushed media",
+          "type": "string",
+          "examples": [
+            "192.168.1.10"
+          ]
+        },
+        "tls_cert": {
+          "description": "Certificate path or inline PEM; omitted to create a persistent self-signed certificate",
+          "type": "string",
+          "examples": [
+            "-----BEGIN CERTIFICATE-----",
+            "/config/unifi-protect.crt"
+          ]
+        },
+        "tls_key": {
+          "description": "Private key path or inline PEM; must be configured with tls_cert",
+          "type": "string",
+          "examples": [
+            "-----BEGIN PRIVATE KEY-----",
+            "/config/unifi-protect.key"
+          ]
+        }
       }
     },
     "xiaomi": {
