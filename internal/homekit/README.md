@@ -55,6 +55,15 @@ HomeKit module can work in two modes:
 
 ### Server Configuration
 
+HomeKit shares the HTTP API listener by default. Set `homekit_server.listen` to
+use a separate TCP port while keeping the API private or password-protected.
+See [Dedicated listener setup](server/README.md) for configuration, private PIN
+requirements, pairing, and networking.
+
+PIN setup is now accepted only for unpaired accessories on both the shared and
+dedicated listeners. Add other controllers through an authenticated HomeKit
+session, or remove all saved pairings before commissioning again.
+
 **Minimal config**
 
 ```yaml

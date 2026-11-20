@@ -271,6 +271,18 @@
         }
       }
     },
+    "homekit_server": {
+      "description": "Optional dedicated HomeKit server listener, separate from the HTTP API",
+      "type": "object",
+      "properties": {
+        "listen": {
+          "description": "TCP listen address; empty or omitted shares the API listener",
+          "type": "string",
+          "default": "",
+          "examples": [":1985", "192.168.1.123:1985"]
+        }
+      }
+    },
     "homekit": {
       "type": "object",
       "additionalProperties": {
