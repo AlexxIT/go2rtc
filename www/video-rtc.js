@@ -66,6 +66,12 @@ export class VideoRTC extends HTMLElement {
         this.visibilityCheck = true;
 
         /**
+         * [internal] `visibilitychange` handler, removed when the element leaves the DOM.
+         * @type {Function}
+         */
+        this.visibilityListener = null;
+
+        /**
          * [config] WebRTC configuration
          * @type {RTCConfiguration}
          */
@@ -206,6 +212,7 @@ export class VideoRTC extends HTMLElement {
                 this.video.currentTime = seek.end(seek.length - 1);
             }
             this.play();
+            this.bindVisibility();
         } else {
             this.oninit();
         }
@@ -219,7 +226,6 @@ export class VideoRTC extends HTMLElement {
      */
     disconnectedCallback() {
         if (this.background || this.disconnectTID) return;
-        if (this.wsState === WebSocket.CLOSED && this.pcState === WebSocket.CLOSED) return;
 
         this.disconnectTID = setTimeout(() => {
             if (this.reconnectTID) {
@@ -229,8 +235,36 @@ export class VideoRTC extends HTMLElement {
 
             this.disconnectTID = 0;
 
-            this.ondisconnect();
+            if (this.wsState !== WebSocket.CLOSED || this.pcState !== WebSocket.CLOSED) {
+                this.ondisconnect();
+            }
+
+            // removed from the DOM (not just a hidden tab): let the element be garbage collected
+            if (!this.isConnected) this.unbindVisibility();
         }, this.DISCONNECT_TIMEOUT);
+    }
+
+    /**
+     * Pause the stream while the page is hidden. Idempotent.
+     */
+    bindVisibility() {
+        if (this.background || this.visibilityListener) return;
+        if (!('hidden' in document) || !this.visibilityCheck) return;
+
+        this.visibilityListener = () => {
+            if (document.hidden) {
+                this.disconnectedCallback();
+            } else if (this.isConnected) {
+                this.connectedCallback();
+            }
+        };
+        document.addEventListener('visibilitychange', this.visibilityListener);
+    }
+
+    unbindVisibility() {
+        if (!this.visibilityListener) return;
+        document.removeEventListener('visibilitychange', this.visibilityListener);
+        this.visibilityListener = null;
     }
 
     /**
@@ -278,15 +312,7 @@ export class VideoRTC extends HTMLElement {
 
         if (this.background) return;
 
-        if ('hidden' in document && this.visibilityCheck) {
-            document.addEventListener('visibilitychange', () => {
-                if (document.hidden) {
-                    this.disconnectedCallback();
-                } else if (this.isConnected) {
-                    this.connectedCallback();
-                }
-            });
-        }
+        this.bindVisibility();
 
         if ('IntersectionObserver' in window && this.visibilityThreshold) {
             const observer = new IntersectionObserver(entries => {
