@@ -198,6 +198,12 @@ func (p *Producer) Stop() error {
 	return p.Connection.Stop()
 }
 
+// Motor sends a pan/tilt step over this producer's session. The camera allows
+// one session, so motor commands must share it rather than dial a second one.
+func (p *Producer) Motor(operation int) error {
+	return p.client.Motor(operation)
+}
+
 // TimeToRTP convert time in milliseconds to RTP time
 func TimeToRTP(timeMS, clockRate uint64) uint32 {
 	return uint32(timeMS * clockRate / 1000)
