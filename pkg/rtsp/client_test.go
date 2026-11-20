@@ -1,11 +1,15 @@
 package rtsp
 
 import (
+	"bufio"
+	"io"
 	"net"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/pion/rtp"
 	"github.com/stretchr/testify/require"
 )
 
@@ -92,4 +96,66 @@ Session: 1
 	ch, err := client.SetupMedia(client.Medias[2])
 	require.Nil(t, err)
 	require.Equal(t, ch, byte(4))
+}
+
+func TestVideoTimeout(t *testing.T) {
+	// camera keeps sending audio but stops sending video
+	err := handleWithTracks(t, 2*time.Second, true, false)
+	require.ErrorContains(t, err, "no video packets")
+
+	// camera keeps sending audio and video
+	err = handleWithTracks(t, 2*time.Second, true, true)
+	require.ErrorIs(t, err, io.EOF)
+}
+
+// handleWithTracks runs Handle on a producer with video (channel 0) and audio
+// (channel 2) tracks, while a fake camera writes RTP for the selected tracks
+// for the given duration and then closes the connection.
+func handleWithTracks(t *testing.T, duration time.Duration, audio, video bool) error {
+	camera, client := net.Pipe()
+
+	videoTrack := core.NewReceiver(
+		&core.Media{Kind: core.KindVideo}, &core.Codec{Name: core.CodecH264},
+	)
+	videoTrack.ID = 0
+	audioTrack := core.NewReceiver(
+		&core.Media{Kind: core.KindAudio}, &core.Codec{Name: core.CodecAAC},
+	)
+	audioTrack.ID = 2
+
+	c := &Conn{
+		Timeout: 1,
+		conn:    client,
+		mode:    core.ModeActiveProducer,
+		reader:  bufio.NewReader(client),
+		state:   StatePlay,
+	}
+	c.Receivers = []*core.Receiver{videoTrack, audioTrack}
+
+	go func() {
+		defer camera.Close()
+
+		packet := func(channel byte) []byte {
+			b, _ := (&rtp.Packet{Header: rtp.Header{Version: 2}, Payload: []byte{0}}).Marshal()
+			return append([]byte{'$', channel, 0, byte(len(b))}, b...)
+		}
+
+		for end := time.Now().Add(duration); time.Now().Before(end); {
+			if audio {
+				if _, err := camera.Write(packet(2)); err != nil {
+					return
+				}
+			}
+			if video {
+				if _, err := camera.Write(packet(0)); err != nil {
+					return
+				}
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+	}()
+
+	err := c.Handle()
+	_ = client.Close() // unblock the fake camera
+	return err
 }
