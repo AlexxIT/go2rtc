@@ -88,17 +88,22 @@ func trackToVideo(track *core.Receiver, video0 *camera.VideoCodecConfiguration, 
 				break
 			}
 		}
+	} else {
+		// audio only consumer: the camera won't stream with an empty video
+		// resolution, so ask for the best one, a video consumer can join later
+		profileID = core.Max(video0.CodecParams[0].ProfileID)
+		level = core.Max(video0.CodecParams[0].Level)
+	}
 
-		for _, s := range video0.VideoAttrs {
-			if (maxWidth > 0 && int(s.Width) > maxWidth) || (maxHeight > 0 && int(s.Height) > maxHeight) {
-				continue
-			}
-			// compare by area: with `Width > || Height >` a 1024x768 entry
-			// would beat 1280x720, and some cameras (Logi Circle 2) reject
-			// a 4:3 mode in SelectedStreamConfiguration with -70410
-			if int(s.Width)*int(s.Height) > int(attrs.Width)*int(attrs.Height) {
-				attrs = s
-			}
+	for _, s := range video0.VideoAttrs {
+		if (maxWidth > 0 && int(s.Width) > maxWidth) || (maxHeight > 0 && int(s.Height) > maxHeight) {
+			continue
+		}
+		// compare by area: with `Width > || Height >` a 1024x768 entry
+		// would beat 1280x720, and some cameras (Logi Circle 2) reject
+		// a 4:3 mode in SelectedStreamConfiguration with -70410
+		if int(s.Width)*int(s.Height) > int(attrs.Width)*int(attrs.Height) {
+			attrs = s
 		}
 	}
 

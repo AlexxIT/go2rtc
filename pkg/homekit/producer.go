@@ -155,30 +155,30 @@ func (c *Client) Start() error {
 
 	deadline := time.NewTimer(core.ConnDeadline)
 
-	if videoTrack != nil {
-		c.videoSession.OnReadRTP = func(packet *rtp.Packet) {
-			deadline.Reset(core.ConnDeadline)
-			videoTrack.WriteRTP(packet)
-			c.Recv += len(packet.Payload)
-		}
-
-		if audioTrack != nil {
-			c.audioSession.OnReadRTP = func(packet *rtp.Packet) {
-				audioTrack.WriteRTP(packet)
-				c.Recv += len(packet.Payload)
+	// a consumer can ask for the video after the producer was started by an
+	// audio only consumer (and vice versa), so tracks are searched until found,
+	// the camera always sends both
+	c.videoSession.OnReadRTP = func(packet *rtp.Packet) {
+		deadline.Reset(core.ConnDeadline)
+		if videoTrack == nil {
+			if videoTrack = c.trackByKind(core.KindVideo); videoTrack == nil {
+				return
 			}
 		}
-	} else {
-		c.audioSession.OnReadRTP = func(packet *rtp.Packet) {
-			deadline.Reset(core.ConnDeadline)
-			audioTrack.WriteRTP(packet)
-			c.Recv += len(packet.Payload)
-		}
+		videoTrack.WriteRTP(packet)
+		c.Recv += len(packet.Payload)
 	}
 
-	if c.audioSession.OnReadRTP != nil {
-		c.audioSession.OnReadRTP = timekeeper(c.audioSession.OnReadRTP)
-	}
+	c.audioSession.OnReadRTP = timekeeper(func(packet *rtp.Packet) {
+		deadline.Reset(core.ConnDeadline)
+		if audioTrack == nil {
+			if audioTrack = c.trackByKind(core.KindAudio); audioTrack == nil {
+				return
+			}
+		}
+		audioTrack.WriteRTP(packet)
+		c.Recv += len(packet.Payload)
+	})
 
 	<-deadline.C
 
