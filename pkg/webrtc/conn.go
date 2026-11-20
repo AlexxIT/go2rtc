@@ -142,8 +142,7 @@ func NewConn(pc *webrtc.PeerConnection) *Conn {
 			// The same reader passes PLI/FIR to the source of the track.
 			c.rtcpOnce.Do(func() {
 				for _, sender := range pc.GetSenders() {
-					track, _ := sender.Track().(*Track)
-					go readRTCP(sender.Read, track)
+					go readRTCP(sender)
 				}
 			})
 			for _, sender := range c.Senders {

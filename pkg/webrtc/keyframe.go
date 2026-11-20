@@ -5,8 +5,8 @@ import (
 	"io"
 	"net"
 
-	"github.com/pion/interceptor"
 	"github.com/pion/rtcp"
+	"github.com/pion/webrtc/v4"
 )
 
 // maxRTCPReadErrors ends the RTCP read loop after this many failed reads in a row.
@@ -22,10 +22,13 @@ func rtcpReadDone(err error) bool {
 // the track for a keyframe, if there is a track.
 // The interceptors return a broken or too large packet as a read error: skip
 // it, end only when the reader is closed or too many reads in a row failed.
-func readRTCP(read func([]byte) (int, interceptor.Attributes, error), track *Track) {
+func readRTCP(sender *webrtc.RTPSender) {
+	track, _ := sender.Track().(*Track)
+
+	var errs int
 	b := make([]byte, 1500)
-	for errs := 0; ; {
-		n, _, err := read(b)
+	for {
+		n, _, err := sender.Read(b)
 		if err != nil {
 			if errs++; rtcpReadDone(err) || errs >= maxRTCPReadErrors {
 				return
