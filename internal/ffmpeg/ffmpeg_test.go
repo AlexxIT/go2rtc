@@ -2,6 +2,7 @@ package ffmpeg
 
 import (
 	"net/url"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -57,6 +58,10 @@ func TestParseArgsFile(t *testing.T) {
 }
 
 func TestParseArgsDevice(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("dshow device input is only built on Windows")
+	}
+
 	tests := []struct {
 		name   string
 		source string
@@ -252,6 +257,9 @@ func TestParseArgsHwVaapi(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			if strings.HasPrefix(test.name, "[DEVICE]") && runtime.GOOS != "windows" {
+				t.Skip("dshow device input is only built on Windows")
+			}
 			args := parseArgs(test.source)
 			require.Equal(t, test.expect, args.String())
 		})
@@ -397,6 +405,7 @@ func TestDrawText(t *testing.T) {
 }
 
 func TestVersion(t *testing.T) {
+	defer func(v string) { verAV = v }(verAV)
 	verAV = ffmpeg.Version61
 	tests := []struct {
 		name   string
