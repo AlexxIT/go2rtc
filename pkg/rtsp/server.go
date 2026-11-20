@@ -23,8 +23,12 @@ func NewServer(conn net.Conn) *Conn {
 			Protocol:   "rtsp+tcp",
 			RemoteAddr: conn.RemoteAddr().String(),
 		},
-		conn:   conn,
-		reader: bufio.NewReader(conn),
+		conn:            conn,
+		reader:          bufio.NewReader(conn),
+		lastTimestamp:   make(map[byte]uint32), // channel -> last timestamp
+		timestampOffset: make(map[byte]uint32), // channel -> constant timestamp offset after reconnect
+		lastSeq:         make(map[byte]uint16), // channel -> last sequence number
+		seqOffset:       make(map[byte]uint16), // channel -> constant seq offset after reconnect
 	}
 }
 
