@@ -34,7 +34,12 @@ func NewStream(
 	if bitrate != 0 {
 		bitrate /= 1024 // convert bps to kbps
 	} else {
-		bitrate = 4096 // default kbps for general FullHD camera
+		// I don't know if 1920 is a good value. I'd prefer 4096 because that's
+		// the value used by top cameras, like Dahua. However, Logitech cameras
+		// do not start with this setting. Users tested the value 1920, but
+		// unfortunately did not test 2048.
+		// https://github.com/AlexxIT/go2rtc/issues/2425
+		bitrate = 1920 // default kbps for general FullHD camera
 	}
 
 	videoCodec.RTPParams = []RTPParams{
