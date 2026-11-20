@@ -45,6 +45,9 @@ func (c *Conn) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, e
 
 	track := core.NewReceiver(media, codec)
 	track.ID = channel
+	if c.Keyframe == KeyframeResetup && media.Kind == core.KindVideo {
+		track.OnKeyframe(c.RequestKeyframe)
+	}
 	c.Receivers = append(c.Receivers, track)
 
 	return track, nil
