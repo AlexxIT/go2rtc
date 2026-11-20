@@ -104,15 +104,18 @@ func (c *Client) ReadPacket() (hdr, payload []byte, err error) {
 		return
 	}
 	if c.key != nil {
-		if c.model == ModelAqaraG2 && hdr[0] == tutk.CodecH265 {
-			payload, err = DecodeVideo(payload, c.key)
-		} else {
-			// ModelAqaraG2: audio AAC
-			// ModelIMILABA1: video HEVC, audio PCMA
-			payload, err = crypto.Decode(payload, c.key)
-		}
+		payload, err = decodePayload(c.model, hdr[0], payload, c.key)
 	}
 	return
+}
+
+func decodePayload(model string, codec byte, payload, key []byte) ([]byte, error) {
+	if model == ModelAqaraG2 && (codec == tutk.CodecH265 || codec == tutk.CodecH264) {
+		return DecodeVideo(payload, key)
+	}
+	// ModelAqaraG2: audio AAC
+	// ModelIMILABA1: video HEVC, audio PCMA
+	return crypto.Decode(payload, key)
 }
 
 const (
