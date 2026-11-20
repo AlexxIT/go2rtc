@@ -15,6 +15,7 @@ const (
 	NALUTypeVPS       = 32
 	NALUTypeSPS       = 33
 	NALUTypePPS       = 34
+	NALUTypeAP        = 48
 	NALUTypePrefixSEI = 39
 	NALUTypeSuffixSEI = 40
 	NALUTypeFU        = 49
