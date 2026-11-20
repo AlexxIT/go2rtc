@@ -21,6 +21,22 @@ A regular camera has a single video source (`GetVideoSources`) and two profiles 
 
 Go2rtc has one video source and one profile per stream.
 
+### ONVIF Events
+
+The ONVIF server has an Events service (PullPoint subscriptions only) with motion events. Clients like UniFi Protect use it to show and record motion from third-party cameras. Both common motion topics are sent: `tns1:RuleEngine/CellMotionDetector/Motion` (`IsMotion`) and `tns1:VideoSource/MotionAlarm` (`State`). The event source token is the stream name.
+
+Go2rtc doesn't detect motion itself. You can set the motion state of a stream from any external detector with the API:
+
+```shell
+curl -X POST "http://localhost:1984/api/onvif/motion?src=camera1&state=true"
+curl -X POST "http://localhost:1984/api/onvif/motion?src=camera1&state=false"
+```
+
+- `state` - `true` or `false` (also `1`/`0`, `on`/`off`), send `false` to end the event
+- the stream becomes a motion source with the first API call
+- the Events service is advertised in `GetCapabilities` and `GetServices` only when at least one motion source exists, so call the API (ex. with `state=false`) before adding the camera to the client
+- motion states live in memory and are lost after a restart
+
 ## Tested clients
 
 Go2rtc works as ONVIF server:
