@@ -108,40 +108,126 @@ func TestKeyframeRequest(t *testing.T) {
 	request("1", &rtcp.FullIntraRequest{FIR: []rtcp.FIREntry{{SSRC: ssrc["1"]}}})
 }
 
-// rtcpReads returns a reader that replays errs (nil = PLI packet) and counts
-// the remaining reads
-func rtcpReads(t *testing.T, errs ...error) (func([]byte) (int, interceptor.Attributes, error), *[]error) {
+// rtcpScript answers the RTCP reads of a real sender, inner is the reader of
+// the connection
+type rtcpScript func(b []byte, a interceptor.Attributes, inner interceptor.RTCPReader) (int, interceptor.Attributes, error)
+
+func (s rtcpScript) NewInterceptor(string) (interceptor.Interceptor, error) {
+	return &scriptedRTCP{read: s}, nil
+}
+
+type scriptedRTCP struct {
+	interceptor.NoOp
+	read rtcpScript
+}
+
+func (s *scriptedRTCP) BindRTCPReader(inner interceptor.RTCPReader) interceptor.RTCPReader {
+	return interceptor.RTCPReaderFunc(func(b []byte, a interceptor.Attributes) (int, interceptor.Attributes, error) {
+		return s.read(b, a, inner)
+	})
+}
+
+// newRTCPSender connects a sendonly track to a local peer and returns its
+// sender, the factories wrap the RTCP reader of the sender in this order
+func newRTCPSender(t *testing.T, track webrtc.TrackLocal, factories ...interceptor.Factory) (*webrtc.RTPSender, *webrtc.PeerConnection) {
+	m := &webrtc.MediaEngine{}
+	require.Nil(t, m.RegisterDefaultCodecs())
+	registry := &interceptor.Registry{}
+	for _, f := range factories {
+		registry.Add(f)
+	}
+	settings := webrtc.SettingEngine{}
+	settings.SetIncludeLoopbackCandidate(true)
+	settings.SetNetworkTypes([]webrtc.NetworkType{webrtc.NetworkTypeUDP4})
+
+	pc, err := webrtc.NewAPI(webrtc.WithMediaEngine(m), webrtc.WithInterceptorRegistry(registry), webrtc.WithSettingEngine(settings)).NewPeerConnection(webrtc.Configuration{})
+	require.Nil(t, err)
+	t.Cleanup(func() { _ = pc.Close() })
+	tr, err := pc.AddTransceiverFromTrack(track, webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionSendonly})
+	require.Nil(t, err)
+
+	remote, err := webrtc.NewAPI(webrtc.WithSettingEngine(settings)).NewPeerConnection(webrtc.Configuration{})
+	require.Nil(t, err)
+	t.Cleanup(func() { _ = remote.Close() })
+
+	require.Nil(t, remote.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: createOffer(t, pc)}))
+	answer, err := remote.CreateAnswer(nil)
+	require.Nil(t, err)
+	gathered := webrtc.GatheringCompletePromise(remote)
+	require.Nil(t, remote.SetLocalDescription(answer))
+	<-gathered
+	require.Nil(t, pc.SetRemoteDescription(*remote.LocalDescription()))
+	return tr.Sender(), pc
+}
+
+// readUntilClose runs readRTCP, closes the connection when drained is closed
+// and waits until the loop ended
+func readUntilClose(t *testing.T, sender *webrtc.RTPSender, pc *webrtc.PeerConnection, drained <-chan struct{}) {
+	done := make(chan struct{})
+	go func() {
+		readRTCP(sender)
+		close(done)
+	}()
+	select {
+	case <-drained:
+	case <-time.After(10 * time.Second):
+		t.Fatal("RTCP script not read")
+	}
+	require.Nil(t, pc.Close())
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("readRTCP did not end on close")
+	}
+}
+
+// rtcpReads replays errs (nil = PLI packet), then closes drained and passes
+// the reads to the connection
+func rtcpReads(t *testing.T, errs ...error) (rtcpScript, *[]error, <-chan struct{}) {
 	pli, err := rtcp.Marshal([]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: 1}})
 	require.Nil(t, err)
 
-	read := func(b []byte) (int, interceptor.Attributes, error) {
+	drained := make(chan struct{})
+	read := func(b []byte, a interceptor.Attributes, inner interceptor.RTCPReader) (int, interceptor.Attributes, error) {
+		if len(errs) == 0 {
+			select {
+			case <-drained:
+			default:
+				close(drained)
+			}
+			return inner.Read(b, a)
+		}
 		err := errs[0]
 		errs = errs[1:]
 		if err != nil {
 			return 0, nil, err
 		}
-		return copy(b, pli), nil, nil
+		return copy(b, pli), a, nil
 	}
-	return read, &errs
+	return read, &errs, drained
 }
 
 // TestReadRTCPSkipsBrokenPackets - a failed read must not end the loop,
 // a later PLI still reaches the handler
 func TestReadRTCPSkipsBrokenPackets(t *testing.T) {
-	read, left := rtcpReads(t, errors.New("broken packet"), io.ErrShortBuffer, nil, io.EOF)
+	read, left, drained := rtcpReads(t, errors.New("broken packet"), io.ErrShortBuffer, nil)
 
 	var calls int
-	readRTCP(read, newKeyframeTrack(func() { calls++ }))
+	sender, pc := newRTCPSender(t, newKeyframeTrack(func() { calls++ }), read)
+	readUntilClose(t, sender, pc, drained)
 	require.Equal(t, 1, calls)
 	require.Empty(t, *left)
 }
 
 // TestReadRTCPWithoutHandler - the NACK responder needs the reads, so the loop
-// consumes packets until the reader is closed, also without a handler
+// consumes packets until the connection is closed, also without a handler
 func TestReadRTCPWithoutHandler(t *testing.T) {
-	read, left := rtcpReads(t, nil, nil, errors.New("broken packet"), nil, io.ErrClosedPipe)
+	read, left, drained := rtcpReads(t, nil, nil, errors.New("broken packet"), nil)
 
-	readRTCP(read, nil)
+	track, err := webrtc.NewTrackLocalStaticRTP(webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264}, "video", "go2rtc")
+	require.Nil(t, err)
+	sender, pc := newRTCPSender(t, track, read)
+	readUntilClose(t, sender, pc, drained)
 	require.Empty(t, *left)
 }
 
@@ -164,29 +250,31 @@ func TestReadRTCPLateSender(t *testing.T) {
 	require.Nil(t, err)
 
 	packets := make(chan []byte)
-	read := func(b []byte) (int, interceptor.Attributes, error) {
+	drained := make(chan struct{})
+	read := func(b []byte, a interceptor.Attributes, inner interceptor.RTCPReader) (int, interceptor.Attributes, error) {
 		p, ok := <-packets
 		if !ok {
-			return 0, nil, io.EOF
+			select {
+			case <-drained:
+			default:
+				close(drained)
+			}
+			return inner.Read(b, a)
 		}
-		return copy(b, p), nil, nil
+		return copy(b, p), a, nil
 	}
 
 	track := NewTrack("video")
-	done := make(chan struct{})
-	go func() {
-		readRTCP(read, track)
-		close(done)
-	}()
-
-	packets <- pli // the loop is running, no sender yet
-
+	sender, pc := newRTCPSender(t, track, rtcpScript(read))
 	// the first PLI may still meet the new sender, so count instead of expecting one
 	var calls atomic.Int32
-	track.setSender(newKeyframeTrack(func() { calls.Add(1) }).sender)
-	packets <- pli
-	close(packets)
-	<-done
+	go func() {
+		packets <- pli // the loop is running, no sender yet
+		track.setSender(newKeyframeTrack(func() { calls.Add(1) }).sender)
+		packets <- pli
+		close(packets)
+	}()
+	readUntilClose(t, sender, pc, drained)
 
 	require.Positive(t, calls.Load(), "late sender got no keyframe request")
 }
@@ -194,11 +282,12 @@ func TestReadRTCPLateSender(t *testing.T) {
 // TestReadRTCPStopsAfterTooManyErrors - a reader that only fails ends the loop
 func TestReadRTCPStopsAfterTooManyErrors(t *testing.T) {
 	var reads int
-	read := func([]byte) (int, interceptor.Attributes, error) {
+	read := func([]byte, interceptor.Attributes, interceptor.RTCPReader) (int, interceptor.Attributes, error) {
 		reads++
 		return 0, nil, errors.New("broken packet")
 	}
-	readRTCP(read, nil)
+	sender, _ := newRTCPSender(t, NewTrack("video"), rtcpScript(read))
+	readRTCP(sender)
 	require.Equal(t, maxRTCPReadErrors, reads)
 }
 
@@ -211,22 +300,22 @@ func TestReadRTCPAfterNackLimiter(t *testing.T) {
 	})
 	require.Nil(t, err)
 
-	i, err := newNackLimiter(nackMaxResendBytesPerSec, nackMaxResendsPerSeq).NewInterceptor("")
-	require.Nil(t, err)
-
+	drained := make(chan struct{})
 	var reads int
-	reader := i.BindRTCPReader(interceptor.RTCPReaderFunc(
-		func(b []byte, a interceptor.Attributes) (int, interceptor.Attributes, error) {
-			if reads++; reads > 1 {
-				return 0, nil, io.EOF
+	read := func(b []byte, a interceptor.Attributes, inner interceptor.RTCPReader) (int, interceptor.Attributes, error) {
+		if reads++; reads > 1 {
+			if reads == 2 {
+				close(drained)
 			}
-			return copy(b, compound), a, nil
-		},
-	))
+			return inner.Read(b, a)
+		}
+		return copy(b, compound), a, nil
+	}
 
 	var calls int
-	readRTCP(func(b []byte) (int, interceptor.Attributes, error) {
-		return reader.Read(b, nil)
-	}, newKeyframeTrack(func() { calls++ }))
+	// the limiter wraps the script, like it wraps the connection in production
+	limiter := newNackLimiter(nackMaxResendBytesPerSec, nackMaxResendsPerSeq)
+	sender, pc := newRTCPSender(t, newKeyframeTrack(func() { calls++ }), rtcpScript(read), limiter)
+	readUntilClose(t, sender, pc, drained)
 	require.Equal(t, 1, calls)
 }
