@@ -1,6 +1,7 @@
 package onvif
 
 import (
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -24,6 +25,9 @@ func Init() {
 
 	streams.HandleFunc("onvif", streamOnvif)
 
+	// motion events for the ONVIF Events service from any external source
+	api.HandleFunc("api/onvif/motion", apiMotion)
+
 	// ONVIF server on all suburls
 	api.HandleFunc("/onvif/", onvifDeviceService)
 
@@ -32,6 +36,9 @@ func Init() {
 }
 
 var log zerolog.Logger
+
+// events - motion states and PullPoint subscriptions of the ONVIF Events service
+var events = onvif.NewEvents()
 
 func streamOnvif(rawURL string) (core.Producer, error) {
 	client, err := onvif.NewClient(rawURL)
@@ -73,9 +80,66 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 
 	log.Trace().Msgf("[onvif] server request %s %s:\n%s", r.Method, r.RequestURI, b)
 
+	status := http.StatusOK
+
 	switch operation {
-	case onvif.ServiceGetServiceCapabilities, // important for Hass
-		onvif.DeviceGetNetworkInterfaces, // important for Hass
+	case onvif.ServiceGetServiceCapabilities:
+		if strings.HasSuffix(r.URL.Path, onvif.PathEvents) {
+			b = onvif.EventsServiceCapabilitiesResponse()
+		} else {
+			b = onvif.StaticResponse(operation) // important for Hass
+		}
+
+	case onvif.EventsGetEventProperties:
+		b = onvif.GetEventPropertiesResponse()
+
+	case onvif.EventsCreatePullPointSubscription:
+		ttl := onvif.ParseDuration(onvif.FindTagValue(b, "InitialTerminationTime"), time.Now())
+		id, expires, ok := events.Subscribe(ttl)
+		if !ok {
+			http.Error(w, "too many subscriptions", http.StatusServiceUnavailable)
+			return
+		}
+		b = onvif.CreatePullPointSubscriptionResponse(r.Host, id, expires)
+
+	case onvif.EventsPullMessages:
+		timeout := onvif.ParseDuration(onvif.FindTagValue(b, "Timeout"), time.Now())
+		limit, _ := strconv.Atoi(onvif.FindTagValue(b, "MessageLimit"))
+		// long poll, ends earlier if the client disconnects
+		b, err = events.Pull(r.Context(), onvif.SubscriptionID(r.URL.Path), timeout, limit)
+		if errors.Is(err, onvif.ErrUnknownSubscription) {
+			b = onvif.ResourceUnknownResponse()
+			status = http.StatusBadRequest
+		} else if err != nil {
+			return
+		}
+
+	case onvif.EventsRenew:
+		ttl := onvif.ParseDuration(onvif.FindTagValue(b, "TerminationTime"), time.Now())
+		if expires, ok := events.Renew(onvif.SubscriptionID(r.URL.Path), ttl); ok {
+			b = onvif.RenewResponse(expires)
+		} else {
+			b = onvif.ResourceUnknownResponse()
+			status = http.StatusBadRequest
+		}
+
+	case onvif.EventsUnsubscribe:
+		if events.Unsubscribe(onvif.SubscriptionID(r.URL.Path)) {
+			b = onvif.UnsubscribeResponse()
+		} else {
+			b = onvif.ResourceUnknownResponse()
+			status = http.StatusBadRequest
+		}
+
+	case onvif.EventsSetSynchronizationPoint:
+		if events.Sync(onvif.SubscriptionID(r.URL.Path)) {
+			b = onvif.SetSynchronizationPointResponse()
+		} else {
+			b = onvif.ResourceUnknownResponse()
+			status = http.StatusBadRequest
+		}
+
+	case onvif.DeviceGetNetworkInterfaces, // important for Hass
 		onvif.DeviceGetSystemDateAndTime, // important for Hass
 		onvif.DeviceSetSystemDateAndTime, // return just OK
 		onvif.DeviceGetDiscoveryMode,
@@ -95,10 +159,10 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 
 	case onvif.DeviceGetCapabilities:
 		// important for Hass: Media section
-		b = onvif.GetCapabilitiesResponse(r.Host)
+		b = onvif.GetCapabilitiesResponse(r.Host, events.HasSources())
 
 	case onvif.DeviceGetServices:
-		b = onvif.GetServicesResponse(r.Host)
+		b = onvif.GetServicesResponse(r.Host, events.HasSources())
 
 	case onvif.DeviceGetDeviceInformation:
 		// important for Hass: SerialNumber (unique server ID)
@@ -153,6 +217,8 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 	log.Trace().Msgf("[onvif] server response:\n%s", b)
 
 	w.Header().Set("Content-Type", "application/soap+xml; charset=utf-8")
+	// SOAP fault should have HTTP status 400
+	w.WriteHeader(status)
 	if _, err = w.Write(b); err != nil {
 		log.Error().Err(err).Caller().Send()
 	}
@@ -235,4 +301,36 @@ func apiOnvif(w http.ResponseWriter, r *http.Request) {
 	}
 
 	api.ResponseSources(w, items)
+}
+
+// apiMotion - set the motion state of a stream for the ONVIF Events service.
+// The stream becomes a motion source with the first call.
+//
+//	POST /api/onvif/motion?src=camera1&state=true
+func apiMotion(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "", http.StatusMethodNotAllowed)
+		return
+	}
+
+	query := r.URL.Query()
+	src := query.Get("src")
+	if streams.Get(src) == nil {
+		http.Error(w, api.StreamNotFound, http.StatusNotFound)
+		return
+	}
+
+	var motion bool
+	switch query.Get("state") {
+	case "true", "1", "on":
+		motion = true
+	case "false", "0", "off":
+	default:
+		http.Error(w, "wrong state", http.StatusBadRequest)
+		return
+	}
+
+	log.Debug().Msgf("[onvif] motion src=%s state=%t", src, motion)
+
+	events.SetMotion(src, motion)
 }
