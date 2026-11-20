@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/textproto"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -25,9 +26,7 @@ type Response struct {
 
 func (r Response) String() string {
 	s := r.Proto + " " + r.Status + EndLine
-	for k, v := range r.Header {
-		s += k + ": " + v[0] + EndLine
-	}
+	s += headerString(r.Header)
 	s += EndLine
 	if r.Body != nil {
 		s += string(r.Body)
@@ -83,6 +82,31 @@ func ReadResponse(r *bufio.Reader) (*Response, error) {
 	return res, nil
 }
 
+// headerString writes CSeq first and the other headers in sorted order.
+// Some servers (e.g. Google Nest RTSP, Wowza) ignore requests unless CSeq
+// is the first header, and ranging over the map gives a random order.
+// https://github.com/AlexxIT/go2rtc/issues/2622
+func headerString(header textproto.MIMEHeader) string {
+	var s string
+	keys := make([]string, 0, len(header))
+	for k := range header {
+		if strings.EqualFold(k, "CSeq") {
+			if v := header[k]; len(v) > 0 {
+				s += k + ": " + v[0] + EndLine
+			}
+		} else {
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		if v := header[k]; len(v) > 0 {
+			s += k + ": " + v[0] + EndLine
+		}
+	}
+	return s
+}
+
 // Request like http.Request, but with any proto
 type Request struct {
 	Method string
@@ -94,9 +118,7 @@ type Request struct {
 
 func (r *Request) String() string {
 	s := r.Method + " " + r.URL.String() + " " + r.Proto + EndLine
-	for k, v := range r.Header {
-		s += k + ": " + v[0] + EndLine
-	}
+	s += headerString(r.Header)
 	s += EndLine
 	if r.Body != nil {
 		s += string(r.Body)
