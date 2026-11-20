@@ -121,5 +121,7 @@ func main() {
 		}
 	}
 
+	api.SetReady()
+
 	shell.RunUntilSignal()
 }
