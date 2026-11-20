@@ -21,16 +21,22 @@ const (
 )
 
 func NALUType(b []byte) byte {
+	if len(b) < 5 {
+		return 0
+	}
 	return (b[4] >> 1) & 0x3F
 }
 
 func IsKeyframe(b []byte) bool {
-	for {
+	hasVPS := false
+	for len(b) >= 5 {
 		switch NALUType(b) {
-		case NALUTypePFrame:
-			return false
 		case NALUTypeIFrame, NALUTypeIFrame2, NALUTypeIFrame3:
 			return true
+		case NALUTypeVPS:
+			hasVPS = true
+		case NALUTypePFrame:
+			return hasVPS
 		}
 
 		size := int(binary.BigEndian.Uint32(b)) + 4
@@ -38,14 +44,15 @@ func IsKeyframe(b []byte) bool {
 			b = b[size:]
 			continue
 		} else {
-			return false
+			return hasVPS
 		}
 	}
+	return hasVPS
 }
 
 func Types(data []byte) []byte {
 	var types []byte
-	for {
+	for len(data) >= 5 {
 		types = append(types, NALUType(data))
 
 		size := 4 + int(binary.BigEndian.Uint32(data))

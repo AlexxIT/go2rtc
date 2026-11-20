@@ -90,6 +90,8 @@ func (c *Keyframe) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 
 		if track.Codec.IsRTP() {
 			handler.Handler = h265.RTPDepay(track.Codec, handler.Handler)
+		} else {
+			handler.Handler = h265.RepairAVCC(track.Codec, handler.Handler)
 		}
 	}
 

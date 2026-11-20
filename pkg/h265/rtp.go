@@ -119,7 +119,9 @@ func RTPPay(mtu uint16, handler core.HandlerFunc) core.HandlerFunc {
 		mtu = 1472
 	}
 
-	payloader := &Payloader{}
+	payloader := &Payloader{
+		SkipAggregation: true,
+	}
 	sequencer := rtp.NewRandomSequencer()
 	mtu -= 12 // rtp.Header size
 
