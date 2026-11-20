@@ -202,8 +202,11 @@ func (c *TuyaClient) GetVideoCodecs() []*core.Codec {
 			}
 
 			codec := &core.Codec{
-				Name:      name,
-				ClockRate: uint32(video.SampleRate),
+				Name: name,
+				// video.SampleRate is unreliable (0 on some cameras, 90000 on
+				// others), and the H264/H265 RTP clock rate is always 90000
+				// regardless (RFC 7798, RFC 6184)
+				ClockRate: 90000,
 			}
 
 			codecs = append(codecs, codec)
