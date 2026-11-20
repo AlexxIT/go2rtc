@@ -1,8 +1,12 @@
 package ffmpeg
 
 import (
+	"net/url"
+	"strings"
 	"testing"
 
+	"github.com/AlexxIT/go2rtc/internal/rtsp"
+	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/ffmpeg"
 	"github.com/stretchr/testify/require"
 )
@@ -194,6 +198,23 @@ func TestParseArgsAudio(t *testing.T) {
 			args := parseArgs(test.source)
 			require.Equal(t, test.expect, args.String())
 		})
+	}
+}
+
+func TestParseArgsStreamName(t *testing.T) {
+	rtsp.Port = "8554"
+
+	// Home Assistant Nest creates names like "nest_enterprises%2Fproject%2Fdevices%2Fcamera"
+	for _, name := range []string{"test%2Fcamera", "test/camera"} {
+		_, _ = streams.New(name)
+
+		args := parseArgs(name + "#audio=opus")
+		i := strings.Index(args.Input, "rtsp://")
+		require.True(t, i > 0)
+
+		u, err := url.Parse(strings.Fields(args.Input[i:])[0])
+		require.Nil(t, err)
+		require.Equal(t, "/"+name, u.Path)
 	}
 }
 
