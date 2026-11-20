@@ -35,16 +35,27 @@ func Init() {
 			return nil, err
 		}
 
+		dialURL := rawURL
 		if u.User != nil {
-			rawURL, err = getCameraURL(u)
+			dialURL, err = getCameraURL(u)
 			if err != nil {
 				return nil, err
 			}
 		}
 
-		log.Debug().Msgf("xiaomi: dial %s", rawURL)
+		log.Debug().Msgf("xiaomi: dial %s", dialURL)
 
-		return xiaomi.Dial(rawURL)
+		prod, err := xiaomi.Dial(dialURL)
+		if err != nil {
+			return nil, err
+		}
+
+		// report the source URL, not the one with keys from the cloud
+		if info, ok := prod.(core.Info); ok {
+			info.SetURL(rawURL)
+		}
+
+		return prod, nil
 	})
 
 	api.HandleFunc("api/xiaomi", apiXiaomi)
