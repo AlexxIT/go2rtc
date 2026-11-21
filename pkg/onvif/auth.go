@@ -2,6 +2,7 @@ package onvif
 
 import (
 	"crypto/sha1"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
 	"regexp"
@@ -9,88 +10,68 @@ import (
 	"time"
 )
 
-const (
-	UsernameTokenPasswordDigest = "#PasswordDigest"
-	UsernameTokenPasswordText   = "#PasswordText"
+const tokenAge = 5 * time.Minute
 
-	DefaultUsernameTokenAge = 5 * time.Minute
-)
-
-type UsernameToken struct {
-	Username     string
-	Password     string
-	PasswordType string
-	Nonce        string
-	Created      string
+type Auth struct {
+	username string
+	password string
 }
 
-func ParseUsernameToken(b []byte) *UsernameToken {
-	token := &UsernameToken{
-		Username: FindTagValue(b, "Username"),
-		Password: FindTagValue(b, "Password"),
-		Nonce:    FindTagValue(b, "Nonce"),
-		Created:  FindTagValue(b, "Created"),
+func NewAuth(username, password string) *Auth {
+	return &Auth{username: username, password: password}
+}
+
+func (a *Auth) Validate(b []byte) bool {
+	username := FindTagValue(b, "Username")
+	password := FindTagValue(b, "Password")
+	if username == "" || password == "" {
+		return false
 	}
+
+	var passwordType string
 
 	re := regexp.MustCompile(`(?s)<(?:\w+:)?Password\b[^>]*\bType="([^"]+)"`)
-	m := re.FindSubmatch(b)
-	if len(m) == 2 {
-		token.PasswordType = string(m[1])
+	if m := re.FindSubmatch(b); len(m) == 2 {
+		passwordType = string(m[1])
 	}
 
-	if token.Username == "" && token.Password == "" && token.Nonce == "" && token.Created == "" {
-		return nil
+	if passwordType == "" || strings.HasSuffix(passwordType, "#PasswordText") {
+		return CompareHash(a.username, username)+CompareHash(a.password, password) == 2
 	}
 
-	return token
-}
+	nonce := FindTagValue(b, "Nonce")
+	created := FindTagValue(b, "Created")
 
-func ValidateUsernameToken(b []byte, username, password string, now time.Time, maxAge time.Duration) bool {
-	token := ParseUsernameToken(b)
-	if token == nil || token.Username != username {
+	if !strings.HasSuffix(passwordType, "#PasswordDigest") || nonce == "" || created == "" {
 		return false
 	}
 
-	return token.Validate(password, now, maxAge)
-}
-
-func (t *UsernameToken) Validate(password string, now time.Time, maxAge time.Duration) bool {
-	if t.Password == "" {
-		return false
-	}
-
-	if maxAge <= 0 {
-		maxAge = DefaultUsernameTokenAge
-	}
-
-	passwordType := t.PasswordType
-	if passwordType == "" || strings.HasSuffix(passwordType, UsernameTokenPasswordText) {
-		return subtle.ConstantTimeCompare([]byte(t.Password), []byte(password)) == 1
-	}
-
-	if !strings.HasSuffix(passwordType, UsernameTokenPasswordDigest) || t.Nonce == "" || t.Created == "" {
-		return false
-	}
-
-	created, err := time.Parse(time.RFC3339Nano, t.Created)
+	ts, err := time.Parse(time.RFC3339Nano, created)
 	if err != nil {
 		return false
 	}
 
-	if created.Before(now.Add(-maxAge)) || created.After(now.Add(maxAge)) {
+	now := time.Now()
+	if ts.Before(now.Add(-tokenAge)) || ts.After(now.Add(tokenAge)) {
 		return false
 	}
 
-	nonce, err := base64.StdEncoding.DecodeString(t.Nonce)
+	decodedNonce, err := base64.StdEncoding.DecodeString(nonce)
 	if err != nil {
 		return false
 	}
 
 	h := sha1.New()
-	_, _ = h.Write(nonce)
-	_, _ = h.Write([]byte(t.Created))
-	_, _ = h.Write([]byte(password))
+	_, _ = h.Write(decodedNonce)
+	_, _ = h.Write([]byte(created))
+	_, _ = h.Write([]byte(a.password))
 
 	digest := base64.StdEncoding.EncodeToString(h.Sum(nil))
-	return subtle.ConstantTimeCompare([]byte(t.Password), []byte(digest)) == 1
+	return CompareHash(a.username, username)+CompareHash(digest, password) == 2
+}
+
+func CompareHash(x, y string) int {
+	a := sha256.Sum256([]byte(x))
+	b := sha256.Sum256([]byte(y))
+	return subtle.ConstantTimeCompare(a[:], b[:])
 }

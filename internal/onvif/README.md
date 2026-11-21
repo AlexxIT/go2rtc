@@ -21,15 +21,9 @@ A regular camera has a single video source (`GetVideoSources`) and two profiles 
 
 Go2rtc has one video source and one profile per stream.
 
-You can protect the ONVIF SOAP service independently from the Web API:
+The ONVIF module does not support Basic authentication. Therefore `/onvif/*` will use the `username` and `password` from the RTSP module. If it is not specified, it will use `username` and `password` from the API module.
 
-```yaml
-onvif:
-  username: "admin"
-  password: "pass"
-```
-
-This uses WS-Security `UsernameToken` authentication for ONVIF SOAP requests. `GetSystemDateAndTime` stays available without authentication so clients can calculate clock offset before sending password digests.
+ONVIF clients receive a video stream from the RTSP module and snapshots from the API module. And they will use the same username and password that you provided to connect to ONVIF.
 
 ## Tested clients
 

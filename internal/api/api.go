@@ -165,6 +165,17 @@ func HandleFunc(pattern string, handler http.HandlerFunc) {
 	http.HandleFunc(pattern, handler)
 }
 
+func HandleFuncNoAuth(pattern string, handler http.HandlerFunc) {
+	// TODO: rewrite to Go 1.22+
+	// mux := http.NewServeMux()
+	// mux.HandleFunc("GET /onvif/", ...)
+	// private := http.NewServeMux()
+	// mux.HandleFunc("GET /api", ...)
+	// mux.Handle("/api/", middlewareAuth(private))
+	noauthPrefixes = append(noauthPrefixes, pattern)
+	HandleFunc(pattern, handler)
+}
+
 // ResponseJSON important always add Content-Type
 // so go won't need to call http.DetectContentType
 func ResponseJSON(w http.ResponseWriter, v any) {
@@ -209,11 +220,15 @@ func isLoopback(remoteAddr string) bool {
 	return strings.HasPrefix(remoteAddr, "127.") || strings.HasPrefix(remoteAddr, "[::1]") || remoteAddr == "@"
 }
 
+var noauthPrefixes []string
+
 func middlewareAuth(username, password string, localAuth bool, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/onvif/") {
-			next.ServeHTTP(w, r)
-			return
+		for _, prefix := range noauthPrefixes {
+			if strings.HasPrefix(r.URL.Path, prefix) {
+				next.ServeHTTP(w, r)
+				return
+			}
 		}
 
 		if localAuth || !isLoopback(r.RemoteAddr) {

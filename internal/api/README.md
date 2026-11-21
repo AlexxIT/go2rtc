@@ -39,17 +39,13 @@ api:
   unix_listen: "/tmp/go2rtc.sock"  # default "", unix socket listener for API
 ```
 
-`/onvif/*` is not protected by `api.username` / `api.password`. Use the ONVIF module configuration for ONVIF authentication:
-
-```yaml
-onvif:
-  username: "admin"
-  password: "pass"
-```
-
-Note that some ONVIF clients require the RTSP username and password to be the same.
-
 **PS:**
 
 - MJPEG over WebSocket plays better than native MJPEG because Chrome [bug](https://bugs.chromium.org/p/chromium/issues/detail?id=527446)
 - MP4 over WebSocket was created only for Apple iOS because it doesn't support file streaming
+
+## ONVIF
+
+The ONVIF module does not support Basic authentication. Therefore `/onvif/*` will use the `username` and `password` from the RTSP module. If it is not specified, it will use `username` and `password` from the API module.
+
+ONVIF clients receive a video stream from the RTSP module and snapshots from the API module. And they will use the same username and password that you provided to connect to ONVIF.
