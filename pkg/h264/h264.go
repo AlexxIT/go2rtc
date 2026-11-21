@@ -19,6 +19,8 @@ const (
 	NALUTypeAUD    = 9 // Access unit delimiter
 )
 
+const NALUTypeFUA = 28 // RTP fragmentation unit A (RFC 6184)
+
 func NALUType(b []byte) byte {
 	return b[4] & 0x1F
 }
