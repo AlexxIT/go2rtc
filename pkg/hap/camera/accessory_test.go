@@ -10,7 +10,7 @@ import (
 )
 
 func TestNilCharacter(t *testing.T) {
-	var res SetupEndpoints
+	var res SetupEndpointsRequest
 	char := &hap.Character{}
 	err := char.ReadTLV8(&res)
 	require.NotNil(t, err)
