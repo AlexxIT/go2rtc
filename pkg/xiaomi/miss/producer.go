@@ -134,6 +134,9 @@ func (p *Producer) Start() error {
 		_ = p.client.SetDeadline(time.Now().Add(10 * time.Second))
 		pkt, err := p.client.ReadPacket()
 		if err != nil {
+			// Free the camera slot now: streams stops this producer only after
+			// the reconnect succeeds, and the reconnect may need that slot.
+			_ = p.client.Close()
 			return err
 		}
 
