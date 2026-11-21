@@ -76,6 +76,10 @@ func (s *Stream) addConsumer(cons core.Consumer, consMedias []*core.Media, isNew
 						log.Info().Err(err).Msg("[streams] can't add track")
 						continue
 					}
+					// request keyframe for a new consumer of a running source (if supported by source)
+					if consMedia.Kind == core.KindVideo && prod.started() {
+						track.RequestKeyframe()
+					}
 
 				case core.DirectionSendonly:
 					log.Trace().Msgf("[streams] match cons=%d => prod=%d", consN, prodN)
