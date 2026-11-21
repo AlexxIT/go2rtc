@@ -26,7 +26,7 @@ func Dial(host, uid, username, password string) (*Conn, error) {
 
 	sid := GenSessionID()
 
-	_ = c.SetDeadline(time.Now().Add(5 * time.Second))
+	_ = c.SetDeadline(time.Now().Add(15 * time.Second))
 
 	if addr.Port != 10001 {
 		err = c.connectDirect(uid, sid)
@@ -164,7 +164,7 @@ func (c *Conn) Error() error {
 func (c *Conn) worker() {
 	defer c.session.Close()
 
-	buf := make([]byte, 1200)
+	buf := make([]byte, 2048) // ch1 record frames are 1328 bytes
 
 	for {
 		n, err := c.Read(buf)

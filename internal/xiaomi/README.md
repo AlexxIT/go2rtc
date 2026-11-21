@@ -17,7 +17,7 @@ The `tutk` protocol is the worst thing that's ever happened to the P2P world. It
 
 1. **Not all cameras are supported**. The list of supported cameras is collected in [this issue](https://github.com/AlexxIT/go2rtc/issues/1982).
 2. Each time you connect to the camera, you need Internet access to obtain encryption keys.
-3. Connection to the camera is local only.
+3. Connection to the camera is local only, except legacy `tutk` cameras, see [Remote P2P](#remote-p2p-legacy-tutk-cameras).
 
 **Features:**
 
@@ -62,3 +62,25 @@ You can use a second channel for dual cameras: `channel=2`.
 streams:
   xiaomi1: xiaomi://***&channel=2
 ```
+
+## Remote P2P (legacy tutk cameras)
+
+Legacy cameras on the `tutk` protocol can also be reached from outside their LAN, the way Mi Home does it. Use a P2P server instead of the camera's IP; the port **10001** is what selects this mode:
+
+```yaml
+streams:
+  g2_remote: xiaomi://1234567890:cn@110.43.39.150:10001?did=9876543210&model=lumi.camera.gwagl01
+```
+
+go2rtc asks the Xiaomi CN P2P servers where the camera is and asks them to push the camera to punch a hole back, then continues like on the LAN.
+
+- Connecting takes from 1 to about 180 s. The camera registers with a new NAT port after each session, and for a few minutes the server still gives out the old one. Reconnecting within ~60 s, while the previous session is still pinged, takes seconds. Keeping the stream open with [`preload`](../streams/README.md#preload-stream) avoids the wait.
+- Verified only with the Aqara G2 (`lumi.camera.gwagl01`) and the Xiaomi CN servers.
+
+## Aqara G2: quality and SD card
+
+The Aqara G2 (`lumi.camera.gwagl01`) accepts these commands in a running session, without reconnecting. They need a running stream of that camera (use `preload` if nobody is watching) and return `404` without it, or `501` for other models.
+
+- `POST /api/xiaomi/quality?did=9876543210&q=fhd|hd|sd` (1920x1080, 1280x720, 640x360) returns when the first frame of the new size has arrived.
+- `GET /api/xiaomi/records?did=9876543210&start=<unix>&end=<unix>` returns the recordings on the SD card: `[{"start":1760000000,"dur":60,"type":1}]`.
+- `POST /api/xiaomi/playback?did=9876543210&start=<unix>&speed=1|2|4` plays the SD card from that time on the same stream; the response has the name of the file the camera chose. `start=0` goes back to live. `speed` is sent to the camera as is: 1 is normal speed, and the camera then plays about `2 * speed` times faster (2 gives ~4.6x, 4 gives ~8.5x, measured against the on-screen clock); other values are ignored by the camera.
