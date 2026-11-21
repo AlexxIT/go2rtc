@@ -55,7 +55,7 @@ func streamsHandler(rawURL string) (core.Producer, error) {
 				return milestoneClient(rawURL, query)
 			} else if format == "wyze" {
 				// https://github.com/mrlt8/docker-wyze-bridge
-				return wyzeClient(rawURL)
+				return wyzeClient(rawURL, query)
 			} else if format == "creality" {
 				return crealityClient(rawURL)
 			} else {
