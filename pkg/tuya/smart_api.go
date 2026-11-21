@@ -282,6 +282,7 @@ func NewTuyaSmartApiClient(httpClient *http.Client, baseUrl, email, password, de
 		TuyaClient: TuyaClient{
 			httpClient: httpClient,
 			mqtt:       mqttClient,
+			signal:     mqttClient,
 			deviceId:   deviceId,
 			expireTime: 0,
 			baseUrl:    baseUrl,

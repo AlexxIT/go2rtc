@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
@@ -15,12 +16,20 @@ import (
 	pion "github.com/pion/webrtc/v4"
 )
 
+// noMediaTimeout is how long a completed WebRTC connection may stay silent before Dial gives
+// up on it. The camera needs a second or two to start sending media on a healthy session.
+const noMediaTimeout = 5 * time.Second
+
+// sessionTimeout bounds the handshake, the offer and the ICE negotiation together.
+const sessionTimeout = 15 * time.Second
+
 type Client struct {
 	api       TuyaAPI
 	conn      *webrtc.Conn
 	pc        *pion.PeerConnection
 	connected core.Waiter
 	closed    bool
+	lanRetry  *lanRetryState
 
 	// HEVC only:
 	dc         *pion.DataChannel
@@ -71,6 +80,7 @@ func Dial(rawURL string) (core.Producer, error) {
 	// Stream params
 	streamResolution := query.Get("resolution")
 
+	useLanApi := u.Scheme == "tuya-lan"
 	useSmartApi := deviceId != "" && email != "" && password != ""
 	useCloudApi := deviceId != "" && uid != "" && clientId != "" && clientSecret != ""
 
@@ -78,7 +88,7 @@ func Dial(rawURL string) (core.Producer, error) {
 		streamResolution = "hd"
 	}
 
-	if !useSmartApi && !useCloudApi {
+	if !useLanApi && !useSmartApi && !useCloudApi {
 		return nil, errors.New("tuya: wrong query params")
 	}
 
@@ -86,7 +96,17 @@ func Dial(rawURL string) (core.Producer, error) {
 		handlers: make(map[uint32]func(*rtp.Packet)),
 	}
 
-	if useSmartApi {
+	if useLanApi {
+		lanClient, err := NewTuyaLanApiClient(u)
+		if err != nil {
+			return nil, fmt.Errorf("tuya: %w", err)
+		}
+		client.lanRetry = lanRetries.For(lanClient.deviceId)
+		if !client.lanRetry.Allow() {
+			return nil, fmt.Errorf("tuya lan: camera session busy, retry in %s", client.lanRetry.Remaining())
+		}
+		client.api = lanClient
+	} else if useSmartApi {
 		if client.api, err = NewTuyaSmartApiClient(nil, u.Hostname(), email, password, deviceId); err != nil {
 			return nil, fmt.Errorf("tuya: %w", err)
 		}
@@ -97,6 +117,9 @@ func Dial(rawURL string) (core.Producer, error) {
 	}
 
 	if err := client.api.Init(); err != nil {
+		if useLanApi {
+			client.lanRetry.Failed()
+		}
 		return nil, fmt.Errorf("tuya: %w", err)
 	}
 
@@ -132,17 +155,26 @@ func Dial(rawURL string) (core.Producer, error) {
 	client.conn = webrtc.NewConn(client.pc)
 	client.conn.FormatName = "tuya/webrtc"
 	client.conn.Mode = core.ModeActiveProducer
-	client.conn.Protocol = "mqtt"
+	if useLanApi {
+		client.conn.Protocol = "tuya-lan"
+	} else {
+		client.conn.Protocol = "mqtt"
+	}
 
-	mqttClient := client.api.GetMqtt()
-	if mqttClient == nil {
-		err = errors.New("tuya: no mqtt client")
+	signalClient := client.api.GetSignal()
+	if signalClient == nil {
+		err = errors.New("tuya: no signaling client")
 		client.Close(err)
 		return nil, err
 	}
 
-	// Set up MQTT handlers
-	mqttClient.handleAnswer = func(answer AnswerFrame) {
+	// Set up signaling handlers
+	signalClient.SetHandlers(func(answer AnswerFrame) {
+		if _, isLAN := client.api.(*TuyaLanAPIClient); isLAN {
+			// The LAN answer carries the camera's KCP video section, which Pion can't
+			// negotiate; keep the bidirectional G.711 audio m-line only.
+			answer.Sdp = normalizeTuyaLanAnswer(answer.Sdp)
+		}
 		// fmt.Printf("tuya: answer: %s\n", answer.Sdp)
 
 		desc := pion.SessionDescription{
@@ -184,9 +216,7 @@ func Dial(rawURL string) (core.Producer, error) {
 				}
 			}
 		}
-	}
-
-	mqttClient.handleCandidate = func(candidate CandidateFrame) {
+	}, func(candidate CandidateFrame) {
 		// fmt.Printf("tuya: candidate: %s\n", candidate.Candidate)
 
 		if candidate.Candidate != "" {
@@ -195,17 +225,13 @@ func Dial(rawURL string) (core.Producer, error) {
 				client.Close(err)
 			}
 		}
-	}
-
-	mqttClient.handleDisconnect = func() {
+	}, func() {
 		// fmt.Println("tuya: disconnect")
 		client.Close(errors.New("mqtt: disconnect"))
-	}
-
-	mqttClient.handleError = func(err error) {
+	}, func(err error) {
 		// fmt.Printf("tuya: error: %s\n", err.Error())
 		client.Close(err)
-	}
+	})
 
 	if client.isHEVC {
 		maxRetransmits := uint16(5)
@@ -269,7 +295,7 @@ func Dial(rawURL string) (core.Producer, error) {
 		switch msg := msg.(type) {
 		case *pion.ICECandidate:
 			_ = sendOffer.Wait()
-			if err := mqttClient.SendCandidate("a=" + msg.ToJSON().Candidate); err != nil {
+			if err := signalClient.SendCandidate("a=" + msg.ToJSON().Candidate); err != nil {
 				client.Close(err)
 			}
 
@@ -283,7 +309,7 @@ func Dial(rawURL string) (core.Producer, error) {
 				// On HEVC, wait for DataChannel to be opened and camera to send codec info
 				if !client.isHEVC {
 					if streamResolution == "hd" {
-						_ = mqttClient.SendResolution(0)
+						_ = signalClient.SendResolution(0)
 					}
 					client.connected.Done(nil)
 				}
@@ -314,7 +340,7 @@ func Dial(rawURL string) (core.Producer, error) {
 	offer = re.ReplaceAllString(offer, "")
 
 	// Send offer
-	if err := mqttClient.SendOffer(offer, streamResolution, client.streamType, client.isHEVC); err != nil {
+	if err := signalClient.SendOffer(offer, streamResolution, client.streamType, client.isHEVC); err != nil {
 		err = fmt.Errorf("tuya: %w", err)
 		client.Close(err)
 		return nil, err
@@ -322,14 +348,57 @@ func Dial(rawURL string) (core.Producer, error) {
 
 	sendOffer.Done(nil)
 
+	if useLanApi {
+		// Bound only LAN setup. Existing Smart/Cloud sources intentionally keep their
+		// previous behavior; this timeout comes from the LAN camera's admission limit.
+		sessionTimer := time.AfterFunc(sessionTimeout, func() {
+			client.connected.Done(errors.New("session timeout"))
+		})
+		defer sessionTimer.Stop()
+	}
+
 	// Wait for connection
 	if err = client.connected.Wait(); err != nil {
+		if useLanApi {
+			client.lanRetry.Failed()
+		}
 		err = fmt.Errorf("tuya: %w", err)
 		client.Close(err)
 		return nil, err
 	}
 
+	// The camera answers an offer even when it has no media session left to hand out: the
+	// WebRTC connection completes but no media ever arrives. Report that as a dial error so the
+	// streams module retries with its backoff (1s/5s/10s/60s) instead of re-opening a session
+	// immediately - a hot retry loop keeps the camera's (very small) session table full, which
+	// is what makes the source stay broken until the process is restarted.
+	if useLanApi && !client.isHEVC {
+		deadline := time.Now().Add(noMediaTimeout)
+		for !hasInboundRTP(client.pc) {
+			if time.Now().After(deadline) {
+				err = errors.New("tuya: no media from camera")
+				client.lanRetry.Failed()
+				client.Close(err)
+				return nil, err
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+
+	if useLanApi {
+		client.lanRetry.OK()
+	}
+
 	return client, nil
+}
+
+func hasInboundRTP(pc *pion.PeerConnection) bool {
+	for _, report := range pc.GetStats() {
+		if inbound, ok := report.(pion.InboundRTPStreamStats); ok && inbound.PacketsReceived > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *Client) GetMedias() []*core.Media {
@@ -346,62 +415,76 @@ func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Rece
 		return errors.New("webrtc: can't get track")
 	}
 
-	// DISABLED: Speaker Protocol 312 command
-	// JavaScript client doesn't send this on first call either
-	// Only subsequent calls (when speakerChloron is set) send Protocol 312
-	// mqttClient := c.api.GetMqtt()
-	// if mqttClient != nil {
-	// 	_ = mqttClient.SendSpeaker(1)
-	// }
+	// Protocol 312 opens the camera speaker. SendSignal only writes the command; it
+	// does not wait for an acknowledgement, so doing it inline preserves write
+	// failures instead of losing them in a detached goroutine.
+	if _, isLAN := c.api.(*TuyaLanAPIClient); isLAN {
+		if signalClient := c.api.GetSignal(); signalClient != nil {
+			if err := signalClient.SendSpeaker(1); err != nil {
+				return fmt.Errorf("tuya lan: speaker: %w", err)
+			}
+		}
+	}
 
 	payloadType := codec.PayloadType
 
 	sender := core.NewSender(media, codec)
 
-	switch track.Codec.Name {
-	case core.CodecPCMA, core.CodecPCMU, core.CodecPCM, core.CodecPCML:
-		// Frame size affects audio delay with Tuya cameras:
-		// Browser sends standard 20ms frames (160 bytes for G.711), but this causes
-		// up to 4s delay on some Tuya cameras. Increasing to 240 bytes (30ms) reduces
-		// delay to ~2s. Higher values (320+ bytes) don't work and cause issues.
-		// Using 240 bytes (30ms) as optimal balance between latency and stability.
-		frameSize := 240
-
-		var buf []byte
-		var seq uint16
-		var ts uint32
-
-		sender.Handler = func(packet *rtp.Packet) {
-			buf = append(buf, packet.Payload...)
-
-			for len(buf) >= frameSize {
-				payload := buf[:frameSize]
-
-				pkt := &rtp.Packet{
-					Header: rtp.Header{
-						Version:        2,
-						Marker:         true,
-						PayloadType:    payloadType,
-						SequenceNumber: seq,
-						Timestamp:      ts,
-						SSRC:           packet.SSRC,
-					},
-					Payload: payload,
-				}
-
-				seq++
-				ts += uint32(frameSize)
-				buf = buf[frameSize:]
-
-				c.conn.Send += pkt.MarshalSize()
-				_ = localTrack.WriteRTP(payloadType, pkt)
-			}
-		}
-
-	default:
+	if _, isLAN := c.api.(*TuyaLanAPIClient); isLAN {
+		// The LAN answer negotiates G.711/8000 sendrecv and the camera's LAN stack takes
+		// standard 20ms frames. The 240-byte reframing below only exists to cut the delay
+		// behind the Tuya cloud relay; sending 30ms frames over the LAN makes this camera
+		// drop the audio completely, so forward the browser payload untouched.
 		sender.Handler = func(packet *rtp.Packet) {
 			c.conn.Send += packet.MarshalSize()
 			_ = localTrack.WriteRTP(payloadType, packet)
+		}
+	} else {
+		switch track.Codec.Name {
+		case core.CodecPCMA, core.CodecPCMU, core.CodecPCM, core.CodecPCML:
+			// Frame size affects audio delay with Tuya cameras:
+			// Browser sends standard 20ms frames (160 bytes for G.711), but this causes
+			// up to 4s delay on some Tuya cameras. Increasing to 240 bytes (30ms) reduces
+			// delay to ~2s. Higher values (320+ bytes) don't work and cause issues.
+			// Using 240 bytes (30ms) as optimal balance between latency and stability.
+			frameSize := 240
+
+			var buf []byte
+			var seq uint16
+			var ts uint32
+
+			sender.Handler = func(packet *rtp.Packet) {
+				buf = append(buf, packet.Payload...)
+
+				for len(buf) >= frameSize {
+					payload := buf[:frameSize]
+
+					pkt := &rtp.Packet{
+						Header: rtp.Header{
+							Version:        2,
+							Marker:         true,
+							PayloadType:    payloadType,
+							SequenceNumber: seq,
+							Timestamp:      ts,
+							SSRC:           packet.SSRC,
+						},
+						Payload: payload,
+					}
+
+					seq++
+					ts += uint32(frameSize)
+					buf = buf[frameSize:]
+
+					c.conn.Send += pkt.MarshalSize()
+					_ = localTrack.WriteRTP(payloadType, pkt)
+				}
+			}
+
+		default:
+			sender.Handler = func(packet *rtp.Packet) {
+				c.conn.Send += packet.MarshalSize()
+				_ = localTrack.WriteRTP(payloadType, packet)
+			}
 		}
 	}
 

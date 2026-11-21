@@ -8,7 +8,7 @@ import (
 )
 
 type TuyaAPI interface {
-	GetMqtt() *TuyaMqttClient
+	GetSignal() TuyaSignalClient
 
 	GetStreamType(streamResolution string) int
 	IsHEVC(streamType int) bool
@@ -28,6 +28,7 @@ type TuyaClient struct {
 
 	httpClient *http.Client
 	mqtt       *TuyaMqttClient
+	signal     TuyaSignalClient
 	baseUrl    string
 	expireTime int64
 	deviceId   string
@@ -124,8 +125,8 @@ func (c *TuyaClient) GetICEServers() []pionWebrtc.ICEServer {
 	return c.iceServers
 }
 
-func (c *TuyaClient) GetMqtt() *TuyaMqttClient {
-	return c.mqtt
+func (c *TuyaClient) GetSignal() TuyaSignalClient {
+	return c.signal
 }
 
 // GetStreamType returns the Skill StreamType for the requested resolution
@@ -241,8 +242,12 @@ func (c *TuyaClient) GetAudioCodecs() []*core.Codec {
 }
 
 func (c *TuyaClient) Close() {
-	c.mqtt.Stop()
-	c.httpClient.CloseIdleConnections()
+	if c.signal != nil {
+		c.signal.Stop()
+	}
+	if c.httpClient != nil {
+		c.httpClient.CloseIdleConnections()
+	}
 }
 
 // https://protect-us.ismartlife.me/

@@ -84,6 +84,7 @@ func NewTuyaCloudApiClient(baseUrl, uid, deviceId, clientId, clientSecret string
 		TuyaClient: TuyaClient{
 			httpClient: &http.Client{Timeout: 15 * time.Second},
 			mqtt:       mqttClient,
+			signal:     mqttClient,
 			deviceId:   deviceId,
 			expireTime: 0,
 			baseUrl:    baseUrl,
