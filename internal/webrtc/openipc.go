@@ -43,6 +43,12 @@ func openIPCClient(rawURL string, query url.Values) (core.Producer, error) {
 		return nil, err
 	}
 
+	defer func() {
+		if err != nil {
+			_ = pc.Close()
+		}
+	}()
+
 	// protect from sending ICE candidate before Offer
 	var sendAnswer core.Waiter
 
