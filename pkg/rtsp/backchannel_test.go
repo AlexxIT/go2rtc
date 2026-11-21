@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -38,13 +39,21 @@ type fakeCamera struct {
 	rtp      chan []byte // backchannel RTP received by the camera
 
 	rejectSetup int // session index that fails on SETUP, -1 for none
+
+	// strictRequire - answer 400 to a backchannel SETUP without the Require
+	// header, like 2N intercoms
+	strictRequire bool
+	requires      map[string]string // SETUP path => Require header
 }
 
 func newFakeCamera(t *testing.T) *fakeCamera {
 	ln, err := net.Listen("tcp", "localhost:0")
 	require.Nil(t, err)
 
-	cam := &fakeCamera{ln: ln, played: make(chan int, 10), rtp: make(chan []byte, 10), rejectSetup: -1}
+	cam := &fakeCamera{
+		ln: ln, played: make(chan int, 10), rtp: make(chan []byte, 10), rejectSetup: -1,
+		requires: map[string]string{},
+	}
 	go func() {
 		for {
 			conn, err := ln.Accept()
@@ -97,10 +106,18 @@ func (cam *fakeCamera) handle(conn net.Conn, i int) {
 
 		cam.mu.Lock()
 		cam.sessions[i] = append(cam.sessions[i], req.Method)
+		if req.Method == MethodSetup {
+			cam.requires[req.URL.Path] = req.Header.Get("Require")
+		}
 		cam.mu.Unlock()
+
+		badBackchannel := cam.strictRequire && req.Method == MethodSetup &&
+			strings.HasSuffix(req.URL.Path, "trackID=1") && req.Header.Get("Require") == ""
 
 		res := "RTSP/1.0 200 OK\r\nCSeq: " + req.Header.Get("CSeq") + "\r\n"
 		switch {
+		case badBackchannel:
+			res = "RTSP/1.0 400 Bad Request\r\nCSeq: " + req.Header.Get("CSeq") + "\r\n\r\n"
 		case req.Method == MethodSetup && i == cam.rejectSetup:
 			res = "RTSP/1.0 453 Not Enough Bandwidth\r\nCSeq: " + req.Header.Get("CSeq") + "\r\n\r\n"
 		case req.Method == MethodDescribe:
@@ -247,4 +264,45 @@ func TestBackchannelFallback(t *testing.T) {
 		return fmt.Sprint(cam.methods(1)) == fmt.Sprint([]string{MethodDescribe, MethodSetup, MethodTeardown}) &&
 			fmt.Sprint(cam.methods(0)) == fmt.Sprint([]string{MethodDescribe, MethodSetup, MethodPlay, MethodTeardown})
 	}, time.Second, 10*time.Millisecond, "%v %v", cam.methods(0), cam.methods(1))
+}
+
+// TestBackchannelSetupRequire - the backchannel SETUP carries the Require header,
+// as in the ONVIF Streaming Spec example, while the other SETUPs don't
+func TestBackchannelSetupRequire(t *testing.T) {
+	Timeout = 5 * time.Second
+
+	cam := newFakeCamera(t)
+	cam.strictRequire = true
+	defer cam.ln.Close()
+
+	client := NewClient("rtsp://" + cam.ln.Addr().String() + "/stream")
+	client.Backchannel = true
+
+	require.Nil(t, client.Dial())
+	require.Nil(t, client.Describe())
+
+	video, backchannel := client.GetMedias()[0], client.GetMedias()[1]
+
+	_, err := client.GetTrack(video, video.Codecs[0])
+	require.Nil(t, err)
+
+	go func() { _ = client.Start() }()
+	defer client.Stop()
+
+	require.Equal(t, 0, waitPlayed(t, cam))
+
+	mic := core.NewReceiver(
+		&core.Media{Kind: core.KindAudio, Direction: core.DirectionRecvonly},
+		&core.Codec{Name: core.CodecPCMU, ClockRate: 8000, PayloadType: 0},
+	)
+	require.Nil(t, client.AddTrack(backchannel, backchannel.Codecs[0], mic))
+
+	// the separate backchannel session is played, no fallback reconnect
+	require.Equal(t, 1, waitPlayed(t, cam))
+	require.Equal(t, []string{MethodDescribe, MethodSetup, MethodPlay}, cam.methods(1))
+
+	cam.mu.Lock()
+	defer cam.mu.Unlock()
+	require.Equal(t, "", cam.requires["/stream/trackID=0"])
+	require.Equal(t, "www.onvif.org/ver20/backchannel", cam.requires["/stream/trackID=1"])
 }
