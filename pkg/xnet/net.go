@@ -5,14 +5,13 @@ import (
 	"strconv"
 )
 
-// Docker has common docker addresses (class B):
-// https://en.wikipedia.org/wiki/Private_network
-// - docker0 172.17.0.1/16
-// - br-xxxx 172.18.0.1/16
-// - hassio  172.30.32.1/23
+// Docker is the default docker0 bridge range.
+// Previously 172.16.0.0/12, which also matched common LAN prefixes
+// (e.g. 172.16.x) and broke mDNS/HomeKit discovery — see #1859.
+// Default docker0 is 172.17.0.0/16; compose/hassio bridges are out of scope.
 var Docker = net.IPNet{
-	IP:   []byte{172, 16, 0, 0},
-	Mask: []byte{255, 240, 0, 0},
+	IP:   []byte{172, 17, 0, 0},
+	Mask: []byte{255, 255, 0, 0},
 }
 
 // ParseUnspecifiedPort will return port if address is unspecified
