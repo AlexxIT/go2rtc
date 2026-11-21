@@ -315,6 +315,15 @@ func (c *Conn) SetupMedia(media *core.Media) (byte, error) {
 		},
 	}
 
+	if media.Direction == core.DirectionSendonly {
+		// 5.3.2.2 Describe example for a server with Onvif backchannel support
+		// the SETUP of the backchannel media carries the Require header too,
+		// and some cameras (2N) answer 400 Bad Request without it.
+		// Don't check c.Backchannel, it is cleared before this SETUP
+		// in addBackchannel and in the Dahua fix below.
+		req.Header.Set("Require", "www.onvif.org/ver20/backchannel")
+	}
+
 	res, err := c.Do(req)
 	if err != nil {
 		// some Dahua/Amcrest cameras fail here because two simultaneous
