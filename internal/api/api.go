@@ -219,6 +219,11 @@ func middlewareAuth(username, password string, localAuth bool, next http.Handler
 	wantAuthHash := sha256.Sum256([]byte("Basic " + credentials))
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		if localAuth || !isLoopback(r.RemoteAddr) {
 			gotAuthHash := sha256.Sum256([]byte(r.Header.Get("Authorization")))
 			if subtle.ConstantTimeCompare(gotAuthHash[:], wantAuthHash[:]) != 1 {
@@ -236,6 +241,10 @@ func middlewareCORS(next http.Handler) http.Handler {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
 		next.ServeHTTP(w, r)
 	})
 }
