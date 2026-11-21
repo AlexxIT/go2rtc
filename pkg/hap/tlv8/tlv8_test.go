@@ -118,19 +118,34 @@ func TestSlice1(t *testing.T) {
 		} `tlv8:"3"`
 	}
 
-	s := `030b010280070202380403011e ff00 030b010200050202d00203011e`
-	b1, err := hex.DecodeString(strings.ReplaceAll(s, " ", ""))
+	// Some dumps use 0xFF separators; unmarshal accepts them
+	sFF := `030b010280070202380403011e ff00 030b010200050202d00203011e`
+	bFF, err := hex.DecodeString(strings.ReplaceAll(sFF, " ", ""))
 	require.NoError(t, err)
 
-	err = Unmarshal(b1, &v)
+	err = Unmarshal(bFF, &v)
 	require.NoError(t, err)
-
 	require.Len(t, v.VideoAttrs, 2)
+
+	// Marshal emits 0x00 separators to match real HomeKit accessories
+	s00 := `030b010280070202380403011e 0000 030b010200050202d00203011e`
+	b00, err := hex.DecodeString(strings.ReplaceAll(s00, " ", ""))
+	require.NoError(t, err)
 
 	b2, err := Marshal(v)
 	require.NoError(t, err)
+	require.Equal(t, b00, b2)
 
-	require.Equal(t, b1, b2)
+	// Round-trip through 0x00 form
+	var v2 struct {
+		VideoAttrs []struct {
+			Width     uint16 `tlv8:"1"`
+			Height    uint16 `tlv8:"2"`
+			Framerate uint8  `tlv8:"3"`
+		} `tlv8:"3"`
+	}
+	require.NoError(t, Unmarshal(b00, &v2))
+	require.Len(t, v2.VideoAttrs, 2)
 }
 
 func TestSlice2(t *testing.T) {
@@ -140,17 +155,30 @@ func TestSlice2(t *testing.T) {
 		Framerate uint8  `tlv8:"3"`
 	}
 
-	s := `010280070202380403011e ff00 010200050202d00203011e`
-	b1, err := hex.DecodeString(strings.ReplaceAll(s, " ", ""))
+	sFF := `010280070202380403011e ff00 010200050202d00203011e`
+	bFF, err := hex.DecodeString(strings.ReplaceAll(sFF, " ", ""))
 	require.NoError(t, err)
 
-	err = Unmarshal(b1, &v)
+	err = Unmarshal(bFF, &v)
 	require.NoError(t, err)
-
 	require.Len(t, v, 2)
+
+	s00 := `010280070202380403011e 0000 010200050202d00203011e`
+	b00, err := hex.DecodeString(strings.ReplaceAll(s00, " ", ""))
+	require.NoError(t, err)
 
 	b2, err := Marshal(v)
 	require.NoError(t, err)
+	require.Equal(t, b00, b2)
+}
 
-	require.Equal(t, b1, b2)
+func TestUnmarshalEmpty(t *testing.T) {
+	// Empty TLV is a valid write-response with no fields
+	var v struct {
+		N uint8 `tlv8:"1"`
+	}
+	require.NoError(t, Unmarshal(nil, &v))
+	require.NoError(t, Unmarshal([]byte{}, &v))
+	require.Equal(t, uint8(0), v.N)
+	require.NoError(t, UnmarshalBase64("", &v))
 }
