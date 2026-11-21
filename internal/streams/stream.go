@@ -71,9 +71,17 @@ func (s *Stream) RemoveConsumer(cons core.Consumer) {
 			break
 		}
 	}
+	producers := append([]*Producer(nil), s.producers...)
 	s.mu.Unlock()
 
 	s.stopProducers()
+
+	// The consumer's own backchannel tracks closed with it: let go of them, so the camera's talkback is free again.
+	// After stopProducers: a producer it stopped has nothing left to release, and the release reconnect must not
+	// run while stopProducers reads the receivers.
+	for _, producer := range producers {
+		producer.dropClosedSenders()
+	}
 }
 
 func (s *Stream) AddProducer(prod core.Producer) {
