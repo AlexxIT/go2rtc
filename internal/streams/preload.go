@@ -18,6 +18,37 @@ type Preload struct {
 var preloads = map[string]*Preload{}
 var preloadsMu sync.Mutex
 
+type preloadLock struct {
+	mu   sync.Mutex
+	refs int
+}
+
+var preloadLocks = map[string]*preloadLock{}
+
+// Serialize changes to one preload without holding the registry lock during
+// producer dialing or shutdown. Count waiting callers so they share the lock.
+func lockPreload(name string) func() {
+	preloadsMu.Lock()
+	lock := preloadLocks[name]
+	if lock == nil {
+		lock = &preloadLock{}
+		preloadLocks[name] = lock
+	}
+	lock.refs++
+	preloadsMu.Unlock()
+
+	lock.mu.Lock()
+	return func() {
+		lock.mu.Unlock()
+		preloadsMu.Lock()
+		lock.refs--
+		if lock.refs == 0 {
+			delete(preloadLocks, name)
+		}
+		preloadsMu.Unlock()
+	}
+}
+
 func AddPreload(name, rawQuery string) error {
 	if rawQuery == "" {
 		rawQuery = "video&audio"
@@ -28,11 +59,16 @@ func AddPreload(name, rawQuery string) error {
 		return err
 	}
 
-	preloadsMu.Lock()
-	defer preloadsMu.Unlock()
+	unlock := lockPreload(name)
+	defer unlock()
 
-	if p := preloads[name]; p != nil {
+	preloadsMu.Lock()
+	p := preloads[name]
+	preloadsMu.Unlock()
+	if p != nil {
+		p.stream.preloadMu.Lock()
 		p.stream.RemoveConsumer(p.Cons)
+		p.stream.preloadMu.Unlock()
 	}
 
 	stream := Get(name)
@@ -41,21 +77,34 @@ func AddPreload(name, rawQuery string) error {
 	}
 	cons := probe.Create("preload", query)
 
-	if err = stream.AddConsumer(cons); err != nil {
+	stream.preloadMu.Lock()
+	err = stream.AddConsumer(cons)
+	stream.preloadMu.Unlock()
+	if err != nil {
 		return err
 	}
 
+	preloadsMu.Lock()
 	preloads[name] = &Preload{stream: stream, Cons: cons, Query: rawQuery}
+	preloadsMu.Unlock()
 	return nil
 }
 
 func DelPreload(name string) error {
-	preloadsMu.Lock()
-	defer preloadsMu.Unlock()
+	unlock := lockPreload(name)
+	defer unlock()
 
-	if p := preloads[name]; p != nil {
+	preloadsMu.Lock()
+	p := preloads[name]
+	preloadsMu.Unlock()
+
+	if p != nil {
+		p.stream.preloadMu.Lock()
 		p.stream.RemoveConsumer(p.Cons)
+		p.stream.preloadMu.Unlock()
+		preloadsMu.Lock()
 		delete(preloads, name)
+		preloadsMu.Unlock()
 		return nil
 	}
 
