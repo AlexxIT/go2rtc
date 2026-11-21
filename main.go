@@ -121,5 +121,7 @@ func main() {
 		}
 	}
 
+	streams.SetReady()
+
 	shell.RunUntilSignal()
 }
