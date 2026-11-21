@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/tutk"
@@ -50,9 +51,22 @@ func NewClient(rawURL string) (*Client, error) {
 	}
 
 	model := query.Get("model")
+	if did := query.Get("did"); did != "" && model != ModelDafang && model != ModelXiaofang {
+		client, err := dialSharedClient(u, query, did, key)
+		if !errors.Is(err, errMuxIncompatible) {
+			return client, err
+		}
+	}
+
+	return dialClient(u, query, key)
+}
+
+func dialClient(u *url.URL, query url.Values, key []byte) (*Client, error) {
+	model := query.Get("model")
 
 	// 2. Check if this vendor supported.
 	var conn Conn
+	var err error
 	switch s := query.Get("vendor"); s {
 	case "cs2":
 		conn, err = cs2.Dial(u.Host, query.Get("transport"))
@@ -79,6 +93,8 @@ type Client struct {
 	Conn
 	key   []byte
 	model string
+	mu    sync.Mutex
+	sub   *muxClient
 }
 
 const (
@@ -126,11 +142,30 @@ func (c *Client) Version() string {
 	return fmt.Sprintf("%s (%s)", c.Conn.Version(), c.model)
 }
 
+func (c *Client) SetDeadline(t time.Time) error {
+	if c.sub != nil {
+		return c.sub.setDeadline(t)
+	}
+	return c.Conn.SetDeadline(t)
+}
+
+func (c *Client) Close() error {
+	if c.sub != nil {
+		return c.sub.close()
+	}
+	return c.Conn.Close()
+}
+
 func (c *Client) WriteCommand(data []byte) error {
+	if c.sub != nil {
+		return c.sub.writeCommand(data)
+	}
 	data, err := crypto.Encode(data, c.key)
 	if err != nil {
 		return err
 	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.Conn.WriteCommand(cmdEncoded, data)
 }
 
@@ -145,6 +180,10 @@ const (
 )
 
 func (c *Client) StartMedia(channel, quality, audio string) error {
+	if c.sub != nil {
+		return c.sub.startMedia()
+	}
+
 	switch c.model {
 	case ModelDafang, ModelXiaofang:
 		var q, a byte
@@ -161,23 +200,7 @@ func (c *Client) StartMedia(channel, quality, audio string) error {
 		)
 	}
 
-	// 0 - auto, 1 - sd, 2 - hd, default - hd
-	switch quality {
-	case "", "hd":
-		// Some models have broken codec settings in quality 3.
-		// Some models have low quality in quality 2.
-		// Different models require different default quality settings.
-		switch c.model {
-		case ModelC200, ModelC300:
-			quality = "3"
-		default:
-			quality = "2"
-		}
-	case "sd":
-		quality = "1"
-	case "auto":
-		quality = "0"
-	}
+	quality = c.parseQuality(quality)
 
 	if audio == "" {
 		audio = "1"
@@ -193,7 +216,51 @@ func (c *Client) StartMedia(channel, quality, audio string) error {
 	return c.WriteCommand(data)
 }
 
+func (c *Client) startMediaDual(quality0, quality1, audio string) error {
+	if audio == "" {
+		audio = "1"
+	}
+	data := binary.BigEndian.AppendUint32(nil, cmdVideoStart)
+	data = fmt.Appendf(data,
+		`{"videoquality":%s,"videoquality2":%s,"enableaudio":%s}`,
+		c.parseQuality(quality0), c.parseQuality(quality1), audio,
+	)
+	return c.WriteCommand(data)
+}
+
+func (c *Client) parseQuality(quality string) string {
+	// 0 - auto, 1 - sd, 2 - hd, default - hd
+	switch quality {
+	case "", "hd":
+		// Some models have broken codec settings in quality 3.
+		// Some models have low quality in quality 2.
+		// Different models require different default quality settings.
+		switch c.model {
+		case ModelC200, ModelC300:
+			return "3"
+		default:
+			return "2"
+		}
+	case "sd":
+		return "1"
+	case "auto":
+		return "0"
+	}
+	return quality
+}
+
+func (c *Client) usesLensTags() bool {
+	switch c.model {
+	case "isa.camera.hlmax", "isa.camera.500dh", "isa.camera.cw501d":
+		return true
+	}
+	return false
+}
+
 func (c *Client) StopMedia() error {
+	if c.sub != nil {
+		return nil
+	}
 	data := binary.BigEndian.AppendUint32(nil, cmdVideoStop)
 	return c.WriteCommand(data)
 }
@@ -222,6 +289,10 @@ func (c *Client) SpeakerCodec() uint32 {
 const hdrSize = 32
 
 func (c *Client) ReadPacket() (*Packet, error) {
+	if c.sub != nil {
+		return c.sub.readPacket()
+	}
+
 	hdr, payload, err := c.Conn.ReadPacket()
 	if err != nil {
 		return nil, fmt.Errorf("miss: read media: %w", err)
@@ -243,6 +314,13 @@ func (c *Client) ReadPacket() (*Packet, error) {
 		Payload:  payload,
 	}
 
+	if !c.usesLensTags() {
+		if ch := hdr[28]; ch <= 1 && binary.LittleEndian.Uint32(hdr[24:28]) <= 3 {
+			pkt.Channel = ch
+			pkt.ChannelOK = true
+		}
+	}
+
 	switch c.model {
 	case ModelDafang, ModelXiaofang, ModelLoockV2:
 		// Dafang has ts in sec
@@ -256,6 +334,9 @@ func (c *Client) ReadPacket() (*Packet, error) {
 }
 
 func (c *Client) WriteAudio(codecID uint32, payload []byte) error {
+	if c.sub != nil {
+		return c.sub.writeAudio(codecID, payload)
+	}
 	payload, err := crypto.Encode(payload, c.key) // new payload will have new size!
 	if err != nil {
 		return err
@@ -267,6 +348,8 @@ func (c *Client) WriteAudio(codecID uint32, payload []byte) error {
 	binary.LittleEndian.PutUint32(header, n)
 	binary.LittleEndian.PutUint32(header[4:], codecID)
 	binary.LittleEndian.PutUint64(header[16:], uint64(time.Now().UnixMilli())) // not really necessary
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.Conn.WritePacket(header, payload)
 }
 
@@ -276,6 +359,8 @@ type Packet struct {
 	Sequence  uint32
 	Flags     uint32
 	Timestamp uint64 // msec
+	Channel   uint8
+	ChannelOK bool
 	//TimestampS uint32
 	//Reserved uint32
 	Payload []byte
