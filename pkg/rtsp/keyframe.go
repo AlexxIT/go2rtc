@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/pion/rtcp"
 )
 
 // Some cameras (ex. UniFi Protect) ignore RTCP PLI/FIR, but send a keyframe to
@@ -12,6 +13,8 @@ import (
 
 const (
 	KeyframeResetup = "resetup"
+	KeyframePLI     = "pli" // RTCP Picture Loss Indication (RFC 4585)
+	KeyframeFIR     = "fir" // RTCP Full Intra Request (RFC 5104)
 
 	keyframeInterval = time.Second
 )
@@ -73,4 +76,39 @@ func (c *Conn) keyframeSession() error {
 	}
 
 	return nil
+}
+
+// requestKeyframeRTCP asks the camera for a keyframe with RTCP PLI or FIR on
+// the main session. GetTrack sets it as the keyframe handler of video tracks
+// with the option `#keyframe=pli` or `#keyframe=fir`. Requests are at least
+// keyframeInterval apart, and nothing is sent before the track got RTP
+// (the camera's SSRC is unknown until then).
+func (c *Conn) requestKeyframeRTCP(channel byte) {
+	ssrc := c.ssrc[channel].Load()
+	if c.Transport == "udp" && int(channel)+1 >= len(c.udpAddr) {
+		return // the camera gave no RTCP port
+	}
+	now := time.Now().UnixNano()
+	next := c.keyframeNext.Load()
+	if ssrc == 0 || now < next || !c.keyframeNext.CompareAndSwap(next, now+int64(keyframeInterval)) {
+		return
+	}
+
+	var pkt rtcp.Packet = &rtcp.PictureLossIndication{MediaSSRC: ssrc}
+	if c.Keyframe == KeyframeFIR {
+		seq := uint8(c.firSeq.Add(1))
+		pkt = &rtcp.FullIntraRequest{FIR: []rtcp.FIREntry{{SSRC: ssrc, SequenceNumber: seq}}}
+	}
+	b, err := pkt.Marshal()
+	if err != nil {
+		return
+	}
+
+	go func() {
+		// RTCP goes on the odd channel after the track's RTP channel
+		data := append([]byte{'$', channel + 1, byte(len(b) >> 8), byte(len(b))}, b...)
+		if err := c.writeInterleavedData(data); err != nil {
+			c.Fire("RTSP keyframe: " + err.Error())
+		}
+	}()
 }
