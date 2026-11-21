@@ -11,6 +11,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/debug"
 	"github.com/AlexxIT/go2rtc/internal/doorbird"
 	"github.com/AlexxIT/go2rtc/internal/dvrip"
+	"github.com/AlexxIT/go2rtc/internal/easy4ip"
 	"github.com/AlexxIT/go2rtc/internal/echo"
 	"github.com/AlexxIT/go2rtc/internal/eseecloud"
 	"github.com/AlexxIT/go2rtc/internal/exec"
@@ -90,6 +91,7 @@ func main() {
 		{"v4l2", v4l2.Init},
 		// Other sources
 		{"bubble", bubble.Init},
+		{"easy4ip", easy4ip.Init},
 		{"doorbird", doorbird.Init},
 		{"dvrip", dvrip.Init},
 		{"eseecloud", eseecloud.Init},
@@ -122,4 +124,6 @@ func main() {
 	}
 
 	shell.RunUntilSignal()
+
+	easy4ip.Shutdown() // tell the devices their P2P session is over
 }
