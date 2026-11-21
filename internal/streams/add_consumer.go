@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/probe"
 )
 
 func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
@@ -25,12 +26,22 @@ func (s *Stream) addConsumer(cons core.Consumer, consMedias []*core.Media, isNew
 	var prodMedias []*core.Media
 	var prodStarts []*Producer
 
+	// a preload keeps the primary source warm; it must never settle for a
+	// fallback, or the primary is left cold behind it. Restrict it to the
+	// first source outright: a per-media check is not enough, because a
+	// primary that failed for the first media is skipped for the next one
+	// and the fallback would be tried in its place.
+	producers := s.producers
+	if isPreload(cons) {
+		producers = producers[:1]
+	}
+
 	// Step 1. Get consumer medias
 	for _, consMedia := range consMedias {
 		log.Trace().Msgf("[streams] check cons=%d media=%s", consN, consMedia)
 
 	producers:
-		for prodN, prod := range s.producers {
+		for prodN, prod := range producers {
 			// check for loop request, ex. `camera1: ffmpeg:camera1`
 			if info, ok := cons.(core.Info); ok && prod.url == info.GetSource() {
 				log.Trace().Msgf("[streams] skip cons=%d prod=%d", consN, prodN)
@@ -45,6 +56,10 @@ func (s *Stream) addConsumer(cons core.Consumer, consMedias []*core.Media, isNew
 			if err = prod.Dial(); err != nil {
 				log.Trace().Err(err).Msgf("[streams] dial cons=%d prod=%d", consN, prodN)
 				prodErrors[prodN] = err
+				// any other consumer takes the next source, so a viewer sees
+				// a placeholder rather than an error while the primary is
+				// switched off or briefly rate limited, and picks the
+				// primary up again on its next request
 				continue
 			}
 
@@ -174,4 +189,9 @@ func appendString(s, elem string) string {
 		return elem
 	}
 	return s + ", " + elem
+}
+
+func isPreload(cons core.Consumer) bool {
+	p, ok := cons.(*probe.Probe)
+	return ok && p.FormatName == "preload"
 }
