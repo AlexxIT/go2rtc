@@ -2,6 +2,7 @@ package camera
 
 import (
 	"errors"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/hap"
@@ -28,6 +29,7 @@ func NewStream(
 	}
 
 	if err := stream.ExchangeEndpoints(videoSession, audioSession); err != nil {
+		_ = stream.Close()
 		return nil, err
 	}
 
@@ -73,6 +75,7 @@ func NewStream(
 	}
 
 	if err := stream.SetStreamConfig(config); err != nil {
+		_ = stream.Close()
 		return nil, err
 	}
 
@@ -174,6 +177,9 @@ func (s *Stream) SetStreamConfig(config *SelectedStreamConfiguration) error {
 }
 
 func (s *Stream) Close() error {
+	_ = s.client.Conn.SetDeadline(time.Now().Add(hap.ConnDeadline))
+	defer s.client.Conn.SetDeadline(time.Time{})
+
 	config := &SelectedStreamConfiguration{
 		Control: SessionControl{
 			SessionID: s.id,
