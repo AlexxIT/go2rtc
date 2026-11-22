@@ -291,6 +291,25 @@ func TestReadRTCPStopsAfterTooManyErrors(t *testing.T) {
 	require.Equal(t, maxRTCPReadErrors, reads)
 }
 
+// TestReadRTCPResetsErrorsAfterRead - only failed reads in a row end the loop,
+// a good read in between starts the count again
+func TestReadRTCPResetsErrorsAfterRead(t *testing.T) {
+	var seq []error
+	for range 2 {
+		for range maxRTCPReadErrors - 1 {
+			seq = append(seq, errors.New("broken packet"))
+		}
+		seq = append(seq, nil)
+	}
+	read, left, _ := rtcpReads(t, append(seq, io.EOF)...)
+
+	var calls int
+	sender, _ := newRTCPSender(t, newKeyframeTrack(func() { calls++ }), read)
+	readRTCP(sender)
+	require.Equal(t, 2, calls)
+	require.Empty(t, *left)
+}
+
 // TestReadRTCPAfterNackLimiter - the limiter empties a NACK (foreign SSRC), a
 // PLI in the same compound still reaches the keyframe reader
 func TestReadRTCPAfterNackLimiter(t *testing.T) {
