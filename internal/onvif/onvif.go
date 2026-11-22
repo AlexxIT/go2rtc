@@ -1,6 +1,7 @@
 package onvif
 
 import (
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -42,6 +43,9 @@ func Init() {
 
 	streams.HandleFunc("onvif", streamOnvif)
 
+	// motion states of streams for the ONVIF Events service
+	streams.HandleMotionFunc(events.SetMotion)
+
 	// ONVIF server on all suburls
 	api.HandleFuncNoAuth("/onvif/", onvifDeviceService)
 
@@ -51,6 +55,9 @@ func Init() {
 
 var log zerolog.Logger
 var auth *onvif.Auth
+
+// events - motion states and PullPoint subscriptions of the ONVIF Events service
+var events = onvif.NewEvents()
 
 func streamOnvif(rawURL string) (core.Producer, error) {
 	client, err := onvif.NewClient(rawURL)
@@ -110,8 +117,16 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// the Events service has its own GetServiceCapabilities
+	if operation == onvif.ServiceGetServiceCapabilities && strings.HasSuffix(r.URL.Path, onvif.PathEvents) {
+		operation = onvif.EventsGetServiceCapabilities
+	}
+
+	status := http.StatusOK
+
 	switch operation {
 	case onvif.ServiceGetServiceCapabilities, // important for Hass
+		onvif.EventsGetServiceCapabilities,
 		onvif.DeviceGetNetworkInterfaces, // important for Hass
 		onvif.DeviceGetSystemDateAndTime, // important for Hass
 		onvif.DeviceSetSystemDateAndTime, // return just OK
@@ -129,6 +144,55 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 		onvif.MediaGetAudioSources,
 		onvif.MediaGetAudioSourceConfigurations:
 		b = onvif.StaticResponse(operation)
+
+	case onvif.EventsGetEventProperties:
+		b = onvif.GetEventPropertiesResponse()
+
+	case onvif.EventsCreatePullPointSubscription:
+		ttl := onvif.ParseDuration(onvif.FindTagValue(b, "InitialTerminationTime"), time.Now())
+		id, expires, ok := events.Subscribe(ttl)
+		if !ok {
+			http.Error(w, "too many subscriptions", http.StatusServiceUnavailable)
+			return
+		}
+		b = onvif.CreatePullPointSubscriptionResponse(r.Host, id, expires)
+
+	case onvif.EventsPullMessages:
+		timeout := onvif.ParseDuration(onvif.FindTagValue(b, "Timeout"), time.Now())
+		limit, _ := strconv.Atoi(onvif.FindTagValue(b, "MessageLimit"))
+		// long poll, ends earlier if the client disconnects
+		b, err = events.Pull(r.Context(), onvif.SubscriptionID(r.URL.Path), timeout, limit)
+		if errors.Is(err, onvif.ErrUnknownSubscription) {
+			b = onvif.ResourceUnknownResponse()
+			status = http.StatusBadRequest
+		} else if err != nil {
+			return
+		}
+
+	case onvif.EventsRenew:
+		ttl := onvif.ParseDuration(onvif.FindTagValue(b, "TerminationTime"), time.Now())
+		if expires, ok := events.Renew(onvif.SubscriptionID(r.URL.Path), ttl); ok {
+			b = onvif.RenewResponse(expires)
+		} else {
+			b = onvif.ResourceUnknownResponse()
+			status = http.StatusBadRequest
+		}
+
+	case onvif.EventsUnsubscribe:
+		if events.Unsubscribe(onvif.SubscriptionID(r.URL.Path)) {
+			b = onvif.UnsubscribeResponse()
+		} else {
+			b = onvif.ResourceUnknownResponse()
+			status = http.StatusBadRequest
+		}
+
+	case onvif.EventsSetSynchronizationPoint:
+		if events.Sync(onvif.SubscriptionID(r.URL.Path)) {
+			b = onvif.SetSynchronizationPointResponse()
+		} else {
+			b = onvif.ResourceUnknownResponse()
+			status = http.StatusBadRequest
+		}
 
 	case onvif.DeviceGetCapabilities:
 		// important for Hass: Media section
@@ -190,6 +254,8 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 	log.Trace().Msgf("[onvif] server response:\n%s", b)
 
 	w.Header().Set("Content-Type", "application/soap+xml; charset=utf-8")
+	// SOAP fault should have HTTP status 400
+	w.WriteHeader(status)
 	if _, err = w.Write(b); err != nil {
 		log.Error().Err(err).Caller().Send()
 	}
