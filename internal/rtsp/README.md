@@ -42,8 +42,16 @@ Format: `rtsp...#{param1}#{param2}#{param3}`
 - Ignore audio - `#media=video` or ignore video - `#media=audio`
 - Ignore two-way audio API `#backchannel=0` - important for some glitchy cameras
 - Use WebSocket transport `#transport=ws...`
-- Request a keyframe when a WebRTC viewer sends PLI/FIR `#keyframe=setup` / `#keyframe=play` - for cameras that ignore RTCP feedback and send a keyframe only on a new session (ex. UniFi Protect). A short helper session is opened at most once per second.
-- Request a keyframe with RTCP PLI or FIR `#keyframe=pli` / `#keyframe=fir` - for cameras that follow RTCP feedback. Sent on the first video track at most once per second.
+
+### Keyframes
+
+An advanced setting that allows you to request an extra keyframe from the camera. This is useful when connecting new consumer or when the current consumer (such as WebRTC) is dropping frames.
+
+Different cameras may support different options. Some cameras may not support any of these options.
+
+- `#keyframe=play` - sends a `PLAY` command over the current RTSP connection. Works with some Dahua cameras.
+- `#keyframe=resetup` / `#keyframe=replay` - sends `SETUP` or `PLAY` over a separate RTSP connection (which triggers a frame update on the main connection). Works with some UniFi Protect cameras.
+- `#keyframe=pli` / `#keyframe=fir` - request a keyframe with RTCP PLI or FIR, for cameras that follow RTCP feedback.
 
 ### RTSP over WebSocket
 

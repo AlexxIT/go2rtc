@@ -12,10 +12,11 @@ import (
 // every session when a new session sets up the video track.
 
 const (
-	KeyframeSETUP = "setup"
-	KeyframePLAY  = "play"
-	KeyframePLI   = "pli" // RTCP Picture Loss Indication (RFC 4585)
-	KeyframeFIR   = "fir" // RTCP Full Intra Request (RFC 5104)
+	KeyframeReSETUP = "resetup"
+	KeyframeRePLAY  = "replay"
+	KeyframePLAY    = "play"
+	KeyframePLI     = "pli" // RTCP Picture Loss Indication (RFC 4585)
+	KeyframeFIR     = "fir" // RTCP Full Intra Request (RFC 5104)
 
 	keyframeInterval = time.Second
 )
@@ -30,7 +31,9 @@ func (c *Conn) RequestKeyframe() {
 	var err error
 
 	switch c.Keyframe {
-	case KeyframeSETUP, KeyframePLAY:
+	case KeyframePLAY:
+		err = c.Play()
+	case KeyframeReSETUP, KeyframeRePLAY:
 		err = c.keyframeSession()
 	case KeyframePLI, KeyframeFIR:
 		err = c.requestKeyframeRTCP()
@@ -78,8 +81,8 @@ func (c *Conn) keyframeSession() error {
 		}
 	}
 
-	if c.Keyframe == KeyframePLAY {
-		return c.Play()
+	if c.Keyframe == KeyframeRePLAY {
+		return h.Play()
 	}
 
 	return nil
