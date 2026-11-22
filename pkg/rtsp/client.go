@@ -180,10 +180,6 @@ func (c *Conn) Describe() error {
 		},
 	}
 
-	if c.Backchannel {
-		req.Header.Set("Require", "www.onvif.org/ver20/backchannel")
-	}
-
 	if c.UserAgent != "" {
 		// this camera will answer with 401 on DESCRIBE without User-Agent
 		// https://github.com/AlexxIT/go2rtc/issues/235
@@ -319,7 +315,7 @@ func (c *Conn) SetupMedia(media *core.Media) (byte, error) {
 	if err != nil {
 		// some Dahua/Amcrest cameras fail here because two simultaneous
 		// backchannel connections
-		if c.Backchannel {
+		if c.Backchannel && media.Direction != core.DirectionSendonly {
 			c.Backchannel = false
 			if err = c.Reconnect(); err != nil {
 				return 0, err

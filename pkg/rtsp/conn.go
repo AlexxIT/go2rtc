@@ -344,6 +344,12 @@ func (c *Conn) WriteRequest(req *tcp.Request) error {
 		req.Header.Set("Session", c.session)
 	}
 
+	// ONVIF Streaming Specification 5.3.1 requires the backchannel tag in
+	// requests that use this feature.
+	if c.Backchannel {
+		req.Header.Set("Require", "www.onvif.org/ver20/backchannel")
+	}
+
 	if req.Body != nil {
 		val := strconv.Itoa(len(req.Body))
 		req.Header.Set("Content-Length", val)
