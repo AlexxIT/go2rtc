@@ -2,6 +2,7 @@ package camera
 
 import (
 	"encoding/base64"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -10,7 +11,7 @@ import (
 )
 
 func TestNilCharacter(t *testing.T) {
-	var res SetupEndpoints
+	var res SetupEndpointsRequest
 	char := &hap.Character{}
 	err := char.ReadTLV8(&res)
 	require.NotNil(t, err)
@@ -48,6 +49,11 @@ func (test testTLV8) run(t *testing.T) {
 	if !test.noequal {
 		require.Equal(t, test.value, dst.Value)
 	}
+
+	// the encoded value must still decode to the same structure
+	again := reflect.New(reflect.TypeOf(test.actual).Elem()).Interface()
+	require.Nil(t, dst.ReadTLV8(again))
+	require.Equal(t, test.expect, again)
 }
 
 func TestAqaraG3(t *testing.T) {
@@ -90,6 +96,7 @@ func TestAqaraG3(t *testing.T) {
 					},
 				},
 			},
+			noequal: true, // device uses 0x00 separators, Marshal writes 0xFF
 		},
 		{
 			name:   "115",
@@ -118,6 +125,7 @@ func TestAqaraG3(t *testing.T) {
 			expect: &SupportedRTPConfiguration{
 				SRTPCryptoType: []byte{CryptoAES_CM_128_HMAC_SHA1_80, CryptoAES_CM_256_HMAC_SHA1_80, CryptoDisabled},
 			},
+			noequal: true, // device uses 0x00 separators, Marshal writes 0xFF
 		},
 	}
 	for _, test := range tests {
@@ -158,6 +166,7 @@ func TestHomebridge(t *testing.T) {
 					},
 				},
 			},
+			noequal: true, // device uses 0x00 separators, Marshal writes 0xFF
 		},
 		{
 			name:   "116",
@@ -198,6 +207,7 @@ func TestScrypted(t *testing.T) {
 					},
 				},
 			},
+			noequal: true, // device uses 0x00 separators, Marshal writes 0xFF
 		},
 		{
 			name:   "115",
@@ -222,6 +232,7 @@ func TestScrypted(t *testing.T) {
 				},
 				ComfortNoiseSupport: 0,
 			},
+			noequal: true, // device uses 0x00 separators, Marshal writes 0xFF
 		},
 		{
 			name:   "116",
@@ -230,6 +241,7 @@ func TestScrypted(t *testing.T) {
 			expect: &SupportedRTPConfiguration{
 				SRTPCryptoType: []byte{CryptoAES_CM_128_HMAC_SHA1_80, CryptoDisabled},
 			},
+			noequal: true, // device uses 0x00 separators, Marshal writes 0xFF
 		},
 	}
 	for _, test := range tests {
