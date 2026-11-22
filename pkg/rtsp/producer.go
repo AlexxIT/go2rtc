@@ -47,10 +47,9 @@ func (c *Conn) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, e
 	track.ID = channel
 	if media.Kind == core.KindVideo {
 		switch c.Keyframe {
-		case KeyframeResetup:
+		case KeyframeResetup, KeyframePLI, KeyframeFIR:
+			c.keyframeChan.Store(uint32(channel))
 			track.OnKeyframe(c.RequestKeyframe)
-		case KeyframePLI, KeyframeFIR:
-			track.OnKeyframe(func() { c.requestKeyframeRTCP(channel) })
 		}
 	}
 	c.Receivers = append(c.Receivers, track)

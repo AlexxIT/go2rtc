@@ -57,8 +57,9 @@ type Conn struct {
 	udpAddr []*net.UDPAddr
 
 	keyframeNext atomic.Int64 // earliest time of the next RequestKeyframe
+	keyframeChan atomic.Uint32
+	keyframeSSRC atomic.Uint32
 	firSeq       atomic.Uint32
-	ssrc         [256]atomic.Uint32 // last RTP SSRC per channel, for keyframe requests
 }
 
 const (
@@ -300,7 +301,9 @@ func (c *Conn) handleRawPacket(channel byte, buf []byte) error {
 		if err := packet.Unmarshal(buf); err != nil {
 			return err
 		}
-		c.ssrc[channel].Store(packet.SSRC)
+		if c.keyframeChan.Load() == uint32(channel) {
+			c.keyframeSSRC.Store(packet.SSRC)
+		}
 
 		for _, receiver := range c.Receivers {
 			if receiver.ID == channel {

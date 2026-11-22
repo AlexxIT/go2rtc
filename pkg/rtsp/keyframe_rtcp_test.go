@@ -35,16 +35,18 @@ func TestRequestKeyframeRTCP(t *testing.T) {
 			r := bufio.NewReader(camera)
 
 			conn := &Conn{Keyframe: mode, conn: client}
+			conn.keyframeChan.Store(2)
 
 			// no RTP yet: the SSRC is unknown, nothing is sent
-			conn.requestKeyframeRTCP(2)
+			conn.RequestKeyframe()
 			_ = camera.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 			_, err := r.ReadByte()
 			require.Error(t, err)
 			_ = camera.SetReadDeadline(time.Time{})
 
-			conn.ssrc[2].Store(0x1234)
-			conn.requestKeyframeRTCP(2)
+			conn.keyframeSSRC.Store(0x1234)
+			conn.keyframeNext.Store(0)
+			go conn.RequestKeyframe()
 			channel, pkt := readRTCP(t, r)
 			require.Equal(t, byte(3), channel) // RTCP channel of the track
 
@@ -62,7 +64,7 @@ func TestRequestKeyframeRTCP(t *testing.T) {
 			}
 
 			// a request right after is throttled
-			conn.requestKeyframeRTCP(2)
+			conn.RequestKeyframe()
 			_ = camera.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 			_, err = r.ReadByte()
 			require.Error(t, err)
@@ -70,7 +72,7 @@ func TestRequestKeyframeRTCP(t *testing.T) {
 
 			// the next one after the interval gets a new FIR sequence number
 			conn.keyframeNext.Store(0)
-			conn.requestKeyframeRTCP(2)
+			go conn.RequestKeyframe()
 			_, pkt = readRTCP(t, r)
 			if fir, ok := pkt.(*rtcp.FullIntraRequest); ok {
 				require.Equal(t, uint8(2), fir.FIR[0].SequenceNumber)
@@ -82,7 +84,7 @@ func TestRequestKeyframeRTCP(t *testing.T) {
 // UDP without a server RTCP port: nothing is sent, and nothing panics
 func TestRequestKeyframeRTCPNoUDPPort(t *testing.T) {
 	conn := &Conn{Keyframe: KeyframePLI, Transport: "udp"}
-	conn.ssrc[0].Store(0x1234)
-	conn.requestKeyframeRTCP(0)
+	conn.keyframeSSRC.Store(0x1234)
+	require.NoError(t, conn.requestKeyframeRTCP())
 	require.Zero(t, conn.keyframeNext.Load())
 }

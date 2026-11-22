@@ -30,13 +30,20 @@ func (c *Conn) RequestKeyframe() {
 		return
 	}
 
-	go func() {
-		err := c.keyframeSession()
-		c.keyframeNext.Store(time.Now().Add(keyframeInterval).UnixNano())
-		if err != nil {
-			c.Fire("RTSP keyframe: " + err.Error())
-		}
-	}()
+	var err error
+
+	switch c.Keyframe {
+	case KeyframeResetup:
+		err = c.keyframeSession()
+	case KeyframePLI, KeyframeFIR:
+		err = c.requestKeyframeRTCP()
+	}
+
+	if err != nil {
+		c.Fire("RTSP keyframe: " + err.Error())
+	}
+
+	c.keyframeNext.Store(time.Now().Add(keyframeInterval).UnixNano())
 }
 
 // keyframeSession: DESCRIBE, SETUP video, TEARDOWN. There is no PLAY, the
@@ -83,32 +90,33 @@ func (c *Conn) keyframeSession() error {
 // with the option `#keyframe=pli` or `#keyframe=fir`. Requests are at least
 // keyframeInterval apart, and nothing is sent before the track got RTP
 // (the camera's SSRC is unknown until then).
-func (c *Conn) requestKeyframeRTCP(channel byte) {
-	ssrc := c.ssrc[channel].Load()
-	if c.Transport == "udp" && int(channel)+1 >= len(c.udpAddr) {
-		return // the camera gave no RTCP port
-	}
-	now := time.Now().UnixNano()
-	next := c.keyframeNext.Load()
-	if ssrc == 0 || now < next || !c.keyframeNext.CompareAndSwap(next, now+int64(keyframeInterval)) {
-		return
+func (c *Conn) requestKeyframeRTCP() error {
+	channel := byte(c.keyframeChan.Load())
+	ssrc := c.keyframeSSRC.Load()
+	if ssrc == 0 {
+		return nil
 	}
 
-	var pkt rtcp.Packet = &rtcp.PictureLossIndication{MediaSSRC: ssrc}
-	if c.Keyframe == KeyframeFIR {
+	if c.Transport == "udp" && int(channel)+1 >= len(c.udpAddr) {
+		return nil // the camera gave no RTCP port
+	}
+
+	var pkt rtcp.Packet
+
+	switch c.Keyframe {
+	case KeyframePLI:
+		pkt = &rtcp.PictureLossIndication{MediaSSRC: ssrc}
+	case KeyframeFIR:
 		seq := uint8(c.firSeq.Add(1))
 		pkt = &rtcp.FullIntraRequest{FIR: []rtcp.FIREntry{{SSRC: ssrc, SequenceNumber: seq}}}
 	}
+
 	b, err := pkt.Marshal()
 	if err != nil {
-		return
+		return err
 	}
 
-	go func() {
-		// RTCP goes on the odd channel after the track's RTP channel
-		data := append([]byte{'$', channel + 1, byte(len(b) >> 8), byte(len(b))}, b...)
-		if err := c.writeInterleavedData(data); err != nil {
-			c.Fire("RTSP keyframe: " + err.Error())
-		}
-	}()
+	// RTCP goes on the odd channel after the track's RTP channel
+	data := append([]byte{'$', channel + 1, byte(len(b) >> 8), byte(len(b))}, b...)
+	return c.writeInterleavedData(data)
 }
