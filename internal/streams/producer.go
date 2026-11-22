@@ -38,6 +38,12 @@ type Producer struct {
 
 const SourceTemplate = "{input}"
 
+func (p *Producer) started() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.state == stateStart
+}
+
 func NewProducer(source string) *Producer {
 	if strings.Contains(source, SourceTemplate) {
 		return &Producer{template: source}
