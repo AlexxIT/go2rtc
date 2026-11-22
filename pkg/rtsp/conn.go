@@ -25,7 +25,7 @@ type Conn struct {
 	// public
 
 	Backchannel bool
-	Keyframe    string // KeyframeResetup: video tracks request keyframes with RequestKeyframe
+	Keyframe    string // KeyframeResetup, KeyframePLI or KeyframeFIR: how video tracks request keyframes
 	Media       string
 	OnClose     func() error
 	PacketSize  uint16
@@ -57,6 +57,9 @@ type Conn struct {
 	udpAddr []*net.UDPAddr
 
 	keyframeNext atomic.Int64 // earliest time of the next RequestKeyframe
+	keyframeChan atomic.Uint32
+	keyframeSSRC atomic.Uint32
+	firSeq       atomic.Uint32
 }
 
 const (
@@ -297,6 +300,9 @@ func (c *Conn) handleRawPacket(channel byte, buf []byte) error {
 		packet := &rtp.Packet{}
 		if err := packet.Unmarshal(buf); err != nil {
 			return err
+		}
+		if c.keyframeChan.Load() == uint32(channel) {
+			c.keyframeSSRC.Store(packet.SSRC)
 		}
 
 		for _, receiver := range c.Receivers {
