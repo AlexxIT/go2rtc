@@ -125,11 +125,14 @@ func GetParameterSet(fmtp string) (sps, pps []byte) {
 }
 
 func trimStartCode(b []byte) []byte {
-	switch {
-	case len(b) >= 4 && b[0] == 0 && b[1] == 0 && b[2] == 0 && b[3] == 1:
-		return b[4:]
-	case len(b) >= 3 && b[0] == 0 && b[1] == 0 && b[2] == 1:
-		return b[3:]
+	// Minimal SPS - 6 bytes, PPS - 3 bytes, so ">= 4" is safe check.
+	if len(b) >= 4 && b[0] == 0 && b[1] == 0 {
+		if b[2] == 1 {
+			return b[3:]
+		}
+		if b[2] == 0 && b[3] == 1 {
+			return b[4:]
+		}
 	}
 	return b
 }
