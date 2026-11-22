@@ -12,17 +12,14 @@ import (
 // every session when a new session sets up the video track.
 
 const (
-	KeyframeResetup = "resetup"
-	KeyframePLI     = "pli" // RTCP Picture Loss Indication (RFC 4585)
-	KeyframeFIR     = "fir" // RTCP Full Intra Request (RFC 5104)
+	KeyframeSETUP = "setup"
+	KeyframePLAY  = "play"
+	KeyframePLI   = "pli" // RTCP Picture Loss Indication (RFC 4585)
+	KeyframeFIR   = "fir" // RTCP Full Intra Request (RFC 5104)
 
 	keyframeInterval = time.Second
 )
 
-// RequestKeyframe asks the camera for a keyframe with a short helper session.
-// GetTrack sets it as the keyframe handler of video tracks with the option
-// `#keyframe=resetup`. It never blocks and never touches the main session.
-// Helper sessions don't overlap, and start at least keyframeInterval apart.
 func (c *Conn) RequestKeyframe() {
 	now := time.Now().UnixNano()
 	next := c.keyframeNext.Load()
@@ -33,7 +30,7 @@ func (c *Conn) RequestKeyframe() {
 	var err error
 
 	switch c.Keyframe {
-	case KeyframeResetup:
+	case KeyframeSETUP, KeyframePLAY:
 		err = c.keyframeSession()
 	case KeyframePLI, KeyframeFIR:
 		err = c.requestKeyframeRTCP()
@@ -46,9 +43,6 @@ func (c *Conn) RequestKeyframe() {
 	c.keyframeNext.Store(time.Now().Add(keyframeInterval).UnixNano())
 }
 
-// keyframeSession: DESCRIBE, SETUP video, TEARDOWN. There is no PLAY, the
-// camera sends the keyframe on SETUP. Only a TCP session is used, every
-// request has the usual timeout.
 func (c *Conn) keyframeSession() error {
 	switch c.Transport {
 	case "", "tcp", "udp":
@@ -77,9 +71,15 @@ func (c *Conn) keyframeSession() error {
 
 	for _, media := range h.Medias {
 		if media.Kind == core.KindVideo && media.Direction == core.DirectionRecvonly {
-			_, err := h.SetupMedia(media)
-			return err
+			if _, err := h.SetupMedia(media); err != nil {
+				return err
+			}
+			break
 		}
+	}
+
+	if c.Keyframe == KeyframePLAY {
+		return c.Play()
 	}
 
 	return nil

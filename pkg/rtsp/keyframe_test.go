@@ -105,7 +105,7 @@ func TestRequestKeyframe(t *testing.T) {
 	camera := newKeyframeCamera(t)
 
 	conn := NewClient(camera.uri)
-	conn.Keyframe = KeyframeResetup
+	conn.Keyframe = KeyframeSETUP
 
 	// concurrent requests start only one helper session
 	var wg sync.WaitGroup
@@ -144,8 +144,8 @@ func TestGetTrackKeyframe(t *testing.T) {
 		kind     string
 		helper   bool
 	}{
-		{KeyframeResetup, core.KindVideo, true},
-		{KeyframeResetup, core.KindAudio, false},
+		{KeyframeSETUP, core.KindVideo, true},
+		{KeyframeSETUP, core.KindAudio, false},
 		{"", core.KindVideo, false},
 	} {
 		camera := newKeyframeCamera(t)
@@ -189,7 +189,7 @@ func TestRequestKeyframeError(t *testing.T) {
 	require.Nil(t, ln.Close()) // connection refused
 
 	conn := NewClient(uri)
-	conn.Keyframe = KeyframeResetup
+	conn.Keyframe = KeyframeSETUP
 
 	msg := make(chan any, 1)
 	conn.Listen(func(m any) { msg <- m })
@@ -216,7 +216,7 @@ func TestRequestKeyframeTimeout(t *testing.T) {
 	t.Cleanup(func() { _ = ln.Close() })
 
 	conn := NewClient("rtsp://" + ln.Addr().String() + "/stream")
-	conn.Keyframe = KeyframeResetup
+	conn.Keyframe = KeyframeSETUP
 	conn.RequestKeyframe()
 
 	require.Eventually(t, func() bool { return conn.keyframeNext.Load() != math.MaxInt64 }, 2*time.Second, 5*time.Millisecond)
@@ -231,7 +231,7 @@ func TestRequestKeyframeAfterRedirect(t *testing.T) {
 	camera.redirect = target.uri
 
 	conn := NewClient(camera.uri)
-	conn.Keyframe = KeyframeResetup
+	conn.Keyframe = KeyframeSETUP
 	require.Nil(t, conn.Dial())
 	require.Nil(t, conn.Describe()) // redirected to target
 	t.Cleanup(func() { _ = conn.conn.Close() })

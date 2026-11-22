@@ -42,7 +42,7 @@ Format: `rtsp...#{param1}#{param2}#{param3}`
 - Ignore audio - `#media=video` or ignore video - `#media=audio`
 - Ignore two-way audio API `#backchannel=0` - important for some glitchy cameras
 - Use WebSocket transport `#transport=ws...`
-- Request a keyframe when a WebRTC viewer sends PLI/FIR `#keyframe=resetup` - for cameras that ignore RTCP feedback and send a keyframe only on a new session (ex. UniFi Protect). A short helper session (DESCRIBE, SETUP, TEARDOWN) is opened at most once per second
+- Request a keyframe when a WebRTC viewer sends PLI/FIR `#keyframe=setup` / `#keyframe=play` - for cameras that ignore RTCP feedback and send a keyframe only on a new session (ex. UniFi Protect). A short helper session is opened at most once per second.
 - Request a keyframe with RTCP PLI or FIR `#keyframe=pli` / `#keyframe=fir` - for cameras that follow RTCP feedback. Sent on the first video track at most once per second.
 
 ### RTSP over WebSocket

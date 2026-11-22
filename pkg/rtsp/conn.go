@@ -25,7 +25,7 @@ type Conn struct {
 	// public
 
 	Backchannel bool
-	Keyframe    string // KeyframeResetup, KeyframePLI or KeyframeFIR: how video tracks request keyframes
+	Keyframe    string // how video tracks request keyframes
 	Media       string
 	OnClose     func() error
 	PacketSize  uint16
