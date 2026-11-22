@@ -181,6 +181,18 @@ func readUntilClose(t *testing.T, sender *webrtc.RTPSender, pc *webrtc.PeerConne
 	}
 }
 
+func requireKeyframeCalls(t *testing.T, calls <-chan struct{}, count int) {
+	t.Helper()
+	for range count {
+		select {
+		case <-calls:
+		case <-time.After(5 * time.Second):
+			t.Fatal("keyframe handler was not called")
+		}
+	}
+	require.Empty(t, calls)
+}
+
 // rtcpReads replays errs (nil = PLI packet), then closes drained and passes
 // the reads to the connection
 func rtcpReads(t *testing.T, errs ...error) (rtcpScript, *[]error, <-chan struct{}) {
@@ -207,15 +219,15 @@ func rtcpReads(t *testing.T, errs ...error) (rtcpScript, *[]error, <-chan struct
 	return read, &errs, drained
 }
 
-// TestReadRTCPSkipsBrokenPackets - a failed read must not end the loop,
+// TestReadRTCPSkipsBrokenPackets - failed reads must not end the loop,
 // a later PLI still reaches the handler
 func TestReadRTCPSkipsBrokenPackets(t *testing.T) {
 	read, left, drained := rtcpReads(t, errors.New("broken packet"), io.ErrShortBuffer, nil)
 
-	var calls int
-	sender, pc := newRTCPSender(t, newKeyframeTrack(func() { calls++ }), read)
+	calls := make(chan struct{}, 1)
+	sender, pc := newRTCPSender(t, newKeyframeTrack(func() { calls <- struct{}{} }), read)
 	readUntilClose(t, sender, pc, drained)
-	require.Equal(t, 1, calls)
+	requireKeyframeCalls(t, calls, 1)
 	require.Empty(t, *left)
 }
 
@@ -276,7 +288,8 @@ func TestReadRTCPLateSender(t *testing.T) {
 	}()
 	readUntilClose(t, sender, pc, drained)
 
-	require.Positive(t, calls.Load(), "late sender got no keyframe request")
+	require.Eventually(t, func() bool { return calls.Load() > 0 }, 5*time.Second, 10*time.Millisecond,
+		"late sender got no keyframe request")
 }
 
 // TestReadRTCPStopsAfterTooManyErrors - a reader that only fails ends the loop
@@ -303,10 +316,10 @@ func TestReadRTCPResetsErrorsAfterRead(t *testing.T) {
 	}
 	read, left, _ := rtcpReads(t, append(seq, io.EOF)...)
 
-	var calls int
-	sender, _ := newRTCPSender(t, newKeyframeTrack(func() { calls++ }), read)
+	calls := make(chan struct{}, 2)
+	sender, _ := newRTCPSender(t, newKeyframeTrack(func() { calls <- struct{}{} }), read)
 	readRTCP(sender)
-	require.Equal(t, 2, calls)
+	requireKeyframeCalls(t, calls, 2)
 	require.Empty(t, *left)
 }
 
@@ -331,10 +344,10 @@ func TestReadRTCPAfterNackLimiter(t *testing.T) {
 		return copy(b, compound), a, nil
 	}
 
-	var calls int
+	calls := make(chan struct{}, 1)
 	// the limiter wraps the script, like it wraps the connection in production
 	limiter := newNackLimiter(nackMaxResendBytesPerSec, nackMaxResendsPerSeq)
-	sender, pc := newRTCPSender(t, newKeyframeTrack(func() { calls++ }), rtcpScript(read), limiter)
+	sender, pc := newRTCPSender(t, newKeyframeTrack(func() { calls <- struct{}{} }), rtcpScript(read), limiter)
 	readUntilClose(t, sender, pc, drained)
-	require.Equal(t, 1, calls)
+	requireKeyframeCalls(t, calls, 1)
 }

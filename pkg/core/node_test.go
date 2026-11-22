@@ -2,22 +2,32 @@ package core
 
 import (
 	"sync"
-	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
 
+func requireKeyframe(t *testing.T, calls <-chan struct{}) {
+	t.Helper()
+
+	select {
+	case <-calls:
+	case <-time.After(time.Second):
+		t.Fatal("keyframe handler was not called")
+	}
+}
+
 func TestRequestKeyframe(t *testing.T) {
-	var calls int
+	calls := make(chan struct{}, 1)
 	receiver := NewReceiver(nil, &Codec{})
-	receiver.OnKeyframe(func() { calls++ })
+	receiver.OnKeyframe(func() { calls <- struct{}{} })
 
 	sender := NewSender(nil, &Codec{})
 	sender.Bind(receiver)
 
 	sender.RequestKeyframe()
-	require.Equal(t, 1, calls)
+	requireKeyframe(t, calls)
 }
 
 func TestRequestKeyframeNoHandler(t *testing.T) {
@@ -31,28 +41,30 @@ func TestRequestKeyframeNoHandler(t *testing.T) {
 
 // after the source was replaced (ex. reconnect), requests go to the new source
 func TestRequestKeyframeMoveNode(t *testing.T) {
-	var oldCalls, newCalls int
+	oldCalls := make(chan struct{}, 1)
+	newCalls := make(chan struct{}, 1)
 	old := NewReceiver(nil, &Codec{})
-	old.OnKeyframe(func() { oldCalls++ })
+	old.OnKeyframe(func() { oldCalls <- struct{}{} })
 	track := NewReceiver(nil, &Codec{})
-	track.OnKeyframe(func() { newCalls++ })
+	track.OnKeyframe(func() { newCalls <- struct{}{} })
 
 	sender := NewSender(nil, &Codec{})
 	sender.Bind(old)
 	old.Replace(track)
 
 	sender.RequestKeyframe()
-	require.Equal(t, 0, oldCalls)
-	require.Equal(t, 1, newCalls)
+	requireKeyframe(t, newCalls)
+	require.Empty(t, oldCalls)
 }
 
 // requests run in the RTCP goroutine, while other goroutines bind and close
 func TestRequestKeyframeConcurrent(t *testing.T) {
-	var calls atomic.Int32
+	calls := make(chan struct{}, 1000)
+	handler := func() { calls <- struct{}{} }
 	a := NewReceiver(nil, &Codec{})
-	a.OnKeyframe(func() { calls.Add(1) })
+	a.OnKeyframe(handler)
 	b := NewReceiver(nil, &Codec{})
-	b.OnKeyframe(func() { calls.Add(1) })
+	b.OnKeyframe(handler)
 
 	sender := NewSender(nil, &Codec{})
 	sender.Bind(a)
@@ -73,11 +85,14 @@ func TestRequestKeyframeConcurrent(t *testing.T) {
 			} else {
 				MoveNode(&a.Node, &b.Node)
 			}
-			a.OnKeyframe(func() { calls.Add(1) })
+			a.OnKeyframe(handler)
 		}
 		sender.Close()
 	}()
 	wg.Wait()
 
-	require.EqualValues(t, 1000, calls.Load())
+	for range 1000 {
+		requireKeyframe(t, calls)
+	}
+	require.Empty(t, calls)
 }

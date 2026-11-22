@@ -171,7 +171,7 @@ transeivers:
 
 // GetCompleteAnswer - get SDP answer with candidates inside
 func (c *Conn) GetCompleteAnswer(candidates []string, filter func(*webrtc.ICECandidate) bool) (string, error) {
-	var done = make(chan struct{})
+	done := make(chan struct{}, 1)
 
 	c.pc.OnICECandidate(func(candidate *webrtc.ICECandidate) {
 		if candidate != nil {
@@ -179,9 +179,13 @@ func (c *Conn) GetCompleteAnswer(candidates []string, filter func(*webrtc.ICECan
 				candidates = append(candidates, candidate.ToJSON().Candidate)
 			}
 		} else {
-			done <- struct{}{}
+			select {
+			case done <- struct{}{}:
+			default:
+			}
 		}
 	})
+	defer c.pc.OnICECandidate(nil)
 
 	answer, err := c.GetAnswer()
 	if err != nil {
