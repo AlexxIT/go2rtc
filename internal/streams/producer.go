@@ -158,6 +158,7 @@ func (p *Producer) start() {
 }
 
 func (p *Producer) worker(conn core.Producer, workerID int) {
+	// TODO: fix reconnect logic https://github.com/AlexxIT/go2rtc/pull/2728
 	if err := conn.Start(); err != nil {
 		p.mu.Lock()
 		closed := p.workerID != workerID

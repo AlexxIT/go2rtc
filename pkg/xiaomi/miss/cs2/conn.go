@@ -192,6 +192,15 @@ func (c *Conn) Error() error {
 	return io.EOF
 }
 
+// Close tells the camera to end the session before closing the socket.
+// Otherwise, on UDP, the camera keeps the session, and one of its few
+// streaming slots, until its own timeout (~20 s).
+func (c *Conn) Close() error {
+	_ = c.Conn.SetWriteDeadline(time.Now().Add(time.Second))
+	_, _ = c.Conn.Write([]byte{magic, msgClose, 0, 0})
+	return c.Conn.Close()
+}
+
 func (c *Conn) ReadCommand() (cmd uint32, data []byte, err error) {
 	buf, ok := c.channels[0].Pop()
 	if !ok {
