@@ -182,7 +182,14 @@ func (c *Client) Request(url, body string) ([]byte, error) {
 	e := NewEnvelopeWithUser(c.url.User)
 	e.Append(body)
 
-	client := &http.Client{Timeout: time.Second * 5000}
+	client := &http.Client{
+		Timeout: time.Second * 5000,
+		// SOAP envelopes may carry camera credentials. A camera-supplied
+		// redirect must not forward the request to another endpoint.
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 	res, err := client.Post(url, `application/soap+xml;charset=utf-8`, bytes.NewReader(e.Bytes()))
 	if err != nil {
 		return nil, err
