@@ -73,7 +73,8 @@ func GetProfileLevelID(fmtp string) string {
 		// some cameras has wrong profile-level-id
 		// https://github.com/AlexxIT/go2rtc/issues/155
 		if s := core.Between(fmtp, "sprop-parameter-sets=", ","); s != "" {
-			if sps, _ := base64.StdEncoding.DecodeString(s); len(sps) >= 4 {
+			sps, _ := base64.StdEncoding.DecodeString(s)
+			if sps = trimStartCode(sps); len(sps) >= 4 {
 				conf = sps[1:4]
 			}
 		} else if s = core.Between(fmtp, "profile-level-id=", ";"); s != "" {
@@ -118,7 +119,22 @@ func GetParameterSet(fmtp string) (sps, pps []byte) {
 	sps, _ = base64.StdEncoding.DecodeString(s[:i])
 	pps, _ = base64.StdEncoding.DecodeString(s[i+1:])
 
-	return
+	// some cameras put an Annex B start code before each parameter set
+	// https://github.com/AlexxIT/go2rtc/issues/2729
+	return trimStartCode(sps), trimStartCode(pps)
+}
+
+func trimStartCode(b []byte) []byte {
+	// Minimal SPS - 6 bytes, PPS - 3 bytes, so ">= 4" is safe check.
+	if len(b) >= 4 && b[0] == 0 && b[1] == 0 {
+		if b[2] == 1 {
+			return b[3:]
+		}
+		if b[2] == 0 && b[3] == 1 {
+			return b[4:]
+		}
+	}
+	return b
 }
 
 // GetFmtpLine from SPS+PPS+IFrame in AVC format

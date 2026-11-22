@@ -84,6 +84,22 @@ func TestGetProfileLevelID(t *testing.T) {
 	require.Equal(t, "640029", profile)
 }
 
+func TestGetParameterSetStartCode(t *testing.T) {
+	// HiSilicon camera with Annex B start codes inside sprop-parameter-sets
+	// https://github.com/AlexxIT/go2rtc/issues/2729
+	s := "packetization-mode=1;sprop-parameter-sets=AAAAASdNADPnQGQc01AQEB8AAAMAAQAAAwAZNoAlgOF//wKA,AAAAASjuPIA="
+
+	sps, pps := GetParameterSet(s)
+	require.Equal(t, byte(NALUTypeSPS), sps[0]&0x1F)
+	require.Equal(t, "28ee3c80", hex.EncodeToString(pps))
+
+	info := DecodeSPS(sps)
+	require.Equal(t, uint16(800), info.Width())
+	require.Equal(t, uint16(448), info.Height())
+
+	require.Equal(t, "4D0029", GetProfileLevelID(s))
+}
+
 func TestDecodeSPS2(t *testing.T) {
 	s := "6764001fad84010c20086100430802184010c200843b50740932"
 	b, err := hex.DecodeString(s)
