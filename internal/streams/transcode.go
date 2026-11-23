@@ -24,7 +24,9 @@ var (
 )
 
 // AddTranscoder registers a transcoder for all streams. Its producer is
-// created with the "transcode:<name>" source and must implement Player.
+// created with the "transcode:<name>#output=<codec>" source, where codec is
+// the one the stream's source takes, and must implement Player. An output
+// without clock rate or channels matches any.
 func AddTranscoder(name string, output *core.Codec) {
 	transcodersMu.Lock()
 	transcoders = append(transcoders, transcoder{name: name, output: output})
@@ -44,11 +46,12 @@ func (s *Stream) matchTranscoder(cons core.Consumer, consMedia *core.Media, prod
 	transcodersMu.Unlock()
 
 	for _, t := range list {
-		if !acceptsBackchannel(prodMedias, t.output) {
+		output := acceptedCodec(prodMedias, t.output)
+		if output == nil {
 			continue
 		}
 
-		prod := s.transcoder(t.name)
+		prod := s.transcoder(t.name + "#output=" + output.String())
 		if err := prod.Dial(); err != nil {
 			log.Warn().Err(err).Str("transcoder", t.name).Msg("[streams] can't start transcoder")
 			continue
@@ -104,11 +107,16 @@ func (s *Stream) transcoder(name string) *Producer {
 	return prod
 }
 
-func acceptsBackchannel(medias []*core.Media, codec *core.Codec) bool {
+// acceptedCodec returns the codec of a source that takes backchannel audio
+// matching codec, or nil.
+func acceptedCodec(medias []*core.Media, codec *core.Codec) *core.Codec {
 	for _, media := range medias {
-		if media.Direction == core.DirectionSendonly && media.MatchCodec(codec) != nil {
-			return true
+		if media.Direction != core.DirectionSendonly {
+			continue
+		}
+		if accepted := media.MatchCodec(codec); accepted != nil {
+			return accepted
 		}
 	}
-	return false
+	return nil
 }

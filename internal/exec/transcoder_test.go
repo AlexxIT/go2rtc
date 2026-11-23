@@ -68,8 +68,11 @@ func TestTranscoderAutomatic(t *testing.T) {
 
 	// as in the config: a stand-in encoder that "encodes" by writing a ready
 	// LOAS file and reads the microphone until it ends
-	transcodeCommands["testeld"] = "sh -c 'cat ../../pkg/aac/testdata/eld_16k_480.loas; cat > /dev/null'#audio=pcml/16000#output=eld/16000"
-	streams.AddTranscoder("testeld", core.ParseCodecString("eld/16000"))
+	var output *core.Codec
+	AddTranscoder("testeld", &core.Codec{Name: core.CodecELD}, func(codec *core.Codec) string {
+		output = codec
+		return "sh -c 'cat ../../pkg/aac/testdata/eld_16k_480.loas; cat > /dev/null'#audio=pcml/16000"
+	})
 	streams.HandleFunc("transcode", transcodeHandle)
 
 	stream, err := streams.New("transcoder_test", "testcam:")
@@ -86,6 +89,8 @@ func TestTranscoderAutomatic(t *testing.T) {
 	select {
 	case track := <-cam.tracks:
 		require.Equal(t, core.CodecELD, track.Codec.Name)
+		// the transcoder was asked for exactly the camera's codec
+		require.Equal(t, "ELD/16000/1", output.String())
 	case <-time.After(5 * time.Second):
 		t.Fatal("the camera got no track")
 	}
@@ -110,6 +115,6 @@ func TestTranscoderAudio(t *testing.T) {
 }
 
 func TestTranscoderUnknown(t *testing.T) {
-	_, err := transcodeHandle("transcode:missing")
+	_, err := transcodeHandle("transcode:missing#output=aac")
 	require.Error(t, err)
 }

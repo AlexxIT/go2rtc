@@ -137,9 +137,20 @@ func (t *transcoder) Start() error {
 	return t.cmd.Wait()
 }
 
-var transcodeCommands = map[string]string{}
+// transcodeSources returns a transcoder's command and params for the codec
+// the stream's source takes.
+var transcodeSources = map[string]func(output *core.Codec) string{}
 
-// initTranscoders registers the transcoders named in the config.
+// AddTranscoder registers a transcoder from code, e.g. the ffmpeg module's
+// built-in ones. source returns the command and its params (#audio=) for the
+// codec the stream's source takes, which matches output.
+func AddTranscoder(name string, output *core.Codec, source func(output *core.Codec) string) {
+	transcodeSources[name] = source
+	streams.AddTranscoder(name, output)
+}
+
+// initTranscoders registers the transcoders named in the config. They are
+// tried before built-in ones.
 func initTranscoders() {
 	var cfg struct {
 		Mod map[string]string `yaml:"transcode"`
@@ -153,21 +164,26 @@ func initTranscoders() {
 			log.Warn().Str("transcoder", name).Msg("[exec] transcoder needs #output=<codec>")
 			continue
 		}
-		transcodeCommands[name] = source
-		streams.AddTranscoder(name, output)
+		AddTranscoder(name, output, func(*core.Codec) string { return source })
 	}
 
-	// Sources can only name a transcoder from the config, so the API may add them
+	// Sources can only name a registered transcoder, so the API may add them
 	streams.HandleFunc("transcode", transcodeHandle)
 }
 
 func transcodeHandle(rawURL string) (core.Producer, error) {
-	source, ok := transcodeCommands[rawURL[len("transcode:"):]]
+	name, rawQuery, _ := strings.Cut(rawURL[len("transcode:"):], "#")
+	source, ok := transcodeSources[name]
 	if !ok {
-		return nil, errors.New("exec: unknown transcoder: " + rawURL)
+		return nil, errors.New("exec: unknown transcoder: " + name)
 	}
 
-	cmdline, rawQuery, _ := strings.Cut(source, "#")
+	output := core.ParseCodecString(streams.ParseQuery(rawQuery).Get("output"))
+	if output == nil {
+		return nil, errors.New("exec: transcoder without output: " + rawURL)
+	}
+
+	cmdline, rawQuery, _ := strings.Cut(source(output), "#")
 	cmd := shell.NewCommand(cmdline)
 	cmd.Stderr = &logWriter{buf: make([]byte, 512), debug: log.Debug().Enabled()}
 

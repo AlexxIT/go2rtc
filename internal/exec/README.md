@@ -63,3 +63,5 @@ streams:
 - `output` is the codec the encoder writes; a source must take it.
 - The encoder writes any format the pipe reads to stdout, e.g. ADTS for AAC, or LOAS for AAC-ELD, which ADTS can't carry (`ffmpeg ... -f latm -`).
 - Streams need no change, so this also works for streams added through the API.
+
+The [ffmpeg](../ffmpeg/README.md) module adds built-in transcoders, tried after the ones in the config: **AAC** with FFmpeg's own encoder (any FFmpeg), and **AAC-ELD** if the configured FFmpeg has the `libfdk_aac` encoder. So cameras that take AAC need no config at all.

@@ -45,7 +45,7 @@ RTSP link with "normal" audio for any player: `rtsp://192.168.1.123:8554/aqara_g
 HomeKit cameras and doorbells with a speaker accept two-way audio in the audio codec of the stream: **Opus** or **AAC-ELD**, whichever the camera supports.
 
 - Cameras with Opus work with the microphone of a WebRTC client directly.
-- AAC-ELD-only cameras (e.g. Aqara G410) need an AAC-ELD encoder, which go2rtc doesn't include. Name any encoder that writes LOAS as a [transcoder](../exec/README.md#transcoding-two-way-audio), e.g. FFmpeg built with `libfdk_aac`, and go2rtc uses it for the microphone automatically:
+- AAC-ELD-only cameras (e.g. Aqara G410) need an AAC-ELD encoder, which go2rtc doesn't include. If the configured FFmpeg is built with `libfdk_aac`, go2rtc uses it automatically, with no config. Otherwise name any encoder that writes LOAS as a [transcoder](../exec/README.md#transcoding-two-way-audio), e.g. FFmpeg built with `libfdk_aac`, and go2rtc uses it for the microphone automatically:
 
 ```yaml
 transcode:
