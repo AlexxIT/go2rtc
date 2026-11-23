@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -52,10 +53,10 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 
 	if s := query.Get("cache"); s != "" {
 		if timeout, err := time.ParseDuration(s); err == nil {
-			src := query.Get("src")
+			key := cacheKey(query)
 
 			cacheMu.Lock()
-			entry, found := cache[src]
+			entry, found := cache[key]
 			cacheMu.Unlock()
 
 			if found && time.Since(entry.timestamp) < timeout {
@@ -70,9 +71,9 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 				entry = cacheEntry{payload: b, timestamp: time.Now()}
 				cacheMu.Lock()
 				if cache == nil {
-					cache = map[string]cacheEntry{src: entry}
+					cache = map[string]cacheEntry{key: entry}
 				} else {
-					cache[src] = entry
+					cache[key] = entry
 				}
 				cacheMu.Unlock()
 			}()
@@ -127,6 +128,17 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 
 var cache map[string]cacheEntry
 var cacheMu sync.Mutex
+
+func cacheKey(query url.Values) string {
+	params := make(url.Values, 6)
+	for k, v := range query {
+		switch k {
+		case "src", "width", "w", "height", "h", "rotate":
+			params[k] = v
+		}
+	}
+	return params.Encode()
+}
 
 // cacheEntry represents a cached keyframe with its timestamp
 type cacheEntry struct {
