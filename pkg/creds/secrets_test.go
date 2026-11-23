@@ -30,3 +30,11 @@ func TestStripUserinfo(t *testing.T) {
     - ffmpeg:rtsp://10.1.2.3:554/stream1@#video=copy
 `, s)
 }
+
+func TestStringOverlappingSecrets(t *testing.T) {
+	AddSecret("rtp://127.0.0.1:6500")
+	AddSecret("rtp://127.0.0.1:6500/talkback?token=secret")
+
+	s := SecretString(`{"url":"rtp://127.0.0.1:6500/talkback?token=secret"}`)
+	require.Equal(t, `{"url":"***"}`, s)
+}
