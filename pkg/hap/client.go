@@ -11,7 +11,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/hap/chacha20poly1305"
@@ -79,8 +78,9 @@ func (c *Client) URL() string {
 }
 
 func (c *Client) DeviceHost() string {
-	if i := strings.IndexByte(c.DeviceAddress, ':'); i > 0 {
-		return c.DeviceAddress[:i]
+	// SplitHostPort also handles IPv6 addresses like [fd00::1]:51826
+	if host, _, err := net.SplitHostPort(c.DeviceAddress); err == nil {
+		return host
 	}
 	return c.DeviceAddress
 }

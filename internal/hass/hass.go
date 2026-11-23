@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -151,8 +153,9 @@ func importConfig(config string) error {
 				continue
 			}
 			entities[entrie.Title] = fmt.Sprintf(
-				"homekit://%s:%d?client_id=%s&client_private=%s%s&device_id=%s&device_public=%s",
-				data.DeviceHost, data.DevicePort,
+				"homekit://%s?client_id=%s&client_private=%s%s&device_id=%s&device_public=%s",
+				// JoinHostPort adds the brackets an IPv6 address needs
+				net.JoinHostPort(data.DeviceHost, strconv.Itoa(int(data.DevicePort))),
 				data.ClientID, data.ClientPrivate, data.ClientPublic,
 				data.DeviceID, data.DevicePublic,
 			)

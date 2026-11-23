@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -47,7 +47,7 @@ func (e *ServiceEntry) Complete() bool {
 }
 
 func (e *ServiceEntry) Addr() string {
-	return fmt.Sprintf("%s:%d", e.IP, e.Port)
+	return net.JoinHostPort(e.IP.String(), strconv.Itoa(int(e.Port)))
 }
 
 func (e *ServiceEntry) Host(service string) string {
@@ -115,7 +115,14 @@ func Discovery(service string, onentry func(*ServiceEntry) bool) error {
 
 // Query - direct Discovery request on device IP-address. Works even over VPN.
 func Query(host, service string) (entry *ServiceEntry, err error) {
-	conn, err := net.ListenPacket("udp4", ":0") // shouldn't use ":5353"
+	ip := net.ParseIP(host)
+
+	network := "udp4"
+	if ip != nil && ip.To4() == nil {
+		network = "udp6"
+	}
+
+	conn, err := net.ListenPacket(network, ":0") // shouldn't use ":5353"
 	if err != nil {
 		return
 	}
@@ -123,7 +130,7 @@ func Query(host, service string) (entry *ServiceEntry, err error) {
 	br := Browser{
 		Service: service,
 		Addr: &net.UDPAddr{
-			IP:   net.ParseIP(host),
+			IP:   ip,
 			Port: 5353,
 		},
 		Recv:        conn,
