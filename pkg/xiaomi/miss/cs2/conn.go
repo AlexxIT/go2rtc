@@ -39,7 +39,8 @@ type Conn struct {
 	seqCh0 uint16
 	seqCh3 uint16
 
-	channels [4]*dataChannel
+	channels  [4]*dataChannel
+	unknownCh [256]bool
 
 	cmdMu  sync.Mutex
 	cmdAck func()
@@ -131,7 +132,7 @@ func (c *Conn) worker() {
 		switch buf[1] {
 		case msgDrw:
 			ch := buf[5]
-			channel := c.channels[ch]
+			channel := c.channel(ch)
 
 			if c.isTCP {
 				// For TCP we should send ping every second to keep connection alive.
@@ -140,7 +141,27 @@ func (c *Conn) worker() {
 					_, _ = c.Conn.Write([]byte{magic, msgPing, 0, 0})
 					keepaliveTS = now.Add(time.Second)
 				}
+			}
 
+			if channel == nil {
+				// Unknown channel: drop the payload instead of crashing
+				// the worker on a nil data channel.
+				if !c.unknownCh[ch] {
+					c.unknownCh[ch] = true
+					fmt.Printf("%s: unknown channel: %d\n", "cs2", ch)
+				}
+
+				if !c.isTCP {
+					// For UDP we should send ACK anyway, so the camera
+					// doesn't retransmit the packet forever.
+					seqHI, seqLO := buf[6], buf[7]
+					ack := []byte{magic, msgDrwAck, 0, 6, magicDrw, ch, 0, 1, seqHI, seqLO}
+					_, _ = c.Conn.Write(ack)
+				}
+				continue
+			}
+
+			if c.isTCP {
 				err = channel.Push(buf[8:n])
 			} else {
 				var pushed int
@@ -172,6 +193,14 @@ func (c *Conn) worker() {
 			fmt.Printf("%s: unknown msg: %x\n", "cs2", buf[:n])
 		}
 	}
+}
+
+// channel returns the data channel by ID, nil for channels we don't handle.
+func (c *Conn) channel(id byte) *dataChannel {
+	if int(id) >= len(c.channels) {
+		return nil
+	}
+	return c.channels[id]
 }
 
 func (c *Conn) Protocol() string {
