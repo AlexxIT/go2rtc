@@ -49,14 +49,7 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 
 	if s := query.Get("cache"); s != "" {
 		if timeout, err := time.ParseDuration(s); err == nil {
-			query.Del("cache")
-			params := make(url.Values, 8)
-			for _, name := range []string{"src", "width", "w", "height", "h", "rotate", "hardware", "hw"} {
-				if values := query[name]; len(values) > 0 {
-					params[name] = values
-				}
-			}
-			key := params.Encode()
+			key := cacheKey(query)
 
 			cacheMu.Lock()
 			entry, found := cache[key]
@@ -115,6 +108,17 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 
 var cache map[string]cacheEntry
 var cacheMu sync.Mutex
+
+func cacheKey(query url.Values) string {
+	params := make(url.Values, 6)
+	for k, v := range query {
+		switch k {
+		case "src", "width", "w", "height", "h", "rotate":
+			params[k] = v
+		}
+	}
+	return params.Encode()
+}
 
 // cacheEntry represents a cached keyframe with its timestamp
 type cacheEntry struct {
