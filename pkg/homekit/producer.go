@@ -141,8 +141,10 @@ func (c *Client) Start() error {
 	audioTrack := c.trackByKind(core.KindAudio)
 	audioCodec := trackToAudio(audioTrack, &c.audioConfig.Codecs[0])
 
-	c.videoSession = &srtp.Session{Local: c.srtpEndpoint()}
-	c.audioSession = &srtp.Session{Local: c.srtpEndpoint()}
+	// Payload types and RTCP intervals as requested in camera.NewStream. They
+	// are used for the packets and sender reports this side sends.
+	c.videoSession = &srtp.Session{Local: c.srtpEndpoint(), PayloadType: 99, RTCPInterval: 500 * time.Millisecond}
+	c.audioSession = &srtp.Session{Local: c.srtpEndpoint(), PayloadType: 110, RTCPInterval: 5 * time.Second}
 
 	var err error
 	c.stream, err = camera.NewStream(c.hap, videoCodec, audioCodec, c.videoSession, c.audioSession, c.Bitrate)
