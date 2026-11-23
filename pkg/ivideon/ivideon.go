@@ -57,7 +57,8 @@ func Dial(source string) (core.Producer, error) {
 
 func GetLiveStream(id string) (string, error) {
 	// &video_codecs=h264,h265&audio_codecs=aac,mp3,pcma,pcmu,none
-	resp, err := http.Get(
+	client := http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get(
 		"https://openapi-alpha.ivideon.com/cameras/" + id +
 			"/live_stream?op=GET&access_token=public&q=2&video_codecs=h264&format=ws-fmp4",
 	)

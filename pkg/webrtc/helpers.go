@@ -186,7 +186,7 @@ func LookupIP(address string) (string, error) {
 
 // GetPublicIP example from https://github.com/pion/stun
 func GetPublicIP(address string) (net.IP, error) {
-	conn, err := net.Dial("udp", address)
+	conn, err := net.DialTimeout("udp", address, 3*time.Second)
 	if err != nil {
 		return nil, err
 	}

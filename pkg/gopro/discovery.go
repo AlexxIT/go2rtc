@@ -4,6 +4,7 @@ import (
 	"net"
 	"net/http"
 	"regexp"
+	"time"
 )
 
 func Discovery() (urls []string) {
@@ -11,6 +12,8 @@ func Discovery() (urls []string) {
 	if err != nil {
 		return nil
 	}
+
+	client := http.Client{Timeout: 5 * time.Second}
 
 	// The socket address for USB connections is 172.2X.1YZ.51:8080
 	// https://gopro.github.io/OpenGoPro/http_2_0#socket-address
@@ -29,7 +32,7 @@ func Discovery() (urls []string) {
 			}
 
 			host = host[:11] + "51" // 172.2x.1xx.xxx
-			res, err := http.Get("http://" + host + ":8080/gopro/webcam/status")
+			res, err := client.Get("http://" + host + ":8080/gopro/webcam/status")
 			if err != nil {
 				continue
 			}
