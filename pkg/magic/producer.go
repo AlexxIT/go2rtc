@@ -49,6 +49,10 @@ func Open(r io.Reader) (core.Producer, error) {
 		return mpjpeg.Open(rd)
 	}
 
+	if aac.IsLOAS(b) {
+		return aac.OpenLOAS(rd)
+	}
+
 	switch b[0] {
 	case mpegts.SyncByte:
 		return mpegts.Open(rd)
