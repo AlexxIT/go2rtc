@@ -2,6 +2,7 @@ package tapo
 
 import (
 	"encoding/json"
+	"strings"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/mpegts"
@@ -10,7 +11,7 @@ import (
 func (c *Client) GetMedias() []*core.Media {
 	if c.medias == nil {
 		// don't know if all Tapo has this capabilities...
-		c.medias = []*core.Media{
+		medias := []*core.Media{
 			{
 				Kind:      core.KindVideo,
 				Direction: core.DirectionRecvonly,
@@ -32,6 +33,16 @@ func (c *Client) GetMedias() []*core.Media {
 					{Name: core.CodecPCMA, ClockRate: 8000, PayloadType: 8},
 				},
 			},
+		}
+
+		for _, media := range medias {
+			if c.Media != "" && !strings.Contains(c.Media, media.Kind) {
+				continue
+			}
+			if !c.Backchannel && media.Direction == core.DirectionSendonly {
+				continue
+			}
+			c.medias = append(c.medias, media)
 		}
 	}
 

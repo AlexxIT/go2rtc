@@ -23,7 +23,16 @@ streams:
   camera4: tapo://cloud-password@192.168.1.123?subtype=1 
   # HD stream (default)
   camera5: tapo://cloud-password@192.168.1.123?subtype=0 
+  # ignore audio and two-way audio
+  camera6: tapo://cloud-password@192.168.1.123#media=video
+  # ignore two-way audio only
+  camera7: tapo://cloud-password@192.168.1.123#backchannel=0
 ```
+
+- Ignore audio - `#media=video` or ignore video - `#media=audio`
+- Ignore two-way audio API - `#backchannel=0`
+- Like RTSP, any `#` param disables two-way audio unless `#backchannel=1` is set
+- Same params work for `vigi://` sources
 
 ```bash
 echo -n "cloud password" | md5 | awk '{print toupper($0)}'
