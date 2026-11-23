@@ -170,9 +170,7 @@ type Browser struct {
 // Receiver will get multicast responses on senders requests.
 func (b *Browser) ListenMulticastUDP() error {
 	// 1. Collect IPv4 interfaces
-	nets, err := xnet.IPNets(func(ip net.IP) bool {
-		return !xnet.Docker.Contains(ip)
-	})
+	nets, err := xnet.IPNets(nil)
 	if err != nil {
 		return err
 	}
