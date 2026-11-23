@@ -265,6 +265,8 @@ func ParseCodecString(s string) *Codec {
 		codec.Name = CodecPCMU
 	case "aac", "mpeg4-generic":
 		codec.Name = CodecAAC
+	case "eld", "aac_eld":
+		codec.Name = CodecELD
 	case "opus":
 		codec.Name = CodecOpus
 	case "flac":

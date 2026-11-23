@@ -10,9 +10,11 @@ import (
 
 type Stream struct {
 	producers []*Producer
-	consumers []core.Consumer
-	mu        sync.Mutex
-	pending   atomic.Int32
+	// transcoders used by this stream, see transcode.go
+	transcoders []*Producer
+	consumers   []core.Consumer
+	mu          sync.Mutex
+	pending     atomic.Int32
 }
 
 func NewStream(source any) *Stream {
@@ -102,7 +104,7 @@ func (s *Stream) stopProducers() {
 
 	s.mu.Lock()
 producers:
-	for _, producer := range s.producers {
+	for _, producer := range append(s.producers[:len(s.producers):len(s.producers)], s.transcoders...) {
 		for _, track := range producer.receivers {
 			if len(track.Senders()) > 0 {
 				continue producers

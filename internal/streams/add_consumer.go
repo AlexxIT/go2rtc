@@ -29,6 +29,8 @@ func (s *Stream) addConsumer(cons core.Consumer, consMedias []*core.Media, isNew
 	for _, consMedia := range consMedias {
 		log.Trace().Msgf("[streams] check cons=%d media=%s", consN, consMedia)
 
+		started := len(prodStarts)
+
 	producers:
 		for prodN, prod := range s.producers {
 			// check for loop request, ex. `camera1: ffmpeg:camera1`
@@ -102,6 +104,13 @@ func (s *Stream) addConsumer(cons core.Consumer, consMedias []*core.Media, isNew
 				if !consMedia.MatchAll() {
 					break producers
 				}
+			}
+		}
+
+		// no source accepts this backchannel: try a transcoder
+		if consMedia.Direction == core.DirectionRecvonly && len(prodStarts) == started {
+			if prod := s.matchTranscoder(cons, consMedia, prodMedias); prod != nil {
+				prodStarts = append(prodStarts, prod)
 			}
 		}
 	}

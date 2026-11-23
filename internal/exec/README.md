@@ -46,3 +46,20 @@ sources:
     - exec:ffplay -nodisp -probesize 32 -f s16le -ar 16000 -#backchannel=1#audio=s16le/16000
     - exec:ffplay -nodisp -probesize 32 -f alaw -ar 8000 -#backchannel=1#audio=alaw/8000
 ```
+
+## Transcoding two-way audio
+
+Some cameras take two-way audio only in a codec browsers can't send, e.g. AAC, or AAC-ELD for HomeKit doorbells. A transcoder sends the microphone through any encoder and plays the encoder's output to the camera. Transcoders are named in the config (only the config can name a program) and used automatically: when no source of a stream takes the microphone's codec, go2rtc uses a transcoder whose output codec one of the stream's sources takes.
+
+```yaml
+transcode:
+  aac: ffmpeg -f s16le -ar 16000 -ac 1 -i - -c:a aac -f adts -#audio=pcml/16000#output=aac/16000
+
+streams:
+  doorbell: rtsp://192.168.1.123/stream1  # a camera that takes AAC
+```
+
+- `audio` is the encoder's input on stdin (default `pcml/16000`). With PCM input, microphones in `PCMA` or `PCMU` are converted to it.
+- `output` is the codec the encoder writes; a source must take it.
+- The encoder writes any format the pipe reads to stdout, e.g. ADTS for AAC, or LOAS for AAC-ELD, which ADTS can't carry (`ffmpeg ... -f latm -`).
+- Streams need no change, so this also works for streams added through the API.
