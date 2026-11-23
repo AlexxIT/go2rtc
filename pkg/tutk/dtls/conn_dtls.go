@@ -374,7 +374,7 @@ func (c *DTLSConn) WriteIOCtrl(payload []byte) error {
 
 func (c *DTLSConn) WriteAndWait(req []byte, ok func(res []byte) bool) ([]byte, error) {
 	var t *time.Timer
-	t = time.AfterFunc(1, func() {
+	t = time.AfterFunc(0, func() {
 		if err := c.Write(req); err == nil && t != nil {
 			t.Reset(time.Second)
 		}
@@ -411,7 +411,7 @@ func (c *DTLSConn) WriteAndWait(req []byte, ok func(res []byte) bool) ([]byte, e
 func (c *DTLSConn) WriteAndWaitIOCtrl(payload []byte, match func([]byte) bool, timeout time.Duration) ([]byte, error) {
 	frame := c.msgIOCtrl(payload)
 	var t *time.Timer
-	t = time.AfterFunc(1, func() {
+	t = time.AfterFunc(0, func() {
 		c.mu.RLock()
 		conn := c.clientConn
 		c.mu.RUnlock()

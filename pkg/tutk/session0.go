@@ -68,7 +68,7 @@ func (c *Conn) clientStart(username, password string) error {
 
 func writeAndWait(conn net.Conn, ok func(res []byte) bool, req ...[]byte) ([]byte, error) {
 	var t *time.Timer
-	t = time.AfterFunc(1, func() {
+	t = time.AfterFunc(0, func() {
 		for _, b := range req {
 			if _, err := conn.Write(b); err != nil {
 				return
