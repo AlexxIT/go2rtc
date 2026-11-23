@@ -212,7 +212,7 @@ func whepClient(url string) (core.Producer, error) {
 	}
 	req.Header.Set("Content-Type", MimeSDP)
 
-	client := http.Client{Timeout: time.Second * 5000}
+	client := http.Client{Timeout: 5 * time.Second}
 	defer client.CloseIdleConnections()
 
 	res, err := client.Do(req)
