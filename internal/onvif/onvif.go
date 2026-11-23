@@ -173,11 +173,15 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 			host = r.Host // in case of Host without port
 		}
 
-		uri := "rtsp://" + host + ":" + rtsp.Port + "/" + onvif.FindTagValue(b, "ProfileToken")
+		// The profile token is the stream name, escape it so names with
+		// characters like % or / are looked up correctly
+		token := onvif.FindTagValue(b, "ProfileToken")
+		uri := "rtsp://" + host + ":" + rtsp.Port + "/" + url.PathEscape(token)
 		b = onvif.GetStreamUriResponse(uri)
 
 	case onvif.MediaGetSnapshotUri:
-		uri := "http://" + r.Host + "/api/frame.jpeg?src=" + onvif.FindTagValue(b, "ProfileToken")
+		token := onvif.FindTagValue(b, "ProfileToken")
+		uri := "http://" + r.Host + "/api/frame.jpeg?src=" + url.QueryEscape(token)
 		b = onvif.GetSnapshotUriResponse(uri)
 
 	default:
