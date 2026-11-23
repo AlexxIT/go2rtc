@@ -41,6 +41,7 @@ Format: `rtsp...#{param1}#{param2}#{param3}`
 - Add custom timeout `#timeout=30` (in seconds)
 - Ignore audio - `#media=video` or ignore video - `#media=audio`
 - Ignore two-way audio API `#backchannel=0` - important for some glitchy cameras
+- Two-way audio API is requested by default only when the link has no `#` params. If the link has any `#` param (for example `#timeout=30`), add `#backchannel=1` to keep two-way audio
 - Use WebSocket transport `#transport=ws...`
 
 ### Keyframes
