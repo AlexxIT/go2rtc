@@ -18,14 +18,19 @@
 | Xiaomi Outdoor Camera CW400                   | 2022 | isa.camera.hlc8 / MJSXJ04HL                    | cs2               | hevc, opus |                     |
 | Xiaomi Smart Camera 2 AI Enhanced Edition     | 2022 | chuangmi.camera.051a01                         | cs2               | hevc, opus |                     |
 | Xiaomi Smart Camera C300                      | 2022 | xiaomi.camera.c01a01                           | cs2               |            |                     |
+| Xiaomi Smart Camera C400                      | 2022 | chuangmi.camera.039a04                         | cs2               |            |                     |
 | Xiaomi Smart Doorbell 1S                      | 2022 | loock.cateye.v06                               | cs2               | hevc, pcma |                     |
+| Xiaomi Outdoor Camera AW200                   | 2022 | isa.camera.hlc9a                               | cs2+udp           | hevc, opus | subtype=3           |
+| Xiaomi Outdoor Camera AW300                   | 2022 | mxiang.camera.mod11                            | cs2+tcp           | hevc, opus | subtype=3           |
 | IMILAB EC5 Floodlight Camera 2К               | 2023 | chuangmi.camera.055c02                         | сs2               |            |                     |
 | Xiaomi Outdoor Camera AW300                   | 2023 | mxiang.camera.mod13                            | cs2               | hevc, opus |                     |
 | Xiaomi Smart Camera 2 PTZ Version             | 2023 | chuangmi.camera.039c01                         | cs2+tcp           | hevc, opus |                     |
 | Xiaomi Smart Camera 3 PTZ Version             | 2023 | chuangmi.camera.069a01                         | cs2+tcp           | hevc, opus |                     |
 | Xiaomi Smart Camera C200                      | 2023 | chuangmi.camera.046c04                         | cs2+tcp           | hevc, opus | 1920x1080*, 640x360 |
+| IMILAB Smart Camera C21                       | 2023 | chuangmi.camera.46e01                          | cs2+udp / cs2+tcp | hevc, opus |                     |
 | Xiaomi Outdoor Camera CW500                   | 2024 | isa.camera.cw500                               | cs2+tcp           | hevc, opus |                     |
 | Xiaomi Outdoor Camera CW500 Dual-Lens Edition | 2024 | isa.camera.hlmax                               | cs2+udp           | hevc, opus |                     |
+| Xiaomi Outdoor Camera CW500 Dual              | 2024 | isa.camera.500dh                               | cs2               |            |                     |
 | Xiaomi Outdoor Camera CW700S                  | 2024 | isa.camera.700sa                               | cs2               |            |                     |
 | Xiaomi Smart Camera C300 Dual (CN)            | 2024 | chuangmi.camera.72ac1                          | cs2+tcp           | hevc, opus | 2304x1296*, 848x480 |
 | Xiaomi Smart Camera C301                      | 2024 | mxiang.camera.c301                             | cs2               |            |                     |
@@ -33,17 +38,23 @@
 | Xiaomi Smart Camera C500 Pro                  | 2024 | chuangmi.camera.061a03                         | cs2               | hevc, opus |                     |
 | Xiaomi Smart Camera C700                      | 2024 | chuangmi.camera.81ac1                          | cs2               | hevc, opus |                     |
 | Xiaomi Smart camera/doorbell (PH300)          | 2024 | midr.cateye.ph300                              | cs2+tcp / cs2+udp | hevc, opus | 720x1280            |
+| Xiaobai Smart Outdoor Camera Q2 Dual          | 2024 | chuangmi.camera.068ac1                         | cs2               | hevc, opus |                     |
 | Xiaomi Outdoor Camera CW100 Dual              | 2025 | chuangmi.camera.075ae1                         | cs2               | hevc, opus |                     |
 | Xiaomi Smart Camera 4 Dual Camera Edition     | 2025 | xiaomi.camera.082ac1                           | cs2               | hevc, opus |                     |
 | Xiaomi Smart Camera 4 Zoom Edition            | 2025 | xiaomi.camera.083ac1                           | cs2+tcp           | hevc, opus |                     |
 | Xiaomi Smart Camera C100                      | 2025 | chuangmi.camera.077ac1                         | cs2+tcp           | hevc, opus | 2304x1296*, 848x480 |
 | Xiaomi Smart Camera C701                      | 2025 | chuangmi.camera.079ae2                         | cs2               | hevc, opus |                     |
+| Xiaomi Outdoor Camera CW501D                  | 2025 | isa.camera.cw501d                              | cs2               | hevc, opus |                     |
 | Xiaomi Smart Camera 3 3K                      | 2026 | xiaomi.camera.069a03                           | cs2+tcp           | hevc, opus | 2960x1666*, 848x480 |
 
 - `chuangmi.camera.046c04`, `chuangmi.camera.72ac1` - Have HD quality on `subtype=3`
 - `isa.camera.hlc7` - Starts streaming with SD quality, causing H265 SPS to have incorrect data
 - `xiaomi.camera.069a03` - `subtype=1` is 848x480; default and `subtype=3` are 2960x1666
 - `chuangmi.camera.077ac1` - default is 848x480; `subtype=3` (or `0`) is 2304x1296
+- `isa.camera.hlc9a` and `mxiang.camera.mod11` - use `subtype=3` for HD
+- `isa.camera.500dh` - working on four cameras in [issue #2421](https://github.com/AlexxIT/go2rtc/issues/2421)
+- `isa.camera.cw501d` - working stream documented in [issue #2234](https://github.com/AlexxIT/go2rtc/issues/2234)
+- `chuangmi.camera.46e01` - video and two-way audio confirmed in [issue #2679](https://github.com/AlexxIT/go2rtc/issues/2679)
 
 ## Limited support
 
@@ -51,6 +62,7 @@
 | ----------------------------------------- | ---- | ---------------------------------- | ------------- | -------------------- | ---------- | ---------------------------- |
 | Mijia Smart Camera 1080P                  | 2017 | mijia.camera.v1                    | xiaomi/miss   | TUTK/25 SDK 3.3.0.6  | h264, pcma | 1920x1080, 640x360           |
 | Mijia Smart Camera PTZ Version (fw 3.3.6) | 2017 | chuangmi.camera.v2                 | xiaomi/legacy | TUTK/18              | h264, pcma | 1280x720, 640x360            |
+| Mijia Smart Camera PTZ Version (fw 3.4.5) | 2017 | chuangmi.camera.v2                 | xiaomi/legacy | TUTK/18              | h264, pcma | 640x360                      |
 | Mijia Smart Camera PTZ Version (fw 4.0.9) | 2017 | chuangmi.camera.v2                 | xiaomi/miss   | TUTK/25 SDK 3.3.0.6  | h264, pcma | 1280x720, 640x360            |
 | Mijia Xiaobai Smart Camera                | 2017 | chuangmi.camera.xiaobai            | xiaomi/legacy | TUTK/18              | h264, pcma | 1920x1080, 640x360           |
 | Xiaomi Dafang 1080p (fw 5.5.1_1025)       | 2017 | isa.camera.df3                     | xiaomi/miss   | TUTK/18 SDK 3.0.1.50 | h264, pcma | 1920x1080, 640x360           |
@@ -66,6 +78,7 @@
 
 - `isa.camera.isc5` - doesn't support quality
 - `chuangmi.camera.v2` and `isa.camera.df3` - supported by both the old and new protocols
+- `chuangmi.camera.v2` (fw 3.4.5) works with `transport=tcp` and `subtype=sd`
 
 ## Not supported
 
