@@ -482,7 +482,7 @@ func (c *dataChannel) Push(b []byte) error {
 		select {
 		case c.popBuf <- c.waitData[:c.waitSize]:
 		default:
-			return fmt.Errorf("pop buffer is full")
+			//return fmt.Errorf("pop buffer is full")
 		}
 
 		c.waitData = c.waitData[c.waitSize:]
