@@ -164,8 +164,8 @@ func (c *Producer) probe() error {
 
 func (c *Producer) addVideoTrack(mediaCode byte, payload []byte) {
 	var codec *core.Codec
-	switch mediaCode {
-	case 0x02, 0x12:
+	switch mediaCode & 0x0F {
+	case 2: // known values 0x02, 0x12, 0x52
 		codec = &core.Codec{
 			Name:        core.CodecH264,
 			ClockRate:   90000,
@@ -173,7 +173,7 @@ func (c *Producer) addVideoTrack(mediaCode byte, payload []byte) {
 			FmtpLine:    h264.GetFmtpLine(payload),
 		}
 
-	case 0x03, 0x13, 0x43, 0x53:
+	case 3: // known values 0x03, 0x13, 0x43, 0x53
 		codec = &core.Codec{
 			Name:        core.CodecH265,
 			ClockRate:   90000,
