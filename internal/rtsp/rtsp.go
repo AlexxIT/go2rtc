@@ -105,6 +105,12 @@ func rtspHandler(rawURL string) (core.Producer, error) {
 		conn.Media = query.Get("media")
 		conn.Timeout = core.Atoi(query.Get("timeout"))
 		conn.Transport = query.Get("transport")
+		if s := query.Get("keepalive"); s != "" {
+			conn.Keepalive = core.Atoi(s)
+			if conn.Keepalive == 0 {
+				conn.Keepalive = -1 // `#keepalive=0` disables keepalive
+			}
+		}
 	} else {
 		conn.Backchannel = true
 	}

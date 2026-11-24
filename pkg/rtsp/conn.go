@@ -25,6 +25,7 @@ type Conn struct {
 	// public
 
 	Backchannel bool
+	Keepalive   int    // keepalive interval in seconds, 0 - auto, -1 - disabled
 	Keyframe    string // how video tracks request keyframes
 	Media       string
 	OnClose     func() error
@@ -104,15 +105,22 @@ func (c *Conn) Handle() (err error) {
 	case core.ModeActiveProducer:
 		var keepaliveDT time.Duration
 
-		if c.keepalive > 5 {
+		switch {
+		case c.Keepalive > 0:
+			keepaliveDT = time.Duration(c.Keepalive) * time.Second
+		case c.Keepalive < 0:
+			// disabled: some servers break when they get a request while streaming
+		case c.keepalive > 5:
 			keepaliveDT = time.Duration(c.keepalive-5) * time.Second
-		} else {
+		default:
 			keepaliveDT = 25 * time.Second
 		}
 
-		ctx, cancel := context.WithCancel(context.Background())
-		go c.handleKeepalive(ctx, keepaliveDT)
-		defer cancel()
+		if keepaliveDT > 0 {
+			ctx, cancel := context.WithCancel(context.Background())
+			go c.handleKeepalive(ctx, keepaliveDT)
+			defer cancel()
+		}
 
 		if c.Timeout == 0 {
 			// polling frames from remote RTSP Server (ex Camera)
