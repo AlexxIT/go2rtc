@@ -31,6 +31,8 @@ func Dial(host, transport string) (*Conn, error) {
 	return c, nil
 }
 
+const dataChannels = 4
+
 type Conn struct {
 	net.Conn
 	isTCP bool
@@ -39,8 +41,7 @@ type Conn struct {
 	seqCh0 uint16
 	seqCh3 uint16
 
-	channels  [4]*dataChannel
-	unknownCh [256]bool
+	channels [dataChannels]*dataChannel
 
 	cmdMu  sync.Mutex
 	cmdAck func()
@@ -132,7 +133,11 @@ func (c *Conn) worker() {
 		switch buf[1] {
 		case msgDrw:
 			ch := buf[5]
-			channel := c.channel(ch)
+
+			var channel *dataChannel
+			if ch < dataChannels {
+				channel = c.channels[ch]
+			}
 
 			if c.isTCP {
 				// For TCP we should send ping every second to keep connection alive.
@@ -141,37 +146,21 @@ func (c *Conn) worker() {
 					_, _ = c.Conn.Write([]byte{magic, msgPing, 0, 0})
 					keepaliveTS = now.Add(time.Second)
 				}
-			}
 
-			if channel == nil {
-				// Unknown channel: drop the payload instead of crashing
-				// the worker on a nil data channel.
-				if !c.unknownCh[ch] {
-					c.unknownCh[ch] = true
-					fmt.Printf("%s: unknown channel: %d\n", "cs2", ch)
+				if channel != nil {
+					err = channel.Push(buf[8:n])
 				}
-
-				if !c.isTCP {
-					// For UDP we should send ACK anyway, so the camera
-					// doesn't retransmit the packet forever.
-					seqHI, seqLO := buf[6], buf[7]
-					ack := []byte{magic, msgDrwAck, 0, 6, magicDrw, ch, 0, 1, seqHI, seqLO}
-					_, _ = c.Conn.Write(ack)
-				}
-				continue
-			}
-
-			if c.isTCP {
-				err = channel.Push(buf[8:n])
 			} else {
 				var pushed int
 
 				seqHI, seqLO := buf[6], buf[7]
-				seq := uint16(seqHI)<<8 | uint16(seqLO)
-				pushed, err = channel.PushSeq(seq, buf[8:n])
+				if channel != nil {
+					seq := uint16(seqHI)<<8 | uint16(seqLO)
+					pushed, err = channel.PushSeq(seq, buf[8:n])
+				}
 
-				if pushed >= 0 {
-					// For UDP we should send ACK.
+				if pushed >= 0 || channel == nil {
+					// For UDP we should send ACK. Even for an unknown channel.
 					ack := []byte{magic, msgDrwAck, 0, 6, magicDrw, ch, 0, 1, seqHI, seqLO}
 					_, _ = c.Conn.Write(ack)
 				}
@@ -193,14 +182,6 @@ func (c *Conn) worker() {
 			fmt.Printf("%s: unknown msg: %x\n", "cs2", buf[:n])
 		}
 	}
-}
-
-// channel returns the data channel by ID, nil for channels we don't handle.
-func (c *Conn) channel(id byte) *dataChannel {
-	if int(id) >= len(c.channels) {
-		return nil
-	}
-	return c.channels[id]
 }
 
 func (c *Conn) Protocol() string {
