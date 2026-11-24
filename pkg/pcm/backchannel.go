@@ -10,7 +10,8 @@ import (
 
 type Backchannel struct {
 	core.Connection
-	cmd *shell.Command
+	cmd   *shell.Command
+	codec *core.Codec
 }
 
 func NewBackchannel(cmd *shell.Command, audio string) (core.Producer, error) {
@@ -27,7 +28,8 @@ func NewBackchannel(cmd *shell.Command, audio string) (core.Producer, error) {
 		{
 			Kind:      core.KindAudio,
 			Direction: core.DirectionSendonly,
-			Codecs:    []*core.Codec{codec},
+			// native codec first, then any PCM codec that can be transcoded to it
+			Codecs: append([]*core.Codec{codec}, ConsumerCodecs()...),
 		},
 	}
 
@@ -39,7 +41,8 @@ func NewBackchannel(cmd *shell.Command, audio string) (core.Producer, error) {
 			Medias:     medias,
 			Transport:  cmd,
 		},
-		cmd: cmd,
+		cmd:   cmd,
+		codec: codec,
 	}, nil
 }
 
@@ -53,12 +56,23 @@ func (c *Backchannel) AddTrack(media *core.Media, codec *core.Codec, track *core
 		return err
 	}
 
-	sender := core.NewSender(media, track.Codec)
-	sender.Handler = func(packet *rtp.Packet) {
-		if n, err := wr.Write(packet.Payload); err != nil {
+	handler := func(packet *rtp.Packet) {
+		if n, err := wr.Write(packet.Payload); err == nil {
 			c.Send += n
 		}
 	}
+
+	src := track.Codec
+	dst := *c.codec
+	if dst.ClockRate == 0 {
+		dst.ClockRate = src.ClockRate // ex. `#audio=pcmu` without sample rate
+	}
+	if src.Name != dst.Name || src.ClockRate != dst.ClockRate {
+		handler = TranscodeHandler(&dst, src, handler)
+	}
+
+	sender := core.NewSender(media, track.Codec)
+	sender.Handler = handler
 	sender.HandleRTP(track)
 	c.Senders = append(c.Senders, sender)
 	return nil

@@ -38,6 +38,7 @@ streams:
 
 - You can check audio card names in the **Go2rtc > WebUI > Add**
 - You can specify multiple backchannel lines with different codecs
+- Incoming PCM audio (PCMA, PCMU, PCM/PCML at any sample rate) is transcoded to the `#audio=` codec of the line when needed
 
 ```yaml
 sources:
