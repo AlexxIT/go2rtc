@@ -101,6 +101,7 @@ func rtspHandler(rawURL string) (core.Producer, error) {
 	if rawQuery != "" {
 		query := streams.ParseQuery(rawQuery)
 		conn.Backchannel = query.Get("backchannel") != "0"
+		conn.Keepalive = core.Atoi(query.Get("keepalive"))
 		conn.Keyframe = query.Get("keyframe")
 		conn.Media = query.Get("media")
 		conn.Timeout = core.Atoi(query.Get("timeout"))

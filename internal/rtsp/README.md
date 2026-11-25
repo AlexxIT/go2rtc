@@ -39,6 +39,7 @@ streams:
 Format: `rtsp...#{param1}#{param2}#{param3}`
 
 - Add custom timeout `#timeout=30` (in seconds)
+- Change keepalive interval `#keepalive=10` (in seconds). Or disable it with `#keepalive=-1`, because some cameras [corrupt the stream](https://github.com/AlexxIT/go2rtc/pull/2746) when they get an `OPTIONS` request while streaming.
 - Ignore audio - `#media=video` or ignore video - `#media=audio`
 - Ignore two-way audio API `#backchannel=0` - important for some glitchy cameras
 - Use WebSocket transport `#transport=ws...`
