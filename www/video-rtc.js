@@ -454,6 +454,10 @@ export class VideoRTC extends HTMLElement {
             const sb = ms.addSourceBuffer(msg.value);
             sb.mode = 'segments'; // segments or sequence
             sb.addEventListener('updateend', () => {
+                // MediaSource was detached (e.g. WebRTC won and replaced video.srcObject).
+                // A closed MediaSource has no attached SourceBuffers.
+                if (ms.readyState === 'closed') return;
+
                 if (!sb.updating && bufLen > 0) {
                     try {
                         const data = buf.slice(0, bufLen);
