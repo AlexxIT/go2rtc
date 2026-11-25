@@ -15,17 +15,22 @@ import (
 func queryToInput(query url.Values) string {
 	video := query.Get("video")
 	audio := query.Get("audio")
-	video_device_id := query.Get("video_device_id")
-	audio_device_id := query.Get("audio_device_id")
 
-	if video == "" && audio == "" && video_device_id == "" && audio_device_id == "" {
+	if video == "" && audio == "" {
 		return ""
 	}
 
 	// https://ffmpeg.org/ffmpeg-devices.html#avfoundation
 	input := "-f avfoundation"
 
-	if video != "" || video_device_id != "" {
+	if video != "" {
+		if isDeviceID(video) {
+			input += " -video_device_id " + video
+			video = ""
+		} else {
+			video = indexToItem(videos, video)
+		}
+
 		for key, value := range query {
 			switch key {
 			case "resolution":
@@ -34,18 +39,11 @@ func queryToInput(query url.Values) string {
 				input += " -" + key + " " + value[0]
 			}
 		}
-
-		if video_device_id != "" {
-			input += " -video_device_id " + video_device_id
-			video = ""
-		} else {
-			video = indexToItem(videos, video)
-		}
 	}
 
-	if audio != "" || audio_device_id != "" {
-		if audio_device_id != "" {
-			input += " -audio_device_id " + audio_device_id
+	if audio != "" {
+		if isDeviceID(audio) {
+			input += " -audio_device_id " + audio
 			audio = ""
 		} else {
 			audio = indexToItem(audios, audio)
@@ -55,12 +53,17 @@ func queryToInput(query url.Values) string {
 	return input + ` -i "` + video + `:` + audio + `"`
 }
 
+func isDeviceID(s string) bool {
+	return strings.HasPrefix(s, "uid:") || strings.HasPrefix(s, "serial:")
+}
+
 func initDevices() {
 	// [AVFoundation indev @ 0x1500047d0] AVFoundation video devices:
-	// [AVFoundation indev @ 0x1500047d0] [0] FaceTime HD Camera  [uid:XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX]
-	// [AVFoundation indev @ 0x1500047d0] [1] Capture screen 0
+	// [AVFoundation indev @ 0x1500047d0] [0] FaceTime HD Camera [uid:XXXXXXXX]
+	// [AVFoundation indev @ 0x1500047d0] [1] USB Camera [uid:XXXXXXXX] [serial:ABCD1234]
+	// [AVFoundation indev @ 0x1500047d0] [2] Capture screen 0
 	// [AVFoundation indev @ 0x1500047d0] AVFoundation audio devices:
-	// [AVFoundation indev @ 0x1500047d0] [0] MacBook Air Microphone  [uid:BuiltInMicrophoneDevice]
+	// [AVFoundation indev @ 0x1500047d0] [0] MacBook Pro Microphone [uid:BuiltInMicrophoneDevice]
 	cmd := exec.Command(
 		Bin, "-hide_banner", "-list_devices", "true", "-f", "avfoundation", "-i", "",
 	)
@@ -85,9 +88,10 @@ func initDevices() {
 		}
 
 		name := m[1]
+
 		// remove unique IDs from device name output
-		if i := strings.Index(name, "[uid:"); i >= 0 {
-			name = strings.TrimSpace(name[:i])
+		if i := strings.Index(name, " [uid:"); i >= 0 {
+			name = name[:i]
 		}
 
 		switch kind {
@@ -98,7 +102,7 @@ func initDevices() {
 		}
 
 		streams = append(streams, &api.Source{
-			Name: name, URL: "ffmpeg:device?" + kind + "=" + name,
+			Name: m[1], URL: "ffmpeg:device?" + kind + "=" + name,
 		})
 	}
 }

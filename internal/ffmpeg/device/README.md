@@ -17,10 +17,9 @@ streams:
   linux_usbcam:   ffmpeg:device?video=0&video_size=1280x720#video=h264
   windows_webcam: ffmpeg:device?video=0#video=h264
   macos_facetime: ffmpeg:device?video=0&audio=1&video_size=1280x720&framerate=30#video=h264#audio=pcma
-  macos_serial:   ffmpeg:device?video_device_id=serial:ABCD1234&video_size=1280x720&framerate=30#video=h264
+  macos_name:     ffmpeg:device?video=FaceTime HD Camera
+  macos_uid:      ffmpeg:device?video=uid:XXXXXXXX
+  macos_serial:   ffmpeg:device?video=serial:ABCD1234
 ```
-
-On macOS, `video` and `audio` select a device by name or index and
-`video_device_id` and `audio_device_id` select a device by AVFoundation unique ID
 
 **PS.** It is recommended to check the available devices in the WebUI add page.
