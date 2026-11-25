@@ -505,6 +505,7 @@ PS. Additionally, WebRTC will try to use the 8555 UDP port to transmit encrypted
 - [MMM-go2rtc](https://github.com/Anonym-tsk/MMM-go2rtc) - MagicMirror² module
 - [ring-mqtt](https://github.com/tsightler/ring-mqtt) - Ring-to-MQTT bridge
 - [lightNVR](https://github.com/opensensor/lightNVR)
+- [Mamoon](https://mamoon.app/guides/home-assistant-baby-monitor/) - baby monitor app for phones that plays a go2rtc RTSP restream, with cry alerts on the parent's phone
 
 **Distributions**
 
