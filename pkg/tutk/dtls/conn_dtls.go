@@ -368,7 +368,15 @@ func (c *DTLSConn) WriteDTLS(payload []byte, channel byte) error {
 }
 
 func (c *DTLSConn) WriteIOCtrl(payload []byte) error {
-	_, err := c.conn.Write(c.msgIOCtrl(payload))
+	frame := c.msgIOCtrl(payload)
+	c.mu.RLock()
+	conn := c.clientConn
+	c.mu.RUnlock()
+	if conn == nil {
+		return io.ErrClosedPipe
+	}
+
+	_, err := conn.Write(frame)
 	return err
 }
 
