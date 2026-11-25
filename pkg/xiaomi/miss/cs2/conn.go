@@ -114,7 +114,7 @@ func (c *Conn) worker() {
 		c.channels[2].Close()
 	}()
 
-	var keepaliveTS time.Time // only for TCP
+	var keepaliveTS time.Time
 
 	buf := make([]byte, 1200)
 
@@ -139,14 +139,14 @@ func (c *Conn) worker() {
 				channel = c.channels[ch]
 			}
 
-			if c.isTCP {
-				// For TCP we should send ping every second to keep connection alive.
-				// Based on PCAP analysis: official Mi Home app sends PING every ~1s.
-				if now := time.Now(); now.After(keepaliveTS) {
-					_, _ = c.Conn.Write([]byte{magic, msgPing, 0, 0})
-					keepaliveTS = now.Add(time.Second)
-				}
+			// Send ping every second to keep connection alive (both TCP and UDP).
+			// Based on PCAP analysis: official Mi Home app sends PING every ~1s.
+			if now := time.Now(); now.After(keepaliveTS) {
+				_, _ = c.Conn.Write([]byte{magic, msgPing, 0, 0})
+				keepaliveTS = now.Add(time.Second)
+			}
 
+			if c.isTCP {
 				if channel != nil {
 					err = channel.Push(buf[8:n])
 				}
