@@ -208,6 +208,11 @@ func (c *Client) StartSpeaker() error {
 	return c.WriteCommand(data)
 }
 
+func (c *Client) StopSpeaker() error {
+	data := binary.BigEndian.AppendUint32(nil, cmdSpeakerStop)
+	return c.WriteCommand(data)
+}
+
 // SpeakerCodec if the camera model has a non-standard two-way codec.
 func (c *Client) SpeakerCodec() uint32 {
 	switch c.model {
