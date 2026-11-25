@@ -78,8 +78,13 @@ func TestWorkerUnknownChannelUDP(t *testing.T) {
 	_, conn := newTestConn(t, false)
 
 	// Channel 3 is nil in channels, channel 9 is out of its bounds.
-	for _, ch := range []byte{3, 9} {
+	for i, ch := range []byte{3, 9} {
 		writeConn(t, conn, drwFrame(ch, 1, []byte("junk")))
+
+		if i == 0 {
+			// First packet triggers the 1s keepalive PING.
+			require.Equal(t, []byte{magic, msgPing, 0, 0}, readConn(t, conn, 4))
+		}
 
 		ack := readConn(t, conn, 10)
 		require.Equal(t, byte(magic), ack[0])
@@ -114,6 +119,8 @@ func TestWorkerKnownChannelUDP(t *testing.T) {
 	copy(body[4:], payload)
 
 	writeConn(t, conn, drwFrame(0, 0, body))
+
+	require.Equal(t, []byte{magic, msgPing, 0, 0}, readConn(t, conn, 4))
 
 	ack := readConn(t, conn, 10)
 	require.Equal(t, byte(msgDrwAck), ack[1])
