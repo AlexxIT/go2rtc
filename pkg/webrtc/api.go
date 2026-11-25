@@ -6,7 +6,6 @@ import (
 	"slices"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/xnet"
 	"github.com/pion/ice/v4"
 	"github.com/pion/interceptor"
 	"github.com/pion/interceptor/pkg/nack"
@@ -156,15 +155,9 @@ func NewServerAPI(network, address string, filters *Filters) (*webrtc.API, error
 			return core.Contains(filters.IPs, ip.String())
 		}
 	} else {
-		// try filter all Docker-like interfaces
-		ipFilter = func(ip net.IP) bool {
-			return !xnet.Docker.Contains(ip)
-		}
-		// if there are no such interfaces - disable the filter
-		// the user will need to enable port forwarding
-		if nets, _ := xnet.IPNets(ipFilter); len(nets) == 0 {
-			ipFilter = nil
-		}
+		// Leave ipFilter nil by default: in pion/ice v4.4+, any non-nil IPFilter
+		// switches STUN and TURN gathering from a single wildcard socket to
+		// per-interface socket fan-out. Docker IPs are filtered in FilterCandidate.
 	}
 	s.SetIPFilter(ipFilter)
 

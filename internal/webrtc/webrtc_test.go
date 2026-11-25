@@ -71,3 +71,22 @@ a=candidate:3 1 TCP 1010827519 172.22.233.10 60677 typ host tcptype passive
 	require.Nil(t, err)
 	require.False(t, strings.Contains(sdp, "x-google-max-bitrate"))
 }
+
+func TestFilterCandidateDocker(t *testing.T) {
+	require.False(t, FilterCandidate(&pion.ICECandidate{
+		Typ:     pion.ICECandidateTypeHost,
+		Address: "172.17.0.1",
+	}))
+	require.False(t, FilterCandidate(&pion.ICECandidate{
+		Typ:     pion.ICECandidateTypeHost,
+		Address: "172.30.32.1",
+	}))
+	require.True(t, FilterCandidate(&pion.ICECandidate{
+		Typ:     pion.ICECandidateTypeHost,
+		Address: "192.168.1.10",
+	}))
+	require.True(t, FilterCandidate(&pion.ICECandidate{
+		Typ:     pion.ICECandidateTypeSrflx,
+		Address: "203.0.113.5",
+	}))
+}
