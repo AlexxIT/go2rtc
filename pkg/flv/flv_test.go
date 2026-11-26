@@ -2,9 +2,11 @@ package flv
 
 import (
 	"bytes"
+	"io"
 	"testing"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/stretchr/testify/require"
 )
 
@@ -40,4 +42,32 @@ func TestReadPacketSkipsEmptyTag(t *testing.T) {
 		require.Equal(t, uint32(0x04010203), pkt.Timestamp)
 		require.Equal(t, []byte{0x17, 0x00}, pkt.Payload)
 	}
+}
+
+func TestStartSkipsEmptyVideoFrames(t *testing.T) {
+	header := []byte{0x17, PacketTypeAVCNALU, 0, 0, 0}
+	idr := h264.JoinNALU([]byte{0x65, 0x88})
+	var stream []byte
+	for _, payload := range [][]byte{
+		header[:2],
+		header,
+		append(bytes.Clone(header), 0, 0, 0),
+		append(append(bytes.Clone(header), 0, 0, 0, 0), idr...),
+	} {
+		stream = append(stream, 0, 0, 0, 0) // previous tag size
+		stream = append(stream, TagVideo, 0, 0, byte(len(payload)), 0, 0, 10, 0, 0, 0, 0)
+		stream = append(stream, payload...)
+	}
+
+	track := core.NewReceiver(&core.Media{Kind: core.KindVideo}, &core.Codec{Name: core.CodecH264, ClockRate: 90000})
+	var packets []*core.Packet
+	track.Input = func(packet *core.Packet) {
+		packets = append(packets, packet)
+	}
+	prod := &Producer{rd: core.NewReadBuffer(bytes.NewReader(stream)), video: track}
+
+	require.ErrorIs(t, prod.Start(), io.EOF)
+	require.Len(t, packets, 1)
+	require.Equal(t, idr, packets[0].Payload)
+	require.Equal(t, uint32(900), packets[0].Timestamp)
 }
