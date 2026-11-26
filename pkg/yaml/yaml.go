@@ -59,38 +59,41 @@ func patch(in []byte, path []string, value any) ([]byte, error) {
 
 	n := len(path) - 1
 
-	// parent node key/value
-	pKey, pVal := findNode(nodes, path[:n])
-	if pKey == nil {
-		// no parent node
-		return addToEnd(in, path, value)
-	}
-
 	var paste []byte
-
 	if value != nil {
-		// nil value means delete key
 		var err error
-		v := map[string]any{path[n]: value}
-		if paste, err = Encode(v, 2); err != nil {
+		if paste, err = Encode(map[string]any{path[n]: value}, 2); err != nil {
 			return nil, err
 		}
 	}
 
+	// top-level key
+	if n == 0 {
+		for i := 0; i < len(nodes); i += 2 {
+			if nodes[i].Value == path[0] {
+				i0, i1 := nodeBounds(in, nodes[i])
+				return join(in[:i0], paste, in[i1:]), nil
+			}
+		}
+		return join(in, paste), nil
+	}
+
+	// nested key
+	pKey, pVal := findNode(nodes, path[:n])
+	if pKey == nil {
+		return addToEnd(in, path, value)
+	}
+
 	iKey, _ := findNode(pVal.Content, path[n:])
 	if iKey != nil {
-		// key item not nil (replace value)
 		paste = addIndent(paste, iKey.Column-1)
-
 		i0, i1 := nodeBounds(in, iKey)
 		return join(in[:i0], paste, in[i1:]), nil
 	}
 
 	if pVal.Content != nil {
-		// parent value not nil (use first child indent)
 		paste = addIndent(paste, pVal.Column-1)
 	} else {
-		// parent value is nil (use parent indent + 2)
 		paste = addIndent(paste, pKey.Column+1)
 	}
 
@@ -138,13 +141,20 @@ func nodeBounds(in []byte, node *yaml.Node) (offset0, offset1 int) {
 }
 
 func addToEnd(in []byte, path []string, value any) ([]byte, error) {
-	if len(path) != 2 || value == nil {
+	if value == nil {
 		return nil, errors.New("yaml: path not exist")
 	}
 
-	v := map[string]map[string]any{
-		path[0]: {path[1]: value},
+	var v any
+	switch len(path) {
+	case 1:
+		v = map[string]any{path[0]: value}
+	case 2:
+		v = map[string]map[string]any{path[0]: {path[1]: value}}
+	default:
+		return nil, errors.New("yaml: path not exist")
 	}
+
 	paste, err := Encode(v, 2)
 	if err != nil {
 		return nil, err
