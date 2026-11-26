@@ -5,10 +5,12 @@ import (
 	"crypto/hmac"
 	"crypto/sha1"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/tutk"
@@ -69,15 +71,19 @@ const (
 )
 
 type DTLSConn struct {
-	conn    *net.UDPConn
-	addr    *net.UDPAddr
-	frames  *tutk.FrameHandler
-	err     error
-	verbose bool
-	ctx     context.Context
-	cancel  context.CancelFunc
-	wg      sync.WaitGroup
-	mu      sync.RWMutex
+	conn      *net.UDPConn
+	addr      *net.UDPAddr
+	frames    *tutk.FrameHandler
+	err       error
+	verbose   bool
+	ctx       context.Context
+	cancel    context.CancelFunc
+	wg        sync.WaitGroup
+	mu        sync.RWMutex
+	addrMu    sync.RWMutex
+	closeOnce sync.Once
+	closeErr  error
+	ioctlMu   sync.Mutex
 
 	// DTLS
 	clientConn *dtls.Conn
@@ -85,6 +91,14 @@ type DTLSConn struct {
 	clientBuf  chan []byte
 	serverBuf  chan []byte
 	rawCmd     chan []byte
+	// RDT uses a separate secure channel and must not consume AV channel 0.
+	rdtMu       sync.Mutex
+	rdtConn     *dtls.Conn
+	rdtBuf      chan []byte
+	rdtCancel   context.CancelFunc
+	rdtReceived atomic.Uint64
+	rdtUsed     bool // One RDT operation per authenticated SID; guarded by rdtMu.
+	dtlsWriteMu sync.Mutex
 
 	// Identity
 	uid     string
@@ -227,7 +241,7 @@ func (c *DTLSConn) AVClientStart(timeout time.Duration) error {
 }
 
 func (c *DTLSConn) AVServStart() error {
-	conn, err := NewDTLSServer(c.ctx, iotcChannelBack, c.addr, c.WriteDTLS, c.serverBuf, c.psk)
+	conn, err := NewDTLSServer(c.ctx, iotcChannelBack, c.remoteAddrSnapshot(), c.WriteDTLS, c.serverBuf, c.psk)
 	if err != nil {
 		return fmt.Errorf("dtls: server handshake failed: %w", err)
 	}
@@ -349,14 +363,16 @@ func (c *DTLSConn) AVSendAudioData(codec byte, payload []byte, timestampUS uint3
 
 func (c *DTLSConn) Write(data []byte) error {
 	if c.isCC51 {
-		_, err := c.conn.WriteToUDP(data, c.addr)
+		_, err := c.conn.WriteToUDP(data, c.remoteAddrSnapshot())
 		return err
 	}
-	_, err := c.conn.WriteToUDP(tutk.TransCodeBlob(data), c.addr)
+	_, err := c.conn.WriteToUDP(tutk.TransCodeBlob(data), c.remoteAddrSnapshot())
 	return err
 }
 
 func (c *DTLSConn) WriteDTLS(payload []byte, channel byte) error {
+	c.dtlsWriteMu.Lock()
+	defer c.dtlsWriteMu.Unlock()
 	var frame []byte
 	if c.isCC51 {
 		frame = c.msgTxDataCC51(payload, channel)
@@ -390,7 +406,7 @@ func (c *DTLSConn) WriteAndWait(req []byte, ok func(res []byte) bool) ([]byte, e
 		if err != nil {
 			return nil, err
 		}
-		if string(addr.IP) != string(c.addr.IP) || n < 16 {
+		if !addr.IP.Equal(c.remoteAddrSnapshot().IP) || n < 16 {
 			continue
 		}
 
@@ -402,45 +418,110 @@ func (c *DTLSConn) WriteAndWait(req []byte, ok func(res []byte) bool) ([]byte, e
 		}
 
 		if ok(res) {
+			c.addrMu.Lock()
 			c.addr.Port = addr.Port
+			c.addrMu.Unlock()
 			return res, nil
 		}
 	}
 }
 
 func (c *DTLSConn) WriteAndWaitIOCtrl(payload []byte, match func([]byte) bool, timeout time.Duration) ([]byte, error) {
+	if c == nil || c.ctx == nil || match == nil || timeout <= 0 {
+		return nil, errors.New("invalid control transaction")
+	}
+	c.mu.RLock()
+	conn := c.clientConn
+	c.mu.RUnlock()
+	if conn == nil {
+		return nil, errors.New("control connection unavailable")
+	}
+	// Only one caller may consume rawCmd. Reject concurrent transactions rather
+	// than letting a lock wait exceed the caller's cancellation/deadline.
+	if !c.ioctlMu.TryLock() {
+		return nil, errors.New("control transaction busy")
+	}
+	defer c.ioctlMu.Unlock()
+	ctx, cancel := context.WithTimeout(c.ctx, timeout)
+	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	frame := c.msgIOCtrl(payload)
-	var t *time.Timer
-	t = time.AfterFunc(1, func() {
-		c.mu.RLock()
-		conn := c.clientConn
-		c.mu.RUnlock()
-		if conn != nil {
-			if _, err := conn.Write(frame); err == nil && t != nil {
-				t.Reset(time.Second)
-			}
+	write := func(data []byte) error {
+		if err := ctx.Err(); err != nil {
+			return err
 		}
-	})
-	defer t.Stop()
+		// A blocked Pion write also has a finite bound, including cancellation
+		// during the synchronous call. No background retry callback owns writes.
+		deadline := time.Now().Add(time.Second)
+		if end, ok := ctx.Deadline(); ok && end.Before(deadline) {
+			deadline = end
+		}
+		if err := conn.SetWriteDeadline(deadline); err != nil {
+			return errors.New("control write deadline failed")
+		}
+		defer conn.SetWriteDeadline(time.Time{})
+		n, err := conn.Write(data)
+		if err != nil || n != len(data) {
+			return errors.New("control write failed")
+		}
+		return nil
+	}
+	return writeAndWaitIOCtrl(ctx, c.rawCmd, frame, match, write, c.msgACK, time.Second)
+}
 
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
-
+// The transaction owns every write and its retry ticker. In particular, the
+// request is written before even a pre-buffered matching response is accepted.
+// Extracted to exercise this ordering with a controlled writer, without sockets.
+func writeAndWaitIOCtrl(ctx context.Context, responses <-chan []byte, frame []byte, match func([]byte) bool, write func([]byte) error, ack func() []byte, retry time.Duration) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := write(frame); err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, errors.New("control request write failed")
+	}
+	ticker := time.NewTicker(retry)
+	defer ticker.Stop()
 	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		select {
-		case data, ok := <-c.rawCmd:
+		case data, ok := <-responses:
 			if !ok {
 				return nil, io.EOF
 			}
-
-			ack := c.msgACK()
-			c.clientConn.Write(ack)
-
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			if err := write(ack()); err != nil {
+				if ctx.Err() != nil {
+					return nil, ctx.Err()
+				}
+				return nil, errors.New("control acknowledgement write failed")
+			}
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			if match(data) {
 				return data, nil
 			}
-		case <-timer.C:
-			return nil, fmt.Errorf("timeout waiting for response")
+		case <-ticker.C:
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			if err := write(frame); err != nil {
+				if ctx.Err() != nil {
+					return nil, ctx.Err()
+				}
+				return nil, errors.New("control request write failed")
+			}
+		case <-ctx.Done():
+			return nil, ctx.Err()
 		}
 	}
 }
@@ -456,7 +537,7 @@ func (c *DTLSConn) IsBackchannelReady() bool {
 }
 
 func (c *DTLSConn) RemoteAddr() *net.UDPAddr {
-	return c.addr
+	return c.remoteAddrSnapshot()
 }
 
 func (c *DTLSConn) LocalAddr() *net.UDPAddr {
@@ -468,7 +549,22 @@ func (c *DTLSConn) SetDeadline(t time.Time) error {
 }
 
 func (c *DTLSConn) Close() error {
+	c.closeOnce.Do(func() { c.closeErr = c.close() })
+	return c.closeErr
+}
+
+func (c *DTLSConn) close() error {
 	c.cancel()
+	c.closeRDTHandshake()
+	// Closing only the local UDP socket leaves the camera's authenticated
+	// session alive. Notify the exact CC51 RID before releasing the socket.
+	if c.isCC51 && len(c.sid) == 8 {
+		_ = c.conn.SetWriteDeadline(time.Now().Add(250 * time.Millisecond))
+		packet := c.msgSessionCloseCC51(time.Now())
+		for range 3 {
+			_ = c.Write(packet)
+		}
+	}
 
 	c.mu.Lock()
 	if conn := c.serverConn; conn != nil {
@@ -506,15 +602,15 @@ func (c *DTLSConn) discovery() error {
 	deadline := time.Now().Add(5 * time.Second)
 
 	for time.Now().Before(deadline) {
-		c.conn.WriteToUDP(pktIOTC, c.addr)
-		c.conn.WriteToUDP(pktCC51, c.addr)
+		c.conn.WriteToUDP(pktIOTC, c.remoteAddrSnapshot())
+		c.conn.WriteToUDP(pktCC51, c.remoteAddrSnapshot())
 
 		c.conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 		n, addr, err := c.conn.ReadFromUDP(buf)
 		if err != nil {
 			continue
 		}
-		if !addr.IP.Equal(c.addr.IP) {
+		if !addr.IP.Equal(c.remoteAddrSnapshot().IP) {
 			continue
 		}
 
@@ -564,7 +660,7 @@ func (c *DTLSConn) discoDoneCC51() error {
 }
 
 func (c *DTLSConn) connect() error {
-	conn, err := NewDTLSClient(c.ctx, iotcChannelMain, c.addr, c.WriteDTLS, c.clientBuf, c.psk)
+	conn, err := NewDTLSClient(c.ctx, iotcChannelMain, c.remoteAddrSnapshot(), c.WriteDTLS, c.clientBuf, c.psk)
 	if err != nil {
 		return fmt.Errorf("dtls: client handshake failed: %w", err)
 	}
@@ -667,7 +763,9 @@ func (c *DTLSConn) reader() {
 			return
 		}
 
+		c.addrMu.Lock()
 		if !addr.IP.Equal(c.addr.IP) {
+			c.addrMu.Unlock()
 			if c.verbose {
 				fmt.Printf("Ignored packet from unknown IP: %s\n", addr.IP.String())
 			}
@@ -676,6 +774,7 @@ func (c *DTLSConn) reader() {
 		if addr.Port != c.addr.Port {
 			c.addr.Port = addr.Port
 		}
+		c.addrMu.Unlock()
 
 		// CC51 Protocol
 		if c.isCC51 && n >= 12 && string(buf[:2]) == magicCC51 {
@@ -689,12 +788,7 @@ func (c *DTLSConn) reader() {
 				if n >= headerSizeCC51+authSizeCC51 {
 					ch := byte(binary.LittleEndian.Uint16(buf[12:]) >> 8)
 					dtlsData := buf[headerSizeCC51 : n-authSizeCC51]
-					switch ch {
-					case iotcChannelMain:
-						c.queue(c.clientBuf, dtlsData)
-					case iotcChannelBack:
-						c.queue(c.serverBuf, dtlsData)
-					}
+					c.routeDTLSRecord(ch, dtlsData)
 				}
 			}
 			continue
@@ -714,12 +808,7 @@ func (c *DTLSConn) reader() {
 		case cmdDataRX:
 			if len(data) > 28 {
 				ch := data[14]
-				switch ch {
-				case iotcChannelMain:
-					c.queue(c.clientBuf, data[28:])
-				case iotcChannelBack:
-					c.queue(c.serverBuf, data[28:])
-				}
+				c.routeDTLSRecord(ch, data[28:])
 			}
 		}
 	}
