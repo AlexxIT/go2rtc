@@ -1,6 +1,7 @@
 package miss
 
 import (
+	"encoding/json"
 	"errors"
 	"sync"
 	"sync/atomic"
@@ -18,7 +19,7 @@ type LensPair struct {
 
 type lensSession struct {
 	camera *Producer
-	opened [2]bool
+	users  int
 	start  sync.Once
 	done   chan struct{}
 	err    error
@@ -30,6 +31,8 @@ type lens struct {
 	session *lensSession
 	done    chan struct{}
 	channel int
+	state   atomic.Uint32
+	recv    atomic.Int64
 }
 
 // Open signs and dials the primary URL only when the first view needs the camera.
@@ -63,28 +66,51 @@ func (p *LensPair) open(channel int, connect func() (*Producer, error)) (*lens, 
 		// The two native talkback senders share the transport sequence number.
 		camera.client.Conn = &lensTransport{Conn: camera.client.Conn}
 		s = &lensSession{camera: camera, done: make(chan struct{})}
-		// Each view needs its own receiver even for the shared microphone:
-		// streams reconnects a receiver by moving all its subscribers.
 		camera.lenses = new(lensOutputs)
-		for i := range camera.lenses {
-			out := &camera.lenses[i]
-			out.Medias = append([]*core.Media{camera.Medias[i]}, camera.Medias[2:]...)
-			for _, m := range out.Medias {
-				if m.Direction == core.DirectionRecvonly {
-					_, _ = out.GetTrack(m, m.Codecs[0])
-				}
-			}
-		}
 		p.session = s
-	} else if s.opened[channel] {
-		return nil, errors.New("xiaomi: lens already in use; subscribe to its configured stream")
 	}
-	s.opened[channel] = true
-	out := s.camera.lenses[channel].Connection
-	out.ID, out.FormatName = core.NewID(), "xiaomi/miss"
-	out.Protocol, out.RemoteAddr, out.UserAgent = s.camera.Protocol, s.camera.RemoteAddr, s.camera.UserAgent
-	// Native AddTrack writes to the same camera. Each view owns its senders.
-	return &lens{Producer: &Producer{Connection: out, client: s.camera.client}, pair: p, session: s, channel: channel, done: make(chan struct{})}, nil
+	s.users++
+	camera := s.camera
+	out := core.Connection{
+		ID: core.NewID(), FormatName: camera.FormatName, Protocol: camera.Protocol,
+		RemoteAddr: camera.RemoteAddr, UserAgent: camera.UserAgent,
+		Medias: append([]*core.Media{camera.Medias[channel]}, camera.Medias[2:]...),
+	}
+	for _, m := range out.Medias {
+		if m.Direction == core.DirectionRecvonly {
+			_, _ = out.GetTrack(m, m.Codecs[0])
+		}
+	}
+	return &lens{Producer: &Producer{Connection: out, client: camera.client}, pair: p, session: s, channel: channel, done: make(chan struct{})}, nil
+}
+
+// A playback-only handle can coexist with the named stream's forward reader.
+func (v *lens) GetTrack(_ *core.Media, codec *core.Codec) (*core.Receiver, error) {
+	v.pair.mu.Lock()
+	defer v.pair.mu.Unlock()
+	select {
+	case <-v.done:
+		return nil, core.ErrCantGetTrack
+	default:
+	}
+	for _, r := range v.Receivers {
+		if r.Codec == codec {
+			slot := &v.session.camera.lenses[v.channel]
+			if owner := slot.Load(); owner != nil && owner != v {
+				return nil, errors.New("xiaomi: lens already in use; subscribe to its configured stream")
+			}
+			slot.Store(v)
+			return r, nil
+		}
+	}
+	return nil, core.ErrCantGetTrack
+}
+
+func (v *lens) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		*core.Connection
+		Recv int64 `json:"bytes_recv,omitempty"`
+	}{&v.Connection, v.recv.Load()})
 }
 
 func (v *lens) Start() error {
@@ -97,7 +123,7 @@ func (v *lens) Start() error {
 	default:
 	}
 	// The stream has now attached its subscriber. A late view needs its own keyframe.
-	s.camera.lenses[v.channel].state.CompareAndSwap(lensIdle, lensWaitKey)
+	v.state.CompareAndSwap(lensIdle, lensWaitKey)
 	v.pair.mu.Unlock()
 	s.start.Do(func() {
 		go func() {
@@ -150,9 +176,9 @@ func (v *lens) Stop() error {
 		sender.Close()
 	}
 	s := v.session
-	s.opened[v.channel] = false
-	s.camera.lenses[v.channel].state.Store(lensIdle)
-	if s.opened[0] || s.opened[1] {
+	s.camera.lenses[v.channel].CompareAndSwap(v, nil)
+	s.users--
+	if s.users != 0 {
 		v.pair.mu.Unlock()
 		return nil
 	}
@@ -166,9 +192,6 @@ func (v *lens) Stop() error {
 	v.pair.mu.Unlock()
 	s.start.Do(func() { close(s.done) }) // a probe can be stopped without Start
 	<-s.done
-	for i := range s.camera.lenses {
-		_ = s.camera.lenses[i].Connection.Stop()
-	}
 	return err
 }
 
@@ -178,15 +201,15 @@ const (
 	lensStreaming
 )
 
-type lensOutputs [2]struct {
-	core.Connection
-	state atomic.Uint32
-}
+type lensOutputs [2]atomic.Pointer[lens]
 
 func (views *lensOutputs) write(pkt *Packet, codec string, packet *core.Packet) {
 	switch pkt.CodecID {
 	case codecH264, codecH265:
-		v := &views[pkt.videoChannel()]
+		v := views[pkt.videoChannel()].Load()
+		if v == nil {
+			return
+		}
 		r := v.Receivers[0]
 		if r.Codec.Name != codec {
 			return
@@ -202,14 +225,16 @@ func (views *lensOutputs) write(pkt *Packet, codec string, packet *core.Packet) 
 				return
 			}
 		}
+		v.recv.Add(int64(len(packet.Payload)))
 		r.WriteRTP(packet)
 	case codecPCMA, codecOPUS:
 		var first *core.Receiver
 		for i := range views {
-			v := &views[i]
-			if v.state.Load() == lensIdle || len(v.Receivers) < 2 || v.Receivers[1].Codec.Name != codec {
+			v := views[i].Load()
+			if v == nil || v.state.Load() == lensIdle || len(v.Receivers) < 2 || v.Receivers[1].Codec.Name != codec {
 				continue
 			}
+			v.recv.Add(int64(len(packet.Payload)))
 			if first == nil {
 				first = v.Receivers[1]
 				continue

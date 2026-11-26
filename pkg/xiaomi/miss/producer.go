@@ -94,7 +94,7 @@ func probe(client *Client, audio bool, videoCount int) ([]*core.Media, error) {
 		case codecH264:
 			if vcodecs[channel] == nil {
 				buf := annexb.EncodeToAVCC(pkt.Payload)
-				if h264.NALUType(buf) == h264.NALUTypeSPS {
+				if len(buf) > 4 && h264.NALUType(buf) == h264.NALUTypeSPS {
 					vcodecs[channel] = h264.AVCCToCodec(buf)
 					videos++
 				}
@@ -102,7 +102,7 @@ func probe(client *Client, audio bool, videoCount int) ([]*core.Media, error) {
 		case codecH265:
 			if vcodecs[channel] == nil {
 				buf := annexb.EncodeToAVCC(pkt.Payload)
-				if h265.NALUType(buf) == h265.NALUTypeVPS {
+				if len(buf) > 4 && h265.NALUType(buf) == h265.NALUTypeVPS {
 					vcodecs[channel] = h265.AVCCToCodec(buf)
 					videos++
 				}
@@ -174,7 +174,11 @@ func (p *Producer) Start() error {
 
 		switch pkt.CodecID {
 		case codecH264, codecH265:
-			if p.lenses != nil && p.lenses[pkt.videoChannel()].state.Load() == lensIdle {
+			if p.lenses != nil && p.lenses[pkt.videoChannel()].Load() == nil {
+				continue
+			}
+			payload := annexb.EncodeToAVCC(pkt.Payload)
+			if len(payload) <= 4 {
 				continue
 			}
 			pkt2 = &core.Packet{
@@ -182,7 +186,7 @@ func (p *Producer) Start() error {
 					SequenceNumber: uint16(pkt.Sequence),
 					Timestamp:      TimeToRTP(pkt.Timestamp, 90000),
 				},
-				Payload: annexb.EncodeToAVCC(pkt.Payload),
+				Payload: payload,
 			}
 			if pkt.CodecID == codecH264 {
 				name = core.CodecH264

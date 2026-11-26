@@ -108,7 +108,12 @@ func TestDualLensProbeAndRouting(t *testing.T) {
 			key := make([]byte, 32)
 			// Deliberately identical parameter sets for both lenses: resolution and codec cannot identify a lens.
 			sps, _ := hex.DecodeString(video.parameters)
+			aud := []byte{0, 0, 0, 1, 9, 0xf0}
+			if video.codec == codecH265 {
+				aud = []byte{0, 0, 0, 1, 0x46, 1, 0x50}
+			}
 			conn := &testConn{frames: []testFrame{
+				makeTestFrame(t, key, video.codec, 0, 0, aud),
 				makeTestFrame(t, key, video.codec, 0x001e2001, 1, sps),
 				makeTestFrame(t, key, video.codec, 0x015e2001, 2, sps),
 				makeTestFrame(t, key, codecOPUS, 0, 3, []byte{1}),
@@ -137,7 +142,12 @@ func TestDualLensProbeAndRouting(t *testing.T) {
 			if len(first.Medias) != 3 || first.Medias[2].Direction != core.DirectionSendonly || first.Medias[2] != second.Medias[2] || len(conn.writes) != 0 {
 				t.Fatal("forward open changed the shared speaker")
 			}
-			producer.lenses[0].state.Store(lensWaitKey)
+			for _, v := range []*lens{first, second} {
+				if _, err = v.GetTrack(v.Medias[0], v.Medias[0].Codecs[0]); err != nil {
+					t.Fatal(err)
+				}
+			}
+			first.state.Store(lensWaitKey)
 			var received [4][]uint16
 			for i, r := range []*core.Receiver{first.Receivers[0], second.Receivers[0], first.Receivers[1], second.Receivers[1]} {
 				r.Input = func(packet *core.Packet) {
@@ -149,11 +159,12 @@ func TestDualLensProbeAndRouting(t *testing.T) {
 						packet.Marker = false
 					}
 					if i == 0 {
-						producer.lenses[1].state.Store(lensWaitKey)
+						second.state.Store(lensWaitKey)
 					}
 				}
 			}
 			conn.frames = []testFrame{
+				makeTestFrame(t, key, video.codec, 0, 7, aud),
 				makeTestFrame(t, key, video.codec, 0x015e2000, 8, []byte{0, 0, 0, 1, video.key, 2}), // before second view joins
 				makeTestFrame(t, key, video.codec, 0x001e2000, 9, []byte{0, 0, 0, 1, video.pred, 1}),
 				makeTestFrame(t, key, video.codec, 0x001e2000, 10, []byte{0, 0, 0, 1, video.key, 1}),
@@ -218,9 +229,15 @@ func TestLensPairLifecycle(t *testing.T) {
 		return v
 	}
 	second, first := open(1), open(0)
-	if _, err := pair.open(1, dial); err == nil {
-		t.Fatal("independent producers acquired the same lens")
+	duplicate := open(1)
+	m := second.Medias[0]
+	if _, err := second.GetTrack(m, m.Codecs[0]); err != nil {
+		t.Fatal(err)
 	}
+	if _, err := duplicate.GetTrack(m, m.Codecs[0]); err == nil {
+		t.Fatal("independent producers acquired the same forward track")
+	}
+	_ = duplicate.Stop()
 	if len(wires) != 1 || second.GetMedias()[0] == first.GetMedias()[0] || second.GetMedias()[1] != first.GetMedias()[1] || second.Receivers[1] == first.Receivers[1] {
 		t.Fatal("invalid lens or shared microphone identity")
 	}
