@@ -118,6 +118,33 @@ func TestDecodeSPS2(t *testing.T) {
 	require.Equal(t, uint16(360), sps.Height())
 }
 
+func TestGetFmtpLine(t *testing.T) {
+	sps := []byte{0x67, 0x64, 0, 0x1f, 0xac, 0x24}
+	pps := []byte{0x68, 0xee, 0x32, 0xc8, 0xb0}
+	const mode = "packetization-mode=1"
+	const withSPS = mode + ";profile-level-id=64001f;sprop-parameter-sets=Z2QAH6wk"
+	const withPair = withSPS + ",aO4yyLA="
+
+	for _, test := range []struct {
+		name string
+		avc  []byte
+		want string
+	}{
+		{"empty", nil, mode},
+		{"short length prefix", []byte{0, 0, 0}, mode},
+		{"zero length", []byte{0, 0, 0, 0, NALUTypeSPS}, mode},
+		{"oversized length", []byte{0xff, 0xff, 0xff, 0xff, NALUTypeSPS}, mode},
+		{"short SPS", JoinNALU(sps[:3]), mode},
+		{"short SPS followed by valid pair", JoinNALU(sps[:3], sps, pps), withPair},
+		{"SPS followed by truncated PPS", append(JoinNALU(sps), 0, 0, 0, 5, NALUTypePPS), withSPS},
+		{"SPS and PPS followed by IDR", JoinNALU(sps, pps, []byte{NALUTypeIFrame}), withPair},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			require.Equal(t, test.want, GetFmtpLine(test.avc))
+		})
+	}
+}
+
 func TestAVCCToCodec(t *testing.T) {
 	s := "000000196764001fac2484014016ec0440000003004000000c23c60c920000000568ee32c8b0000000d365"
 	b, _ := hex.DecodeString(s)
