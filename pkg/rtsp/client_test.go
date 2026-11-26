@@ -4,30 +4,33 @@ import (
 	"net"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 )
 
 func TestTimeout(t *testing.T) {
-	Timeout = time.Millisecond
+	t.Parallel()
 
 	ln, err := net.Listen("tcp", "localhost:0")
 	require.Nil(t, err)
+	defer ln.Close()
 
 	client := NewClient("rtsp://" + ln.Addr().String() + "/stream")
 	client.Backchannel = true
 
 	err = client.Dial()
 	require.Nil(t, err)
+	defer client.Close()
+
+	peer, err := ln.Accept()
+	require.Nil(t, err)
+	defer peer.Close()
 
 	err = client.Describe()
 	require.ErrorIs(t, err, os.ErrDeadlineExceeded)
 }
 
 func TestMissedControl(t *testing.T) {
-	setTimeout(t, 5*time.Second)
-
 	ln, err := net.Listen("tcp", "localhost:0")
 	require.Nil(t, err)
 	defer ln.Close()
