@@ -15,7 +15,22 @@ func RepairAVCC(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 	sps, pps := GetParameterSet(codec.FmtpLine)
 	ps := JoinNALU(sps, pps)
 
+	fmtpLineUpdated := false
+
 	return func(packet *rtp.Packet) {
+		// Update FmtpLine from first keyframe with parameter sets
+		// This fixes MSE aspect ratio issues when RTSP cameras don't send SPS/PPS in DESCRIBE
+		if !fmtpLineUpdated && ContainsParameterSets(packet.Payload) {
+			newFmtpLine := GetFmtpLine(packet.Payload)
+			if newFmtpLine != "" {
+				codec.FmtpLine = newFmtpLine
+				// Re-extract SPS/PPS with updated FmtpLine
+				sps, pps = GetParameterSet(codec.FmtpLine)
+				ps = JoinNALU(sps, pps)
+			}
+			fmtpLineUpdated = true
+		}
+
 		// this can happen for FLV from FFmpeg
 		if NALUType(packet.Payload) == NALUTypeSEI {
 			size := int(binary.BigEndian.Uint32(packet.Payload)) + 4
@@ -70,7 +85,7 @@ func SplitNALU(avcc []byte) [][]byte {
 
 func NALUTypes(avcc []byte) []byte {
 	var types []byte
-	for {
+	for len(avcc) >= 5 { // minimum: 4 bytes length + 1 byte NAL header
 		types = append(types, NALUType(avcc))
 
 		size := 4 + int(binary.BigEndian.Uint32(avcc))

@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/h264"
+	"github.com/AlexxIT/go2rtc/pkg/h265"
 )
 
 type Probe struct {
@@ -40,9 +42,29 @@ func Create(name string, query url.Values) *Probe {
 
 func (p *Probe) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
 	sender := core.NewSender(media, track.Codec)
-	sender.Handler = func(pkt *core.Packet) {
+
+	handler := func(pkt *core.Packet) {
 		p.Send += len(pkt.Payload)
 	}
+
+	// Apply format handlers to update FmtpLine from first keyframe
+	// This fixes MSE aspect ratio issues when RTSP cameras don't send SPS/PPS in DESCRIBE
+	switch track.Codec.Name {
+	case core.CodecH264:
+		if track.Codec.IsRTP() {
+			handler = h264.RTPDepay(track.Codec, handler)
+		} else {
+			handler = h264.RepairAVCC(track.Codec, handler)
+		}
+	case core.CodecH265:
+		if track.Codec.IsRTP() {
+			handler = h265.RTPDepay(track.Codec, handler)
+		} else {
+			handler = h265.RepairAVCC(track.Codec, handler)
+		}
+	}
+
+	sender.Handler = handler
 	sender.HandleRTP(track)
 	p.Senders = append(p.Senders, sender)
 	return nil

@@ -15,7 +15,22 @@ func RepairAVCC(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 	vds, sps, pps := GetParameterSet(codec.FmtpLine)
 	ps := h264.JoinNALU(vds, sps, pps)
 
+	fmtpLineUpdated := false
+
 	return func(packet *rtp.Packet) {
+		// Update FmtpLine from first keyframe with parameter sets
+		// This fixes MSE aspect ratio issues when RTSP cameras don't send VPS/SPS/PPS in DESCRIBE
+		if !fmtpLineUpdated && ContainsParameterSets(packet.Payload) {
+			newFmtpLine := GetFmtpLine(packet.Payload)
+			if newFmtpLine != "" {
+				codec.FmtpLine = newFmtpLine
+				// Re-extract VPS/SPS/PPS with updated FmtpLine
+				vds, sps, pps = GetParameterSet(codec.FmtpLine)
+				ps = h264.JoinNALU(vds, sps, pps)
+			}
+			fmtpLineUpdated = true
+		}
+
 		switch NALUType(packet.Payload) {
 		case NALUTypeIFrame, NALUTypeIFrame2, NALUTypeIFrame3:
 			clone := *packet
