@@ -19,6 +19,7 @@ const (
 	magicCC51    = "\x51\xcc"         // (wyze specific?)
 	sdkVersion42 = "\x01\x01\x02\x04" // 4.2.1.1
 	sdkVersion43 = "\x00\x08\x03\x04" // 4.3.8.0
+	portCC51     = 46656
 )
 
 const (
@@ -501,6 +502,9 @@ func (c *DTLSConn) discovery() error {
 
 	pktIOTC := tutk.TransCodeBlob(c.msgDisco(1))
 	pktCC51 := c.msgDiscoCC51(0, 0, false)
+	// Some CC51 cameras accept discovery on their direct session port even
+	// when UDP 32761 is only available for LAN broadcast discovery.
+	addrCC51 := &net.UDPAddr{IP: c.addr.IP, Port: portCC51, Zone: c.addr.Zone}
 
 	buf := make([]byte, 2048)
 	deadline := time.Now().Add(5 * time.Second)
@@ -508,6 +512,9 @@ func (c *DTLSConn) discovery() error {
 	for time.Now().Before(deadline) {
 		c.conn.WriteToUDP(pktIOTC, c.addr)
 		c.conn.WriteToUDP(pktCC51, c.addr)
+		if c.addr.Port != portCC51 {
+			c.conn.WriteToUDP(pktCC51, addrCC51)
+		}
 
 		c.conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 		n, addr, err := c.conn.ReadFromUDP(buf)
