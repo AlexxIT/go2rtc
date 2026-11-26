@@ -50,12 +50,14 @@
 
     const background = params.get('background') !== 'false';
     const width = '1 0 ' + (params.get('width') || '320px');
+    const renderer = params.get('renderer');
 
     for (let i = 0; i < streams.length; i++) {
         /** @type {VideoStream} */
         const video = document.createElement('video-stream');
         video.background = background;
         video.mode = modes[i] || video.mode;
+        if (renderer) video.renderer = renderer;
         video.style.flex = width;
         video.src = new URL('api/ws?src=' + encodeURIComponent(streams[i]), location.href);
         document.body.appendChild(video);
