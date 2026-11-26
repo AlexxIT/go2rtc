@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/tutk"
@@ -79,6 +81,9 @@ type DTLSConn struct {
 	cancel  context.CancelFunc
 	wg      sync.WaitGroup
 	mu      sync.RWMutex
+
+	// recvDeadline limits AVRecvFrameData, in Unix nanoseconds; zero means none.
+	recvDeadline atomic.Int64
 
 	// DTLS
 	clientConn *dtls.Conn
@@ -314,7 +319,17 @@ func (c *DTLSConn) AVServStop() error {
 }
 
 func (c *DTLSConn) AVRecvFrameData() (*tutk.Packet, error) {
+	// Frames arrive on a channel, so the socket deadline does not apply here.
+	var timeout <-chan time.Time
+	if ns := c.recvDeadline.Load(); ns != 0 {
+		timer := time.NewTimer(time.Until(time.Unix(0, ns)))
+		defer timer.Stop()
+		timeout = timer.C
+	}
+
 	select {
+	case <-timeout:
+		return nil, os.ErrDeadlineExceeded
 	case pkt, ok := <-c.frames.Recv():
 		if !ok {
 			return nil, c.Error()
@@ -473,6 +488,11 @@ func (c *DTLSConn) LocalAddr() *net.UDPAddr {
 }
 
 func (c *DTLSConn) SetDeadline(t time.Time) error {
+	if t.IsZero() {
+		c.recvDeadline.Store(0)
+	} else {
+		c.recvDeadline.Store(t.UnixNano())
+	}
 	return c.conn.SetDeadline(t)
 }
 
