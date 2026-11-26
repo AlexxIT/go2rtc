@@ -53,6 +53,7 @@ func Init() {
 
 	api.HandleFunc("api/ffmpeg", apiFFmpeg)
 
+	initTranscoders(defaults["bin"])
 	device.Init(defaults["bin"])
 	hardware.Init(defaults["bin"])
 }

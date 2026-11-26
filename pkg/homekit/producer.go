@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -28,6 +30,15 @@ type Client struct {
 	audioSession *srtp.Session
 
 	stream *camera.Stream
+
+	// The backchannel is sent on the audio session once the stream has
+	// started with the backchannel's codec. Tracks can be added before or
+	// after the start (e.g. a microphone added during live view).
+	mu                 sync.Mutex
+	backchannelCodec   string
+	startedAudio       *srtp.Session
+	startedCodec       string
+	backchannelSession atomic.Pointer[srtp.Session]
 
 	MaxWidth  int `json:"-"`
 	MaxHeight int `json:"-"`
@@ -123,15 +134,19 @@ func (c *Client) GetMedias() []*core.Media {
 		},
 	}
 
+	if media := backchannelMedia(acc, c.audioConfig.Codecs); media != nil {
+		c.Medias = append(c.Medias, media)
+	}
+
 	return c.Medias
 }
 
 func (c *Client) Start() error {
-	if c.Receivers == nil {
+	if c.Receivers == nil && c.Senders == nil {
 		return errors.New("producer without tracks")
 	}
 
-	if c.Receivers[0].Codec.Name == core.CodecJPEG {
+	if c.Receivers != nil && c.Receivers[0].Codec.Name == core.CodecJPEG {
 		return c.startMJPEG()
 	}
 
@@ -139,10 +154,22 @@ func (c *Client) Start() error {
 	videoCodec := trackToVideo(videoTrack, &c.videoConfig.Codecs[0], c.MaxWidth, c.MaxHeight)
 
 	audioTrack := c.trackByKind(core.KindAudio)
-	audioCodec := trackToAudio(audioTrack, &c.audioConfig.Codecs[0])
+	var audioCodec *camera.AudioCodecConfiguration
+	c.mu.Lock()
+	backchannelCodec := c.backchannelCodec
+	c.mu.Unlock()
+	if audioTrack == nil && backchannelCodec != "" {
+		// only the backchannel needs audio, so it decides the codec
+		audioCodec = backchannelToAudio(backchannelCodec, c.audioConfig.Codecs)
+	}
+	if audioCodec == nil {
+		audioCodec = trackToAudio(audioTrack, &c.audioConfig.Codecs[0])
+	}
 
-	c.videoSession = &srtp.Session{Local: c.srtpEndpoint()}
-	c.audioSession = &srtp.Session{Local: c.srtpEndpoint()}
+	// Payload types and RTCP intervals as requested in camera.NewStream. They
+	// are used for the packets and sender reports this side sends.
+	c.videoSession = &srtp.Session{Local: c.srtpEndpoint(), PayloadType: 99, RTCPInterval: 500 * time.Millisecond}
+	c.audioSession = &srtp.Session{Local: c.srtpEndpoint(), PayloadType: 110, RTCPInterval: 5 * time.Second}
 
 	var err error
 	c.stream, err = camera.NewStream(c.hap, videoCodec, audioCodec, c.videoSession, c.audioSession, c.Bitrate)
@@ -152,6 +179,12 @@ func (c *Client) Start() error {
 
 	c.srtp.AddSession(c.videoSession)
 	c.srtp.AddSession(c.audioSession)
+
+	c.mu.Lock()
+	c.startedAudio = c.audioSession
+	c.startedCodec = audioCodecs[audioCodec.CodecType]
+	c.updateBackchannel()
+	c.mu.Unlock()
 
 	deadline := time.NewTimer(core.ConnDeadline)
 
@@ -168,15 +201,21 @@ func (c *Client) Start() error {
 				c.Recv += len(packet.Payload)
 			}
 		}
-	} else {
+	} else if audioTrack != nil {
 		c.audioSession.OnReadRTP = func(packet *rtp.Packet) {
 			deadline.Reset(core.ConnDeadline)
 			audioTrack.WriteRTP(packet)
 			c.Recv += len(packet.Payload)
 		}
+	} else {
+		// backchannel only: the stream lives while the camera sends audio
+		c.audioSession.OnReadRTP = func(packet *rtp.Packet) {
+			deadline.Reset(core.ConnDeadline)
+			c.Recv += len(packet.Payload)
+		}
 	}
 
-	if c.audioSession.OnReadRTP != nil {
+	if audioTrack != nil {
 		c.audioSession.OnReadRTP = timekeeper(c.audioSession.OnReadRTP)
 	}
 
@@ -185,7 +224,20 @@ func (c *Client) Start() error {
 	return nil
 }
 
+// updateBackchannel sends the backchannel on the started audio session if
+// the codecs match: the camera takes audio only in the codec selected for
+// the stream. Call with c.mu held.
+func (c *Client) updateBackchannel() {
+	if c.startedAudio != nil && c.backchannelCodec != "" && c.backchannelCodec == c.startedCodec {
+		c.backchannelSession.Store(c.startedAudio)
+	}
+}
+
 func (c *Client) Stop() error {
+	c.mu.Lock()
+	c.startedAudio = nil
+	c.backchannelSession.Store(nil)
+	c.mu.Unlock()
 	if c.videoSession != nil && c.videoSession.Remote != nil {
 		c.srtp.DelSession(c.videoSession)
 	}

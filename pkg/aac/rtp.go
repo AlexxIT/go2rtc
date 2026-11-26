@@ -64,6 +64,12 @@ func RTPDepay(handler core.HandlerFunc) core.HandlerFunc {
 }
 
 func RTPPay(handler core.HandlerFunc) core.HandlerFunc {
+	return RTPPaySamples(AUTime, handler)
+}
+
+// RTPPaySamples is RTPPay for access units of a different size, such as the
+// 480 samples of AAC-ELD.
+func RTPPaySamples(samples uint32, handler core.HandlerFunc) core.HandlerFunc {
 	var seq uint16
 	var ts uint32
 
@@ -93,7 +99,7 @@ func RTPPay(handler core.HandlerFunc) core.HandlerFunc {
 		handler(&clone)
 
 		seq++
-		ts += AUTime
+		ts += samples
 	}
 }
 
