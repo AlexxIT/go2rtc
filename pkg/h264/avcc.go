@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/h264/annexb"
 	"github.com/pion/rtp"
 )
 
@@ -16,24 +17,18 @@ func RepairAVCC(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 	ps := JoinNALU(sps, pps)
 
 	return func(packet *rtp.Packet) {
-		payload := packet.Payload
-		if len(payload) < 5 {
+		payload := annexb.NormalizeAVCC(packet.Payload, 1)
+		if len(payload) == 0 {
 			return
 		}
 
 		// FLV from FFmpeg can start with a SEI NAL unit.
-		stripSEI := NALUType(payload) == NALUTypeSEI
-		if stripSEI {
-			size := int(binary.BigEndian.Uint32(payload))
-			// On 32-bit systems, an oversized uint32 becomes negative as an int.
-			// Check the remaining length before adding the 4-byte prefix.
-			if size <= 0 || size > len(payload)-4 {
+		if NALUType(payload) == NALUTypeSEI {
+			size := annexb.AVCCNALUSize(payload)
+			if size == 0 || size >= len(payload) {
 				return
 			}
-			payload = payload[4+size:]
-			if len(payload) < 5 {
-				return
-			}
+			payload = payload[size:]
 		}
 
 		prependPS := len(ps) > 0 && NALUType(payload) == NALUTypeIFrame
@@ -41,7 +36,7 @@ func RepairAVCC(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 			payload = Join(ps, payload)
 		}
 
-		if stripSEI || prependPS {
+		if prependPS || len(payload) != len(packet.Payload) {
 			clone := *packet
 			clone.Payload = payload
 			packet = &clone

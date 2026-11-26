@@ -20,6 +20,8 @@ func TestRepairAVCCDoesNotMutateInputPacket(t *testing.T) {
 	}{
 		{"IDR", JoinNALU(idr)},
 		{"SEI before IDR", JoinNALU([]byte{NALUTypeSEI}, idr)},
+		{"empty NAL before IDR", append(make([]byte, 4), JoinNALU(idr)...)},
+		{"empty NAL between SEI and IDR", append(append(JoinNALU([]byte{NALUTypeSEI}), 0, 0, 0, 0), JoinNALU(idr)...)},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			input := &rtp.Packet{Header: rtp.Header{Timestamp: 123}, Payload: bytes.Clone(test.payload)}
@@ -46,14 +48,31 @@ func TestRepairAVCCDropsStandaloneSEI(t *testing.T) {
 	repair(input)
 }
 
-func TestRepairAVCCDropsMalformedSEI(t *testing.T) {
-	input := &rtp.Packet{Payload: []byte{0, 0, 0, 8, NALUTypeSEI}}
-	called := false
+func TestRepairAVCCDropsMalformedPayload(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		payload []byte
+	}{
+		{"empty payload", nil},
+		{"empty NAL", make([]byte, 4)},
+		{"truncated SEI", []byte{0, 0, 0, 8, NALUTypeSEI}},
+		{"oversized NAL", []byte{0xFF, 0xFF, 0xFF, 0xFF, NALUTypeSEI}},
+		{"SEI with short tail", append(JoinNALU([]byte{NALUTypeSEI}), 0, 0, 0)},
+		{"IDR with short tail", append(JoinNALU([]byte{NALUTypeIFrame}), 0, 0)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			repair := RepairAVCC(&core.Codec{}, func(*rtp.Packet) {
+				t.Fatal("forwarded a malformed AVCC packet")
+			})
+			original := bytes.Clone(test.payload)
+			repair(&rtp.Packet{Payload: test.payload})
+			require.Equal(t, original, test.payload)
+		})
+	}
+}
 
-	repair := RepairAVCC(&core.Codec{}, func(*rtp.Packet) {
-		called = true
-	})
-	require.NotPanics(t, func() { repair(input) })
-	require.False(t, called)
-	require.Equal(t, []byte{0, 0, 0, 8, NALUTypeSEI}, input.Payload)
+func TestNALUTypeShortPayload(t *testing.T) {
+	for size := range 5 {
+		require.Equal(t, byte(0xFF), NALUType(make([]byte, size)))
+	}
 }

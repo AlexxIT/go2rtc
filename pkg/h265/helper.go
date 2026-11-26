@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/h264/annexb"
 )
 
 const (
@@ -20,12 +21,21 @@ const (
 	NALUTypeFU        = 49
 )
 
+// NALUType returns 0xFF if the AVCC NAL unit header is missing.
 func NALUType(b []byte) byte {
+	if len(b) < 4+h265NaluHeaderSize {
+		return 0xFF
+	}
 	return (b[4] >> 1) & 0x3F
 }
 
 func IsKeyframe(b []byte) bool {
-	for {
+	for len(b) > 0 {
+		size := annexb.AVCCNALUSize(b)
+		if size == 0 {
+			break
+		}
+
 		switch NALUType(b) {
 		case NALUTypePFrame:
 			return false
@@ -33,14 +43,9 @@ func IsKeyframe(b []byte) bool {
 			return true
 		}
 
-		size := int(binary.BigEndian.Uint32(b)) + 4
-		if size < len(b) {
-			b = b[size:]
-			continue
-		} else {
-			return false
-		}
+		b = b[size:]
 	}
+	return false
 }
 
 func Types(data []byte) []byte {

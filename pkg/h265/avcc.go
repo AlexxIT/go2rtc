@@ -8,22 +8,32 @@ import (
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
+	"github.com/AlexxIT/go2rtc/pkg/h264/annexb"
 	"github.com/pion/rtp"
 )
 
 func RepairAVCC(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
-	vds, sps, pps := GetParameterSet(codec.FmtpLine)
-	ps := h264.JoinNALU(vds, sps, pps)
+	vps, sps, pps := GetParameterSet(codec.FmtpLine)
+	ps := h264.JoinNALU(vps, sps, pps)
 
 	return func(packet *rtp.Packet) {
-		switch NALUType(packet.Payload) {
-		case NALUTypeIFrame, NALUTypeIFrame2, NALUTypeIFrame3:
-			clone := *packet
-			clone.Payload = h264.Join(ps, packet.Payload)
-			handler(&clone)
-		default:
-			handler(packet)
+		payload := annexb.NormalizeAVCC(packet.Payload, h265NaluHeaderSize)
+		if len(payload) == 0 {
+			return
 		}
+
+		typ := NALUType(payload)
+		prependPS := len(ps) > 0 && (typ == NALUTypeIFrame || typ == NALUTypeIFrame2 || typ == NALUTypeIFrame3)
+		if prependPS {
+			payload = h264.Join(ps, payload)
+		}
+
+		if prependPS || len(payload) != len(packet.Payload) {
+			clone := *packet
+			clone.Payload = payload
+			packet = &clone
+		}
+		handler(packet)
 	}
 }
 
