@@ -16,13 +16,35 @@ func RepairAVCC(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 	ps := JoinNALU(sps, pps)
 
 	return func(packet *rtp.Packet) {
-		// this can happen for FLV from FFmpeg
-		if NALUType(packet.Payload) == NALUTypeSEI {
-			size := int(binary.BigEndian.Uint32(packet.Payload)) + 4
-			packet.Payload = packet.Payload[size:]
+		payload := packet.Payload
+		if len(payload) < 5 {
+			return
 		}
-		if NALUType(packet.Payload) == NALUTypeIFrame {
-			packet.Payload = Join(ps, packet.Payload)
+
+		// FLV from FFmpeg can start with a SEI NAL unit.
+		stripSEI := NALUType(payload) == NALUTypeSEI
+		if stripSEI {
+			size := int(binary.BigEndian.Uint32(payload))
+			// On 32-bit systems, an oversized uint32 becomes negative as an int.
+			// Check the remaining length before adding the 4-byte prefix.
+			if size <= 0 || size > len(payload)-4 {
+				return
+			}
+			payload = payload[4+size:]
+			if len(payload) < 5 {
+				return
+			}
+		}
+
+		prependPS := len(ps) > 0 && NALUType(payload) == NALUTypeIFrame
+		if prependPS {
+			payload = Join(ps, payload)
+		}
+
+		if stripSEI || prependPS {
+			clone := *packet
+			clone.Payload = payload
+			packet = &clone
 		}
 		handler(packet)
 	}
