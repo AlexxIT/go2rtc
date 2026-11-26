@@ -45,11 +45,12 @@ func (s *Stream) Play(urlOrProd any) error {
 			}
 		}
 
-		if !matchMedia(src, cons) {
+		track := matchMedia(src, cons)
+		if track == nil {
 			continue
 		}
 
-		s.AddInternalProducer(src)
+		s.AddInternalProducer(src, track)
 
 		go func() {
 			_ = src.Start()
@@ -76,16 +77,18 @@ func (s *Stream) Play(urlOrProd any) error {
 		// start new producer
 		if src == nil {
 			if src, err = GetProducer(source); err != nil {
+				_ = dst.Stop()
 				return err
 			}
 		}
 
-		if !matchMedia(src, cons) {
+		track := matchMedia(src, cons)
+		if track == nil {
 			_ = dst.Stop()
 			continue
 		}
 
-		s.AddInternalProducer(src)
+		s.AddInternalProducer(src, track)
 		s.AddInternalConsumer(cons)
 
 		go func() {
@@ -105,11 +108,14 @@ func (s *Stream) Play(urlOrProd any) error {
 		return nil
 	}
 
+	if source != "" && src != nil {
+		_ = src.Stop()
+	}
 	return errors.New("can't find consumer")
 }
 
-func (s *Stream) AddInternalProducer(conn core.Producer) {
-	producer := &Producer{conn: conn, state: stateInternal, url: "internal"}
+func (s *Stream) AddInternalProducer(conn core.Producer, track *core.Receiver) {
+	producer := &Producer{conn: conn, receivers: []*core.Receiver{track}, state: stateInternal, url: "internal"}
 	s.mu.Lock()
 	s.producers = append(s.producers, producer)
 	s.mu.Unlock()
@@ -132,7 +138,7 @@ func (s *Stream) RemoveInternalConsumer(conn core.Consumer) {
 	s.mu.Unlock()
 }
 
-func matchMedia(prod core.Producer, cons core.Consumer) bool {
+func matchMedia(prod core.Producer, cons core.Consumer) *core.Receiver {
 	for _, consMedia := range cons.GetMedias() {
 		for _, prodMedia := range prod.GetMedias() {
 			if prodMedia.Direction != core.DirectionRecvonly {
@@ -155,9 +161,9 @@ func matchMedia(prod core.Producer, cons core.Consumer) bool {
 				continue
 			}
 
-			return true
+			return track
 		}
 	}
 
-	return false
+	return nil
 }

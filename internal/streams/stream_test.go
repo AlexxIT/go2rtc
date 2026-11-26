@@ -1,6 +1,7 @@
 package streams
 
 import (
+	"io"
 	"net/url"
 	"testing"
 
@@ -44,4 +45,23 @@ func TestTempate(t *testing.T) {
 
 	require.Equal(t, stream1, stream2)
 	require.Equal(t, "ffmpeg:rtsp://example.com#video=copy", stream1.producers[0].url)
+}
+
+type playDestination struct {
+	core.Connection
+	closed bool
+}
+
+func (p *playDestination) Start() error { return nil }
+func (p *playDestination) Stop() error  { p.closed = true; return nil }
+func (p *playDestination) AddTrack(*core.Media, *core.Codec, *core.Receiver) error {
+	return nil
+}
+
+func TestPlayClosesDestinationOnSourceError(t *testing.T) {
+	dst := new(playDestination)
+	HandleFunc("playdst", func(string) (core.Producer, error) { return dst, nil })
+	HandleFunc("playerror", func(string) (core.Producer, error) { return nil, io.EOF })
+	require.ErrorIs(t, NewStream("playdst:").Play("playerror:"), io.EOF)
+	require.True(t, dst.closed)
 }
