@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+func DebugLog(format string, a ...any) {}
+
 func Dial(host, uid, username, password string) (*Conn, error) {
 	addr, err := net.ResolveUDPAddr("udp", host)
 	if err != nil {
@@ -38,6 +40,8 @@ func Dial(host, uid, username, password string) (*Conn, error) {
 		return nil, err
 	}
 
+	DebugLog("tutk: Dial connected, ver=%v, addr=%v", c.ver, c.addr)
+
 	if c.ver[0] >= 25 {
 		c.session = NewSession25(c, sid)
 	} else {
@@ -45,9 +49,11 @@ func Dial(host, uid, username, password string) (*Conn, error) {
 	}
 
 	if err = c.clientStart(username, password); err != nil {
+		DebugLog("tutk: clientStart failed: %v", err)
 		_ = c.Close()
 		return nil, err
 	}
+	DebugLog("tutk: clientStart succeeded!")
 
 	go c.worker()
 
@@ -117,13 +123,16 @@ func (c *Conn) WriteCommand(ctrlType uint32, ctrlData []byte) error {
 	c.cmdMu.Lock()
 	defer c.cmdMu.Unlock()
 
-	var repeat atomic.Int32
-	repeat.Store(5)
+	DebugLog("tutk: WriteCommand 0x%04x len=%d data=%s", ctrlType, len(ctrlData), string(ctrlData))
 
-	timeout := time.NewTicker(time.Second)
+	var repeat atomic.Int32
+	repeat.Store(2)
+
+	timeout := time.NewTicker(500 * time.Millisecond)
 	defer timeout.Stop()
 
 	c.cmdAck = func() {
+		DebugLog("tutk: WriteCommand 0x%04x ACKed", ctrlType)
 		repeat.Store(0)
 		timeout.Reset(1)
 	}
@@ -140,7 +149,8 @@ func (c *Conn) WriteCommand(ctrlType uint32, ctrlData []byte) error {
 			return nil
 		}
 		if r == 0 {
-			return fmt.Errorf("%s: can't send command %d", "tutk", ctrlType)
+			DebugLog("tutk: WriteCommand 0x%04x NO ACK (continuing anyway)", ctrlType)
+			return nil
 		}
 	}
 }
@@ -162,7 +172,11 @@ func (c *Conn) Error() error {
 }
 
 func (c *Conn) worker() {
-	defer c.session.Close()
+	DebugLog("tutk: worker started")
+	defer func() {
+		DebugLog("tutk: worker exiting, c.err=%v", c.err)
+		c.session.Close()
+	}()
 
 	buf := make([]byte, 1200)
 
@@ -170,15 +184,20 @@ func (c *Conn) worker() {
 		n, err := c.Read(buf)
 		if err != nil {
 			c.err = fmt.Errorf("%s: %w", "tutk", err)
+			DebugLog("tutk worker: Read error: %v", err)
 			return
 		}
 
-		switch c.handleMsg(buf[:n]) {
-		case msgUnknown:
-			fmt.Printf("tutk: unknown msg: %x\n", buf[:n])
-		case msgError:
-			return
+		msgRes := c.handleMsg(buf[:n])
+		if msgRes == msgUnknown {
+			DebugLog("tutk: unknown msg[8]=0x%02x len=%d hex=%x", buf[8], n, buf[:min(32, n)])
+		} else if msgRes == msgError {
+			DebugLog("tutk: handleMsg returned msgError! packet=%x", buf[:min(32, n)])
+		}
+
+		switch msgRes {
 		case msgCommandAck:
+			DebugLog("tutk: got command ACK")
 			if c.cmdAck != nil {
 				c.cmdAck()
 			}

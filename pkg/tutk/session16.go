@@ -50,10 +50,65 @@ type Session16 struct {
 	seqSendCmd1 uint16
 	seqSendAud  uint16
 
-	waitFSeq uint16
-	waitCSeq uint16
-	waitSize int
-	waitData []byte
+	waitFSeq        uint16
+	waitCSeq        uint16
+	waitSize        int
+	waitPayloadSize int
+	waitData        []byte
+
+	lastVideoFSeq uint16
+	hasVideoFSeq  bool
+
+	lastAudioFSeq uint16
+	hasAudioFSeq  bool
+
+	recentVideoFSeqs [128]uint16
+	recentVideoCount int
+
+	recentAudioFSeqs [64]uint16
+	recentAudioCount int
+}
+
+func (s *Session16) isVideoEmitted(fSeq uint16) bool {
+	count := s.recentVideoCount
+	if count > len(s.recentVideoFSeqs) {
+		count = len(s.recentVideoFSeqs)
+	}
+	for i := 0; i < count; i++ {
+		if s.recentVideoFSeqs[i] == fSeq {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Session16) markVideoEmitted(fSeq uint16) {
+	idx := s.recentVideoCount % len(s.recentVideoFSeqs)
+	s.recentVideoFSeqs[idx] = fSeq
+	s.recentVideoCount++
+	s.lastVideoFSeq = fSeq
+	s.hasVideoFSeq = true
+}
+
+func (s *Session16) isAudioEmitted(fSeq uint16) bool {
+	count := s.recentAudioCount
+	if count > len(s.recentAudioFSeqs) {
+		count = len(s.recentAudioFSeqs)
+	}
+	for i := 0; i < count; i++ {
+		if s.recentAudioFSeqs[i] == fSeq {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Session16) markAudioEmitted(fSeq uint16) {
+	idx := s.recentAudioCount % len(s.recentAudioFSeqs)
+	s.recentAudioFSeqs[idx] = fSeq
+	s.recentAudioCount++
+	s.lastAudioFSeq = fSeq
+	s.hasAudioFSeq = true
 }
 
 func (s *Session16) Close() error {
@@ -198,33 +253,125 @@ func (s *Session16) SessionRead(chID byte, cmd []byte) int {
 
 		switch cmd[1] {
 		case 0x03:
+			isAudio := cmd[2] == 0x0b
 			frameSeq := binary.LittleEndian.Uint16(cmd[4:])
 			chunkSeq := binary.LittleEndian.Uint16(cmd[12:])
+			payloadSize := int(binary.LittleEndian.Uint32(cmd[8:]))
+			hdrSize := int(binary.LittleEndian.Uint16(cmd[14:]))
+			totalSize := hdrSize + payloadSize
+
+			if !isAudio && chunkSeq < 3 {
+				DebugLog("0x03 VIDEO: fSeq=%d cSeq=%d pSize=%d hdrSize=%d dataLen=%d hex=%x", frameSeq, chunkSeq, payloadSize, hdrSize, len(cmd[24:]), cmd[:24])
+			}
+
+			if isAudio {
+				if s.isAudioEmitted(frameSeq) {
+					return msgMediaChunk // duplicate audio packet
+				}
+
+				if len(cmd[24:]) >= totalSize {
+					s.markAudioEmitted(frameSeq)
+					data := cmd[24:]
+					packetData[0] = bytes.Clone(data[payloadSize:totalSize])
+					packetData[1] = bytes.Clone(data[:payloadSize])
+					select {
+					case s.rawPkt <- packetData:
+					default:
+						return msgError
+					}
+					return msgMediaFrame
+				}
+				return msgMediaChunk
+			}
+
+			// --- VIDEO ---
+			// Check if this frameSeq was already completely emitted
+			if s.isVideoEmitted(frameSeq) {
+				return msgMediaChunk // duplicate chunk for already emitted frame
+			}
+
+			// Single-chunk video frame
+			if chunkSeq == 0 && len(cmd[24:]) >= totalSize {
+				s.markVideoEmitted(frameSeq)
+
+				data := cmd[24:]
+				packetData[0] = bytes.Clone(data[payloadSize:totalSize])
+				packetData[1] = bytes.Clone(data[:payloadSize])
+				select {
+				case s.rawPkt <- packetData:
+				default:
+					return msgError
+				}
+				return msgMediaFrame
+			}
+
+			// Multi-chunk video frame
 			if chunkSeq == 0 {
+				if s.isVideoEmitted(frameSeq) {
+					return msgMediaChunk // duplicate chunk 0 for already finished frame
+				}
+				if frameSeq == s.waitFSeq && len(s.waitData) > 0 {
+					return msgMediaChunk // duplicate chunk 0 while in progress
+				}
 				s.waitFSeq = frameSeq
-				s.waitCSeq = 0
+				s.waitCSeq = 1
 				s.waitData = s.waitData[:0]
-				payloadSize := binary.LittleEndian.Uint32(cmd[8:])
-				hdrSize := binary.LittleEndian.Uint16(cmd[14:])
-				s.waitSize = int(hdrSize) + int(payloadSize)
-			} else if frameSeq != s.waitFSeq || chunkSeq != s.waitCSeq {
-				s.waitCSeq = 0
-				return msgMediaLost
+				s.waitSize = totalSize
+				s.waitPayloadSize = payloadSize
+				DebugLog("0x03 MULTI-CHUNK START: fSeq=%d totalSize=%d", frameSeq, totalSize)
+			} else {
+				if s.isVideoEmitted(frameSeq) {
+					return msgMediaChunk // duplicate chunk for already finished frame
+				}
+				if frameSeq != s.waitFSeq {
+					return msgMediaLost
+				}
+				if chunkSeq < s.waitCSeq {
+					return msgMediaChunk // duplicate chunk already processed
+				}
+				if chunkSeq != s.waitCSeq {
+					// Gap in chunk sequence, frame is corrupted
+					s.waitData = s.waitData[:0]
+					s.waitSize = 0
+					s.waitPayloadSize = 0
+					s.waitFSeq = 0xffff
+					return msgMediaLost
+				}
+				s.waitCSeq++
 			}
 
 			s.waitData = append(s.waitData, cmd[24:]...)
 			if n := len(s.waitData); n < s.waitSize {
-				s.waitCSeq++
 				return msgMediaChunk
 			}
 
 			s.waitCSeq = 0
+			s.markVideoEmitted(frameSeq)
 
-			payloadSize := binary.LittleEndian.Uint32(cmd[8:])
-			packetData[0] = bytes.Clone(s.waitData[payloadSize:])
-			packetData[1] = bytes.Clone(s.waitData[:payloadSize])
+			DebugLog("0x03 MULTI-CHUNK ASSEMBLED! fSeq=%d totalBytes=%d payloadBytes=%d", s.waitFSeq, len(s.waitData), s.waitPayloadSize)
+
+			if len(s.waitData) >= s.waitSize && s.waitPayloadSize <= len(s.waitData) {
+				packetData[0] = bytes.Clone(s.waitData[s.waitPayloadSize:s.waitSize])
+				packetData[1] = bytes.Clone(s.waitData[:s.waitPayloadSize])
+			} else {
+				s.waitData = s.waitData[:0]
+				s.waitSize = 0
+				s.waitPayloadSize = 0
+				s.waitFSeq = 0xffff
+				return msgMediaLost
+			}
+
+			s.waitData = s.waitData[:0]
+			s.waitSize = 0
+			s.waitPayloadSize = 0
+			s.waitFSeq = 0xffff
 
 		case 0x04:
+			frameSeq := binary.LittleEndian.Uint16(cmd[4:])
+			if s.isVideoEmitted(frameSeq) {
+				return msgMediaChunk
+			}
+			s.markVideoEmitted(frameSeq)
 			data := cmd[24:]
 			hdrSize := binary.LittleEndian.Uint16(cmd[14:])
 			packetData[0] = bytes.Clone(data[:hdrSize])
