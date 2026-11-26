@@ -15,9 +15,18 @@ import (
 type Producer struct {
 	core.Connection
 	client *Client
+	lenses *lensOutputs
 }
 
 func Dial(rawURL string) (core.Producer, error) {
+	p, err := dial(rawURL, false)
+	if err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+func dial(rawURL string, dual bool) (*Producer, error) {
 	client, err := NewClient(rawURL)
 	if err != nil {
 		return nil, err
@@ -26,13 +35,18 @@ func Dial(rawURL string) (core.Producer, error) {
 	u, _ := url.Parse(rawURL)
 	query := u.Query()
 
-	err = client.StartMedia(query.Get("channel"), query.Get("subtype"), query.Get("audio"))
+	channel := query.Get("channel")
+	videoCount := 1
+	if dual {
+		videoCount = 2
+	}
+	err = client.startMedia(channel, query.Get("subtype"), query.Get("audio"), dual)
 	if err != nil {
 		_ = client.Close()
 		return nil, err
 	}
 
-	medias, err := probe(client, query.Get("audio") != "0")
+	medias, err := probe(client, query.Get("audio") != "0", videoCount)
 	if err != nil {
 		_ = client.Close()
 		return nil, err
@@ -52,35 +66,45 @@ func Dial(rawURL string) (core.Producer, error) {
 	}, nil
 }
 
-func probe(client *Client, audio bool) ([]*core.Media, error) {
+func probe(client *Client, audio bool, videoCount int) ([]*core.Media, error) {
 	_ = client.SetDeadline(time.Now().Add(15 * time.Second))
 
-	var vcodec, acodec *core.Codec
+	vcodecs := make([]*core.Codec, videoCount)
+	var acodec *core.Codec
+	var videos int
 
 	for {
 		pkt, err := client.ReadPacket()
 		if err != nil {
-			if vcodec != nil {
+			if videos == videoCount {
 				err = fmt.Errorf("no audio")
+			} else if videos != 0 {
+				err = fmt.Errorf("missing video channel")
 			} else if acodec != nil {
 				err = fmt.Errorf("no video")
 			}
 			return nil, fmt.Errorf("xiaomi: probe: %w", err)
 		}
 
+		channel := 0
+		if videoCount > 1 {
+			channel = int(pkt.videoChannel())
+		}
 		switch pkt.CodecID {
 		case codecH264:
-			if vcodec == nil {
+			if vcodecs[channel] == nil {
 				buf := annexb.EncodeToAVCC(pkt.Payload)
 				if h264.NALUType(buf) == h264.NALUTypeSPS {
-					vcodec = h264.AVCCToCodec(buf)
+					vcodecs[channel] = h264.AVCCToCodec(buf)
+					videos++
 				}
 			}
 		case codecH265:
-			if vcodec == nil {
+			if vcodecs[channel] == nil {
 				buf := annexb.EncodeToAVCC(pkt.Payload)
 				if h265.NALUType(buf) == h265.NALUTypeVPS {
-					vcodec = h265.AVCCToCodec(buf)
+					vcodecs[channel] = h265.AVCCToCodec(buf)
+					videos++
 				}
 			}
 		case codecPCMA:
@@ -93,19 +117,21 @@ func probe(client *Client, audio bool) ([]*core.Media, error) {
 			}
 		}
 
-		if vcodec != nil && (acodec != nil || !audio) {
+		if videos == videoCount && (acodec != nil || !audio) {
 			break
 		}
 	}
 
 	_ = client.SetDeadline(time.Time{})
 
-	medias := []*core.Media{
-		{
+	medias := make([]*core.Media, 0, videoCount+2)
+	for _, codec := range vcodecs {
+		media := &core.Media{
 			Kind:      core.KindVideo,
 			Direction: core.DirectionRecvonly,
-			Codecs:    []*core.Codec{vcodec},
-		},
+			Codecs:    []*core.Codec{codec},
+		}
+		medias = append(medias, media)
 	}
 
 	if acodec != nil {
@@ -148,6 +174,9 @@ func (p *Producer) Start() error {
 
 		switch pkt.CodecID {
 		case codecH264, codecH265:
+			if p.lenses != nil && p.lenses[pkt.videoChannel()].state.Load() == lensIdle {
+				continue
+			}
 			pkt2 = &core.Packet{
 				Header: rtp.Header{
 					SequenceNumber: uint16(pkt.Sequence),
@@ -187,6 +216,10 @@ func (p *Producer) Start() error {
 			audioTS += timestamp40ms
 		}
 
+		if p.lenses != nil {
+			p.lenses.write(pkt, name, pkt2)
+			continue
+		}
 		for _, recv := range p.Receivers {
 			if recv.Codec.Name == name {
 				recv.WriteRTP(pkt2)
