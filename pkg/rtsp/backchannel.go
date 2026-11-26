@@ -58,8 +58,8 @@ func (c *Conn) addBackchannel(media *core.Media, codec *core.Codec, track *core.
 		return
 	}
 
-	bc.playOK = true
-	bc.state = StatePlay
+	bc.playOK.Store(true)
+	bc.state.Store(StatePlay)
 
 	sender := core.NewSender(media, codec)
 	sender.Handler = bc.packetWriter(track.Codec, channel, codec.PayloadType)

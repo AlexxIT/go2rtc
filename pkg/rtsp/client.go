@@ -18,8 +18,6 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 )
 
-var Timeout = time.Second * 5
-
 // maxRedirects is the number of 301/302 redirects followed in a row,
 // the same limit as net/http uses
 const maxRedirects = 10
@@ -72,7 +70,7 @@ func (c *Conn) Dial() (err error) {
 	c.reader = bufio.NewReaderSize(conn, core.BufferSize)
 	c.session = ""
 	c.sequence = 0
-	c.state = StateConn
+	c.state.Store(StateConn)
 
 	c.udpConn = nil
 	c.udpAddr = nil

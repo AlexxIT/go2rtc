@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/AlexxIT/go2rtc/internal/app"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 func configHandler(w http.ResponseWriter, r *http.Request) {

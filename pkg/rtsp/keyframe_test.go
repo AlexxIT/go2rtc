@@ -101,7 +101,6 @@ func (c *keyframeCamera) waitClosed(t *testing.T) {
 }
 
 func TestRequestKeyframe(t *testing.T) {
-	setTimeout(t, 5*time.Second)
 	camera := newKeyframeCamera(t)
 
 	conn := NewClient(camera.uri)
@@ -137,7 +136,6 @@ func TestRequestKeyframe(t *testing.T) {
 
 // GetTrack sets the keyframe handler only for video and only with the option
 func TestGetTrackKeyframe(t *testing.T) {
-	setTimeout(t, 5*time.Second)
 
 	for _, tc := range []struct {
 		keyframe string
@@ -182,7 +180,6 @@ func TestGetTrackKeyframe(t *testing.T) {
 }
 
 func TestRequestKeyframeError(t *testing.T) {
-	setTimeout(t, 5*time.Second)
 	ln, err := net.Listen("tcp", "localhost:0")
 	require.Nil(t, err)
 	uri := "rtsp://" + ln.Addr().String() + "/stream"
@@ -207,9 +204,7 @@ func TestRequestKeyframeError(t *testing.T) {
 // a camera that never answers can't block the helper session, every request
 // has the usual timeout
 func TestRequestKeyframeTimeout(t *testing.T) {
-	old := Timeout
-	Timeout = 100 * time.Millisecond
-	t.Cleanup(func() { Timeout = old })
+	t.Parallel()
 
 	ln, err := net.Listen("tcp", "localhost:0")
 	require.Nil(t, err)
@@ -224,7 +219,6 @@ func TestRequestKeyframeTimeout(t *testing.T) {
 
 // the main session followed a redirect, the helper uses the final location
 func TestRequestKeyframeAfterRedirect(t *testing.T) {
-	setTimeout(t, 5*time.Second)
 
 	target := newKeyframeCamera(t)
 	camera := newKeyframeCamera(t)
