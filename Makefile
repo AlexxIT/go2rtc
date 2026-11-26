@@ -5,7 +5,7 @@ PLATFORM_TARGETS := \
 	build_darwin_amd64 build_darwin_arm64 \
 	build_freebsd_amd64 build_freebsd_arm64 build_freebsd_riscv64
 
-.PHONY: build build_all build_release run test vet update test_race_win64 $(PLATFORM_TARGETS)
+.PHONY: build build_all build_release run test vet update test_race_windows $(PLATFORM_TARGETS)
 .NOTPARALLEL: build_all build_release
 
 build:
