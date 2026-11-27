@@ -116,7 +116,7 @@ func execHandle(rawURL string) (prod core.Producer, err error) {
 	}
 
 	if path == "" {
-		prod, err = handlePipe(rawURL, cmd)
+		prod, err = handlePipe(rawURL, cmd, timeout)
 	} else {
 		prod, err = handleRTSP(rawURL, cmd, path, timeout)
 	}
@@ -128,7 +128,7 @@ func execHandle(rawURL string) (prod core.Producer, err error) {
 	return
 }
 
-func handlePipe(source string, cmd *shell.Command) (core.Producer, error) {
+func handlePipe(source string, cmd *shell.Command, timeout time.Duration) (core.Producer, error) {
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
@@ -152,7 +152,21 @@ func handlePipe(source string, cmd *shell.Command) (core.Producer, error) {
 		return nil, err
 	}
 
+	// close stdout on timeout to unblock magic.Open
+	done := make(chan struct{})
+	timer := time.AfterFunc(timeout, func() {
+		_ = stdout.Close()
+		close(done)
+	})
+
 	prod, err := magic.Open(rd)
+
+	if !timer.Stop() {
+		<-done // Wait for the timeout callback to finish closing stdout.
+		log.Error().Str("source", source).Msg("[exec] timeout")
+		return nil, errors.New("exec: timeout")
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("exec/pipe: %w\n%s", err, cmd.Stderr)
 	}

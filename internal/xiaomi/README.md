@@ -15,9 +15,9 @@ The `tutk` protocol is the worst thing that's ever happened to the P2P world. It
 
 **Important:**
 
-1. **Not all cameras are supported**. The list of supported cameras is collected in [this issue](https://github.com/AlexxIT/go2rtc/issues/1982).
+1. **Not all cameras are supported**. The list of supported cameras is collected in [this file](DEVICES.md).
 2. Each time you connect to the camera, you need Internet access to obtain encryption keys.
-3. Connection to the camera is local only.
+3. Connection to the camera is local only: the camera and go2rtc server must be on the same local network, and the firewall must allow incoming connections to go2rtc.
 
 **Features:**
 
@@ -62,3 +62,12 @@ You can use a second channel for dual cameras: `channel=2`.
 streams:
   xiaomi1: xiaomi://***&channel=2
 ```
+
+Battery cameras that connect through a hub (e.g. `mxiang.camera.mwc11` cameras with the `mxiang.camera.mwc10` hub) have no IP of their own. Use the hub's IP, DID and model, and select the camera with `subdid=<camera DID>`:
+
+```yaml
+streams:
+  xiaomi1: xiaomi://<userid>:<region>@<hub-ip>?did=<hub-did>&model=<hub-model>&subdid=<cam-did>
+```
+
+These cameras sleep most of the time; the hub wakes them on request, so the first frame can take a few seconds.

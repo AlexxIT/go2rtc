@@ -18,6 +18,8 @@ This folder contains static HTTP and JS content that is embedded into the applic
 - `media=camera+microphone` - stream from browser
 - `media=display+speaker` - stream from desktop
 
+`www/webrtc-mic.html?src=camera1` - test WebRTC renegotiation by enabling or disabling the microphone on the existing camera audio transceiver.
+
 ## JavaScript API
 
 - You can write your viewer from the scratch

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"slices"
 
 	"github.com/AlexxIT/go2rtc/pkg/aac"
 	"github.com/AlexxIT/go2rtc/pkg/bits"
@@ -19,8 +20,8 @@ type Demuxer struct {
 	pos  byte // current pos in buf
 	end  byte // end position
 
-	pmtID uint16 // Program Map Table (PMT) PID
-	pes   map[uint16]*PES
+	pmtIDs []uint16 // Program Map Table (PMT) PIDs
+	pes    map[uint16]*PES
 }
 
 func NewDemuxer() *Demuxer {
@@ -42,13 +43,18 @@ func (d *Demuxer) ReadPacket(rd io.Reader) (*rtp.Packet, error) {
 			return nil, err
 		}
 
-		if d.pes == nil {
-			switch pid {
-			case 0: // PAT ID
-				d.readPAT() // PAT: Program Association Table
-			case d.pmtID:
-				d.readPMT() // PMT : Program Map Table
+		// PID 0 is reserved for packets carrying the PAT.
+		if pid == 0 && start {
+			// A new PAT replaces the list of PMT PIDs for this transport stream.
+			d.readPAT()
+			continue
+		}
 
+		// Each program can have its own PMT PID, so check all PIDs from the PAT.
+		if slices.Contains(d.pmtIDs, pid) && start {
+			wasUninitialized := d.pes == nil
+			if d.readPMT() && wasUninitialized {
+				// Return stream types once so callers can discover the initial tracks.
 				pkt := &rtp.Packet{
 					Payload: make([]byte, 0, len(d.pes)),
 				}
@@ -81,18 +87,18 @@ func (d *Demuxer) readPacketHeader() (pid uint16, start bool, err error) {
 
 	_ = d.readBits(2) // Transport scrambling control (TSC)
 	af := d.readBit() // Adaptation field
-	_ = d.readBit()   // Payload
+	payload := d.readBit()
 	_ = d.readBits(4) // Continuity counter
 
 	if af != 0 {
 		adSize := d.readByte() // Adaptation field length
-		if adSize > PacketSize-6 {
+		if adSize > PacketSize-5 {
 			return 0, false, errors.New("mpegts: wrong adaptation size")
 		}
 		d.skip(adSize)
 	}
 
-	return pid, pusi != 0, nil
+	return pid, pusi != 0 && payload != 0, nil
 }
 
 func (d *Demuxer) skip(i byte) {
@@ -104,17 +110,34 @@ func (d *Demuxer) readBytes(i byte) []byte {
 	return d.buf[d.pos-i : d.pos]
 }
 
-func (d *Demuxer) readPSIHeader() {
+func (d *Demuxer) readPSIHeader(tableID byte) bool {
 	// https://en.wikipedia.org/wiki/Program-specific_information#Table_Sections
+	if d.pos >= PacketSize {
+		return false
+	}
+	// The pointer skips bytes before the section; reject it if even the header
+	// would extend beyond this TS packet.
 	pointer := d.readByte() // Pointer field
-	d.skip(pointer)         // Pointer filler bytes
+	if int(pointer) > PacketSize-int(d.pos)-3 {
+		return false
+	}
+	d.skip(pointer) // Pointer filler bytes
 
-	_ = d.readByte()       // Table ID
+	if d.readByte() != tableID {
+		return false
+	}
 	_ = d.readBit()        // Section syntax indicator
 	_ = d.readBit()        // Private bit
 	_ = d.readBits(2)      // Reserved bits
 	_ = d.readBits(2)      // Section length unused bits
 	size := d.readBits(10) // Section length
+	if size < 5 {
+		return false
+	}
+	if size > uint32(PacketSize-int(d.pos)) {
+		return false
+	}
+	// Section data must fit in this packet; split sections are not reassembled.
 	d.setSize(byte(size))
 
 	_ = d.readBits(16) // Table ID extension
@@ -123,58 +146,93 @@ func (d *Demuxer) readPSIHeader() {
 	_ = d.readBit()    // Current/next indicator
 	_ = d.readByte()   // Section number
 	_ = d.readByte()   // Last section number
+	return true
 }
 
 // ReadPAT (Program Association Table)
 func (d *Demuxer) readPAT() {
-	// https://en.wikipedia.org/wiki/Program-specific_information#PAT_(Program_Association_Table)
-	d.readPSIHeader()
+	// MPEG-TS table_id 0x00 identifies a PAT.
+	if !d.readPSIHeader(0x00) {
+		return
+	}
 
-	const CRCSize = 4
-	for d.left() > CRCSize {
+	// The final four bytes are the CRC; everything before it must be whole PAT entries.
+	if left := d.left(); left < 4 || (left-4)%4 != 0 {
+		return
+	}
+
+	// PAT entries are four bytes each; program zero is reserved for network data.
+	var pmtIDs []uint16
+	for d.left() > 4 {
 		num := d.readBits(16)   // Program num
 		_ = d.readBits(3)       // Reserved bits
 		pid := d.readBits16(13) // Program map PID
 		if num != 0 {
-			d.pmtID = pid
+			pmtIDs = append(pmtIDs, pid)
 		}
 	}
-
 	d.skip(4) // CRC32
+	d.pmtIDs = pmtIDs
 }
 
 // ReadPMT (Program map specific data)
-func (d *Demuxer) readPMT() {
+func (d *Demuxer) readPMT() bool {
 	// https://en.wikipedia.org/wiki/Program-specific_information#PMT_(Program_map_specific_data)
-	d.readPSIHeader()
+	// MPEG-TS table_id 0x02 identifies a PMT.
+	if !d.readPSIHeader(0x02) {
+		return false
+	}
+	if d.left() < 8 {
+		return false
+	}
 
 	_ = d.readBits(3)      // Reserved bits
 	_ = d.readBits(13)     // PCR PID
 	_ = d.readBits(4)      // Reserved bits
 	_ = d.readBits(2)      // Program info length unused bits
 	size := d.readBits(10) // Program info length
+	if size > uint32(d.left()-4) {
+		return false
+	}
 	d.skip(byte(size))
 
-	d.pes = map[uint16]*PES{}
-
-	const CRCSize = 4
-	for d.left() > CRCSize {
+	// Parse into a temporary map so an invalid section cannot partially update
+	// the active streams.
+	streams := make(map[uint16]byte)
+	for d.left() > 4 {
+		if d.left() < 9 {
+			return false
+		}
 		streamType := d.readByte() // Stream type
 		_ = d.readBits(3)          // Reserved bits
 		pid := d.readBits16(13)    // Elementary PID
 		_ = d.readBits(4)          // Reserved bits
 		_ = d.readBits(2)          // ES Info length unused bits
 		size = d.readBits(10)      // ES Info length
+		if size > uint32(d.left()-4) {
+			return false
+		}
 		info := d.readBytes(byte(size))
 
 		if streamType == StreamTypePrivate && bytes.HasPrefix(info, opusInfo) {
 			streamType = StreamTypePrivateOPUS
 		}
+		streams[pid] = streamType
+	}
+	d.skip(4) // CRC32
 
-		d.pes[pid] = &PES{StreamType: streamType}
+	if d.pes == nil {
+		d.pes = make(map[uint16]*PES)
 	}
 
-	d.skip(4) // CRC32
+	for pid, streamType := range streams {
+		if pes := d.pes[pid]; pes == nil || pes.StreamType != streamType {
+			// Add new PIDs and reset reassembly if an existing PID changes type.
+			d.pes[pid] = &PES{StreamType: streamType}
+		}
+	}
+
+	return true
 }
 
 func (d *Demuxer) readPES(pid uint16, start bool) *rtp.Packet {

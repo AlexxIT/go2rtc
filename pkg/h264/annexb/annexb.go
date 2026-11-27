@@ -67,17 +67,61 @@ func isAUD(b byte) bool {
 	return b&0b0001_1111 == h264 || b&0b0111_1110 == h265
 }
 
+// AVCCNALUSize returns the size of the first NAL unit including its length prefix,
+// or zero if the prefix or NAL unit is incomplete.
+func AVCCNALUSize(b []byte) int {
+	if len(b) < 4 {
+		return 0
+	}
+	size := int(binary.BigEndian.Uint32(b))
+	// On 32-bit systems, an oversized uint32 becomes negative as an int.
+	// Check the remaining length before adding the 4-byte prefix.
+	if size < 0 || size > len(b)-4 {
+		return 0
+	}
+	return 4 + size
+}
+
+// NormalizeAVCC removes empty NAL units and rejects malformed payloads.
+// It reuses the input slice when every NAL unit is complete and nonempty.
+func NormalizeAVCC(b []byte, headerSize int) []byte {
+	var payload []byte
+
+	for i := 0; i < len(b); {
+		size := AVCCNALUSize(b[i:])
+		switch {
+		case size == 4: // empty NAL unit
+			if payload == nil {
+				payload = make([]byte, i, len(b)-4)
+				copy(payload, b[:i])
+			}
+		case size < 4+headerSize: // malformed payloads
+			return nil
+		case payload != nil:
+			payload = append(payload, b[i:i+size]...)
+		}
+		i += size
+	}
+
+	if payload != nil {
+		return payload
+	}
+
+	return b
+}
+
+// DecodeAVCC converts complete NAL units to Annex B and stops at an invalid unit.
 func DecodeAVCC(b []byte, safeClone bool) []byte {
 	if safeClone {
 		b = bytes.Clone(b)
 	}
 	for i := 0; i < len(b); {
-		size := int(binary.BigEndian.Uint32(b[i:]))
-		b[i] = 0
-		b[i+1] = 0
-		b[i+2] = 0
-		b[i+3] = 1
-		i += 4 + size
+		size := AVCCNALUSize(b[i:])
+		if size <= 4 {
+			return b[:i]
+		}
+		copy(b[i:], StartCode)
+		i += size
 	}
 	return b
 }
@@ -87,8 +131,8 @@ func DecodeAVCCWithAUD(src []byte) []byte {
 	dst := make([]byte, len(startAUD)+len(src))
 	copy(dst, startAUD)
 	copy(dst[len(startAUD):], src)
-	DecodeAVCC(dst[len(startAUD):], false)
-	return dst
+	payload := DecodeAVCC(dst[len(startAUD):], false)
+	return dst[:len(startAUD)+len(payload)]
 }
 
 const (

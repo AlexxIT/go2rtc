@@ -35,6 +35,11 @@ func getReplacer() *strings.Replacer {
 	defer secretsMu.Unlock()
 
 	if secretsReplacer == nil {
+		// longest first, so a secret that contains another secret is masked as a whole
+		slices.SortFunc(secrets, func(a, b string) int {
+			return len(b) - len(a)
+		})
+
 		oldnew := make([]string, 0, 2*len(secrets))
 		for _, s := range secrets {
 			oldnew = append(oldnew, s, "***")

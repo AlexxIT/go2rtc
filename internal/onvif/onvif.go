@@ -22,16 +22,35 @@ import (
 func Init() {
 	log = app.GetLogger("onvif")
 
+	var cfg struct {
+		API struct {
+			Username string `yaml:"username"`
+			Password string `yaml:"password"`
+		} `yaml:"api"`
+		RTSP struct {
+			Username string `yaml:"username"`
+			Password string `yaml:"password"`
+		} `yaml:"rtsp"`
+	}
+	app.LoadConfig(&cfg)
+
+	if cfg.RTSP.Username != "" {
+		auth = onvif.NewAuth(cfg.RTSP.Username, cfg.RTSP.Password)
+	} else if cfg.API.Username != "" {
+		auth = onvif.NewAuth(cfg.API.Username, cfg.API.Password)
+	}
+
 	streams.HandleFunc("onvif", streamOnvif)
 
 	// ONVIF server on all suburls
-	api.HandleFunc("/onvif/", onvifDeviceService)
+	api.HandleFuncNoAuth("/onvif/", onvifDeviceService)
 
 	// ONVIF client autodiscovery
 	api.HandleFunc("api/onvif", apiOnvif)
 }
 
 var log zerolog.Logger
+var auth *onvif.Auth
 
 func streamOnvif(rawURL string) (core.Producer, error) {
 	client, err := onvif.NewClient(rawURL)
@@ -72,6 +91,24 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Trace().Msgf("[onvif] server request %s %s:\n%s", r.Method, r.RequestURI, b)
+
+	if auth != nil {
+		switch operation {
+		case onvif.DeviceGetSystemDateAndTime:
+		case onvif.DeviceGetServices:
+		case onvif.DeviceGetCapabilities:
+		case onvif.ServiceGetServiceCapabilities:
+		case onvif.DeviceGetHostname:
+		default:
+			if !auth.Validate(b) {
+				log.Debug().Str("addr", r.RemoteAddr).Msg("[onvif] auth failed")
+				w.WriteHeader(http.StatusUnauthorized)
+				w.Header().Set("Content-Type", "application/soap+xml; charset=utf-8")
+				_, _ = w.Write(onvif.NotAuthorizedResponse())
+				return
+			}
+		}
+	}
 
 	switch operation {
 	case onvif.ServiceGetServiceCapabilities, // important for Hass
@@ -136,11 +173,15 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 			host = r.Host // in case of Host without port
 		}
 
-		uri := "rtsp://" + host + ":" + rtsp.Port + "/" + onvif.FindTagValue(b, "ProfileToken")
+		// The profile token is the stream name, escape it so names with
+		// characters like % or / are looked up correctly
+		token := onvif.FindTagValue(b, "ProfileToken")
+		uri := "rtsp://" + host + ":" + rtsp.Port + "/" + url.PathEscape(token)
 		b = onvif.GetStreamUriResponse(uri)
 
 	case onvif.MediaGetSnapshotUri:
-		uri := "http://" + r.Host + "/api/frame.jpeg?src=" + onvif.FindTagValue(b, "ProfileToken")
+		token := onvif.FindTagValue(b, "ProfileToken")
+		uri := "http://" + r.Host + "/api/frame.jpeg?src=" + url.QueryEscape(token)
 		b = onvif.GetSnapshotUriResponse(uri)
 
 	default:

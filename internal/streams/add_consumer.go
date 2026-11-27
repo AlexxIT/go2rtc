@@ -2,26 +2,41 @@ package streams
 
 import (
 	"errors"
+	"slices"
 	"strings"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
 func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
+	return s.addConsumer(cons, cons.GetMedias(), true)
+}
+
+// AddConsumerMedias - match new medias of already added consumer.
+// For example, after WebRTC renegotiation (enable two-way audio).
+func (s *Stream) AddConsumerMedias(cons core.Consumer, medias []*core.Media) (err error) {
+	return s.addConsumer(cons, medias, false)
+}
+
+func (s *Stream) addConsumer(cons core.Consumer, consMedias []*core.Media, isNew bool) (err error) {
 	// support for multiple simultaneous pending from different consumers
 	consN := s.pending.Add(1) - 1
 
-	var prodErrors = make([]error, len(s.producers))
+	// producers can be added or removed while we are matching medias
+	s.mu.Lock()
+	prods := slices.Clone(s.producers)
+	s.mu.Unlock()
+
+	var prodErrors = make([]error, len(prods))
 	var prodMedias []*core.Media
 	var prodStarts []*Producer
 
 	// Step 1. Get consumer medias
-	consMedias := cons.GetMedias()
 	for _, consMedia := range consMedias {
 		log.Trace().Msgf("[streams] check cons=%d media=%s", consN, consMedia)
 
 	producers:
-		for prodN, prod := range s.producers {
+		for prodN, prod := range prods {
 			// check for loop request, ex. `camera1: ffmpeg:camera1`
 			if info, ok := cons.(core.Info); ok && prod.url == info.GetSource() {
 				log.Trace().Msgf("[streams] skip cons=%d prod=%d", consN, prodN)
@@ -67,6 +82,10 @@ func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
 						log.Info().Err(err).Msg("[streams] can't add track")
 						continue
 					}
+					// request keyframe for a new consumer of a running source (if supported by source)
+					if consMedia.Kind == core.KindVideo && prod.started() {
+						track.RequestKeyframe()
+					}
 
 				case core.DirectionSendonly:
 					log.Trace().Msgf("[streams] match cons=%d => prod=%d", consN, prodN)
@@ -102,9 +121,11 @@ func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
 		return formatError(consMedias, prodMedias, prodErrors)
 	}
 
-	s.mu.Lock()
-	s.consumers = append(s.consumers, cons)
-	s.mu.Unlock()
+	if isNew {
+		s.mu.Lock()
+		s.consumers = append(s.consumers, cons)
+		s.mu.Unlock()
+	}
 
 	// there may be duplicates, but that's not a problem
 	for _, prod := range prodStarts {

@@ -14,7 +14,7 @@ func RTPDepay(handlerFunc core.HandlerFunc) core.HandlerFunc {
 	buf := make([]byte, 0, 512*1024) // 512K
 
 	return func(packet *rtp.Packet) {
-		//log.Printf("[RTP] codec: %s, size: %6d, ts: %10d, pt: %2d, ssrc: %d, seq: %d, mark: %v", track.Codec.Name, len(packet.Payload), packet.Timestamp, packet.PayloadType, packet.SSRC, packet.SequenceNumber, packet.Marker)
+		//log.Printf("[RTP] codec: %s, size: %6d, ts: %10d, pt: %2d, ssrc: %d, seq: %v, mark: %v", track.Codec.Name, len(packet.Payload), packet.Timestamp, packet.PayloadType, packet.SSRC, packet.SequenceNumber, packet.Marker)
 
 		// https://www.rfc-editor.org/rfc/rfc2435#section-3.1
 		b := packet.Payload
@@ -72,7 +72,7 @@ func RTPDepay(handlerFunc core.HandlerFunc) core.HandlerFunc {
 			return
 		}
 
-		if end := buf[len(buf)-2:]; end[0] != 0xFF && end[1] != 0xD9 {
+		if !bytes.HasSuffix(buf, []byte{0xFF, 0xD9}) {
 			buf = append(buf, 0xFF, 0xD9)
 		}
 
@@ -190,19 +190,8 @@ func Transcode(b []byte) ([]byte, error) {
 	}
 
 	wh := img.Bounds().Size()
-	w := wh.X
-	h := wh.Y
-
-	if w > 2040 {
-		w = 2040
-	} else if w&3 > 0 {
-		w &= 3
-	}
-	if h > 2040 {
-		h = 2040
-	} else if h&3 > 0 {
-		h &= 3
-	}
+	w := min(wh.X, 2040)
+	h := min(wh.Y, 2040)
 
 	if w != wh.X || h != wh.Y {
 		x0 := (wh.X - w) / 2

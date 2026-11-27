@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -20,8 +21,9 @@ type Conn struct {
 
 	pc *webrtc.PeerConnection
 
-	offer  string
-	closed core.Waiter
+	offer    string
+	closed   core.Waiter
+	rtcpOnce sync.Once
 }
 
 func NewConn(pc *webrtc.PeerConnection) *Conn {
@@ -134,6 +136,15 @@ func NewConn(pc *webrtc.PeerConnection) *Conn {
 
 		switch state {
 		case webrtc.PeerConnectionStateConnected:
+			// Pion's NACK responder runs while RTCP is read. Without this,
+			// receivers request missing RTP packets but never receive repairs.
+			// Start only once; an ICE transition must not add competing readers.
+			// The same reader passes PLI/FIR to the source of the track.
+			c.rtcpOnce.Do(func() {
+				for _, sender := range pc.GetSenders() {
+					go readRTCP(sender)
+				}
+			})
 			for _, sender := range c.Senders {
 				sender.Start()
 			}
@@ -202,6 +213,11 @@ func (c *Conn) getMediaCodec(remote *webrtc.TrackRemote) (*core.Media, *core.Cod
 				return media, codec
 			}
 		}
+	}
+
+	// consumer can get unknown track after renegotiation, skip it instead of crashing
+	if c.Mode == core.ModePassiveConsumer {
+		return nil, nil
 	}
 
 	// fix moment when core.ModePassiveProducer or core.ModeActiveProducer

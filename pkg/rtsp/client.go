@@ -18,7 +18,9 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 )
 
-var Timeout = time.Second * 5
+// maxRedirects is the number of 301/302 redirects followed in a row,
+// the same limit as net/http uses
+const maxRedirects = 10
 
 func NewClient(uri string) *Conn {
 	return &Conn{
@@ -68,7 +70,7 @@ func (c *Conn) Dial() (err error) {
 	c.reader = bufio.NewReaderSize(conn, core.BufferSize)
 	c.session = ""
 	c.sequence = 0
-	c.state = StateConn
+	c.state.Store(StateConn)
 
 	c.udpConn = nil
 	c.udpAddr = nil
@@ -95,9 +97,16 @@ func (c *Conn) Do(req *tcp.Request) (*tcp.Response, error) {
 
 	switch res.StatusCode {
 	case http.StatusOK:
+		c.redirects = 0
 		return res, nil
 
 	case http.StatusMovedPermanently, http.StatusFound:
+		if c.redirects >= maxRedirects {
+			c.redirects = 0
+			return nil, errors.New("rtsp: too many redirects")
+		}
+		c.redirects++
+
 		rawURL := res.Header.Get("Location")
 
 		var u *url.URL
@@ -167,10 +176,6 @@ func (c *Conn) Describe() error {
 		Header: map[string][]string{
 			"Accept": {"application/sdp"},
 		},
-	}
-
-	if c.Backchannel {
-		req.Header.Set("Require", "www.onvif.org/ver20/backchannel")
 	}
 
 	if c.UserAgent != "" {
@@ -308,7 +313,7 @@ func (c *Conn) SetupMedia(media *core.Media) (byte, error) {
 	if err != nil {
 		// some Dahua/Amcrest cameras fail here because two simultaneous
 		// backchannel connections
-		if c.Backchannel {
+		if c.Backchannel && media.Direction != core.DirectionSendonly {
 			c.Backchannel = false
 			if err = c.Reconnect(); err != nil {
 				return 0, err

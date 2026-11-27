@@ -5,27 +5,33 @@ import (
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
+	"github.com/AlexxIT/go2rtc/pkg/h264/annexb"
 	"github.com/pion/rtp"
 )
 
 func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
+	// Cache parameter sets to prepend them to keyframes.
 	vps, sps, pps := GetParameterSet(codec.FmtpLine)
 	ps := h264.JoinNALU(vps, sps, pps)
 
+	// Keep the current access unit and active FU start offset between packets.
 	buf := make([]byte, 0, 512*1024) // 512K
-	var nuStart int
+	nuStart := -1
 	var seqNum uint16
 
 	return func(packet *rtp.Packet) {
 		data := packet.Payload
+		// Ignore short payloads and clear any incomplete access unit.
 		if len(data) < 3 {
+			buf = buf[:0]
+			nuStart = -1
 			return
 		}
 
 		nuType := (data[0] >> 1) & 0x3F
-		//log.Printf("[RTP] codec: %s, nalu: %2d, size: %6d, ts: %10d, pt: %2d, ssrc: %d, seq: %d, %v", track.Codec.Name, nuType, len(packet.Payload), packet.Timestamp, packet.PayloadType, packet.SSRC, packet.SequenceNumber, packet.Marker)
 
 		// Fix for RtspServer https://github.com/AlexxIT/go2rtc/issues/244
+		// Keep parameter sets for the next AU and skip small trailing SEI packets.
 		if packet.Marker && len(data) < h264.PSMaxSize {
 			switch nuType {
 			case NALUTypeVPS, NALUTypeSPS, NALUTypePPS:
@@ -35,19 +41,33 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 			}
 		}
 
-		// when we collect data into one buffer, we need to make sure
-		// that all of it falls into the same sequence
+		// Drop buffered data when RTP sequence numbers are discontinuous.
 		if len(buf) > 0 && packet.SequenceNumber-seqNum != 1 {
 			//log.Printf("broken H265 sequence")
-			buf = buf[:0] // drop data
+			buf = buf[:0]
+			nuStart = -1
 			return
 		}
 
 		seqNum = packet.SequenceNumber
 
+		if nuType == NALUTypeFU && len(data) < 4 {
+			buf = buf[:0]
+			nuStart = -1
+			return
+		}
+
+		// Require an unfinished FU to continue or end before another NALU starts.
+		if nuStart >= 0 && (nuType != NALUTypeFU || data[2]&0x80 != 0) {
+			buf = buf[:0]
+			nuStart = -1
+			return
+		}
+
 		if nuType == NALUTypeFU {
 			switch data[2] >> 6 {
 			case 0b10: // begin
+				// Start an AVCC NALU and prepend parameter sets before an IDR.
 				nuType = data[2] & 0x3F
 
 				// push PS data before keyframe
@@ -61,49 +81,49 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 				buf = append(buf, data[3:]...)
 				return
 			case 0b00: // continue
-				if len(buf) == 0 {
-					//log.Printf("broken H265 fragment")
+				// Append this fragment to the active FU.
+				if nuStart < 0 {
+					buf = buf[:0]
 					return
 				}
 
 				buf = append(buf, data[3:]...)
 				return
 			case 0b01: // end
-				if len(buf) == 0 {
-					//log.Printf("broken H265 fragment")
+				// Append the final fragment and fill in the NALU length.
+				if nuStart < 0 || nuStart+4 > len(buf) {
+					buf = buf[:0]
+					nuStart = -1
 					return
 				}
 
 				buf = append(buf, data[3:]...)
-
-				if nuStart > len(buf)+4 {
-					//log.Printf("broken H265 fragment")
-					buf = buf[:0] // drop data
-					return
-				}
-
 				binary.BigEndian.PutUint32(buf[nuStart:], uint32(len(buf)-nuStart-4))
-			case 0b11: // wrong RFC 7798 realisation from OpenIPC project
+				nuStart = -1
+			case 0b11: // wrong RFC 7798 realization from OpenIPC project
 				// A non-fragmented NAL unit MUST NOT be transmitted in one FU; i.e.,
 				// the Start bit and End bit must not both be set to 1 in the same FU
 				// header.
+				// Recover peers that send a whole NALU in a single FU packet.
 				nuType = data[2] & 0x3F
 				buf = binary.BigEndian.AppendUint32(buf, uint32(len(data))-1) // NAL unit size
 				buf = append(buf, (data[0]&0x81)|(nuType<<1), data[1])
 				buf = append(buf, data[3:]...)
 			}
 		} else {
+			// Store a complete NALU with its AVCC length prefix.
 			buf = binary.BigEndian.AppendUint32(buf, uint32(len(data))) // NAL unit size
 			buf = append(buf, data...)
 		}
 
-		// collect all NAL Units for Access Unit
+		// Wait for the final packet before emitting the access unit.
 		if !packet.Marker {
 			return
 		}
 
 		//log.Printf("[HEVC] %v, len: %d", Types(buf), len(buf))
 
+		// Preserve packet metadata and replace its payload with the AVCC access unit.
 		clone := *packet
 		clone.Version = h264.RTPPacketVersionAVC
 		clone.Payload = buf
@@ -159,13 +179,19 @@ func SafariPay(mtu uint16, handler core.HandlerFunc) core.HandlerFunc {
 		}
 
 		// protect original packets from modification
-		au := make([]byte, len(packet.Payload))
-		copy(au, packet.Payload)
+		au := annexb.NormalizeAVCC(packet.Payload, h265NaluHeaderSize)
+		if len(au) == 0 {
+			return
+		}
+		au = append([]byte(nil), au...)
 
 		var start byte
 
 		for i := 0; i < len(au); {
-			size := int(binary.BigEndian.Uint32(au[i:])) + 4
+			size := annexb.AVCCNALUSize(au[i:])
+			if size == 0 {
+				return
+			}
 
 			// convert AVC to Annex-B
 			au[i] = 0

@@ -96,15 +96,18 @@ func rtspHandler(rawURL string) (core.Producer, error) {
 	rawURL, rawQuery, _ := strings.Cut(rawURL, "#")
 
 	conn := rtsp.NewClient(rawURL)
-	conn.Backchannel = true
 	conn.UserAgent = app.UserAgent
 
 	if rawQuery != "" {
 		query := streams.ParseQuery(rawQuery)
-		conn.Backchannel = query.Get("backchannel") == "1"
+		conn.Backchannel = query.Get("backchannel") != "0"
+		conn.Keepalive = core.Atoi(query.Get("keepalive"))
+		conn.Keyframe = query.Get("keyframe")
 		conn.Media = query.Get("media")
 		conn.Timeout = core.Atoi(query.Get("timeout"))
 		conn.Transport = query.Get("transport")
+	} else {
+		conn.Backchannel = true
 	}
 
 	if log.Trace().Enabled() {

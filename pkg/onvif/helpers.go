@@ -151,12 +151,13 @@ func GetPosixTZ(current time.Time) string {
 }
 
 func GetPath(urlOrPath, defPath string) string {
-	if urlOrPath == "" || urlOrPath[0] == '/' {
-		return defPath
+	if strings.HasPrefix(urlOrPath, "/") {
+		return urlOrPath
 	}
-	u, err := url.Parse(urlOrPath)
-	if err != nil {
-		return defPath
+	if u, err := url.Parse(urlOrPath); err == nil {
+		if strings.HasPrefix(u.Path, "/") {
+			return u.Path
+		}
 	}
-	return GetPath(u.Path, defPath)
+	return defPath
 }

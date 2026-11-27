@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/pcm"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
 	"github.com/pion/rtp"
 	pion "github.com/pion/webrtc/v4"
@@ -182,6 +183,17 @@ func Dial(rawURL string) (core.Producer, error) {
 						media.Codecs = codecs
 					}
 				}
+			}
+
+			// HEVC cameras send mic audio as RTP over the DataChannel, but the
+			// answer marks m=audio recvonly (talk path only), so SetAnswer gives
+			// us no recvonly audio media for consumers to subscribe to.
+			if codecs := client.api.GetAudioCodecs(); len(codecs) > 0 && !client.hasRecvAudio() {
+				client.conn.Medias = append(client.conn.Medias, &core.Media{
+					Kind:      core.KindAudio,
+					Direction: core.DirectionRecvonly,
+					Codecs:    codecs,
+				})
 			}
 		}
 	}
@@ -411,6 +423,38 @@ func (c *Client) AddTrack(media *core.Media, codec *core.Codec, track *core.Rece
 	return nil
 }
 
+func (c *Client) hasRecvAudio() bool {
+	for _, media := range c.conn.Medias {
+		if media.Kind == core.KindAudio && media.Direction == core.DirectionRecvonly {
+			return true
+		}
+	}
+	return false
+}
+
+// reclockPCM - rebuild PCM RTP timestamps from the payload size
+// Tuya HEVC cameras stamp mic audio with a clock half the sample rate
+// (160 ticks per 320-sample 16kHz frame). Non-PCM codecs pass through.
+func reclockPCM(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
+	bpf := pcm.BytesPerFrame(codec)
+	if bpf == 0 {
+		return handler
+	}
+
+	var ts uint32
+	var init bool
+
+	return func(packet *rtp.Packet) {
+		if init {
+			ts += uint32(len(packet.Payload) / bpf)
+		} else {
+			ts, init = packet.Timestamp, true
+		}
+		packet.Timestamp = ts
+		handler(packet)
+	}
+}
+
 func (c *Client) Start() error {
 	if len(c.conn.Receivers) == 0 {
 		return errors.New("tuya: no receivers")
@@ -433,12 +477,8 @@ func (c *Client) Start() error {
 		})
 	}
 
-	if c.audioSSRC != nil {
-		c.setHandler(*c.audioSSRC, func(packet *rtp.Packet) {
-			if audio != nil {
-				audio.WriteRTP(packet)
-			}
-		})
+	if c.audioSSRC != nil && audio != nil {
+		c.setHandler(*c.audioSSRC, reclockPCM(audio.Codec, audio.WriteRTP))
 	}
 
 	return c.conn.Start()

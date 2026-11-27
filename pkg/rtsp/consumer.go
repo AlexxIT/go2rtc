@@ -25,7 +25,13 @@ func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiv
 		c.stateMu.Lock()
 		defer c.stateMu.Unlock()
 
-		if c.state == StatePlay {
+		if c.state.Load() == StatePlay {
+			// try a separate session first, so the running session is not interrupted
+			if err = c.addBackchannel(media, codec, track); err == nil {
+				return
+			}
+			c.Fire("RTSP backchannel session failed: " + err.Error())
+
 			if err = c.Reconnect(); err != nil {
 				return
 			}
@@ -35,7 +41,7 @@ func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiv
 			return
 		}
 
-		c.state = StateSetup
+		c.state.Store(StateSetup)
 
 	case core.ModePassiveConsumer:
 		channel = byte(len(c.Senders)) * 2
@@ -86,14 +92,14 @@ func (c *Conn) packetWriter(codec *core.Codec, channel, payloadType uint8) core.
 
 	flushBuf := func() {
 		//log.Printf("[rtsp] channel:%2d write_size:%6d buffer_size:%6d", channel, n, len(buf))
-		if err := c.writeInterleavedData(buf[:n]); err != nil {
+		if err := c.writeInterleavedData(buf[:n]); err == nil {
 			c.Send += n
 		}
 		n = 0
 	}
 
 	handlerFunc := func(packet *rtp.Packet) {
-		if c.state == StateNone {
+		if c.state.Load() == StateNone {
 			return
 		}
 
@@ -138,7 +144,7 @@ func (c *Conn) packetWriter(codec *core.Codec, channel, payloadType uint8) core.
 
 		n += 4 + size
 
-		if !packet.Marker || !c.playOK {
+		if !packet.Marker || !c.playOK.Load() {
 			// collect continious video packets to buffer
 			// or wait OK for PLAY command for backchannel
 			//log.Printf("[rtsp] collecting buffer ok=%t", c.playOK)
@@ -177,7 +183,7 @@ func (c *Conn) packetWriter(codec *core.Codec, channel, payloadType uint8) core.
 
 func (c *Conn) writeInterleavedData(data []byte) error {
 	if c.Transport != "udp" {
-		_ = c.conn.SetWriteDeadline(time.Now().Add(Timeout))
+		_ = c.conn.SetWriteDeadline(time.Now().Add(core.ConnDeadline))
 		_, err := c.conn.Write(data)
 		return err
 	}
