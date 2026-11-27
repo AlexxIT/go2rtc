@@ -59,10 +59,13 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 					buf = append(buf, ps...)
 				case NALUTypeSEI, NALUTypeAUD:
 					// fix ffmpeg with transcoding first frame
-					i := int(4 + binary.BigEndian.Uint32(payload))
+					i := annexb.AVCCNALUSize(payload)
+					if i == 0 {
+						return
+					}
 
 					// check if only one NAL (fix ffmpeg transcoding for Reolink RLC-510A)
-					if i == len(payload) {
+					if i >= len(payload) {
 						return
 					}
 

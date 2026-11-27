@@ -4,7 +4,6 @@ package h265
 import (
 	"bytes"
 	"encoding/base64"
-	"encoding/binary"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
@@ -40,19 +39,24 @@ func RepairAVCC(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 func AVCCToCodec(avcc []byte) *core.Codec {
 	buf := bytes.NewBufferString("profile-id=1")
 
-	for {
-		size := 4 + int(binary.BigEndian.Uint32(avcc))
+	for len(avcc) > 0 {
+		size := annexb.AVCCNALUSize(avcc)
+		if size == 0 {
+			break
+		}
 
-		switch NALUType(avcc) {
-		case NALUTypeVPS:
-			buf.WriteString(";sprop-vps=")
-			buf.WriteString(base64.StdEncoding.EncodeToString(avcc[4:size]))
-		case NALUTypeSPS:
-			buf.WriteString(";sprop-sps=")
-			buf.WriteString(base64.StdEncoding.EncodeToString(avcc[4:size]))
-		case NALUTypePPS:
-			buf.WriteString(";sprop-pps=")
-			buf.WriteString(base64.StdEncoding.EncodeToString(avcc[4:size]))
+		if size >= 4+h265NaluHeaderSize {
+			switch NALUType(avcc) {
+			case NALUTypeVPS:
+				buf.WriteString(";sprop-vps=")
+				buf.WriteString(base64.StdEncoding.EncodeToString(avcc[4:size]))
+			case NALUTypeSPS:
+				buf.WriteString(";sprop-sps=")
+				buf.WriteString(base64.StdEncoding.EncodeToString(avcc[4:size]))
+			case NALUTypePPS:
+				buf.WriteString(";sprop-pps=")
+				buf.WriteString(base64.StdEncoding.EncodeToString(avcc[4:size]))
+			}
 		}
 
 		if size < len(avcc) {

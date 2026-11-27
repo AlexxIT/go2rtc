@@ -2,7 +2,6 @@ package h265
 
 import (
 	"encoding/base64"
-	"encoding/binary"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264/annexb"
@@ -50,15 +49,13 @@ func IsKeyframe(b []byte) bool {
 
 func Types(data []byte) []byte {
 	var types []byte
-	for {
-		types = append(types, NALUType(data))
-
-		size := 4 + int(binary.BigEndian.Uint32(data))
-		if size < len(data) {
-			data = data[size:]
-		} else {
+	for len(data) > 0 {
+		size := annexb.AVCCNALUSize(data)
+		if size == 0 {
 			break
 		}
+		types = append(types, NALUType(data))
+		data = data[size:]
 	}
 	return types
 }

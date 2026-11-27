@@ -27,6 +27,50 @@ func TestRepairAVCCDropsMalformedPayload(t *testing.T) {
 	}
 }
 
+func TestAVCCToCodecDropsMalformedInputSafely(t *testing.T) {
+	for _, avcc := range [][]byte{
+		nil,
+		{},
+		{0},
+		{0, 0, 0},
+		{0, 0, 0, 0},
+		{0, 0, 0, 1, 0x40},       // one-byte NAL header
+		{0, 0, 0, 2, 0x40},       // truncated NAL
+		{0, 0, 0, 3, 0x40, 0x01}, // declared length exceeds payload
+	} {
+		require.NotPanics(t, func() {
+			codec := AVCCToCodec(avcc)
+			require.Equal(t, core.CodecH265, codec.Name)
+		})
+	}
+}
+
+func TestTypesStopsAtMalformedNALU(t *testing.T) {
+	valid := h264.JoinNALU([]byte{NALUTypePFrame << 1, 1})
+	malformed := append(bytes.Clone(valid), 0, 0, 0)
+
+	require.Equal(t, []byte{NALUTypePFrame}, Types(malformed))
+	require.Empty(t, Types(nil))
+}
+
+func TestSafariPayDropsMalformedAVCC(t *testing.T) {
+	for _, payload := range [][]byte{
+		nil,
+		{0, 0, 0},
+		{0, 0, 0, 4, 0x40, 0x01},
+	} {
+		pay := SafariPay(1200, func(*rtp.Packet) {
+			t.Fatal("forwarded malformed AVCC")
+		})
+		require.NotPanics(t, func() {
+			pay(&rtp.Packet{
+				Header:  rtp.Header{Version: h264.RTPPacketVersionAVC},
+				Payload: payload,
+			})
+		})
+	}
+}
+
 func TestRepairAVCCPreservesKeyframeWithEmptyNAL(t *testing.T) {
 	idr := []byte{NALUTypeIFrame << 1, 1}
 	payload := append(make([]byte, 4), h264.JoinNALU(idr)...)

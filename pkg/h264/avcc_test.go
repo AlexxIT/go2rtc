@@ -71,6 +71,30 @@ func TestRepairAVCCDropsMalformedPayload(t *testing.T) {
 	}
 }
 
+func TestAVCCHelpersStopAtMalformedNALU(t *testing.T) {
+	valid := JoinNALU([]byte{NALUTypePFrame})
+	malformed := append(bytes.Clone(valid), 0, 0, 0)
+
+	require.Equal(t, [][]byte{valid}, SplitNALU(malformed))
+	require.Equal(t, []byte{NALUTypePFrame}, NALUTypes(malformed))
+}
+
+func TestAVCCToCodecDropsMalformedInputSafely(t *testing.T) {
+	for _, avcc := range [][]byte{
+		nil,
+		{},
+		{0},
+		{0, 0, 0},
+		{0, 0, 0, 2, NALUTypeSPS}, // length exceeds payload
+		{0, 0, 0, 1, NALUTypeSPS}, // too short to contain profile fields
+	} {
+		require.NotPanics(t, func() {
+			codec := AVCCToCodec(avcc)
+			require.Equal(t, core.CodecH264, codec.Name)
+		})
+	}
+}
+
 func TestNALUTypeShortPayload(t *testing.T) {
 	for size := range 5 {
 		require.Equal(t, byte(0xFF), NALUType(make([]byte, size)))

@@ -69,33 +69,26 @@ func JoinNALU(nalus ...[]byte) (avcc []byte) {
 
 func SplitNALU(avcc []byte) [][]byte {
 	var nals [][]byte
-	for {
-		// get AVC length
-		size := int(binary.BigEndian.Uint32(avcc)) + 4
-
-		// check if multiple items in one packet
-		if size < len(avcc) {
-			nals = append(nals, avcc[:size])
-			avcc = avcc[size:]
-		} else {
-			nals = append(nals, avcc)
+	for len(avcc) > 0 {
+		size := annexb.AVCCNALUSize(avcc)
+		if size == 0 {
 			break
 		}
+		nals = append(nals, avcc[:size])
+		avcc = avcc[size:]
 	}
 	return nals
 }
 
 func NALUTypes(avcc []byte) []byte {
 	var types []byte
-	for {
-		types = append(types, NALUType(avcc))
-
-		size := 4 + int(binary.BigEndian.Uint32(avcc))
-		if size < len(avcc) {
-			avcc = avcc[size:]
-		} else {
+	for len(avcc) > 0 {
+		size := annexb.AVCCNALUSize(avcc)
+		if size == 0 {
 			break
 		}
+		types = append(types, NALUType(avcc))
+		avcc = avcc[size:]
 	}
 	return types
 }
@@ -103,26 +96,25 @@ func NALUTypes(avcc []byte) []byte {
 func AVCCToCodec(avcc []byte) *core.Codec {
 	buf := bytes.NewBufferString("packetization-mode=1")
 
-	for {
-		n := len(avcc)
-		if n < 4 {
+	for len(avcc) > 0 {
+		size := annexb.AVCCNALUSize(avcc)
+		if size == 0 {
 			break
 		}
 
-		size := 4 + int(binary.BigEndian.Uint32(avcc))
-		if n < size {
-			break
-		}
-
-		switch NALUType(avcc) {
-		case NALUTypeSPS:
-			buf.WriteString(";profile-level-id=")
-			buf.WriteString(hex.EncodeToString(avcc[5:8]))
-			buf.WriteString(";sprop-parameter-sets=")
-			buf.WriteString(base64.StdEncoding.EncodeToString(avcc[4:size]))
-		case NALUTypePPS:
-			buf.WriteString(",")
-			buf.WriteString(base64.StdEncoding.EncodeToString(avcc[4:size]))
+		if size > 4 {
+			switch NALUType(avcc) {
+			case NALUTypeSPS:
+				if size >= 8 {
+					buf.WriteString(";profile-level-id=")
+					buf.WriteString(hex.EncodeToString(avcc[5:8]))
+					buf.WriteString(";sprop-parameter-sets=")
+					buf.WriteString(base64.StdEncoding.EncodeToString(avcc[4:size]))
+				}
+			case NALUTypePPS:
+				buf.WriteString(",")
+				buf.WriteString(base64.StdEncoding.EncodeToString(avcc[4:size]))
+			}
 		}
 
 		avcc = avcc[size:]

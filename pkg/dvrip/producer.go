@@ -1,7 +1,6 @@
 package dvrip
 
 import (
-	"encoding/base64"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -174,31 +173,7 @@ func (c *Producer) addVideoTrack(mediaCode byte, payload []byte) {
 		}
 
 	case 3: // known values 0x03, 0x13, 0x43, 0x53
-		codec = &core.Codec{
-			Name:        core.CodecH265,
-			ClockRate:   90000,
-			PayloadType: core.PayloadTypeRAW,
-			FmtpLine:    "profile-id=1",
-		}
-
-		for {
-			size := 4 + int(binary.BigEndian.Uint32(payload))
-
-			switch h265.NALUType(payload) {
-			case h265.NALUTypeVPS:
-				codec.FmtpLine += ";sprop-vps=" + base64.StdEncoding.EncodeToString(payload[4:size])
-			case h265.NALUTypeSPS:
-				codec.FmtpLine += ";sprop-sps=" + base64.StdEncoding.EncodeToString(payload[4:size])
-			case h265.NALUTypePPS:
-				codec.FmtpLine += ";sprop-pps=" + base64.StdEncoding.EncodeToString(payload[4:size])
-			}
-
-			if size < len(payload) {
-				payload = payload[size:]
-			} else {
-				break
-			}
-		}
+		codec = h265.AVCCToCodec(payload)
 	default:
 		println("[DVRIP] unsupported video codec:", mediaCode)
 		return

@@ -5,6 +5,7 @@ import (
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
+	"github.com/AlexxIT/go2rtc/pkg/h264/annexb"
 	"github.com/pion/rtp"
 )
 
@@ -159,13 +160,19 @@ func SafariPay(mtu uint16, handler core.HandlerFunc) core.HandlerFunc {
 		}
 
 		// protect original packets from modification
-		au := make([]byte, len(packet.Payload))
-		copy(au, packet.Payload)
+		au := annexb.NormalizeAVCC(packet.Payload, h265NaluHeaderSize)
+		if len(au) == 0 {
+			return
+		}
+		au = append([]byte(nil), au...)
 
 		var start byte
 
 		for i := 0; i < len(au); {
-			size := int(binary.BigEndian.Uint32(au[i:])) + 4
+			size := annexb.AVCCNALUSize(au[i:])
+			if size == 0 {
+				return
+			}
 
 			// convert AVC to Annex-B
 			au[i] = 0
