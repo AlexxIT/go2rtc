@@ -62,15 +62,15 @@ type packetReader interface {
 	ReadPacket() (hdr, payload []byte, err error)
 }
 
-// probeAfterVideo is how many packets to wait for audio after the video codec
-// is found. Cameras without audio never send it, so we can't wait for the deadline.
-const probeAfterVideo = 5
+// probeAudioWait bounds how long we wait for audio after finding video.
+// Some cameras have no audio, while others start sending it a little later.
+const probeAudioWait = 2 * time.Second
 
 func probe(client packetReader) ([]*core.Media, error) {
 	_ = client.SetDeadline(time.Now().Add(15 * time.Second))
 
 	var vcodec, acodec *core.Codec
-	var afterVideo int
+	var audioDeadlineSet bool
 
 	for {
 		// 0   5000      codec
@@ -84,6 +84,11 @@ func probe(client packetReader) ([]*core.Media, error) {
 		// 18  0000
 		hdr, payload, err := client.ReadPacket()
 		if err != nil {
+			// Video is enough to start a video-only stream. This also lets
+			// cameras without audio finish probing at the shorter deadline.
+			if vcodec != nil {
+				break
+			}
 			return nil, err
 		}
 
@@ -113,11 +118,11 @@ func probe(client packetReader) ([]*core.Media, error) {
 			break
 		}
 
-		// camera without audio: don't wait for it until the deadline
-		if vcodec != nil {
-			if afterVideo++; afterVideo > probeAfterVideo {
-				break
-			}
+		// Give audio a bounded grace period after discovering video. Reset the
+		// socket deadline once so packet rate does not affect the probe window.
+		if vcodec != nil && acodec == nil && !audioDeadlineSet {
+			_ = client.SetDeadline(time.Now().Add(probeAudioWait))
+			audioDeadlineSet = true
 		}
 	}
 

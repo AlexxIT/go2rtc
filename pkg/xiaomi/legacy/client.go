@@ -227,7 +227,14 @@ func (c *Client) StopMedia() error {
 }
 
 func DecodeVideo(data, key []byte) ([]byte, error) {
-	if string(data[:4]) == "\x00\x00\x00\x01" || data[8] == 0 {
+	if len(data) >= 4 && string(data[:4]) == "\x00\x00\x00\x01" {
+		return data, nil
+	}
+
+	if len(data) < 9 {
+		return nil, nil
+	}
+	if data[8] == 0 {
 		return data, nil
 	}
 
@@ -236,10 +243,16 @@ func DecodeVideo(data, key []byte) ([]byte, error) {
 		return nil, fmt.Errorf("xiaomi: unsupported encryption")
 	}
 
+	if len(data) < 17 {
+		return nil, nil
+	}
 	nonce8 := data[:8]
-	i1 := binary.LittleEndian.Uint32(data[9:])
-	i2 := binary.LittleEndian.Uint32(data[13:])
+	i1 := uint64(binary.LittleEndian.Uint32(data[9:]))
+	i2 := uint64(binary.LittleEndian.Uint32(data[13:]))
 	data = data[17:]
+	if i1+i2 > uint64(len(data)) {
+		return nil, nil
+	}
 	src := data[i1 : i1+i2]
 
 	for i := 32; i+16 < len(src); i += 160 {
