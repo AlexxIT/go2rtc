@@ -6,7 +6,6 @@ import (
 	"slices"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/xnet"
 	"github.com/pion/ice/v4"
 	"github.com/pion/interceptor"
 	"github.com/pion/interceptor/pkg/nack"
@@ -136,37 +135,18 @@ func NewServerAPI(network, address string, filters *Filters) (*webrtc.API, error
 	// fix https://github.com/pion/webrtc/pull/2407
 	s.SetDTLSInsecureSkipHelloVerify(true)
 
-	if filters != nil && filters.Loopback {
-		s.SetIncludeLoopbackCandidate(true)
-	}
+	s.SetIncludeLoopbackCandidate(filters.IncludeLoopback())
 
-	var interfaceFilter func(name string) bool
-	if filters != nil && filters.Interfaces != nil {
-		interfaceFilter = func(name string) bool {
-			return core.Contains(filters.Interfaces, name)
+	// Non-nil interface or IP filters cause Pion to gather
+	// STUN/TURN candidates separately for each local IP.
+	if filters != nil {
+		if filters.Interfaces != nil {
+			s.SetInterfaceFilter(filters.InterfaceFilter)
 		}
-	} else {
-		// default interfaces - all, except loopback
-	}
-	s.SetInterfaceFilter(interfaceFilter)
-
-	var ipFilter func(ip net.IP) bool
-	if filters != nil && filters.IPs != nil {
-		ipFilter = func(ip net.IP) bool {
-			return core.Contains(filters.IPs, ip.String())
-		}
-	} else {
-		// try filter all Docker-like interfaces
-		ipFilter = func(ip net.IP) bool {
-			return !xnet.Docker.Contains(ip)
-		}
-		// if there are no such interfaces - disable the filter
-		// the user will need to enable port forwarding
-		if nets, _ := xnet.IPNets(ipFilter); len(nets) == 0 {
-			ipFilter = nil
+		if filters.IPs != nil {
+			s.SetIPFilter(filters.IPFilter)
 		}
 	}
-	s.SetIPFilter(ipFilter)
 
 	var networkTypes []webrtc.NetworkType
 	if filters != nil && filters.Networks != nil {
@@ -265,19 +245,24 @@ func RegisterDefaultCodecs(m *webrtc.MediaEngine) error {
 	for _, codec := range []webrtc.RTPCodecParameters{
 		{
 			RTPCodecCapability: webrtc.RTPCodecCapability{
-				MimeType: webrtc.MimeTypeOpus, ClockRate: 48000, Channels: 2, SDPFmtpLine: "minptime=10;useinbandfec=1",
+				MimeType:    webrtc.MimeTypeOpus,
+				ClockRate:   48000,
+				Channels:    2,
+				SDPFmtpLine: "minptime=10;useinbandfec=1",
 			},
 			PayloadType: 101, //111,
 		},
 		{
 			RTPCodecCapability: webrtc.RTPCodecCapability{
-				MimeType: webrtc.MimeTypePCMU, ClockRate: 8000,
+				MimeType:  webrtc.MimeTypePCMU,
+				ClockRate: 8000,
 			},
 			PayloadType: 0,
 		},
 		{
 			RTPCodecCapability: webrtc.RTPCodecCapability{
-				MimeType: webrtc.MimeTypePCMA, ClockRate: 8000,
+				MimeType:  webrtc.MimeTypePCMA,
+				ClockRate: 8000,
 			},
 			PayloadType: 8,
 		},
@@ -298,7 +283,7 @@ func RegisterDefaultCodecs(m *webrtc.MediaEngine) error {
 			RTPCodecCapability: webrtc.RTPCodecCapability{
 				MimeType:     webrtc.MimeTypeH264,
 				ClockRate:    90000,
-				SDPFmtpLine:  "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f",
+				SDPFmtpLine:  "packetization-mode=1;level-asymmetry-allowed=1;profile-level-id=42001f",
 				RTCPFeedback: videoRTCPFeedback,
 			},
 			PayloadType: 96, // Chrome v110 - PayloadType: 102
