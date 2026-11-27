@@ -65,7 +65,7 @@ func (c *Backchannel) AddTrack(media *core.Media, _ *core.Codec, track *core.Rec
 
 		for len(payload) >= PacketSize {
 			buf = append(buf[:8], payload[:PacketSize]...)
-			if n, err := c.client.WriteCmd(OPTalkData, buf); err != nil {
+			if n, err := c.client.WriteCmd(OPTalkData, buf); err == nil {
 				c.Send += n
 			}
 

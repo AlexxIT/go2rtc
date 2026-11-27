@@ -53,7 +53,7 @@ func (c *Backchannel) AddTrack(media *core.Media, codec *core.Codec, track *core
 
 	sender := core.NewSender(media, track.Codec)
 	sender.Handler = func(packet *rtp.Packet) {
-		if n, err := wr.Write(packet.Payload); err != nil {
+		if n, err := wr.Write(packet.Payload); err == nil {
 			c.Send += n
 		}
 	}
