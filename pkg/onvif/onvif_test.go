@@ -227,8 +227,35 @@ func TestGetCapabilities(t *testing.T) {
 }
 
 func TestGetPath(t *testing.T) {
-	require.Equal(t, "/onvif/device_service", GetPath("", PathDevice))
-	require.Equal(t, "/onvif/Media", GetPath("/onvif/Media", "/onvif/media_service"))
-	require.Equal(t, "/onvif/Media", GetPath("http://10.0.0.16:80/onvif/Media", "/onvif/media_service"))
-	require.Equal(t, "/onvif/media_service", GetPath("http://10.0.0.16:80", "/onvif/media_service"))
+	const defPath = "/onvif/media_service"
+
+	tests := []struct {
+		name string
+		in   string
+		def  string
+		want string
+	}{
+		{"empty", "", PathDevice, PathDevice},
+		{"root", "/", defPath, "/"},
+		{"absolute path", "/onvif/Media", defPath, "/onvif/Media"},
+		{"HTTP URL", "http://10.0.0.16:80/onvif/Media", defPath, "/onvif/Media"},
+		{"HTTPS URL", "https://10.0.0.16/onvif/Media", defPath, "/onvif/Media"},
+		{"URL without path", "http://10.0.0.16:80", defPath, defPath},
+		{"URL with root path", "http://10.0.0.16/", defPath, "/"},
+		{"URL with query and fragment", "http://10.0.0.16/onvif/Media?foo=bar#baz", defPath, "/onvif/Media"},
+		{"absolute path with query", "/onvif/Media?foo=bar", defPath, "/onvif/Media?foo=bar"},
+		{"escaped URL path", "http://10.0.0.16/onvif/%4Dedia", defPath, "/onvif/Media"},
+		{"relative path", "onvif/Media", defPath, defPath},
+		{"stream name", "test_camera", PathDevice, PathDevice},
+		{"invalid URL", "http://%", defPath, defPath},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := GetPath(tt.in, tt.def); got != tt.want {
+				t.Errorf("GetPath(%q, %q) = %q, want %q",
+					tt.in, tt.def, got, tt.want)
+			}
+		})
+	}
 }
