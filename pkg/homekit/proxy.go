@@ -24,15 +24,24 @@ type ServerProxy interface {
 func ProxyHandler(srv ServerProxy, acc net.Conn) HandlerFunc {
 	return func(con net.Conn) error {
 		defer con.Close()
+		defer acc.Close()
 
 		pr := &Proxy{
-			con: con.(*hap.Conn),
-			acc: acc.(*hap.Conn),
-			res: make(chan *http.Response),
+			con:  con.(*hap.Conn),
+			acc:  acc.(*hap.Conn),
+			res:  make(chan *http.Response),
+			done: make(chan struct{}),
 		}
+		defer close(pr.done)
 
 		// accessory (ex. Camera) => controller (ex. iPhone)
-		go pr.handleAcc()
+		go func() {
+			defer close(pr.res)
+			// Wake an idle request reader without interrupting the writer while
+			// it forwards the upstream's last complete, buffered response.
+			defer func() { _ = con.SetReadDeadline(time.Now()) }()
+			_ = pr.handleAcc()
+		}()
 
 		// controller => accessory
 		return pr.handleCon(srv)
@@ -40,9 +49,10 @@ func ProxyHandler(srv ServerProxy, acc net.Conn) HandlerFunc {
 }
 
 type Proxy struct {
-	con *hap.Conn
-	acc *hap.Conn
-	res chan *http.Response
+	con  *hap.Conn
+	acc  *hap.Conn
+	res  chan *http.Response
+	done chan struct{}
 }
 
 func (p *Proxy) handleCon(srv ServerProxy) error {
@@ -86,7 +96,10 @@ func (p *Proxy) handleCon(srv ServerProxy) error {
 			return err
 		}
 
-		res := <-p.res
+		res, ok := <-p.res
+		if !ok {
+			return io.EOF
+		}
 
 		switch {
 		case req.Method == "GET" && req.URL.Path == hap.PathAccessories:
@@ -161,7 +174,11 @@ func (p *Proxy) handleAcc() error {
 		}
 		res.Body = io.NopCloser(bytes.NewReader(body))
 
-		p.res <- res
+		select {
+		case p.res <- res:
+		case <-p.done:
+			return nil
+		}
 	}
 }
 

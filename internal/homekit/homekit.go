@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/app"
@@ -27,6 +28,9 @@ func Init() {
 			CategoryID    string   `yaml:"category_id"`
 			Pairings      []string `yaml:"pairings"`
 		} `yaml:"homekit"`
+		Server struct {
+			Listen string `yaml:"listen"`
+		} `yaml:"homekit_server"`
 	}
 	app.LoadConfig(&cfg)
 
@@ -53,11 +57,7 @@ func Init() {
 			continue
 		}
 
-		if conf.Pin == "" {
-			conf.Pin = "19550224" // default PIN
-		}
-
-		pin, err := hap.SanitizePin(conf.Pin)
+		pin, err := pairingPIN(conf.Pin, cfg.Server.Listen != "", len(conf.Pairings) > 0)
 		if err != nil {
 			log.Error().Err(err).Caller().Send()
 			continue
@@ -68,9 +68,10 @@ func Init() {
 		setupID := calcSetupID(id)
 
 		srv := &server{
-			stream:   id,
-			pairings: conf.Pairings,
-			setupID:  setupID,
+			stream:             id,
+			pairings:           conf.Pairings,
+			setupID:            setupID,
+			privatePINRequired: cfg.Server.Listen != "",
 		}
 
 		srv.hap = &hap.Server{
@@ -114,8 +115,13 @@ func Init() {
 		log.Trace().Msgf("[homekit] new server: %s", srv.mdns)
 	}
 
-	api.HandleFunc(hap.PathPairSetup, hapHandler)
-	api.HandleFunc(hap.PathPairVerify, hapHandler)
+	if len(entries) == 0 {
+		return
+	}
+	if _, err := serveHAP(cfg.Server.Listen, entries); err != nil {
+		log.Error().Err(err).Msg("[homekit] listen")
+		return
+	}
 
 	go func() {
 		if err := mdns.Serve(mdns.ServiceHAP, entries); err != nil {
@@ -166,7 +172,18 @@ func hapHandler(w http.ResponseWriter, r *http.Request) {
 		log.Error().Msg("[homekit] unknown host: " + r.Host)
 		return
 	}
-	srv.Handle(w, r)
+	srv.Handle(w, r, 30*time.Second)
+}
+
+func pairingPIN(pin string, dedicated, paired bool) (string, error) {
+	const defaultPIN = "19550224"
+	if pin == "" {
+		pin = defaultPIN
+	}
+	if dedicated && !paired && strings.ReplaceAll(pin, "-", "") == defaultPIN {
+		return "", errors.New("homekit: an unpaired accessory on the dedicated listener requires a private PIN")
+	}
+	return hap.SanitizePin(pin)
 }
 
 func findHomeKitURL(sources []string) string {
