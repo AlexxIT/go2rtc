@@ -14,6 +14,7 @@
 | IMILAB Security Camera EC3 Pro                | 2021 | chuangmi.camera.042a02                         | cs2               | hevc, pcma |                     |
 | IMILAB EC5 Floodlight Camera 2K               | 2021 | chuangmi.camera.055a02 / CMSXJ55A              | сs2               |            |                     |
 | Mi Camera 2K                                  | 2021 | isa.camera.hlc7 / MJSXJ03HL / BHR5255GL        | cs2+udp           | hevc, pcma | 2304x1296*, 640x360 |
+| Mi Wireless Outdoor Security Camera 1080p Set | 2021 | mxiang.camera.mwc10 (hub) / mwc11 (camera)     | cs2+tcp           | hevc, pcma | 1920x1080           |
 | Xiaomi Smart Camera PTZ Version SE+           | 2021 | chuangmi.camera.026c02                         | cs2               |            |                     |
 | Xiaomi Outdoor Camera CW400                   | 2022 | isa.camera.hlc8 / MJSXJ04HL                    | cs2               | hevc, opus |                     |
 | Xiaomi Smart Camera 2 AI Enhanced Edition     | 2022 | chuangmi.camera.051a01                         | cs2               | hevc, opus |                     |
@@ -55,6 +56,7 @@
 - `isa.camera.500dh` - working on four cameras in [issue #2421](https://github.com/AlexxIT/go2rtc/issues/2421)
 - `isa.camera.cw501d` - working stream documented in [issue #2234](https://github.com/AlexxIT/go2rtc/issues/2234)
 - `chuangmi.camera.46e01` - video and two-way audio confirmed in [issue #2679](https://github.com/AlexxIT/go2rtc/issues/2679)
+- `mxiang.camera.mwc11` battery cameras have no IP of their own; connect to the `mxiang.camera.mwc10` hub using the hub IP, DID and model, and set `subdid` to the camera DID. The hub and camera were tested with CS2/TCP, 1080p H.265 and PCMA. The camera sleeps between requests, so the first frame may take a few seconds. See [issue #2459](https://github.com/AlexxIT/go2rtc/issues/2459) and [issue #2578](https://github.com/AlexxIT/go2rtc/issues/2578).
 
 ## Limited support
 
@@ -71,7 +73,7 @@
 | IMILAB Home Security Camera Basic         | 2018 | chuangmi.camera.ipc016             | xiaomi/miss   | TUTK/25 SDK 3.3.0.4  | hevc, pcma |                              |
 | Xiaofang Smart Camera                     | 2018 | isa.camera.isc5c1                  | xiaomi/miss   | TUTK/18              | h264, pcma | 1920x1080, 640x360           |
 | Xiaomi Mijia Smart Camera                 | 2018 | mijia.camera.v3                    | xiaomi/miss   | TUTK/25 SDK 3.3.0.5  | h264, pcma | 1920x1080, 640x360           |
-| Aqara Smart Camera G2                     | 2019 | lumi.camera.gwagl01                | xiaomi/legacy | TUTK/18              | hevc       | 1920x1080, 1280x720, 640x360 |
+| Aqara Smart Camera G2                     | 2019 | lumi.camera.gwagl01                | xiaomi/legacy | TUTK/18              | hevc, h264 | 1920x1080, 1280x720, 640x360 |
 | IMILAB Home Security Camera A1 (EU)       | 2019 | chuangmi.camera.ipc019e / CMSXJ19E | xiaomi/legacy | TUTK/18              | hevc, pcma | 2304x1296, 640x360           |
 | Xiaomi Smart Camera PTZ Version           | 2019 | chuangmi.camera.ipc019             | xiaomi/miss   | TUTK/25 SDK 3.3.0.4  | hevc, pcma | 1920x1080, 640x360           |
 | Xiaomi Smart Doorbell                     | 2019 | loock.cateye.v02                   | xiaomi/miss   | TUTK/20              | hevc, pcma | 1280x720, 640x360            |
@@ -79,6 +81,7 @@
 - `isa.camera.isc5` - doesn't support quality
 - `chuangmi.camera.v2` and `isa.camera.df3` - supported by both the old and new protocols
 - `chuangmi.camera.v2` (fw 3.4.5) works with `transport=tcp` and `subtype=sd`
+- `lumi.camera.gwagl01` - H.264 firmware on Aqara G2 (ZNSXJ11LM) may be reported as `lumi.camera.aq1`; use `model=lumi.camera.gwagl01` in the stream URL because `lumi.camera.aq1` is not yet recognized as an alias. This variant may send no audio. See [issue #2620](https://github.com/AlexxIT/go2rtc/issues/2620).
 
 ## Not supported
 
