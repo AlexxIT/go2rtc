@@ -139,6 +139,7 @@ const (
 	ModelLoockV2 = "loock.cateye.v02"
 	ModelC200    = "chuangmi.camera.046c04"
 	ModelC300    = "chuangmi.camera.72ac1"
+	ModelHLC9A   = "isa.camera.hlc9a"
 	// ModelXiaofang looks like it has the same firmware as the ModelDafang.
 	// There is also an older model "isa.camera.isc5" that only works with the legacy protocol.
 	ModelXiaofang = "isa.camera.isc5c1"
@@ -168,7 +169,7 @@ func (c *Client) StartMedia(channel, quality, audio string) error {
 		// Some models have low quality in quality 2.
 		// Different models require different default quality settings.
 		switch c.model {
-		case ModelC200, ModelC300:
+		case ModelC200, ModelC300, ModelHLC9A:
 			quality = "3"
 		default:
 			quality = "2"
