@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/creds"
 )
 
 type state byte
@@ -43,6 +44,10 @@ func NewProducer(source string) *Producer {
 		return &Producer{template: source}
 	}
 
+	// Register credential query params the moment a URL exists. This must
+	// happen at construction, not at Dial: /api/streams serialises the
+	// producer (MarshalJSON) before it ever dials.
+	creds.AddURLSecrets(source)
 	return &Producer{url: source}
 }
 
@@ -52,6 +57,7 @@ func (p *Producer) SetSource(s string) {
 	} else {
 		p.url = strings.Replace(p.template, SourceTemplate, s, 1)
 	}
+	creds.AddURLSecrets(p.url)
 }
 
 func (p *Producer) Dial() error {

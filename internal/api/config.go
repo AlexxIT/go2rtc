@@ -9,6 +9,7 @@ import (
 	"slices"
 
 	"github.com/AlexxIT/go2rtc/internal/app"
+	"github.com/AlexxIT/go2rtc/pkg/creds"
 	pkgyaml "github.com/AlexxIT/go2rtc/pkg/yaml"
 	"gopkg.in/yaml.v3"
 )
@@ -27,7 +28,10 @@ func configHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// https://www.ietf.org/archive/id/draft-ietf-httpapi-yaml-mediatypes-00.html
-		Response(w, data, "application/yaml")
+		// The raw file may hold literal credentials (issue #2298). Registered
+		// secrets are masked here exactly as /api/streams already masks them;
+		// a ${VAR} config carries placeholders and is unaffected.
+		Response(creds.SecretResponse(w), data, "application/yaml")
 
 	case "POST", "PATCH":
 		if IsReadOnly() {
