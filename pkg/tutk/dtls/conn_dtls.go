@@ -81,6 +81,7 @@ type DTLSConn struct {
 	cancel  context.CancelFunc
 	wg      sync.WaitGroup
 	mu      sync.RWMutex
+	stateMu sync.Mutex
 
 	// recvDeadline limits AVRecvFrameData, in Unix nanoseconds; zero means none.
 	recvDeadline atomic.Int64
@@ -179,13 +180,18 @@ func (c *DTLSConn) AVClientStart(timeout time.Duration) error {
 	pkt2 := c.msgAVLogin(magicAVLogin2, 572, 0x0000, randomID)
 	pkt2[20]++ // pkt2 has randomID incremented by 1
 
-	if _, err := c.clientConn.Write(pkt1); err != nil {
+	conn := c.getClientConn()
+	if conn == nil {
+		return net.ErrClosed
+	}
+
+	if _, err := conn.Write(pkt1); err != nil {
 		return fmt.Errorf("av login 1 failed: %w", err)
 	}
 
 	time.Sleep(10 * time.Millisecond)
 
-	if _, err := c.clientConn.Write(pkt2); err != nil {
+	if _, err := conn.Write(pkt2); err != nil {
 		return fmt.Errorf("av login 2 failed: %w", err)
 	}
 
@@ -199,10 +205,12 @@ func (c *DTLSConn) AVClientStart(timeout time.Duration) error {
 				return io.EOF
 			}
 			if len(data) >= 32 && binary.LittleEndian.Uint16(data) == magicAVLoginResp {
+				c.mu.Lock()
 				c.hasTwoWayStreaming = data[31] == 1
+				c.mu.Unlock()
 
 				ack := c.msgACK()
-				c.clientConn.Write(ack)
+				conn.Write(ack)
 
 				// Start ACK sender for continuous streaming
 				c.wg.Add(1)
@@ -216,9 +224,9 @@ func (c *DTLSConn) AVClientStart(timeout time.Duration) error {
 						case <-c.ctx.Done():
 							return
 						case <-ackTicker.C:
-							if c.clientConn != nil {
+							if conn := c.getClientConn(); conn != nil {
 								ack := c.msgACK()
-								c.clientConn.Write(ack)
+								conn.Write(ack)
 							}
 						}
 					}
@@ -441,10 +449,7 @@ func (c *DTLSConn) WriteAndWaitIOCtrl(payload []byte, match func([]byte) bool, t
 	frame := c.msgIOCtrl(payload)
 	var t *time.Timer
 	t = time.AfterFunc(1, func() {
-		c.mu.RLock()
-		conn := c.clientConn
-		c.mu.RUnlock()
-		if conn != nil {
+		if conn := c.getClientConn(); conn != nil {
 			if _, err := conn.Write(frame); err == nil && t != nil {
 				t.Reset(time.Second)
 			}
@@ -462,8 +467,10 @@ func (c *DTLSConn) WriteAndWaitIOCtrl(payload []byte, match func([]byte) bool, t
 				return nil, io.EOF
 			}
 
-			ack := c.msgACK()
-			c.clientConn.Write(ack)
+			if conn := c.getClientConn(); conn != nil {
+				ack := c.msgACK()
+				conn.Write(ack)
+			}
 
 			if match(data) {
 				return data, nil
@@ -475,6 +482,8 @@ func (c *DTLSConn) WriteAndWaitIOCtrl(payload []byte, match func([]byte) bool, t
 }
 
 func (c *DTLSConn) HasTwoWayStreaming() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	return c.hasTwoWayStreaming
 }
 
@@ -523,7 +532,17 @@ func (c *DTLSConn) Close() error {
 	return c.conn.Close()
 }
 
+// getClientConn returns the DTLS client connection, or nil once Close has
+// cleared it. Background goroutines must not read c.clientConn directly.
+func (c *DTLSConn) getClientConn() *dtls.Conn {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.clientConn
+}
+
 func (c *DTLSConn) Error() error {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	if c.err != nil {
 		return c.err
 	}
@@ -623,6 +642,11 @@ func (c *DTLSConn) connect() error {
 func (c *DTLSConn) worker() {
 	defer c.wg.Done()
 
+	conn := c.getClientConn()
+	if conn == nil {
+		return
+	}
+
 	buf := make([]byte, 2048)
 
 	for {
@@ -632,9 +656,12 @@ func (c *DTLSConn) worker() {
 		default:
 		}
 
-		n, err := c.clientConn.Read(buf)
+		n, err := conn.Read(buf)
 		if err != nil {
+			c.mu.Lock()
 			c.err = err
+			c.mu.Unlock()
+			c.cancel()
 			return
 		}
 
@@ -659,6 +686,7 @@ func (c *DTLSConn) worker() {
 		case protoVersion:
 			// Seq-Tracking
 			if len(data) >= 8 {
+				c.stateMu.Lock()
 				seq := binary.LittleEndian.Uint16(data[4:])
 				if !c.rxSeqInit {
 					c.rxSeqInit = true
@@ -666,6 +694,7 @@ func (c *DTLSConn) worker() {
 				if seq > c.rxSeqEnd || c.rxSeqEnd == 0xffff {
 					c.rxSeqEnd = seq
 				}
+				c.stateMu.Unlock()
 			}
 			c.queue(c.rawCmd, data)
 
@@ -955,6 +984,9 @@ func (c *DTLSConn) msgTxDataCC51(payload []byte, channel byte) []byte {
 }
 
 func (c *DTLSConn) msgACK() []byte {
+	c.stateMu.Lock()
+	defer c.stateMu.Unlock()
+
 	c.ackFlags++
 	b := make([]byte, 24)
 	binary.LittleEndian.PutUint16(b[0:], magicACK)     // 0x0009
@@ -986,6 +1018,9 @@ func (c *DTLSConn) msgKeepalive(incoming []byte) []byte {
 }
 
 func (c *DTLSConn) msgIOCtrl(payload []byte) []byte {
+	c.stateMu.Lock()
+	defer c.stateMu.Unlock()
+
 	b := make([]byte, 40+len(payload))
 	binary.LittleEndian.PutUint16(b, protoVersion)     // magic
 	binary.LittleEndian.PutUint16(b[2:], protoVersion) // version
