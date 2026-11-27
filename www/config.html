@@ -24,6 +24,7 @@
     <div>
         <button id="save">Save & Restart</button>
         <button id="suggest" title="ctrl + space">Suggest</button>
+        <button id="rescan" title="check the camera IP addresses by MAC">Rescan IP</button>
     </div>
 </main>
 <div id="config"></div>
@@ -1201,6 +1202,83 @@
 
         document.getElementById('suggest').addEventListener('click', () => {
             editor.trigger('source', 'editor.action.triggerSuggest', {});
+        });
+
+        document.getElementById('rescan').addEventListener('click', async () => {
+            const r = await fetch('api/macwatch', {method: 'POST'});
+            if (r.status === 404) {
+                alert('MAC Watch module is not enabled in the config');
+                return;
+            }
+            if (!r.ok) {
+                alert(await r.text());
+                return;
+            }
+
+            const data = await r.json();
+            if (data.enabled === false) {
+                alert('MAC Watch module is not enabled in the config');
+                return;
+            }
+
+            const cameras = data.cameras || [];
+            const updated = cameras.filter((cam) => cam.status === 'updated');
+            const others = cameras.filter((cam) => cam.status !== 'ok' && cam.status !== 'updated');
+
+            // streams with a known MAC address, that are not tracked yet
+            let missing = [];
+            const rd = await fetch('api/macwatch/discover', {method: 'POST'});
+            if (rd.ok) {
+                const found = await rd.json();
+                missing = Object.keys(found.missing || {}).sort();
+            }
+
+            const describe = (cam) => {
+                switch (cam.status) {
+                    case 'dry_run':
+                        return cam.stream + ': would change to ' + (cam.found || '?');
+                    case 'not_found':
+                        return cam.stream + ': MAC address not found in the ARP table';
+                    case 'unreachable':
+                        return cam.stream + ': found at ' + (cam.found || '?') + ', but not reachable';
+                    case 'static':
+                        return cam.stream + ': source uses a hostname, skipped';
+                    case 'no_stream':
+                        return cam.stream + ': stream not found in go2rtc';
+                    default:
+                        return cam.stream + ': ' + cam.status + (cam.error ? ' - ' + cam.error : '');
+                }
+            };
+
+            let text = '';
+            if (updated.length) {
+                text = 'Updated:\n' + updated.map((cam) => cam.stream + ' -> ' + cam.ip).join('\n');
+            }
+            if (others.length) {
+                if (text) text += '\n\n';
+                text += 'Needs attention:\n' + others.map(describe).join('\n');
+            }
+            if (missing.length) {
+                if (text) text += '\n\n';
+                text += 'Not tracked by macwatch yet (add to macwatch.cameras):\n' + missing.join('\n');
+            }
+            if (!text) {
+                text = 'All ' + cameras.length + ' camera IP addresses are up to date';
+            }
+            if (data.dry_run) {
+                text += '\n\ndry_run is enabled - the config file was not changed';
+            }
+
+            alert(text);
+
+            if (updated.length && editor.getValue() === dump) {
+                // no unsaved changes - reload the config with the new IP addresses
+                const r2 = await fetch('api/config', {cache: 'no-cache'});
+                if (r2.ok) {
+                    dump = await r2.text();
+                    editor.setValue(dump);
+                }
+            }
         });
 
         (async () => {

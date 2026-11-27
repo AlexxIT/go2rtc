@@ -2,6 +2,7 @@ package streams
 
 import (
 	"encoding/json"
+	"slices"
 	"sync"
 	"sync/atomic"
 
@@ -59,6 +60,22 @@ func (s *Stream) SetSource(source string) {
 	for _, prod := range s.producers {
 		prod.SetSource(source)
 	}
+}
+
+// ReplaceSource replaces the producer with the exactly matching source URL.
+// Returns count of the replaced producers.
+func (s *Stream) ReplaceSource(old, new string) int {
+	s.mu.Lock()
+	producers := slices.Clone(s.producers)
+	s.mu.Unlock()
+
+	count := 0
+	for _, prod := range producers {
+		if prod.ReplaceURL(old, new) {
+			count++
+		}
+	}
+	return count
 }
 
 func (s *Stream) RemoveConsumer(cons core.Consumer) {
