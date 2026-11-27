@@ -16,13 +16,11 @@ func RTPDepay(handler core.HandlerFunc) core.HandlerFunc {
 		// support ONLY 2 bytes header size!
 		// streamtype=5;profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;config=1408
 		// https://datatracker.ietf.org/doc/html/rfc3640
-		headersSize := binary.BigEndian.Uint16(packet.Payload) >> 3
-
-		//log.Printf("[RTP/AAC] units: %d, size: %4d, ts: %10d, %t", headersSize/2, len(packet.Payload), packet.Timestamp, packet.Marker)
-
-		if len(packet.Payload) < int(2+headersSize) {
+		headersSize := rtpAUHeadersSize(packet.Payload)
+		// Reject malformed AU-header lengths and sections truncated by the payload.
+		if headersSize < 0 || len(packet.Payload) < 2+headersSize {
 			// In very rare cases noname cameras may send data not according to the standard
-			// https://github.com/AlexxIT/go2rtc/issues/1328
+			// Compatibility workaround for cameras that send ADTS directly.
 			if IsADTS(packet.Payload) {
 				clone := *packet
 				clone.Version = RTPPacketVersionAAC
@@ -32,6 +30,8 @@ func RTPDepay(handler core.HandlerFunc) core.HandlerFunc {
 			}
 			return
 		}
+
+		//log.Printf("[RTP/AAC] units: %d, size: %4d, ts: %10d, %t", headersSize/2, len(packet.Payload), packet.Timestamp, packet.Marker)
 
 		headers := packet.Payload[2 : 2+headersSize]
 		units := packet.Payload[2+headersSize:]
@@ -111,8 +111,11 @@ func ADTStoRTP(src []byte) (dst []byte) {
 
 func RTPTimeSize(b []byte) uint32 {
 	// convert RTP header size to units count
-	units := binary.BigEndian.Uint16(b) >> 4
-	return uint32(units) * AUTime
+	headerSize := rtpAUHeadersSize(b)
+	if headerSize < 0 || len(b) < 2+headerSize {
+		return 0
+	}
+	return uint32(headerSize/2) * AUTime
 }
 
 func RTPToADTS(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
@@ -120,15 +123,21 @@ func RTPToADTS(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 
 	return func(packet *rtp.Packet) {
 		src := packet.Payload
+		headersSize := rtpAUHeadersSize(src)
+		if headersSize < 0 || len(src) < 2+headersSize {
+			return
+		}
 		dst := make([]byte, 0, len(src))
 
-		headersSize := binary.BigEndian.Uint16(src) >> 3
 		headers := src[2 : 2+headersSize]
 		units := src[2+headersSize:]
 
 		for len(headers) > 0 {
-			unitSize := binary.BigEndian.Uint16(headers) >> 3
+			unitSize := int(binary.BigEndian.Uint16(headers) >> 3)
 			headers = headers[2:]
+			if unitSize > len(units) {
+				return
+			}
 			unit := units[:unitSize]
 			units = units[unitSize:]
 
@@ -149,6 +158,30 @@ func RTPToADTS(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 }
 
 func RTPToCodec(b []byte) *core.Codec {
-	hdrSize := binary.BigEndian.Uint16(b) / 8
-	return ADTSToCodec(b[2+hdrSize:])
+	headerSize := rtpAUHeadersSize(b)
+	if headerSize < 2 || len(b) < 2+headerSize {
+		return nil
+	}
+
+	unitSize := int(binary.BigEndian.Uint16(b[2:4]) >> 3)
+	units := b[2+headerSize:]
+	if unitSize > len(units) {
+		return nil
+	}
+	return ADTSToCodec(units[:unitSize])
+}
+
+// rtpAUHeadersSize validates the two-byte AU-headers-length field. AAC RTP
+// uses 16-bit AU headers (13-bit size and 3-bit index).
+func rtpAUHeadersSize(b []byte) int {
+	if len(b) < 2 {
+		return -1
+	}
+	bits := binary.BigEndian.Uint16(b)
+	// AU headers are 16 bits each, so the section must contain a whole number
+	// of them.
+	if bits%16 != 0 {
+		return -1
+	}
+	return int(bits / 8)
 }
