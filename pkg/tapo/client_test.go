@@ -58,10 +58,19 @@ func addPart(t *testing.T, w *multipart.Writer, length int, body []byte) {
 // A part with more bytes than its Content-Length used to make Handle spin.
 func TestHandleOversizedPartDoesNotSpin(t *testing.T) {
 	err := runHandle(t, func(w *multipart.Writer) {
-		addPart(t, w, 0, []byte("abcd"))
+		addPart(t, w, 2, []byte("abcd"))
 	})
-	if err == nil {
-		t.Fatal("expected an error")
+	if !errors.Is(err, io.EOF) {
+		t.Fatalf("expected io.EOF, got %v", err)
+	}
+}
+
+func TestHandleNegativeContentLength(t *testing.T) {
+	err := runHandle(t, func(w *multipart.Writer) {
+		addPart(t, w, -1, nil)
+	})
+	if err == nil || err.Error() != "negative Content-Length" {
+		t.Fatalf("expected negative Content-Length error, got %v", err)
 	}
 }
 
