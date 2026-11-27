@@ -31,3 +31,23 @@ func TestBuggy_RTSP_AAC(t *testing.T) {
 
 	require.Equal(t, len(payload), size+ADTSHeaderSize)
 }
+
+func TestRTPPaySamples(t *testing.T) {
+	var packets []*rtp.Packet
+	pay := RTPPaySamples(480, func(packet *rtp.Packet) {
+		packets = append(packets, packet)
+	})
+
+	for i := 0; i < 3; i++ {
+		pay(&rtp.Packet{Header: rtp.Header{Version: RTPPacketVersionAAC}, Payload: make([]byte, 100)})
+	}
+
+	require.Len(t, packets, 3)
+	for i, packet := range packets {
+		require.Equal(t, uint16(i), packet.SequenceNumber)
+		require.Equal(t, uint32(i*480), packet.Timestamp)
+		// one AU-header: 16 bits of headers, then size 100 << 3, index 0
+		require.Equal(t, []byte{0x00, 0x10, 0x03, 0x20}, packet.Payload[:4])
+		require.Len(t, packet.Payload, 104)
+	}
+}

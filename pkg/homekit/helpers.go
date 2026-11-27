@@ -143,8 +143,25 @@ func trackToAudio(track *core.Receiver, audio0 *camera.AudioCodecConfiguration) 
 			{
 				Channels:   channels,
 				SampleRate: []byte{sampleRate},
-				RTPTime:    []uint8{20},
+				RTPTime:    []uint8{audioRTPTime(codecType, sampleRate)},
 			},
 		},
 	}
+}
+
+// audioRTPTime returns the packet duration in ms for the selected codec.
+// AAC-ELD frames are always 480 samples, so the duration depends on the
+// sample rate (HAP spec, table "Mandatory RTP Time Values").
+func audioRTPTime(codecType, sampleRate byte) uint8 {
+	if codecType == camera.AudioCodecTypeAACELD {
+		switch sampleRate {
+		case camera.AudioCodecSampleRate8Khz:
+			return camera.RTPTimeAACELD8
+		case camera.AudioCodecSampleRate16Khz:
+			return camera.RTPTimeAACELD16
+		case camera.AudioCodecSampleRate24Khz:
+			return camera.RTPTimeAACELD24
+		}
+	}
+	return 20
 }
