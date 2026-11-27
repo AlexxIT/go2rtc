@@ -55,9 +55,12 @@ func Marshal(v any) ([]byte, error) {
 	return nil, errors.New("tlv8: not implemented: " + kind.String())
 }
 
-// separator the most confusing meaning in the documentation.
-// It can have a value of 0x00 or 0xFF or even 0x05.
-const separator = 0xFF
+// separator marks the boundary between consecutive instances of the same
+// TLV8 tag (HAP TLV8: "instances of the same TLV type must be separated by
+// a TLV item with zero length"). Confirmed against real device captures
+// (pkg/hap/camera's TestAqaraG3/TestHomebridge/TestScrypted): tag 0x00,
+// length 0 - not 0xFF as previously assumed here.
+const separator = 0x00
 
 func appendSlice(b []byte, value reflect.Value) ([]byte, error) {
 	for i := 0; i < value.Len(); i++ {
@@ -121,24 +124,16 @@ func appendValue(b []byte, tag byte, value reflect.Value) ([]byte, error) {
 		return append(b, tag, 4, byte(v), byte(v>>8), byte(v>>16), byte(v>>24)), nil
 
 	case reflect.String:
-		v := value.String()
-		l := len(v) // support "big" string
-		for ; l > 255; l -= 255 {
-			b = append(b, tag, 255)
-			b = append(b, v[:255]...)
-			v = v[255:]
-		}
-		b = append(b, tag, byte(l))
-		return append(b, v...), nil
+		return appendFragmented(b, tag, []byte(value.String())), nil
 
 	case reflect.Array:
 		if value.Type().Elem().Kind() == reflect.Uint8 {
 			n := value.Len()
-			b = append(b, tag, byte(n))
+			v := make([]byte, n)
 			for i := range n {
-				b = append(b, byte(value.Index(i).Uint()))
+				v[i] = byte(value.Index(i).Uint())
 			}
-			return b, nil
+			return appendFragmented(b, tag, v), nil
 		}
 
 	case reflect.Slice:
@@ -153,16 +148,31 @@ func appendValue(b []byte, tag byte, value reflect.Value) ([]byte, error) {
 		return b, nil
 
 	case reflect.Struct:
-		b = append(b, tag, 0)
-		i := len(b)
-		if b, err = appendStruct(b, value); err != nil {
+		// Marshal into its own buffer first: a nested struct whose body runs
+		// past 255 bytes has to be split across fragments, and the size can
+		// only be written once it is known.
+		var body []byte
+		if body, err = appendStruct(nil, value); err != nil {
 			return nil, err
 		}
-		b[i-1] = byte(len(b) - i) // set struct size
-		return b, nil
+		return appendFragmented(b, tag, body), nil
 	}
 
 	return nil, errors.New("tlv8: not implemented: " + value.Kind().String())
+}
+
+// appendFragmented writes v as one or more TLV items sharing the same tag.
+// A single item carries at most 255 bytes, so a longer value is split into
+// 255-byte fragments that the receiver concatenates (this decoder does so in
+// Unmarshal). Writing byte(len(v)) directly instead truncated the length
+// modulo 256 and silently corrupted anything larger.
+func appendFragmented(b []byte, tag byte, v []byte) []byte {
+	for len(v) > 255 {
+		b = append(b, tag, 255)
+		b = append(b, v[:255]...)
+		v = v[255:]
+	}
+	return append(append(b, tag, byte(len(v))), v...)
 }
 
 func UnmarshalBase64(in any, out any) error {

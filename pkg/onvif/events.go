@@ -147,15 +147,19 @@ func (c *Client) EventRequest(reqURL, body string) ([]byte, error) {
 
 // resolveEventAddress fixes subscription addresses returned by the camera.
 // The camera may return its internal IP, localhost, or a relative path.
-// We always use the host from the original client URL since we know it's reachable.
+// Then we use the host from the original client URL since we know it's reachable.
 func (c *Client) resolveEventAddress(addr string) string {
 	u, err := url.Parse(addr)
 	if err != nil {
 		return addr
 	}
 
-	// Always use the host we connected to (handles Docker, NAT, port mapping, etc.).
-	u.Host = c.url.Host
+	// Same host we connected to - keep the port, some cameras (Tapo) open
+	// a separate port for every subscription. Otherwise use the host we
+	// connected to (handles Docker, NAT, port mapping, etc.).
+	if u.Hostname() != c.url.Hostname() {
+		u.Host = c.url.Host
+	}
 
 	if u.Scheme == "" {
 		u.Scheme = "http"

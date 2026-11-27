@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/srtp"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/creds"
 	"github.com/AlexxIT/go2rtc/pkg/hap"
 	"github.com/AlexxIT/go2rtc/pkg/hap/camera"
 	"github.com/AlexxIT/go2rtc/pkg/hap/tlv8"
@@ -39,18 +41,45 @@ func Init() {
 			MotionThreshold float64  `yaml:"motion_threshold"`
 			MotionHoldTime  float64  `yaml:"motion_hold_time"`
 			OnvifURL        string   `yaml:"onvif_url"`
-			Speaker         *bool    `yaml:"speaker"`
+			// RecordingResolution is what the accessory advertises for
+			// recording, as "WIDTHxHEIGHT". Cameras with a non-16:9 sensor
+			// need this to avoid cropping away the useful part of the frame.
+			RecordingResolution string `yaml:"recording_resolution"`
+			Speaker             *bool  `yaml:"speaker"`
+
+			// Persisted controller-set toggles. These are written back by
+			// SaveCharacteristic whenever Home flips one of these switches,
+			// and read here on the next startup so a config change (which
+			// restarts the whole process) doesn't silently revert them.
+			RecordingAudioActive    *bool `yaml:"recording_audio_active"`
+			HomeKitCameraActive     *bool `yaml:"homekit_camera_active"`
+			EventSnapshotsActive    *bool `yaml:"event_snapshots_active"`
+			PeriodicSnapshotsActive *bool `yaml:"periodic_snapshots_active"`
 		} `yaml:"homekit"`
 	}
 	app.LoadConfig(&cfg)
 
 	log = app.GetLogger("homekit")
 
+	homekit.FFmpegBin = ffmpeg.Bin
+
 	streams.HandleFunc("homekit", streamHandler)
+
+	// Mask pairing keys for sources already present in the config. streamHandler
+	// only runs when a stream is first dialled, and the API will happily return
+	// the source URL before that happens.
+	for _, sources := range streams.GetAllSources() {
+		for _, source := range sources {
+			if strings.HasPrefix(source, "homekit") {
+				maskClientPrivate(source)
+			}
+		}
+	}
 
 	api.HandleFunc("api/homekit", apiHomekit)
 	api.HandleFunc("api/homekit/accessories", apiHomekitAccessories)
 	api.HandleFunc("api/homekit/motion", apiMotion)
+	api.HandleFunc("api/homekit/recording.mp4", apiRecording)
 	api.HandleFunc("api/homekit/doorbell", apiDoorbell)
 	api.HandleFunc("api/discovery/homekit", apiDiscovery)
 
@@ -81,26 +110,32 @@ func Init() {
 		}
 
 		srv, err := hksv.NewServer(hksv.Config{
-			StreamName:      id,
-			Pin:             conf.Pin,
-			Name:            conf.Name,
-			DeviceID:        conf.DeviceID,
-			DevicePrivate:   conf.DevicePrivate,
-			CategoryID:      conf.CategoryID,
-			Pairings:        conf.Pairings,
-			ProxyURL:        proxyURL,
-			HKSV:            conf.HKSV,
-			MotionMode:      motionMode,
-			MotionThreshold: conf.MotionThreshold,
-			Speaker:         conf.Speaker,
-			UserAgent:       app.UserAgent,
-			Version:         app.Version,
-			Streams:         &go2rtcStreamProvider{},
-			Store:           &go2rtcPairingStore{},
-			Snapshots:       &go2rtcSnapshotProvider{},
-			LiveStream:      &go2rtcLiveStreamHandler{},
-			Logger:          log,
-			Port:            uint16(api.Port),
+			StreamName:          id,
+			Pin:                 conf.Pin,
+			Name:                conf.Name,
+			DeviceID:            conf.DeviceID,
+			DevicePrivate:       conf.DevicePrivate,
+			CategoryID:          conf.CategoryID,
+			Pairings:            conf.Pairings,
+			ProxyURL:            proxyURL,
+			HKSV:                conf.HKSV,
+			MotionMode:          motionMode,
+			MotionThreshold:     conf.MotionThreshold,
+			RecordingResolution: conf.RecordingResolution,
+			Speaker:             conf.Speaker,
+
+			RecordingAudioActive:    conf.RecordingAudioActive,
+			HomeKitCameraActive:     conf.HomeKitCameraActive,
+			EventSnapshotsActive:    conf.EventSnapshotsActive,
+			PeriodicSnapshotsActive: conf.PeriodicSnapshotsActive,
+			UserAgent:               app.UserAgent,
+			Version:                 app.Version,
+			Streams:                 &go2rtcStreamProvider{},
+			Store:                   &go2rtcPairingStore{},
+			Snapshots:               &go2rtcSnapshotProvider{},
+			LiveStream:              &go2rtcLiveStreamHandler{},
+			Logger:                  log,
+			Port:                    uint16(api.Port),
 		})
 		if err != nil {
 			log.Error().Err(err).Str("stream", id).Msg("[homekit] create server failed")
@@ -139,8 +174,11 @@ func Init() {
 		log.Trace().Msgf("[homekit] new server: %s", entry)
 	}
 
-	api.HandleFunc(hap.PathPairSetup, hapHandler)
-	api.HandleFunc(hap.PathPairVerify, hapHandler)
+	// Exempt from API auth: a HomeKit controller cannot send Basic
+	// credentials, so these 401 and pairing silently fails when
+	// api.username is set. See api.HandleFuncNoAuth.
+	api.HandleFuncNoAuth(hap.PathPairSetup, hapHandler)
+	api.HandleFuncNoAuth(hap.PathPairVerify, hapHandler)
 
 	go func() {
 		if err := mdns.Serve(mdns.ServiceHAP, entries); err != nil {
@@ -175,6 +213,24 @@ type go2rtcPairingStore struct{}
 
 func (s *go2rtcPairingStore) SavePairings(name string, pairings []string) error {
 	return app.PatchConfig([]string{"homekit", name, "pairings"}, pairings)
+}
+
+// characteristicConfigKeys maps a HAP characteristic type to the yaml key it
+// gets persisted under, for controller-set toggles that must survive a
+// restart (see PairingStore).
+var characteristicConfigKeys = map[string]string{
+	"226": "recording_audio_active",
+	"21B": "homekit_camera_active",
+	"223": "event_snapshots_active",
+	"225": "periodic_snapshots_active",
+}
+
+func (s *go2rtcPairingStore) SaveCharacteristic(name, charType string, value bool) error {
+	key, ok := characteristicConfigKeys[charType]
+	if !ok {
+		return nil
+	}
+	return app.PatchConfig([]string{"homekit", name, key}, value)
 }
 
 // go2rtcSnapshotProvider implements hksv.SnapshotProvider
@@ -334,6 +390,13 @@ func streamHandler(rawURL string) (core.Producer, error) {
 	}
 
 	rawURL, rawQuery, _ := strings.Cut(rawURL, "#")
+
+	// A paired source URL carries the controller's long term private key, and
+	// the URL is echoed verbatim by the streams API and in log lines. Register
+	// the key so it is masked, otherwise anything able to reach the API can
+	// read it and pair itself against the accessory.
+	maskClientPrivate(rawURL)
+
 	client, err := homekit.Dial(rawURL, srtp.Server)
 	if client != nil && rawQuery != "" {
 		query := streams.ParseQuery(rawQuery)
@@ -343,6 +406,20 @@ func streamHandler(rawURL string) (core.Producer, error) {
 	}
 
 	return client, err
+}
+
+// maskClientPrivate registers the controller private key from a homekit source
+// URL with the credential masker. Only client_private is sensitive - device_id
+// and client_id are identifiers, and device_public is the accessory's public
+// key.
+func maskClientPrivate(rawURL string) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return
+	}
+	if key := u.Query().Get("client_private"); key != "" {
+		creds.AddSecret(key)
+	}
 }
 
 func resolve(host string) *hksv.Server {

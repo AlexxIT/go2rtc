@@ -390,7 +390,7 @@ func TestMotionDetector_MultipleCycles(t *testing.T) {
 
 	for cycle := 0; cycle < 3; cycle++ {
 		det.handlePacket(makePFrame(5000)) // trigger ON
-		for i := 0; i < 30; i++ {         // expire hold
+		for i := 0; i < 30; i++ {          // expire hold
 			det.handlePacket(makePFrame(500))
 		}
 		for i := 0; i < 6; i++ { // expire cooldown

@@ -35,6 +35,10 @@ type HKSVConsumer struct {
 	// GOP buffer - accumulate moof+mdat pairs, flush on next keyframe
 	fragBuf []byte
 
+	// tap, when set, receives the init segment and every fragment instead
+	// of the HDS session - the exact fMP4 the controller would be sent.
+	tap io.Writer
+
 	// Pre-built init segment (built when tracks connect)
 	initData []byte
 	initErr  error
@@ -43,7 +47,12 @@ type HKSVConsumer struct {
 
 // NewHKSVConsumer creates a new HKSV consumer that muxes H264+AAC into fMP4
 // and sends fragments over an HDS DataStream session.
-func NewHKSVConsumer(log zerolog.Logger) *HKSVConsumer {
+func NewHKSVConsumer(log zerolog.Logger, stream string) *HKSVConsumer {
+	// Every log line from a consumer is otherwise indistinguishable from the
+	// other cameras', which makes fragments and init segments impossible to
+	// attribute when several are recording at once.
+	log = log.With().Str("stream", stream).Logger()
+
 	medias := []*core.Media{
 		{
 			Kind:      core.KindVideo,
@@ -159,6 +168,22 @@ func (c *HKSVConsumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Re
 	return nil
 }
 
+// TracksAdded builds the init segment from the tracks the stream gave this
+// consumer, once streams.AddConsumer has returned: every track that exists has
+// been added by then, so a stream without audio need not wait out Activate's
+// timeout for an AAC track that will never come.
+func (c *HKSVConsumer) TracksAdded() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	select {
+	case <-c.initDone:
+	default:
+		if len(c.Senders) > 0 {
+			c.buildInit()
+		}
+	}
+}
+
 // buildInit creates the init segment from currently connected tracks.
 // Must only be called once (closes initDone).
 func (c *HKSVConsumer) buildInit() {
@@ -175,8 +200,9 @@ func (c *HKSVConsumer) buildInit() {
 
 // Activate is called when the HDS session is ready (dataSend.open).
 // It sends the pre-built init segment and starts streaming.
-func (c *HKSVConsumer) Activate(session *hds.Session, streamID int) error {
-	// Wait for init to be ready (should already be done if consumer was pre-started)
+// waitInit blocks until the init segment is built, falling back to whatever
+// tracks are connected after a timeout.
+func (c *HKSVConsumer) waitInit() error {
 	select {
 	case <-c.initDone:
 	case <-time.After(5 * time.Second):
@@ -193,8 +219,32 @@ func (c *HKSVConsumer) Activate(session *hds.Session, streamID int) error {
 		}
 	}
 
-	if c.initErr != nil {
-		return c.initErr
+	return c.initErr
+}
+
+// ActivateTap diverts the fMP4 to w instead of an HDS session, so the exact
+// bytes the controller receives can be captured and inspected.
+func (c *HKSVConsumer) ActivateTap(w io.Writer) error {
+	if err := c.waitInit(); err != nil {
+		return err
+	}
+
+	if _, err := w.Write(c.initData); err != nil {
+		return err
+	}
+
+	c.mu.Lock()
+	c.tap = w
+	c.seqNum = 2
+	c.active = true
+	c.mu.Unlock()
+
+	return nil
+}
+
+func (c *HKSVConsumer) Activate(session *hds.Session, streamID int) error {
+	if err := c.waitInit(); err != nil {
+		return err
 	}
 
 	c.log.Debug().Int("initSize", len(c.initData)).Msg("[hksv] sending init segment")
@@ -224,7 +274,11 @@ func (c *HKSVConsumer) flushFragment() {
 
 	c.log.Debug().Int("fragSize", len(fragment)).Int("seq", c.seqNum).Msg("[hksv] flush fragment")
 
-	if err := c.session.SendMediaFragment(c.streamID, fragment, c.seqNum); err == nil {
+	if c.tap != nil {
+		if _, err := c.tap.Write(fragment); err == nil {
+			c.Send += len(fragment)
+		}
+	} else if err := c.session.SendMediaFragment(c.streamID, fragment, c.seqNum); err == nil {
 		c.Send += len(fragment)
 	}
 	c.seqNum++

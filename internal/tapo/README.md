@@ -8,6 +8,7 @@
 - use the **cloud password**, this is not the RTSP password! you do not need to add a login!
 - you can also use **UPPERCASE** MD5 hash from your cloud password with `admin` username
 - some new camera firmwares require SHA256 instead of MD5
+- new camera firmwares also require **Third-Party Compatibility** to be enabled in the Tapo app, otherwise the camera answers 401 even with the right password
 
 ## Configuration
 

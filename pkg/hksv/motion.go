@@ -34,7 +34,7 @@ type MotionDetector struct {
 
 	// algorithm state (accessed only from Sender goroutine — no mutex needed)
 	threshold    float64
-	triggerLevel int     // pre-computed: int(baseline * threshold)
+	triggerLevel int // pre-computed: int(baseline * threshold)
 	baseline     float64
 	initialized  bool
 	frameCount   int

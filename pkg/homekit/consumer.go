@@ -28,6 +28,8 @@ type Consumer struct {
 	audioRTPTime byte
 
 	backTrack *core.Receiver // backchannel audio (HomeKit viewer → camera)
+	talkback  *talkback      // Opus to G.711 for cameras without Opus backchannel
+	sessions  bool           // SRTP sessions added to the server
 }
 
 func NewConsumer(conn net.Conn, server *srtp.Server) *Consumer {
@@ -51,6 +53,9 @@ func NewConsumer(conn net.Conn, server *srtp.Server) *Consumer {
 			Direction: core.DirectionRecvonly,
 			Codecs: []*core.Codec{
 				{Name: core.CodecOpus},
+				// transcoded from Opus with FFmpeg
+				{Name: core.CodecPCMA, ClockRate: 8000, PayloadType: 8},
+				{Name: core.CodecPCMU, ClockRate: 8000, PayloadType: 0},
 			},
 		},
 	}
@@ -135,6 +140,7 @@ func (c *Consumer) SetConfig(conf *camera.SelectedStreamConfiguration) bool {
 
 	c.srtp.AddSession(c.videoSession)
 	c.srtp.AddSession(c.audioSession)
+	c.sessions = true
 
 	return true
 }
@@ -144,15 +150,36 @@ func (c *Consumer) GetTrack(media *core.Media, codec *core.Codec) (*core.Receive
 		return nil, core.ErrCantGetTrack
 	}
 
-	c.backTrack = core.NewReceiver(media, codec)
+	if c.talkback != nil {
+		c.talkback.Stop()
+		c.talkback = nil
+	}
 
+	// input gets Opus from HomeKit, track goes to the camera
+	var input, track *core.Receiver
+	if codec.Name == core.CodecOpus {
+		input = core.NewReceiver(media, codec)
+		track = input
+	} else {
+		t, err := newTalkback(media, codec)
+		if err != nil {
+			return nil, err
+		}
+		c.talkback = t
+		input = t.input
+		track = t.output
+	}
+
+	c.backTrack = track
+
+	// the closure keeps its own receiver, so a late packet after Stop is safe
 	c.audioSession.OnReadRTP = func(packet *rtp.Packet) {
-		c.backTrack.WriteRTP(packet)
+		input.WriteRTP(packet)
 		c.Recv += len(packet.Payload)
 	}
 
-	c.Receivers = append(c.Receivers, c.backTrack)
-	return c.backTrack, nil
+	c.Receivers = append(c.Receivers, track)
+	return track, nil
 }
 
 func (c *Consumer) Start() error {
@@ -213,6 +240,14 @@ func (c *Consumer) WriteTo(io.Writer) (int64, error) {
 func (c *Consumer) Stop() error {
 	if c.deadline != nil {
 		c.deadline.Reset(0)
+	}
+	if c.talkback != nil {
+		c.talkback.Stop()
+	}
+	if c.sessions {
+		c.sessions = false
+		c.srtp.DelSession(c.videoSession)
+		c.srtp.DelSession(c.audioSession)
 	}
 	return c.Connection.Stop()
 }

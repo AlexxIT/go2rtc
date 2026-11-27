@@ -55,7 +55,9 @@ func (s *Server) AddSession(session *Session) {
 func (s *Server) DelSession(session *Session) {
 	s.mu.Lock()
 
-	delete(s.sessions, session.Remote.SSRC)
+	if s.sessions[session.Remote.SSRC] == session {
+		delete(s.sessions, session.Remote.SSRC)
+	}
 
 	// check s.conn for https://github.com/AlexxIT/go2rtc/issues/734
 	if len(s.sessions) == 0 && s.conn != nil {
@@ -83,20 +85,35 @@ func (s *Server) handle() error {
 		// Multiplexing RTP Data and Control Packets on a Single Port
 		// https://datatracker.ietf.org/doc/html/rfc5761
 
-		switch packetType := b[1]; packetType {
-		case 99, 110, 0x80 | 99, 0x80 | 110:
-			// this is default position for SSRC in RTP packet
-			ssrc := binary.BigEndian.Uint32(b[8:])
-			if session := s.GetSession(ssrc); session != nil {
-				session.ReadRTP(b[:n])
-			}
+		rtcp, ssrc, ok := parseSSRC(b[:n])
+		if !ok {
+			continue
+		}
 
-		case 200, 201, 202, 203, 204, 205, 206, 207:
-			// this is default position for SSRC in RTCP packet
-			ssrc := binary.BigEndian.Uint32(b[4:])
-			if session := s.GetSession(ssrc); session != nil {
-				session.ReadRTCP(b[:n])
-			}
+		session := s.GetSession(ssrc)
+		if session == nil {
+			continue
+		}
+
+		if rtcp {
+			session.ReadRTCP(b[:n])
+		} else {
+			session.ReadRTP(b[:n])
 		}
 	}
+}
+
+// parseSSRC returns the SSRC of an RTP or RTCP packet on a multiplexed port.
+// RTCP packet types 200-207 can't be RTP payload types 72-79 with the marker
+// bit (RFC 5761 section 4), so everything else is RTP whatever the payload type.
+func parseSSRC(b []byte) (rtcp bool, ssrc uint32, ok bool) {
+	if len(b) < 12 {
+		return false, 0, false
+	}
+	if packetType := b[1]; packetType >= 200 && packetType <= 207 {
+		// this is default position for SSRC in RTCP packet
+		return true, binary.BigEndian.Uint32(b[4:]), true
+	}
+	// this is default position for SSRC in RTP packet
+	return false, binary.BigEndian.Uint32(b[8:]), true
 }
