@@ -10,14 +10,29 @@ import (
 )
 
 func NewDTLSClient(ctx context.Context, channel uint8, addr net.Addr, writeFn func([]byte, uint8) error, readChan chan []byte, psk []byte) (*dtls.Conn, error) {
-	return dialDTLS(ctx, channel, addr, writeFn, readChan, psk, false)
+	return NewDTLSClientWithIdentity(ctx, channel, addr, writeFn, readChan, psk, "AUTHPWD_admin")
+}
+
+// NewDTLSClientWithIdentity creates a DTLS client using the supplied PSK identity.
+func NewDTLSClientWithIdentity(ctx context.Context, channel uint8, addr net.Addr, writeFn func([]byte, uint8) error, readChan chan []byte, psk []byte, pskIdentity string) (*dtls.Conn, error) {
+	return NewDTLSClientWithIdentityAndCipherSuites(ctx, channel, addr, writeFn, readChan, psk, pskIdentity, nil)
+}
+
+// NewDTLSClientWithIdentityAndCipherSuites creates a DTLS client with an optional cipher-suite override.
+func NewDTLSClientWithIdentityAndCipherSuites(ctx context.Context, channel uint8, addr net.Addr, writeFn func([]byte, uint8) error, readChan chan []byte, psk []byte, pskIdentity string, cipherSuites []dtls.CipherSuiteID) (*dtls.Conn, error) {
+	return dialDTLS(ctx, channel, addr, writeFn, readChan, psk, pskIdentity, cipherSuites, false)
 }
 
 func NewDTLSServer(ctx context.Context, channel uint8, addr net.Addr, writeFn func([]byte, uint8) error, readChan chan []byte, psk []byte) (*dtls.Conn, error) {
-	return dialDTLS(ctx, channel, addr, writeFn, readChan, psk, true)
+	return NewDTLSServerWithIdentity(ctx, channel, addr, writeFn, readChan, psk, "AUTHPWD_admin")
 }
 
-func dialDTLS(ctx context.Context, channel uint8, addr net.Addr, writeFn func([]byte, uint8) error, readChan chan []byte, psk []byte, isServer bool) (*dtls.Conn, error) {
+// NewDTLSServerWithIdentity creates a DTLS server using the supplied PSK identity.
+func NewDTLSServerWithIdentity(ctx context.Context, channel uint8, addr net.Addr, writeFn func([]byte, uint8) error, readChan chan []byte, psk []byte, pskIdentity string) (*dtls.Conn, error) {
+	return dialDTLS(ctx, channel, addr, writeFn, readChan, psk, pskIdentity, nil, true)
+}
+
+func dialDTLS(ctx context.Context, channel uint8, addr net.Addr, writeFn func([]byte, uint8) error, readChan chan []byte, psk []byte, pskIdentity string, cipherSuites []dtls.CipherSuiteID, isServer bool) (*dtls.Conn, error) {
 	adapter := &channelAdapter{
 		ctx:      ctx,
 		channel:  channel,
@@ -30,9 +45,14 @@ func dialDTLS(ctx context.Context, channel uint8, addr net.Addr, writeFn func([]
 	var err error
 
 	if isServer {
-		conn, err = dtls.Server(adapter, addr, buildDTLSConfig(psk, true))
+		conn, err = dtls.Server(adapter, addr, buildDTLSConfigWithIdentity(psk, pskIdentity, true))
 	} else {
-		conn, err = dtls.Client(adapter, addr, buildDTLSConfig(psk, false))
+		config := buildDTLSConfigWithIdentity(psk, pskIdentity, false)
+		if len(cipherSuites) != 0 {
+			config.CustomCipherSuites = nil
+			config.CipherSuites = cipherSuites
+		}
+		conn, err = dtls.Client(adapter, addr, config)
 	}
 	if err != nil {
 		return nil, err
@@ -53,11 +73,19 @@ func dialDTLS(ctx context.Context, channel uint8, addr net.Addr, writeFn func([]
 }
 
 func buildDTLSConfig(psk []byte, isServer bool) *dtls.Config {
+	return buildDTLSConfigWithIdentity(psk, "AUTHPWD_admin", isServer)
+}
+
+func buildDTLSConfigWithIdentity(psk []byte, pskIdentity string, isServer bool) *dtls.Config {
+	if pskIdentity == "" {
+		pskIdentity = "AUTHPWD_admin"
+	}
+
 	config := &dtls.Config{
 		PSK: func(hint []byte) ([]byte, error) {
 			return psk, nil
 		},
-		PSKIdentityHint:         []byte("AUTHPWD_admin"),
+		PSKIdentityHint:         []byte(pskIdentity),
 		InsecureSkipVerify:      true,
 		InsecureSkipVerifyHello: true,
 		MTU:                     1200,
