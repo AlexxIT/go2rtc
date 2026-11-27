@@ -26,7 +26,12 @@ func MimeCodecs(codecs []*core.Codec) string {
 			s += "avc1." + h264.GetProfileLevelID(codec.FmtpLine)
 		case core.CodecH265:
 			// H.265 profile=main level=5.1
-			// hvc1 - supported in Safari, hev1 - doesn't, both supported in Chrome
+			// hev1 allows VPS/SPS/PPS to be carried in-band, while hvc1 prohibits it.
+			// We use hev1 in the MP4 container because parameter sets may be present
+			// in the stream, and we need to support that. Browsers like Chrome handle
+			// this just fine. However, Apple recommends using hvc1. That's why we
+			// deliberately "lie" in the MIME type by declaring hvc1; otherwise, video
+			// playback on Apple devices may not work at all.
 			s += MimeH265
 		case core.CodecAAC:
 			s += MimeAAC
