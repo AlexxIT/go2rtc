@@ -72,14 +72,14 @@ func NewClient(rawURL string) (*Client, error) {
 		return nil, err
 	}
 
-	return &Client{Conn: conn, key: key, model: model, subDID: query.Get("subdid")}, nil
+	return &Client{Conn: conn, key: key, model: model, subdid: query.Get("subdid")}, nil
 }
 
 type Client struct {
 	Conn
 	key    []byte
 	model  string
-	subDID string // camera DID behind a hub (mxiang.camera.mwc10)
+	subdid string // camera DID behind a hub (mxiang.camera.mwc10)
 }
 
 const (
@@ -146,13 +146,14 @@ const (
 )
 
 func (c *Client) StartMedia(channel, quality, audio string) error {
+	if audio == "" {
+		audio = "1"
+	}
+
 	// Battery cameras behind a hub: the hub selects the camera by its DID.
-	if c.subDID != "" {
-		if audio == "" {
-			audio = "1"
-		}
+	if c.subdid != "" {
 		data := binary.BigEndian.AppendUint32(nil, cmdVideoStart)
-		data = fmt.Appendf(data, `{"enableaudio":%s,"subdid":"%s"}`, audio, c.subDID)
+		data = fmt.Appendf(data, `{"enableaudio":%s,"subdid":"%s"}`, audio, c.subdid)
 		return c.WriteCommand(data)
 	}
 
@@ -190,10 +191,6 @@ func (c *Client) StartMedia(channel, quality, audio string) error {
 		quality = "0"
 	}
 
-	if audio == "" {
-		audio = "1"
-	}
-
 	data := binary.BigEndian.AppendUint32(nil, cmdVideoStart)
 	switch channel {
 	case "", "0":
@@ -206,8 +203,8 @@ func (c *Client) StartMedia(channel, quality, audio string) error {
 
 func (c *Client) StopMedia() error {
 	data := binary.BigEndian.AppendUint32(nil, cmdVideoStop)
-	if c.subDID != "" {
-		data = fmt.Appendf(data, `{"videoquality":0,"enableaudio":0,"subdid":"%s"}`, c.subDID)
+	if c.subdid != "" {
+		data = fmt.Appendf(data, `{"videoquality":0,"enableaudio":0,"subdid":"%s"}`, c.subdid)
 	}
 	return c.WriteCommand(data)
 }
