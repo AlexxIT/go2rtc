@@ -1,8 +1,6 @@
 package rtsp
 
 import (
-	"time"
-
 	"github.com/AlexxIT/go2rtc/pkg/aac"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
@@ -177,9 +175,7 @@ func (c *Conn) packetWriter(codec *core.Codec, channel, payloadType uint8) core.
 
 func (c *Conn) writeInterleavedData(data []byte) error {
 	if c.Transport != "udp" {
-		_ = c.conn.SetWriteDeadline(time.Now().Add(Timeout))
-		_, err := c.conn.Write(data)
-		return err
+		return c.write(data)
 	}
 
 	for len(data) >= 4 && data[0] == '$' {
