@@ -225,18 +225,17 @@ func (c *Client) Handle() error {
 			return err
 		}
 
-		c.recv += size
+		if size < 0 {
+			return errors.New("negative Content-Length")
+		}
 
 		body := make([]byte, size)
 
-		b := body
-		for {
-			if n, err2 := p.Read(b); err2 == nil {
-				b = b[n:]
-			} else {
-				break
-			}
+		if _, err = io.ReadFull(p, body); err != nil {
+			return err
 		}
+
+		c.recv += size
 
 		body, err = c.decrypt(body)
 		if err != nil {
