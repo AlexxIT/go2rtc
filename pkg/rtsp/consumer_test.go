@@ -17,21 +17,36 @@ func TestPartialWriteClosesConn(t *testing.T) {
 	Timeout = 50 * time.Millisecond
 
 	server, client := net.Pipe()
+	defer server.Close()
 	defer client.Close()
+
+	require.NoError(t, client.SetReadDeadline(time.Now().Add(time.Second)))
 
 	c := &Conn{conn: server, state: StatePlay, playOK: true}
 	codec := &core.Codec{Name: core.CodecH264, ClockRate: 90000, PayloadType: 96}
 	handler := c.packetWriter(codec, 0, 96)
-	packet := &rtp.Packet{Header: rtp.Header{Marker: true}, Payload: make([]byte, 20)}
+	packet := &rtp.Packet{
+		Header:  rtp.Header{Marker: true},
+		Payload: make([]byte, 20),
+	}
 
 	sent := make(chan struct{})
 	done := make(chan struct{})
+
 	go func() {
 		defer close(done)
-		handler(packet) // 36 bytes, the client reads only 7 of them, then the write times out
+
+		handler(packet)
 		close(sent)
+
 		handler(packet)
 		_ = c.WriteResponse(&tcp.Response{})
+	}()
+
+	defer func() {
+		_ = client.Close()
+		_ = server.Close()
+		<-done
 	}()
 
 	b := make([]byte, 7)
@@ -39,12 +54,20 @@ func TestPartialWriteClosesConn(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []byte{'$', 0, 0, 32}, b[:4])
 
-	<-sent
+	select {
+	case <-sent:
+	case <-time.After(time.Second):
+		t.Fatal("write timeout")
+	}
 
-	// nothing may follow the incomplete message: the peer would read it as the missing tail
-	_ = client.SetReadDeadline(time.Now().Add(time.Second))
+	// Nothing may follow an incomplete RTSP message.
 	n, err := client.Read(make([]byte, 64))
-	require.Equal(t, 0, n)
+	require.Zero(t, n)
 	require.ErrorIs(t, err, io.EOF)
-	<-done
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("writer did not stop")
+	}
 }

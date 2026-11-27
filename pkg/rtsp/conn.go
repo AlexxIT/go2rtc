@@ -409,14 +409,16 @@ func (c *Conn) write(b []byte) error {
 	c.writeMu.Lock()
 	defer c.writeMu.Unlock()
 
-	if err := c.conn.SetWriteDeadline(time.Now().Add(Timeout)); err != nil {
-		return err
+	err := c.conn.SetWriteDeadline(time.Now().Add(Timeout))
+
+	if err == nil {
+		var n int
+		n, err = c.conn.Write(b)
+		if err == nil && n < len(b) {
+			err = io.ErrShortWrite
+		}
 	}
 
-	n, err := c.conn.Write(b)
-	if err == nil && n < len(b) {
-		err = io.ErrShortWrite
-	}
 	if err != nil {
 		_ = c.conn.Close()
 	}
