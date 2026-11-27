@@ -38,7 +38,7 @@ type Client struct {
 	conn1 net.Conn
 	conn2 net.Conn
 
-	decrypt func(b []byte) []byte
+	decrypt func(b []byte) ([]byte, error)
 
 	session1 string
 	session2 string
@@ -161,7 +161,11 @@ func (c *Client) newDectypter(res *http.Response, brand, username, password stri
 
 	cbc := cipher.NewCBCDecrypter(block, iv[:]).(cbcMode)
 
-	c.decrypt = func(b []byte) []byte {
+	c.decrypt = func(b []byte) ([]byte, error) {
+		if len(b) == 0 || len(b)%aes.BlockSize != 0 {
+			return nil, errors.New("tapo: invalid encryption")
+		}
+
 		// restore IV
 		cbc.SetIV(iv[:])
 
@@ -171,7 +175,11 @@ func (c *Client) newDectypter(res *http.Response, brand, username, password stri
 		// unpad
 		n := len(b)
 		padSize := int(b[n-1])
-		return b[:n-padSize]
+		if padSize == 0 || padSize > aes.BlockSize || padSize > n {
+			return nil, errors.New("tapo: invalid encryption")
+		}
+
+		return b[:n-padSize], nil
 	}
 }
 
@@ -230,7 +238,10 @@ func (c *Client) Handle() error {
 			}
 		}
 
-		body = c.decrypt(body)
+		body, err = c.decrypt(body)
+		if err != nil {
+			return err
+		}
 		bytesRd := bytes.NewReader(body)
 
 		for {

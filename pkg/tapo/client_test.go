@@ -1,8 +1,12 @@
 package tapo
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/md5"
 	"io"
 	"net"
+	"net/http"
 	"testing"
 	"time"
 
@@ -33,4 +37,49 @@ func TestGetTrackAfterStart(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("GetTrack blocked on conn1 while Handle is reading it")
 	}
+}
+
+func TestDecryptRejectsInvalidBlockSize(t *testing.T) {
+	client := newDecryptTestClient(t)
+
+	for _, chunk := range [][]byte{nil, make([]byte, aes.BlockSize-1)} {
+		_, err := client.decrypt(chunk)
+		require.EqualError(t, err, "tapo: invalid encryption")
+	}
+}
+
+func TestDecryptRejectsInvalidPaddingSize(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		padSize byte
+	}{
+		{name: "zero", padSize: 0},
+		{name: "larger than block", padSize: aes.BlockSize + 1},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			client := newDecryptTestClient(t)
+			key := md5.Sum([]byte("test-nonce:test-password"))
+			iv := md5.Sum([]byte("test-user:test-nonce"))
+			block, err := aes.NewCipher(key[:])
+			require.NoError(t, err)
+
+			plain := make([]byte, aes.BlockSize)
+			plain[len(plain)-1] = test.padSize
+			chunk := make([]byte, len(plain))
+			cipher.NewCBCEncrypter(block, iv[:]).CryptBlocks(chunk, plain)
+
+			_, err = client.decrypt(chunk)
+			require.EqualError(t, err, "tapo: invalid encryption")
+		})
+	}
+}
+
+func newDecryptTestClient(t *testing.T) *Client {
+	t.Helper()
+
+	res := &http.Response{Header: make(http.Header)}
+	res.Header.Set("Key-Exchange", `nonce="test-nonce"`)
+	client := &Client{}
+	client.newDectypter(res, "vigi", "test-user", "test-password")
+	return client
 }
