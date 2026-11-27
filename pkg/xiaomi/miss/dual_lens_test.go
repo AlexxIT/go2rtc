@@ -4,43 +4,62 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"io"
-	"net"
-	"strings"
+	"strconv"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/xiaomi/crypto"
+	"github.com/stretchr/testify/require"
 )
 
 type testFrame struct{ header, payload []byte }
 
 type testConn struct {
-	frames []testFrame
+	Conn
+	frames chan testFrame
 	writes [][]byte
+	closed bool
 }
 
-func (c *testConn) Protocol() string                     { return "test" }
-func (c *testConn) Version() string                      { return "test" }
-func (c *testConn) ReadCommand() (uint32, []byte, error) { return 0, nil, io.EOF }
 func (c *testConn) WriteCommand(_ uint32, data []byte) error {
-	c.writes = append(c.writes, append([]byte(nil), data...))
+	c.writes = append(c.writes, data)
 	return nil
 }
+
+func (*testConn) SetDeadline(time.Time) error { return nil }
+
 func (c *testConn) ReadPacket() ([]byte, []byte, error) {
-	if len(c.frames) == 0 {
+	f := <-c.frames
+	if f.header == nil {
 		return nil, nil, io.EOF
 	}
-	f := c.frames[0]
-	c.frames = c.frames[1:]
 	return f.header, f.payload, nil
 }
-func (c *testConn) WritePacket(_, _ []byte) error { return nil }
-func (c *testConn) RemoteAddr() net.Addr          { return &net.UDPAddr{} }
-func (c *testConn) SetDeadline(time.Time) error   { return nil }
-func (c *testConn) Close() error                  { return nil }
+
+func (c *testConn) Close() error {
+	c.closed = true
+	close(c.frames)
+	return nil
+}
+
+func lensTrack(t *testing.T, v *lens, index int) *core.Receiver {
+	t.Helper()
+	m := v.GetMedias()[index]
+	r, err := v.GetTrack(m, m.Codecs[0])
+	require.NoError(t, err)
+	return r
+}
+
+// Wait until Start and the shared reader are blocked before sending packets.
+func startLens(v *lens) <-chan error {
+	done := make(chan error, 1)
+	go func() { done <- v.Start() }()
+	synctest.Wait()
+	return done
+}
 
 func TestDialErrorReturnsNilProducer(t *testing.T) {
 	if p, err := Dial("%"); err == nil || p != nil {
@@ -54,39 +73,26 @@ func TestDialErrorReturnsNilProducer(t *testing.T) {
 }
 
 func TestDualLensStartMedia(t *testing.T) {
-	for _, audio := range []string{"0", "1"} {
-		conn := &testConn{}
+	for _, audio := range []int{0, 1} {
+		conn := new(testConn)
 		client := &Client{Conn: conn, key: make([]byte, 32), model: "xiaomi.camera.082ac1"}
-		if err := client.startMedia("", "3", audio, true); err != nil {
-			t.Fatal(err)
-		}
-		if len(conn.writes) != 1 {
-			t.Fatalf("wanted one media-start command, got %d", len(conn.writes))
-		}
+		require.NoError(t, client.startMedia("", "3", strconv.Itoa(audio), true))
+		require.Len(t, conn.writes, 1)
 		data, err := crypto.Decode(conn.writes[0], client.key)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if binary.BigEndian.Uint32(data) != cmdVideoStart {
-			t.Fatal("wrong media command")
-		}
+		require.NoError(t, err)
+		require.Equal(t, uint32(cmdVideoStart), binary.BigEndian.Uint32(data))
+
 		var body map[string]int
-		if err = json.Unmarshal(data[4:], &body); err != nil {
-			t.Fatal(err)
-		}
-		if body["videoquality"] != 3 || body["videoquality2"] != 3 || body["enableaudio"] != int(audio[0]-'0') {
-			t.Fatalf("unexpected dual media request: %v", body)
-		}
+		require.NoError(t, json.Unmarshal(data[4:], &body))
+		require.Subset(t, body, map[string]int{"videoquality": 3, "videoquality2": 3, "enableaudio": audio})
 	}
 }
 
 func makeTestFrame(t *testing.T, key []byte, codec, flags, sequence uint32, data []byte) testFrame {
 	t.Helper()
 	payload, err := crypto.Encode(data, key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	header := make([]byte, 32)
+	require.NoError(t, err)
+	header := make([]byte, hdrSize)
 	binary.LittleEndian.PutUint32(header, uint32(len(payload)))
 	binary.LittleEndian.PutUint32(header[4:], codec)
 	binary.LittleEndian.PutUint32(header[8:], sequence)
@@ -95,192 +101,142 @@ func makeTestFrame(t *testing.T, key []byte, codec, flags, sequence uint32, data
 }
 
 func TestDualLensProbeAndRouting(t *testing.T) {
-	for _, video := range []struct {
-		name       string
-		codec      uint32
-		parameters string
-		key, pred  byte
+	for _, tc := range []struct {
+		name                      string
+		codec                     uint32
+		params, aud, intra, inter string
 	}{
-		{"H264", codecH264, "000000016764001fac2484014016ec0440000003004000000c23c60c92", 0x65, 0x41},
-		{"H265", codecH265, "0000000140010c01", 0x26, 0x02},
+		{"H264", codecH264, "6764001fac2484014016ec0440000003004000000c23c60c92", "09f0", "6501", "4101"},
+		{"H265", codecH265, "40010c01", "460150", "2601", "0201"},
 	} {
-		t.Run(video.name, func(t *testing.T) {
-			key := make([]byte, 32)
-			// Deliberately identical parameter sets for both lenses: resolution and codec cannot identify a lens.
-			sps, _ := hex.DecodeString(video.parameters)
-			aud := []byte{0, 0, 0, 1, 9, 0xf0}
-			if video.codec == codecH265 {
-				aud = []byte{0, 0, 0, 1, 0x46, 1, 0x50}
-			}
-			conn := &testConn{frames: []testFrame{
-				makeTestFrame(t, key, video.codec, 0, 0, aud),
-				makeTestFrame(t, key, video.codec, 0x001e2001, 1, sps),
-				makeTestFrame(t, key, video.codec, 0x015e2001, 2, sps),
-				makeTestFrame(t, key, codecOPUS, 0, 3, []byte{1}),
-			}}
-			client := &Client{Conn: conn, key: key, model: "xiaomi.camera.082ac1"}
-			medias, err := probe(client, true, 2)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if len(medias) != 4 || medias[0].Kind != core.KindVideo || medias[1].Kind != core.KindVideo {
-				t.Fatalf("expected two video tracks and shared audio/backchannel: %v", medias)
-			}
-			if medias[0].Codecs[0] == medias[1].Codecs[0] || medias[0].Codecs[0].FmtpLine != medias[1].Codecs[0].FmtpLine {
-				t.Fatal("same-format lenses need distinct track identities")
-			}
-			producer := &Producer{Connection: core.Connection{Medias: medias}, client: client}
-			var pair LensPair
-			first, err := pair.open(0, func() (*Producer, error) { return producer, nil })
-			if err != nil {
-				t.Fatal(err)
-			}
-			second, err := pair.open(1, func() (*Producer, error) { t.Fatal("second device dial"); return nil, nil })
-			if err != nil {
-				t.Fatal(err)
-			}
-			if len(first.Medias) != 3 || first.Medias[2].Direction != core.DirectionSendonly || first.Medias[2] != second.Medias[2] || len(conn.writes) != 0 {
-				t.Fatal("forward open changed the shared speaker")
-			}
-			for _, v := range []*lens{first, second} {
-				if _, err = v.GetTrack(v.Medias[0], v.Medias[0].Codecs[0]); err != nil {
-					t.Fatal(err)
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				conn := &testConn{frames: make(chan testFrame, 4)}
+				client := &Client{Conn: conn, key: make([]byte, 32)}
+				video := func(flags, seq uint32, nalu string) {
+					data, err := hex.DecodeString("00000001" + nalu)
+					require.NoError(t, err)
+					conn.frames <- makeTestFrame(t, client.key, tc.codec, flags, seq, data)
 				}
-			}
-			first.state.Store(lensWaitKey)
-			var received [4][]uint16
-			for i, r := range []*core.Receiver{first.Receivers[0], second.Receivers[0], first.Receivers[1], second.Receivers[1]} {
-				r.Input = func(packet *core.Packet) {
-					received[i] = append(received[i], packet.SequenceNumber)
-					if i >= 2 {
-						if !packet.Marker {
-							t.Error("microphone header changed by the other stream")
+				mic := func(seq uint32) {
+					conn.frames <- makeTestFrame(t, client.key, codecOPUS, 0, seq, []byte{1})
+				}
+
+				// Both lenses have identical parameters; only bit 24 changes.
+				const primary = 0x001e2000
+				const secondary = primary | 1<<24
+				video(primary, 0, tc.aud)
+				video(primary, 1, tc.params)
+				video(secondary, 2, tc.params)
+				mic(3)
+				close(conn.frames) // an incomplete probe must reach EOF
+				medias, err := probe(client, true, 2)
+				require.NoError(t, err)
+				conn.frames = make(chan testFrame)
+
+				var pair LensPair
+				var views [2]*lens
+				var gotVideo, gotMic [2][]uint16
+				dial := func() (*Producer, error) {
+					return &Producer{Connection: core.Connection{Medias: medias}, client: client}, nil
+				}
+				for i := range views {
+					v, err := pair.open(i, dial)
+					require.NoError(t, err)
+					views[i] = v
+					defer v.Stop()
+					require.Len(t, v.Medias, 3)
+					require.Equal(t, core.DirectionSendonly, v.Medias[2].Direction)
+					lensTrack(t, v, 0).Input = func(p *core.Packet) { gotVideo[i] = append(gotVideo[i], p.SequenceNumber) }
+					lensTrack(t, v, 1).Input = func(p *core.Packet) {
+						gotMic[i] = append(gotMic[i], p.SequenceNumber)
+						if !p.Marker {
+							t.Error("microphone RTP header changed by the other view")
 						}
-						packet.Marker = false
-					}
-					if i == 0 {
-						second.state.Store(lensWaitKey)
+						p.Marker = false
 					}
 				}
-			}
-			conn.frames = []testFrame{
-				makeTestFrame(t, key, video.codec, 0, 7, aud),
-				makeTestFrame(t, key, video.codec, 0x015e2000, 8, []byte{0, 0, 0, 1, video.key, 2}), // before second view joins
-				makeTestFrame(t, key, video.codec, 0x001e2000, 9, []byte{0, 0, 0, 1, video.pred, 1}),
-				makeTestFrame(t, key, video.codec, 0x001e2000, 10, []byte{0, 0, 0, 1, video.key, 1}),
-				makeTestFrame(t, key, video.codec, 0x015e2000, 19, []byte{0, 0, 0, 1, video.pred, 2}),
-				makeTestFrame(t, key, video.codec, 0x015e2000, 20, []byte{0, 0, 0, 1, video.key, 2}),
-				makeTestFrame(t, key, codecOPUS, 0, 30, []byte{1}),
-			}
-			_ = producer.Start() // finite fake transport finishes with EOF
-			for i, sequence := range []uint16{10, 20, 30, 30} {
-				if len(received[i]) != 1 || received[i][0] != sequence {
-					t.Fatalf("track %d received other lens or audio: %v", i, received[i])
-				}
-			}
+				require.Empty(t, conn.writes, "opening a view must not start the speaker")
+
+				startLens(views[0])
+				video(secondary, 8, tc.intra) // before the secondary starts
+				video(primary, 9, tc.inter)
+				video(primary, 10, tc.intra)
+				video(primary, 11, tc.aud)
+				video(primary, 12, tc.inter)
+				synctest.Wait()
+
+				startLens(views[1])
+				video(secondary, 19, tc.inter)
+				video(secondary, 20, tc.intra)
+				video(secondary, 21, tc.inter)
+				mic(30)
+				synctest.Wait()
+				require.Equal(t, [2][]uint16{{10, 12}, {20, 21}}, gotVideo)
+				require.Equal(t, [2][]uint16{{30}, {30}}, gotMic)
+			})
 		})
 	}
 }
 
 func TestDualLensProbeRequiresBothLenses(t *testing.T) {
-	key := make([]byte, 32)
-	sps, _ := hex.DecodeString("000000016764001fac2484014016ec0440000003004000000c23c60c92")
-	conn := &testConn{frames: []testFrame{makeTestFrame(t, key, codecH264, 0, 1, sps)}}
-	_, err := probe(&Client{Conn: conn, key: key}, false, 2)
-	if err == nil || !strings.Contains(err.Error(), "missing video channel") {
-		t.Fatalf("one lens must not pass dual-lens discovery: %v", err)
-	}
+	conn := &testConn{frames: make(chan testFrame, 1)}
+	client := &Client{Conn: conn, key: make([]byte, 32)}
+	conn.frames <- makeTestFrame(t, client.key, codecH265, 0, 1, []byte{0, 0, 0, 1, 0x40, 1, 0x0c, 1})
+	close(conn.frames)
+	_, err := probe(client, false, 2)
+	require.ErrorContains(t, err, "missing video channel")
 }
-
-// A failed reader must release the old slot before either view reconnects.
-// Counters and encoded payloads here are synthetic.
-type pairWire struct {
-	testConn
-	read     chan struct{}
-	closedCh chan struct{}
-}
-
-func (w *pairWire) ReadPacket() ([]byte, []byte, error) {
-	close(w.read)
-	<-w.closedCh
-	return nil, nil, io.EOF
-}
-
-func (w *pairWire) Close() error { close(w.closedCh); return nil }
 
 func TestLensPairLifecycle(t *testing.T) {
-	var pair LensPair
-	var wires []*pairWire
-	dial := func() (*Producer, error) {
-		w := &pairWire{read: make(chan struct{}), closedCh: make(chan struct{})}
-		wires = append(wires, w)
-		makeMedia := func(kind, name string) *core.Media {
-			return &core.Media{Kind: kind, Direction: core.DirectionRecvonly, Codecs: []*core.Codec{{Name: name}}}
+	synctest.Test(t, func(t *testing.T) {
+		var pair LensPair
+		var conns []*testConn
+		video := &core.Media{Kind: core.KindVideo, Direction: core.DirectionRecvonly, Codecs: []*core.Codec{{Name: core.CodecH265}}}
+		open := func(channel int) *lens {
+			t.Helper()
+			v, err := pair.open(channel, func() (*Producer, error) {
+				conn := &testConn{frames: make(chan testFrame)}
+				conns = append(conns, conn)
+				c := &Client{Conn: conn, key: make([]byte, 32)}
+				return &Producer{Connection: core.Connection{Medias: []*core.Media{video, video.Clone()}}, client: c}, nil
+			})
+			require.NoError(t, err)
+			return v
 		}
-		c := &Client{Conn: w, key: make([]byte, 32)}
-		return &Producer{Connection: core.Connection{Medias: []*core.Media{makeMedia(core.KindVideo, core.CodecH265), makeMedia(core.KindVideo, core.CodecH265), makeMedia(core.KindAudio, core.CodecOpus)}, Transport: c}, client: c}, nil
-	}
-	open := func(channel int) *lens {
-		t.Helper()
-		v, err := pair.open(channel, dial)
-		if err != nil {
-			t.Fatal(err)
+
+		subscribe := func(v *lens) <-chan error {
+			lensTrack(t, v, 0)
+			return startLens(v)
 		}
-		return v
-	}
-	second, first := open(1), open(0)
-	duplicate := open(1)
-	m := second.Medias[0]
-	if _, err := second.GetTrack(m, m.Codecs[0]); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := duplicate.GetTrack(m, m.Codecs[0]); err == nil {
-		t.Fatal("independent producers acquired the same forward track")
-	}
-	_ = duplicate.Stop()
-	if len(wires) != 1 || second.GetMedias()[0] == first.GetMedias()[0] || second.GetMedias()[1] != first.GetMedias()[1] || second.Receivers[1] == first.Receivers[1] {
-		t.Fatal("invalid lens or shared microphone identity")
-	}
-	ended := make(chan error, 2)
-	go func() { ended <- second.Start() }()
-	go func() { ended <- first.Start() }()
-	<-wires[0].read
-	if err := second.Stop(); err != nil {
-		t.Fatal(err)
-	}
-	if err := <-ended; err != nil {
-		t.Fatal(err)
-	}
-	select {
-	case <-wires[0].closedCh:
-		t.Fatal("closing the second view closed the camera")
-	default:
-	}
-	second = open(1)
-	go func() { ended <- second.Start() }()
-	_ = first.session.camera.client.Close() // simulate transport loss while both views are subscribed
-	for range 2 {
-		if err := <-ended; !errors.Is(err, io.EOF) {
-			t.Fatalf("reader returned %v", err)
-		}
-	}
-	newSecond, newFirst := open(1), open(0)
-	if len(wires) != 2 || newSecond.session != newFirst.session {
-		t.Fatal("reconnect opened multiple device slots")
-	}
-	_ = second.Stop()
-	_ = first.Stop()
-	select {
-	case <-wires[1].closedCh:
-		t.Fatal("old view closed its replacement")
-	default:
-	}
-	_ = newFirst.Stop()
-	_ = newSecond.Stop()
-	_ = newSecond.Stop()
-	select {
-	case <-wires[1].closedCh:
-	default:
-		t.Fatal("last view did not release the device")
-	}
+		second := open(1)
+		secondDone := subscribe(second)
+		first, duplicate := open(0), open(1)
+		m := duplicate.Medias[0]
+		_, err := duplicate.GetTrack(m, m.Codecs[0])
+		require.Error(t, err)
+		require.NoError(t, duplicate.Stop())
+		require.Len(t, conns, 1)
+
+		firstDone := subscribe(first)
+		require.NoError(t, second.Stop())
+		require.NoError(t, <-secondDone)
+		require.False(t, conns[0].closed, "the primary still needs the camera")
+		second = open(1)
+		secondDone = subscribe(second)
+		conns[0].frames <- testFrame{} // peer EOF with both views subscribed
+		require.ErrorIs(t, <-firstDone, io.EOF)
+		require.ErrorIs(t, <-secondDone, io.EOF)
+		require.True(t, conns[0].closed)
+
+		newSecond, newFirst := open(1), open(0)
+		require.Len(t, conns, 2, "both views must share one replacement connection")
+		require.NoError(t, second.Stop())
+		require.NoError(t, first.Stop())
+		require.NoError(t, newFirst.Stop())
+		require.False(t, conns[1].closed, "the replacement still has a viewer")
+		require.NoError(t, newSecond.Stop())
+		require.NoError(t, newSecond.Stop())
+		require.True(t, conns[1].closed, "the last viewer must release the camera")
+	})
 }
