@@ -62,3 +62,18 @@ You can use a second channel for dual cameras: `channel=2`.
 streams:
   xiaomi1: xiaomi://***&channel=2
 ```
+
+On `xiaomi.camera.082ac1`, the second stream can reuse the first stream's MISS
+connection. Add `reuse=<primary stream name>` to its usual `channel=2` URL.
+Either stream can open first. They share the camera's media settings and
+microphone, and each stream delivers its own video.
+
+```yaml
+streams:
+  dome: xiaomi://1234567890:cn@192.168.1.123?did=9876543210&model=xiaomi.camera.082ac1
+  bullet: xiaomi://1234567890:cn@192.168.1.123?did=9876543210&model=xiaomi.camera.082ac1&channel=2&reuse=dome
+```
+
+Configure one stream name per lens. Multiple clients can subscribe to either
+name. Set options such as `subtype` and `audio` on the primary. Options repeated
+on the secondary must match. Restart go2rtc after editing the paired URLs.

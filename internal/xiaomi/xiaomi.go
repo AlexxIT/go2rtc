@@ -29,10 +29,24 @@ func Init() {
 
 	log = app.GetLogger("xiaomi")
 
+	lenses := lensSources(streams.GetAllSources())
 	streams.HandleFunc("xiaomi", func(rawURL string) (core.Producer, error) {
 		u, err := url.Parse(rawURL)
 		if err != nil {
 			return nil, err
+		}
+
+		if src, ok := lenses[rawURL]; ok {
+			if streams.Get(src.owner) == nil {
+				return nil, errReuse
+			}
+			return src.pair.Open(src.secondary, func() (string, error) {
+				primary, _ := url.Parse(src.primary)
+				return getCameraURL(primary)
+			})
+		}
+		if u.Query().Has("reuse") {
+			return nil, errReuse
 		}
 
 		if u.User != nil {

@@ -145,6 +145,10 @@ const (
 )
 
 func (c *Client) StartMedia(channel, quality, audio string) error {
+	return c.startMedia(channel, quality, audio, false)
+}
+
+func (c *Client) startMedia(channel, quality, audio string, dual bool) error {
 	switch c.model {
 	case ModelDafang, ModelXiaofang:
 		var q, a byte
@@ -184,8 +188,10 @@ func (c *Client) StartMedia(channel, quality, audio string) error {
 	}
 
 	data := binary.BigEndian.AppendUint32(nil, cmdVideoStart)
-	switch channel {
-	case "", "0":
+	switch {
+	case dual:
+		data = fmt.Appendf(data, `{"videoquality":%s,"videoquality2":%s,"enableaudio":%s}`, quality, quality, audio)
+	case channel == "" || channel == "0":
 		data = fmt.Appendf(data, `{"videoquality":%s,"enableaudio":%s}`, quality, audio)
 	default:
 		data = fmt.Appendf(data, `{"videoquality":-1,"videoquality2":%s,"enableaudio":%s}`, quality, audio)
@@ -280,6 +286,9 @@ type Packet struct {
 	//Reserved uint32
 	Payload []byte
 }
+
+// The 082ac1 stores the lens index in bit 24 of its video flags.
+func (p *Packet) videoChannel() byte { return byte(p.Flags >> 24 & 1) }
 
 func (p *Packet) SampleRate() uint32 {
 	// flag:         1 0011 000 - sample rate 16000
