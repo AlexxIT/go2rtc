@@ -67,6 +67,7 @@ rtsp:
   username: "admin"  # optional, default - disabled
   password: "pass"   # optional, default - disabled
   default_query: "video&audio"  # optional, default codecs filters 
+  allow_publish: [192.168.1.10, 10.0.0.0/24]  # optional, default - anyone can publish
 ```
 
 By default go2rtc provide RTSP-stream with only one first video and only one first audio. You can change it with the `default_query` setting:
@@ -83,6 +84,8 @@ Read more about [codecs filters](../../README.md#codecs-filters).
 ```shell
 ffmpeg -re -i BigBuckBunny.mp4 -c copy -rtsp_transport tcp -f rtsp rtsp://localhost:8554/camera1
 ```
+
+By default, anyone who can reach the RTSP port can publish (`ANNOUNCE`) to an existing stream. With `allow_publish`, only the listed IPs and networks can publish, the others get `403 Forbidden`. Playback is not affected. Localhost can always publish, it is used by [exec](../exec/README.md) and [FFmpeg](../ffmpeg/README.md) sources. `allow_publish: []` allows publishing only from localhost.
 
 ## Two-way audio
 

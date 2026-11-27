@@ -14,6 +14,7 @@ import (
 )
 
 var FailedAuth = errors.New("failed authentication")
+var FailedPublish = errors.New("publish not allowed")
 
 func NewServer(conn net.Conn) *Conn {
 	return &Conn{
@@ -79,6 +80,12 @@ func (c *Conn) Accept() error {
 			}
 
 		case MethodAnnounce:
+			if c.DenyPublish {
+				res := &tcp.Response{Status: "403 Forbidden", Request: req}
+				_ = c.WriteResponse(res)
+				return FailedPublish
+			}
+
 			if req.Header.Get("Content-Type") != "application/sdp" {
 				return errors.New("wrong content type")
 			}

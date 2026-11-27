@@ -589,6 +589,19 @@
         },
         "pkt_size": {
           "type": "integer"
+        },
+        "allow_publish": {
+          "description": "Allow publishing (ANNOUNCE) only from these IPs or networks, localhost is always allowed",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "examples": [
+            [
+              "192.168.1.10",
+              "10.0.0.0/24"
+            ]
+          ]
         }
       }
     },

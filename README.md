@@ -565,6 +565,10 @@ api:
 exec:
   # use only allowed exec paths
   allow_paths: [ffmpeg]
+
+rtsp:
+  # publish streams only from localhost
+  allow_publish: []
 ```
 
 By default, `go2rtc` starts the Web interface on port `1984` and RTSP on port `8554`, as well as uses port `8555` for WebRTC connections. The three ports are accessible from your local network. So anyone on your local network can watch video from your cameras without authorization. The same rule applies to the Home Assistant add-on.
