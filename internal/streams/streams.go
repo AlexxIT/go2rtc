@@ -27,6 +27,7 @@ func Init() {
 	}
 
 	api.HandleFunc("api/streams", apiStreams)
+	api.HandleFunc("api/streams/connection", apiStreamsConnection)
 	api.HandleFunc("api/streams.dot", apiStreamsDOT)
 	api.HandleFunc("api/preload", apiPreload)
 	api.HandleFunc("api/schemes", apiSchemes)

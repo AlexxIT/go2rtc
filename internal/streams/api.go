@@ -2,6 +2,7 @@ package streams
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/app"
@@ -103,6 +104,27 @@ func apiStreams(w http.ResponseWriter, r *http.Request) {
 		if err := app.PatchConfig([]string{"streams", src}, nil); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		}
+	}
+}
+
+// apiStreamsConnection - force close consumer or external producer by connection ID
+func apiStreamsConnection(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "DELETE" {
+		http.Error(w, "", http.StatusMethodNotAllowed)
+		return
+	}
+
+	query := r.URL.Query()
+	src := query.Get("src")
+	id, err := strconv.ParseUint(query.Get("id"), 10, 32)
+	if src == "" || err != nil {
+		http.Error(w, "", http.StatusBadRequest)
+		return
+	}
+
+	stream := Get(src)
+	if stream == nil || !stream.StopConnection(uint32(id)) {
+		http.Error(w, "", http.StatusNotFound)
 	}
 }
 
