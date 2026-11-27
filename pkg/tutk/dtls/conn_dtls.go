@@ -322,7 +322,12 @@ func (c *DTLSConn) AVRecvFrameData() (*tutk.Packet, error) {
 	// Frames arrive on a channel, so the socket deadline does not apply here.
 	var timeout <-chan time.Time
 	if ns := c.recvDeadline.Load(); ns != 0 {
-		timer := time.NewTimer(time.Until(time.Unix(0, ns)))
+		d := time.Until(time.Unix(0, ns))
+		// Don't consume queued frames after the absolute deadline has expired.
+		if d <= 0 {
+			return nil, os.ErrDeadlineExceeded
+		}
+		timer := time.NewTimer(d)
 		defer timer.Stop()
 		timeout = timer.C
 	}

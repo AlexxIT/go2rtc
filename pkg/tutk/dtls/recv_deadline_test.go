@@ -3,6 +3,7 @@ package dtls
 import (
 	"context"
 	"errors"
+	"io"
 	"net"
 	"os"
 	"testing"
@@ -12,17 +13,71 @@ import (
 )
 
 func TestAVRecvFrameDataHonorsDeadline(t *testing.T) {
+	conn := newRecvDeadlineTestConn(t)
+	if err := conn.SetDeadline(time.Now().Add(100 * time.Millisecond)); err != nil {
+		t.Fatal(err)
+	}
+
+	checkRecvFrameError(t, conn, os.ErrDeadlineExceeded)
+}
+
+func TestAVRecvFrameDataExpiredDeadline(t *testing.T) {
+	conn := newRecvDeadlineTestConn(t)
+	if err := conn.SetDeadline(time.Now().Add(-time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	checkRecvFrameError(t, conn, os.ErrDeadlineExceeded)
+}
+
+func TestAVRecvFrameDataClearDeadline(t *testing.T) {
+	conn := newRecvDeadlineTestConn(t)
+	if err := conn.SetDeadline(time.Now().Add(-time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if err := conn.SetDeadline(time.Time{}); err != nil {
+		t.Fatal(err)
+	}
+	if ns := conn.recvDeadline.Load(); ns != 0 {
+		t.Fatalf("deadline not cleared: %d", ns)
+	}
+
+	conn.cancel()
+	checkRecvFrameError(t, conn, io.EOF)
+}
+
+func TestAVRecvFrameDataCanceled(t *testing.T) {
+	conn := newRecvDeadlineTestConn(t)
+	if err := conn.SetDeadline(time.Now().Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+
+	conn.cancel()
+	checkRecvFrameError(t, conn, io.EOF)
+}
+
+func newRecvDeadlineTestConn(t *testing.T) *DTLSConn {
+	t.Helper()
+
 	udp, err := net.ListenUDP("udp", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = udp.Close() }()
+	t.Cleanup(func() { _ = udp.Close() })
 
-	// A connected camera that never sends a frame.
-	conn := &DTLSConn{conn: udp, frames: tutk.NewFrameHandler(false), ctx: context.Background()}
-	if err = conn.SetDeadline(time.Now().Add(100 * time.Millisecond)); err != nil {
-		t.Fatal(err)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	return &DTLSConn{
+		conn:   udp,
+		frames: tutk.NewFrameHandler(false),
+		ctx:    ctx,
+		cancel: cancel,
 	}
+}
+
+func checkRecvFrameError(t *testing.T, conn *DTLSConn, want error) {
+	t.Helper()
 
 	done := make(chan error, 1)
 	go func() {
@@ -31,11 +86,11 @@ func TestAVRecvFrameDataHonorsDeadline(t *testing.T) {
 	}()
 
 	select {
-	case err = <-done:
-		if !errors.Is(err, os.ErrDeadlineExceeded) {
-			t.Fatalf("got error %v, want os.ErrDeadlineExceeded", err)
+	case err := <-done:
+		if !errors.Is(err, want) {
+			t.Fatalf("got error %v, want %v", err, want)
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("AVRecvFrameData is still blocked after the deadline")
+		t.Fatal("AVRecvFrameData is still blocked")
 	}
 }
