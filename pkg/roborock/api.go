@@ -36,7 +36,7 @@ func GetBaseURL(username string) (string, error) {
 		return "", err
 	}
 
-	client := http.Client{Timeout: time.Second * 5000}
+	client := http.Client{Timeout: 5 * time.Second}
 	res, err := client.Do(req)
 
 	var v struct {
@@ -69,7 +69,7 @@ func Login(baseURL, username, password string) (*UserInfo, error) {
 	clientID = base64.StdEncoding.EncodeToString([]byte(clientID))
 	req.Header.Set("header_clientid", clientID)
 
-	client := http.Client{Timeout: time.Second * 5000}
+	client := http.Client{Timeout: 5 * time.Second}
 	res, err := client.Do(req)
 
 	var v struct {
@@ -95,7 +95,7 @@ func GetHomeID(baseURL, token string) (int, error) {
 	}
 	req.Header.Set("Authorization", token)
 
-	client := http.Client{Timeout: time.Second * 5000}
+	client := http.Client{Timeout: 5 * time.Second}
 	res, err := client.Do(req)
 	if err != nil {
 		return 0, err
@@ -148,7 +148,7 @@ func GetDevices(ui *UserInfo, homeID int) ([]DeviceInfo, error) {
 	}
 	req.Header.Set("Authorization", auth)
 
-	client := http.Client{Timeout: time.Second * 5000}
+	client := http.Client{Timeout: 5 * time.Second}
 	res, err := client.Do(req)
 	if err != nil {
 		return nil, err

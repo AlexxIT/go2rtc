@@ -51,7 +51,8 @@ func (s *Session) Login() error {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Ya-Consumer-Authorization", "OAuth "+s.token)
 
-	res, err := http.DefaultClient.Do(req)
+	client := http.Client{Timeout: 15 * time.Second}
+	res, err := client.Do(req)
 	if err != nil {
 		return err
 	}

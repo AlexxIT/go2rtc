@@ -23,7 +23,13 @@ streams:
   camera4: tapo://cloud-password@192.168.1.123?subtype=1 
   # HD stream (default)
   camera5: tapo://cloud-password@192.168.1.123?subtype=0 
+  # second camera channel (for example, the other lens on a dual-lens camera)
+  camera6: tapo://cloud-password@192.168.1.123?channel=1
 ```
+
+`channel` selects the camera channel and defaults to `0`. On dual-lens cameras,
+use `?channel=1` to request the second lens. `subtype` selects the stream
+resolution (`0` for HD, `1` for VGA); it does not select a lens.
 
 ```bash
 echo -n "cloud password" | md5 | awk '{print toupper($0)}'

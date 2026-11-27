@@ -65,8 +65,6 @@ func DialPublish(rawURL string, cons *flv.Consumer) (io.Writer, error) {
 
 func NewClient(conn net.Conn, u *url.URL) (*Conn, error) {
 	c := &Conn{
-		url: u.String(),
-
 		conn: conn,
 		rd:   bufio.NewReaderSize(conn, core.BufferSize),
 		wr:   conn,
@@ -77,15 +75,16 @@ func NewClient(conn net.Conn, u *url.URL) (*Conn, error) {
 		wrPacketSize: 4096, // OBS - 4096, Reolink - 4096
 	}
 
-	if args := strings.Split(u.Path, "/"); len(args) >= 2 {
+	if args := strings.Split(u.RequestURI(), "/"); len(args) >= 2 {
 		c.App = args[1]
-		if len(args) >= 3 {
+		if len(args) == 3 {
 			c.Stream = args[2]
-			if u.RawQuery != "" {
-				c.Stream += "?" + u.RawQuery
-			}
+			u.Path = args[1]
+			u.RawQuery = ""
 		}
 	}
+
+	c.url = u.String()
 
 	if err := c.clienHandshake(); err != nil {
 		return nil, err

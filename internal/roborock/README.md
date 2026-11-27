@@ -13,3 +13,5 @@ This source type supports Roborock vacuums with cameras. Known working models:
 This source supports loading Roborock credentials from the Home Assistant [custom integration](https://github.com/humbertogontijo/homeassistant-roborock) or the [core integration](https://www.home-assistant.io/integrations/roborock). Otherwise, you need to log in to your Roborock account (MiHome account is not supported). Go to go2rtc WebUI > Add webpage. Copy the `roborock://...` source for your vacuum and paste it into your `go2rtc.yaml` config.
 
 If you have a pattern PIN for your vacuum, add it as a numeric PIN (lines: 123, 456, 789) to the end of the `roborock` link.
+
+Some app versions store a different password on the vacuum, so a correct numeric PIN fails with `incorrect old_password`. In that case, set `pin` to the `password` value that the official app sends in its `check_homesec_password` request (for example, from the logs of a local Roborock server). go2rtc tries md5 of `pin` first, then `pin` as is.

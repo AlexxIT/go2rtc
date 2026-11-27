@@ -21,6 +21,10 @@ A regular camera has a single video source (`GetVideoSources`) and two profiles 
 
 Go2rtc has one video source and one profile per stream.
 
+The ONVIF module does not support Basic authentication. Therefore `/onvif/*` will use the `username` and `password` from the RTSP module. If it is not specified, it will use `username` and `password` from the API module.
+
+ONVIF clients receive a video stream from the RTSP module and snapshots from the API module. And they will use the same username and password that you provided to connect to ONVIF.
+
 ## Tested clients
 
 Go2rtc works as ONVIF server:

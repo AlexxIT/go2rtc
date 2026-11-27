@@ -51,10 +51,19 @@ func Dial(u *url.URL, timeout time.Duration) (net.Conn, error) {
 		return conn, nil
 	}
 
+	// bound the handshake by the same timeout as the TCP connect,
+	// otherwise a peer that accepts but never speaks TLS blocks forever
+	if timeout > 0 {
+		_ = conn.SetDeadline(time.Now().Add(timeout))
+	}
+
 	tlsConn := tls.Client(conn, secure)
 	if err = tlsConn.Handshake(); err != nil {
+		_ = conn.Close()
 		return nil, err
 	}
+
+	_ = conn.SetDeadline(time.Time{})
 
 	if u.Scheme[4] == 'x' {
 		u.Scheme = u.Scheme[:4] + "s"

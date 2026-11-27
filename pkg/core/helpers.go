@@ -92,3 +92,15 @@ func Caller() string {
 	_, file, line, _ := runtime.Caller(1)
 	return file + ":" + strconv.Itoa(line)
 }
+
+func ParseDuration(s string, def time.Duration) time.Duration {
+	if s != "" {
+		if i, err := strconv.Atoi(s); err == nil {
+			return time.Duration(i) * time.Second
+		}
+		if d, err := time.ParseDuration(s); err == nil {
+			return d
+		}
+	}
+	return def
+}

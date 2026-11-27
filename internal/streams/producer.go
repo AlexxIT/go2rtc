@@ -38,6 +38,12 @@ type Producer struct {
 
 const SourceTemplate = "{input}"
 
+func (p *Producer) started() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.state == stateStart
+}
+
 func NewProducer(source string) *Producer {
 	if strings.Contains(source, SourceTemplate) {
 		return &Producer{template: source}
@@ -158,6 +164,7 @@ func (p *Producer) start() {
 }
 
 func (p *Producer) worker(conn core.Producer, workerID int) {
+	// TODO: fix reconnect logic https://github.com/AlexxIT/go2rtc/pull/2728
 	if err := conn.Start(); err != nil {
 		p.mu.Lock()
 		closed := p.workerID != workerID

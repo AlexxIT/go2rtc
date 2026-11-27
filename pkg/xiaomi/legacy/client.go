@@ -104,15 +104,18 @@ func (c *Client) ReadPacket() (hdr, payload []byte, err error) {
 		return
 	}
 	if c.key != nil {
-		if c.model == ModelAqaraG2 && hdr[0] == tutk.CodecH265 {
-			payload, err = DecodeVideo(payload, c.key)
-		} else {
-			// ModelAqaraG2: audio AAC
-			// ModelIMILABA1: video HEVC, audio PCMA
-			payload, err = crypto.Decode(payload, c.key)
-		}
+		payload, err = decodePayload(c.model, hdr[0], payload, c.key)
 	}
 	return
+}
+
+func decodePayload(model string, codec byte, payload, key []byte) ([]byte, error) {
+	if model == ModelAqaraG2 && (codec == tutk.CodecH265 || codec == tutk.CodecH264) {
+		return DecodeVideo(payload, key)
+	}
+	// ModelAqaraG2: audio AAC
+	// ModelIMILABA1: video HEVC, audio PCMA
+	return crypto.Decode(payload, key)
 }
 
 const (
@@ -224,7 +227,14 @@ func (c *Client) StopMedia() error {
 }
 
 func DecodeVideo(data, key []byte) ([]byte, error) {
-	if string(data[:4]) == "\x00\x00\x00\x01" || data[8] == 0 {
+	if len(data) >= 4 && string(data[:4]) == "\x00\x00\x00\x01" {
+		return data, nil
+	}
+
+	if len(data) < 9 {
+		return nil, nil
+	}
+	if data[8] == 0 {
 		return data, nil
 	}
 
@@ -233,10 +243,16 @@ func DecodeVideo(data, key []byte) ([]byte, error) {
 		return nil, fmt.Errorf("xiaomi: unsupported encryption")
 	}
 
+	if len(data) < 17 {
+		return nil, nil
+	}
 	nonce8 := data[:8]
-	i1 := binary.LittleEndian.Uint32(data[9:])
-	i2 := binary.LittleEndian.Uint32(data[13:])
+	i1 := uint64(binary.LittleEndian.Uint32(data[9:]))
+	i2 := uint64(binary.LittleEndian.Uint32(data[13:]))
 	data = data[17:]
+	if i1+i2 > uint64(len(data)) {
+		return nil, nil
+	}
 	src := data[i1 : i1+i2]
 
 	for i := 32; i+16 < len(src); i += 160 {

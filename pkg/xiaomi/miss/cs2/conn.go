@@ -37,6 +37,8 @@ func Dial(host, transport string) (*Conn, error) {
 	return c, nil
 }
 
+const dataChannels = 4
+
 type Conn struct {
 	net.Conn
 	isTCP bool
@@ -45,7 +47,7 @@ type Conn struct {
 	seqCh0 uint16
 	seqCh3 uint16
 
-	channels [4]*dataChannel
+	channels [dataChannels]*dataChannel
 
 	cmdMu  sync.Mutex
 	cmdAck func()
@@ -118,7 +120,7 @@ func (c *Conn) worker() {
 		c.channels[2].Close()
 	}()
 
-	var keepaliveTS time.Time // only for TCP
+	var keepaliveTS time.Time
 
 	buf := make([]byte, 1200)
 
@@ -137,29 +139,34 @@ func (c *Conn) worker() {
 		switch buf[1] {
 		case msgDrw:
 			ch := buf[5]
-			if ch >= 4 || c.channels[ch] == nil {
-				continue // unsupported channel
+
+			var channel *dataChannel
+			if ch < dataChannels {
+				channel = c.channels[ch]
 			}
-			channel := c.channels[ch]
+
+			// Send ping every second to keep connection alive (both TCP and UDP).
+			// Based on PCAP analysis: official Mi Home app sends PING every ~1s.
+			if now := time.Now(); now.After(keepaliveTS) {
+				_, _ = c.Conn.Write([]byte{magic, msgPing, 0, 0})
+				keepaliveTS = now.Add(time.Second)
+			}
 
 			if c.isTCP {
-				// For TCP we should send ping every second to keep connection alive.
-				// Based on PCAP analysis: official Mi Home app sends PING every ~1s.
-				if now := time.Now(); now.After(keepaliveTS) {
-					_, _ = c.Conn.Write([]byte{magic, msgPing, 0, 0})
-					keepaliveTS = now.Add(time.Second)
+				if channel != nil {
+					err = channel.Push(buf[8:n])
 				}
-
-				err = channel.Push(buf[8:n])
 			} else {
 				var pushed int
 
 				seqHI, seqLO := buf[6], buf[7]
-				seq := uint16(seqHI)<<8 | uint16(seqLO)
-				pushed, err = channel.PushSeq(seq, buf[8:n])
+				if channel != nil {
+					seq := uint16(seqHI)<<8 | uint16(seqLO)
+					pushed, err = channel.PushSeq(seq, buf[8:n])
+				}
 
-				if pushed >= 0 {
-					// For UDP we should send ACK.
+				if pushed >= 0 || channel == nil {
+					// For UDP we should send ACK. Even for an unknown channel.
 					ack := []byte{magic, msgDrwAck, 0, 6, magicDrw, ch, 0, 1, seqHI, seqLO}
 					_, _ = c.Conn.Write(ack)
 				}
@@ -199,6 +206,15 @@ func (c *Conn) Error() error {
 		return c.err
 	}
 	return io.EOF
+}
+
+// Close tells the camera to end the session before closing the socket.
+// Otherwise, on UDP, the camera keeps the session, and one of its few
+// streaming slots, until its own timeout (~20 s).
+func (c *Conn) Close() error {
+	_ = c.Conn.SetWriteDeadline(time.Now().Add(time.Second))
+	_, _ = c.Conn.Write([]byte{magic, msgClose, 0, 0})
+	return c.Conn.Close()
 }
 
 func (c *Conn) ReadCommand() (cmd uint32, data []byte, err error) {
@@ -274,7 +290,7 @@ func (c *Conn) WritePacket(hdr, payload []byte) error {
 	c.seqCh3++
 	binary.BigEndian.PutUint32(req[8:], n)
 	copy(req[offset:], hdr)
-	copy(req[offset+hdrSize:], hdr)
+	copy(req[offset+hdrSize:], payload)
 
 	_, err := c.Conn.Write(req)
 	return err
@@ -307,15 +323,24 @@ func marshalCmd(channel byte, seq uint16, cmd uint32, payload []byte) []byte {
 }
 
 func newUDPConn(host string, port int) (net.Conn, error) {
-	// We using raw net.UDPConn, because RemoteAddr should be changed during handshake.
-	conn, err := net.ListenUDP("udp", nil)
-	if err != nil {
-		return nil, err
-	}
-
 	addr, err := net.ResolveUDPAddr("udp", host)
 	if err != nil {
 		addr = &net.UDPAddr{IP: net.ParseIP(host), Port: port}
+	}
+
+	// Use an IPv4 socket for IPv4 destinations to avoid relying on
+	// dual-stack socket behavior. Normalize the address to 4 bytes
+	// to ensure consistent IP comparisons.
+	network := "udp"
+	if ip4 := addr.IP.To4(); ip4 != nil {
+		network = "udp4"
+		addr.IP = ip4
+	}
+
+	// We using raw net.UDPConn, because RemoteAddr should be changed during handshake.
+	conn, err := net.ListenUDP(network, nil)
+	if err != nil {
+		return nil, err
 	}
 
 	return &udpConn{UDPConn: conn, addr: addr}, nil
@@ -334,7 +359,7 @@ func (c *udpConn) Read(b []byte) (n int, err error) {
 			return 0, err
 		}
 
-		if string(addr.IP) == string(c.addr.IP) || n >= 8 {
+		if addr.IP.Equal(c.addr.IP) || n >= 8 {
 			//log.Printf("<- %x", b[:n])
 			return
 		}
@@ -351,13 +376,22 @@ func (c *udpConn) RemoteAddr() net.Addr {
 }
 
 func (c *udpConn) WriteUntil(req []byte, ok func(res []byte) bool) ([]byte, error) {
-	var t *time.Timer
-	t = time.AfterFunc(1, func() {
-		if _, err := c.Write(req); err == nil && t != nil {
-			t.Reset(time.Second)
+	done := make(chan struct{})
+	defer close(done)
+
+	go func() {
+		for {
+			// Continue retransmitting regardless of send errors until the
+			// expected response arrives or the deadline expires.
+			_, _ = c.Write(req)
+
+			select {
+			case <-done:
+				return
+			case <-time.After(time.Second):
+			}
 		}
-	})
-	defer t.Stop()
+	}()
 
 	buf := make([]byte, 1200)
 
@@ -367,7 +401,7 @@ func (c *udpConn) WriteUntil(req []byte, ok func(res []byte) bool) ([]byte, erro
 			return nil, err
 		}
 
-		if string(addr.IP) != string(c.addr.IP) || n < 16 {
+		if !addr.IP.Equal(c.addr.IP) || n < 16 {
 			continue // skip messages from another IP
 		}
 
@@ -454,7 +488,7 @@ func (c *dataChannel) Push(b []byte) error {
 		select {
 		case c.popBuf <- c.waitData[:c.waitSize]:
 		default:
-			return fmt.Errorf("pop buffer is full")
+			//return fmt.Errorf("pop buffer is full")
 		}
 
 		c.waitData = c.waitData[c.waitSize:]

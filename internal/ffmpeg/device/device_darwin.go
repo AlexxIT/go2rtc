@@ -24,7 +24,12 @@ func queryToInput(query url.Values) string {
 	input := "-f avfoundation"
 
 	if video != "" {
-		video = indexToItem(videos, video)
+		if isDeviceID(video) {
+			input += " -video_device_id " + video
+			video = ""
+		} else {
+			video = indexToItem(videos, video)
+		}
 
 		for key, value := range query {
 			switch key {
@@ -37,18 +42,28 @@ func queryToInput(query url.Values) string {
 	}
 
 	if audio != "" {
-		audio = indexToItem(audios, audio)
+		if isDeviceID(audio) {
+			input += " -audio_device_id " + audio
+			audio = ""
+		} else {
+			audio = indexToItem(audios, audio)
+		}
 	}
 
 	return input + ` -i "` + video + `:` + audio + `"`
 }
 
+func isDeviceID(s string) bool {
+	return strings.HasPrefix(s, "uid:") || strings.HasPrefix(s, "serial:")
+}
+
 func initDevices() {
-	// [AVFoundation indev @ 0x147f04510] AVFoundation video devices:
-	// [AVFoundation indev @ 0x147f04510] [0] FaceTime HD Camera
-	// [AVFoundation indev @ 0x147f04510] [1] Capture screen 0
-	// [AVFoundation indev @ 0x147f04510] AVFoundation audio devices:
-	// [AVFoundation indev @ 0x147f04510] [0] MacBook Pro Microphone
+	// [AVFoundation indev @ 0x1500047d0] AVFoundation video devices:
+	// [AVFoundation indev @ 0x1500047d0] [0] FaceTime HD Camera [uid:XXXXXXXX]
+	// [AVFoundation indev @ 0x1500047d0] [1] USB Camera [uid:XXXXXXXX] [serial:ABCD1234]
+	// [AVFoundation indev @ 0x1500047d0] [2] Capture screen 0
+	// [AVFoundation indev @ 0x1500047d0] AVFoundation audio devices:
+	// [AVFoundation indev @ 0x1500047d0] [0] MacBook Pro Microphone [uid:BuiltInMicrophoneDevice]
 	cmd := exec.Command(
 		Bin, "-hide_banner", "-list_devices", "true", "-f", "avfoundation", "-i", "",
 	)
@@ -74,6 +89,11 @@ func initDevices() {
 
 		name := m[1]
 
+		// remove unique IDs from device name output
+		if i := strings.Index(name, " [uid:"); i >= 0 {
+			name = name[:i]
+		}
+
 		switch kind {
 		case core.KindVideo:
 			videos = append(videos, name)
@@ -82,7 +102,7 @@ func initDevices() {
 		}
 
 		streams = append(streams, &api.Source{
-			Name: name, URL: "ffmpeg:device?" + kind + "=" + name,
+			Name: m[1], URL: "ffmpeg:device?" + kind + "=" + name,
 		})
 	}
 }

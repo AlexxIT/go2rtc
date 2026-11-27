@@ -28,6 +28,9 @@ func Init() {
 
 var log zerolog.Logger
 
+const keyframeTimeout = 15 * time.Second
+
+// noinspection DuplicatedCode
 func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 	// Chrome 105 does two requests: without Range and with `Range: bytes=0-`
 	ua := r.UserAgent()
@@ -55,10 +58,26 @@ func handlerKeyframe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ctx := r.Context() // handle when the client drops the connection
+
+	if timeout := core.ParseDuration(query.Get("timeout"), keyframeTimeout); timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
+
+	go func() {
+		<-ctx.Done()
+		stream.RemoveConsumer(cons)
+	}()
+
 	once := &core.OnceBuffer{} // init and first frame
 	_, _ = cons.WriteTo(once)
 
-	stream.RemoveConsumer(cons)
+	if once.Len() == 0 {
+		http.Error(w, "can't get frame", http.StatusInternalServerError)
+		return
+	}
 
 	// Apple Safari won't show frame without length
 	header := w.Header()
@@ -129,8 +148,7 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context() // handle when the client drops the connection
 
-	if i := core.Atoi(query.Get("duration")); i > 0 {
-		timeout := time.Second * time.Duration(i)
+	if timeout := core.ParseDuration(query.Get("duration"), 0); timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, timeout)
 		defer cancel()
@@ -138,7 +156,6 @@ func handlerMP4(w http.ResponseWriter, r *http.Request) {
 
 	go func() {
 		<-ctx.Done()
-		_ = cons.Stop()
 		stream.RemoveConsumer(cons)
 	}()
 

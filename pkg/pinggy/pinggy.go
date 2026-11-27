@@ -49,6 +49,7 @@ func NewClient(proto string) (*Client, error) {
 		SSH: client,
 		TCP: ln,
 		API: &http.Client{
+			Timeout: 5 * time.Second,
 			Transport: &http.Transport{
 				DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 					return client.Dial(network, addr)
@@ -112,7 +113,7 @@ func (c *Client) Proxy(address string) error {
 func proxy(conn1 net.Conn, address string) {
 	defer conn1.Close()
 
-	conn2, err := net.Dial("tcp", address)
+	conn2, err := net.DialTimeout("tcp", address, 5*time.Second)
 	if err != nil {
 		return
 	}

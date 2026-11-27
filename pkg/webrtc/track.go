@@ -3,6 +3,7 @@ package webrtc
 import (
 	"sync"
 
+	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v4"
 )
@@ -14,6 +15,7 @@ type Track struct {
 	sequence uint16
 	ssrc     uint32
 	writer   webrtc.TrackLocalWriter
+	sender   *core.Sender // asked for a keyframe on PLI/FIR
 	mu       sync.Mutex
 }
 
@@ -80,4 +82,22 @@ func (t *Track) WriteRTP(payloadType uint8, packet *rtp.Packet) (err error) {
 
 	t.mu.Unlock()
 	return
+}
+
+func (t *Track) setSender(sender *core.Sender) {
+	t.mu.Lock()
+	t.sender = sender
+	t.mu.Unlock()
+}
+
+// requestKeyframe asks the source of the track for a keyframe, the source is
+// looked up on each call, because AddTrack can bind the sender to a new one
+func (t *Track) requestKeyframe() {
+	t.mu.Lock()
+	sender := t.sender
+	t.mu.Unlock()
+
+	if sender != nil {
+		sender.RequestKeyframe()
+	}
 }

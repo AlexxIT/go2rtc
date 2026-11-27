@@ -130,25 +130,10 @@ func urlParse(rawURL string) (*url.URL, error) {
 
 	u, err := url.Parse(rawURL)
 	if err != nil && strings.HasSuffix(err.Error(), "after host") {
-		if i := indexN(rawURL, '/', 3); i > 0 {
-			return urlParse(rawURL[:i] + ":" + rawURL[i:])
-		}
+		// Fix URLs like this: rtsp://::ffff:192.168.1.123/
+		rawURL = regexp.MustCompile("/[^/]+:").ReplaceAllString(rawURL, "/")
+		return urlParse(rawURL)
 	}
 
 	return u, err
-}
-
-func indexN(s string, c byte, n int) int {
-	var offset int
-	for {
-		i := strings.IndexByte(s[offset:], c)
-		if i < 0 {
-			break
-		}
-		if n--; n == 0 {
-			return offset + i
-		}
-		offset += i + 1
-	}
-	return -1
 }

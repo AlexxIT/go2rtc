@@ -68,6 +68,12 @@ func kinesisClient(
 		return nil, err
 	}
 
+	defer func() {
+		if err != nil {
+			_ = pc.Close()
+		}
+	}()
+
 	// protect from sending ICE candidate before Offer
 	var sendOffer core.Waiter
 

@@ -1,7 +1,10 @@
 package api
 
 import (
+	"crypto/sha256"
+	"crypto/subtle"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -165,6 +168,17 @@ func HandleFunc(pattern string, handler http.HandlerFunc) {
 	http.HandleFunc(pattern, handler)
 }
 
+func HandleFuncNoAuth(pattern string, handler http.HandlerFunc) {
+	// TODO: rewrite to Go 1.22+
+	// mux := http.NewServeMux()
+	// mux.HandleFunc("GET /onvif/", ...)
+	// private := http.NewServeMux()
+	// mux.HandleFunc("GET /api", ...)
+	// mux.Handle("/api/", middlewareAuth(private))
+	noauthPrefixes = append(noauthPrefixes, pattern)
+	HandleFunc(pattern, handler)
+}
+
 // ResponseJSON important always add Content-Type
 // so go won't need to call http.DetectContentType
 func ResponseJSON(w http.ResponseWriter, v any) {
@@ -209,11 +223,25 @@ func isLoopback(remoteAddr string) bool {
 	return strings.HasPrefix(remoteAddr, "127.") || strings.HasPrefix(remoteAddr, "[::1]") || remoteAddr == "@"
 }
 
+var noauthPrefixes []string
+
 func middlewareAuth(username, password string, localAuth bool, next http.Handler) http.Handler {
+	// We use ConstantTimeCompare and Sum256 to prevent an attacker from guessing the password length.
+	// https://github.com/AlexxIT/go2rtc/pull/2693
+	credentials := base64.StdEncoding.EncodeToString([]byte(username + ":" + password))
+	wantAuthHash := sha256.Sum256([]byte("Basic " + credentials))
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		for _, prefix := range noauthPrefixes {
+			if strings.HasPrefix(r.URL.Path, prefix) {
+				next.ServeHTTP(w, r)
+				return
+			}
+		}
+
 		if localAuth || !isLoopback(r.RemoteAddr) {
-			user, pass, ok := r.BasicAuth()
-			if !ok || user != username || pass != password {
+			gotAuthHash := sha256.Sum256([]byte(r.Header.Get("Authorization")))
+			if subtle.ConstantTimeCompare(gotAuthHash[:], wantAuthHash[:]) != 1 {
 				w.Header().Set("Www-Authenticate", `Basic realm="go2rtc"`)
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
@@ -223,7 +251,6 @@ func middlewareAuth(username, password string, localAuth bool, next http.Handler
 		next.ServeHTTP(w, r)
 	})
 }
-
 func middlewareCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")

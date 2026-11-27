@@ -29,6 +29,27 @@ func naluTypes(avcc []byte) (types []byte) {
 	return
 }
 
+func TestDecodeAVCCTruncatedPayload(t *testing.T) {
+	valid := decode("00000002 6588")
+	want := decode("00000001 6588")
+	for _, tail := range [][]byte{
+		{0},
+		{0, 0},
+		{0, 0, 0},
+		{0, 0, 0, 0},
+		{0xFF, 0xFF, 0xFF, 0xFF},
+		{0, 0, 0, 2, 0x41},
+	} {
+		input := append(bytes.Clone(valid), tail...)
+		require.Empty(t, DecodeAVCC(tail, true))
+		require.Equal(t, want, DecodeAVCC(input, true))
+		require.Equal(t, append([]byte(startAUD), want...), DecodeAVCCWithAUD(input))
+		require.Equal(t, append(bytes.Clone(valid), tail...), input)
+		require.Equal(t, want, DecodeAVCC(input, false))
+		require.Equal(t, want, input[:len(want)])
+	}
+}
+
 func TestFFmpegH264(t *testing.T) {
 	// ffmpeg -re -i bbb.mp4 -c copy -f h264 -
 	s := "000000016764001fac2484014016ec0440000003004000000c23c60c92 0000000168ee32c8b0 00000165888080033ffef5f8454f32cb1bb4203f854dd69bc2ca91b2bce1fb3527440000030000030000030000030050999841d1afd324aea000000300000f600011c0001b40004e40011f0003b80010800059000238000be0005e000220001100000300000300000300000300000300000300000300000300000300000300000300000300000300000300000300000300000300000300000300000300000300000300000300000300000300000300000300000300000300000300000300000300000300000300000300000300000300000300004041 00000001"

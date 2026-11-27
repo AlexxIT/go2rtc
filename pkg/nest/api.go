@@ -60,7 +60,7 @@ func NewAPI(clientID, clientSecret, refreshToken string) (*API, error) {
 		"refresh_token": []string{refreshToken},
 	}
 
-	client := &http.Client{Timeout: time.Second * 5000}
+	client := &http.Client{Timeout: 5 * time.Second}
 	res, err := client.PostForm("https://www.googleapis.com/oauth2/v4/token", data)
 	if err != nil {
 		return nil, err
@@ -101,7 +101,7 @@ func (a *API) GetDevices(projectID string) ([]DeviceInfo, error) {
 
 	req.Header.Set("Authorization", "Bearer "+a.Token)
 
-	client := &http.Client{Timeout: time.Second * 5000}
+	client := &http.Client{Timeout: 5 * time.Second}
 	res, err := client.Do(req)
 	if err != nil {
 		return nil, err
@@ -178,7 +178,7 @@ func (a *API) ExchangeSDP(projectID, deviceID, offer string) (string, error) {
 
 		req.Header.Set("Authorization", "Bearer "+a.Token)
 
-		client := &http.Client{Timeout: time.Second * 5000}
+		client := &http.Client{Timeout: 5 * time.Second}
 		res, err := client.Do(req)
 		if err != nil {
 			return "", err
@@ -295,7 +295,7 @@ func (a *API) ExtendStream() error {
 
 	req.Header.Set("Authorization", "Bearer "+a.Token)
 
-	client := &http.Client{Timeout: time.Second * 5000}
+	client := &http.Client{Timeout: 5 * time.Second}
 	res, err := client.Do(req)
 	if err != nil {
 		return err
@@ -348,7 +348,7 @@ func (a *API) GenerateRtspStream(projectID, deviceID string) (string, error) {
 
 	req.Header.Set("Authorization", "Bearer "+a.Token)
 
-	client := &http.Client{Timeout: time.Second * 5000}
+	client := &http.Client{Timeout: 5 * time.Second}
 	res, err := client.Do(req)
 	if err != nil {
 		return "", err
@@ -412,7 +412,7 @@ func (a *API) StopRTSPStream() error {
 
 	req.Header.Set("Authorization", "Bearer "+a.Token)
 
-	client := &http.Client{Timeout: time.Second * 5000}
+	client := &http.Client{Timeout: 5 * time.Second}
 	res, err := client.Do(req)
 	if err != nil {
 		return err

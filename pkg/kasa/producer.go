@@ -206,10 +206,10 @@ func (c *Producer) probe() error {
 // GetTimestamp - return timestamp in seconds
 func GetTimestamp(header http.Header) float64 {
 	if s := header.Get("X-Timestamp"); s != "" {
-		if f, _ := strconv.ParseFloat(s, 32); f != 0 {
+		if f, _ := strconv.ParseFloat(s, 64); f != 0 {
 			return f
 		}
 	}
 
-	return float64(time.Duration(time.Now().UnixNano()) / time.Second)
+	return float64(time.Now().UnixNano()) / float64(time.Second)
 }

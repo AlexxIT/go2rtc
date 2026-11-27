@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/AlexxIT/go2rtc/pkg/h264/annexb"
 )
 
 const (
@@ -19,13 +20,22 @@ const (
 	NALUTypeAUD    = 9 // Access unit delimiter
 )
 
+// NALUType returns 0xFF if the AVCC NAL unit header is missing.
 func NALUType(b []byte) byte {
+	if len(b) < 5 {
+		return 0xFF
+	}
 	return b[4] & 0x1F
 }
 
 // IsKeyframe - check if any NALU in one AU is Keyframe
 func IsKeyframe(b []byte) bool {
-	for {
+	for len(b) > 0 {
+		size := annexb.AVCCNALUSize(b)
+		if size == 0 {
+			break
+		}
+
 		switch NALUType(b) {
 		case NALUTypePFrame:
 			return false
@@ -33,14 +43,9 @@ func IsKeyframe(b []byte) bool {
 			return true
 		}
 
-		size := int(binary.BigEndian.Uint32(b)) + 4
-		if size < len(b) {
-			b = b[size:]
-			continue
-		} else {
-			return false
-		}
+		b = b[size:]
 	}
+	return false
 }
 
 func Join(ps, iframe []byte) []byte {
@@ -73,7 +78,8 @@ func GetProfileLevelID(fmtp string) string {
 		// some cameras has wrong profile-level-id
 		// https://github.com/AlexxIT/go2rtc/issues/155
 		if s := core.Between(fmtp, "sprop-parameter-sets=", ","); s != "" {
-			if sps, _ := base64.StdEncoding.DecodeString(s); len(sps) >= 4 {
+			sps, _ := base64.StdEncoding.DecodeString(s)
+			if sps = trimStartCode(sps); len(sps) >= 4 {
 				conf = sps[1:4]
 			}
 		} else if s = core.Between(fmtp, "profile-level-id=", ";"); s != "" {
@@ -118,28 +124,45 @@ func GetParameterSet(fmtp string) (sps, pps []byte) {
 	sps, _ = base64.StdEncoding.DecodeString(s[:i])
 	pps, _ = base64.StdEncoding.DecodeString(s[i+1:])
 
-	return
+	// some cameras put an Annex B start code before each parameter set
+	// https://github.com/AlexxIT/go2rtc/issues/2729
+	return trimStartCode(sps), trimStartCode(pps)
 }
 
-// GetFmtpLine from SPS+PPS+IFrame in AVC format
+func trimStartCode(b []byte) []byte {
+	// Minimal SPS - 6 bytes, PPS - 3 bytes, so ">= 4" is safe check.
+	if len(b) >= 4 && b[0] == 0 && b[1] == 0 {
+		if b[2] == 1 {
+			return b[3:]
+		}
+		if b[2] == 0 && b[3] == 1 {
+			return b[4:]
+		}
+	}
+	return b
+}
+
+// GetFmtpLine builds an fmtp line from the parameter sets in an AVCC payload.
 func GetFmtpLine(avc []byte) string {
 	s := "packetization-mode=1"
 
-	for {
-		size := 4 + int(binary.BigEndian.Uint32(avc))
+	for len(avc) >= 5 {
+		size := int(binary.BigEndian.Uint32(avc))
+		if size <= 0 || size > len(avc)-4 {
+			break
+		}
 
 		switch NALUType(avc) {
 		case NALUTypeSPS:
-			s += ";profile-level-id=" + hex.EncodeToString(avc[5:8])
-			s += ";sprop-parameter-sets=" + base64.StdEncoding.EncodeToString(avc[4:size])
+			if size >= 4 {
+				s += ";profile-level-id=" + hex.EncodeToString(avc[5:8])
+				s += ";sprop-parameter-sets=" + base64.StdEncoding.EncodeToString(avc[4:4+size])
+			}
 		case NALUTypePPS:
-			s += "," + base64.StdEncoding.EncodeToString(avc[4:size])
+			s += "," + base64.StdEncoding.EncodeToString(avc[4:4+size])
 		}
 
-		if size < len(avc) {
-			avc = avc[size:]
-		} else {
-			return s
-		}
+		avc = avc[4+size:]
 	}
+	return s
 }

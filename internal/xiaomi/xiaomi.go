@@ -355,7 +355,7 @@ const AppXiaomiHome = "xiaomiio"
 
 func GetBaseURL(region string) string {
 	switch region {
-	case "de", "i2", "ru", "sg", "us":
+	case "de", "i2", "in", "ru", "sg", "tw", "us":
 		return "https://" + region + ".api.io.mi.com/app"
 	}
 	return "https://api.io.mi.com/app"

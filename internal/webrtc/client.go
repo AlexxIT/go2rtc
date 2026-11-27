@@ -190,6 +190,12 @@ func whepClient(url string) (core.Producer, error) {
 		return nil, err
 	}
 
+	defer func() {
+		if err != nil {
+			_ = pc.Close()
+		}
+	}()
+
 	prod := webrtc.NewConn(pc)
 	prod.Mode = core.ModeActiveProducer
 	prod.Protocol = "http"
@@ -212,7 +218,7 @@ func whepClient(url string) (core.Producer, error) {
 	}
 	req.Header.Set("Content-Type", MimeSDP)
 
-	client := http.Client{Timeout: time.Second * 5000}
+	client := http.Client{Timeout: 5 * time.Second}
 	defer client.CloseIdleConnections()
 
 	res, err := client.Do(req)

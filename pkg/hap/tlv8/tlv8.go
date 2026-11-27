@@ -297,9 +297,12 @@ func unmarshalStruct(b []byte, value reflect.Value) error {
 func unmarshalValue(v []byte, value reflect.Value) error {
 	switch value.Kind() {
 	case reflect.Uint8:
-		if len(v) != 1 {
+		if len(v) < 1 {
 			return errors.New("tlv8: wrong size: " + value.Type().Name())
 		}
+		// some cameras (ex. Logitech Circle 2) encode byte values as uint16le
+		// (audio codec type `01 02 03 00`), so accept any size and take the
+		// low byte (TLV8 integers are little-endian)
 		value.SetUint(uint64(v[0]))
 
 	case reflect.Uint16:

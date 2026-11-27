@@ -5,11 +5,13 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/aac"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
+	"github.com/AlexxIT/go2rtc/pkg/h264/annexb"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
 	"github.com/pion/rtp"
 )
@@ -98,25 +100,43 @@ func (c *Producer) Start() error {
 				continue
 			}
 
+			// Standard video tags include a composition time and enhanced tags a FourCC.
+			headerSize := 5
+
+			if len(pkt.Payload) < headerSize {
+				continue
+			}
+
 			if isExHeader(pkt.Payload) {
 				switch packetType := pkt.Payload[0] & 0b1111; packetType {
 				case PacketTypeCodedFrames:
 					// frame type 4b, packet type 4b, fourCC 32b, composition time 24b
-					pkt.Payload = pkt.Payload[8:]
+					headerSize = 8
 				case PacketTypeCodedFramesX:
 					// frame type 4b, packet type 4b, fourCC 32b
-					pkt.Payload = pkt.Payload[5:]
+					//headerSize = 5
 				default:
 					continue
 				}
 			} else {
-				switch pkt.Payload[1] {
-				case PacketTypeAVCNALU:
-					// frame type 4b, codecID 4b, avc packet type 8b, composition time 24b
-					pkt.Payload = pkt.Payload[5:]
-				default:
+				if pkt.Payload[1] != PacketTypeAVCNALU {
 					continue
 				}
+				//headerSize = 5
+			}
+
+			if len(pkt.Payload) <= headerSize {
+				continue
+			}
+
+			naluHeaderSize := 1
+			if c.video.Codec.Name == core.CodecH265 {
+				naluHeaderSize = 2
+			}
+
+			pkt.Payload = annexb.NormalizeAVCC(pkt.Payload[headerSize:], naluHeaderSize)
+			if len(pkt.Payload) == 0 {
+				continue
 			}
 
 			pkt.Timestamp = TimeToRTP(pkt.Timestamp, c.video.Codec.ClockRate)
@@ -216,6 +236,11 @@ func (c *Producer) probe() error {
 				switch codecID := pkt.Payload[0] & 0b1111; codecID {
 				case CodecH264:
 					codec = h264.ConfigToCodec(pkt.Payload[5:])
+					// Some encoders send an empty AVC header before the real one.
+					// Keep probing until SPS/PPS arrive. See https://github.com/AlexxIT/go2rtc/issues/2687
+					if !strings.Contains(codec.FmtpLine, "sprop-parameter-sets") {
+						continue
+					}
 				case CodecHEVC:
 					codec = h265.ConfigToCodec(pkt.Payload[5:])
 				default:
@@ -274,13 +299,17 @@ func (c *Producer) readHeader() error {
 func (c *Producer) readPacket() (*rtp.Packet, error) {
 	// https://rtmp.veriskope.com/pdf/video_file_format_spec_v10.pdf
 	b := make([]byte, 4+11)
-	if _, err := io.ReadFull(c.rd, b); err != nil {
-		return nil, err
+	var size uint32
+	// skip tags with zero data size, some RTMP servers send an empty audio
+	// message before the codec headers, and probe and Start read the payload
+	for size == 0 {
+		if _, err := io.ReadFull(c.rd, b); err != nil {
+			return nil, err
+		}
+		size = uint32(b[4+1])<<16 | uint32(b[4+2])<<8 | uint32(b[4+3])
 	}
 
 	b = b[4 : 4+11] // skip previous tag size
-
-	size := uint32(b[1])<<16 | uint32(b[2])<<8 | uint32(b[3])
 
 	pkt := &rtp.Packet{
 		Header: rtp.Header{

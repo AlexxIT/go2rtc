@@ -2,6 +2,8 @@ package tcp
 
 import (
 	"crypto/md5"
+	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
@@ -100,7 +102,9 @@ func (a *Auth) Validate(req *Request) (valid, empty bool) {
 		a.header = "Basic " + B64(a.user, a.pass)
 	}
 
-	return header == a.header, false
+	got := sha256.Sum256([]byte(header))
+	want := sha256.Sum256([]byte(a.header))
+	return subtle.ConstantTimeCompare(got[:], want[:]) == 1, false
 }
 
 func (a *Auth) ReadNone(res *Response) bool {
