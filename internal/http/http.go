@@ -42,6 +42,11 @@ func handleHTTP(rawURL string) (core.Producer, error) {
 
 		for _, header := range query["header"] {
 			key, value, _ := strings.Cut(header, ":")
+			// Source options cannot contain whitespace (API refuses them), so a
+			// value like "Bearer <token>" is passed percent-encoded.
+			if unescaped, err := url.QueryUnescape(value); err == nil {
+				value = unescaped
+			}
 			req.Header.Add(key, strings.TrimSpace(value))
 		}
 	}
