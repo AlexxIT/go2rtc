@@ -82,6 +82,7 @@ func (hs *hksvSession) handleOpen(streamID int) error {
 		hs.log.Error().Err(err).Str("stream", hs.server.stream).Msg("[hksv] add consumer failed")
 		return nil
 	}
+	consumer.TracksAdded()
 
 	hs.consumer = consumer
 	hs.server.AddConn(consumer)

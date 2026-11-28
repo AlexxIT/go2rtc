@@ -159,6 +159,22 @@ func (c *HKSVConsumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Re
 	return nil
 }
 
+// TracksAdded builds the init segment from the tracks the stream gave this
+// consumer, once streams.AddConsumer has returned: every track that exists has
+// been added by then, so a stream without audio need not wait out Activate's
+// timeout for an AAC track that will never come.
+func (c *HKSVConsumer) TracksAdded() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	select {
+	case <-c.initDone:
+	default:
+		if len(c.Senders) > 0 {
+			c.buildInit()
+		}
+	}
+}
+
 // buildInit creates the init segment from currently connected tracks.
 // Must only be called once (closes initDone).
 func (c *HKSVConsumer) buildInit() {
