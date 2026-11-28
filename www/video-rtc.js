@@ -530,6 +530,11 @@ export class VideoRTC extends HTMLElement {
                 this.pcState = WebSocket.CLOSED;
                 this.pc = null;
 
+                // failed before it played (WebSocket still open),
+                // start the same MJPEG fallback as on the webrtc/offer error
+                const fallback = this.ws && this.onmessage['mjpeg'];
+                if (fallback) fallback({type: 'error', value: 'webrtc: connection failed'});
+
                 this.onconnect();
             }
         });
