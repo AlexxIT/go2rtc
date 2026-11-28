@@ -7,7 +7,7 @@
 //
 //	srv, err := hksv.NewServer(hksv.Config{
 //	    StreamName: "camera1",
-//	    Pin:        "27041991",
+//	    Pin:        "19550224",
 //	    HKSV:       true,
 //	    MotionMode: "detect",
 //	    Streams:    myStreamProvider,
@@ -91,7 +91,7 @@ type ConnTracker interface {
 // Config for creating an HKSV server.
 type Config struct {
 	StreamName      string
-	Pin             string   // HomeKit pairing PIN (e.g., "27041991")
+	Pin             string   // HomeKit pairing PIN (e.g., "19550224")
 	Name            string   // mDNS display name (auto-generated if empty)
 	DeviceID        string   // MAC-like device ID (auto-generated if empty)
 	DevicePrivate   string   // ed25519 private key hex (auto-generated if empty)
@@ -150,7 +150,7 @@ type Server struct {
 // NewServer creates a new HKSV server with the given configuration.
 func NewServer(cfg Config) (*Server, error) {
 	if cfg.Pin == "" {
-		cfg.Pin = "27041991"
+		cfg.Pin = hap.DefaultPIN
 	}
 
 	pin, err := hap.SanitizePin(cfg.Pin)

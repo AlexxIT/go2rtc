@@ -69,7 +69,7 @@ func main() {
 
     srv, err := hksv.NewServer(hksv.Config{
         StreamName: "my-camera",
-        Pin:        "27041991",
+        Pin:        "19550224",
         HKSV:       true,
         MotionMode: "detect",
         Streams:    &myStreamProvider{},
@@ -105,7 +105,7 @@ func main() {
 ```go
 srv, err := hksv.NewServer(hksv.Config{
     StreamName: "my-camera",
-    Pin:        "27041991",
+    Pin:        "19550224",
     HKSV:       true,
     MotionMode: "detect",
 
@@ -124,7 +124,7 @@ srv, err := hksv.NewServer(hksv.Config{
 ```go
 srv, err := hksv.NewServer(hksv.Config{
     StreamName: "basic-cam",
-    Pin:        "27041991",
+    Pin:        "19550224",
     HKSV:       false, // no HKSV recording
 
     Streams:    &myStreamProvider{},
@@ -139,7 +139,7 @@ srv, err := hksv.NewServer(hksv.Config{
 ```go
 srv, err := hksv.NewServer(hksv.Config{
     StreamName: "proxied-cam",
-    Pin:        "27041991",
+    Pin:        "19550224",
     ProxyURL:   "homekit://192.168.1.100:51827?device_id=AA:BB:CC:DD:EE:FF&...",
 
     Logger: logger,
@@ -152,7 +152,7 @@ srv, err := hksv.NewServer(hksv.Config{
 ```go
 srv, err := hksv.NewServer(hksv.Config{
     StreamName: "my-doorbell",
-    Pin:        "27041991",
+    Pin:        "19550224",
     CategoryID: "doorbell", // creates doorbell accessory
     HKSV:       true,
     MotionMode: "detect",
@@ -376,7 +376,7 @@ func (h *srtpLiveStreamHandler) StopStream(sessionID string, ct hksv.ConnTracker
 type Config struct {
     // Required
     StreamName string           // stream identifier (used for lookups)
-    Pin        string           // HomeKit pairing PIN, e.g. "27041991" (default)
+    Pin        string           // HomeKit pairing PIN, e.g. "19550224" (default)
     Port       uint16           // HAP HTTP port
     Logger     zerolog.Logger   // structured logger
     Streams    StreamProvider   // stream registry (required for HKSV/live/motion)
@@ -562,7 +562,7 @@ var entries []*mdns.ServiceEntry
 for _, name := range cameras {
     srv, _ := hksv.NewServer(hksv.Config{
         StreamName: name,
-        Pin:        "27041991",
+        Pin:        "19550224",
         HKSV:       true,
         MotionMode: "detect",
         Streams:    provider,
@@ -637,7 +637,7 @@ go build -o hksv-camera ./pkg/hksv/example
 | Flag | Default | Description |
 |------|---------|-------------|
 | `-url` | (required) | RTSP stream URL |
-| `-pin` | `27041991` | HomeKit pairing PIN |
+| `-pin` | `19550224` | HomeKit pairing PIN |
 | `-port` | `0` (auto) | HAP HTTP port |
 | `-motion` | `detect` | Motion mode: `detect`, `continuous`, `api` |
 | `-threshold` | `2.0` | Motion sensitivity (lower = more sensitive) |
