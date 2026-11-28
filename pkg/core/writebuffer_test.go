@@ -4,7 +4,52 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 )
+
+func TestWriteBufferCloseUnblocksWriteTo(t *testing.T) {
+	wb := NewWriteBuffer(nil)
+	returned := make(chan struct{})
+	go func() {
+		_, _ = wb.WriteTo(&OnceBuffer{})
+		close(returned)
+	}()
+
+	select {
+	case <-returned:
+		t.Fatal("WriteTo returned before Close")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	if err := wb.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-returned:
+	case <-time.After(time.Second):
+		t.Fatal("WriteTo did not unblock after Close")
+	}
+}
+
+func TestWriteBufferCloseBeforeWriteTo(t *testing.T) {
+	wb := NewWriteBuffer(nil)
+	if err := wb.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	returned := make(chan struct{})
+	go func() {
+		_, _ = wb.WriteTo(&OnceBuffer{})
+		close(returned)
+	}()
+
+	select {
+	case <-returned:
+	case <-time.After(time.Second):
+		t.Fatal("WriteTo blocked after Close")
+	}
+}
 
 // recyclableWriter emulates a net/http response writer: after the handler
 // returns (i.e. WriteTo unblocks), net/http puts the response bufio.Writer
