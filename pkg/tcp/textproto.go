@@ -71,6 +71,9 @@ func ReadResponse(r *bufio.Reader) (*Response, error) {
 	if val := res.Header.Get("Content-Length"); val != "" {
 		var i int
 		i, err = strconv.Atoi(val)
+		if err != nil {
+			return nil, err
+		}
 		res.Body = make([]byte, i)
 		if _, err = io.ReadAtLeast(r, res.Body, i); err != nil {
 			return nil, err
@@ -159,6 +162,9 @@ func ReadRequest(r *bufio.Reader) (*Request, error) {
 	if val := req.Header.Get("Content-Length"); val != "" {
 		var i int
 		i, err = strconv.Atoi(val)
+		if err != nil {
+			return nil, err
+		}
 		req.Body = make([]byte, i)
 		if _, err = io.ReadAtLeast(r, req.Body, i); err != nil {
 			return nil, err
