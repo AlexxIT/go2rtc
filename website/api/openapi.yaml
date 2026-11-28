@@ -123,11 +123,18 @@ paths:
                 properties:
                   config_path: { type: string, example: "/config/go2rtc.yaml" }
                   host: { type: string, example: "192.168.1.123:1984" }
+                  pid: { type: integer, example: 12345 }
                   rtsp:
                     type: object
                     properties:
                       listen: { type: string, example: ":8554" }
                       default_query: { type: string, example: "video&audio" }
+                  system:
+                    type: object
+                    properties:
+                      cpu_usage: { type: number, format: float, example: 23.5, description: "CPU usage percent (0-100)" }
+                      mem_total: { type: integer, format: int64, example: 17179869184, description: "Total physical memory in bytes" }
+                      mem_used: { type: integer, format: int64, example: 8589934592, description: "Used memory in bytes" }
                   version: { type: string, example: "1.9.12" }
 
   /api/exit:

@@ -122,6 +122,9 @@ document.head.innerHTML += `
 </style>
 `;
 
+// Common UI refresh intervals (ms)
+window.SYSTEM_INFO_UPDATE_INTERVAL_MS = 2000;
+
 document.body.innerHTML = `
 <header>
     <nav>
