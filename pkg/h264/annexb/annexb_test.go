@@ -116,3 +116,63 @@ func TestUSB(t *testing.T) {
 	n = naluTypes(b)
 	require.Equal(t, []byte{0x41}, n)
 }
+
+func TestH264SPSWithNalRefIDC2(t *testing.T) {
+	// H.264 SPS with nal_ref_idc = 2: 0x47 is also an HEVC AUD header, but this
+	// NAL unit is much longer than the three bytes of an HEVC AUD.
+	s := "00000001474d401e99a05825a100000303e800009c4084 0000000148ee3c80"
+	b := EncodeToAVCC(decode(s))
+	n := naluTypes(b)
+	require.Equal(t, []byte{0x47, 0x48}, n)
+}
+
+func TestH264SEIWithNalRefIDC2(t *testing.T) {
+	// H.264 SEI with nal_ref_idc = 2: 0x46 matches the HEVC AUD mask as well.
+	s := "0000000146060050a1b2c3d4e5f60718293a4b5c6d7e8f90 00000001674d401e99a05825a100000303e800009c4084 0000000168ee3c80"
+	b := EncodeToAVCC(decode(s))
+	n := naluTypes(b)
+	require.Equal(t, []byte{0x46, 0x67, 0x68}, n)
+}
+
+func TestHEVCAUDIsStillDropped(t *testing.T) {
+	// HEVC AUD is exactly three bytes: two header bytes and the picture type.
+	s := "00000001460150 0000000140010c01ffff01600000030090000003000003005dba0240 0000000142010101600000030090000003000003005da00280802d165bab930bc05a7080000003008000000c04"
+	b := EncodeToAVCC(decode(s))
+	n := naluTypes(b)
+	require.Equal(t, []byte{0x40, 0x42}, n)
+}
+
+func TestIsAUD(t *testing.T) {
+	tests := []struct {
+		nalu string
+		want bool
+	}{
+		{"", false},
+		{"46", false},
+		{"4601", false},
+
+		// H264 AUD.
+		{"09f0", true},
+
+		// H265 AUD with all valid picture types.
+		{"460110", true},
+		{"460130", true},
+		{"460150", true},
+
+		// Invalid H265 AUD.
+		{"460050", false},   // zero temporal ID
+		{"460151", false},   // invalid trailing bits
+		{"460170", false},   // invalid picture type
+		{"46015080", false}, // invalid size
+
+		// H264 SPS and noncompliant SEI.
+		{"474d401e", false},
+		{"46060050", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.nalu, func(t *testing.T) {
+			require.Equal(t, tt.want, isAUD(decode(tt.nalu)))
+		})
+	}
+}
