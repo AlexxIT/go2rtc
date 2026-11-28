@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/AlexxIT/go2rtc/pkg/audio"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 )
 
@@ -62,7 +63,11 @@ func GetProducer(url string) (core.Producer, error) {
 		}
 
 		if handler, ok := handlers[scheme]; ok {
-			return handler(url)
+			prod, err := handler(url)
+			if err != nil {
+				return nil, err
+			}
+			return audio.WithProducer(prod), nil
 		}
 	}
 

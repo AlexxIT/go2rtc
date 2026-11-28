@@ -107,3 +107,52 @@ func FramesPerDuration(codec *core.Codec, duration time.Duration) int {
 func BytesPerDuration(codec *core.Codec, duration time.Duration) int {
 	return BytesPerFrame(codec) * FramesPerDuration(codec, duration)
 }
+
+// The shared PCM converter downmixes before resampling. Keep independent
+// resampler state for each channel when both input and output are stereo.
+func TranscodeChannels(dst, src *core.Codec) func([]byte) []byte {
+	if dst.Name == src.Name && dst.ClockRate == src.ClockRate && dst.Channels == src.Channels {
+		return func(data []byte) []byte { return data }
+	}
+	if src.Channels != 2 || dst.Channels != 2 {
+		return transcodeFrames(dst, src)
+	}
+	monoSrc, monoDst := src.Clone(), dst.Clone()
+	monoSrc.Channels, monoDst.Channels = 1, 1
+	left, right := transcodeFrames(monoDst, monoSrc), transcodeFrames(monoDst, monoSrc)
+	inBytes, outBytes := BytesPerSample(src), BytesPerSample(dst)
+	return func(data []byte) []byte {
+		l, r := make([]byte, len(data)/2), make([]byte, len(data)/2)
+		for i := 0; i < len(data)/2; i += inBytes {
+			copy(l[i:i+inBytes], data[2*i:2*i+inBytes])
+			copy(r[i:i+inBytes], data[2*i+inBytes:2*i+2*inBytes])
+		}
+		l, r = left(l), right(r)
+		out := make([]byte, min(len(l), len(r))*2)
+		for i := 0; i < len(out)/2; i += outBytes {
+			copy(out[2*i:2*i+outBytes], l[i:i+outBytes])
+			copy(out[2*i+outBytes:2*i+2*outBytes], r[i:i+outBytes])
+		}
+		return out
+	}
+}
+
+// The existing resamplers allocate for the largest possible output, leaving
+// unused zero samples on fractional-rate packet boundaries. Keep only the
+// cumulative sample count produced by downsampling (floor) or upsampling (ceil).
+func transcodeFrames(dst, src *core.Codec) func([]byte) []byte {
+	convert := Transcode(dst, src)
+	var input, output uint64
+	return func(data []byte) []byte {
+		input += uint64(len(data) / BytesPerFrame(src))
+		samples := input * uint64(dst.ClockRate)
+		if dst.ClockRate > src.ClockRate {
+			samples += uint64(src.ClockRate) - 1
+		}
+		samples /= uint64(src.ClockRate)
+		n := int(samples-output) * BytesPerFrame(dst)
+		output = samples
+		data = convert(data)
+		return data[:min(n, len(data))]
+	}
+}

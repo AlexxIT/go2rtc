@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 
 	"github.com/AlexxIT/go2rtc/pkg/aac"
+	"github.com/AlexxIT/go2rtc/pkg/audio"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h264/annexb"
@@ -82,7 +83,13 @@ func NewConsumer(medias []*core.Media) *Consumer {
 	}
 }
 
-func (c *Consumer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver) error {
+func (c *Consumer) GetMedias() []*core.Media {
+	return audio.WithTranscoding(c.Medias)
+}
+func (c *Consumer) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
+	return audio.AddTrack(c.Medias, media, codec, track, c.addTrack)
+}
+func (c *Consumer) addTrack(media *core.Media, _ *core.Codec, track *core.Receiver) error {
 	trackID := byte(len(c.Senders))
 
 	codec := track.Codec.Clone()

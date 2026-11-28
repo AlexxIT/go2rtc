@@ -7,6 +7,7 @@ import (
 	"net"
 	"sync"
 
+	"github.com/AlexxIT/go2rtc/pkg/audio"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/pcm"
 	"github.com/AlexxIT/go2rtc/pkg/pcm/s16le"
@@ -234,6 +235,10 @@ func newMicConsumer(onData func(chunk []byte)) *micConsumer {
 }
 
 func (c *micConsumer) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
+	return audio.AddTrack(c.Medias, media, codec, track, c.addTrack)
+}
+
+func (c *micConsumer) addTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
 	src := track.Codec
 	dst := &core.Codec{
 		Name:      core.CodecPCML,
@@ -272,4 +277,8 @@ func repack(handler core.HandlerFunc) core.HandlerFunc {
 			handler(pkt)
 		}
 	}
+}
+
+func (c *micConsumer) GetMedias() []*core.Media {
+	return audio.WithTranscoding(c.Medias)
 }

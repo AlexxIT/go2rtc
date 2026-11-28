@@ -15,7 +15,7 @@ POST http://localhost:1984/api/streams?dst=camera1&src=ffmpeg:http://example.com
 ```
 
 - you can stream: local files, web files, live streams or any format, supported by FFmpeg
-- you should use [ffmpeg source](../ffmpeg/README.md) for transcoding audio to codec, that your camera supports
+- live Opus, AAC-LC/AAC-ELD and PCM/G.711 sources can use [built-in audio conversion](../../pkg/audio/README.md) in supported camera backchannels when the camera needs the other codec; use an [FFmpeg source](../ffmpeg/README.md) for other codecs and file inputs
 - you can check camera codecs on the go2rtc WebUI info page when the stream is active
 - some cameras support only low quality `PCMA/8000` codec (ex. [Tapo](../tapo/README.md))
 - it is recommended to choose higher quality formats if your camera supports them (ex. `PCMA/48000` for some Dahua cameras)

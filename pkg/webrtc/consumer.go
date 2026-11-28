@@ -3,6 +3,7 @@ package webrtc
 import (
 	"errors"
 
+	"github.com/AlexxIT/go2rtc/pkg/audio"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/h264"
 	"github.com/AlexxIT/go2rtc/pkg/h265"
@@ -11,10 +12,14 @@ import (
 )
 
 func (c *Conn) GetMedias() []*core.Media {
-	return WithResampling(c.Medias)
+	return audio.WithTranscoding(WithResampling(c.Medias))
 }
 
 func (c *Conn) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
+	return audio.AddTrack(c.Medias, media, codec, track, c.addTrack)
+}
+
+func (c *Conn) addTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
 	core.Assert(media.Direction == core.DirectionSendonly)
 
 	for _, sender := range c.Senders {

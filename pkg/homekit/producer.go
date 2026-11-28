@@ -129,6 +129,12 @@ func (c *Client) Start() error {
 	videoCodec := trackToVideo(videoTrack, &c.videoConfig.Codecs[0], c.MaxWidth, c.MaxHeight)
 
 	audioTrack := c.trackByKind(core.KindAudio)
+	if audioTrack == nil {
+		// HomeKit negotiates audio even for video-only consumers. Keep its receiver
+		// ready so a later audio consumer can attach to the running session.
+		media := c.Medias[1]
+		audioTrack, _ = c.Connection.GetTrack(media, media.Codecs[0])
+	}
 	audioCodec := trackToAudio(audioTrack, &c.audioConfig.Codecs[0])
 
 	c.videoSession = &srtp.Session{Local: c.srtpEndpoint()}
@@ -170,7 +176,7 @@ func (c *Client) Start() error {
 	}
 
 	if c.audioSession.OnReadRTP != nil {
-		c.audioSession.OnReadRTP = timekeeper(c.audioSession.OnReadRTP)
+		c.audioSession.OnReadRTP = timekeeper(audioTrack.Codec, c.audioSession.OnReadRTP)
 	}
 
 	c.mu.Unlock()
@@ -242,7 +248,13 @@ func (c *Client) srtpEndpoint() *srtp.Endpoint {
 	}
 }
 
-func timekeeper(handler core.HandlerFunc) core.HandlerFunc {
+func timekeeper(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
+	if codec.Name == core.CodecOpus {
+		// Opus cameras use the negotiated HomeKit audio clock. Preserve their
+		// RTP timeline; the fixed 30 ms workaround below drops 20 ms packets.
+		return handler
+	}
+
 	const sampleRate = 16000
 	const sampleSize = 480
 
