@@ -164,12 +164,17 @@ export class VideoRTC extends HTMLElement {
      * https://developer.chrome.com/blog/autoplay/
      */
     play() {
-        this.video.play().catch(() => {
-            if (!this.video.muted) {
+        this.video.play().catch(er => {
+            // The HTML spec requires NotAllowedError when autoplay is blocked.
+            // Some browsers (e.g. older Safari versions) may return AbortError,
+            // which can also indicate interrupted playback or a source change.
+            if (!this.video.muted && er.name === 'NotAllowedError') {
                 this.video.muted = true;
                 this.video.play().catch(er => {
                     console.warn(er);
                 });
+            } else {
+                console.warn(er);
             }
         });
     }
