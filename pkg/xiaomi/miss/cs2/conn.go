@@ -18,6 +18,10 @@ func Dial(host, transport string) (*Conn, error) {
 		return nil, err
 	}
 
+	return newConn(conn), nil
+}
+
+func newConn(conn net.Conn) *Conn {
 	_, isTCP := conn.(*tcpConn)
 
 	// Channel 2 - media. Some devices (hub mxiang.camera.mwc10) send audio
@@ -34,7 +38,7 @@ func Dial(host, transport string) (*Conn, error) {
 		},
 	}
 	go c.worker()
-	return c, nil
+	return c
 }
 
 const dataChannels = 4
@@ -179,7 +183,7 @@ func (c *Conn) worker() {
 
 		case msgPing:
 			_, _ = c.Conn.Write([]byte{magic, msgPong, 0, 0})
-		case msgPong, msgP2PRdyUDP, msgP2PRdyTCP, msgClose, msgCloseAck: // skip it
+		case msgPong, msgP2PRdyUDP, msgP2PRdyTCP, msgClose, msgCloseAck, msgP2PReqAck, msgPunchTo: // skip it
 		case msgDrwAck: // only for UDP
 			if c.cmdAck != nil {
 				c.cmdAck()
