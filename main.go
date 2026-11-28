@@ -113,6 +113,8 @@ func main() {
 		{"ngrok", ngrok.Init},
 		{"pinggy", pinggy.Init},
 		{"srtp", srtp.Init},
+		// Modules with delayed start
+		{"", streams.Start},
 	}
 
 	for _, m := range modules {
