@@ -94,4 +94,4 @@ log:
   api: trace   # module name: log level
 ```
 
-Modules: `api`, `streams`, `rtsp`, `webrtc`, `mp4`, `hls`, `mjpeg`, `hass`, `homekit`, `onvif`, `rtmp`, `webtorrent`, `wyoming`, `echo`, `exec`, `expr`, `ffmpeg`, `wyze`, `xiaomi`.
+Modules: `api`, `streams`, `rtsp`, `webrtc`, `mp4`, `hls`, `mjpeg`, `hass`, `homekit`, `onvif`, `rtmp`, `webtorrent`, `wyoming`, `echo`, `exec`, `expr`, `ffmpeg`, `unifi`, `wyze`, `xiaomi`.
