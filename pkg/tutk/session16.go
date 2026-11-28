@@ -52,7 +52,7 @@ type Session16 struct {
 
 	waitFSeq uint16
 	waitCSeq uint16
-	waitSize int
+	waitSize uint64
 	waitData []byte
 }
 
@@ -82,8 +82,8 @@ func (s *Session16) ClientStart(i byte, username, password string) []byte {
 	msg := s.Msg(size)
 
 	// 0    00000b0000000000000000000000000022020000fcfc7284
-	// 24   4d69737300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-	// 281  636c69656e740000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+	// 24   4d697373000000000000000000000000...
+	// 281  636c69656e7400000000000000000000...
 	// 538  0100000004000000fb071f000000000000000000000003000000000001000000
 	cmd := msg[msgHhrSize:]
 	copy(cmd, "\x00\x00\x0b\x00")
@@ -179,14 +179,16 @@ func (s *Session16) RecvFrameData() (frameInfo, frameData []byte, err error) {
 }
 
 func (s *Session16) SessionRead(chID byte, cmd []byte) int {
-	if chID != 0 {
-		if len(cmd) < cmdHdrSize {
-			return msgUnknown
-		}
-		return s.handleCh1(cmd)
-	}
+	// Both channels use a fixed-size command header.
 	if len(cmd) < cmdHdrSize {
-		return msgMediaLost
+		if chID == 0 {
+			return msgMediaLost
+		}
+		return msgUnknown
+	}
+
+	if chID != 0 {
+		return s.handleCh1(cmd)
 	}
 
 	// 0  01030800  command + version
@@ -208,34 +210,36 @@ func (s *Session16) SessionRead(chID byte, cmd []byte) int {
 			chunkSeq := binary.LittleEndian.Uint16(cmd[12:])
 			payloadSize := binary.LittleEndian.Uint32(cmd[8:])
 			hdrSize := binary.LittleEndian.Uint16(cmd[14:])
+
 			if chunkSeq == 0 {
 				s.waitFSeq = frameSeq
 				s.waitCSeq = 0
 				s.waitData = s.waitData[:0]
-				s.waitSize = int(hdrSize) + int(payloadSize)
+
+				// Avoid integer overflow on 32-bit platforms.
+				s.waitSize = uint64(payloadSize) + uint64(hdrSize)
 			} else if frameSeq != s.waitFSeq || chunkSeq != s.waitCSeq {
 				s.waitCSeq = 0
 				return msgMediaLost
 			}
 
 			s.waitData = append(s.waitData, cmd[24:]...)
-			if n := len(s.waitData); n < s.waitSize {
+			if uint64(len(s.waitData)) < s.waitSize {
 				s.waitCSeq++
 				return msgMediaChunk
 			}
 
 			s.waitCSeq = 0
 
-			// Every fragment repeats the frame layout. A malformed fragment can
-			// advertise a larger payload than the frame buffer assembled from the
-			// first fragment; never slice based on that untrusted value.
-			if int(payloadSize)+int(hdrSize) != s.waitSize ||
-				int(payloadSize) > len(s.waitData) ||
-				int(hdrSize) > len(s.waitData) ||
-				len(s.waitData) != s.waitSize {
+			// Every fragment repeats the frame layout. A malformed fragment may
+			// declare sizes inconsistent with the first fragment or the assembled
+			// buffer. Validate the total size before splitting the frame data.
+			size := uint64(payloadSize) + uint64(hdrSize)
+			if size != s.waitSize || size != uint64(len(s.waitData)) {
 				s.waitData = s.waitData[:0]
 				return msgMediaLost
 			}
+
 			packetData[0] = bytes.Clone(s.waitData[payloadSize:])
 			packetData[1] = bytes.Clone(s.waitData[:payloadSize])
 
@@ -262,6 +266,11 @@ func (s *Session16) SessionRead(chID byte, cmd []byte) int {
 	case 0x00:
 		switch cmd[1] {
 		case 0x70:
+			// RecvIOCtrl expects at least a uint32 control type.
+			if len(cmd) < cmdHdrSize+4 {
+				return msgUnknown
+			}
+
 			_ = s.SessionWrite(0, s.msgAck0070(cmd))
 			select {
 			case s.rawCmd <- append([]byte{}, cmd[24:]...):
@@ -316,6 +325,11 @@ func (s *Session16) handleCh1(cmd []byte) int {
 	// - respond on every 0008 command for smooth playback
 	switch cid := string(cmd[:2]); cid {
 	case "\x00\x00": // client start
+		// msgAck0000 copies the last 32 bytes of the command payload.
+		if len(cmd) < cmdHdrSize+32 {
+			return msgUnknown
+		}
+
 		_ = s.SessionWrite(1, s.msgAck0000(cmd))
 		_ = s.SessionWrite(1, s.msg0012())
 		return msgClientStart
