@@ -37,6 +37,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/roborock"
 	"github.com/AlexxIT/go2rtc/internal/rtmp"
 	"github.com/AlexxIT/go2rtc/internal/rtsp"
+	"github.com/AlexxIT/go2rtc/internal/sip"
 	"github.com/AlexxIT/go2rtc/internal/srtp"
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/internal/tapo"
@@ -65,6 +66,7 @@ func main() {
 		{"api", api.Init}, // init API before all others
 		{"ws", ws.Init},   // init WS API endpoint
 		{"", streams.Init},
+		{"sip", sip.Init}, // SIP auto-answer server
 		// Main sources and servers
 		{"http", http.Init},     // rtsp source, HTTP server
 		{"rtsp", rtsp.Init},     // rtsp source, RTSP server
