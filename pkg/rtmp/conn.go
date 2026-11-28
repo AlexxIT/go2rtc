@@ -197,9 +197,9 @@ func (c *Conn) writeMessage(chunkID, tagType byte, timeMS uint32, payload []byte
 		for {
 			b = b[c.wrPacketSize:]
 			if uint32(len(b)) > c.wrPacketSize {
-				c.appendType3(chunkID, b[:c.wrPacketSize])
+				c.appendType3(chunkID, timeMS, b[:c.wrPacketSize])
 			} else {
-				c.appendType3(chunkID, b)
+				c.appendType3(chunkID, timeMS, b)
 				break
 			}
 		}
@@ -219,19 +219,30 @@ func (c *Conn) resetBuffer() {
 }
 
 func (c *Conn) appendType0(chunkID, tagType byte, timeMS, size uint32, payload []byte) {
-	// TODO: timeMS more than 24 bit
+	// >= 0xFFFFFF: sentinel in the 3-byte field, real value in the extended timestamp (RTMP 5.3.1.3)
+	ts := timeMS
+	if timeMS >= 0xFFFFFF {
+		ts = 0xFFFFFF
+	}
 	c.wrBuf = append(c.wrBuf,
 		chunkID,
-		byte(timeMS>>16), byte(timeMS>>8), byte(timeMS),
+		byte(ts>>16), byte(ts>>8), byte(ts),
 		byte(size>>16), byte(size>>8), byte(size),
 		tagType,
 		c.streamID, 0, 0, 0, // little endian streamID
 	)
+	if timeMS >= 0xFFFFFF {
+		c.wrBuf = binary.BigEndian.AppendUint32(c.wrBuf, timeMS)
+	}
 	c.wrBuf = append(c.wrBuf, payload...)
 }
 
-func (c *Conn) appendType3(chunkID byte, payload []byte) {
+func (c *Conn) appendType3(chunkID byte, timeMS uint32, payload []byte) {
 	c.wrBuf = append(c.wrBuf, 3<<6|chunkID)
+	// extended timestamp repeats on every continuation chunk (RTMP 5.3.1.3)
+	if timeMS >= 0xFFFFFF {
+		c.wrBuf = binary.BigEndian.AppendUint32(c.wrBuf, timeMS)
+	}
 	c.wrBuf = append(c.wrBuf, payload...)
 }
 
@@ -310,7 +321,7 @@ func (c *Conn) writePublish() error {
 		return len(items) >= 3 && items[0] == "onStatus"
 	})
 	if err != nil {
-		return nil
+		return err
 	}
 
 	code := getString(v, 3, "code")
@@ -332,7 +343,7 @@ func (c *Conn) writePlay() error {
 		return len(items) >= 3 && items[0] == "onStatus"
 	})
 	if err != nil {
-		return nil
+		return err
 	}
 
 	code := getString(v, 3, "code")
