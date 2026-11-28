@@ -120,3 +120,38 @@ func TestHEVCAUDIsStillDropped(t *testing.T) {
 	n := naluTypes(b)
 	require.Equal(t, []byte{0x40, 0x42}, n)
 }
+
+func TestIsAUD(t *testing.T) {
+	tests := []struct {
+		nalu string
+		want bool
+	}{
+		{"", false},
+		{"46", false},
+		{"4601", false},
+
+		// H264 AUD.
+		{"09f0", true},
+
+		// H265 AUD with all valid picture types.
+		{"460110", true},
+		{"460130", true},
+		{"460150", true},
+
+		// Invalid H265 AUD.
+		{"460050", false},   // zero temporal ID
+		{"460151", false},   // invalid trailing bits
+		{"460170", false},   // invalid picture type
+		{"46015080", false}, // invalid size
+
+		// H264 SPS and noncompliant SEI.
+		{"474d401e", false},
+		{"46060050", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.nalu, func(t *testing.T) {
+			require.Equal(t, tt.want, isAUD(decode(tt.nalu)))
+		})
+	}
+}
