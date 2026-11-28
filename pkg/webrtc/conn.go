@@ -24,6 +24,8 @@ type Conn struct {
 	offer    string
 	closed   core.Waiter
 	rtcpOnce sync.Once
+
+	receiverMu sync.Mutex
 }
 
 func NewConn(pc *webrtc.PeerConnection) *Conn {

@@ -8,6 +8,11 @@ import (
 func (c *Conn) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
 	core.Assert(media.Direction == core.DirectionRecvonly)
 
+	// GetTrack can be called concurrently by a consumer and OnTrack.
+	// Serialize receiver lookup and creation to avoid duplicate receivers.
+	c.receiverMu.Lock()
+	defer c.receiverMu.Unlock()
+
 	for _, track := range c.Receivers {
 		if track.Codec == codec {
 			return track, nil
