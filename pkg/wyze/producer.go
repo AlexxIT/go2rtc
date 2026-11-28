@@ -168,6 +168,7 @@ func probe(client *Client, quality byte) ([]*core.Media, error) {
 
 	var vcodec, acodec *core.Codec
 	var tutkAudioCodec byte
+	var unsupportedAudio bool
 
 	for {
 		if client.verbose {
@@ -232,9 +233,13 @@ func probe(client *Client, quality byte) ([]*core.Media, error) {
 			if vcodec == nil {
 				vcodec = &core.Codec{Name: core.CodecJPEG, ClockRate: 90000, PayloadType: core.PayloadTypeRAW}
 			}
+		default:
+			if tutk.IsAudioCodec(pkt.Codec) && acodec == nil {
+				unsupportedAudio = true // e.g. G.726 on Wyze Cam Outdoor: continue with video only
+			}
 		}
 
-		if vcodec != nil && (acodec != nil || !client.SupportsAudio()) {
+		if vcodec != nil && (acodec != nil || unsupportedAudio || !client.SupportsAudio()) {
 			break
 		}
 	}
