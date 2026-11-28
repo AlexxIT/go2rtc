@@ -94,13 +94,19 @@ func execHandle(rawURL string) (prod core.Producer, err error) {
 
 	if s := query.Get("killsignal"); s != "" {
 		sig := syscall.Signal(core.Atoi(s))
+		// Use the shell package to preserve group signaling on Linux.
+		cmd.SetKillSignal(sig)
+		// Wrap the configured callback for logging without replacing its
+		// platform-specific cancellation behavior.
+		cancel := cmd.Cancel
 		cmd.Cancel = func() error {
 			log.Debug().Msgf("[exec] kill with signal=%d", sig)
-			return cmd.Process.Signal(sig)
+			return cancel()
 		}
 	}
 
 	if s := query.Get("killtimeout"); s != "" {
+		// Override both os/exec cleanup timing and the Linux group grace period.
 		cmd.WaitDelay = time.Duration(core.Atoi(s)) * time.Second
 	}
 
