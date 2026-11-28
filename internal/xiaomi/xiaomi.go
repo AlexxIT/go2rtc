@@ -327,15 +327,19 @@ func apiAuth(w http.ResponseWriter, r *http.Request) {
 		userID, token := auth.UserToken()
 		auth = nil
 
-		cloudsMu.Lock()
-		if tokens == nil {
-			tokens = map[string]string{userID: token}
+		if userID == "" || token == "" {
+			err = errors.New("xiaomi: login finished without user token")
 		} else {
-			tokens[userID] = token
-		}
-		cloudsMu.Unlock()
+			cloudsMu.Lock()
+			if tokens == nil {
+				tokens = map[string]string{userID: token}
+			} else {
+				tokens[userID] = token
+			}
+			cloudsMu.Unlock()
 
-		err = app.PatchConfig([]string{"xiaomi", userID}, token)
+			err = app.PatchConfig([]string{"xiaomi", userID}, token)
+		}
 	}
 
 	if err != nil {

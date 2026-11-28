@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"strconv"
 	"strings"
@@ -36,8 +37,9 @@ type Cloud struct {
 }
 
 func NewCloud(sid string) *Cloud {
+	jar, _ := cookiejar.New(nil)
 	return &Cloud{
-		client: &http.Client{Timeout: 15 * time.Second},
+		client: &http.Client{Timeout: 15 * time.Second, Jar: jar},
 		sid:    sid,
 	}
 }
@@ -313,13 +315,23 @@ func (l *LoginError) Error() string {
 	return ""
 }
 
-func (c *Cloud) finishAuth(location string) error {
-	res, err := c.client.Get(location)
-	if err != nil {
-		return err
+func confirmURL(res *http.Response) string {
+	if res == nil || res.Request == nil || res.Request.URL == nil {
+		return ""
 	}
-	defer res.Body.Close()
+	query := res.Request.URL.Query()
+	for _, name := range []string{"confirmUrl", "skipUrl"} {
+		if u := query.Get(name); u != "" {
+			if strings.HasPrefix(u, "/") {
+				u = "https://account.xiaomi.com" + u
+			}
+			return u
+		}
+	}
+	return ""
+}
 
+func (c *Cloud) finishAuth(location string) error {
 	// LoginWithVerify
 	//   - userId, cUserId, serviceToken from cookies
 	//   - passToken from redirect cookies
@@ -328,31 +340,55 @@ func (c *Cloud) finishAuth(location string) error {
 	//   - userId, cUserId, serviceToken from cookies
 	var cUserId, serviceToken string
 
-	for res != nil {
-		for _, cookie := range res.Cookies() {
-			switch cookie.Name {
-			case "userId":
-				c.userID = cookie.Value
-			case "cUserId":
-				cUserId = cookie.Value
-			case "serviceToken":
-				serviceToken = cookie.Value
-			case "passToken":
-				c.passToken = cookie.Value
+	collect := func(res *http.Response) error {
+		for ; res != nil; res = res.Request.Response {
+			for _, cookie := range res.Cookies() {
+				switch cookie.Name {
+				case "userId":
+					c.userID = cookie.Value
+				case "cUserId":
+					cUserId = cookie.Value
+				case "serviceToken":
+					serviceToken = cookie.Value
+				case "passToken":
+					c.passToken = cookie.Value
+				}
+			}
+
+			if s := res.Header.Get("Extension-Pragma"); s != "" {
+				var v1 struct {
+					Ssecurity []byte `json:"ssecurity"`
+				}
+				if err := json.Unmarshal([]byte(s), &v1); err != nil {
+					return err
+				}
+				c.ssecurity = v1.Ssecurity
 			}
 		}
+		return nil
+	}
 
-		if s := res.Header.Get("Extension-Pragma"); s != "" {
-			var v1 struct {
-				Ssecurity []byte `json:"ssecurity"`
-			}
-			if err = json.Unmarshal([]byte(s), &v1); err != nil {
-				return err
-			}
-			c.ssecurity = v1.Ssecurity
+	res, err := c.client.Get(location)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+
+	if err = collect(res); err != nil {
+		return err
+	}
+
+	// After two-step verification Xiaomi may stop at the "confirm phone" page.
+	// Its confirmUrl/skipUrl continues the login chain and sets passToken.
+	if u := confirmURL(res); u != "" {
+		res, err = c.client.Get(u)
+		if err != nil {
+			return err
 		}
-
-		res = res.Request.Response
+		defer res.Body.Close()
+		if err = collect(res); err != nil {
+			return err
+		}
 	}
 
 	c.cookies = fmt.Sprintf("userId=%s; cUserId=%s; serviceToken=%s", c.userID, cUserId, serviceToken)
