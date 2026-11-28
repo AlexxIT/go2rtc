@@ -129,17 +129,15 @@ func rtcConn(nestAPI *API, rawURL, projectID, deviceID string) (*WebRTCClient, e
 		// 3. Create offer with candidates
 		offer, err := conn.CreateCompleteOffer(medias)
 		if err != nil {
-			_ = pc.Close()
+			_ = conn.Close()
 			return nil, err
 		}
 
 		// 4. Exchange SDP via Hass
 		answer, err := nestAPI.ExchangeSDP(projectID, deviceID, offer)
 		if err != nil {
-			// close the failed PeerConnection: it never reaches ICE connectivity
-			// (no answer is set), so pion's connection-state auto-close never fires
-			// and its ICE agent's mDNS sockets (:5353) would leak on every retry.
-			_ = pc.Close()
+			// Close the failed connection before retrying to release ICE resources.
+			_ = conn.Close()
 			lastErr = err
 			if attempt < maxRetries-1 {
 				time.Sleep(retryDelay)
@@ -151,7 +149,7 @@ func rtcConn(nestAPI *API, rawURL, projectID, deviceID string) (*WebRTCClient, e
 
 		// 5. Set answer with remote medias
 		if err = conn.SetAnswer(answer); err != nil {
-			_ = pc.Close()
+			_ = conn.Close()
 			return nil, err
 		}
 
