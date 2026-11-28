@@ -6,6 +6,12 @@ import (
 	"syscall"
 )
 
+// BSD constants from <netinet6/in6.h>: IPV6_MULTICAST_LOOP=11, IPV6_JOIN_GROUP=12.
+const (
+	ipv6MulticastLoop = 11
+	ipv6JoinGroup     = 12
+)
+
 func SetsockoptInt(fd uintptr, level, opt int, value int) (err error) {
 	// change SO_REUSEADDR and REUSEPORT flags simultaneously for BSD-like OS
 	// https://github.com/AlexxIT/go2rtc/issues/626
@@ -23,4 +29,8 @@ func SetsockoptInt(fd uintptr, level, opt int, value int) (err error) {
 
 func SetsockoptIPMreq(fd uintptr, level, opt int, mreq *syscall.IPMreq) (err error) {
 	return syscall.SetsockoptIPMreq(int(fd), level, opt, mreq)
+}
+
+func SetsockoptIPv6Mreq(fd uintptr, level, opt int, mreq *syscall.IPv6Mreq) (err error) {
+	return syscall.SetsockoptIPv6Mreq(int(fd), level, opt, mreq)
 }
