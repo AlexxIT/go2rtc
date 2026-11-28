@@ -47,6 +47,9 @@ func Init() {
 
 	// ONVIF client autodiscovery
 	api.HandleFunc("api/onvif", apiOnvif)
+
+	// ONVIF PTZ for sources with a motor (see ptz.go)
+	initPTZ()
 }
 
 var log zerolog.Logger
@@ -185,6 +188,10 @@ func onvifDeviceService(w http.ResponseWriter, r *http.Request) {
 		b = onvif.GetSnapshotUriResponse(uri)
 
 	default:
+		if ptz, ok := ptzOperation(operation, b); ok {
+			b = ptz
+			break
+		}
 		http.Error(w, "unsupported operation", http.StatusBadRequest)
 		log.Warn().Msgf("[onvif] unsupported operation: %s", operation)
 		log.Debug().Msgf("[onvif] unsupported request:\n%s", b)

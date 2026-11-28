@@ -48,6 +48,44 @@ func Init() {
 	})
 
 	api.HandleFunc("api/xiaomi", apiXiaomi)
+	api.HandleFunc("api/xiaomi/motor", apiMotor)
+}
+
+// Motorer is a source that can move its camera one pan/tilt step.
+type Motorer interface {
+	Motor(operation int) error
+}
+
+// Motor moves the camera behind stream `name` one step. It uses the session the
+// stream already holds, so the stream must be running (someone consuming it).
+func Motor(name string, operation int) error {
+	stream := streams.Get(name)
+	if stream == nil {
+		return fmt.Errorf("xiaomi: motor: no stream %q", name)
+	}
+	for _, conn := range stream.Conns() {
+		if m, ok := conn.(Motorer); ok {
+			return m.Motor(operation)
+		}
+	}
+	return fmt.Errorf("xiaomi: motor: stream %q has no connected source with a motor", name)
+}
+
+// apiMotor: POST /api/xiaomi/motor?src=<stream>&operation=<1 left|2 right|3 up|4 down>
+func apiMotor(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	query := r.URL.Query()
+	var op int
+	if _, err := fmt.Sscan(query.Get("operation"), &op); err != nil || op < 1 || op > 4 {
+		http.Error(w, "operation must be 1 (left), 2 (right), 3 (up) or 4 (down)", http.StatusBadRequest)
+		return
+	}
+	if err := Motor(query.Get("src"), op); err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+	}
 }
 
 var log zerolog.Logger
