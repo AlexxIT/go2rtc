@@ -327,6 +327,13 @@ func apiAuth(w http.ResponseWriter, r *http.Request) {
 		userID, token := auth.UserToken()
 		auth = nil
 
+		// Never persist empty credentials - they would poison the config with
+		// "xiaomi: {"": ""}" and turn every later request into a 401.
+		if userID == "" || token == "" {
+			http.Error(w, "xiaomi: login finished without credentials", http.StatusInternalServerError)
+			return
+		}
+
 		cloudsMu.Lock()
 		if tokens == nil {
 			tokens = map[string]string{userID: token}

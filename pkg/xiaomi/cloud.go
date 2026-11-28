@@ -357,6 +357,15 @@ func (c *Cloud) finishAuth(location string) error {
 
 	c.cookies = fmt.Sprintf("userId=%s; cUserId=%s; serviceToken=%s", c.userID, cUserId, serviceToken)
 
+	// The login chain can finish without handing out credentials, e.g. when
+	// Xiaomi requires an extra device verification step and the final redirect
+	// goes to verifyPhone/verifyEmail instead of sts. Returning nil here made
+	// the caller persist empty values ("": ""), which then failed with 401 on
+	// every later request and looked like a successful login in the UI.
+	if c.userID == "" || c.passToken == "" {
+		return fmt.Errorf("xiaomi: login finished without credentials, extra device verification may be required")
+	}
+
 	return nil
 }
 
