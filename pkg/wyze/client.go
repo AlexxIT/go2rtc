@@ -552,7 +552,9 @@ func (c *Client) is2K() bool {
 }
 
 func (c *Client) isFloodlight() bool {
-	return c.model == "HL_CFL2"
+	// HL_BC uses the same wire resolution value (5) as the floodlight
+	// for its 2304x1296 stream; the usual 2K value (4) leaves it at 360p.
+	return c.model == "HL_BC" || c.model == "HL_CFL2"
 }
 
 func (c *Client) matchHL(expectCmd uint16) func([]byte) bool {
