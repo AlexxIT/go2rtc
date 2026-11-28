@@ -23,16 +23,13 @@ type Response struct {
 	Request    *Request
 }
 
-func (r Response) String() string {
-	s := r.Proto + " " + r.Status + EndLine
-	for k, v := range r.Header {
-		s += k + ": " + v[0] + EndLine
-	}
-	s += EndLine
-	if r.Body != nil {
-		s += string(r.Body)
-	}
-	return s
+func (r *Response) String() string {
+	var s strings.Builder
+	s.WriteString(r.Proto + " " + r.Status + EndLine)
+	writeHeaders(&s, r.Header)
+	s.WriteString(EndLine)
+	s.Write(r.Body)
+	return s.String()
 }
 
 func (r *Response) Write(w io.Writer) (err error) {
@@ -83,6 +80,31 @@ func ReadResponse(r *bufio.Reader) (*Response, error) {
 	return res, nil
 }
 
+// writeHeaders follows the RTSP header order used by LIVE555 (VLC).
+// Some servers (e.g. Google Nest RTSP, Wowza) are sensitive to header order.
+// https://github.com/AlexxIT/go2rtc/issues/2622
+func writeHeaders(s *strings.Builder, header textproto.MIMEHeader) {
+	for _, k := range []string{
+		"CSeq",
+		"Authorization",
+		"User-Agent",
+		"Accept",
+		"Content-Type",
+		"Range",
+		"Transport",
+		"Require",
+		"Session",
+		"Server",
+		"Public",
+		"Www-Authenticate",
+		"Content-Length",
+	} {
+		if v := header[k]; len(v) != 0 {
+			s.WriteString(k + ": " + v[0] + EndLine)
+		}
+	}
+}
+
 // Request like http.Request, but with any proto
 type Request struct {
 	Method string
@@ -93,15 +115,12 @@ type Request struct {
 }
 
 func (r *Request) String() string {
-	s := r.Method + " " + r.URL.String() + " " + r.Proto + EndLine
-	for k, v := range r.Header {
-		s += k + ": " + v[0] + EndLine
-	}
-	s += EndLine
-	if r.Body != nil {
-		s += string(r.Body)
-	}
-	return s
+	var s strings.Builder
+	s.WriteString(r.Method + " " + r.URL.String() + " " + r.Proto + EndLine)
+	writeHeaders(&s, r.Header)
+	s.WriteString(EndLine)
+	s.Write(r.Body)
+	return s.String()
 }
 
 func (r *Request) Write(w io.Writer) (err error) {

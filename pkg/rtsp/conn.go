@@ -409,7 +409,7 @@ func (c *Conn) WriteResponse(res *tcp.Response) error {
 	if res.Request != nil && res.Request.Header != nil {
 		seq := res.Request.Header.Get("CSeq")
 		if seq != "" {
-			res.Header.Set("CSeq", seq)
+			res.Header["CSeq"] = []string{seq}
 		}
 	}
 
