@@ -13,6 +13,7 @@
 //	    Streams:    myStreamProvider,
 //	    Logger:     logger,
 //	    Port:       8080,
+//	    Version:    "1.0.0",
 //	})
 //	// Register srv.Handle as HTTP handler for HAP paths
 //	// Advertise srv.MDNSEntry() via mDNS
@@ -30,6 +31,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -90,20 +92,25 @@ type ConnTracker interface {
 
 // Config for creating an HKSV server.
 type Config struct {
-	StreamName      string
-	Pin             string   // HomeKit pairing PIN (e.g., "27041991")
-	Name            string   // mDNS display name (auto-generated if empty)
-	DeviceID        string   // MAC-like device ID (auto-generated if empty)
-	DevicePrivate   string   // ed25519 private key hex (auto-generated if empty)
-	CategoryID      string   // "camera" or "doorbell"
-	Pairings        []string // pre-existing pairings
-	ProxyURL        string   // if set, acts as transparent proxy (no local accessory)
-	HKSV            bool
-	MotionMode      string  // "api", "continuous", "detect"
-	MotionThreshold float64 // ratio threshold for "detect" mode (default 2.0)
-	Speaker         *bool   // include Speaker service for 2-way audio (default false)
-	UserAgent       string  // for mDNS TXTModel field
-	Version         string  // for accessory firmware version
+	StreamName       string
+	Pin              string   // HomeKit pairing PIN (e.g., "27041991")
+	Name             string   // mDNS display name (auto-generated if empty)
+	Manufacturer     string   // accessory manufacturer (default "AlexxIT")
+	Model            string   // accessory model (default "go2rtc")
+	SerialNumber     string   // accessory serial number (default "--")
+	Firmware         string   // accessory firmware revision x[.y[.z]] (defaults to Version without -/+ suffix)
+	HardwareRevision string   // optional accessory hardware revision x[.y[.z]] (omitted if empty)
+	DeviceID         string   // MAC-like device ID (auto-generated if empty)
+	DevicePrivate    string   // ed25519 private key hex (auto-generated if empty)
+	CategoryID       string   // "camera" or "doorbell"
+	Pairings         []string // pre-existing pairings
+	ProxyURL         string   // if set, acts as transparent proxy (no local accessory)
+	HKSV             bool
+	MotionMode       string  // "api", "continuous", "detect"
+	MotionThreshold  float64 // ratio threshold for "detect" mode (default 2.0)
+	Speaker          *bool   // include Speaker service for 2-way audio (default false)
+	UserAgent        string  // for mDNS TXTModel field
+	Version          string  // for accessory firmware version
 
 	// Dependencies (injected by host)
 	Streams    StreamProvider
@@ -161,6 +168,26 @@ func NewServer(cfg Config) (*Server, error) {
 	deviceID := CalcDeviceID(cfg.DeviceID, cfg.StreamName)
 	name := CalcName(cfg.Name, deviceID)
 	setupID := CalcSetupID(cfg.StreamName)
+	if cfg.Manufacturer == "" {
+		cfg.Manufacturer = "AlexxIT"
+	}
+	if cfg.Model == "" {
+		cfg.Model = "go2rtc"
+	}
+	if cfg.SerialNumber == "" {
+		cfg.SerialNumber = "--"
+	}
+	if cfg.Firmware == "" {
+		// HAP firmware is numeric only, so drop SemVer prerelease/build suffix (1.9.14+dev.abc -> 1.9.14)
+		cfg.Firmware, _, _ = strings.Cut(cfg.Version, "+")
+		cfg.Firmware, _, _ = strings.Cut(cfg.Firmware, "-")
+	}
+	// proxy mode publishes the remote accessory, so local metadata is unused
+	if cfg.ProxyURL == "" {
+		if err := validateMetadata(&cfg); err != nil {
+			return nil, err
+		}
+	}
 
 	srv := &Server{
 		stream:          cfg.StreamName,
@@ -213,12 +240,12 @@ func NewServer(cfg Config) (*Server, error) {
 			Float64("threshold", srv.motionThreshold).Msg("[hksv] HKSV mode")
 
 		if cfg.CategoryID == "doorbell" {
-			srv.accessory = camera.NewHKSVDoorbellAccessory("AlexxIT", "go2rtc", name, "-", cfg.Version)
+			srv.accessory = camera.NewHKSVDoorbellAccessory(cfg.Manufacturer, cfg.Model, name, cfg.SerialNumber, cfg.Firmware, cfg.HardwareRevision)
 		} else {
-			srv.accessory = camera.NewHKSVAccessory("AlexxIT", "go2rtc", name, "-", cfg.Version)
+			srv.accessory = camera.NewHKSVAccessory(cfg.Manufacturer, cfg.Model, name, cfg.SerialNumber, cfg.Firmware, cfg.HardwareRevision)
 		}
 	} else {
-		srv.accessory = camera.NewAccessory("AlexxIT", "go2rtc", name, "-", cfg.Version)
+		srv.accessory = camera.NewAccessory(cfg.Manufacturer, cfg.Model, name, cfg.SerialNumber, cfg.Firmware, cfg.HardwareRevision)
 	}
 
 	// Remove Speaker service unless explicitly enabled (default: disabled)
@@ -234,6 +261,56 @@ func NewServer(cfg Config) (*Server, error) {
 	}
 
 	return srv, nil
+}
+
+// validateMetadata checks Accessory Information limits from HAP R2 §9 (lengths are UTF-8 bytes).
+func validateMetadata(cfg *Config) error {
+	fields := []struct {
+		name, value string
+		min         int
+	}{
+		{"manufacturer", cfg.Manufacturer, 0},
+		{"model", cfg.Model, 1},
+		{"serial_number", cfg.SerialNumber, 2},
+		{"firmware", cfg.Firmware, 0},
+		{"hardware_revision", cfg.HardwareRevision, 0},
+	}
+	for _, f := range fields {
+		if n := len(f.value); n > 64 {
+			return fmt.Errorf("hksv: %s is %d bytes, must be at most 64", f.name, n)
+		} else if n < f.min {
+			return fmt.Errorf("hksv: %s is %d bytes, must be at least %d", f.name, n, f.min)
+		}
+	}
+	if cfg.Firmware == "" {
+		return errors.New("hksv: firmware is required (set Firmware or Version)")
+	}
+	if err := validateRevision(cfg.Firmware); err != nil {
+		return fmt.Errorf("hksv: invalid firmware %q: %w", cfg.Firmware, err)
+	}
+	if cfg.HardwareRevision != "" {
+		if err := validateRevision(cfg.HardwareRevision); err != nil {
+			return fmt.Errorf("hksv: invalid hardware_revision %q: %w", cfg.HardwareRevision, err)
+		}
+	}
+	return nil
+}
+
+// validateRevision checks the HAP x[.y[.z]] format with uint32 decimal components.
+func validateRevision(s string) error {
+	parts := strings.Split(s, ".")
+	if len(parts) > 3 {
+		return errors.New("must be x[.y[.z]], got more than 3 components")
+	}
+	for _, p := range parts {
+		if p == "" || strings.Trim(p, "0123456789") != "" {
+			return errors.New("must be x[.y[.z]] with decimal numbers only")
+		}
+		if _, err := strconv.ParseUint(p, 10, 32); err != nil {
+			return fmt.Errorf("component %s exceeds 4294967295", p)
+		}
+	}
+	return nil
 }
 
 // MDNSEntry returns the mDNS service entry for advertisement.

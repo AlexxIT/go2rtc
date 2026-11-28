@@ -26,7 +26,7 @@ import (
 func TestProducerReleasesHomeKitStream(t *testing.T) {
 	for _, failStart := range []bool{false, true} {
 		t.Run(fmt.Sprint("failStart=", failStart), func(t *testing.T) {
-			acc := camera.NewAccessory("test", "camera", "test", "1", "1")
+			acc := camera.NewAccessory("test", "camera", "test", "1", "1", "")
 			service := acc.GetService("110")
 			status := service.GetCharacter(camera.TypeStreamingStatus)
 			setup := service.GetCharacter(camera.TypeSetupEndpoints)

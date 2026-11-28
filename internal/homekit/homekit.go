@@ -28,18 +28,23 @@ import (
 func Init() {
 	var cfg struct {
 		Mod map[string]struct {
-			Pin             string   `yaml:"pin"`
-			Name            string   `yaml:"name"`
-			DeviceID        string   `yaml:"device_id"`
-			DevicePrivate   string   `yaml:"device_private"`
-			CategoryID      string   `yaml:"category_id"`
-			Pairings        []string `yaml:"pairings"`
-			HKSV            bool     `yaml:"hksv"`
-			Motion          string   `yaml:"motion"`
-			MotionThreshold float64  `yaml:"motion_threshold"`
-			MotionHoldTime  float64  `yaml:"motion_hold_time"`
-			OnvifURL        string   `yaml:"onvif_url"`
-			Speaker         *bool    `yaml:"speaker"`
+			Pin              string   `yaml:"pin"`
+			Name             string   `yaml:"name"`
+			Manufacturer     string   `yaml:"manufacturer"`
+			Model            string   `yaml:"model"`
+			SerialNumber     string   `yaml:"serial_number"`
+			Firmware         string   `yaml:"firmware"`
+			HardwareRevision string   `yaml:"hardware_revision"`
+			DeviceID         string   `yaml:"device_id"`
+			DevicePrivate    string   `yaml:"device_private"`
+			CategoryID       string   `yaml:"category_id"`
+			Pairings         []string `yaml:"pairings"`
+			HKSV             bool     `yaml:"hksv"`
+			Motion           string   `yaml:"motion"`
+			MotionThreshold  float64  `yaml:"motion_threshold"`
+			MotionHoldTime   float64  `yaml:"motion_hold_time"`
+			OnvifURL         string   `yaml:"onvif_url"`
+			Speaker          *bool    `yaml:"speaker"`
 		} `yaml:"homekit"`
 	}
 	app.LoadConfig(&cfg)
@@ -81,26 +86,31 @@ func Init() {
 		}
 
 		srv, err := hksv.NewServer(hksv.Config{
-			StreamName:      id,
-			Pin:             conf.Pin,
-			Name:            conf.Name,
-			DeviceID:        conf.DeviceID,
-			DevicePrivate:   conf.DevicePrivate,
-			CategoryID:      conf.CategoryID,
-			Pairings:        conf.Pairings,
-			ProxyURL:        proxyURL,
-			HKSV:            conf.HKSV,
-			MotionMode:      motionMode,
-			MotionThreshold: conf.MotionThreshold,
-			Speaker:         conf.Speaker,
-			UserAgent:       app.UserAgent,
-			Version:         app.Version,
-			Streams:         &go2rtcStreamProvider{},
-			Store:           &go2rtcPairingStore{},
-			Snapshots:       &go2rtcSnapshotProvider{},
-			LiveStream:      &go2rtcLiveStreamHandler{},
-			Logger:          log,
-			Port:            uint16(api.Port),
+			StreamName:       id,
+			Pin:              conf.Pin,
+			Name:             conf.Name,
+			Manufacturer:     conf.Manufacturer,
+			Model:            conf.Model,
+			SerialNumber:     conf.SerialNumber,
+			Firmware:         conf.Firmware,
+			HardwareRevision: conf.HardwareRevision,
+			DeviceID:         conf.DeviceID,
+			DevicePrivate:    conf.DevicePrivate,
+			CategoryID:       conf.CategoryID,
+			Pairings:         conf.Pairings,
+			ProxyURL:         proxyURL,
+			HKSV:             conf.HKSV,
+			MotionMode:       motionMode,
+			MotionThreshold:  conf.MotionThreshold,
+			Speaker:          conf.Speaker,
+			UserAgent:        app.UserAgent,
+			Version:          app.Version,
+			Streams:          &go2rtcStreamProvider{},
+			Store:            &go2rtcPairingStore{},
+			Snapshots:        &go2rtcSnapshotProvider{},
+			LiveStream:       &go2rtcLiveStreamHandler{},
+			Logger:           log,
+			Port:             uint16(api.Port),
 		})
 		if err != nil {
 			log.Error().Err(err).Str("stream", id).Msg("[homekit] create server failed")
