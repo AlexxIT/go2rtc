@@ -21,10 +21,44 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 
 	buf := make([]byte, 0, 512*1024) // 512K
 
+	var inFU bool       // an unfinished FU-A NAL unit is being assembled
+	var fuSeqNum uint16 // sequence number of the last FU-A fragment
+
 	return func(packet *rtp.Packet) {
 		//log.Printf("[RTP] codec: %s, nalu: %2d, size: %6d, ts: %10d, pt: %2d, ssrc: %d, seq: %d, %v", codec.Name, packet.Payload[0]&0x1F, len(packet.Payload), packet.Timestamp, packet.PayloadType, packet.SSRC, packet.SequenceNumber, packet.Marker)
 
-		payload, err := depack.Unmarshal(packet.Payload)
+		data := packet.Payload
+
+		// FU-A packets have a two-byte header and NAL unit type 28.
+		isFU := len(data) >= 2 && data[0]&0x1F == fuaNALUType
+
+		// Drop an unfinished FU-A if:
+		// - a different NAL unit arrives;
+		// - a new FU-A starts (Start bit, 0x80);
+		// - an RTP fragment is lost or arrives out of order.
+		if inFU && (!isFU || data[1]&0x80 != 0 || packet.SequenceNumber != fuSeqNum+1) {
+			// Recreate the depacketizer to discard Pion's internal FU-A buffer.
+			depack = &codecs.H264Packet{IsAVC: true}
+			buf = buf[:0]
+			inFU = false
+		}
+
+		if isFU {
+			// Pion doesn't check the Start bit and may produce a headless IDR
+			// when a consumer joins the stream in the middle of a NAL unit.
+			// Ignore continuation and end fragments until a start fragment arrives.
+			if !inFU && data[1]&0x80 == 0 {
+				buf = buf[:0]
+				return
+			}
+
+			// Keep the FU-A active until the End bit (0x40) is set.
+			inFU = data[1]&0x40 == 0
+			fuSeqNum = packet.SequenceNumber
+		}
+
+		// Let Pion assemble FU-A fragments and convert NAL units to AVC.
+		payload, err := depack.Unmarshal(data)
 		if len(payload) == 0 || err != nil {
 			return
 		}
