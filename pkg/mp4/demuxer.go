@@ -28,6 +28,7 @@ func (d *Demuxer) Probe(init []byte) (medias []*core.Media) {
 		switch atom := atom.(type) {
 		case *iso.AtomTkhd:
 			trackID = atom.TrackID
+			timeScale = 0
 		case *iso.AtomMdhd:
 			timeScale = atom.TimeScale
 		case *iso.AtomVideo:
@@ -42,7 +43,7 @@ func (d *Demuxer) Probe(init []byte) (medias []*core.Media) {
 			}
 		}
 
-		if codec != nil && timeScale > 0 {
+		if codec != nil && timeScale != 0 {
 			d.codecs[trackID] = codec
 			d.timeScales[trackID] = float32(codec.ClockRate) / float32(timeScale)
 
