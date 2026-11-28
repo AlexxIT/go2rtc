@@ -34,6 +34,8 @@ func Init() {
 
 	log = app.GetLogger("webrtc")
 
+	filters = cfg.Mod.Filters
+
 	if log.Debug().Enabled() {
 		itfs, _ := net.Interfaces()
 		for _, itf := range itfs {
@@ -69,7 +71,7 @@ func Init() {
 	var err error
 
 	// create pionAPI with custom codecs list and custom network settings
-	serverAPI, err = webrtc.NewServerAPI(network, address, &cfg.Mod.Filters)
+	serverAPI, err = webrtc.NewServerAPI(network, address, &filters)
 	if err != nil {
 		log.Error().Err(err).Caller().Send()
 		return
