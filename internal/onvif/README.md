@@ -25,6 +25,20 @@ The ONVIF module does not support Basic authentication. Therefore `/onvif/*` wil
 
 ONVIF clients receive a video stream from the RTSP module and snapshots from the API module. And they will use the same username and password that you provided to connect to ONVIF.
 
+### ONVIF Events
+
+The ONVIF server has an Events service (PullPoint subscriptions only) with motion events. Clients like UniFi Protect use it to show and record motion from third-party cameras. Both common motion topics are sent: `tns1:RuleEngine/CellMotionDetector/Motion` (`IsMotion`) and `tns1:VideoSource/MotionAlarm` (`State`). The event source token is the stream name.
+
+Events come from the [motion state](../streams/README.md#motion-state) of streams, which any external detector can set with the API:
+
+```shell
+curl -X POST "http://localhost:1984/api/motion?src=camera1"   # motion started
+curl -X DELETE "http://localhost:1984/api/motion?src=camera1" # motion ended
+```
+
+- the Events service is always advertised in `GetCapabilities` and `GetServices`
+- a new subscription gets one `Initialized` message per stream with a known motion state, streams without a state send nothing until their first change
+
 ## Tested clients
 
 Go2rtc works as ONVIF server:

@@ -380,6 +380,52 @@ paths:
         default:
           description: ""
 
+  /api/motion:
+    get:
+      summary: Get motion states of streams
+      description: Only streams with a known motion state
+      tags: [ Streams list ]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: { type: boolean }
+              example: { camera1: false }
+    post:
+      summary: Motion started
+      description: Sets the motion state of the stream, for example from an external motion detector
+      tags: [ Streams list ]
+      parameters:
+        - name: src
+          in: query
+          description: Stream name
+          required: true
+          schema: { type: string }
+          example: camera1
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Stream not found
+    delete:
+      summary: Motion ended
+      tags: [ Streams list ]
+      parameters:
+        - name: src
+          in: query
+          description: Stream name
+          required: true
+          schema: { type: string }
+          example: camera1
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Stream not found
+
   /api/schemes:
     get:
       summary: Get supported source URL schemes

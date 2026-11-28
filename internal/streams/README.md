@@ -84,6 +84,19 @@ streams:
     - ffmpeg:camera3#video=h264#audio=opus#hardware
 ```
 
+## Motion state
+
+Go2rtc doesn't detect motion itself. Any external detector can set the motion state of a stream with the API, and modules can report it to their clients (ex. the [ONVIF server](../onvif/README.md#onvif-events)).
+
+```shell
+curl -X POST "http://localhost:1984/api/motion?src=camera1"   # motion started
+curl -X DELETE "http://localhost:1984/api/motion?src=camera1" # motion ended
+curl "http://localhost:1984/api/motion"                       # {"camera1":false}
+```
+
+- a stream has no motion state until the first call
+- motion states live in memory and are lost after a restart
+
 ## Examples
 
 ```yaml
