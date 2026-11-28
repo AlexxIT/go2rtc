@@ -36,9 +36,21 @@ func (p *Producer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 				}
 			}
 		} else {
+			// speaker uses the same rate as the camera audio (ex. PCMA/16000)
+			rate := p.audioRate()
+			var transcode func([]byte) []byte
+			if track.Codec.ClockRate != rate {
+				dst := &core.Codec{Name: core.CodecPCMA, ClockRate: rate}
+				transcode = pcm.Transcode(dst, track.Codec)
+			}
+			size := int(rate) * 40 / 1000 // 8bit 40 ms
+
 			sender.Handler = func(pkt *rtp.Packet) {
-				buf = append(buf, pkt.Payload...)
-				const size = 8000 * 0.040 // 8bit 40 ms
+				if transcode != nil {
+					buf = append(buf, transcode(pkt.Payload)...)
+				} else {
+					buf = append(buf, pkt.Payload...)
+				}
 				for len(buf) >= size {
 					p.Send += size
 					_ = p.client.WriteAudio(codecPCMA, buf[:size])
@@ -71,4 +83,13 @@ func (p *Producer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 	sender.HandleRTP(track)
 	p.Senders = append(p.Senders, sender)
 	return nil
+}
+
+func (p *Producer) audioRate() uint32 {
+	for _, media := range p.Medias {
+		if media.Kind == core.KindAudio && media.Direction == core.DirectionRecvonly {
+			return media.Codecs[0].ClockRate
+		}
+	}
+	return 8000
 }
