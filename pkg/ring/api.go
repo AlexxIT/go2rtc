@@ -2,9 +2,8 @@ package ring
 
 import (
 	"bytes"
-	"crypto/sha256"
+	"crypto/rand"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -680,10 +679,16 @@ func encodeAuthConfig(config *AuthConfig) string {
 	return base64.StdEncoding.EncodeToString(jsonBytes)
 }
 
+// generateHardwareID returns a random UUID v4 for every new login.
+// A fixed ID (it was sha256("ring-client-go2rtc"), the same for every go2rtc install)
+// is rejected by Ring with "406 Not Acceptable". The ID is stored inside the encoded
+// refresh token, so a session keeps the same ID after login.
 func generateHardwareID() string {
-	h := sha256.New()
-	h.Write([]byte("ring-client-go2rtc"))
-	return hex.EncodeToString(h.Sum(nil)[:16])
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	b[6] = (b[6] & 0x0f) | 0x40 // version 4
+	b[8] = (b[8] & 0x3f) | 0x80 // variant 10
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
 func interfaceSlice(slice interface{}) []CameraData {
