@@ -3,6 +3,8 @@ package miss
 import (
 	"fmt"
 	"net/url"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -15,6 +17,12 @@ import (
 type Producer struct {
 	core.Connection
 	client *Client
+
+	speakerMu sync.Mutex
+	speakerOn atomic.Bool
+	lastTalk  atomic.Int64
+	watchOnce sync.Once
+	done      chan struct{}
 }
 
 func Dial(rawURL string) (core.Producer, error) {
@@ -49,6 +57,7 @@ func Dial(rawURL string) (core.Producer, error) {
 			Transport:  client,
 		},
 		client: client,
+		done:   make(chan struct{}),
 	}, nil
 }
 
@@ -197,6 +206,14 @@ func (p *Producer) Start() error {
 }
 
 func (p *Producer) Stop() error {
+	if p.done != nil {
+		select {
+		case <-p.done:
+		default:
+			close(p.done)
+		}
+	}
+	p.stopSpeaker()
 	_ = p.client.StopMedia()
 	return p.Connection.Stop()
 }

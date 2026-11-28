@@ -9,10 +9,13 @@ import (
 	"github.com/pion/rtp"
 )
 
+const talkIdle = 3 * time.Second
+
 func (p *Producer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver) error {
-	if err := p.client.StartSpeaker(); err != nil {
+	if err := p.startSpeaker(); err != nil {
 		return err
 	}
+	p.watchOnce.Do(func() { go p.speakerWatch(talkIdle) })
 	// TODO: check this!!!
 	time.Sleep(time.Second)
 
@@ -68,7 +71,77 @@ func (p *Producer) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiv
 		}
 	}
 
+	if handler := sender.Handler; handler != nil {
+		sender.Handler = func(pkt *rtp.Packet) {
+			p.ensureSpeaker()
+			handler(pkt)
+		}
+	}
+
 	sender.HandleRTP(track)
 	p.Senders = append(p.Senders, sender)
 	return nil
+}
+
+func (p *Producer) startSpeaker() error {
+	p.speakerMu.Lock()
+	defer p.speakerMu.Unlock()
+
+	p.lastTalk.Store(time.Now().UnixNano())
+	if p.speakerOn.Load() {
+		return nil
+	}
+	if err := p.client.StartSpeaker(); err != nil {
+		return err
+	}
+	p.speakerOn.Store(true)
+	return nil
+}
+
+func (p *Producer) stopSpeaker() {
+	p.speakerMu.Lock()
+	defer p.speakerMu.Unlock()
+
+	if p.speakerOn.Swap(false) {
+		_ = p.client.StopSpeaker()
+	}
+}
+
+func (p *Producer) ensureSpeaker() {
+	p.lastTalk.Store(time.Now().UnixNano())
+	if p.speakerOn.Load() {
+		return
+	}
+	_ = p.startSpeaker()
+}
+
+func (p *Producer) speakerWatch(idleTimeout time.Duration) {
+	if p.done == nil {
+		return
+	}
+
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-p.done:
+			return
+		case <-ticker.C:
+			p.checkSpeakerIdle(idleTimeout)
+		}
+	}
+}
+
+func (p *Producer) checkSpeakerIdle(idleTimeout time.Duration) {
+	p.speakerMu.Lock()
+	defer p.speakerMu.Unlock()
+
+	if !p.speakerOn.Load() {
+		return
+	}
+	if time.Since(time.Unix(0, p.lastTalk.Load())) > idleTimeout {
+		p.speakerOn.Store(false)
+		_ = p.client.StopSpeaker()
+	}
 }
