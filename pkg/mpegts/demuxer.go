@@ -397,11 +397,16 @@ type PES struct {
 	StreamID   byte   // from each PES header
 	StreamType byte   // from PMT table
 	Sequence   uint16 // manual
-	Timestamp  uint32 // manual
-	PTS        uint32 // from extra header, always 90000Hz
-	DTS        uint32
-	Payload    []byte // from PES body
-	Size       int    // from PES header, can be 0
+
+	Timestamp    uint32 // manual
+	ClockRate    uint32 // source clock rate
+	Remainder    uint64 // division remainder carried into the next timestamp conversion
+	HasTimestamp bool
+
+	PTS     uint32 // from extra header, always 90000Hz
+	DTS     uint32
+	Payload []byte // from PES body
+	Size    int    // from PES header, can be 0
 
 	wr *bits.Writer
 }

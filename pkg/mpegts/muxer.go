@@ -19,8 +19,11 @@ func NewMuxer() *Muxer {
 	}
 }
 
-func (m *Muxer) AddTrack(streamType byte) (pid uint16) {
-	pes := &PES{StreamType: streamType}
+func (m *Muxer) AddTrack(streamType byte, clockRate uint32) (pid uint16) {
+	if clockRate == 0 {
+		clockRate = ClockRate
+	}
+	pes := &PES{StreamType: streamType, ClockRate: clockRate}
 
 	// Audio streams (0xC0-0xDF), Video streams (0xE0-0xEF)
 	switch streamType {
@@ -58,8 +61,13 @@ func (m *Muxer) GetPayload(pid uint16, timestamp uint32, payload []byte) []byte 
 		payload = annexb.DecodeAVCCWithAUD(payload)
 	}
 
-	if pes.Timestamp != 0 {
-		pes.PTS += timestamp - pes.Timestamp
+	if pes.HasTimestamp {
+		// Keep the division remainder so small timestamp steps don't lose precision.
+		scaledDelta := uint64(timestamp-pes.Timestamp)*ClockRate + pes.Remainder
+		pes.PTS += uint32(scaledDelta / uint64(pes.ClockRate))
+		pes.Remainder = scaledDelta % uint64(pes.ClockRate)
+	} else {
+		pes.HasTimestamp = true
 	}
 	pes.Timestamp = timestamp
 

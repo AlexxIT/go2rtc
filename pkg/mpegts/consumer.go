@@ -52,7 +52,7 @@ func (c *Consumer) AddTrack(media *core.Media, codec *core.Codec, track *core.Re
 
 	switch track.Codec.Name {
 	case core.CodecH264:
-		pid := c.muxer.AddTrack(StreamTypeH264)
+		pid := c.muxer.AddTrack(StreamTypeH264, track.Codec.ClockRate)
 
 		sender.Handler = func(pkt *rtp.Packet) {
 			b := c.muxer.GetPayload(pid, pkt.Timestamp, pkt.Payload)
@@ -68,7 +68,7 @@ func (c *Consumer) AddTrack(media *core.Media, codec *core.Codec, track *core.Re
 		}
 
 	case core.CodecH265:
-		pid := c.muxer.AddTrack(StreamTypeH265)
+		pid := c.muxer.AddTrack(StreamTypeH265, track.Codec.ClockRate)
 
 		sender.Handler = func(pkt *rtp.Packet) {
 			b := c.muxer.GetPayload(pid, pkt.Timestamp, pkt.Payload)
@@ -82,14 +82,10 @@ func (c *Consumer) AddTrack(media *core.Media, codec *core.Codec, track *core.Re
 		}
 
 	case core.CodecAAC:
-		pid := c.muxer.AddTrack(StreamTypeAAC)
-
-		// convert timestamp to 90000Hz clock
-		dt := 90000 / float64(track.Codec.ClockRate)
+		pid := c.muxer.AddTrack(StreamTypeAAC, track.Codec.ClockRate)
 
 		sender.Handler = func(pkt *rtp.Packet) {
-			pts := uint32(float64(pkt.Timestamp) * dt)
-			b := c.muxer.GetPayload(pid, pts, pkt.Payload)
+			b := c.muxer.GetPayload(pid, pkt.Timestamp, pkt.Payload)
 			if n, err := c.wr.Write(b); err == nil {
 				c.Send += n
 			}

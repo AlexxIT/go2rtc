@@ -16,7 +16,7 @@ func (c *Client) AddTrack(media *core.Media, _ *core.Codec, track *core.Receiver
 		}
 
 		muxer := mpegts.NewMuxer()
-		pid := muxer.AddTrack(mpegts.StreamTypePCMATapo)
+		pid := muxer.AddTrack(mpegts.StreamTypePCMATapo, track.Codec.ClockRate)
 		if err := c.WriteBackchannel(muxer.GetHeader()); err != nil {
 			return err
 		}
