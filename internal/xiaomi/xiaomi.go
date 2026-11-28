@@ -336,6 +336,9 @@ func apiAuth(w http.ResponseWriter, r *http.Request) {
 			} else {
 				tokens[userID] = token
 			}
+			// drop cached cloud so the new token is used instead of a session
+			// that may have been created earlier with an empty/expired token
+			delete(clouds, userID)
 			cloudsMu.Unlock()
 
 			err = app.PatchConfig([]string{"xiaomi", userID}, token)
