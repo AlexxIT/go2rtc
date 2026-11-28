@@ -428,9 +428,8 @@ func (c *TuyaMqttClient) sendMqttMessage(messageType string, protocol int, trans
 	}
 
 	token := c.client.Publish(c.publishTopic, 1, false, payload)
-	if token.Wait() && token.Error() != nil {
-		return token.Error()
+	if !token.WaitTimeout(10 * time.Second) {
+		return fmt.Errorf("mqtt: timeout publishing %s", messageType)
 	}
-
-	return nil
+	return token.Error()
 }
