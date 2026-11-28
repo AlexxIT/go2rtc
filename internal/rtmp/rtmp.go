@@ -139,7 +139,9 @@ func streamsConsumerHandle(url string) (core.Consumer, func(), error) {
 			return
 		}
 		n, err := cons.WriteTo(wr)
-		log.Warn().Err(err).Int64("bytes", n).Str("url", url).Msg("[rtmp] publish ended")
+		if err != nil {
+			log.Warn().Err(err).Int64("bytes", n).Str("url", url).Msg("[rtmp] publish ended")
+		}
 	}
 
 	return cons, run, nil
