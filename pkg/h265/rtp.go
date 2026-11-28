@@ -30,17 +30,6 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 
 		nuType := (data[0] >> 1) & 0x3F
 
-		// Fix for RtspServer https://github.com/AlexxIT/go2rtc/issues/244
-		// Keep parameter sets for the next AU and skip small trailing SEI packets.
-		if packet.Marker && len(data) < h264.PSMaxSize {
-			switch nuType {
-			case NALUTypeVPS, NALUTypeSPS, NALUTypePPS:
-				packet.Marker = false
-			case NALUTypePrefixSEI, NALUTypeSuffixSEI:
-				return
-			}
-		}
-
 		// Drop buffered data when RTP sequence numbers are discontinuous.
 		if len(buf) > 0 && packet.SequenceNumber-seqNum != 1 {
 			//log.Printf("broken H265 sequence")
@@ -49,6 +38,7 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 			return
 		}
 
+		// Update the sequence number even for packets skipped below.
 		seqNum = packet.SequenceNumber
 
 		if nuType == NALUTypeFU && len(data) < 4 {
@@ -62,6 +52,23 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 			buf = buf[:0]
 			nuStart = -1
 			return
+		}
+
+		marker := packet.Marker
+
+		// Fix for RtspServer https://github.com/AlexxIT/go2rtc/issues/244
+		if marker && len(data) < h264.PSMaxSize {
+			switch nuType {
+			case NALUTypeVPS, NALUTypeSPS, NALUTypePPS:
+				// Keep parameter sets for the next access unit.
+				marker = false
+			case NALUTypePrefixSEI, NALUTypeSuffixSEI:
+				// Skip standalone SEI before picture data, but keep SEI
+				// that completes an access unit (e.g. Haima cameras).
+				if !hasVCL(buf) {
+					return
+				}
+			}
 		}
 
 		if nuType == NALUTypeFU {
@@ -110,6 +117,32 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 				buf = append(buf, (data[0]&0x81)|(nuType<<1), data[1])
 				buf = append(buf, data[3:]...)
 			}
+		} else if nuType == h265NaluAggregationPacketType {
+			// RFC 7798 4.4.2. Aggregation Packets (APs).
+			// Skip the payload header and unpack each length-prefixed NALU.
+			// DONL/DOND fields are not supported, same as for FU.
+			data = data[2:]
+
+			for len(data) > 0 {
+				if len(data) < 2 {
+					buf = buf[:0]
+					return
+				}
+
+				size := int(binary.BigEndian.Uint16(data))
+				data = data[2:]
+
+				// Drop the buffered access unit if the AP is truncated
+				// or contains a NALU smaller than its header.
+				if size < h265NaluHeaderSize || size > len(data) {
+					buf = buf[:0]
+					return
+				}
+
+				buf = binary.BigEndian.AppendUint32(buf, uint32(size))
+				buf = append(buf, data[:size]...)
+				data = data[size:]
+			}
 		} else {
 			// Store a complete NALU with its AVCC length prefix.
 			buf = binary.BigEndian.AppendUint32(buf, uint32(len(data))) // NAL unit size
@@ -117,7 +150,7 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 		}
 
 		// Wait for the final packet before emitting the access unit.
-		if !packet.Marker {
+		if !marker {
 			return
 		}
 
@@ -132,6 +165,25 @@ func RTPDepay(codec *core.Codec, handler core.HandlerFunc) core.HandlerFunc {
 
 		handler(&clone)
 	}
+}
+
+// hasVCL reports whether the access unit contains picture data.
+func hasVCL(avcc []byte) bool {
+	for len(avcc) > 0 {
+		size := annexb.AVCCNALUSize(avcc)
+		if size == 0 {
+			return false
+		}
+
+		// VCL NAL unit types are 0..31.
+		if NALUType(avcc[:size]) < 32 {
+			return true
+		}
+
+		avcc = avcc[size:]
+	}
+
+	return false
 }
 
 func RTPPay(mtu uint16, handler core.HandlerFunc) core.HandlerFunc {
